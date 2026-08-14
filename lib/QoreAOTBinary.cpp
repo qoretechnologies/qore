@@ -2350,6 +2350,37 @@ static bool aot_get_constant_path_base(const std::string& path, std::string& bas
     return true;
 }
 
+static ConstantEntry* aot_resolve_constant_by_fqn(QoreProgram* pgm, const char* fqn);
+
+static bool aot_constant_is_owned_by_serialized_artifact(
+        const QoreAOTBinaryWriter& writer, const std::string& base) {
+    if (!writer.serialization_program) {
+        return true;
+    }
+
+    ConstantEntry* ce = aot_resolve_constant_by_fqn(writer.serialization_program, base.c_str());
+    if (!ce) {
+        return true;
+    }
+    if (ce->isSystem() || ce->isExternalStub()) {
+        return false;
+    }
+
+    // A null module filter means that all user declarations in the program
+    // are being serialized, so they must all remain subject to ordering.
+    if (!writer.serialization_module_name) {
+        return true;
+    }
+
+    const char* item_module = ce->getModuleName();
+    if (!item_module || !strcmp(item_module, writer.serialization_module_name)) {
+        return true;
+    }
+    return writer.serialization_keep_modules
+        && writer.serialization_keep_modules->find(item_module)
+            != writer.serialization_keep_modules->end();
+}
+
 static bool aot_constant_path_available_for_writer(const QoreAOTBinaryWriter& writer,
         const std::string& path) {
     if (!writer.current_blob_const_fqns) {
@@ -2358,6 +2389,18 @@ static bool aot_constant_path_available_for_writer(const QoreAOTBinaryWriter& wr
 
     std::string base;
     if (!aot_get_constant_path_base(path, base)) {
+        return false;
+    }
+
+    // Only constants owned by this artifact are subject to declaration-order
+    // availability. Imported and builtin constants already exist before the
+    // blob is deserialized and are therefore always safe references. A local
+    // constant in another split blob is not available here.
+    if (!aot_constant_is_owned_by_serialized_artifact(writer, base)) {
+        return true;
+    }
+
+    if (writer.current_blob_const_fqns->find(base) == writer.current_blob_const_fqns->end()) {
         return false;
     }
 
@@ -3258,6 +3301,12 @@ static bool qoreAOTApplyContainerValueType(QoreValue& v,
 // ---- QoreAOTBinaryWriter ----
 
 bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
+    const uint32_t start_pos = position();
+    auto fail = [this, start_pos]() -> bool {
+        truncate(start_pos);
+        return false;
+    };
+
     if (v.isNothing()) {
         writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NOTHING));
         return true;
@@ -3405,13 +3454,11 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                     tracePluginQord("write failed: plugin value serialization failed: "
                         + qoreAOTExceptionText(xsink));
                 }
-                writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NOTHING));
-                return false;
+                return fail();
             }
             uint16_t import_idx = 0;
             if (!addPluginTypeRef(plugin_value.module_name.c_str(), plugin_value.local_type_id, &import_idx)) {
-                writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NOTHING));
-                return false;
+                return fail();
             }
             writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_PLUGIN_INSTANCE));
             writeU16(import_idx);
@@ -3432,9 +3479,13 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                 uint32_t count = static_cast<uint32_t>(list->size());
                 writeU32(count);
                 for (uint32_t i = 0; i < count; ++i) {
-                    // Must not return false here - would leave partial data
-                    // Unsupported element types become NOTHING
-                    writeValue(list->retrieveEntry(i));
+                    if (i && !(i % 100)
+                            && qore_check_cancel(nullptr, "AOT list value serialization")) {
+                        return fail();
+                    }
+                    if (!writeValue(list->retrieveEntry(i))) {
+                        return fail();
+                    }
                 }
             } else {
                 writeU32(0);
@@ -3449,12 +3500,18 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                 uint32_t count = static_cast<uint32_t>(hash->size());
                 writeU32(count);
                 ConstHashIterator hi(*hash);
+                uint32_t i = 0;
                 while (hi.next()) {
+                    if (i && !(i % 100)
+                            && qore_check_cancel(nullptr, "AOT hash value serialization")) {
+                        return fail();
+                    }
                     const char* key = hi.getKey();
                     writeStringRef(key);
-                    // Must not return false here - would leave partial data
-                    // Unsupported value types become NOTHING
-                    writeValue(hi.get());
+                    if (!writeValue(hi.get())) {
+                        return fail();
+                    }
+                    ++i;
                 }
             } else {
                 writeU32(0);
@@ -3473,33 +3530,23 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                 const QoreListNode* args = socn->getArgs();
                 const QoreParseListNode* parse_args = socn->getParseArgs();
                 if (parse_args && !parse_args->empty() && (!args || args->empty())) {
-                    writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NOTHING));
-                    return true;
+                    return fail();
                 }
                 uint32_t nargs = args ? static_cast<uint32_t>(args->size()) : 0;
-
-                // Only serialize if all args are serializable concrete values
-                bool args_ok = true;
+                writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_OBJECT));
+                writeU32(static_cast<uint32_t>(class_path.size()));
+                writeStringRef(class_path.c_str(), class_path.size());
+                writeU32(nargs);
                 for (uint32_t i = 0; i < nargs; ++i) {
-                    QoreValue arg = args->retrieveEntry(i);
-                    // Check that args are concrete value types we can serialize
-                    if (arg.getType() == NT_SCOPE_REF || arg.getType() == NT_FUNCTION_CALL
-                            || arg.getType() == NT_SELF_VARREF || arg.getType() == NT_VARREF) {
-                        args_ok = false;
-                        break;
+                    if (i && !(i % 100)
+                            && qore_check_cancel(nullptr, "AOT object constructor serialization")) {
+                        return fail();
+                    }
+                    if (!writeValue(args->retrieveEntry(i))) {
+                        return fail();
                     }
                 }
-
-                if (args_ok) {
-                    writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NEW_OBJECT));
-                    writeU32(static_cast<uint32_t>(class_path.size()));
-                    writeStringRef(class_path.c_str(), class_path.size());
-                    writeU32(nargs);
-                    for (uint32_t i = 0; i < nargs; ++i) {
-                        writeValue(args->retrieveEntry(i));
-                    }
-                    return true;
-                }
+                return true;
             }
             // NewComplexListNode: `list<T> m();` default-constructed complex list
             if (auto* ncl = dynamic_cast<const NewComplexListNode*>(node)) {
@@ -3523,7 +3570,13 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                 writeStringRef(type_path.c_str(), tlen);
                 writeU32(nargs);
                 for (uint32_t i = 0; i < nargs; ++i) {
-                    writeValue(arg_list->retrieveEntry(i));
+                    if (i && !(i % 100)
+                            && qore_check_cancel(nullptr, "AOT complex list constructor serialization")) {
+                        return fail();
+                    }
+                    if (!writeValue(arg_list->retrieveEntry(i))) {
+                        return fail();
+                    }
                 }
                 return true;
             }
@@ -3538,7 +3591,13 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                 writeStringRef(type_path.c_str(), tlen);
                 writeU32(nargs);
                 for (uint32_t i = 0; i < nargs; ++i) {
-                    writeValue(nch->args->get(i));
+                    if (i && !(i % 100)
+                            && qore_check_cancel(nullptr, "AOT complex hash constructor serialization")) {
+                        return fail();
+                    }
+                    if (!writeValue(nch->args->get(i))) {
+                        return fail();
+                    }
                 }
                 return true;
             }
@@ -3564,7 +3623,13 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                 writeStringRef(type_path.c_str(), tlen);
                 writeU32(nargs);
                 for (uint32_t i = 0; i < nargs; ++i) {
-                    writeValue(arg_list->retrieveEntry(i));
+                    if (i && !(i % 100)
+                            && qore_check_cancel(nullptr, "AOT complex buffer constructor serialization")) {
+                        return fail();
+                    }
+                    if (!writeValue(arg_list->retrieveEntry(i))) {
+                        return fail();
+                    }
                 }
                 return true;
             }
@@ -3581,20 +3646,21 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                 writeStringRef(ns_path.c_str(), tlen);
                 writeU32(nargs);
                 for (uint32_t i = 0; i < nargs; ++i) {
-                    writeValue(nhd->args->get(i));
+                    if (i && !(i % 100)
+                            && qore_check_cancel(nullptr, "AOT hashdecl constructor serialization")) {
+                        return fail();
+                    }
+                    if (!writeValue(nhd->args->get(i))) {
+                        return fail();
+                    }
                 }
                 return true;
             }
-            // Fall through to default if not serializable
-            writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NOTHING));
-            return true;
+            return fail();
         }
 
         default:
-            // Unsupported value type - write NOTHING instead of failing
-            // This preserves binary structure integrity for container types
-            writeU8(static_cast<uint8_t>(QoreAOTValueTag::VT_NOTHING));
-            return true;
+            return fail();
     }
 }
 
@@ -9311,7 +9377,13 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                     const QoreParseListNode* parse_args = socn->getParseArgs();
                     if (socn->oc && (!args || args->empty()) && (!parse_args || parse_args->empty())) {
                         writer.writeU8(1);
-                        writer.writeValue(dv);
+                        if (!writer.writeValue(dv)) {
+                            error = "AOT cannot serialize no-argument object default for parameter '";
+                            error += pname ? pname : "<unknown>";
+                            error += "': ";
+                            error += qoreAOTDescribeExpr(dv);
+                            return false;
+                        }
                         continue;
                     }
                 }
@@ -9325,7 +9397,13 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                 // CRM lookup can emit VT_CONST_REF for parse-folded Type-class
                 // constants (e.g. `*Type t = IntType` default args).
                 writer.writeU8(1);
-                writer.writeValue(dv);
+                if (!writer.writeValue(dv)) {
+                    error = "AOT cannot serialize constant default for parameter '";
+                    error += pname ? pname : "<unknown>";
+                    error += "': ";
+                    error += qoreAOTDescribeExpr(dv);
+                    return false;
+                }
             } else if (dv.hasNode()) {
                 const AbstractQoreNode* node = dv.getInternalNode();
 
@@ -9414,8 +9492,12 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                         writer.writeStringRef(hd->getNamespacePath().c_str());
                         writer.writeU8(hdc->isOrNothing() ? 1 : 0);
                         writer.writeU8(inner.isNothing() ? 0 : 1);
-                        if (!inner.isNothing()) {
-                            writer.writeValue(inner);
+                        if (!inner.isNothing() && !writer.writeValue(inner)) {
+                            error = "AOT cannot serialize hashdecl-cast default for parameter '";
+                            error += pname ? pname : "<unknown>";
+                            error += "': ";
+                            error += qoreAOTDescribeExpr(inner);
+                            return false;
                         }
                         continue;
                     }
@@ -9685,7 +9767,17 @@ static bool writeMemberDefaultValue(QoreAOTBinaryWriter& writer, const QoreValue
         return false;
     }
 
-    writer.writeValue(v);
+    if (!writer.writeValue(v)) {
+        error = "AOT cannot serialize ";
+        error += owner_kind ? owner_kind : "member-owner";
+        error += " '";
+        error += owner_name ? owner_name : "<unknown>";
+        error += "' member '";
+        error += member_name ? member_name : "<unknown>";
+        error += "' default value: ";
+        error += qoreAOTDescribeExpr(v);
+        return false;
+    }
     if (encoding) {
         *encoding = AOTMemberDefaultEncoding::Value;
     }
@@ -9726,8 +9818,22 @@ static bool qoreAOTWriteDefaultArgValuePayloadImpl(QoreAOTBinaryWriter& writer, 
     }
 
     if (aotValueTagPreservesMemberDefault(v)) {
-        writer.writeValue(v);
-        return true;
+        if (writer.writeValue(v)) {
+            return true;
+        }
+        std::string diag = "AOT cannot serialize ";
+        diag += owner_kind ? owner_kind : "callable";
+        diag += " '";
+        diag += owner_name ? owner_name : "<unknown>";
+        diag += "' parameter '";
+        diag += param_name ? param_name : "<unknown>";
+        diag += "' default value: ";
+        diag += qoreAOTDescribeExpr(v);
+        if (error) {
+            *error = diag;
+        }
+        qoreAOTSetExprSerializationError(std::move(diag));
+        return false;
     }
 
     std::string native_error;
@@ -9917,10 +10023,9 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
             // expression to a concrete value (e.g. `static Type t = IntType`
             // where IntType is a reflection constant), we need to persist
             // that value so it survives AOT load. For unserializable values
-            // (objects, closures), writeValue falls back to VT_CONST_REF via
-            // the program reverse map when possible; otherwise NOTHING is
-            // written and the static var will need an init function (which
-            // is generated separately if the expression `needs_eval()`).
+            // (objects, closures), writeValue uses VT_CONST_REF via the
+            // program reverse map when possible and otherwise fails
+            // serialization rather than changing the value to NOTHING.
             if (vi.second->exp) {
                 writer.writeU8(1);
                 if (!writeMemberDefaultValue(writer, vi.second->exp, "class",
@@ -9960,15 +10065,21 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                     writer.writeU8(ce->hasInitExpr() ? 1 : 0);
                     if (ce->hasInitExpr()) {
                         // Class constants with init expressions get NOTHING placeholder
-                        writer.writeValue(QoreValue());
+                        bool placeholder_ok = writer.writeValue(QoreValue());
+                        assert(placeholder_ok);
                     } else {
                         // Use getReferencedValue() for the actual evaluated value
-                        QoreValue actual_val = ce->getReferencedValue();
+                        ValueHolder actual_val(ce->getReferencedValue(), nullptr);
                         std::string old_const_path = std::move(writer.current_const_path);
                         writer.current_const_path = getClassConstantPath(priv, ce->getName());
-                        writer.writeValue(actual_val);
+                        bool value_ok = writer.writeValue(*actual_val);
                         writer.current_const_path = std::move(old_const_path);
-                        actual_val.discard(nullptr);
+                        if (!value_ok) {
+                            error = "AOT cannot serialize class constant '";
+                            error += getClassConstantPath(priv, ce->getName());
+                            error += "' without data loss";
+                            return false;
+                        }
                     }
                 }
             }
@@ -10086,7 +10197,8 @@ static bool writeHashDeclsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
 }
 
 //! Write ENUMS section
-static void writeEnumsSection(QoreAOTBinaryWriter& writer, const AOTSerializeState& state) {
+static bool writeEnumsSection(QoreAOTBinaryWriter& writer, const AOTSerializeState& state,
+        std::string& error) {
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::ENUMS);
 
     uint32_t count = static_cast<uint32_t>(state.enums.size());
@@ -10117,12 +10229,22 @@ static void writeEnumsSection(QoreAOTBinaryWriter& writer, const AOTSerializeSta
             QoreEnumMemberIterator emi(*ed);
             while (emi.next()) {
                 writer.writeStringRef(emi.getName());
-                writer.writeValue(emi.getValue());
+                if (!writer.writeValue(emi.getValue())) {
+                    error = "AOT cannot serialize enum member '";
+                    error += nspath;
+                    if (!nspath.empty()) {
+                        error += "::";
+                    }
+                    error += emi.getName();
+                    error += "' without data loss";
+                    return false;
+                }
             }
         }
     }
 
     writer.endSection(sec_idx);
+    return true;
 }
 
 //! Write TYPEDEFS section
@@ -10143,7 +10265,8 @@ static void writeTypedefsSection(QoreAOTBinaryWriter& writer, const AOTSerialize
 }
 
 //! Write CONSTANTS section (namespace-level constants only; class constants are in CLASSES)
-static void writeConstantsSection(QoreAOTBinaryWriter& writer, const AOTSerializeState& state) {
+static bool writeConstantsSection(QoreAOTBinaryWriter& writer, const AOTSerializeState& state,
+        std::string& error) {
     uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::CONSTANTS);
 
     std::unordered_set<std::string> current_blob_consts;
@@ -10166,10 +10289,25 @@ static void writeConstantsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
             ? state.namespaces[ci.ns_idx].ns : nullptr;
         current_blob_consts.insert(getNamespaceConstantPath(ns, ce->getName()));
     }
-    const std::unordered_set<std::string>* old_blob_consts = writer.current_blob_const_fqns;
-    const std::unordered_set<std::string>* old_available_consts = writer.available_const_ref_fqns;
-    writer.current_blob_const_fqns = &current_blob_consts;
-    writer.available_const_ref_fqns = &available_consts;
+    struct WriterConstantAvailabilityScope {
+        QoreAOTBinaryWriter& writer;
+        const std::unordered_set<std::string>* old_blob_consts;
+        const std::unordered_set<std::string>* old_available_consts;
+
+        WriterConstantAvailabilityScope(QoreAOTBinaryWriter& n_writer,
+                const std::unordered_set<std::string>* blob_consts,
+                const std::unordered_set<std::string>* available_consts)
+                : writer(n_writer), old_blob_consts(n_writer.current_blob_const_fqns),
+                    old_available_consts(n_writer.available_const_ref_fqns) {
+            writer.current_blob_const_fqns = blob_consts;
+            writer.available_const_ref_fqns = available_consts;
+        }
+
+        ~WriterConstantAvailabilityScope() {
+            writer.current_blob_const_fqns = old_blob_consts;
+            writer.available_const_ref_fqns = old_available_consts;
+        }
+    } availability_scope(writer, &current_blob_consts, &available_consts);
 
     uint32_t count = static_cast<uint32_t>(state.constants.size());
     writer.writeU32(count);
@@ -10196,22 +10334,28 @@ static void writeConstantsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
         if (ce->hasInitExpr()) {
             // Constants with init expressions will be initialized at runtime
             // by their lowered init function — serialize NOTHING as placeholder
-            writer.writeValue(QoreValue());
+            bool placeholder_ok = writer.writeValue(QoreValue());
+            assert(placeholder_ok);
         } else {
             // Use getReferencedValue() to get the actual evaluated value.
             // ce->val may hold a RuntimeConstantRefNode (NT_RTCONSTREF) which is
             // just a reference to the constant's evaluated saved_val.
-            QoreValue actual_val = ce->getReferencedValue();
-            writer.writeValue(actual_val);
-            actual_val.discard(nullptr);
+            ValueHolder actual_val(ce->getReferencedValue(), nullptr);
+            bool value_ok = writer.writeValue(*actual_val);
+            if (!value_ok) {
+                error = "AOT cannot serialize namespace constant '";
+                error += const_path;
+                error += "' without data loss";
+                writer.current_const_path = std::move(old_const_path);
+                return false;
+            }
         }
         available_consts.insert(std::move(const_path));
         writer.current_const_path = std::move(old_const_path);
     }
 
-    writer.current_blob_const_fqns = old_blob_consts;
-    writer.available_const_ref_fqns = old_available_consts;
     writer.endSection(sec_idx);
+    return true;
 }
 
 //! Write GLOBALS section
@@ -13677,6 +13821,21 @@ static bool serializeIRInstruction(QoreAOTBinaryWriter& writer, const QoreIRInst
             diag += " (";
             diag += std::to_string(static_cast<uint8_t>(group));
             diag += ")";
+            if (const auto* lci = dynamic_cast<const QoreIRLoadConstantInstruction*>(inst)) {
+                diag += ": ";
+                diag += qoreAOTDescribeExpr(lci->expr);
+                if (writer.const_reverse_map && lci->expr.hasNode()) {
+                    const AbstractQoreNode* node = lci->expr.getInternalNode();
+                    if (const std::string* path = aotFindConstantReverseMapPath(
+                            writer.const_reverse_map, node)) {
+                        diag += ", constant-path='";
+                        diag += *path;
+                        diag += "'";
+                    } else {
+                        diag += ", no constant reverse-map path";
+                    }
+                }
+            }
             qoreAOTSetExprSerializationError(std::move(diag));
             return false;
         }
@@ -18534,6 +18693,30 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
     state.root_ns = root_ns;  // Store root namespace for program-wide CRM building
     collectItems(state, root_ns, UINT32_MAX, module_name, keep_modules, compile_file, compile_files);
 
+    struct WriterSerializationContextScope {
+        QoreAOTBinaryWriter& writer;
+        QoreProgram* old_program;
+        const char* old_module_name;
+        const std::unordered_set<std::string>* old_keep_modules;
+
+        WriterSerializationContextScope(QoreAOTBinaryWriter& n_writer,
+                QoreProgram* program, const char* module_name,
+                const std::unordered_set<std::string>* keep_modules)
+                : writer(n_writer), old_program(n_writer.serialization_program),
+                    old_module_name(n_writer.serialization_module_name),
+                    old_keep_modules(n_writer.serialization_keep_modules) {
+            writer.serialization_program = program;
+            writer.serialization_module_name = module_name;
+            writer.serialization_keep_modules = keep_modules;
+        }
+
+        ~WriterSerializationContextScope() {
+            writer.serialization_program = old_program;
+            writer.serialization_module_name = old_module_name;
+            writer.serialization_keep_modules = old_keep_modules;
+        }
+    } serialization_context(writer, root_ns->getProgram(), module_name, keep_modules);
+
     std::vector<qore_ns_private*> extra_roots;
     bool debug_local_modules = getenv("QORE_AOT_DEBUG_LOCAL_MODULES") != nullptr;
     if (debug_local_modules && keep_modules) {
@@ -18592,7 +18775,20 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
         }
         program_crm = &local_program_crm;
     }
-    writer.const_reverse_map = program_crm;
+    struct WriterConstantReverseMapScope {
+        QoreAOTBinaryWriter& writer;
+        const AOTConstantReverseMap* old_const_reverse_map;
+
+        WriterConstantReverseMapScope(QoreAOTBinaryWriter& n_writer,
+                const AOTConstantReverseMap* const_reverse_map)
+                : writer(n_writer), old_const_reverse_map(n_writer.const_reverse_map) {
+            writer.const_reverse_map = const_reverse_map;
+        }
+
+        ~WriterConstantReverseMapScope() {
+            writer.const_reverse_map = old_const_reverse_map;
+        }
+    } constant_reverse_map_scope(writer, program_crm);
 
     // Phase 2: Write each section
     writeNamespacesSection(writer, state);
@@ -18610,9 +18806,21 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
         }
         return false;
     }
-    writeEnumsSection(writer, state);
+    section_error.clear();
+    if (!writeEnumsSection(writer, state, section_error)) {
+        if (error) {
+            *error = "ENUMS section: " + section_error;
+        }
+        return false;
+    }
     writeTypedefsSection(writer, state);
-    writeConstantsSection(writer, state);
+    section_error.clear();
+    if (!writeConstantsSection(writer, state, section_error)) {
+        if (error) {
+            *error = "CONSTANTS section: " + section_error;
+        }
+        return false;
+    }
     writeGlobalsSection(writer, state);
     section_error.clear();
     if (!writeFunctionsSection(writer, state, section_error)) {
@@ -18641,9 +18849,6 @@ bool serializeNamespaceTree(QoreAOTBinaryWriter& writer, qore_ns_private* root_n
         }
         return false;
     }
-
-    // Drop the non-owning CRM pointer — program_crm goes out of scope next.
-    writer.const_reverse_map = nullptr;
 
     return true;
 }

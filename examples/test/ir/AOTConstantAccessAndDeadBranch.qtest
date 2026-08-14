@@ -19,6 +19,8 @@ if (!is_file(qcc_bin)) {
 
 string source = '%modern
 
+%requires reflection
+
 public const NamespaceHash = {
     "a": {"value": 10, "flag": True},
     "b": {"value": 20, "flag": True},
@@ -39,6 +41,46 @@ public hashdecl ConstantRecord {
 }
 
 public const TypedHash = <ConstantRecord>{"present": 1};
+
+# Imported object constants nested inside a folded container must retain
+# their runtime identity instead of being serialized as nothing.
+public const RuntimeObjectHash = {
+    "from": {"type": Qore::Reflection::IntOrNothingType},
+};
+
+class NestedDefaultInner {
+    private {
+        string value;
+    }
+
+    constructor(string value) {
+        self.value = value;
+    }
+
+    string getValue() {
+        return value;
+    }
+}
+
+class NestedDefaultOuter {
+    private {
+        NestedDefaultInner inner;
+    }
+
+    constructor(NestedDefaultInner inner) {
+        self.inner = inner;
+    }
+
+    string getValue() {
+        return inner.getValue();
+    }
+}
+
+class NestedDefaultHolder {
+    public {
+        static *NestedDefaultOuter Value = new NestedDefaultOuter(new NestedDefaultInner("nested-default"));
+    }
+}
 
 class ConstantAccess {
     public {
@@ -128,7 +170,10 @@ string sub verify() {
         NamespaceHash{"missing"}.type(), NamespaceList[99].type(), typed_missing,
         NamespaceList[0][0], last_list[1], literal_value, literal_calls,
         constantFalseGuard(), caught)
-        + sprintf("debug=%d\n", debug_calls);
+        + sprintf("debug=%d\n", debug_calls)
+        + sprintf("runtime-object=%s|%s\n", RuntimeObjectHash{"from"}{"type"}.type(),
+            RuntimeObjectHash{"from"}{"type"}.getName())
+        + sprintf("nested-default=%s\n", NestedDefaultHolder::Value.getValue());
 }
 
 printf("%s", verify());
@@ -142,7 +187,8 @@ source_file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
 source_file.write(source);
 source_file.close();
 
-string expected = "12|3|10|nothing|nothing|INVALID-MEMBER|10|31|7|2|40|DIVISION-BY-ZERO\ndebug=0\n";
+string expected = "12|3|10|nothing|nothing|INVALID-MEMBER|10|31|7|2|40|DIVISION-BY-ZERO\ndebug=0\n"
+    + "runtime-object=object|*int\nnested-default=nested-default\n";
 
 string sub runMode(string mode) {
     return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s 2>&1",
@@ -183,6 +229,16 @@ string sub functionIr(string ir, string name) {
     return ir.substr(start, end - start);
 }
 
+string sub functionStats(string output, string name) {
+    string marker = "IR-OPT-AOT: " + name + ":";
+    int start = output.find(marker);
+    int end = start < 0 ? -1 : output.find("\n", start);
+    if (start < 0) {
+        return "";
+    }
+    return output.substr(start, end < 0 ? output.size() - start : end - start);
+}
+
 hash<string, string> enabled = compile("enabled", "");
 hash<string, string> pruning_disabled = compile("pruning-disabled",
     "QORE_DISABLE_IR_UNREACHABLE_BLOCKS=1");
@@ -193,8 +249,8 @@ if (enabled.run != expected || pruning_disabled.run != expected) {
 }
 
 string direct_ir = functionIr(enabled.compile, "directConstantAccess(int)");
-if (!direct_ir || direct_ir !~ /load\.constant/ || direct_ir =~ /make\.hash/
-        || direct_ir =~ /hash\.key\.access/) {
+if (!direct_ir || direct_ir.find("load.constant") < 0 || direct_ir.find("make.hash") >= 0
+        || direct_ir.find("hash.key.access") >= 0) {
     printf("direct constant projection was not lowered to one constant load:\n%s",
         direct_ir ?: enabled.compile);
     exit(2);
@@ -202,14 +258,138 @@ if (!direct_ir || direct_ir !~ /load\.constant/ || direct_ir =~ /make\.hash/
 
 string enabled_guard_ir = functionIr(enabled.compile, "constantFalseGuard()");
 string disabled_guard_ir = functionIr(pruning_disabled.compile, "constantFalseGuard()");
-if (!enabled_guard_ir || enabled_guard_ir =~ /call\.direct/
-        || !disabled_guard_ir || disabled_guard_ir !~ /call\.direct/
-        || enabled.compile
-            !~ /IR-OPT-AOT: constantFalseGuard:.*branches=[1-9][0-9]* unreachable=[1-9][0-9]*/
-        || pruning_disabled.compile
-            =~ /IR-OPT-AOT: constantFalseGuard:.*unreachable=[1-9][0-9]*/) {
+string enabled_guard_stats = functionStats(enabled.compile, "constantFalseGuard");
+string disabled_guard_stats = functionStats(pruning_disabled.compile, "constantFalseGuard");
+if (!enabled_guard_ir || enabled_guard_ir.find("call.direct") >= 0
+        || !disabled_guard_ir || disabled_guard_ir.find("call.direct") < 0
+        || !enabled_guard_stats || enabled_guard_stats.find("branches=0") >= 0
+        || enabled_guard_stats.find("unreachable=0") >= 0
+        || !disabled_guard_stats || disabled_guard_stats.find("unreachable=0") < 0) {
     printf("constant-false branch pruning mismatch:\nenabled IR:\n%sdisabled IR:\n%s"
         + "enabled compile:\n%sdisabled compile:\n%s",
         enabled_guard_ir, disabled_guard_ir, enabled.compile, pruning_disabled.compile);
+    exit(2);
+}
+
+# Real Qorus runtime gates are declaration-only qcc --stub constants.  They
+# must retain the host-supplied value while their loads move out of hot loops.
+string stub_path = root + "/runtime-gate-stub.qc";
+string provider_false_path = root + "/runtime-gate-false.qr";
+string provider_true_path = root + "/runtime-gate-true.qr";
+string external_main_path = root + "/runtime-gate-main.qr";
+
+nothing sub writeSource(string path, string contents) {
+    File f();
+    f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+    f.write(contents);
+    f.close();
+}
+
+writeSource(stub_path, '%modern
+public namespace RuntimeGate {
+    public const DebugEnabled = False;
+}
+');
+writeSource(provider_false_path, '%modern
+public namespace RuntimeGate {
+    public const DebugEnabled = False;
+}
+');
+writeSource(provider_true_path, '%modern
+public namespace RuntimeGate {
+    public const DebugEnabled = True;
+}
+');
+writeSource(external_main_path, '%modern
+
+int sub debugArgument() {
+    return 1;
+}
+
+int sub externalGuard(int count) {
+    int result = 0;
+    for (int i = 0; i < count; ++i) {
+        ++result;
+        if (RuntimeGate::DebugEnabled) {
+            result += debugArgument();
+        }
+    }
+    return result;
+}
+
+sub main() {
+    int result = externalGuard(5);
+    printf("%d\n", result);
+}
+');
+
+string provider_false_qo = root + "/runtime-gate-false.qo";
+string provider_true_qo = root + "/runtime-gate-true.qo";
+string external_main_qo = root + "/runtime-gate-main.qo";
+string external_main_disabled_qo = root + "/runtime-gate-main-disabled.qo";
+string external_false_exe = root + "/runtime-gate-false";
+string external_true_exe = root + "/runtime-gate-true";
+string external_disabled_exe = root + "/runtime-gate-disabled";
+
+string external_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s QORE_AOT_DUMP_IR=1 QORE_IR_OPT_STATS=1 "
+        + "%s -O3 -c --stub=%s -o %s %s 2>&1",
+    libqore_dir, qcc_bin, stub_path, external_main_qo, external_main_path));
+string external_compile_disabled = backquote(sprintf(
+    "QORE_DISABLE_IR_EXTERNAL_BOOL_CONST_LICM=1 LD_LIBRARY_PATH=%s "
+        + "QORE_AOT_DUMP_IR=1 QORE_IR_OPT_STATS=1 %s -O3 -c --stub=%s -o %s %s 2>&1",
+    libqore_dir, qcc_bin, stub_path, external_main_disabled_qo, external_main_path));
+string provider_false_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c -o %s %s 2>&1",
+    libqore_dir, qcc_bin, provider_false_qo, provider_false_path));
+string provider_true_compile = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -O3 -c -o %s %s 2>&1",
+    libqore_dir, qcc_bin, provider_true_qo, provider_true_path));
+if (!is_file(external_main_qo) || !is_file(external_main_disabled_qo)
+        || !is_file(provider_false_qo) || !is_file(provider_true_qo)) {
+    printf("external runtime-gate compilation failed:\nenabled:\n%sdisabled:\n%sfalse provider:\n%s"
+        + "true provider:\n%s", external_compile, external_compile_disabled,
+        provider_false_compile, provider_true_compile);
+    exit(2);
+}
+
+string external_link_false = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, external_false_exe, provider_false_qo, external_main_qo));
+string external_link_true = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, external_true_exe, provider_true_qo, external_main_qo));
+string external_link_disabled = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s -o %s %s %s 2>&1",
+    libqore_dir, qcc_bin, external_disabled_exe, provider_false_qo, external_main_disabled_qo));
+if (!is_file(external_false_exe) || !is_file(external_true_exe) || !is_file(external_disabled_exe)) {
+    printf("external runtime-gate link failed:\nfalse:\n%strue:\n%sdisabled:\n%s",
+        external_link_false, external_link_true, external_link_disabled);
+    exit(2);
+}
+
+string external_false_run = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, external_false_exe));
+string external_true_run = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, external_true_exe));
+string external_disabled_run = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1",
+    libqore_dir, external_disabled_exe));
+if (external_false_run != "5\n" || external_true_run != "10\n"
+        || external_disabled_run != "5\n") {
+    printf("external runtime-gate execution mismatch:\nfalse: %y\ntrue: %y\ndisabled: %y\n",
+        external_false_run, external_true_run, external_disabled_run);
+    exit(2);
+}
+
+string external_ir = functionIr(external_compile, "externalGuard(int)");
+string external_disabled_ir = functionIr(external_compile_disabled, "externalGuard(int)");
+string external_stats = functionStats(external_compile, "externalGuard");
+string external_disabled_stats = functionStats(external_compile_disabled, "externalGuard");
+if (!external_ir || !external_disabled_ir
+        || !external_stats || external_stats.find("hoisted=0") >= 0
+        || !external_disabled_stats || external_disabled_stats.find("hoisted=0") < 0) {
+    printf("external runtime-gate LICM mismatch:\nenabled IR:\n%sdisabled IR:\n%s"
+        + "enabled compile:\n%sdisabled compile:\n%s",
+        external_ir, external_disabled_ir, external_compile, external_compile_disabled);
     exit(2);
 }

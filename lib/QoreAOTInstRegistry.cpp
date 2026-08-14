@@ -2134,22 +2134,10 @@ static std::unique_ptr<QoreIRInstruction> readNewObject(
 
 static bool writeLoadConst(AOTInstWriteCtx& ctx) {
     auto* lci = static_cast<const QoreIRLoadConstantInstruction*>(ctx.inst);
-    if (lci->expr.needsEval()) {
-        return ctx.writeExpr(ctx.writer, lci->expr);
-    }
-    // Direct parse-time objects (for example class constants such as
-    // LoggerLevel::LevelInfo) must be resolved through the constant reverse map.
-    // writeValue() cannot serialize arbitrary objects and encodes unsupported
-    // values as NOTHING to preserve container layout.
-    if (!lci->node && !dynamic_cast<const RuntimeConstantRefNode*>(lci->expr.getInternalNode())
-            && lci->expr.getType() != NT_OBJECT) {
-        ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::CONST_VALUE));
-        return ctx.writer.writeValue(lci->expr);
-    }
-    if (!ctx.writeExpr(ctx.writer, lci->expr)) {
-        return false;
-    }
-    return true;
+    // Always use the expression callback so this function's filtered constant
+    // reverse map is available. Calling writeValue() directly bypasses that
+    // context in debug-IR serialization and can lose nested runtime constants.
+    return ctx.writeExpr(ctx.writer, lci->expr);
 }
 
 static std::unique_ptr<QoreIRInstruction> readLoadConst(

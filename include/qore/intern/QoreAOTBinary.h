@@ -780,6 +780,12 @@ public:
     //! available yet and must be serialized by value.
     const std::unordered_set<std::string>* available_const_ref_fqns = nullptr;
 
+    //! Program and module ownership context for distinguishing constants
+    //! provided by dependencies from constants emitted by this artifact.
+    QoreProgram* serialization_program = nullptr;
+    const char* serialization_module_name = nullptr;
+    const std::unordered_set<std::string>* serialization_keep_modules = nullptr;
+
     //! Per-blob type-path interner — when non-empty, `writeVariantSignature`
     //! emits a `u32` index into this table instead of the legacy inline
     //! string.  The TYPE_TABLE section is written at the tail of

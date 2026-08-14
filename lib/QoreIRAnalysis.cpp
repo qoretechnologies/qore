@@ -6226,6 +6226,21 @@ static bool qore_ir_is_hoistable_load(const QoreIRFunction& func, const QoreIRIn
         || facts->representation == QoreIRValueRepresentation::NativeBool;
 }
 
+//! Returns true for an immutable external boolean constant that is safe to load once per loop.
+/** qcc --stub constants are resolved and type-checked when the AOT artifact is registered; a missing or
+    incompatible host constant prevents execution before any compiled function can run.  Therefore an exact
+    boolean load is total during function execution and has no reference-counted payload whose lifetime could
+    change when moved to the loop preheader. */
+static bool qore_ir_is_hoistable_external_bool_constant_load(const QoreIRInstruction& inst) {
+    if (std::getenv("QORE_DISABLE_IR_EXTERNAL_BOOL_CONST_LICM")
+            || inst.opcode != QoreIROpcode::LoadConstant) {
+        return false;
+    }
+    const auto& load = static_cast<const QoreIRLoadConstantInstruction&>(inst);
+    ConstantEntry* ce = load.node ? load.node->getConstantEntry() : nullptr;
+    return ce && ce->isExternalStub() && ce->getParseTypeInfo() == boolTypeInfo;
+}
+
 static bool qore_ir_is_hoistable_query_load(
         const QoreIRFunction& func, const QoreIRInstruction& inst,
         const std::unordered_set<const LocalVar*>& mutated) {
@@ -9580,6 +9595,7 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
                     }
                     bool candidate = qore_ir_is_native_scalar_constant(inst->opcode)
                         || qore_ir_is_hoistable_load(func, *inst, mutated)
+                        || qore_ir_is_hoistable_external_bool_constant_load(*inst)
                         || (enable_query_licm
                             && (qore_ir_is_hoistable_query_load(
                                     func, *inst, mutated)
