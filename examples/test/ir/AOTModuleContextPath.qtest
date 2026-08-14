@@ -4,6 +4,7 @@
 %modern
 %no-child-restrictions
 
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
 
@@ -24,6 +25,8 @@ class AOTModuleContextPathTest inherits QUnit::Test {
             \moduleRejectsIncompatibleNativeAbi());
         addTestCase("AOT module init can inspect module hash", \moduleInitCanInspectModuleHash());
         addTestCase("AOT module init can load another module", \moduleInitCanLoadAnotherModule());
+        addTestCase("AOT module-qualified static variable resolves as a class member",
+            \moduleQualifiedStaticVarResolvesAsClassMember());
         addTestCase("AOT module binds dependency public our globals",
             \moduleBindsDependencyPublicOurGlobal());
         addTestCase("AOT module preserves inherited concrete method bodies",
@@ -158,6 +161,95 @@ printf(\"%s\\n\", AOTModuleContextPath::contextPath());
             libqore_dir, libqore_dir, tmp_dir, qore_bin, script_path));
         assertEq(qmod_path + "\n", run_out,
             "AOT module init context path must be the loaded .qmod path");
+    }
+
+    moduleQualifiedStaticVarResolvesAsClassMember() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string dep_qm_path = tmp_dir + "/AOTModuleQualifiedStaticVar.qm";
+        string dep_qmod_path = tmp_dir + "/AOTModuleQualifiedStaticVar.qmod";
+        string main_qm_path = tmp_dir + "/AOTModuleQualifiedStaticVarMain.qm";
+        string main_qmod_path = tmp_dir + "/AOTModuleQualifiedStaticVarMain.qmod";
+        string script_path = tmp_dir + "/run-static-var.qr";
+
+        File f();
+        f.open2(dep_qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module AOTModuleQualifiedStaticVar {
+    version = \"1.0\";
+    desc = \"module-qualified static variable regression\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+# Make an unrelated namespace visible in the module Program, as in the
+# DataProviderAOT failure where namespace lookup selected Mapper before the
+# encoded class provenance could be resolved.
+public namespace Mapper {
+    public const Sentinel = 1;
+}
+
+public namespace AOTModuleQualifiedStaticVar {
+    public class AOTModuleQualifiedStaticVar {
+        public {
+            static int Stored = 42;
+        }
+
+        public static int get() {
+            return AOTModuleQualifiedStaticVar::Stored;
+        }
+    }
+
+    public int sub value() {
+        return AOTModuleQualifiedStaticVar::get();
+    }
+}
+");
+        f.close();
+
+        string compile_dep_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, dep_qmod_path, dep_qm_path));
+        assertTrue(is_file(dep_qmod_path),
+            "compiled module-qualified static variable dependency: " + compile_dep_out);
+        unlink(dep_qm_path);
+
+        f.open2(main_qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%requires(reexport) AOTModuleQualifiedStaticVar
+
+module AOTModuleQualifiedStaticVarMain {
+    version = \"1.0\";
+    desc = \"module-qualified static variable wrapper\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public int sub moduleQualifiedStaticVarValue() {
+    return AOTModuleQualifiedStaticVar::value();
+}
+");
+        f.close();
+
+        string compile_main_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s "
+                + "%s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, tmp_dir, qore_bin, main_qmod_path, main_qm_path));
+        assertTrue(is_file(main_qmod_path),
+            "compiled module-qualified static variable wrapper: " + compile_main_out);
+        unlink(main_qm_path);
+
+        f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+%requires AOTModuleQualifiedStaticVarMain
+
+printf(\"value=%d\\n\", moduleQualifiedStaticVarValue());
+");
+        f.close();
+
+        assertEq("value=42\nEXIT=0\n", runQoreScriptWithTimeout(tmp_dir, script_path),
+            "module-qualified class provenance must bypass namespace/global lookup");
     }
 
     moduleInitCanInspectModuleHash() {

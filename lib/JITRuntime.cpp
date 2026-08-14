@@ -2364,6 +2364,17 @@ static uint64_t qore_rt_load_static_var_by_path_impl(QoreProgram* pgm, const cha
         ? class_path + 2 : class_path;
     qore_program_private* pp = qore_program_private::get(*pgm);
 
+    // Module-qualified AOT class references carry provenance before a newline:
+    //   @qore-module:<module>\n<class-path>
+    // They are unambiguously class references and are not valid NamedScope
+    // inputs.  Passing the encoded value through namespace/global lookup can
+    // select an unrelated namespace entry and violates runtimeMatch*()'s
+    // name invariant before qore_aot_resolve_class_ref() gets a chance to
+    // decode the provenance.
+    static constexpr char module_class_ref_prefix[] = "@qore-module:";
+    const bool module_qualified = !strncmp(resolved_class_path,
+        module_class_ref_prefix, sizeof(module_class_ref_prefix) - 1);
+
     std::string full_path;
     if (*resolved_class_path) {
         full_path = resolved_class_path;
@@ -2373,18 +2384,21 @@ static uint64_t qore_rt_load_static_var_by_path_impl(QoreProgram* pgm, const cha
         full_path = var_name;
     }
 
-    const qore_ns_private* found_ns = nullptr;
-    if (Var* var = qore_root_ns_private::runtimeFindGlobalVar(*pp->RootNS, full_path.c_str(), found_ns)) {
-        return toBits(qore_rt_eval_runtime_var(var, xsink));
-    }
-    if (*xsink) {
-        return toBits(QoreValue());
-    }
+    if (!module_qualified) {
+        const qore_ns_private* found_ns = nullptr;
+        if (Var* var = qore_root_ns_private::runtimeFindGlobalVar(
+                *pp->RootNS, full_path.c_str(), found_ns)) {
+            return toBits(qore_rt_eval_runtime_var(var, xsink));
+        }
+        if (*xsink) {
+            return toBits(QoreValue());
+        }
 
-    found_ns = nullptr;
-    if (const ConstantEntry* ce = qore_root_ns_private::runtimeFindNamespaceConstant(*pp->RootNS,
-            full_path.c_str(), found_ns)) {
-        return toBits(ce->getReferencedValue());
+        found_ns = nullptr;
+        if (const ConstantEntry* ce = qore_root_ns_private::runtimeFindNamespaceConstant(
+                *pp->RootNS, full_path.c_str(), found_ns)) {
+            return toBits(ce->getReferencedValue());
+        }
     }
 
     if (!*resolved_class_path) {
@@ -2392,11 +2406,13 @@ static uint64_t qore_rt_load_static_var_by_path_impl(QoreProgram* pgm, const cha
         return toBits(QoreValue());
     }
 
-    found_ns = nullptr;
-    if (const QoreEnumDecl* ed = qore_root_ns_private::runtimeFindEnum(*pp->RootNS, resolved_class_path,
-            found_ns)) {
-        if (const QoreEnumMember* member = ed->findMember(var_name)) {
-            return toBits(QoreValue::makeEnum(member));
+    if (!module_qualified) {
+        const qore_ns_private* found_ns = nullptr;
+        if (const QoreEnumDecl* ed = qore_root_ns_private::runtimeFindEnum(
+                *pp->RootNS, resolved_class_path, found_ns)) {
+            if (const QoreEnumMember* member = ed->findMember(var_name)) {
+                return toBits(QoreValue::makeEnum(member));
+            }
         }
     }
 
