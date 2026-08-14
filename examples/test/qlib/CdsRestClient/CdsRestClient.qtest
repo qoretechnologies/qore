@@ -252,6 +252,13 @@ class CdsTest inherits QUnit::Test {
             "an environment already chosen is left alone");
         assertNothing(rv2.url, "and no URL change is requested");
 
+        # a connection stuck on the platform's placeholder discovers as well, so one created before the
+        # default URL was published repairs itself on the next authorization
+        FakeDynamicsConnection cx({"name": "d", "desc": "d", "url": "dynamics://x", "opts": opts}, found);
+        hash<auto> rvx = cx.completeAuthorization({"access_token": "at"});
+        assertEq("dynamics://contoso.crm17.dynamics.com", rvx.url, "the placeholder is replaced");
+        assertTrue(rvx{RestConnection::ReauthorizationRequiredOption});
+
         # a discovery that finds nothing must not ask for a round that would change nothing
         FakeDynamicsConnection c3({"name": "d", "desc": "d", "opts": opts}, NOTHING);
         hash<auto> rv3 = c3.completeAuthorization({"access_token": "at"});
@@ -315,6 +322,16 @@ class CdsTest inherits QUnit::Test {
         assertFalse(CdsRestClientBase::isDiscoveryUrl(
             "dynamics://globaldiscoXcrmXdynamics.com"));
         assertFalse(CdsRestClientBase::isDiscoveryUrl(NOTHING));
+
+        # a connection created before the default URL was published to the platform got the placeholder
+        # the platform assigns when it finds none; it has no environment either, and without recognising
+        # that it would ask the authorization server for the resource "https://x" for ever
+        assertTrue(CdsRestClientBase::isPlaceholderUrl("dynamics://x"));
+        assertTrue(CdsRestClientBase::needsEnvironmentDiscovery("dynamics://x"));
+        assertTrue(CdsRestClientBase::needsEnvironmentDiscovery(CdsRestClientBase::DefaultUrl));
+        assertFalse(CdsRestClientBase::needsEnvironmentDiscovery(
+            "dynamics://contoso.crm17.dynamics.com"), "an environment is not rediscovered");
+        assertFalse(CdsRestClientBase::isPlaceholderUrl("dynamics://xx.crm17.dynamics.com"));
     }
 
     profileScopeTest() {

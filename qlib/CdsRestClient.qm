@@ -271,6 +271,17 @@ public class CdsRestClientBase {
         */
         const DiscoveryInstancesPath = "/api/discovery/v2.0/Instances";
 
+        #! The host the platform uses for an \c auto_url connection whose class publishes no default
+        /** A connection created before this module published
+            @ref DynamicsRestConnection::DefaultConnectionUrl "DefaultConnectionUrl" got
+            <tt>dynamics://x</tt>, and would otherwise never discover an environment: it does not target the
+            discovery service, so nothing would recognise it as still needing one, and every authorization
+            would ask Microsoft for the resource <tt>https://x</tt> again.
+
+            @since CdsRestClient 2.2
+        */
+        const PlaceholderHost = "x";
+
         #! OAuth2 base URL for Microsoft identity platform
         const OAuth2BaseUrl = "https://login.microsoftonline.com/";
 
@@ -321,6 +332,43 @@ public class CdsRestClientBase {
 
         @since CdsRestClient 1.1
     */
+    #! Returns @ref True if the connection has not been pointed at an environment yet
+    /** True while the connection still targets the discovery service, and also for the placeholder URL the
+        platform assigns when it has no default to use - a connection on either has no environment, which is
+        what says the discovery is still to be done.
+
+        @param url the URL to check
+
+        @since CdsRestClient 2.2
+    */
+    static bool needsEnvironmentDiscovery(*string url) {
+        return CdsRestClientBase::isDiscoveryUrl(url) || CdsRestClientBase::isPlaceholderUrl(url);
+    }
+
+    #! Returns @ref True if the URL is the placeholder the platform uses when it has no default to use
+    /** @param url the URL to check
+
+        @see @ref PlaceholderHost
+
+        @since CdsRestClient 2.2
+    */
+    static bool isPlaceholderUrl(*string url) {
+        return CdsRestClientBase::getHost(url) == PlaceholderHost;
+    }
+
+    #! Returns the host of the given URL
+    /** @param url the URL to read
+
+        @since CdsRestClient 2.2
+    */
+    static *string getHost(*string url) {
+        if (!url.val()) {
+            return;
+        }
+        *list<*string> m = (url =~ x/^[a-z]+:\/\/([^\/:]+)/i);
+        return m[0];
+    }
+
     static bool isDiscoveryUrl(*string url) {
         if (!url.val()) {
             return False;
@@ -437,7 +485,7 @@ public class CdsRestClientBase {
     */
     static *hash<auto> discoverAfterLogin(*hash<auto> new_opts, hash<auto> h, string url, *string org,
             *LoggerInterface logger, *code set_url) {
-        if (!h.access_token.val() || !CdsRestClientBase::isDiscoveryUrl(url)) {
+        if (!h.access_token.val() || !CdsRestClientBase::needsEnvironmentDiscovery(url)) {
             return new_opts;
         }
         try {
@@ -1250,7 +1298,7 @@ public class DynamicsRestConnection inherits CdsRestConnection {
     */
     private *hash<auto> processOAuth2TokenResponseImpl(hash<auto> resp) {
         *hash<auto> new_opts = RestConnection::processOAuth2TokenResponseImpl(resp);
-        if (!resp.access_token.val() || !CdsRestClientBase::isDiscoveryUrl(url)) {
+        if (!resp.access_token.val() || !CdsRestClientBase::needsEnvironmentDiscovery(url)) {
             return new_opts;
         }
         try {
