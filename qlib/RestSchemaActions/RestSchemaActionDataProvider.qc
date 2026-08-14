@@ -248,7 +248,7 @@ public class RestSchemaActionDataProvider inherits AbstractDataProvider {
         # a collection an API will not list whole is read once per partition; see
         # RestSchemaReferenceDataInfo::option_sets
         list<auto> records = ();
-        foreach hash<auto> variant in (rd.option_sets ?? ({},)) {
+        foreach hash<auto> variant in (rd.option_sets ?* ({},)) {
             auto resp = lister.doRequest(opts + variant);
             foreach string name in (rd.records_path) {
                 if (!exists resp) {
