@@ -200,6 +200,13 @@ public const ApiProfileMap = {
 #! Common base class for CdsRestClient functionality
 public class CdsRestClientBase {
     public {
+        #! The placeholder an API profile's scopes use for the connection URL
+        /** @see @ref resolveProfileScopes()
+
+            @since CdsRestClient 1.1
+        */
+        const UrlPlaceholder = "{url}";
+
         #! OAuth2 base URL for Microsoft identity platform
         const OAuth2BaseUrl = "https://login.microsoftonline.com/";
 
@@ -242,6 +249,73 @@ public class CdsRestClientBase {
     }
 
     #! returns options for the CdsRestClient constructors
+    #! Resolves an API profile's scopes against the connection URL, re-resolving any that have gone stale
+    /** A profile declares its scopes with a \c "{url}" placeholder - Dynamics 365 asks for
+        <tt>{url}user_impersonation</tt> - and the placeholder is replaced with the connection URL, so the
+        authorization request names the organisation being connected to.
+
+        The resolved value is then **stored** with the connection, which is what makes a later URL change go
+        wrong: the stored scope has the old URL baked into it and no placeholder left to substitute, so
+        replacing \c "{url}" does nothing and the authorization request keeps naming the old organisation.
+        Microsoft answers that with \c AADSTS500011, saying the resource principal was not found in the
+        tenant - which is true, and says nothing about the URL being the reason.
+
+        So a scope that has the **shape** of one of the profile's templates is resolved again against the
+        current URL, rather than only an unresolved one.  A scope the caller added itself does not have that
+        shape and is left exactly as it is.
+
+        @param templates the profile's scopes, which may contain \c "{url}"
+        @param scopes the scopes to resolve, which may already have been resolved against another URL
+        @param url the connection URL
+
+        @return the scopes, resolved against \a url
+
+        @since CdsRestClient 1.1
+    */
+    static list<string> resolveProfileScopes(*softlist<string> templates, *softlist<string> scopes,
+            string url) {
+        list<string> rv = ();
+        foreach string scope in (scopes) {
+            rv += CdsRestClientBase::resolveProfileScope(templates, scope, url);
+        }
+        return rv;
+    }
+
+    #! Resolves one scope against the connection URL
+    /** @param templates the profile's scopes, which may contain \c "{url}"
+        @param scope the scope to resolve
+        @param url the connection URL
+
+        @return the scope, resolved against \a url if it was derived from a template, otherwise unchanged
+
+        @see @ref resolveProfileScopes()
+
+        @since CdsRestClient 1.1
+    */
+    static string resolveProfileScope(*softlist<string> templates, string scope, string url) {
+        foreach string t in (templates) {
+            int i = t.find(UrlPlaceholder);
+            if (i < 0) {
+                continue;
+            }
+            string prefix = t.substr(0, i);
+            string suffix = t.substr(i + UrlPlaceholder.size());
+            # what this template resolves to for the URL in hand
+            string want = prefix + url + suffix;
+            if (scope == want) {
+                return scope;
+            }
+            # the same template resolved against some other URL: there is a URL between the template's
+            # fixed parts, and it is not the current one
+            if (scope.size() > prefix.size() + suffix.size()
+                && (!prefix.val() || scope.substr(0, prefix.size()) == prefix)
+                && (!suffix.val() || scope.substr(scope.size() - suffix.size()) == suffix)) {
+                return want;
+            }
+        }
+        return scope;
+    }
+
     static hash<auto> getOptions(hash<auto> opts0) {
         # create an untyped hash to avoid type constraints from the input hash
         hash<auto> opts += opts0;
@@ -269,8 +343,10 @@ public class CdsRestClientBase {
                     opts.url = profile.default_base_uri + api + "/" + opts.instance_type + "/api/" + api + "/";
                 }
 
-                # process scopes; substitute "{url}" with the real URL
-                opts.oauth2_scopes = map replace($1, "{url}", opts.url), opts.oauth2_scopes;
+                # resolve the profile's scopes against the URL; a scope already resolved against another
+                # URL is resolved again, or a URL change would leave the old one in the scope
+                opts.oauth2_scopes = CdsRestClientBase::resolveProfileScopes(profile.oauth2_scopes,
+                    opts.oauth2_scopes, opts.url);
             } else if (prof != "none") {
                 throw "CDS-RESTCLIENT-ERROR", sprintf("api_profile %y is unknown; known API profiles: %y", prof,
                     keys ApiProfileMap);
@@ -823,8 +899,11 @@ public class CdsRestConnection inherits RestClient::RestConnection {
                 if (url !~ /\/$/) {
                     url += "/";
                 }
-                # process scopes; substitute "{url}" with the connection URL
-                opts.oauth2_scopes = map replace($1, "{url}", url), opts.oauth2_scopes;
+                # resolve the profile's scopes against the URL; a scope already resolved against another
+                # URL is resolved again, or changing a connection's URL would leave the old one in the
+                # scope and the authorization request would name the wrong organisation
+                opts.oauth2_scopes = CdsRestClientBase::resolveProfileScopes(profile.oauth2_scopes,
+                    opts.oauth2_scopes, url);
 
                 if (opts.ping_path =~ /\{api_uri_path\}/) {
                     opts.ping_path = replace(opts.ping_path, "{api_uri_path}",

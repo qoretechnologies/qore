@@ -54,6 +54,7 @@ class CdsTest inherits QUnit::Test {
         addTestCase("CDS DataProvider test", \CdsDataProviderTests());
         addTestCase("CDS REST", \CdsRestTests());
         addTestCase("connection tests", \connectionTest());
+        addTestCase("profile scopes follow the URL", \profileScopeTest());
 
         try {
             setupConnection();
@@ -188,6 +189,57 @@ class CdsTest inherits QUnit::Test {
             }
             assertEq("OK", info.result);
         }
+    }
+
+    #! A profile scope carries the connection URL, so it has to follow the URL when that changes
+    /** The profile declares the scope as "{url}user_impersonation" and the resolved value is stored with
+        the connection, so a later URL change leaves the old URL in a scope with no placeholder left to
+        substitute.  The authorization request then names the old organisation, and Microsoft answers
+        AADSTS500011 - "the resource principal was not found in the tenant" - which says nothing about the
+        URL being the reason.
+    */
+    profileScopeTest() {
+        string UrlA = "https://eu.lcs.dynamics.com/";
+        string UrlB = "https://qoretechnologies.crm17.dynamics.com/";
+        hash<auto> Opts = {
+            "oauth2_client_id": "id",
+            "oauth2_client_secret": "secret",
+            "api_profile": "dynamics",
+        };
+
+        CdsRestConnection c1({"name": "d", "desc": "d", "url": "dynamics://eu.lcs.dynamics.com",
+            "opts": Opts});
+        assertEq(("offline_access", UrlA + "user_impersonation"), c1.opts.oauth2_scopes,
+            "the scope is resolved against the connection URL");
+
+        # the resolved options are what get stored and handed back when the connection is rebuilt
+        CdsRestConnection c2({"name": "d", "desc": "d",
+            "url": "dynamics://qoretechnologies.crm17.dynamics.com", "opts": c1.opts});
+        assertEq(("offline_access", UrlB + "user_impersonation"), c2.opts.oauth2_scopes,
+            "a scope resolved against the old URL is resolved again against the new one");
+
+        # ... and rebuilding with the same URL changes nothing
+        CdsRestConnection c3({"name": "d", "desc": "d",
+            "url": "dynamics://qoretechnologies.crm17.dynamics.com", "opts": c2.opts});
+        assertEq(c2.opts.oauth2_scopes, c3.opts.oauth2_scopes, "resolving is idempotent");
+
+        # a scope the caller set itself does not have the profile's shape and is left alone
+        CdsRestConnection c4({"name": "d", "desc": "d", "url": "dynamics://eu.lcs.dynamics.com",
+            "opts": Opts + {"oauth2_scopes": ("offline_access", "https://graph.microsoft.com/.default")}});
+        assertEq(("offline_access", "https://graph.microsoft.com/.default"), c4.opts.oauth2_scopes,
+            "a custom scope is not rewritten");
+        CdsRestConnection c5({"name": "d", "desc": "d",
+            "url": "dynamics://qoretechnologies.crm17.dynamics.com", "opts": c4.opts});
+        assertEq(c4.opts.oauth2_scopes, c5.opts.oauth2_scopes,
+            "and it still is not, when the URL changes");
+
+        # the helper itself: a template with no placeholder never rewrites anything
+        assertEq("offline_access",
+            CdsRestClientBase::resolveProfileScope(DynamicsProfile.oauth2_scopes, "offline_access", UrlB));
+        assertEq(UrlB + "user_impersonation", CdsRestClientBase::resolveProfileScope(
+            DynamicsProfile.oauth2_scopes, UrlA + "user_impersonation", UrlB));
+        assertEq("something-else", CdsRestClientBase::resolveProfileScope(
+            DynamicsProfile.oauth2_scopes, "something-else", UrlB));
     }
 
     connectionTest() {
