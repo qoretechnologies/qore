@@ -1,0 +1,115 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires Mime
+%requires Logger
+%requires DataProvider
+%requires ConnectionProvider
+%requires RestClient
+%requires CdsRestClient
+%requires DropboxRestClient
+%requires LinkedInRestClient
+%requires OneDriveRestClient
+%requires SalesforceRestClient
+%requires ServiceNowRestClient
+
+%requires qore >= 0.9
+
+%modern
+
+%exec-class OAuth2AuthFeatureTest
+
+#! Tests that connections supporting an OAuth2 authorization flow say so consistently
+/** A connection reports both the flow it supports (\c oauth2_auth_code / \c oauth2_implicit) and
+    whether it can be authorized at all (\c oauth2_auth).  The second is implied by the first, and a UI
+    deciding whether to offer an "Authorize" control reads the second - so a connection that sets only
+    the first cannot be authorized from the UI at all, however complete its OAuth2 configuration is.
+
+    Connection classes that always use the authorization code grant override \c checkAuthCodeFeature()
+    to skip re-testing the grant type, which \c setFeatures() has already gated on.  Six of them were
+    written before \c oauth2-auth existed and set only \c oauth2-auth-code, which is what this pins.
+*/
+class OAuth2AuthFeatureTest inherits QUnit::Test {
+    public {
+        #! Every connection class whose \c checkAuthCodeFeature() override skips the grant type test
+        const AuthCodeConnections = (
+            {"cls": "DynamicsRestConnection", "url": "dynamics://x.crm17.dynamics.com"},
+            {"cls": "CdsRestConnection", "url": "cdsrests://x.crm17.dynamics.com"},
+            {"cls": "BusinessCentralRestConnection", "url": "bcrests://api.businesscentral.dynamics.com",
+                "opts": {"instance_type": "sandbox"}},
+            {"cls": "DropboxRestConnection", "url": "dropbox://api.dropboxapi.com"},
+            {"cls": "LinkedInRestConnection", "url": "linkedin://api.linkedin.com"},
+            {"cls": "LinkedInDmaRestConnection", "url": "linkedindma://api.linkedin.com"},
+            {"cls": "OneDriveRestConnection", "url": "onedrive://graph.microsoft.com"},
+            {"cls": "SharePointRestConnection", "url": "sharepoint://graph.microsoft.com"},
+            {"cls": "SalesforceRestConnection", "url": "sfrests://x.my.salesforce.com"},
+            {"cls": "ServiceNowRestConnection", "url": "snrests://x.service-now.com"},
+        );
+
+        #! A complete authorization code configuration; the feature is only claimed when all are set
+        /** The grant type is stated rather than left to each connection's default, because
+            \c setFeatures() only asks about the flow at all for the authorization code and implicit
+            grants - ServiceNow, which can also authenticate with an API key or a token, defaults to
+            neither and legitimately offers no authorization.
+        */
+        const AuthCodeOptions = {
+            "oauth2_grant_type": "authorization_code",
+            "oauth2_auth_url": "https://example.com/authorize",
+            "oauth2_token_url": "https://example.com/token",
+            "oauth2_client_id": "client-id",
+            "oauth2_client_secret": "client-secret",
+            "oauth2_redirect_url": "auto",
+        };
+    }
+
+    constructor() : Test("OAuth2AuthFeatureTest", "1.0") {
+        addTestCase("a connection supporting a flow can be authorized", \authFeatureTest());
+        addTestCase("an unconfigured connection claims no authorization support", \noAuthFeatureTest());
+        set_return_value(main());
+    }
+
+    #! Builds a connection of the named class
+    private AbstractConnection getConnection(hash<auto> entry, *hash<auto> opts) {
+        return cast<AbstractConnection>(create_object(entry.cls, {
+            "name": "test-" + entry.cls,
+            "url": entry.url,
+            "opts": entry.opts + opts,
+        }));
+    }
+
+    #! Claiming a specific flow and claiming no authorization support at all is a contradiction
+    private authFeatureTest() {
+        foreach hash<auto> entry in (AuthCodeConnections) {
+            hash<auto> info = getConnection(entry, AuthCodeOptions).getExtendedInfoAsData();
+            assertTrue(info.oauth2_auth_code, entry.cls + " supports the authorization code grant");
+            # the regression: a UI offering an "Authorize" control reads this one
+            assertTrue(info.oauth2_auth, entry.cls + " reports that it can be authorized");
+            assertEq(info.oauth2_auth_code || info.oauth2_implicit, info.oauth2_auth,
+                entry.cls + " agrees with itself about being authorizable");
+        }
+    }
+
+    #! The base class decides on the grant type, and reports the two features together either way
+    private noAuthFeatureTest() {
+        # a grant with no authorization step claims neither feature
+        hash<auto> info = new RestConnection({
+            "name": "test-client-credentials",
+            "url": "rests://example.com",
+            "opts": AuthCodeOptions + {"oauth2_grant_type": "client_credentials"},
+        }).getExtendedInfoAsData();
+        assertFalse(info.oauth2_auth_code, "the client credentials grant has no authorization step");
+        assertFalse(info.oauth2_auth, "so the connection cannot be authorized");
+
+        # while the same connection on the authorization code grant claims both
+        info = new RestConnection({
+            "name": "test-auth-code",
+            "url": "rests://example.com",
+            "opts": AuthCodeOptions + {"oauth2_grant_type": "authorization_code"},
+        }).getExtendedInfoAsData();
+        assertTrue(info.oauth2_auth_code, "the authorization code grant is claimed");
+        assertTrue(info.oauth2_auth, "and with it the ability to be authorized");
+    }
+}

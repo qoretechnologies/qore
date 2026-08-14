@@ -1596,7 +1596,7 @@ public class SalesforceRestConnection inherits RestClient::RestConnection {
     #! Sets the auth code feature if supported
     private checkAuthCodeFeature() {
         if (opts{OAuth2AuthRequestOptions}.size() == OAuth2AuthRequestOptions.size()) {
-            features{RCF_OAUTH2_AUTH_CODE} = True;
+            setOAuth2AuthFeature(RCF_OAUTH2_AUTH_CODE);
         }
     }
 

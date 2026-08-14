@@ -145,6 +145,12 @@ printf("%Y\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_7 RestClient v2.7
+    - fixed connections that always use the authorization code grant reporting that they cannot be
+      authorized; their \c checkAuthCodeFeature() overrides set only the authorization code feature
+      and not the general \c oauth2-auth feature a UI reads to offer an \c Authorize control, so
+      Dynamics, Salesforce, OneDrive, ServiceNow, Dropbox, and LinkedIn connections could not be
+      authorized from the UI at all.  Both features are now set together in
+      @ref RestClient::RestConnection::setOAuth2AuthFeature() "setOAuth2AuthFeature()"
     - fixed pings swallowing every failure acquiring the async client and silently retrying the
       whole ping synchronously; only \c CONNECTION-ASYNC-UNSUPPORTED and \c LOAD-MODULE-ERROR
       fall back now, so a real failure such as an OAuth2 login error is reported as-is instead of
@@ -5144,13 +5150,32 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
     private checkAuthCodeFeature() {
         if (opts.oauth2_grant_type == "authorization_code"
                 && opts{OAuth2AuthRequestOptions}.size() == OAuth2AuthRequestOptions.size()) {
-            features{RCF_OAUTH2_AUTH_CODE} = True;
-            features{RCF_OAUTH2_AUTH} = True;
+            setOAuth2AuthFeature(RCF_OAUTH2_AUTH_CODE);
         } else if (opts.oauth2_grant_type == "implicit"
                 && opts{OAuth2ImplicitAuthRequestOptions}.size() == OAuth2ImplicitAuthRequestOptions.size()) {
-            features{RCF_OAUTH2_IMPLICIT} = True;
-            features{RCF_OAUTH2_AUTH} = True;
+            setOAuth2AuthFeature(RCF_OAUTH2_IMPLICIT);
         }
+    }
+
+    #! Declares support for a specific OAuth2 authorization flow, and for authorization in general
+    /** @ref RCF_OAUTH2_AUTH says only that the connection has an authorization step a user can be sent
+        through, which is true of every flow that sets one of the specific features, so the two are set
+        together here rather than by each caller.
+
+        Setting a flow's feature on its own leaves the connection saying it supports the authorization
+        code grant and that it cannot be authorized at the same time; a UI deciding whether to offer an
+        \c Authorize control reads the general feature and believes the second, so the connection can
+        never be authorized from it.  That is what @ref checkAuthCodeFeature() overrides in connection
+        classes written before @ref RCF_OAUTH2_AUTH existed did, so subclasses overriding it must call
+        this rather than assigning to @ref features directly.
+
+        @param feature @ref RCF_OAUTH2_AUTH_CODE or @ref RCF_OAUTH2_IMPLICIT
+
+        @since %RestClient 2.7
+    */
+    private setOAuth2AuthFeature(string feature) {
+        features{feature} = True;
+        features{RCF_OAUTH2_AUTH} = True;
     }
 
     #! returns a @ref RestClient::RestClient "RestClient" object
