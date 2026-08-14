@@ -128,6 +128,7 @@ class CdsEntityEventsTest inherits QUnit::Test {
         addTestCase("any entity can be watched", \genericEntityTest());
         addTestCase("example event data", \exampleEventDataTest());
         addTestCase("the payload type comes from the entity", \eventPayloadTypeTest());
+        addTestCase("superseded option names survive", \supersededOptionTest());
         set_return_value(main());
     }
 
@@ -272,6 +273,31 @@ class CdsEntityEventsTest inherits QUnit::Test {
         must not throw: an example is a convenience, and failing to produce one would stop an event
         being configured at all.
     */
+    #! The option names the superseded TypeScript triggers published
+    /** An existing subscription supplies its option values **by name**, so an option renamed in the port
+        breaks every workflow that set it.  The TypeScript triggers published \c condition on the seven
+        entity triggers and \c entityName on the custom-entity one, read from that application's own i18n
+        catalog rather than from its source.
+    */
+    supersededOptionTest() {
+        CdsEventsDataProvider events();
+        foreach string id in (TypeScriptEventIds) {
+            AbstractDataProvider ep = cast<AbstractDataProvider>(events.getChildProvider(id));
+            hash<string, hash<DataProviderOptionInfo>> opts = ep.getInfo().constructor_options ?? {};
+            if (id == "new-custom-entity") {
+                assertTrue(exists opts.entityName,
+                    "new-custom-entity still takes \"entityName\", not a renamed option");
+                assertTrue(opts.entityName.required, "and it is still required");
+            } else {
+                assertTrue(exists opts.condition, sprintf("%y still takes \"condition\"", id));
+                assertEq("created", opts.condition.default_value,
+                    sprintf("%y still defaults to \"created\"", id));
+                assertEq(("created", "updated"), (map $1.value, opts.condition.allowed_values),
+                    sprintf("%y still offers the same two values", id));
+            }
+        }
+    }
+
     #! An event describes its payload with the entity's own type
     /** \c getRecordType() answers with the record's **fields**, and assigning that to a type silently fell
         into the catch below it, so every entity event published an untyped hash and a caller mapping one
@@ -325,8 +351,8 @@ class CdsEntityEventsTest inherits QUnit::Test {
         # the custom-entity event takes the table as an option and resolves its entity set and key
         # from the organisation's own entity definition rather than from the option's spelling
         hash<auto> copts = CdsCustomEntityWatchDataProvider::ConstructorOptions;
-        assertTrue(copts.entity.required, "the custom-entity event requires an entity");
+        assertTrue(copts.entityName.required, "the custom-entity event requires an entity");
         assertTrue(exists copts.condition, "the custom-entity event takes a condition too");
-        assertEq("account", copts.entity.example_value, "the option is a logical name");
+        assertEq("account", copts.entityName.example_value, "the option is a logical name");
     }
 }

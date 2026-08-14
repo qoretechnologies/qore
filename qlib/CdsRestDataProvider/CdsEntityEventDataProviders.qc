@@ -501,7 +501,9 @@ public class CdsCustomEntityWatchDataProvider inherits CdsEntityWatchDataProvide
 
         #! Constructor options
         const ConstructorOptions = WatchConstructorOptions + {
-            "entity": <DataProviderOptionInfo>{
+            # named as the superseded TypeScript trigger named it: an existing subscription supplies its
+            # option values **by name**, so renaming this one would break every workflow that set it
+            "entityName": <DataProviderOptionInfo>{
                 "display_name": "Entity",
                 "short_desc": "The logical name of the table to watch",
                 "type": AbstractDataProviderType::get(StringType),
@@ -539,7 +541,7 @@ public class CdsCustomEntityWatchDataProvider inherits CdsEntityWatchDataProvide
     #! Creates the object
     constructor(*CdsRestClient::CdsRestClient rest, *hash<auto> options)
             : CdsEntityWatchDataProviderBase(rest, options) {
-        logical_name = options.entity;
+        logical_name = options.entityName;
     }
 
     #! Returns the data provider name
