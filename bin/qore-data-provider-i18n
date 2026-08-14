@@ -44,6 +44,7 @@ class QoreDataProviderI18nCmd {
             "check":   "check",
             "check_tree": "check-tree",
             "check_source_tree": "check-source-tree",
+            "require_standard_locales": "require-standard-locales",
             "verbose": "v,verbose:i+",
             "help":    "h,help",
         };
@@ -79,13 +80,20 @@ class QoreDataProviderI18nCmd {
     }
 
     private run(hash<auto> opt) {
+        if (opt.require_standard_locales && !opt.check
+                && !opt.check_tree && !opt.check_source_tree) {
+            fail("--require-standard-locales requires a check mode");
+        }
+        list<string> required_locales = opt.require_standard_locales
+            ? DataProviderPresentation::StandardTranslationLocales : ();
         if (opt.check_source_tree) {
             if (opt.app) {
                 fail("--check-source-tree cannot be combined with --app");
             }
             checkSourceTree(opt.output,
                 cast<list<string>>(opt.module ?? ()),
-                cast<list<string>>(opt.owner ?? ()), opt.verbose);
+                cast<list<string>>(opt.owner ?? ()), required_locales,
+                opt.verbose);
             return;
         }
 
@@ -93,7 +101,7 @@ class QoreDataProviderI18nCmd {
             if (opt.module || opt.owner || opt.app) {
                 fail("--check-tree cannot be combined with --module, --owner, or --app");
             }
-            checkTree(opt.output, opt.verbose);
+            checkTree(opt.output, required_locales, opt.verbose);
             return;
         }
 
@@ -179,6 +187,8 @@ class QoreDataProviderI18nCmd {
                 stale += checkTranslations(domain,
                     catalogs{domain}.locales.root.messages, opt.output,
                     opt.verbose);
+                stale += checkRequiredTranslationLocales(domain, opt.output,
+                    required_locales);
                 continue;
             }
             mkdir_ex(dirname(path), 0755, True);
@@ -199,7 +209,8 @@ class QoreDataProviderI18nCmd {
             catalogs.size());
     }
 
-    private checkTree(string output, *int verbose) {
+    private checkTree(string output, list<string> required_locales,
+            *int verbose) {
         list<hash<auto>> roots = ();
         collectRootCatalogs(output, \roots);
         if (!roots) {
@@ -254,6 +265,14 @@ class QoreDataProviderI18nCmd {
                     issue.path, issue.message_id.val()
                         ? ": " + issue.message_id : "", issue.reason);
             }
+            hash<string, bool> checked_roots;
+            foreach hash<auto> root in (domain_roots{domain}) {
+                if (!checked_roots{root.search_root}) {
+                    checked_roots{root.search_root} = True;
+                    stale += checkRequiredTranslationLocales(domain,
+                        root.search_root, required_locales);
+                }
+            }
         }
         if (stale) {
             exit(2);
@@ -263,7 +282,8 @@ class QoreDataProviderI18nCmd {
     }
 
     private checkSourceTree(string output, list<string> extra_modules,
-            list<string> explicit_owners, *int verbose) {
+            list<string> explicit_owners, list<string> required_locales,
+            *int verbose) {
         list<hash<auto>> roots = ();
         collectRootCatalogs(output, \roots);
         if (!roots) {
@@ -371,6 +391,8 @@ class QoreDataProviderI18nCmd {
                     issue.path, issue.message_id.val()
                         ? ": " + issue.message_id : "", issue.reason);
             }
+            stale += checkRequiredTranslationLocales(root.domain,
+                root.search_root, required_locales);
             if (verbose) {
                 printf("verified %s\n", color.key(root.path));
             }
@@ -622,6 +644,30 @@ class QoreDataProviderI18nCmd {
         return result.issues.size();
     }
 
+    #! Reports standard translation locale files missing from one catalog
+    /** Required locales are exact canonical BCP 47 identities supplied by
+        policy. Discovery uses the native catalog layouts and never infers a
+        language from message text or filenames outside that native boundary.
+    */
+    private int checkRequiredTranslationLocales(string domain,
+            string search_root, list<string> required_locales) {
+        if (!required_locales) {
+            return 0;
+        }
+        hash<string, bool> available = map {$1: True},
+            DataProviderPresentation::discoverCatalogLocales(domain,
+                {"search_path": (search_root,)});
+        int missing = 0;
+        foreach string locale in (required_locales) {
+            if (!available{locale}) {
+                ++missing;
+                stderr.printf("%s catalog domain %y locale %y below %s\n",
+                    color.error("MISSING:"), domain, locale, search_root);
+            }
+        }
+        return missing;
+    }
+
     private mergeCatalogs(reference<hash<string, hash<auto>>> target,
             hash<string, hash<auto>> source) {
         foreach hash<auto> catalog_entry in (source.pairIterator()) {
@@ -688,6 +734,8 @@ class QoreDataProviderI18nCmd {
         printf("      --check-tree   Recursively verify catalogs without loading providers\n");
         printf("      --check-source-tree\n");
         printf("                     Load source owners and verify roots and translations\n");
+        printf("      --require-standard-locales\n");
+        printf("                     Require every standard translation locale in a check\n");
         printf("  -v, --verbose      Show loaded modules and written files\n");
         printf("  -C, --no-color     Disable colored output\n");
         printf("  -h, --help         Show this help\n");
