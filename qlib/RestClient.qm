@@ -3847,27 +3847,6 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
         #! Connections needs authorization?
         bool needs_auth;
 
-        #! Option key asking the platform for another authorization round
-        /** Returned by @ref processOAuth2TokenResponseImpl() where the authorization that has just
-            completed produced a token the connection **cannot use**, because completing it changed which
-            resource the connection targets.
-
-            Microsoft Dynamics is the case this exists for: the environment a credential reaches is only
-            known once the credential exists, so the first authorization is made against the discovery
-            service and the environment is discovered from its response.  The token in hand is then for the
-            discovery service and not for the environment, and no refresh will change that - an OAuth2
-            refresh does not name a resource, and asking for another one returns the originally granted one
-            anyway, measured against Microsoft's own service.
-
-            The platform removes this key from the options, stores everything else - the discovered URL and
-            the scopes that go with it - and issues a second authorization request instead of reporting the
-            first one as complete.  A connection that reported success here would be shown as authorized
-            while every call it made failed.
-
-            @since RestClient 2.4
-        */
-        const ReauthorizationRequiredOption = "oauth2_reauthorization_required";
-
         #! Connection entry info
         const hash<ConnectionSchemeInfo> ConnectionScheme = <ConnectionSchemeInfo>{
             "display_name": "REST Connection",
@@ -4445,6 +4424,12 @@ public class RestConnection inherits ConnectionProvider::HttpBasedConnection,
             @ref processOAuth2TokenResponseImpl() when processing an OAuth2 token response changes the resource URL
             and the issued token cannot authorize the newly discovered resource.  Callers must remove this control
             option before persisting the returned connection options and start a new authorization flow.
+
+            Microsoft Dynamics is the case this exists for: the environment a credential reaches is known only
+            after the first authorization against the discovery service.  That token cannot authorize the discovered
+            environment, and an OAuth2 refresh cannot change its resource.  The platform therefore stores the
+            discovered URL and scopes and issues another authorization request instead of reporting the unusable
+            first token as a completed connection.
 
             @since %RestClient 2.7
         */
