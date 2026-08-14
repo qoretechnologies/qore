@@ -3,6 +3,7 @@
  *
  * Copyright (c) 2010, Salvatore Sanfilippo <antirez at gmail dot com>
  * Copyright (c) 2010, Pieter Noordhuis <pcnoordhuis at gmail dot com>
+ * Copyright (C) 2026 Qore Technologies, s.r.o.
  *
  * All rights reserved.
  *
@@ -127,10 +128,13 @@
 #include "linenoise.h"
 #include "ConvertUTF.h"
 
-#include <string>
-#include <vector>
+#include <limits>
 #include <memory>
+#include <stdexcept>
+#include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 using std::string;
 using std::vector;
@@ -437,66 +441,65 @@ static int write32(int fd, char32_t* text32, int len32) {
 
 class Utf32String {
  public:
-  Utf32String() : _length(0), _data(nullptr) {
-    // note: parens intentional, _data must be properly initialized
-    _data = new char32_t[1]();
+  Utf32String() : _length(0), _data(new char32_t[1]()) {
   }
 
   explicit Utf32String(const char* src) : _length(0), _data(nullptr) {
     size_t len = strlen(src);
     // note: parens intentional, _data must be properly initialized
-    _data = new char32_t[len + 1]();
-    copyString8to32(_data, len + 1, _length, src);
+    _data.reset(new char32_t[allocationSize(len)]());
+    copyString8to32(_data.get(), len + 1, _length, src);
   }
 
   explicit Utf32String(const char8_t* src) : _length(0), _data(nullptr) {
     size_t len = strlen(reinterpret_cast<const char*>(src));
     // note: parens intentional, _data must be properly initialized
-    _data = new char32_t[len + 1]();
-    copyString8to32(_data, len + 1, _length, src);
+    _data.reset(new char32_t[allocationSize(len)]());
+    copyString8to32(_data.get(), len + 1, _length, src);
   }
 
   explicit Utf32String(const char32_t* src) : _length(0), _data(nullptr) {
-    for (_length = 0; src[_length] != 0; ++_length) {
+    _length = std::char_traits<char32_t>::length(src);
+    if (_length > maxLength()) {
+      throw std::length_error("UTF-32 string is too long");
     }
 
     // note: parens intentional, _data must be properly initialized
-    _data = new char32_t[_length + 1]();
-    memcpy(_data, src, _length * sizeof(char32_t));
+    _data.reset(new char32_t[allocationSize(_length)]());
+    memcpy(_data.get(), src, byteSize(_length));
   }
 
-  explicit Utf32String(const char32_t* src, int len) : _length(len), _data(nullptr) {
+  explicit Utf32String(const char32_t* src, int len)
+      : _length(checkedLength(len)), _data(nullptr) {
     // note: parens intentional, _data must be properly initialized
-    _data = new char32_t[len + 1]();
-    memcpy(_data, src, len * sizeof(char32_t));
+    _data.reset(new char32_t[allocationSize(_length)]());
+    memcpy(_data.get(), src, byteSize(_length));
   }
 
   explicit Utf32String(int len) : _length(0), _data(nullptr) {
     // note: parens intentional, _data must be properly initialized
-    _data = new char32_t[len]();
+    _data.reset(new char32_t[checkedCapacity(len)]());
   }
 
-  explicit Utf32String(const Utf32String& that) : _length(that._length), _data(nullptr) {
+  Utf32String(const Utf32String& that) : _length(that._length), _data(nullptr) {
     // note: parens intentional, _data must be properly initialized
-    _data = new char32_t[_length + 1]();
-    memcpy(_data, that._data, sizeof(char32_t) * _length);
+    _data.reset(new char32_t[allocationSize(_length)]());
+    memcpy(_data.get(), that._data.get(), byteSize(_length));
   }
 
   Utf32String& operator=(const Utf32String& that) {
     if (this != &that) {
-      delete[] _data;
-      _data = new char32_t[that._length]();
-      _length = that._length;
-      memcpy(_data, that._data, sizeof(char32_t) * _length);
+      Utf32String temp(that);
+      swap(temp);
     }
 
     return *this;
   }
 
-  ~Utf32String() { delete[] _data; }
+  ~Utf32String() = default;
 
  public:
-  char32_t* get() const { return _data; }
+  char32_t* get() const { return _data.get(); }
 
   size_t length() const { return _length; }
 
@@ -512,8 +515,45 @@ class Utf32String {
   char32_t& operator[](size_t pos) { return _data[pos]; }
 
  private:
+  static constexpr size_t maxLength() {
+    return std::numeric_limits<size_t>::max() / sizeof(char32_t) - 1;
+  }
+
+  static size_t checkedLength(int length) {
+    if (length < 0 || static_cast<size_t>(length) > maxLength()) {
+      throw std::length_error("invalid UTF-32 string length");
+    }
+    return static_cast<size_t>(length);
+  }
+
+  static size_t checkedCapacity(int capacity) {
+    if (capacity <= 0 || static_cast<size_t>(capacity) > maxLength() + 1) {
+      throw std::length_error("invalid UTF-32 string capacity");
+    }
+    return static_cast<size_t>(capacity);
+  }
+
+  static size_t allocationSize(size_t length) {
+    if (length > maxLength()) {
+      throw std::length_error("UTF-32 string is too long");
+    }
+    return length + 1;
+  }
+
+  static size_t byteSize(size_t length) {
+    if (length > maxLength()) {
+      throw std::length_error("UTF-32 string is too long");
+    }
+    return length * sizeof(char32_t);
+  }
+
+  void swap(Utf32String& that) noexcept {
+    std::swap(_length, that._length);
+    _data.swap(that._data);
+  }
+
   size_t _length;
-  char32_t* _data;
+  unique_ptr<char32_t[]> _data;
 };
 
 class Utf8String {
@@ -4463,7 +4503,7 @@ int linenoiseHistorySave(const char* filename) {
 
   for (int j = 0; j < historyLen; ++j) {
     if (history[j][0] != '\0') {
-      fprintf(fp, "%s\n", history[j]);
+      fprintf(fp, "%s\n", reinterpret_cast<const char*>(history[j]));
     }
   }
 
