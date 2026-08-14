@@ -3930,11 +3930,17 @@ static uint64_t qore_rt_list_push_impl(QoreValue list_val, QoreValue push_val,
     if (list_val.getType() == NT_LIST) {
         QoreListNode* l = list_val.get<QoreListNode>();
         if (l->reference_count() > 1) {
-            QoreListNode* copy = l->copy();
+            ReferenceHolder<QoreListNode> copy(l->copy(), xsink);
             copy->push(push_val.refSelf(), xsink);
-            return toBits(QoreValue(copy));
+            if (xsink && *xsink) {
+                return toBits(QoreValue());
+            }
+            return toBits(QoreValue(copy.release()));
         }
         l->push(push_val.refSelf(), xsink);
+        if (xsink && *xsink) {
+            return toBits(QoreValue());
+        }
         // Return same list with a new reference for the caller to own
         l->ref();
         return toBits(list_val);
@@ -3943,10 +3949,13 @@ static uint64_t qore_rt_list_push_impl(QoreValue list_val, QoreValue push_val,
     if (list_val.isNothing()) {
         // Auto-vivify empty list (already has refcount 1 from new)
         element_type = qore_substitute_type_params_if_needed(element_type);
-        QoreListNode* l = new QoreListNode(element_type ? element_type : autoTypeInfo);
+        ReferenceHolder<QoreListNode> l(
+            new QoreListNode(element_type ? element_type : autoTypeInfo), xsink);
         l->push(push_val.refSelf(), xsink);
-        QoreValue result(l);
-        return toBits(result);
+        if (xsink && *xsink) {
+            return toBits(QoreValue());
+        }
+        return toBits(QoreValue(l.release()));
     }
 
     // Not a list - raise error

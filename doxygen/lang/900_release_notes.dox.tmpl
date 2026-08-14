@@ -2665,15 +2665,6 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         data with the initial-exec TLS model, which musl's dynamic linker refuses in any library opened with
         \c dlopen()
 
-    - Compiler and runtime
-      - fixed captured, referenced, and thread-safe local hashes and lists being copied on every direct key
-        assignment or \c push in IR, tiered, JIT, and AOT execution, which made accumulation loops quadratic;
-        shared locals now use lock-aware lvalue mutation so compiler bookkeeping references do not trigger
-        copy-on-write, while true value aliases retain copy-on-write semantics
-      - fixed exceptions from structured assignments and \c push and \c unshift mutations bypassing an
-        enclosing \c catch block in interpreted IR execution; lvalue locks are now released before cleanup and
-        catch transfer
-
     - @ref dataproviderintro "DataProvider" module
       - fixed a bug in @ref DataProvider::AbstractDataProviderBulkOperation::setupInitialRecord() "AbstractDataProviderBulkOperation::setupInitialRecord()" that caused the buffer to have
         an empty string key, preventing bulk operations from flushing correctly

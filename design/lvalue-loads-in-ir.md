@@ -26,6 +26,31 @@ LoadLocal(container, auto_ref=false)
 This applies to direct mutation opcodes and to root values for lvalue paths.
 The borrowed value must not be placed in owned cleanup lists.
 
+## Paired Local Mutation Rule
+
+An ordinary local can remain runtime-backed because another statement in the
+same function uses indexed or structured lvalue access. A native
+`LoadLocal` → mutation → `StoreLocal` sequence must not become quadratic merely
+because that classification prevents the stronger fresh-local optimization.
+
+For an uninterrupted paired local mutation, analysis marks the load, mutation,
+and store as one guarded local-COW operation. Immediately before the runtime
+uniqueness check, the interpreter and LLVM lowering remove only compiler-owned
+slot-cache and reload references. The runtime local and any semantic aliases
+remain owners, so the helper mutates a truly unique value in place or creates a
+replacement when a real alias exists. A replacement is always stored back to a
+runtime-backed local.
+
+The guarded marker remains valid across AOT function outlining because helper
+cache references are cleared before the check. Stronger in-place and redundant
+store markers are removed when outlining changes local ownership.
+
+List `push` also preserves the AST's exception-visible auto-vivification order:
+when a typed local is `NOTHING`, lowering stores the correctly typed empty list
+before validating the pushed element. A caught element-type error therefore
+leaves an empty list in the local, and any tentative helper-owned COW result is
+released on failure.
+
 ## Shared-Local Mutation Rule
 
 Captured, closure-bound, and thread-safe locals must use the structured lvalue
@@ -101,6 +126,7 @@ collisions and keeps native alloca caches coherent with handler writes.
 When adding a new lvalue opcode or helper:
 
 - The lowering path uses borrowed loads for mutation roots.
+- Paired local mutations clear only compiler-owned references before COW.
 - Shared local roots use lock-held structured lvalue navigation.
 - Interpreter cleanup never owns borrowed roots.
 - Exception edges release lvalue locks before cleanup or catch transfer.

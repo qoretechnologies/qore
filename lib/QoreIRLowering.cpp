@@ -9672,10 +9672,65 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
                 return QoreIRValue();
             }
 
+            const QoreTypeInfo* var_type = var->ref.id->getTypeInfo();
+            const QoreTypeInfo* element_type =
+                QoreTypeInfo::getUniqueReturnComplexList(var_type);
+            if (!element_type) {
+                element_type = QoreTypeInfo::getUniqueReturnComplexSoftList(var_type);
+            }
+            if (!element_type) {
+                element_type = QoreTypeInfo::getReturnComplexListOrNothing(var_type);
+            }
+
             // Load current list
             QoreIRValue list_val = lowerExpression(left_expr, error);
             if (!list_val.isValid()) {
                 return QoreIRValue();
+            }
+
+            // QorePushOperatorNode commits typed-list auto-vivification before
+            // validating the pushed value. Preserve that exception-visible
+            // ordering: a caught element type error must leave an empty list,
+            // not the local's previous NOTHING value. Definitely assigned,
+            // non-NOTHING locals keep the straight-line fast path.
+            bool local_known_assigned = parse_context
+                && parse_context->isLocalDefinitelyAssigned(var->ref.id)
+                && var_type
+                && QoreTypeInfo::parseReturns(var_type, NT_NOTHING) == QTI_NOT_EQUAL;
+            if (!local_known_assigned) {
+                QoreIRBasicBlock* has_value_block = createBlock("push.has_value");
+                QoreIRBasicBlock* nothing_block = createBlock("push.nothing");
+                QoreIRBasicBlock* merge_block = createBlock("push.merge");
+                if (!has_value_block || !nothing_block || !merge_block) {
+                    error = "IR builder failed to create blocks for push auto-vivification";
+                    return QoreIRValue();
+                }
+                QoreIRValue nothing = builder.createConstNothing(op->loc)->result;
+                QoreIRValue is_nothing = builder.createBinaryOp(
+                    QoreIROpcode::EqHard, list_val, nothing, op->loc)->result;
+                builder.createBranchIf(is_nothing, nothing_block, has_value_block,
+                    op->loc);
+
+                builder.setBlock(nothing_block);
+                QoreIRValue empty_list =
+                    builder.createEmptyList(op->loc, element_type)->result;
+                auto* initial_store = builder.createStoreLocal(
+                    var->ref.id, empty_list, op->loc);
+                if (!exception_stack.empty()) {
+                    initial_store->exception_target = exception_stack.back();
+                }
+                QoreIRBasicBlock* nothing_exit_block = builder.getBlock();
+                builder.createBranch(merge_block, op->loc);
+
+                builder.setBlock(has_value_block);
+                QoreIRBasicBlock* has_value_exit_block = builder.getBlock();
+                builder.createBranch(merge_block, op->loc);
+
+                builder.setBlock(merge_block);
+                list_val = builder.createPhi({
+                    {list_val, has_value_exit_block},
+                    {empty_list, nothing_exit_block},
+                }, op->loc)->result;
             }
 
             if (!exception_stack.empty()) {
@@ -9689,14 +9744,7 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
                 auto* inst = builder.createInvoke(expr, {list_val, push_val}, normal_block, handler, op->loc);
                 inst->invoke_opcode = QoreIROpcode::ListPush;
                 // Set element type for proper coercion on auto-vivification
-                const QoreTypeInfo* var_type = var->ref.id->getTypeInfo();
-                inst->element_type = QoreTypeInfo::getUniqueReturnComplexList(var_type);
-                if (!inst->element_type) {
-                    inst->element_type = QoreTypeInfo::getUniqueReturnComplexSoftList(var_type);
-                }
-                if (!inst->element_type) {
-                    inst->element_type = QoreTypeInfo::getReturnComplexListOrNothing(var_type);
-                }
+                inst->element_type = element_type;
                 builder.setBlock(normal_block);
 
                 // Store result back
@@ -9709,14 +9757,7 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
             auto* push_inst = builder.createListPush(list_val, push_val, op->loc);
             // Set element type from the variable's list type for proper coercion
             // when auto-vivifying from NOTHING (e.g., list<softint> l; push l, "3")
-            const QoreTypeInfo* var_type = var->ref.id->getTypeInfo();
-            push_inst->element_type = QoreTypeInfo::getUniqueReturnComplexList(var_type);
-            if (!push_inst->element_type) {
-                push_inst->element_type = QoreTypeInfo::getUniqueReturnComplexSoftList(var_type);
-            }
-            if (!push_inst->element_type) {
-                push_inst->element_type = QoreTypeInfo::getReturnComplexListOrNothing(var_type);
-            }
+            push_inst->element_type = element_type;
             QoreIRValue result = push_inst->result;
 
             // Store result back (may be new list if auto-vivified from NOTHING)

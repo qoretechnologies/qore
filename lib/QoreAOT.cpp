@@ -4138,10 +4138,12 @@ public:
         // Outlined pieces access shared locals through runtime slots, and
         // helper entry initialization holds its own reference to each
         // pre-instantiated local's node, so the alloca-borrow invariant the
-        // in-place mutation markings rely on (the local's node is unique at
-        // the mutation site) no longer holds.  Strip the markings across the
-        // coordinator and all helpers: the paired stores become real
-        // store-backs and the appends/pushes revert to CoW helpers.
+        // provably in-place mutation markings rely on (the local's node is
+        // unique at the mutation site) no longer holds. Strip those markings
+        // across the coordinator and all helpers. Guarded local-CoW markings
+        // remain valid: their codegen explicitly clears helper cache/reload
+        // references before checking uniqueness, and the paired stores become
+        // real store-backs here.
         auto strip_in_place_markings = [](QoreIRFunction& f) {
             for (auto& block : f.blocks) {
                 for (auto& inst : block->instructions) {

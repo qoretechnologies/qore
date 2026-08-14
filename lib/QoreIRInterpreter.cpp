@@ -5060,26 +5060,17 @@ static QoreValue evalInvoke(const QoreIRInvokeInstruction* inv,
         case QoreIROpcode::ListPush: {
             QoreValue list_val = inv->operands.size() > 0 ? getIRValue(values, inv->operands[0]) : QoreValue();
             QoreValue push_val = inv->operands.size() > 1 ? getIRValue(values, inv->operands[1]) : QoreValue();
-            if (list_val.getType() == NT_LIST) {
+            if (inv->list_push_in_place && list_val.getType() == NT_LIST) {
                 QoreListNode* l = list_val.get<QoreListNode>();
                 l->push(push_val.refSelf(), xsink);
                 // refSelf: result shares same list pointer as operand; both are in
                 // cleanup, so both need their own reference
-                return list_val.refSelf();
+                return xsink && *xsink ? QoreValue() : list_val.refSelf();
             }
-            if (list_val.isNothing()) {
-                const QoreTypeInfo* elem_type = substituteRuntimeTypeParams(
-                    inv->element_type ? inv->element_type : autoTypeInfo);
-                QoreListNode* l = new QoreListNode(elem_type);
-                l->push(push_val.refSelf(), xsink);
-                return QoreValue(l);
-            }
-            if (xsink) {
-                xsink->raiseException("PUSH-ERROR",
-                    "the lvalue argument to push is type \"%s\"; expecting \"list\"",
-                    list_val.getTypeName());
-            }
-            return QoreValue();
+            const QoreTypeInfo* elem_type = substituteRuntimeTypeParams(
+                inv->element_type ? inv->element_type : autoTypeInfo);
+            return fromBits(qore_rt_list_push_typed(
+                toBits(list_val), toBits(push_val), elem_type, xsink));
         }
 
         // Cast opcodes: native cast with pre-evaluated inner value (operand[0])
@@ -8011,12 +8002,13 @@ next_instruction:
                                 && locals_instantiated[sid]);
                         if (cache_has_value && cached_val.getType() != NT_REFERENCE) {
                             if (local_inst->borrowed_local_load) {
-                                // Load pairs with an in-place mutation and has no
+                                // Load pairs with a local mutation and has no
                                 // other consumers: borrow the slot-cache reference
                                 // so the builder node stays unique at the mutation
                                 // site (native code borrows via alloca loads)
                                 out = cached_val;
-                                if (local_inst->string_append_local_cow
+                                if ((local_inst->string_append_local_cow
+                                        || local_inst->list_push_local_cow)
                                         && !is_ir_only_local) {
                                     // The runtime local remains the persistent
                                     // owner. Drop only the interpreter cache's
@@ -8074,11 +8066,12 @@ next_instruction:
                             }
                         }
                         if (local_inst->borrowed_local_load
-                                && local_inst->string_append_local_cow
+                                && (local_inst->string_append_local_cow
+                                    || local_inst->list_push_local_cow)
                                 && !is_ir_only_local && !is_weak_ref_local) {
                             // eval() returned a temporary +1 ref while the TLS
                             // local remains the owner. Release that temporary
-                            // and forward borrowed bits to the paired append.
+                            // and forward borrowed bits to the paired mutation.
                             out = val;
                             if (needs_deref && val.hasNode()) {
                                 val.getInternalNode()->deref(xsink);
@@ -10146,11 +10139,12 @@ load_local_done:
                 QoreIRValue operand = local_inst->operands.front();
                 QoreValue val = getIRValue(values, operand);
                 if (local_inst->redundant_store
-                        && (!local_inst->string_append_local_cow
+                        && (!(local_inst->string_append_local_cow
+                                || local_inst->list_push_local_cow)
                             || is_ir_only_local)) {
                     // The paired mutation normally updates the local's own node
-                    // in place, making this store-back a no-op forward.  When
-                    // the interpreter's append fell back to CoW (transient refs
+                    // in place, making this store-back a no-op forward. When
+                    // the interpreter mutation fell back to CoW (transient refs
                     // kept the node non-unique), the result is a fresh node that
                     // must be stored through to the local.
                     uint32_t sid = local_inst->slot_id;

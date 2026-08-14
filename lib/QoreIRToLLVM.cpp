@@ -12969,11 +12969,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* val = getVal(inst->operands[0].id, error);
             if (!val) { return false; }
             auto key = reinterpret_cast<const void*>(linst->local);
-            bool paired_cow_ir_only = inst->string_append_local_cow
+            bool local_cow = inst->string_append_local_cow
+                || inst->list_push_local_cow;
+            bool paired_cow_ir_only = (inst->string_append_local_cow
+                    || (inst->list_push_local_cow && inst->list_push_in_place))
                 && local_allocas.count(key) && ir_only_locals_set
                 && ir_only_locals_set->count(key);
             if (inst->redundant_store
-                    && (!inst->string_append_local_cow || paired_cow_ir_only)) {
+                    && (!local_cow || paired_cow_ir_only)) {
                 if (inst->result.isValid()) {
                     values[inst->result.id] = val;
                     nanboxed_values.insert(inst->result.id);
@@ -16777,6 +16780,23 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 if (!val) { return false; }
                 llvm::Value* list_boxed = boxValue(list, inv->operands[0].id);
                 llvm::Value* val_boxed = boxValue(val, inv->operands[1].id);
+                if (inv->list_push_local_cow) {
+                    auto definition = value_definitions.find(inv->operands[0].id);
+                    if (definition == value_definitions.end()
+                            || definition->second->opcode != QoreIROpcode::LoadLocal) {
+                        error = "internal error: local list push invoke has no local load";
+                        return false;
+                    }
+                    const auto* load = static_cast<const QoreIRLocalInstruction*>(
+                        definition->second);
+                    auto key = reinterpret_cast<const void*>(load->local);
+                    if (local_allocas.count(key)
+                            && !(ir_only_locals_set && ir_only_locals_set->count(key))) {
+                        clearLocalCachedValue(key, module, llvm_func,
+                            LocalCacheClearMode::DuplicateRefsOnly);
+                        clearLocalReloadTracker(key, module, llvm_func);
+                    }
+                }
                 llvm::Value* type_arg = aot_mode
                     ? getTypePathArg(inv->element_type) : getTypeInfoPointerArg(inv->element_type);
                 const char* helper_name = aot_mode ? "qore_rt_list_push_by_type_path" : "qore_rt_list_push_typed";
@@ -22388,6 +22408,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             auto* val = getVal(inst->operands[1].id, error);
             if (!val) { return false; }
             llvm::Value* list_boxed = boxValue(list, inst->operands[0].id);
+            if (inst->list_push_local_cow) {
+                auto definition = value_definitions.find(inst->operands[0].id);
+                if (definition == value_definitions.end()
+                        || definition->second->opcode != QoreIROpcode::LoadLocal) {
+                    error = "internal error: local list push has no local load";
+                    return false;
+                }
+                const auto* load = static_cast<const QoreIRLocalInstruction*>(
+                    definition->second);
+                auto key = reinterpret_cast<const void*>(load->local);
+                if (local_allocas.count(key)
+                        && !(ir_only_locals_set && ir_only_locals_set->count(key))) {
+                    // The runtime stack owns the local. Drop compiler-held
+                    // reload/cache references before the helper's CoW guard.
+                    clearLocalCachedValue(key, module, llvm_func,
+                        LocalCacheClearMode::DuplicateRefsOnly);
+                    clearLocalReloadTracker(key, module, llvm_func);
+                }
+            }
             if (inst->list_push_in_place) {
                 const QoreIRValueFacts* facts = current_ir_func
                     ? current_ir_func->getValueFacts(inst->operands[1]) : nullptr;

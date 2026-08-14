@@ -1,0 +1,167 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+string sub aliasCases() {
+    list<int> direct = (1,);
+    list<int> direct_alias = direct;
+    push direct, 2;
+
+    list<int> guarded = (1,);
+    list<int> guarded_alias = guarded;
+    try {
+        push guarded, 2;
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+    return sprintf(\"%d:%d|%d:%d\", direct_alias.size(), direct.size(),
+        guarded_alias.size(), guarded.size());
+}
+
+int invalid_empty_evaluations = 0;
+string sub makeInvalidEmptyValue() {
+    ++invalid_empty_evaluations;
+    return \"invalid\";
+}
+
+string sub errorCases() {
+    list<int> typed = (7,);
+    string type_error = \"none\";
+    try {
+        push typed, \"invalid\";
+    } catch (hash<ExceptionInfo> ex) {
+        type_error = ex.err;
+    }
+
+    list<int> invalid_empty;
+    string empty_type_error = \"none\";
+    try {
+        push invalid_empty, makeInvalidEmptyValue();
+    } catch (hash<ExceptionInfo> ex) {
+        empty_type_error = ex.err;
+    }
+
+    list<int> empty;
+    try {
+        push empty, 4;
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+    return sprintf(\"%s:%d|%s:%y:%d:%d|%d:%d\", type_error, typed.size(),
+        empty_type_error, invalid_empty === NOTHING, invalid_empty.size(),
+        invalid_empty_evaluations, empty.size(), empty[0]);
+}
+
+hash<auto> sub measurePinnedDirect(int n) {
+    list<hash<auto>> values = ();
+    date started = now_us();
+    for (int i = 0; i < n; ++i) {
+        hash<auto!> value = {\"i\": i};
+        push values, value;
+    }
+    number elapsed = (now_us() - started).durationMicroseconds().toNumber();
+    values[0].touched = True;
+    return {\"elapsed\": elapsed, \"size\": values.size()};
+}
+
+hash<auto> sub measurePinnedGuarded(int n) {
+    list<hash<auto>> values = ();
+    date started = now_us();
+    for (int i = 0; i < n; ++i) {
+        try {
+            hash<auto!> value = {\"i\": i};
+            push values, value;
+        } catch (hash<ExceptionInfo> ex) {
+            return {\"elapsed\": 0, \"size\": -1, \"error\": ex.err};
+        }
+    }
+    number elapsed = (now_us() - started).durationMicroseconds().toNumber();
+    values[0].touched = True;
+    return {\"elapsed\": elapsed, \"size\": values.size()};
+}
+
+bool direct_linear = True;
+bool guarded_linear = True;
+if (ENV.QORE_TEST_LIST_PUSH_SCALING == \"1\") {
+    hash<auto> ds = measurePinnedDirect(500);
+    hash<auto> dl = measurePinnedDirect(2000);
+    hash<auto> gs = measurePinnedGuarded(500);
+    hash<auto> gl = measurePinnedGuarded(2000);
+    direct_linear = ds.size == 500 && dl.size == 2000
+        && dl.elapsed / ds.elapsed < 9.0n;
+    guarded_linear = gs.size == 500 && gl.size == 2000
+        && gl.elapsed / gs.elapsed < 9.0n;
+}
+printf(\"%s|%s|%y|%y\\n\", aliasCases(), errorCases(),
+    direct_linear, guarded_linear);
+";
+
+string base_path = "/tmp/qore-ir-list-push-local-cow-" + string(getpid());
+string script_path = base_path + ".qr";
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+on_exit {
+    unlink(script_path);
+    unlink(base_path);
+    unlink(base_path + "-in-place-disabled");
+    unlink(base_path + "-outlined");
+}
+
+string expected = "1:2|1:2|RUNTIME-TYPE-ERROR:1|RUNTIME-TYPE-ERROR:False:0:1|1:4|True|True\n";
+foreach string mode in ("ast", "ir", "tiered", "jit") {
+    string actual = backquote(sprintf(
+        "LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+
+string sub runAot(string suffix, string env, bool expect_outlining) {
+    string exe_path = base_path + suffix;
+    string compile_out = backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s %s --strip-source --strip-debug-info -O3 -o %s %s 2>&1",
+        env, libqore_dir, qcc_bin, exe_path, script_path));
+    if (!is_file(exe_path)) {
+        printf("AOT compile failed:\n%s", compile_out);
+        exit(2);
+    }
+    bool outlined = compile_out =~ /AOT-OUTLINE-FN:.*outlined/;
+    if (outlined != expect_outlining) {
+        printf("unexpected outlining status (%y):\n%s", expect_outlining, compile_out);
+        exit(2);
+    }
+    return backquote(sprintf(
+        "QORE_TEST_LIST_PUSH_SCALING=1 LD_LIBRARY_PATH=%s %s 2>&1",
+        libqore_dir, exe_path));
+}
+
+string aot = runAot("", "", False);
+string in_place_disabled_aot = runAot("-in-place-disabled",
+    "QORE_DISABLE_IR_IN_PLACE_LIST_PUSH=1", False);
+string outlined_aot = runAot("-outlined",
+    "QORE_AOT_DEBUG=1 QORE_AOT_OUTLINE_FN_MIN_INSTS=40 "
+        + "QORE_AOT_OUTLINE_FN_MIN_BLOCKS=5 QORE_AOT_OUTLINE_FN_TARGET_INSTS=30",
+    True);
+if (aot != expected || in_place_disabled_aot != expected
+        || outlined_aot != expected) {
+    printf("mismatch in AOT\nexpected:\n%sactual:\n%sin-place disabled:\n%soutlined:\n%s",
+        expected, aot, in_place_disabled_aot, outlined_aot);
+    exit(2);
+}
