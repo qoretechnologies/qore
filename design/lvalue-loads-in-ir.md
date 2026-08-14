@@ -26,6 +26,18 @@ LoadLocal(container, auto_ref=false)
 This applies to direct mutation opcodes and to root values for lvalue paths.
 The borrowed value must not be placed in owned cleanup lists.
 
+## Shared-Local Mutation Rule
+
+Captured, closure-bound, and thread-safe locals must use the structured lvalue
+path for container mutations. The path acquires the variable lock before it
+evaluates copy-on-write, so compiler bookkeeping references are removed while
+the mutation is serialized. Direct hash-store and list-push fast paths are only
+valid for ordinary, non-reference locals.
+
+For a structured mutation that throws, the interpreter must release the
+`LValueHelper` (and therefore its lock) before cleaning up values or transferring
+control to the instruction's exception target.
+
 ## Cache Invalidation Rule
 
 Before any lvalue mutation that can write through `LValueHelper`, the
@@ -89,7 +101,9 @@ collisions and keeps native alloca caches coherent with handler writes.
 When adding a new lvalue opcode or helper:
 
 - The lowering path uses borrowed loads for mutation roots.
+- Shared local roots use lock-held structured lvalue navigation.
 - Interpreter cleanup never owns borrowed roots.
+- Exception edges release lvalue locks before cleanup or catch transfer.
 - Caches are invalidated before mutation.
 - COW replacement writes back to the runtime local.
 - JIT and AOT variants preserve the same writeback behavior.

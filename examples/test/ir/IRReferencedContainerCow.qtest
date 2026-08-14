@@ -1,0 +1,171 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string code = "%modern
+
+nothing sub touchHash(reference<hash<string, int>> values) {
+    values{\"ref\"} = 99;
+}
+
+nothing sub touchList(reference<list<int>> values) {
+    push values, 99;
+}
+
+class PrivateBox {
+    private {
+        int value;
+    }
+
+    constructor() {
+        value = 1;
+    }
+}
+
+string sub memberAssignmentErrors() {
+    object box = new PrivateBox();
+    string direct_error = \"none\";
+    try {
+        box.value = 2;
+    } catch (hash<ExceptionInfo> ex) {
+        direct_error = ex.err;
+    }
+    code<nothing()> assign = sub () {
+        box.value = 3;
+    };
+    string closure_error = \"none\";
+    try {
+        assign();
+    } catch (hash<ExceptionInfo> ex) {
+        closure_error = ex.err;
+    }
+    return direct_error + \":\" + closure_error;
+}
+
+string sub semanticCases() {
+    hash<string, int> values = {\"seed\": 1};
+    hash<string, int> alias = values;
+    reference<hash<string, int>> values_ref = \\values;
+    values{\"direct\"} = 2;
+    values_ref{\"through\"} = 3;
+
+    list<int> items = (1,);
+    list<int> items_alias = items;
+    reference<list<int>> items_ref = \\items;
+    push items, 2;
+    push items_ref, 3;
+
+    list<int> captured = (4,);
+    code<nothing()> append = sub () {
+        push captured, 5;
+    };
+    append();
+
+    list<int> typed = (6,);
+    reference<list<int>> typed_ref = \\typed;
+    string type_error = \"none\";
+    try {
+        push typed, \"invalid\";
+    } catch (hash<ExceptionInfo> ex) {
+        type_error = ex.err;
+    }
+
+    list<int> typed_unshift = (7,);
+    reference<list<int>> typed_unshift_ref = \\typed_unshift;
+    string unshift_error = \"none\";
+    try {
+        unshift typed_unshift, \"invalid\";
+    } catch (hash<ExceptionInfo> ex) {
+        unshift_error = ex.err;
+    }
+
+    return sprintf(\"%d:%d:%d:%d:%d:%d:%d:%d:%d:%s:%d:%s\",
+        alias.size(), values.size(), values_ref{\"through\"},
+        items_alias.size(), items.size(), items_ref[2],
+        captured.size(), captured[1], typed_ref.size(), type_error,
+        typed_unshift_ref.size(), unshift_error);
+}
+
+hash<auto> sub measureHash(int n, bool take_ref) {
+    hash<string, int> values = {};
+    date started = now_us();
+    for (int i = 0; i < n; ++i) {
+        values{sprintf(\"k%d\", i)} = i;
+    }
+    number elapsed = (now_us() - started).durationMicroseconds().toNumber();
+    if (take_ref) {
+        touchHash(\\values);
+    }
+    return {\"elapsed\": elapsed, \"size\": values.size()};
+}
+
+hash<auto> sub measureList(int n, bool take_ref) {
+    list<int> values = ();
+    date started = now_us();
+    for (int i = 0; i < n; ++i) {
+        push values, i;
+    }
+    number elapsed = (now_us() - started).durationMicroseconds().toNumber();
+    if (take_ref) {
+        touchList(\\values);
+    }
+    return {\"elapsed\": elapsed, \"size\": values.size()};
+}
+
+hash<auto> hs = measureHash(1000, False);
+hash<auto> hl = measureHash(4000, False);
+hash<auto> ls = measureList(1000, False);
+hash<auto> ll = measureList(4000, False);
+bool hash_linear = hs.size == 1000 && hl.size == 4000
+    && hl.elapsed / hs.elapsed < 9.0n;
+bool list_linear = ls.size == 1000 && ll.size == 4000
+    && ll.elapsed / ls.elapsed < 9.0n;
+printf(\"%s:%s|%y|%y\\n\", semanticCases(), memberAssignmentErrors(),
+    hash_linear, list_linear);
+";
+
+string script_path = "/tmp/qore-ir-referenced-container-cow-" + string(getpid()) + ".qr";
+string exe_path = "/tmp/qore-ir-referenced-container-cow-" + string(getpid());
+File script();
+script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+script.write(code);
+script.close();
+
+on_exit {
+    unlink(script_path);
+    unlink(exe_path);
+}
+
+string expected = "1:3:3:1:3:3:2:5:1:RUNTIME-TYPE-ERROR:1:RUNTIME-TYPE-ERROR"
+    + ":PRIVATE-MEMBER:PRIVATE-MEMBER|True|True\n";
+foreach string mode in ("ast", "ir", "tiered", "jit") {
+    string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, script_path));
+    if (actual != expected) {
+        printf("mismatch in %s\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+
+string compile_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --strip-source --strip-debug-info -O3 -o %s %s 2>&1",
+    libqore_dir, qcc_bin, exe_path, script_path));
+if (!is_file(exe_path)) {
+    printf("AOT compile failed:\n%s", compile_out);
+    exit(2);
+}
+string aot = backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe_path));
+if (aot != expected) {
+    printf("mismatch in source-free AOT\nexpected:\n%sactual:\n%s", expected, aot);
+    exit(2);
+}

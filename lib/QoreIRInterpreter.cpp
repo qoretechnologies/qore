@@ -12565,36 +12565,45 @@ load_local_done:
                 QoreValue assign_val = val;
                 ValueHolder eval_holder(xsink);
                 qore_type_t val_type = val.getType();
+                bool assignment_failed = false;
                 if (!path_inst->weak
                         && (val_type == NT_WEAKREF || val_type == NT_WEAKREF_HASH || val_type == NT_WEAKREF_LIST)) {
                     eval_holder = val.eval(xsink);
                     if (*xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
+                        assignment_failed = true;
+                    } else {
+                        assign_val = *eval_holder;
                     }
-                    assign_val = *eval_holder;
                 }
 
                 // Scope the LValueHelper so it releases the object lock
                 // BEFORE cache invalidation (which may deref objects and
                 // try to acquire the same lock for GC scanning).
                 QoreValue res;
-                {
+                if (!assignment_failed) {
                     LValueHelper lvh(xsink);
                     if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
+                        assignment_failed = true;
+                    } else if (lvh.assign(assign_val.refSelf(), "<lvalue path assign>",
+                            true, path_inst->weak)) {
+                        assignment_failed = true;
+                    } else {
+                        res = lvh.getReferencedValue();
                     }
-                    if (lvh.assign(assign_val.refSelf(), "<lvalue path assign>", true, path_inst->weak)) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    res = lvh.getReferencedValue();
                 }
                 // lvh is now destructed — object lock released
+                if (assignment_failed || (xsink && *xsink)) {
+                    if (xsink && *xsink && inst->exception_target) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
+                }
                 invalidateLValuePathClosureCache(path_inst);
 
                 // Cache invalidation: broad for reference roots (write-through can modify
@@ -13287,103 +13296,110 @@ lvalue_path_unary_done:
                     rhs = getIRValue(values, path_inst->operands[0]);
                 }
                 QoreValue res;
-                LValueHelper lvh(xsink);
-                if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupLocalCaches();
-                    return false;
+                bool navigation_failed = false;
+                // Release the lvalue lock before cleaning up values or transferring
+                // control to a catch block.  Cleanup can dereference objects that
+                // need the same lock.
+                {
+                    LValueHelper lvh(xsink);
+                    navigation_failed = lvh.navigatePath(path_copy.data(), path_copy.size(), false);
+                    if (!navigation_failed) {
+                        switch (path_inst->binary_mut_op) {
+                            case LVBinaryMutOp::Push:
+                            case LVBinaryMutOp::Unshift: {
+                                // Auto-vivify NOTHING to empty list
+                                if (lvh.getType() == NT_NOTHING) {
+                                    const QoreTypeInfo* vti = lvh.getTypeInfo();
+                                    if (QoreTypeInfo::parseAcceptsReturns(vti, NT_LIST)) {
+                                        const QoreTypeInfo* lti = vti == autoTypeInfo
+                                            ? autoTypeInfo
+                                            : QoreTypeInfo::getReturnComplexListOrNothing(vti);
+                                        if (lvh.assign(new QoreListNode(lti))) {
+                                            assert(*xsink);
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (lvh.getType() != NT_LIST) {
+                                    if (path_inst->binary_mut_op == LVBinaryMutOp::Unshift
+                                            || runtime_check_parse_option(PO_STRICT_ARGS)) {
+                                        xsink->raiseException(
+                                            path_inst->binary_mut_op == LVBinaryMutOp::Push
+                                                ? "PUSH-ERROR" : "UNSHIFT-ERROR",
+                                            "the lvalue argument is type \"%s\"; expecting \"list\"",
+                                            lvh.getTypeName());
+                                    }
+                                    break;
+                                }
+                                lvh.ensureUnique();
+                                QoreListNode* l = lvh.getValue().get<QoreListNode>();
+                                if (path_inst->binary_mut_op == LVBinaryMutOp::Push) {
+                                    l->push(rhs.refSelf(), xsink);
+                                } else {
+                                    l->insert(rhs.refSelf(), xsink);
+                                }
+                                if (!*xsink) {
+                                    res = l->refSelf();
+                                }
+                                break;
+                            }
+                            case LVBinaryMutOp::RegexSubst: {
+                                // If not a string, do nothing (matches AST behavior)
+                                if (!lvh.checkType(NT_STRING)) {
+                                    break;
+                                }
+                                // Get the regex from the pattern expression
+                                if (path_inst->pattern_expr.hasNode()) {
+                                    auto* regex_op = dynamic_cast<const QoreRegexSubstOperatorNode*>(
+                                        path_inst->pattern_expr.getInternalNode());
+                                    if (regex_op && regex_op->getRegexSubst()) {
+                                        QoreStringNodeValueHelper str(lvh.getValue());
+                                        QoreStringNode* nv = regex_op->getRegexSubst()->exec(*str, xsink);
+                                        if (!*xsink && nv) {
+                                            if (!lvh.assign(nv) && path_inst->ref_rv) {
+                                                res = nv->refSelf();
+                                            }
+                                        }
+                                    }
+                                }
+                                break;
+                            }
+                            case LVBinaryMutOp::Transliterate: {
+                                // If not a string, do nothing
+                                if (!lvh.checkType(NT_STRING)) {
+                                    break;
+                                }
+                                if (path_inst->pattern_expr.hasNode()) {
+                                    auto* trans_op = dynamic_cast<const QoreTransliterationOperatorNode*>(
+                                        path_inst->pattern_expr.getInternalNode());
+                                    if (trans_op && trans_op->getTransliteration()) {
+                                        QoreStringNodeValueHelper str(lvh.getValue());
+                                        QoreStringNode* nv = trans_op->getTransliteration()->exec(*str, xsink);
+                                        if (!*xsink && nv) {
+                                            if (!lvh.assign(nv) && path_inst->ref_rv) {
+                                                res = nv->refSelf();
+                                            }
+                                        }
+                                    }
+                                }
+                                break;
+                            }
+                            default:
+                                xsink->raiseException("IR-EXEC-ERROR",
+                                    "unsupported binary mutation op %d",
+                                    static_cast<int>(path_inst->binary_mut_op));
+                                break;
+                        }
+                    }
                 }
-                switch (path_inst->binary_mut_op) {
-                    case LVBinaryMutOp::Push:
-                    case LVBinaryMutOp::Unshift: {
-                        // Auto-vivify NOTHING to empty list
-                        if (lvh.getType() == NT_NOTHING) {
-                            const QoreTypeInfo* vti = lvh.getTypeInfo();
-                            if (QoreTypeInfo::parseAcceptsReturns(vti, NT_LIST)) {
-                                const QoreTypeInfo* lti = vti == autoTypeInfo
-                                    ? autoTypeInfo
-                                    : QoreTypeInfo::getReturnComplexListOrNothing(vti);
-                                if (lvh.assign(new QoreListNode(lti))) {
-                                    assert(*xsink);
-                                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                                    cleanupLocalCaches();
-                                    return false;
-                                }
-                            }
-                        }
-                        if (lvh.getType() != NT_LIST) {
-                            if (runtime_check_parse_option(PO_STRICT_ARGS)) {
-                                xsink->raiseException(
-                                    path_inst->binary_mut_op == LVBinaryMutOp::Push
-                                        ? "PUSH-ERROR" : "UNSHIFT-ERROR",
-                                    "the lvalue argument is type \"%s\"; expecting \"list\"",
-                                    lvh.getTypeName());
-                            }
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupLocalCaches();
-                            return false;
-                        }
-                        lvh.ensureUnique();
-                        QoreListNode* l = lvh.getValue().get<QoreListNode>();
-                        if (path_inst->binary_mut_op == LVBinaryMutOp::Push) {
-                            l->push(rhs.refSelf(), xsink);
-                        } else {
-                            l->insert(rhs.refSelf(), xsink);
-                        }
-                        res = l->refSelf();
-                        break;
-                    }
-                    case LVBinaryMutOp::RegexSubst: {
-                        // If not a string, do nothing (matches AST behavior)
-                        if (!lvh.checkType(NT_STRING)) {
-                            break;
-                        }
-                        // Get the regex from the pattern expression
-                        if (path_inst->pattern_expr.hasNode()) {
-                            auto* regex_op = dynamic_cast<const QoreRegexSubstOperatorNode*>(
-                                path_inst->pattern_expr.getInternalNode());
-                            if (regex_op && regex_op->getRegexSubst()) {
-                                QoreStringNodeValueHelper str(lvh.getValue());
-                                QoreStringNode* nv = regex_op->getRegexSubst()->exec(*str, xsink);
-                                if (!*xsink && nv) {
-                                    lvh.assign(nv);
-                                    if (path_inst->ref_rv) {
-                                        res = nv->refSelf();
-                                    }
-                                }
-                            }
-                        }
-                        break;
-                    }
-                    case LVBinaryMutOp::Transliterate: {
-                        // If not a string, do nothing
-                        if (!lvh.checkType(NT_STRING)) {
-                            break;
-                        }
-                        if (path_inst->pattern_expr.hasNode()) {
-                            auto* trans_op = dynamic_cast<const QoreTransliterationOperatorNode*>(
-                                path_inst->pattern_expr.getInternalNode());
-                            if (trans_op && trans_op->getTransliteration()) {
-                                QoreStringNodeValueHelper str(lvh.getValue());
-                                QoreStringNode* nv = trans_op->getTransliteration()->exec(*str, xsink);
-                                if (!*xsink && nv) {
-                                    lvh.assign(nv);
-                                    if (path_inst->ref_rv) {
-                                        res = nv->refSelf();
-                                    }
-                                }
-                            }
-                        }
-                        break;
-                    }
-                    default:
-                        xsink->raiseException("IR-EXEC-ERROR",
-                            "unsupported binary mutation op %d", (int)path_inst->binary_mut_op);
+                if (navigation_failed || (xsink && *xsink)) {
+                    if (xsink && *xsink && inst->exception_target) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                }
-                if (xsink && *xsink) {
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;

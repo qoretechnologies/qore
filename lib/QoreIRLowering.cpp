@@ -4563,30 +4563,47 @@ bool QoreIRLowering::guaranteedFloatType(const QoreValue* expr) const {
 static bool isConstKeyHashSubscript(const QoreValue& expr,
         const VarRefNode*& container_var, std::string& key_name, QoreValue& key_expr) {
     const AbstractQoreNode* node = expr.getInternalNode();
-    if (!node) return false;
+    if (!node) {
+        return false;
+    }
     const auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node);
-    if (!hd) return false;
+    if (!hd) {
+        return false;
+    }
     const QoreValue right = hd->getRight();
-    if (!right.hasNode() || right.getType() != NT_STRING) return false;
+    if (!right.hasNode() || right.getType() != NT_STRING) {
+        return false;
+    }
     QoreStringValueHelper key(right);
     key_name = key->c_str();
     key_expr = right;  // Also return the QoreValue for lowerExpression
     const auto* vr = dynamic_cast<const VarRefNode*>(hd->getLeft().getInternalNode());
-    if (!vr) return false;
+    if (!vr) {
+        return false;
+    }
     qore_var_t vtype = vr->getType();
     // Allow local, local_ts, and closure variables
-    if (vtype != VT_LOCAL && vtype != VT_LOCAL_TS && vtype != VT_CLOSURE) return false;
+    if (vtype != VT_LOCAL && vtype != VT_LOCAL_TS && vtype != VT_CLOSURE) {
+        return false;
+    }
+    const auto* lv = reinterpret_cast<const LocalVar*>(vr->ref.id);
+    // Closure-bound and thread-safe locals must be mutated through the
+    // structured lvalue path.  It acquires the variable lock before checking
+    // container uniqueness, so bookkeeping references from the compiled frame
+    // cannot be mistaken for semantic aliases and real concurrent aliases
+    // still force copy-on-write.
+    if (vtype != VT_LOCAL || (lv && lv->closureUse())) {
+        return false;
+    }
     // Reference-type variables must use the lvalue path to write through the reference
     // binding to the original variable.  The HashKeyStore optimization bypasses references.
-    if (vr->ref.id && QoreTypeInfo::isReference(
-            reinterpret_cast<const LocalVar*>(vr->ref.id)->getTypeInfo())) {
+    if (lv && QoreTypeInfo::isReference(lv->getTypeInfo())) {
         return false;
     }
     // Object-typed containers (e.g., `self`) require the lvalue path for correct
     // member type-aware initialization (NOTHING → typed list/hash) via evalPlusEquals.
     // The load-compute-store pattern in emitHashKeyCompoundOp cannot handle this.
-    if (vr->ref.id && QoreTypeInfo::getUniqueReturnClass(
-            reinterpret_cast<const LocalVar*>(vr->ref.id)->getTypeInfo()) != nullptr) {
+    if (lv && QoreTypeInfo::getUniqueReturnClass(lv->getTypeInfo()) != nullptr) {
         return false;
     }
     container_var = vr;
@@ -4599,20 +4616,32 @@ static bool isConstKeyHashSubscript(const QoreValue& expr,
 static bool isDynamicKeyHashSubscript(const QoreValue& expr,
         const VarRefNode*& container_var, QoreValue& key_expr) {
     const AbstractQoreNode* node = expr.getInternalNode();
-    if (!node) return false;
-    const auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node);
-    if (!hd) return false;
-    key_expr = hd->getRight();
-    const auto* vr = dynamic_cast<const VarRefNode*>(hd->getLeft().getInternalNode());
-    if (!vr) return false;
-    qore_var_t vtype = vr->getType();
-    if (vtype != VT_LOCAL && vtype != VT_LOCAL_TS && vtype != VT_CLOSURE) return false;
-    if (vr->ref.id && QoreTypeInfo::isReference(
-            reinterpret_cast<const LocalVar*>(vr->ref.id)->getTypeInfo())) {
+    if (!node) {
         return false;
     }
-    if (vr->ref.id && QoreTypeInfo::getUniqueReturnClass(
-            reinterpret_cast<const LocalVar*>(vr->ref.id)->getTypeInfo()) != nullptr) {
+    const auto* hd = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node);
+    if (!hd) {
+        return false;
+    }
+    key_expr = hd->getRight();
+    const auto* vr = dynamic_cast<const VarRefNode*>(hd->getLeft().getInternalNode());
+    if (!vr) {
+        return false;
+    }
+    qore_var_t vtype = vr->getType();
+    if (vtype != VT_LOCAL && vtype != VT_LOCAL_TS && vtype != VT_CLOSURE) {
+        return false;
+    }
+    const auto* lv = reinterpret_cast<const LocalVar*>(vr->ref.id);
+    // See isConstKeyHashSubscript(): shared locals require lock-held lvalue
+    // navigation so the CoW decision observes only real aliases.
+    if (vtype != VT_LOCAL || (lv && lv->closureUse())) {
+        return false;
+    }
+    if (lv && QoreTypeInfo::isReference(lv->getTypeInfo())) {
+        return false;
+    }
+    if (lv && QoreTypeInfo::getUniqueReturnClass(lv->getTypeInfo()) != nullptr) {
         return false;
     }
     container_var = vr;
@@ -7013,6 +7042,9 @@ QoreIRValue QoreIRLowering::lowerAssignment(const QoreValue& expr, std::string& 
                 path_inst->path = std::move(lv_path);
                 path_inst->weak = is_weak;
                 path_inst->loc = assign->loc;
+                if (QoreIRBasicBlock* handler = getCurrentExceptionTarget()) {
+                    path_inst->exception_target = handler;
+                }
                 path_inst->operands.push_back(right);
                 // Add dynamic operands so they're tracked for cleanup
                 for (auto& dv : dyn_vals) {
@@ -9625,15 +9657,14 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
     }
     QoreValue left_expr = op->getLeft();
 
-    // Native ListPush path: emit Load + ListPush + Store for local and closure
-    // variables to avoid AST delegation (which relies on AST nodes stripped in AOT)
+    // Native ListPush path: emit Load + ListPush + Store for ordinary local
+    // variables.  Closure-bound and thread-safe locals must use the structured
+    // lvalue path below so locking and CoW happen against the variable's
+    // natural reference count.
     if (left_expr.hasNode()) {
         auto* var = dynamic_cast<const VarRefNode*>(left_expr.getInternalNode());
         if (var && var->ref.id
-                && (var->getType() == VT_LOCAL || var->getType() == VT_CLOSURE
-                    || var->getType() == VT_LOCAL_TS)) {
-            bool is_closure = var->ref.id->closureUse()
-                || var->getType() == VT_CLOSURE || var->getType() == VT_LOCAL_TS;
+                && var->getType() == VT_LOCAL && !var->ref.id->closureUse()) {
 
             // Lower the value to push first
             QoreIRValue push_val = lowerExpression(op->getRight(), error);
@@ -9669,13 +9700,8 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
                 builder.setBlock(normal_block);
 
                 // Store result back
-                if (is_closure) {
-                    auto* store_inst = builder.createStoreClosure(var->ref.id, inst->result, op->loc);
-                    store_inst->exception_target = exception_stack.back();
-                } else {
-                    auto* store_inst = builder.createStoreLocal(var->ref.id, inst->result, op->loc);
-                    store_inst->exception_target = exception_stack.back();
-                }
+                auto* store_inst = builder.createStoreLocal(var->ref.id, inst->result, op->loc);
+                store_inst->exception_target = exception_stack.back();
                 return inst->result;
             }
 
@@ -9694,14 +9720,7 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
             QoreIRValue result = push_inst->result;
 
             // Store result back (may be new list if auto-vivified from NOTHING)
-            if (is_closure) {
-                auto* store_inst = builder.createStoreClosure(var->ref.id, result, op->loc);
-                if (!exception_stack.empty()) {
-                    store_inst->exception_target = exception_stack.back();
-                }
-            } else {
-                builder.createStoreLocal(var->ref.id, result, op->loc);
-            }
+            builder.createStoreLocal(var->ref.id, result, op->loc);
             return result;
         }
     }
