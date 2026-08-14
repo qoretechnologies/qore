@@ -1233,27 +1233,36 @@ public:
 
     DLLLOCAL int lockParsing(ExceptionSink* xsink) {
         int tid = q_gettid();
-        // grab program-level lock
-        AutoLocker al(plock);
+        bool lock_runtime_namespace = false;
+        {
+            // Grab the program-level lock only while claiming parse ownership. Do not hold it while waiting for the
+            // namespace write lock: a running reader can need plock while completing its Program thread context.
+            AutoLocker al(plock);
 
-        while (parse_tid != -1 && parse_tid != tid && !ptid) {
-            ++thread_waiting;
-            pcond.wait(plock);
-            --thread_waiting;
-        }
-
-        if (ptid && ptid != q_gettid()) {
-            if (xsink) {
-                xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and "
-                    "therefore cannot be accessed");
+            while (parse_tid != -1 && parse_tid != tid && !ptid) {
+                ++thread_waiting;
+                pcond.wait(plock);
+                --thread_waiting;
             }
-            return -1;
+
+            if (ptid && ptid != q_gettid()) {
+                if (xsink) {
+                    xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and "
+                        "therefore cannot be accessed");
+                }
+                return -1;
+            }
+
+            //printd(5, "qore_program_private::lockParsing() this: %p ptid: %d thread_count: %d parse_count: %d -> %d\n",
+            //  this, ptid, thread_count, parse_count, parse_count + 1);
+            lock_runtime_namespace = !parse_count && RootNS;
+            ++parse_count;
+            parse_tid = tid;
         }
 
-        //printd(5, "qore_program_private::lockParsing() this: %p ptid: %d thread_count: %d parse_count: %d -> %d\n",
-        //  this, ptid, thread_count, parse_count, parse_count + 1);
-        ++parse_count;
-        parse_tid = tid;
+        if (lock_runtime_namespace) {
+            qore_root_ns_private::runtimeNamespaceWriteLock(*RootNS);
+        }
         return 0;
     }
 
@@ -1263,6 +1272,9 @@ public:
         assert(parse_tid == q_gettid());
         assert(parse_count > 0);
         if (!(--parse_count)) {
+            if (RootNS) {
+                qore_root_ns_private::runtimeNamespaceWriteUnlock(*RootNS);
+            }
             parse_tid = -1;
             if (thread_waiting) {
                 pcond.broadcast();

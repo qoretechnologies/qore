@@ -4,6 +4,7 @@
 %modern
 %no-child-restrictions
 
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
 %requires QUnit
 %requires FsUtil
 
@@ -36,6 +37,8 @@ class AOTModuleContextPathTest inherits QUnit::Test {
             \moduleConcurrentDistinctProgramLoads());
         addTestCase("AOT distinct modules load concurrently into one Program",
             \moduleConcurrentDistinctLoadsIntoSharedProgram());
+        addTestCase("AOT runtime module merge excludes namespace readers",
+            \moduleRuntimeMergeExcludesNamespaceReaders());
 
         set_return_value(main());
     }
@@ -760,5 +763,150 @@ if (errors) {
             shared_program
                 ? "concurrent Program::loadModule() calls for distinct AOT modules into one Program must not deadlock"
                 : "concurrent Program::loadModule() calls for distinct AOT modules must not race AOT module state");
+    }
+
+    moduleRuntimeMergeExcludesNamespaceReaders() {
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string reader_qm_path = tmp_dir + "/AOTNamespaceReader.qm";
+        string reader_qmod_path = tmp_dir + "/AOTNamespaceReader.qmod";
+        string mutation_qm_path = tmp_dir + "/AOTNamespaceMutation.qm";
+        string mutation_qmod_path = tmp_dir + "/AOTNamespaceMutation.qmod";
+        string script_path = tmp_dir + "/run-runtime-namespace-merge.qr";
+
+        File f();
+        f.open2(reader_qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+module AOTNamespaceReader {
+    version = \"1.0\";
+    desc = \"concurrent runtime namespace reader\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace AOTNamespaceReader {
+    public class Catalog {
+        public {
+            static string Text = \"stable\";
+        }
+    }
+
+    public string sub read() {
+        return Catalog::Text;
+    }
+}
+
+public string sub aotNamespaceRead() {
+    return AOTNamespaceReader::read();
+}
+");
+        f.close();
+
+        string compile_reader_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, reader_qmod_path, reader_qm_path));
+        assertTrue(is_file(reader_qmod_path), "compiled concurrent namespace reader module: " + compile_reader_out);
+        unlink(reader_qm_path);
+
+        string mutation_source = "%modern
+module AOTNamespaceMutation {
+    version = \"1.0\";
+    desc = \"large concurrent runtime namespace mutation\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+";
+        for (int i = 0; i < 256; ++i) {
+            mutation_source += sprintf("
+public namespace AOTNamespaceMutation%d {
+    public class Value%d {
+        public {
+            static int Number = %d;
+        }
+    }
+
+    public int sub value%d() {
+        return Value%d::Number;
+    }
+}
+", i, i, i, i, i);
+        }
+
+        f.open2(mutation_qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(mutation_source);
+        f.close();
+
+        string compile_mutation_out = backquote(sprintf(
+            "QORE_LIBDIR=%s LD_LIBRARY_PATH=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, libqore_dir, qore_bin, mutation_qmod_path, mutation_qm_path));
+        assertTrue(is_file(mutation_qmod_path),
+            "compiled concurrent namespace mutation module: " + compile_mutation_out);
+        unlink(mutation_qm_path);
+
+        f.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("%modern
+
+const Rounds = 8;
+const Readers = 8;
+const ReadsPerThread = 10000;
+
+Mutex error_lock();
+list<string> errors = ();
+
+for (int round = 0; round < Rounds; ++round) {
+    Program p();
+    p.loadModule(\"AOTNamespaceReader\");
+
+    Counter ready(Readers + 1);
+    Counter done(Readers + 1);
+
+    for (int reader = 0; reader < Readers; ++reader) {
+        background sub (int round, int reader) {
+            on_exit done.dec();
+            ready.dec();
+            ready.waitForZero();
+            try {
+                for (int i = 0; i < ReadsPerThread; ++i) {
+                    string value = p.callFunction(\"aotNamespaceRead\");
+                    if (value != \"stable\") {
+                        throw \"VALUE-ERROR\", sprintf(\"unexpected reader value: %y\", value);
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                AutoLock al(error_lock);
+                errors += sprintf(\"round %d reader %d: %s: %s\", round, reader, ex.err, ex.desc);
+            }
+        }(round, reader);
+    }
+
+    background sub (int round) {
+        on_exit done.dec();
+        ready.dec();
+        ready.waitForZero();
+        try {
+            p.loadModule(\"AOTNamespaceMutation\");
+        } catch (hash<ExceptionInfo> ex) {
+            AutoLock al(error_lock);
+            errors += sprintf(\"round %d loader: %s: %s\", round, ex.err, ex.desc);
+        }
+    }(round);
+
+    if (done.waitForZero(15s)) {
+        errors += sprintf(\"round %d timed out\", round);
+        break;
+    }
+}
+
+printf(\"errors=%d\\n\", errors.size());
+if (errors) {
+    printf(\"%s\\n\", errors.join(\"\\n\"));
+}
+");
+        f.close();
+
+        string run_out = runQoreScriptWithTimeout(tmp_dir, script_path);
+        assertEq("errors=0\nEXIT=0\n", run_out,
+            "cold AOT namespace merges must not race concurrent runtime namespace and static-variable lookups");
     }
 }

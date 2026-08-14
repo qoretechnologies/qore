@@ -2684,6 +2684,10 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         remain compatible with MySQL 5.7 and current MariaDB releases
 
     - Core language
+      - fixed a potential crash when a running @ref Qore::Program "Program" loaded a module while other threads
+        resolved functions, classes, namespaces, constants, or global and static variables in the same Program;
+        runtime module application and committed namespace lookups are now synchronized without stopping unrelated
+        Program execution
       - fixed the thread stack guard being silently reduced or disabled, so that runaway recursion could crash the
         process instead of throwing a \c STACK-LIMIT-EXCEEDED exception.  The guard limit for each thread was
         derived from the stack position captured when the thread was registered with Qore rather than from the
