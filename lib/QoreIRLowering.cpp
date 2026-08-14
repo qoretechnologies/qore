@@ -568,8 +568,9 @@ static QoreIRValue tryDescriptorPluginLowering(QoreIRLowering& lowering, QoreIRB
     return QoreIRValue();
 }
 
-QoreIRLowering::QoreIRLowering(QoreIRBuilder& n_builder, QoreParseContext* n_parse_context)
-        : builder(n_builder), parse_context(n_parse_context) {
+QoreIRLowering::QoreIRLowering(QoreIRBuilder& n_builder, QoreParseContext* n_parse_context,
+        const std::unordered_map<const AbstractQoreNode*, std::string>* n_constant_reverse_map)
+        : builder(n_builder), parse_context(n_parse_context), constant_reverse_map(n_constant_reverse_map) {
 }
 
 // Check if a variable is a local (not global) and not captured by a closure.
@@ -4134,7 +4135,7 @@ QoreIRFunction* QoreIRLowering::compileHandlerToIR(
     handler_builder.setBlock(entry);
 
     // Create temporary lowering context for the handler body
-    QoreIRLowering handler_lowering(handler_builder, parse_context);
+    QoreIRLowering handler_lowering(handler_builder, parse_context, constant_reverse_map);
 
     // Lower the handler body into the handler IR function
     if (!handler_lowering.lowerStatementBlock(handler_code, error)) {
@@ -4218,7 +4219,7 @@ int QoreIRLowering::compileBlockHandlerIRs(const std::vector<InlineHandler>& han
         handler_builder.setBlock(entry);
 
         // Create temporary lowering context for the handler body
-        QoreIRLowering handler_lowering(handler_builder, parse_context);
+        QoreIRLowering handler_lowering(handler_builder, parse_context, constant_reverse_map);
 
         // Lower the handler body into the handler IR function.  Any failure
         // here is an outer-function lowering failure — we no longer keep an
@@ -4334,7 +4335,7 @@ int QoreIRLowering::compileAllHandlerIRs(std::string& error) {
 
         // Create temporary lowering context for the handler body
         // This will use the pre-seeded local_var_slots for scope access
-        QoreIRLowering handler_lowering(handler_builder, parse_context);
+        QoreIRLowering handler_lowering(handler_builder, parse_context, constant_reverse_map);
 
         // Lower the handler body into the handler IR function.  Any failure
         // is now reported as an outer-function lowering failure — the
@@ -9396,6 +9397,23 @@ QoreIRValue QoreIRLowering::lowerSquareBrackets(const QoreValue& expr, std::stri
         return inst->result;
     }
 
+    // A parsed constant-value list has already evaluated every element.  Fold
+    // a scalar index before rebuilding the complete list; mutable selected
+    // values retain the same shared child identity and therefore the same COW
+    // behavior as indexing the freshly reconstructed outer list.
+    if (const auto* list = dynamic_cast<const QoreListNode*>(op->getLeft().getInternalNode());
+            list && op->getRight().getType() == NT_INT) {
+        int64 index = op->getRight().getAsBigInt();
+        if (!QoreSquareBracketsOperatorNode::normalizeIndex(index,
+                static_cast<int64>(list->size()), op->hasNegativeOffsets())) {
+            return builder.createConstNothing(op->loc)->result;
+        }
+        QoreIRValue selected = lowerContainerElement(list->retrieveEntry(static_cast<size_t>(index)), error);
+        if (selected.isValid() || !error.empty()) {
+            return selected;
+        }
+    }
+
     // Lower both operands (container and index) for native execution
     QoreIRValue lhs = lowerExpression(op->getLeft(), error);
     if (!lhs.isValid()) {
@@ -9439,6 +9457,27 @@ QoreIRValue QoreIRLowering::lowerHashObjectDereference(const QoreValue& expr, st
     if (right_val.hasNode() && right_val.getType() == NT_STRING) {
         QoreStringValueHelper key(right_val);
         const char* key_str = key->c_str();
+        // QoreHashNode bases are already-evaluated constant values.  Select
+        // the requested member directly so AOT does not reconstruct a large
+        // constant hash merely to discard every other member.  Nested
+        // constant containers still lower as LoadConstant through the AOT
+        // reverse map, preserving runtime-loaded values and COW semantics.
+        if (const auto* hash = dynamic_cast<const QoreHashNode*>(op->getLeft().getInternalNode())) {
+            bool exists = false;
+            QoreValue value = hash->getKeyValueExistence(key_str, exists);
+            if (!exists) {
+                // Missing members of hashdecl-typed values raise
+                // INVALID-MEMBER; retain the guarded runtime access below.
+                if (!hash->getHashDecl()) {
+                    return builder.createConstNothing(op->loc)->result;
+                }
+            } else {
+                QoreIRValue selected = lowerContainerElement(value, error);
+                if (selected.isValid() || !error.empty()) {
+                    return selected;
+                }
+            }
+        }
         // Lower the base expression
         QoreIRValue base_val = lowerExpression(op->getLeft(), error);
         if (!base_val.isValid()) {
@@ -10507,6 +10546,14 @@ QoreIRValue QoreIRLowering::lowerContainerLiteral(const QoreValue& expr, std::st
     }
 
     const AbstractQoreNode* node = expr.getInternalNode();
+    // Parsed constant container references are represented by the constant's
+    // value node rather than a RuntimeConstantRefNode.  Preserve the runtime
+    // constant identity in AOT mode instead of rebuilding the complete
+    // container at every use.  Ordinary container literals are absent from
+    // this map and must continue to create a fresh value.
+    if (constant_reverse_map && constant_reverse_map->find(node) != constant_reverse_map->end()) {
+        return builder.createLoadConstant(nullptr, expr, nullptr)->result;
+    }
     if (dynamic_cast<const QoreParseHashNode*>(node)) {
         return lowerParseHash(expr, error);
     }

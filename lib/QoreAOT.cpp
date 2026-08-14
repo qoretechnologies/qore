@@ -2443,7 +2443,8 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         QoreIRFunction*& ir_func, std::string& error,
         const QoreFunction* source_qf = nullptr,
         const QoreTypeInfo* specialization_receiver_type_info = nullptr,
-        const QoreTypeParamInstantiation* specialization_type_param_instantiation = nullptr) {
+        const QoreTypeParamInstantiation* specialization_type_param_instantiation = nullptr,
+        const AOTConstantReverseMap* constant_reverse_map = nullptr) {
     StatementBlock* statements = uvb->getStatementBlock();
     if (!statements) {
         error = "no statement block";
@@ -2521,7 +2522,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         specialization_type_param_instantiation);
 
     QoreParseContext parse_context(pgm);
-    QoreIRLowering lowering(builder, &parse_context);
+    QoreIRLowering lowering(builder, &parse_context, constant_reverse_map);
     if (!lowering.lowerStatementBlock(statements, error)) {
         if (getenv("QORE_AOT_DEBUG")) {
             fprintf(stderr, "AOT-LOWER: lowering failed for '%s': %s\n", name, error.c_str());
@@ -2611,7 +2612,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
         return -1;
     }
     if (getenv("QORE_IR_OPT_STATS")) {
-        fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu branches=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu pure-cse=%zu phi-elided=%zu\n",
+        fprintf(stderr, "IR-OPT-AOT: %s: loops=%zu hoisted=%zu scalar-loads=%zu local-value-facts=%zu dense-list-facts=%zu dense-joins=%zu native-local-loads=%zu native-local-stores=%zu scalar-cse=%zu scalar-lists=%zu scalar-hashes=%zu literal-list-queries=%zu branches=%zu unreachable=%zu borrowed-list=%zu bounded-list=%zu boxed-direct=%zu inplace-push=%zu inplace-string=%zu pure-calls=%zu pure-cse=%zu phi-elided=%zu\n",
             name,
             optimization_stats.loops_analyzed, optimization_stats.instructions_hoisted,
             optimization_stats.scalar_loads_forwarded,
@@ -2625,6 +2626,7 @@ static int tryLowerFunction(UserVariantBase* uvb, const char* name, QoreProgram*
             optimization_stats.fixed_hashes_scalarized,
             optimization_stats.scalar_list_queries_folded,
             optimization_stats.constant_branches_folded,
+            optimization_stats.unreachable_blocks_pruned,
             optimization_stats.borrowed_list_reads,
             optimization_stats.bounded_typed_list_reads,
             optimization_stats.bounded_boxed_direct_reads,
@@ -4635,7 +4637,8 @@ static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers,
 }
 
 static int tryLowerInitExpression(const QoreValue& init_expr, const char* name,
-        QoreProgram* pgm, QoreIRFunction*& ir_func, std::string& error) {
+        QoreProgram* pgm, QoreIRFunction*& ir_func, std::string& error,
+        const AOTConstantReverseMap* constant_reverse_map = nullptr) {
     ir_func = new QoreIRFunction(name);
     // No pre-instantiated locals from signature (init functions have no parameters)
 
@@ -4644,7 +4647,7 @@ static int tryLowerInitExpression(const QoreValue& init_expr, const char* name,
     builder.setBlock(entry);
 
     QoreParseContext parse_context(pgm);
-    QoreIRLowering lowering(builder, &parse_context);
+    QoreIRLowering lowering(builder, &parse_context, constant_reverse_map);
 
     // Lower the init expression to IR and return its value
     QoreIRValue result = lowering.lowerExpression(init_expr, error);
@@ -4846,7 +4849,8 @@ static bool compileModuleInitClosureAsInitFunc(const QoreValue& init_c, const ch
 
     QoreIRFunction* ir_func = nullptr;
     std::string lower_error;
-    if (tryLowerFunction(uvb, init_name.c_str(), pgm, ir_func, lower_error, source_qf) != 0 || !ir_func) {
+    if (tryLowerFunction(uvb, init_name.c_str(), pgm, ir_func, lower_error,
+            source_qf, nullptr, nullptr, const_reverse_map) != 0 || !ir_func) {
         error = makeModuleInitCompileError(mod_name, module_path,
             "IR lowering failed for '" + init_name + "': " + lower_error);
         if (getenv("QORE_AOT_DEBUG")) {
@@ -4991,6 +4995,20 @@ static void buildConstantReverseMapImpl(qore_ns_private* ns, AOTConstantReverseM
                     crm.emplace(node, fqn);
                 }
             }
+            // Function bodies can retain the evaluated value graph of a
+            // delayed constant.  Record that graph for native constant-value
+            // projection, except for a direct alias: mapping an alias's target
+            // graph to the alias can replace the target constant's canonical
+            // path and make the alias init function unable to serialize its
+            // dependency after its own path is filtered out.
+            QoreValue init_expr = ce->getInitExpr();
+            if (!dynamic_cast<const RuntimeConstantRefNode*>(init_expr.getInternalNode())) {
+                QoreValue v = ce->getReferencedValue();
+                if (v.hasNode()) {
+                    qore_aot_add_constant_value_reverse_mappings(crm, v, fqn);
+                }
+                v.discard(nullptr);
+            }
             continue;
         }
         QoreValue v = ce->getReferencedValue();
@@ -5018,6 +5036,14 @@ static void buildConstantReverseMapImpl(qore_ns_private* ns, AOTConstantReverseM
                     if (node && crm.find(node) == crm.end()) {
                         crm.emplace(node, fqn);
                     }
+                }
+                QoreValue init_expr = ce->getInitExpr();
+                if (!dynamic_cast<const RuntimeConstantRefNode*>(init_expr.getInternalNode())) {
+                    QoreValue v = ce->getReferencedValue();
+                    if (v.hasNode()) {
+                        qore_aot_add_constant_value_reverse_mappings(crm, v, fqn);
+                    }
+                    v.discard(nullptr);
                 }
                 continue;
             }
@@ -17214,7 +17240,8 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
 
         QoreIRFunction* ir_func = nullptr;
         std::string lower_error;
-        if (tryLowerFunction(variant, native_key.c_str(), pgm, ir_func, lower_error) != 0
+        if (tryLowerFunction(variant, native_key.c_str(), pgm, ir_func, lower_error,
+                nullptr, nullptr, nullptr, const_reverse_map) != 0
                 || !ir_func) {
             if (getenv("QORE_AOT_DEBUG")) {
                 fprintf(stderr, "AOT: native closure '%s' IR lowering skipped: %s\n",
@@ -19578,7 +19605,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
             ++total_funcs;
             QoreIRFunction* ir_func = nullptr;
             std::string lower_error;
-            int rc = tryLowerFunction(uvb, function_name.c_str(), pgm, ir_func, lower_error, func);
+            int rc = tryLowerFunction(uvb, function_name.c_str(), pgm, ir_func, lower_error,
+                func, nullptr, nullptr, const_reverse_map);
 
             if (rc == 0 && ir_func) {
                 // The LLVM symbol is sanitized for object/linker use; the
@@ -19650,7 +19678,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     if (tryLowerFunction(uvb, function_name.c_str(), pgm,
                             specialized_ir, specialization_error, func,
                             analyzed_fast_entry->specialization_receiver_type_info,
-                            analyzed_fast_entry->specialization_type_param_instantiation) == 0
+                            analyzed_fast_entry->specialization_type_param_instantiation,
+                            const_reverse_map) == 0
                             && specialized_ir) {
                         specialized_fast_ir.reset(specialized_ir);
                         specialized_fast_ir->name = ir_func->name;
@@ -20122,7 +20151,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                 ++total_funcs;
                 QoreIRFunction* ir_func = nullptr;
                 std::string lower_error;
-                int rc = tryLowerFunction(uvb, method_name.c_str(), pgm, ir_func, lower_error);
+                int rc = tryLowerFunction(uvb, method_name.c_str(), pgm, ir_func, lower_error,
+                    nullptr, nullptr, nullptr, const_reverse_map);
 
                 if (rc == 0 && ir_func) {
                     // The LLVM symbol is sanitized for object/linker use; the
@@ -20190,7 +20220,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         if (tryLowerFunction(uvb, method_name.c_str(), pgm,
                                 specialized_ir, specialization_error, nullptr,
                                 analyzed_fast_entry->specialization_receiver_type_info,
-                                analyzed_fast_entry->specialization_type_param_instantiation) == 0
+                                analyzed_fast_entry->specialization_type_param_instantiation,
+                                const_reverse_map) == 0
                                 && specialized_ir) {
                             specialized_fast_ir.reset(specialized_ir);
                             specialized_fast_ir->name = ir_func->name;
@@ -20594,9 +20625,23 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         if (!compiled_keys->insert(init_name).second) {
             return;
         }
+        std::string direct_exclude_fqn;
+        if (target_type == AOTCompiledInitFunc::NS_CONSTANT
+                || target_type == AOTCompiledInitFunc::CLASS_CONSTANT) {
+            direct_exclude_fqn = makeAOTConstantFQN(container_path, item_name);
+        }
+        std::shared_ptr<AOTConstantReverseMap> filtered_crm;
+        const AOTConstantReverseMap* init_const_reverse_map = init_base_const_reverse_map;
+        if (init_base_const_reverse_map && ((pending_init_constant_fqns
+                && !pending_init_constant_fqns->empty()) || !direct_exclude_fqn.empty())) {
+            filtered_crm = std::make_shared<AOTConstantReverseMap>(filterPendingInitConstantReverseMap(
+                *init_base_const_reverse_map, *pending_init_constant_fqns, direct_exclude_fqn));
+            init_const_reverse_map = filtered_crm.get();
+        }
         QoreIRFunction* ir_func = nullptr;
         std::string lower_error;
-        int rc = tryLowerInitExpression(init_expr, init_name.c_str(), pgm, ir_func, lower_error);
+        int rc = tryLowerInitExpression(init_expr, init_name.c_str(), pgm, ir_func, lower_error,
+            init_const_reverse_map);
         if (rc != 0 || !ir_func) {
             if (getenv("QORE_AOT_DEBUG")) {
                 fprintf(stderr, "AOT: init expr lowering failed for '%s': %s\n",
@@ -20680,21 +20725,6 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         }
 
         if (init_ok) {
-            std::string direct_exclude_fqn;
-            if (target_type == AOTCompiledInitFunc::NS_CONSTANT
-                    || target_type == AOTCompiledInitFunc::CLASS_CONSTANT) {
-                direct_exclude_fqn = makeAOTConstantFQN(container_path, item_name);
-            }
-
-            std::shared_ptr<AOTConstantReverseMap> filtered_crm;
-            const AOTConstantReverseMap* init_const_reverse_map = init_base_const_reverse_map;
-            if (init_base_const_reverse_map && (pending_init_constant_fqns && !pending_init_constant_fqns->empty()
-                    || !direct_exclude_fqn.empty())) {
-                filtered_crm = std::make_shared<AOTConstantReverseMap>(filterPendingInitConstantReverseMap(
-                    *init_base_const_reverse_map, *pending_init_constant_fqns, direct_exclude_fqn));
-                init_const_reverse_map = filtered_crm.get();
-            }
-
             // Single AOTCompiledInitFunc entry for the outer.  Its slot
             // map covers the UNION of slots referenced by the outer's
             // body and by every outlined helper — so `registerAOT
@@ -21685,7 +21715,11 @@ static bool codegenModuleSplit(llvm::Module& module, int jobs, const std::string
         const std::string& out_o, std::string& error, bool debug_opt) {
     auto makeTM = [&triple]() -> llvm::TargetMachine* {
         std::string terr;
+#if LLVM_VERSION_MAJOR >= 21
+        const llvm::Target* t = llvm::TargetRegistry::lookupTarget(llvm::Triple(triple), terr);
+#else
         const llvm::Target* t = llvm::TargetRegistry::lookupTarget(triple, terr);
+#endif
         if (!t) {
             return nullptr;
         }
@@ -22104,7 +22138,11 @@ static bool emitObjectFile(llvm::Module& module, const std::string& path, std::s
 
     std::string target_error;
     llvm::Triple t(triple);
+#if LLVM_VERSION_MAJOR >= 21
+    auto* target = llvm::TargetRegistry::lookupTarget(t, target_error);
+#else
     auto* target = llvm::TargetRegistry::lookupTarget(triple, target_error);
+#endif
     if (!target) {
         error = "failed to look up target '" + triple + "': " + target_error;
         return false;
@@ -22810,7 +22848,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
         builder.setBlock(entry);
 
         QoreParseContext parse_context(pgm);
-        QoreIRLowering lowering(builder, &parse_context);
+        QoreIRLowering lowering(builder, &parse_context, &const_reverse_map);
         std::string lower_error;
         bool toplevel_ok = false;
         if (lowering.lowerStatementBlock(&sb, lower_error)) {

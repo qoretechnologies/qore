@@ -816,7 +816,11 @@ static void optimizeModule(llvm::Module& module, int opt_level) {
     std::string triple_str = llvm::sys::getDefaultTargetTriple();
     llvm::Triple triple(triple_str);
     std::string target_error;
+#if LLVM_VERSION_MAJOR >= 21
+    auto* target = llvm::TargetRegistry::lookupTarget(triple, target_error);
+#else
     auto* target = llvm::TargetRegistry::lookupTarget(triple_str, target_error);
+#endif
     if (!target) {
         return;  // Fall back to unoptimized if target lookup fails
     }

@@ -1,0 +1,215 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires FsUtil
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string source = '%modern
+
+public const NamespaceHash = {
+    "a": {"value": 10, "flag": True},
+    "b": {"value": 20, "flag": True},
+};
+
+public const NamespaceList = (
+    (10, 11),
+    (20, 21),
+    (30, 31),
+);
+
+# Direct aliases must retain their dependency identity while init-function
+# constant maps filter the alias currently being initialized.
+public const NamespaceListAlias = NamespaceList;
+
+public hashdecl ConstantRecord {
+    int present;
+}
+
+public const TypedHash = <ConstantRecord>{"present": 1};
+
+class ConstantAccess {
+    public {
+        const DebugEnabled = False;
+        const Masks = {
+            "a": {"a1": True, "a2": True, "a3": True},
+            "b": {"b1": True, "b2": True, "b3": True},
+            "c": {"c1": True, "c2": True, "c3": True},
+            "d": {"d1": True, "d2": True, "d3": True},
+            "e": {"e1": True, "e2": True, "e3": True},
+        };
+    }
+}
+
+int debug_calls = 0;
+int literal_calls = 0;
+
+int sub deadDebugArgument() {
+    ++debug_calls;
+    throw "DEAD-DEBUG-ARGUMENT", "a constant-false debug argument was evaluated";
+}
+
+int sub markLiteral(int value) {
+    ++literal_calls;
+    return value;
+}
+
+hash<auto> sub eraseHashdeclType(auto value) {
+    return value;
+}
+
+int sub directConstantAccess(int count) {
+    int hits = 0;
+    for (int i = 0; i < count; ++i) {
+        hash<auto> selected = ConstantAccess::Masks{"c"};
+        hits += selected.size();
+    }
+    return hits;
+}
+
+int sub constantFalseGuard() {
+    int selected = 17;
+    if (ConstantAccess::DebugEnabled) {
+        selected = deadDebugArgument();
+    }
+    int phi = ConstantAccess::DebugEnabled ? deadDebugArgument() : 23;
+    return selected + phi;
+}
+
+string sub verify() {
+    hash<auto> namespace_child = NamespaceHash{"a"};
+    hash<auto> class_child = ConstantAccess::Masks{"c"};
+    list<auto> first_list = NamespaceList[0];
+    list<auto> last_list = NamespaceListAlias[-1];
+
+    namespace_child{"value"} = 99;
+    first_list[0] = 99;
+
+    int literal_value = ({
+        "selected": markLiteral(7),
+        "also-evaluated": markLiteral(8),
+    }){"selected"};
+
+    string typed_missing = "none";
+    try {
+        # Erase the static hashdecl type so the unknown member is diagnosed at
+        # runtime in every execution mode.
+        hash<auto> typed_hash = eraseHashdeclType(TypedHash);
+        auto ignored = typed_hash{"missing"};
+    } catch (hash<ExceptionInfo> ex) {
+        typed_missing = ex.err;
+    }
+
+    string caught = "none";
+    try {
+        if (ConstantAccess::DebugEnabled) {
+            deadDebugArgument();
+        }
+        int zero = 0;
+        int ignored = 1 / zero;
+    } catch (hash<ExceptionInfo> ex) {
+        caught = ex.err;
+    }
+
+    return sprintf("%d|%d|%d|%s|%s|%s|%d|%d|%d|%d|%d|%s\n",
+        directConstantAccess(4), class_child.size(), NamespaceHash{"a"}{"value"},
+        NamespaceHash{"missing"}.type(), NamespaceList[99].type(), typed_missing,
+        NamespaceList[0][0], last_list[1], literal_value, literal_calls,
+        constantFalseGuard(), caught)
+        + sprintf("debug=%d\n", debug_calls);
+}
+
+printf("%s", verify());
+';
+
+TmpDir tmp("qore-aot-constant-access-");
+string root = tmp.path;
+string source_path = root + "/constant-access.qr";
+File source_file();
+source_file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+source_file.write(source);
+source_file.close();
+
+string expected = "12|3|10|nothing|nothing|INVALID-MEMBER|10|31|7|2|40|DIVISION-BY-ZERO\ndebug=0\n";
+
+string sub runMode(string mode) {
+    return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug --exec-mode=%s %s 2>&1",
+        libqore_dir, qore_bin, mode, source_path));
+}
+
+foreach string mode in (("ast", "ir", "tiered", "jit")) {
+    string actual = runMode(mode);
+    if (actual != expected) {
+        printf("%s mismatch:\nexpected:\n%sactual:\n%s", mode, expected, actual);
+        exit(2);
+    }
+}
+
+hash<string, string> sub compile(string suffix, string extra_env) {
+    string exe = root + "/constant-access-" + suffix;
+    string output = backquote(sprintf(
+        "%s LD_LIBRARY_PATH=%s QORE_AOT_DUMP_IR=1 QORE_IR_OPT_STATS=1 "
+            + "%s -O3 -o %s %s 2>&1",
+        extra_env, libqore_dir, qcc_bin, exe, source_path));
+    if (!is_file(exe)) {
+        printf("AOT compile failed (%s):\n%s", suffix, output);
+        exit(2);
+    }
+    return {
+        "compile": output,
+        "run": backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)),
+    };
+}
+
+string sub functionIr(string ir, string name) {
+    string marker = "=== IR for " + name;
+    int start = ir.find(marker);
+    int end = start < 0 ? -1 : ir.find("=================", start);
+    if (start < 0 || end < 0) {
+        return "";
+    }
+    return ir.substr(start, end - start);
+}
+
+hash<string, string> enabled = compile("enabled", "");
+hash<string, string> pruning_disabled = compile("pruning-disabled",
+    "QORE_DISABLE_IR_UNREACHABLE_BLOCKS=1");
+if (enabled.run != expected || pruning_disabled.run != expected) {
+    printf("AOT execution mismatch:\nexpected:\n%senabled:\n%spruning disabled:\n%s",
+        expected, enabled.run, pruning_disabled.run);
+    exit(2);
+}
+
+string direct_ir = functionIr(enabled.compile, "directConstantAccess(int)");
+if (!direct_ir || direct_ir !~ /load\.constant/ || direct_ir =~ /make\.hash/
+        || direct_ir =~ /hash\.key\.access/) {
+    printf("direct constant projection was not lowered to one constant load:\n%s",
+        direct_ir ?: enabled.compile);
+    exit(2);
+}
+
+string enabled_guard_ir = functionIr(enabled.compile, "constantFalseGuard()");
+string disabled_guard_ir = functionIr(pruning_disabled.compile, "constantFalseGuard()");
+if (!enabled_guard_ir || enabled_guard_ir =~ /call\.direct/
+        || !disabled_guard_ir || disabled_guard_ir !~ /call\.direct/
+        || enabled.compile
+            !~ /IR-OPT-AOT: constantFalseGuard:.*branches=[1-9][0-9]* unreachable=[1-9][0-9]*/
+        || pruning_disabled.compile
+            =~ /IR-OPT-AOT: constantFalseGuard:.*unreachable=[1-9][0-9]*/) {
+    printf("constant-false branch pruning mismatch:\nenabled IR:\n%sdisabled IR:\n%s"
+        + "enabled compile:\n%sdisabled compile:\n%s",
+        enabled_guard_ir, disabled_guard_ir, enabled.compile, pruning_disabled.compile);
+    exit(2);
+}

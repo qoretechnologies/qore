@@ -82,6 +82,7 @@ struct QoreIROptimizationStats {
     size_t scalar_list_queries_folded = 0;
     size_t typed_foreach_loops = 0;
     size_t constant_branches_folded = 0;
+    size_t unreachable_blocks_pruned = 0;
     size_t borrowed_list_reads = 0;
     size_t bounded_typed_list_reads = 0;
     size_t bounded_boxed_direct_reads = 0;

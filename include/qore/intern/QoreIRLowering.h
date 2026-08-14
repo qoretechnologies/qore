@@ -121,7 +121,8 @@ public:
         std::unordered_set<LocalVar*> referenced_set;  //!< set for O(1) duplicate detection
     };
 
-    explicit QoreIRLowering(QoreIRBuilder& builder, QoreParseContext* parse_context = nullptr);
+    explicit QoreIRLowering(QoreIRBuilder& builder, QoreParseContext* parse_context = nullptr,
+        const std::unordered_map<const AbstractQoreNode*, std::string>* constant_reverse_map = nullptr);
 
     QoreIRValue lowerExpression(const QoreValue& expr, std::string& error);
     bool lowerStatement(const AbstractStatement* stmt, std::string& error);
@@ -478,6 +479,7 @@ private:
 
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
+    const std::unordered_map<const AbstractQoreNode*, std::string>* constant_reverse_map = nullptr;
     //! Values known to never be NOTHING (produced by typed opcodes)
     std::unordered_set<uint32_t> never_nothing_values;
     uint32_t block_counter = 0;

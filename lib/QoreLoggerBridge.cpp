@@ -54,7 +54,7 @@ namespace {
 */
 class LoggerProgramContextHelper {
 public:
-    DLLLOCAL LoggerProgramContextHelper(QoreProgram* pgm) {
+    LoggerProgramContextHelper(QoreProgram* pgm) {
         if (!pgm || getProgram()) {
             return;
         }
@@ -68,7 +68,7 @@ public:
         }
     }
 
-    DLLLOCAL operator bool() const {
+    operator bool() const {
         return valid;
     }
 

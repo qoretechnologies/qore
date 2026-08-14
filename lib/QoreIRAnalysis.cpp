@@ -5687,6 +5687,62 @@ static size_t qore_ir_fold_constant_branches(QoreIRFunction& func) {
         }
     }
 
+    // Lowering inserts ToBool between a native boolean constant and some
+    // conditional-expression branches.  Propagate exact boolean facts through
+    // the side-effect-free native boolean conversions so these branches are
+    // folded just like an if statement whose condition is the same constant.
+    struct BoolConsumer {
+        uint32_t result_id;
+        bool invert;
+    };
+    std::unordered_map<uint32_t, std::vector<BoolConsumer>> bool_consumers;
+    for (const auto& block : func.blocks) {
+        if (qore_ir_analysis_cancelled(check_count, "IR constant branch folding")) {
+            return 0;
+        }
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count, "IR constant branch folding")) {
+                return 0;
+            }
+            if (inst->result.isValid() && inst->operands.size() == 1
+                    && (inst->opcode == QoreIROpcode::ToBool
+                        || inst->opcode == QoreIROpcode::Not)) {
+                bool_consumers[inst->operands.front().id].push_back(
+                    {inst->result.id, inst->opcode == QoreIROpcode::Not});
+            }
+        }
+    }
+    std::vector<uint32_t> worklist;
+    worklist.reserve(constants.size());
+    for (const auto& [value_id, value] : constants) {
+        if (qore_ir_analysis_cancelled(check_count, "IR constant branch folding")) {
+            return 0;
+        }
+        (void)value;
+        worklist.push_back(value_id);
+    }
+    while (!worklist.empty()) {
+        if (qore_ir_analysis_cancelled(check_count, "IR constant branch folding")) {
+            return 0;
+        }
+        uint32_t source_id = worklist.back();
+        worklist.pop_back();
+        auto consumers = bool_consumers.find(source_id);
+        if (consumers == bool_consumers.end()) {
+            continue;
+        }
+        bool source_value = constants.at(source_id);
+        for (const BoolConsumer& consumer : consumers->second) {
+            if (qore_ir_analysis_cancelled(check_count, "IR constant branch folding")) {
+                return 0;
+            }
+            if (constants.emplace(consumer.result_id,
+                    consumer.invert ? !source_value : source_value).second) {
+                worklist.push_back(consumer.result_id);
+            }
+        }
+    }
+
     struct Replacement {
         std::unique_ptr<QoreIRInstruction>* slot = nullptr;
         QoreIRBasicBlock* source = nullptr;
@@ -5761,6 +5817,113 @@ static size_t qore_ir_fold_constant_branches(QoreIRFunction& func) {
         }
     }
     return folded;
+}
+
+//! Remove basic blocks that cannot execute after control-flow simplification.
+/** Exceptional and debugger-control-flow targets are part of reachability even
+    though the ordinary CFG intentionally models normal terminator edges only. */
+static size_t qore_ir_prune_unreachable_blocks(QoreIRFunction& func) {
+    if (func.blocks.empty() || std::getenv("QORE_DISABLE_IR_UNREACHABLE_BLOCKS")) {
+        return 0;
+    }
+
+    size_t check_count = 0;
+    std::unordered_set<QoreIRBasicBlock*> all_blocks;
+    all_blocks.reserve(func.blocks.size());
+    for (const auto& block : func.blocks) {
+        if (qore_ir_analysis_cancelled(check_count, "IR unreachable-block analysis")) {
+            return 0;
+        }
+        all_blocks.insert(block.get());
+    }
+
+    std::unordered_set<QoreIRBasicBlock*> reachable;
+    reachable.reserve(func.blocks.size());
+    std::vector<QoreIRBasicBlock*> worklist;
+    auto add_reachable = [&](QoreIRBasicBlock* target) {
+        if (target && all_blocks.count(target) && reachable.insert(target).second) {
+            worklist.push_back(target);
+        }
+    };
+    add_reachable(func.blocks.front().get());
+    while (!worklist.empty()) {
+        if (qore_ir_analysis_cancelled(check_count, "IR unreachable-block analysis")) {
+            return 0;
+        }
+        QoreIRBasicBlock* block = worklist.back();
+        worklist.pop_back();
+        // DebugFlowBreak can branch directly to the enclosing loop exit.
+        add_reachable(block->enclosing_loop_exit);
+        if (!block->instructions.empty()) {
+            qore_ir_visit_successors(*block->instructions.back(), add_reachable);
+        }
+        for (const auto& inst : block->instructions) {
+            if (qore_ir_analysis_cancelled(check_count, "IR unreachable-block analysis")) {
+                return 0;
+            }
+            add_reachable(inst->exception_target);
+            if (const auto* throw_inst = dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
+                add_reachable(throw_inst->exception_target);
+            }
+            if (const auto* guard = dynamic_cast<const QoreIRGuardInstruction*>(inst.get())) {
+                add_reachable(guard->deopt_target);
+            }
+            if (const auto* helper = dynamic_cast<const QoreIRCallAOTHelperInstruction*>(inst.get())) {
+                add_reachable(helper->return_target);
+            }
+        }
+    }
+
+    if (reachable.size() == func.blocks.size()) {
+        return 0;
+    }
+
+    std::unordered_set<QoreIRBasicBlock*> removed;
+    removed.reserve(func.blocks.size() - reachable.size());
+    for (const auto& block : func.blocks) {
+        if (!reachable.count(block.get())) {
+            removed.insert(block.get());
+        }
+    }
+
+    // The removal decision is committed.  Finish all pointer and phi rewrites
+    // even if cancellation arrives so no retained IR can reference an erased
+    // block.
+    for (const auto& block : func.blocks) {
+        if (!reachable.count(block.get())) {
+            continue;
+        }
+        (void)qore_ir_analysis_cancelled(check_count, "IR unreachable-block pruning");
+        if (removed.count(block->enclosing_loop_exit)) {
+            block->enclosing_loop_exit = nullptr;
+        }
+        for (const auto& inst : block->instructions) {
+            (void)qore_ir_analysis_cancelled(check_count, "IR unreachable-block pruning");
+            if (inst->opcode != QoreIROpcode::Phi) {
+                continue;
+            }
+            auto& phi = static_cast<QoreIRPhiInstruction&>(*inst);
+            phi.incoming.erase(std::remove_if(phi.incoming.begin(), phi.incoming.end(),
+                [&](const QoreIRPhiIncoming& incoming) {
+                    (void)qore_ir_analysis_cancelled(check_count, "IR unreachable-block pruning");
+                    return removed.count(incoming.block);
+                }), phi.incoming.end());
+            phi.operands.clear();
+            phi.operands.reserve(phi.incoming.size());
+            for (const QoreIRPhiIncoming& incoming : phi.incoming) {
+                (void)qore_ir_analysis_cancelled(check_count, "IR unreachable-block pruning");
+                phi.operands.push_back(incoming.value);
+            }
+        }
+    }
+
+    const size_t pruned = removed.size();
+    func.blocks.erase(std::remove_if(func.blocks.begin(), func.blocks.end(),
+        [&](const std::unique_ptr<QoreIRBasicBlock>& block) {
+            (void)qore_ir_analysis_cancelled(check_count, "IR unreachable-block pruning");
+            return removed.count(block.get());
+        }), func.blocks.end());
+    return pruned;
 }
 
 static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
@@ -9501,6 +9664,7 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
     if (!getenv("QORE_DISABLE_IR_CONST_FOLD")) {
         local_stats.constant_branches_folded = qore_ir_fold_constant_branches(func);
     }
+    local_stats.unreachable_blocks_pruned = qore_ir_prune_unreachable_blocks(func);
 
     if (stats) {
         *stats = local_stats;
