@@ -475,14 +475,19 @@ public class CdsRestClientBase {
 
         @param templates the profile's scopes, which may contain \c "{url}"
         @param scopes the scopes to resolve, which may already have been resolved against another URL
-        @param url the connection URL
+        @param url the connection URL; with none, the scopes are returned unchanged
 
         @return the scopes, resolved against \a url
 
         @since CdsRestClient 1.1
     */
     static list<string> resolveProfileScopes(*softlist<string> templates, *softlist<string> scopes,
-            string url) {
+            *string url) {
+        # with no URL there is nothing to resolve against; the scopes are returned as they are rather than
+        # the call failing, since a client may legitimately be built from options that carry no URL
+        if (!url.val()) {
+            return map $1, scopes;
+        }
         list<string> rv = ();
         foreach string scope in (scopes) {
             rv += CdsRestClientBase::resolveProfileScope(templates, scope, url);
