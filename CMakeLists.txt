@@ -3749,6 +3749,7 @@ if (QORE_BUILD_AOT_MODULES AND QORE_AOT_LINK_SOURCE_MODULES
         COMMAND ${CMAKE_COMMAND}
             -DQORE_SOURCE_QLIB_DIR=${CMAKE_SOURCE_DIR}/qlib
             -DQORE_BUILD_QMOD_DIR=${CMAKE_BINARY_DIR}/qlib-qmod
+            -DQORE_QCC_FORMAT_STAMP=${QCC_FORMAT_STAMP}
             -P ${CMAKE_SOURCE_DIR}/cmake/EnsureSourceQmodSymlinks.cmake
         COMMENT "Ensuring in-tree source qmod symlinks"
         VERBATIM)
@@ -3759,6 +3760,7 @@ if (QORE_BUILD_AOT_MODULES AND QORE_AOT_LINK_SOURCE_MODULES
         execute_process(COMMAND ${CMAKE_COMMAND}
             -DQORE_SOURCE_QLIB_DIR=${CMAKE_SOURCE_DIR}/qlib
             -DQORE_BUILD_QMOD_DIR=${CMAKE_BINARY_DIR}/qlib-qmod
+            -DQORE_QCC_FORMAT_STAMP=${QCC_FORMAT_STAMP}
             -P ${CMAKE_SOURCE_DIR}/cmake/EnsureSourceQmodSymlinks.cmake
             RESULT_VARIABLE _qore_ensure_qmod_links_result)
         if (NOT _qore_ensure_qmod_links_result EQUAL 0)

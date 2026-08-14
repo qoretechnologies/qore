@@ -186,6 +186,7 @@ fi
 cmake \
     -DQORE_SOURCE_QLIB_DIR="${QORE_SRC_DIR}/qlib" \
     -DQORE_BUILD_QMOD_DIR="${QORE_SRC_DIR}/build/qlib-qmod" \
+    -DQORE_QCC_FORMAT_STAMP="${QORE_SRC_DIR}/build/qcc-format.stamp" \
     -P "${QORE_SRC_DIR}/cmake/EnsureSourceQmodSymlinks.cmake"
 
 # add Qore user and group

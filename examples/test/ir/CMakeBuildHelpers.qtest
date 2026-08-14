@@ -1,6 +1,8 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
 %modern
 %no-child-restrictions
 
@@ -47,6 +49,8 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
             \testGenericQccObjectHelpers());
         addTestCase("managed qcc outputs prune stale artifacts safely",
             \testManagedQccOutputPruning());
+        addTestCase("source qmod links reject stale format artifacts",
+            \testSourceQmodSymlinkFreshness());
         addTestCase("cyclic source components build as one atomic generation",
             \testCyclicComponentBuilds());
 
@@ -55,6 +59,10 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
 
     private string run(string cmd) {
         return backquote("{ " + cmd + "; } 2>&1");
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
     }
 
     private write(string path, string body) {
@@ -71,6 +79,47 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
     private date mtime(string path) {
         hash<auto> info = hstat(path);
         return info.mtime;
+    }
+
+    testSourceQmodSymlinkFreshness() {
+        TmpDir tmp("qore-source-qmod-links-");
+        string source_qlib = tmp.path + "/qlib";
+        string build_qmods = tmp.path + "/qlib-qmod";
+        string source_module = source_qlib + "/Fixture";
+        string build_module = build_qmods + "/Fixture";
+        string source = source_module + "/Fixture.qm";
+        string qmod = build_module + "/Fixture.qmod";
+        string link = source_module + "/Fixture.qmod";
+        string format_stamp = tmp.path + "/qcc-format.stamp";
+        string script = realpath(get_script_dir()
+            + "/../../../cmake/EnsureSourceQmodSymlinks.cmake");
+        mkdir(source_module, 0755, True);
+        mkdir(build_module, 0755, True);
+        write(source, "%modern\nmodule Fixture { version = \"1.0\"; }\n");
+        write(qmod, "fixture qmod\n");
+        write(format_stamp, "format=1\n");
+        symlink(qmod, link);
+
+        assertEq(0, system(sprintf("touch -t 202601010000 %s && touch -t 202601010001 %s",
+                shellQuote(qmod), shellQuote(format_stamp))),
+            "the fixture establishes deterministic stale timestamps");
+        string stale = run(sprintf(
+            "cmake -DQORE_SOURCE_QLIB_DIR=%s -DQORE_BUILD_QMOD_DIR=%s "
+                + "-DQORE_QCC_FORMAT_STAMP=%s -P %s",
+            shellQuote(source_qlib), shellQuote(build_qmods), shellQuote(format_stamp), shellQuote(script)));
+        assertFalse(is_file(link),
+            "a qmod older than the format stamp is unlinked: " + stale);
+        assertTrue(stale.find("1 stale artifact(s) skipped") >= 0,
+            "stale qmod rejection is visible in the build diagnostic: " + stale);
+
+        assertEq(0, system(sprintf("touch -t 202601010002 %s", shellQuote(qmod))),
+            "the fixture advances the rebuilt qmod timestamp deterministically");
+        string fresh = run(sprintf(
+            "cmake -DQORE_SOURCE_QLIB_DIR=%s -DQORE_BUILD_QMOD_DIR=%s "
+                + "-DQORE_QCC_FORMAT_STAMP=%s -P %s",
+            shellQuote(source_qlib), shellQuote(build_qmods), shellQuote(format_stamp), shellQuote(script)));
+        assertEq(qmod, readlink(link),
+            "a rebuilt qmod is linked after the format stamp: " + fresh);
     }
 
     testDownstreamCatalogInstallRoot() {

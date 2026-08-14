@@ -10,6 +10,8 @@
 # Inputs:
 #   QORE_SOURCE_QLIB_DIR - source qlib directory
 #   QORE_BUILD_QMOD_DIR  - build directory containing the AOT qmods
+#   QORE_QCC_FORMAT_STAMP - optional qcc format stamp; qmods older than this
+#                           file are stale and must not be linked
 
 if (NOT DEFINED QORE_SOURCE_QLIB_DIR OR NOT DEFINED QORE_BUILD_QMOD_DIR)
     message(FATAL_ERROR "QORE_SOURCE_QLIB_DIR and QORE_BUILD_QMOD_DIR must be defined")
@@ -26,6 +28,13 @@ endif()
 set(_created 0)
 set(_fixed 0)
 set(_removed 0)
+set(_stale 0)
+
+set(_qcc_format_timestamp "")
+if (DEFINED QORE_QCC_FORMAT_STAMP AND NOT "${QORE_QCC_FORMAT_STAMP}" STREQUAL ""
+        AND EXISTS "${QORE_QCC_FORMAT_STAMP}")
+    file(TIMESTAMP "${QORE_QCC_FORMAT_STAMP}" _qcc_format_timestamp "%s" UTC)
+endif()
 
 # Flat modules have the same relative path in qlib and qlib-qmod. Split
 # modules likewise use <name>/<name>.qmod in both trees.
@@ -40,6 +49,24 @@ foreach(_rel IN LISTS _built_qmods)
     # Do not create links for qmods built from sources outside qlib.
     if (NOT EXISTS "${_link_dir}/${_name}.qm")
         continue()
+    endif()
+
+    # A qcc format change invalidates every AOT qmod.  The build graph removes
+    # source links when the format stamp changes, but configure-time healing
+    # must not recreate those links from older artifacts before their targets
+    # rebuild.  Equal timestamps are accepted for filesystems with one-second
+    # timestamp precision; the qmod target itself depends on the format stamp
+    # and performs the authoritative rebuild check.
+    if (NOT "${_qcc_format_timestamp}" STREQUAL "")
+        file(TIMESTAMP "${_qmod}" _qmod_timestamp "%s" UTC)
+        if (_qmod_timestamp LESS _qcc_format_timestamp)
+            if (IS_SYMLINK "${_link}")
+                file(REMOVE "${_link}")
+                math(EXPR _removed "${_removed} + 1")
+            endif()
+            math(EXPR _stale "${_stale} + 1")
+            continue()
+        endif()
     endif()
 
     if (IS_SYMLINK "${_link}")
@@ -76,7 +103,8 @@ foreach(_link IN LISTS _source_qmods)
     endif()
 endforeach()
 
-if (_created OR _fixed OR _removed)
+if (_created OR _fixed OR _removed OR _stale)
     message(STATUS
-        "Source qmod symlinks ensured: ${_created} created, ${_fixed} fixed, ${_removed} removed")
+        "Source qmod symlinks ensured: ${_created} created, ${_fixed} fixed, "
+        "${_removed} removed, ${_stale} stale artifact(s) skipped")
 endif()
