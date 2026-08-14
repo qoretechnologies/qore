@@ -1241,13 +1241,26 @@ public class DynamicsRestConnection inherits CdsRestConnection {
             return new_opts;
         }
         try {
-            new_opts += CdsRestClientBase::discoverInstanceOptions(resp.access_token,
-                real_opts.organization, getLogger());
+            if (*hash<auto> inst = discoverInstance(resp.access_token)) {
+                new_opts += inst;
+                # the token just issued is for the discovery service, and the connection now targets an
+                # environment: a different resource, which no refresh will move it to.  So the platform is
+                # asked for a second authorization, now that there is an environment to name in it
+                new_opts{RestConnection::ReauthorizationRequiredOption} = True;
+                info("Dynamics: environment discovered; a second authorization is needed to reach it");
+            }
         } catch (hash<ExceptionInfo> ex) {
             # a failed discovery must not break an otherwise successful authorization
             error("Dynamics: cannot determine the environment to work in: %s: %s", ex.err, ex.desc);
         }
         return new_opts;
+    }
+
+    #! Discovers the environment a newly issued credential reaches
+    /** The one call the discovery makes; an extension point for reaching Microsoft another way.
+    */
+    private *hash<auto> discoverInstance(string token) {
+        return CdsRestClientBase::discoverInstanceOptions(token, real_opts.organization, getLogger());
     }
 
     #! Re-derives the URL when the environment is set or changed

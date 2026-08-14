@@ -19,6 +19,26 @@
 
 %modern
 
+#! A Dynamics connection whose discovery answers from a fixture rather than from Microsoft
+class FakeDynamicsConnection inherits CdsRestClient::DynamicsRestConnection {
+    public {
+        *hash<auto> discovered;
+    }
+
+    constructor(hash<auto> config, *hash<auto> found) : DynamicsRestConnection(config) {
+        discovered = found;
+    }
+
+    private *hash<auto> discoverInstance(string token) {
+        return discovered;
+    }
+
+    #! reaches the hook the platform calls when it has exchanged the authorization code
+    hash<auto> completeAuthorization(hash<auto> resp) {
+        return processOAuth2TokenResponse(resp) ?? {};
+    }
+}
+
 %exec-class CdsTest
 
 class CdsTest inherits QUnit::Test {
@@ -56,6 +76,7 @@ class CdsTest inherits QUnit::Test {
         addTestCase("connection tests", \connectionTest());
         addTestCase("profile scopes follow the URL", \profileScopeTest());
         addTestCase("no URL is needed to create a connection", \autoUrlDiscoveryTest());
+        addTestCase("a discovered environment asks for a second authorization", \reauthorizeTest());
 
         try {
             setupConnection();
@@ -204,6 +225,38 @@ class CdsTest inherits QUnit::Test {
         credential reaches is what Microsoft's Global Discovery Service answers - so the connection is
         created against the discovery service and moves to its environment once authorized.
     */
+    #! Discovering the environment changes which resource the connection targets, so it asks for another round
+    /** The token issued by the first authorization is for the discovery service, and no refresh will move
+        it to the environment: an OAuth2 refresh does not name a resource, and asking for another one
+        returns the originally granted one anyway - measured against Microsoft's own service.  So the
+        connection tells the platform to authorize again, now that there is an environment to name.
+    */
+    reauthorizeTest() {
+        hash<auto> opts = {"oauth2_client_id": "id", "oauth2_client_secret": "secret"};
+        hash<auto> found = {"url": "dynamics://contoso.crm17.dynamics.com", "organization": "orgabc"};
+
+        FakeDynamicsConnection c({"name": "d", "desc": "d", "opts": opts}, found);
+        hash<auto> rv = c.completeAuthorization({"access_token": "at", "refresh_token": "rt"});
+        assertEq("dynamics://contoso.crm17.dynamics.com", rv.url, "the environment is returned as the URL");
+        assertEq("orgabc", rv.organization);
+        assertTrue(rv{RestConnection::ReauthorizationRequiredOption},
+            "and the platform is asked to authorize again against the environment");
+
+        # a connection that already has its environment does not discover again, and does not ask for
+        # another authorization: this is what makes a token refresh cost nothing
+        FakeDynamicsConnection c2({"name": "d", "desc": "d",
+            "url": "dynamics://contoso.crm17.dynamics.com", "opts": opts}, found);
+        hash<auto> rv2 = c2.completeAuthorization({"access_token": "at", "refresh_token": "rt"});
+        assertNothing(rv2{RestConnection::ReauthorizationRequiredOption},
+            "an environment already chosen is left alone");
+        assertNothing(rv2.url, "and no URL change is requested");
+
+        # a discovery that finds nothing must not ask for a round that would change nothing
+        FakeDynamicsConnection c3({"name": "d", "desc": "d", "opts": opts}, NOTHING);
+        hash<auto> rv3 = c3.completeAuthorization({"access_token": "at"});
+        assertNothing(rv3{RestConnection::ReauthorizationRequiredOption});
+    }
+
     autoUrlDiscoveryTest() {
         hash<auto> opts = {"oauth2_client_id": "id", "oauth2_client_secret": "secret"};
 
