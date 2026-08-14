@@ -8026,35 +8026,32 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_cow(
         return toBits(QoreValue());
     }
 
-    QoreStringNode* left_string = left.get<QoreStringNode>();
     if (right.isNullOrNothing()) {
-        left_string->ref();
-        return left_bits;
+        return toBits(left.refSelf());
     }
     if (right.getType() != NT_STRING) {
         return toBits(QoreValue());
     }
 
-    QoreStringNode* right_node = right.get<QoreStringNode>();
     QoreStringValueHelper right_string(right);
-    QoreStringNode* result;
-    if (left_string != right_node && left_string->reference_count() == 1) {
-        result = left_string;
-        result->concat(*right_string, xsink);
+    QoreStringNode* left_node = left.isShortString() ? nullptr : left.get<QoreStringNode>();
+    QoreStringNode* right_node = right.isShortString() ? nullptr : right.get<QoreStringNode>();
+    if (left_node && left_node != right_node && left_node->reference_count() == 1) {
+        left_node->concat(*right_string, xsink);
         if (xsink && *xsink) {
             return toBits(QoreValue());
         }
-        result->ref();
-        return toBits(QoreValue(result));
-    } else {
-        result = new QoreStringNode(*left_string);
+        left_node->ref();
+        return toBits(QoreValue(left_node));
     }
+
+    QoreStringValueHelper left_string(left);
+    ReferenceHolder<QoreStringNode> result(new QoreStringNode(*left_string), xsink);
     result->concat(*right_string, xsink);
     if (xsink && *xsink) {
-        result->deref();
         return toBits(QoreValue());
     }
-    return toBits(QoreValue(result));
+    return toBits(QoreValue(result.release()));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_string_append_local_cow(
@@ -8072,7 +8069,6 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_local_cow(
         return toBits(QoreValue());
     }
 
-    QoreStringNode* left_string = left.get<QoreStringNode>();
     if (right.isNullOrNothing()) {
         return left_bits;
     }
@@ -8080,14 +8076,16 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_local_cow(
         return toBits(QoreValue());
     }
 
-    QoreStringNode* right_node = right.get<QoreStringNode>();
     QoreStringValueHelper right_string(right);
-    if (left_string != right_node && left_string->reference_count() == 1) {
-        left_string->concat(*right_string, xsink);
+    QoreStringNode* left_node = left.isShortString() ? nullptr : left.get<QoreStringNode>();
+    QoreStringNode* right_node = right.isShortString() ? nullptr : right.get<QoreStringNode>();
+    if (left_node && left_node != right_node && left_node->reference_count() == 1) {
+        left_node->concat(*right_string, xsink);
         return xsink && *xsink ? toBits(QoreValue()) : left_bits;
     }
 
-    SimpleRefHolder<QoreStringNode> result(new QoreStringNode(*left_string));
+    QoreStringValueHelper left_string(left);
+    ReferenceHolder<QoreStringNode> result(new QoreStringNode(*left_string), xsink);
     result->concat(*right_string, xsink);
     if (xsink && *xsink) {
         return toBits(QoreValue());
@@ -8096,7 +8094,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_local_cow(
     uint64_t result_bits = toBits(QoreValue(result.release()));
     *owner = result_bits;
     *cache = result_bits;
-    left.discard(xsink);
+    left.discard(nullptr);
     return result_bits;
 }
 
@@ -8104,19 +8102,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_append_in_place(
         uint64_t left_bits, uint64_t right_bits, ExceptionSink* xsink) {
     QoreValue left = fromBits(left_bits);
     QoreValue right = fromBits(right_bits);
-    if (left.getType() != NT_STRING || right.getType() != NT_STRING) {
+    if (left.getType() != NT_STRING || left.isShortString()
+            || right.getType() != NT_STRING) {
         xsink->raiseException("IR-EXEC-ERROR",
-            "in-place string append requires assigned string operands");
+            "in-place string append requires an assigned mutable string node on the left");
         return toBits(QoreValue());
     }
 
     QoreStringNode* left_string = left.get<QoreStringNode>();
-    QoreStringNode* right_string = right.get<QoreStringNode>();
-    if (left_string == right_string) {
-        SimpleRefHolder<QoreStringNode> right_copy(new QoreStringNode(*right_string));
+    QoreStringNode* right_node = right.isShortString() ? nullptr : right.get<QoreStringNode>();
+    QoreStringValueHelper right_string(right);
+    if (left_string == right_node) {
+        ReferenceHolder<QoreStringNode> right_copy(new QoreStringNode(*right_string), xsink);
         left_string->concat(*right_copy, xsink);
     } else {
-        left_string->concat(right_string, xsink);
+        left_string->concat(*right_string, xsink);
     }
     return xsink && *xsink ? toBits(QoreValue()) : left_bits;
 }

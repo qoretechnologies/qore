@@ -11991,6 +11991,7 @@ load_local_done:
                 // node and stores it through to the local.
                 bool in_place = inst->string_append_in_place
                     && left.getType() == NT_STRING
+                    && !left.isShortString()
                     && left.get<QoreStringNode>()->is_unique();
                 QoreValue result = in_place
                     ? fromBits(qore_rt_string_append_in_place(

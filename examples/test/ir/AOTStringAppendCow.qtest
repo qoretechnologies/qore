@@ -14,6 +14,32 @@ if (!is_file(qcc_bin)) {
 
 string code = "%modern
 
+class ShortStringColumn {
+    private {
+        string native_type;
+        int size;
+        int scale;
+    }
+
+    constructor(string native_type, int size, int scale) {
+        self.native_type = native_type;
+        self.size = size;
+        self.scale = scale;
+    }
+
+    string getNativeTypeString() {
+        string sql = native_type;
+        if (size) {
+            if (scale) {
+                sql += sprintf(\"(%d,%d)\", size, scale);
+            } else {
+                sql += sprintf(\"(%d)\", size);
+            }
+        }
+        return sql;
+    }
+}
+
 string value = \"a\";
 string append_result = (value += \"b\");
 string alias_source = \"left\";
@@ -33,11 +59,13 @@ string latin1 = convert_encoding(\"caf\\u00e9\", \"ISO-8859-1\");
 latin1 += convert_encoding(\" d\\u00e9j\\u00e0\", \"UTF-8\");
 
 string encoding_exception = \"none\";
+string ascii_after_exception;
+string ascii = convert_encoding(\"ascii\", \"US-ASCII\");
 try {
-    string ascii = convert_encoding(\"ascii\", \"US-ASCII\");
     ascii += \"\\u00df\";
 } catch (hash<ExceptionInfo> ex) {
     encoding_exception = ex.err;
+    ascii_after_exception = ascii;
 }
 
 string referenced = \"ref\";
@@ -45,8 +73,11 @@ reference<string> referenced_ref = \\referenced;
 referenced_ref += \"-append\";
 
 string captured = \"closure\";
+auto captured_short_source = ARGV.empty() ? 1.5 : \"text\";
+string captured_short = typename(captured_short_source);
 code<nothing()> append_closure = sub () {
     captured += \"-append\";
+    captured_short += \"-capture\";
 };
 append_closure();
 
@@ -89,13 +120,25 @@ string escaped_alias = escaped_builder;
 for (int i = 0; i < 4; ++i) {
     escaped_builder += \"x\";
 }
+ShortStringColumn short_string_column(\"int\", 10, 2);
+string member_short_append = short_string_column.getNativeTypeString();
+auto runtime_typed_value = ARGV.empty() ? 1.5 : \"text\";
+string runtime_short_append = typename(runtime_typed_value);
+string runtime_short_alias = runtime_short_append;
+runtime_short_append += \"-value\";
+string runtime_short_self = typename(runtime_typed_value);
+runtime_short_self += runtime_short_self;
+string runtime_short_noop = typename(runtime_typed_value);
+runtime_short_noop += optional_suffix;
 
-printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%d|%d|%s|%s|%s/%s|%s|%s\\n\",
+printf(\"%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|%s/%s|%s/%s|%d|%d|%s|%s|%s/%s|%s|%s|%s|%s/%s|%s|%s\\n\",
     value, append_result, alias_source, alias, self, unset, removed, optional,
     convert_encoding(latin1, \"UTF-8\"), latin1.encoding(), encoding_exception,
-    referenced + \"/\" + captured, builder.size(), builder.size() - 512,
+    ascii_after_exception,
+    referenced + \"/\" + captured, captured_short, builder.size(), builder.size() - 512,
     builder.substr(512, 26), chained, escaped_builder, escaped_alias,
-    branch_alias, branch_no_alias);
+    branch_alias, branch_no_alias, member_short_append, runtime_short_append,
+    runtime_short_alias, runtime_short_self, runtime_short_noop);
 ";
 
 string script_path = "/tmp/qore-aot-string-append-cow-" + string(getpid()) + ".qr";
@@ -121,8 +164,9 @@ string sub runAot(string suffix, string env) {
 }
 
 string expected = "ab|ab|left-right|left|xyxy|assigned|new|kept|café déjà|"
-    + "ISO-8859-1|ENCODING-CONVERSION-ERROR|ref-append/closure-append|4608|4096|"
-    + "abcdefghijklmnopqrstuvwxyz|AbCabcABCABC|xxxx/|x/|x/\n";
+    + "ISO-8859-1|ENCODING-CONVERSION-ERROR/ascii|ref-append/closure-append/float-capture|4608|4096|"
+    + "abcdefghijklmnopqrstuvwxyz|AbCabcABCABC|xxxx/|x/|x/|int(10,2)|"
+    + "float-value/float|floatfloat|float\n";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {
     string actual = runMode(mode);
     if (actual != expected) {
