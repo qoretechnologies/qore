@@ -91,7 +91,43 @@ hash<auto> ans = rest.get("...");
 printf("%Y\n", ans.body);
     @endcode
 
+    @section cdsrestclient_discovery Creating a Dynamics Connection Without a URL
+
+    A Dataverse environment's URL is not something a user should have to look up, and it is not knowable
+    before the credential exists: **which environments a credential reaches is what Microsoft answers**,
+    through the Global Discovery Service.  So a Dynamics connection is created against the discovery
+    service and moves to its environment once it has been authorized.
+
+    |!Step|!What happens
+    |the connection is created|with no URL, so it targets the discovery service (\c DefaultUrl)
+    |it is authorized|the discovery service is an OAuth2 resource of its own, so the profile's <tt>{url}user_impersonation</tt> scope resolves to exactly the scope the discovery call needs - there is no special case
+    |the token arrives|the environments the credential reaches are read from <tt>/api/discovery/v2.0/Instances</tt>
+    |the environment is chosen|where there is one, it is used; where there are several, \c organization names it
+    |the URL is replaced|the environment's URL is returned as an option and promoted onto the connection, and the scope is resolved again against it
+
+    The scheme declares \c auto_url, so nothing asks
+    the user for a URL.
+
+    @note **No environment is ever chosen arbitrarily.**  A credential that reaches several environments
+    and names none leaves the connection on the discovery service, because connecting to whichever came
+    back first would read a different company's data without saying so.  \c organization is not a required
+    option either: requiring a value that only the authorization can produce makes the connection
+    impossible to create in the first place.
+
+    The discovery runs on all three hooks that can complete an authorization - the connection's
+    \c processOAuth2TokenResponseImpl(), which is
+    the path a real user goes through, and each client's own \c getUpdateOptionsAfterLogin() - because
+    different callers use different ones.  It runs only while the connection still targets the discovery
+    service, so an environment that has already been chosen is left alone and a token refresh does not pay
+    for the call again, and a failed discovery never breaks an otherwise successful authorization.
+
     @section cdsrestclientrelnotes Release Notes
+
+    @subsection cdsrestclientv2_2 CdsRestClient v2.2
+    - a Dynamics connection is created without a URL and discovers its environment from the credential;
+      see @ref cdsrestclient_discovery
+    - an API profile's scopes are resolved against the connection URL again when the URL changes, so a
+      connection moved to another environment no longer authorizes against the old one
 
     @subsection cdsrestclientv2_1 CdsRestClient v2.1
     - added support for Microsoft Dynamics 365 Business Central
@@ -207,6 +243,34 @@ public class CdsRestClientBase {
         */
         const UrlPlaceholder = "{url}";
 
+        #! The host of Microsoft's Global Discovery Service
+        /** @see @ref cdsrestclient_discovery
+
+            @since CdsRestClient 1.1
+        */
+        const GlobalDiscoveryHost = "globaldisco.crm.dynamics.com";
+
+        #! The URL a Dynamics connection targets until it knows which environment it works in
+        /** A Dataverse environment's URL is not something a user should have to look up, and it is not
+            knowable before the credential exists: which environments a credential reaches is what the
+            Global Discovery Service answers.  So a Dynamics connection is created against the discovery
+            service and moves to its environment once it has been authorized.
+
+            The discovery service is also an OAuth2 resource of its own, which is what makes this work
+            without a special case: the profile's scope is <tt>{url}user_impersonation</tt>, and resolved
+            against this URL it is exactly the scope the discovery call needs.
+
+            @see @ref cdsrestclient_discovery
+
+            @since CdsRestClient 1.1
+        */
+        const DefaultUrl = "dynamics://" + GlobalDiscoveryHost;
+
+        #! The Global Discovery Service path listing the environments a credential reaches
+        /** @since CdsRestClient 1.1
+        */
+        const DiscoveryInstancesPath = "/api/discovery/v2.0/Instances";
+
         #! OAuth2 base URL for Microsoft identity platform
         const OAuth2BaseUrl = "https://login.microsoftonline.com/";
 
@@ -249,6 +313,151 @@ public class CdsRestClientBase {
     }
 
     #! returns options for the CdsRestClient constructors
+    #! Returns @ref True if the given URL still targets the Global Discovery Service
+    /** A connection targeting the discovery service has not been given an environment yet, which is what
+        says the discovery is still to be done.
+
+        @param url the URL to check
+
+        @since CdsRestClient 1.1
+    */
+    static bool isDiscoveryUrl(*string url) {
+        if (!url.val()) {
+            return False;
+        }
+        # compared as a host rather than matched as a pattern, so that the dots in the host name are not
+        # wildcards and a look-alike host cannot pass for the discovery service
+        *list<*string> m = (url =~ x/^[a-z]+:\/\/([^\/:]+)/i);
+        return m[0].lwr() == GlobalDiscoveryHost;
+    }
+
+    #! Asks the Global Discovery Service which environments a credential reaches
+    /** @param token the access token to use; the one from the authorization response, not the client's,
+        which may not have been updated yet
+        @param org the environment to select, where the credential reaches more than one
+        @param logger any logger to report the alternatives to
+
+        @return the connection options to update, or @ref nothing when no environment could be chosen
+
+        @see @ref cdsrestclient_discovery
+
+        @since CdsRestClient 1.1
+    */
+    static *hash<auto> discoverInstanceOptions(string token, *string org, *LoggerInterface logger) {
+        RestClientIo::RestClientIo rest({
+            "url": "https://" + GlobalDiscoveryHost,
+            "data": "json",
+            "token": token,
+            "token_type": "Bearer",
+        });
+        on_exit rest.close();
+
+        hash<RestClient::RestResponseInfo> resp = rest.restDoRequest("GET", DiscoveryInstancesPath,
+            NOTHING, {"Accept": MimeTypeJson});
+        return CdsRestClientBase::getInstanceOptions(resp.body, org, logger);
+    }
+
+    #! Returns the connection options for the environment to work in
+    /** With one environment there is nothing to choose.  With several, an arbitrary choice would silently
+        connect to the wrong company's data, so one is made only when \c organization names it; otherwise
+        the alternatives are logged and the connection is left targeting the discovery service, which is
+        what says the choice has still to be made.
+
+        @param body the Global Discovery Service response
+        @param org the environment to select, by unique name, URL name or friendly name
+        @param logger any logger to report the alternatives to
+
+        @return the connection options to update, or @ref nothing when no environment could be chosen
+
+        @since CdsRestClient 1.1
+    */
+    static *hash<auto> getInstanceOptions(auto body, *string org, *LoggerInterface logger) {
+        *list<auto> instances = body.value;
+        # an environment with no URL cannot be connected to whatever else it says
+        instances = map $1, instances, $1.Url.val();
+        if (!instances) {
+            if (logger) {
+                logger.error("Dynamics: the credential reaches no Dataverse environment");
+            }
+            return;
+        }
+        *hash<auto> instance;
+        if (org.val()) {
+            # an environment need not carry every name, so each is defaulted before it is compared
+            string want = org.lwr();
+            instance = (map $1, instances,
+                ($1.UniqueName ?? "").lwr() == want || ($1.UrlName ?? "").lwr() == want
+                    || ($1.FriendlyName ?? "").lwr() == want)[0];
+            if (!instance) {
+                # the choice named nothing that exists; connecting to another environment instead would
+                # read a different company's data
+                if (logger) {
+                    logger.error("Dynamics: no environment named %y; reachable: %y", org,
+                        (map $1.UniqueName, instances));
+                }
+                return;
+            }
+        } else if (instances.size() == 1) {
+            instance = instances[0];
+        } else {
+            if (logger) {
+                logger.info("Dynamics: the credential reaches %d environments: %y; set the "
+                    "\"organization\" option to choose one", instances.size(),
+                    (map $1.UniqueName, instances));
+            }
+            return;
+        }
+        if (logger) {
+            logger.info("Dynamics: working in environment %y (%s)", instance.UniqueName, instance.Url);
+        }
+        return {
+            # the connection's own scheme, not "https": this value is promoted onto the connection
+            "url": regex_subst(instance.Url, "^https?", "dynamics"),
+            "organization": instance.UniqueName,
+        };
+    }
+
+    #! Discovers the environment after a client's own login, if it is still to be done
+    /** Shared by the clients' login hooks, which differ only in their signatures.
+
+        @param new_opts the options the base class returned
+        @param h the token response
+        @param url the client's current URL
+        @param org the environment to select, where the credential reaches more than one
+        @param logger any logger
+        @param set_url called with the environment's URL, so that **this** client reaches it at once and
+        not only the next one built from the options returned here; @ref nothing for the asynchronous
+        client, whose URL is immutable by design because its connection manager pools by URL
+
+        @return the options to update
+
+        @see @ref cdsrestclient_discovery
+
+        @since CdsRestClient 1.1
+    */
+    static *hash<auto> discoverAfterLogin(*hash<auto> new_opts, hash<auto> h, string url, *string org,
+            *LoggerInterface logger, *code set_url) {
+        if (!h.access_token.val() || !CdsRestClientBase::isDiscoveryUrl(url)) {
+            return new_opts;
+        }
+        try {
+            if (*hash<auto> inst = CdsRestClientBase::discoverInstanceOptions(h.access_token, org,
+                    logger)) {
+                new_opts += inst;
+                if (set_url) {
+                    set_url(regex_subst(inst.url, "^[a-z]+:", "https:"));
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # a failed discovery must not break an otherwise successful authorization
+            if (logger) {
+                logger.error("Dynamics: cannot determine the environment to work in: %s: %s", ex.err,
+                    ex.desc);
+            }
+        }
+        return new_opts;
+    }
+
     #! Resolves an API profile's scopes against the connection URL, re-resolving any that have gone stale
     /** A profile declares its scopes with a \c "{url}" placeholder - Dynamics 365 asks for
         <tt>{url}user_impersonation</tt> - and the placeholder is replaced with the connection URL, so the
@@ -542,6 +751,22 @@ CdsRestClient rest({
             }
             rethrow;
         }
+    }
+
+    #! Returns options to update after an OAuth2 login, discovering the environment on the first one
+    /** The environment a credential reaches does not change, so it is discovered only while this client
+        still targets the discovery service - which is exactly the first authorization; a refresh does not
+        pay for the call again.
+
+        @see @ref cdsrestclient_discovery
+    */
+    private *hash<auto> getUpdateOptionsAfterLogin(hash<auto> h, *bool refresh) {
+        *hash<auto> new_opts = RestClient::getUpdateOptionsAfterLogin(h, refresh);
+        if (refresh) {
+            return new_opts;
+        }
+        return CdsRestClientBase::discoverAfterLogin(new_opts, h, getURL(), NOTHING, getLogger(),
+            \self.setURL());
     }
 }
 
@@ -939,6 +1164,18 @@ public class DynamicsRestConnection inherits CdsRestConnection {
                     ),
                     "default_value": "dynamics",
                 },
+                "organization": <ConnectionOptionInfo>{
+                    "display_name": "Environment",
+                    "short_desc": "The Dataverse environment to work in",
+                    "type": "string",
+                    "desc": "The Dataverse environment to work in, by its unique name.\n\n"
+                        "This is normally **discovered**: authorizing the connection asks Microsoft which "
+                        "environments the credential reaches, and where there is one it is used and this "
+                        "option is set to it. Set it by hand only where the credential reaches several, "
+                        "which is the one case that cannot be resolved without being told - connecting to "
+                        "an arbitrary one would read another company's data.",
+                    "example_value": "orgb1c2d3e4",
+                },
             },
             "schemes": {
                 "dynamics": True,
@@ -946,6 +1183,8 @@ public class DynamicsRestConnection inherits CdsRestConnection {
             "base_scheme_map": {
                 "https": "dynamics",
             },
+            # the environment's URL is discovered from the credential, so the user does not supply one
+            "auto_url": True,
         };
     }
 
@@ -981,9 +1220,47 @@ public class DynamicsRestConnection inherits CdsRestConnection {
         return ConnectionScheme;
     }
 
+    #! Processes an OAuth2 token response, discovering the environment on the first authorization
+    /** This is the authorization code flow's own path: the platform exchanges the code and hands the token
+        response here, so it is where a connection that has just been authorized becomes a working one.
+
+        The environment is discovered only while the connection still targets the discovery service, so an
+        environment that has already been chosen - or set by hand - is left alone, and a refresh does not
+        pay for the call again.
+
+        @see @ref cdsrestclient_discovery
+    */
+    private *hash<auto> processOAuth2TokenResponseImpl(hash<auto> resp) {
+        *hash<auto> new_opts = RestConnection::processOAuth2TokenResponseImpl(resp);
+        if (!resp.access_token.val() || !CdsRestClientBase::isDiscoveryUrl(url)) {
+            return new_opts;
+        }
+        try {
+            new_opts += CdsRestClientBase::discoverInstanceOptions(resp.access_token,
+                real_opts.organization, getLogger());
+        } catch (hash<ExceptionInfo> ex) {
+            # a failed discovery must not break an otherwise successful authorization
+            error("Dynamics: cannot determine the environment to work in: %s: %s", ex.err, ex.desc);
+        }
+        return new_opts;
+    }
+
+    #! Re-derives the URL when the environment is set or changed
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+    }
+
     #! returns options for @ref DynamicsRestConnection::constructor()
+    /** A Dynamics connection is created against the Global Discovery Service and moves to its environment
+        once it has been authorized, so a connection made without a URL gets that one rather than being
+        refused - or, with \c auto_url and no URL to build, silently getting
+        <tt>dynamics://localhost</tt>.
+
+        @see @ref cdsrestclient_discovery
+    */
     private static hash<auto> getConfig(hash<auto> config) {
         return config + {
+            "url": config.url.val() ? config.url : CdsRestClientBase::DefaultUrl,
             "opts": config.opts + {
                 "api_profile": CdsRestClient::DynamicsProfile.name,
             },
@@ -1130,6 +1407,18 @@ public class DynamicsRestClientIo inherits RestClientIo::RestClientIo, CdsRestCl
             : RestClientIo(CdsRestClientBase::getOptions(opts + {
                 "api_profile": CdsRestClient::DynamicsProfile.name,
             }), shared_mgr) {
+    }
+
+    #! Returns options to update after an OAuth2 login, discovering the environment on the first one
+    /** The environment a credential reaches does not change, so it is discovered only while this client
+        still targets the discovery service - which is exactly the first authorization; a refresh does not
+        pay for the call again.
+
+        @see @ref cdsrestclient_discovery
+    */
+    private *hash<auto> getUpdateOptionsAfterLogin(hash<auto> h) {
+        return CdsRestClientBase::discoverAfterLogin(RestClientIo::getUpdateOptionsAfterLogin(h), h,
+            getUrl(), NOTHING, getLogger());
     }
 }
 

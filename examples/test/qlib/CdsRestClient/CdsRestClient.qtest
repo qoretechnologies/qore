@@ -55,6 +55,7 @@ class CdsTest inherits QUnit::Test {
         addTestCase("CDS REST", \CdsRestTests());
         addTestCase("connection tests", \connectionTest());
         addTestCase("profile scopes follow the URL", \profileScopeTest());
+        addTestCase("no URL is needed to create a connection", \autoUrlDiscoveryTest());
 
         try {
             setupConnection();
@@ -198,6 +199,61 @@ class CdsTest inherits QUnit::Test {
         AADSTS500011 - "the resource principal was not found in the tenant" - which says nothing about the
         URL being the reason.
     */
+    #! A Dynamics connection is created without a URL and finds its environment from the credential
+    /** A Dataverse environment's URL is not knowable before the credential exists - which environments a
+        credential reaches is what Microsoft's Global Discovery Service answers - so the connection is
+        created against the discovery service and moves to its environment once authorized.
+    */
+    autoUrlDiscoveryTest() {
+        hash<auto> opts = {"oauth2_client_id": "id", "oauth2_client_secret": "secret"};
+
+        # created with no URL at all
+        DynamicsRestConnection c({"name": "d", "desc": "d", "opts": opts});
+        assertEq(CdsRestClientBase::DefaultUrl, c.url, "the connection targets the discovery service");
+        assertTrue(DynamicsRestConnection::ConnectionScheme.auto_url, "and does not ask for a URL");
+        assertTrue(CdsRestClientBase::isDiscoveryUrl(c.url));
+
+        # the discovery service is an OAuth2 resource of its own, so the profile's own scope template
+        # resolves to exactly the scope the discovery call needs - no special case
+        assertEq(("offline_access", "https://globaldisco.crm.dynamics.com/user_impersonation"),
+            c.opts.oauth2_scopes, "the scope is the discovery scope while the environment is unknown");
+
+        # one environment: there is nothing to choose
+        hash<auto> one = {"value": ({"UniqueName": "orgabc", "UrlName": "contoso",
+            "FriendlyName": "Contoso", "Url": "https://contoso.crm17.dynamics.com"},)};
+        assertEq({"url": "dynamics://contoso.crm17.dynamics.com", "organization": "orgabc"},
+            CdsRestClientBase::getInstanceOptions(one, NOTHING, NOTHING),
+            "the URL carries the connection's own scheme, since it is promoted onto the connection");
+
+        # several environments and nothing to say which: choosing one would silently read another
+        # company's data, so none is chosen and the connection stays on the discovery service
+        hash<auto> many = {"value": ({"UniqueName": "orgA", "Url": "https://a.crm17.dynamics.com"},
+                                     {"UniqueName": "orgB", "Url": "https://b.crm17.dynamics.com"})};
+        assertNothing(CdsRestClientBase::getInstanceOptions(many, NOTHING, NOTHING),
+            "no environment is chosen arbitrarily");
+        assertEq({"url": "dynamics://b.crm17.dynamics.com", "organization": "orgB"},
+            CdsRestClientBase::getInstanceOptions(many, "orgB", NOTHING), "the named one is chosen");
+        assertNothing(CdsRestClientBase::getInstanceOptions(many, "nosuch", NOTHING),
+            "and a name that matches nothing chooses nothing");
+
+        # an environment with no URL cannot be connected to whatever else it says
+        assertNothing(CdsRestClientBase::getInstanceOptions({"value": ({"UniqueName": "x"},)}, NOTHING,
+            NOTHING));
+        assertNothing(CdsRestClientBase::getInstanceOptions({"value": ()}, NOTHING, NOTHING));
+
+        # once the environment is known the scope follows it, which is what makes the whole flow work
+        DynamicsRestConnection c2({"name": "d", "desc": "d",
+            "url": "dynamics://contoso.crm17.dynamics.com", "opts": c.opts});
+        assertEq(("offline_access", "https://contoso.crm17.dynamics.com/user_impersonation"),
+            c2.opts.oauth2_scopes, "the environment's scope replaces the discovery scope");
+        assertFalse(CdsRestClientBase::isDiscoveryUrl(c2.url), "and the discovery is not done again");
+
+        # a look-alike host is not the discovery service
+        assertFalse(CdsRestClientBase::isDiscoveryUrl(
+            "dynamics://globaldiscoXcrmXdynamics.com"));
+        assertFalse(CdsRestClientBase::isDiscoveryUrl(NOTHING));
+    }
+
     profileScopeTest() {
         string UrlA = "https://eu.lcs.dynamics.com/";
         string UrlB = "https://qoretechnologies.crm17.dynamics.com/";
