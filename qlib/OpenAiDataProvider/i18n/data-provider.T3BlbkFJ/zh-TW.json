@@ -283,10 +283,6 @@
           "source": "Background",
           "message": "背景"
         },
-        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.short_desc": {
-          "source": "Allows to set transparency for the background of the generated image(s) when using 'gpt-image-1'",
-          "message": "使用 'gpt-image-1' 時，允許為產生的圖片設定背景透明度"
-        },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2NvbXByZXNzaW9u.desc": {
           "source": "The compression level (0-100%) for the generated image(s). This parameter is only supported for `gpt-image-1` with the `webp` or `jpeg` output formats, and defaults to `100`",
           "message": "產生圖片的壓縮等級 (0-100%)。此參數僅支援 `gpt-image-1` 搭配 `webp` 或 `jpeg` 輸出格式，預設值為 `100`"
@@ -511,10 +507,6 @@
           "source": "Prompt",
           "message": "提示"
         },
-        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cHJvbXB0.short_desc": {
-          "source": "A text description of the desired image(s).",
-          "message": "所需圖片的文字描述。"
-        },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
           "source": "Medium quality (`gpt-image-1` only)",
           "message": "中等畫質（僅限 `gpt-image-1`）"
@@ -582,10 +574,6 @@
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.dXNlcg.display_name": {
           "source": "User",
           "message": "使用者"
-        },
-        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.dXNlcg.short_desc": {
-          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
-          "message": "代表您終端使用者的唯一識別碼，可協助 OpenAI 監控並偵測濫用行為"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.short_desc": {
           "source": "Generate an image from a prompt",
@@ -986,10 +974,6 @@
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.display_name": {
           "source": "User",
           "message": "使用者"
-        },
-        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.short_desc": {
-          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
-          "message": "代表您終端使用者的唯一識別碼，可協助 OpenAI 監控並偵測濫用行為"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
           "source": "Process a request with a model",
@@ -1731,10 +1715,6 @@
           "source": "URI Path",
           "message": "URI 路徑"
         },
-        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "相對於連線 API 基底 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
-        },
         "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
@@ -2030,10 +2010,6 @@
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dXNlcg.short_desc": {
           "source": "A unique identifier representing your end-user",
           "message": "代表您終端使用者的唯一識別碼"
-        },
-        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.short_desc": {
-          "source": "Chat with an AI model by sending multiple messages at once and potentially getting multiple replies",
-          "message": "透過一次傳送多則訊息並可能接收多則回覆來與 AI 模型對話"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.desc": {
           "source": "Chat with an AI model by sending a single message and receiving a single reply",
@@ -2774,10 +2750,6 @@
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.display_name": {
           "source": "User",
           "message": "使用者"
-        },
-        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.short_desc": {
-          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
-          "message": "代表您終端使用者的唯一識別碼，可協助 OpenAI 監控並偵測濫用行為"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
           "source": "Stream a response from a model",

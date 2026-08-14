@@ -67,10 +67,6 @@
           "source": "All Available",
           "message": "所有可用"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.YWxsX2F2YWlsYWJsZQ.short_desc": {
-          "source": "When 'true', returns all accessible groups. When 'false', returns only groups where the user is a member",
-          "message": "當為 'true' 時，返回所有可存取的群組。當為 'false' 時，僅返回使用者為其成員的群組"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.YXJjaGl2ZWQ.desc": {
           "source": "Limit by archived status",
           "message": "依封存狀態限制"
@@ -751,10 +747,6 @@
           "source": "Due Date",
           "message": "到期日"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.ZHVlX2RhdGU.short_desc": {
-          "source": "Return issues that have no due date ('{{0}}'), or whose due date is this week, this month, between two weeks ago and next month, or which are overdue. Accepts: 'overdue', 'week', 'month', 'next_month_and_previous_two_weeks', '{{0}}'",
-          "message": "傳回沒有截止日期 ('{{0}}')，或截止日期在本週、本月、兩週前至下個月之間，或已逾期的議題。接受的值：'overdue'、'week'、'month'、'next_month_and_previous_two_weeks'、'{{0}}'"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.ZXBpY19pZA.desc": {
           "source": "The ID of an epic associated with the issues",
           "message": "與議題關聯的 Epic ID"
@@ -931,10 +923,6 @@
           "source": "Order By",
           "message": "排序依據"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.b3JkZXJfYnk.short_desc": {
-          "source": "Return issues ordered by 'created_at', 'due_date', 'label_priority', 'milestone_due', 'popularity', 'priority', 'relative_position', 'title', or 'updated_at' fields",
-          "message": "傳回依 'created_at'、'due_date'、'label_priority'、'milestone_due'、'popularity'、'priority'、'relative_position'、'title' 或 'updated_at' 欄位排序的議題"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bGFiZWxz.desc": {
           "source": "Comma-separated list of label names",
           "message": "以逗號分隔的標籤名稱清單"
@@ -982,10 +970,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bWlsZXN0b25lX2lk.display_name": {
           "source": "Milestone Id",
           "message": "Milestone Id"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bWlsZXN0b25lX2lk.short_desc": {
-          "source": "Return issues assigned to milestones with the specified timebox value (\"Any\", \"None\", \"Upcoming\" or \"Started\")",
-          "message": "傳回指派給具有指定時間箱值（\"Any\"、\"None\"、\"Upcoming\" 或 \"Started\"）之里程碑的議題"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bXlfcmVhY3Rpb25fZW1vamk.desc": {
           "source": "Return issues reacted by the authenticated user by the given emoji",
@@ -1046,10 +1030,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bm90W21pbGVzdG9uZV9pZF0.display_name": {
           "source": "Not[milestone Id]",
           "message": "Not[milestone Id]"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bm90W21pbGVzdG9uZV9pZF0.short_desc": {
-          "source": "Return issues assigned to milestones without the specified timebox value (\"Any\", \"None\", \"Upcoming\" or \"Started\")",
-          "message": "傳回指派給不具有指定時間箱值（\"Any\"、\"None\"、\"Upcoming\" 或 \"Started\"）之里程碑的議題"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bm90W2F1dGhvcl91c2VybmFtZV0.desc": {
           "source": "Return issues which are not authored by the user with the given username",
@@ -1647,10 +1627,6 @@
           "source": "Due Date",
           "message": "到期日"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.ZHVlX2RhdGU.short_desc": {
-          "source": "Return issues that have no due date ('{{0}}'), or whose due date is this week, this month, between two weeks ago and next month, or which are overdue. Accepts: 'overdue', 'week', 'month', 'next_month_and_previous_two_weeks', '{{0}}'",
-          "message": "傳回沒有截止日期 ('{{0}}')，或截止日期在本週、本月、兩週前至下個月之間，或已逾期的議題。接受的值：'overdue'、'week'、'month'、'next_month_and_previous_two_weeks'、'{{0}}'"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.ZXBpY19pZA.desc": {
           "source": "The ID of an epic associated with the issues",
           "message": "與議題關聯的 Epic ID"
@@ -1839,10 +1815,6 @@
           "source": "Order By",
           "message": "排序依據"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.b3JkZXJfYnk.short_desc": {
-          "source": "Return issues ordered by 'created_at', 'due_date', 'label_priority', 'milestone_due', 'popularity', 'priority', 'relative_position', 'title', or 'updated_at' fields",
-          "message": "傳回依 'created_at'、'due_date'、'label_priority'、'milestone_due'、'popularity'、'priority'、'relative_position'、'title' 或 'updated_at' 欄位排序的議題"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bGFiZWxz.desc": {
           "source": "Comma-separated list of label names",
           "message": "以逗號分隔的標籤名稱清單"
@@ -1890,10 +1862,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bWlsZXN0b25lX2lk.display_name": {
           "source": "Milestone",
           "message": "里程碑"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bWlsZXN0b25lX2lk.short_desc": {
-          "source": "Return issues assigned to milestones with the specified timebox value (\"Any\", \"None\", \"Upcoming\" or \"Started\")",
-          "message": "傳回指派給具有指定時間箱值（\"Any\"、\"None\"、\"Upcoming\" 或 \"Started\"）之里程碑的議題"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bXlfcmVhY3Rpb25fZW1vamk.desc": {
           "source": "Return issues reacted by the authenticated user by the given emoji",
@@ -1954,10 +1922,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bm90W21pbGVzdG9uZV9pZF0.display_name": {
           "source": "Not In Milestone",
           "message": "不在里程碑中"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bm90W21pbGVzdG9uZV9pZF0.short_desc": {
-          "source": "Return issues assigned to milestones without the specified timebox value (\"Any\", \"None\", \"Upcoming\" or \"Started\")",
-          "message": "傳回指派給不具有指定時間箱值（\"Any\"、\"None\"、\"Upcoming\" 或 \"Started\"）之里程碑的議題"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bm90W2F1dGhvcl91c2VybmFtZV0.desc": {
           "source": "Return issues which are not authored by the user with the given username",
@@ -2559,10 +2523,6 @@
           "source": "Approved By Ids",
           "message": "核准者 ID"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfaWRz.short_desc": {
-          "source": "Return merge requests which have been approved by the specified users with the given IDs",
-          "message": "傳回已由具有指定 ID 的特定使用者核准的合併請求"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfdXNlcm5hbWVz.desc": {
           "source": "Return merge requests which have been approved by the specified users with the given\n            usernames",
           "message": "傳回已由具有指定\n            使用者名稱的特定使用者核准的合併請求"
@@ -2571,10 +2531,6 @@
           "source": "Approved By Usernames",
           "message": "核准者使用者名稱"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfdXNlcm5hbWVz.short_desc": {
-          "source": "Return merge requests which have been approved by the specified users with the given",
-          "message": "傳回已由具有指定條件的特定使用者核准的合併請求"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZXJfaWRz.desc": {
           "source": "Return merge requests which have specified the users with the given IDs as an individual approver",
           "message": "傳回將具有指定 ID 的使用者指定為個別核准者的合併請求"
@@ -2582,10 +2538,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZXJfaWRz.display_name": {
           "source": "Approver Ids",
           "message": "核准者 ID"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZXJfaWRz.short_desc": {
-          "source": "Return merge requests which have specified the users with the given IDs as an individual approver",
-          "message": "傳回將具有指定 ID 的使用者指定為個別核准者的合併請求"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXNzaWduZWVfaWQ.desc": {
           "source": "Return issues which are assigned to the user with the given ID",
@@ -2666,10 +2618,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.ZHJhZnQ.display_name": {
           "source": "Draft",
           "message": "草稿"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.ZHJhZnQ.short_desc": {
-          "source": "Filter merge requests against their 'draft' status. 'true' to return only draft merge requests, 'false' to return non-draft merge requests",
-          "message": "依據合併請求的 'draft' 狀態進行篩選。設為 'true' 僅傳回草稿合併請求，設為 'false' 傳回非草稿合併請求"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.ZW52aXJvbm1lbnQ.desc": {
           "source": "Returns merge requests deployed to the given environment",
@@ -2759,10 +2707,6 @@
           "source": "Order By",
           "message": "排序依據"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.b3JkZXJfYnk.short_desc": {
-          "source": "Returns merge requests ordered by 'created_at', 'label_priority', 'milestone_due', 'popularity', 'priority', 'title', 'updated_at' or 'merged_at' fields",
-          "message": "傳回依 'created_at'、'label_priority'、'milestone_due'、'popularity'、'priority'、'title'、'updated_at' 或 'merged_at' 欄位排序的合併請求"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bGFiZWxz.desc": {
           "source": "Comma-separated list of label names",
           "message": "以逗號分隔的標籤名稱清單"
@@ -2783,10 +2727,6 @@
           "source": "Merge User Username",
           "message": "合併者使用者名稱"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VfdXNlcl91c2VybmFtZQ.short_desc": {
-          "source": "Returns merge requests which have been merged by the user with the given 'username'. Mutually exclusive with 'merge_user_id'",
-          "message": "傳回已由具有指定 'username' 的使用者合併的合併請求。與 'merge_user_id' 互斥"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VfdXNlcl9pZA.desc": {
           "source": "Returns merge requests which have been merged by the user with the given user `id`. Mutually exclusive with `merge_user_username`.",
           "message": "傳回已由具有指定使用者 `id` 的使用者合併的合併請求。與 `merge_user_username` 互斥。"
@@ -2794,10 +2734,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VfdXNlcl9pZA.display_name": {
           "source": "Merged By",
           "message": "合併者"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VfdXNlcl9pZA.short_desc": {
-          "source": "Returns merge requests which have been merged by the user with the given user 'id'. Mutually exclusive with 'merge_user_username'",
-          "message": "傳回已由具有指定使用者 'id' 的使用者合併的合併請求。與 'merge_user_username' 互斥"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VkX2FmdGVy.desc": {
           "source": "Returns merge requests merged on or after the given time. Expected in ISO 8601 format.",
@@ -2867,10 +2803,6 @@
           "source": "Not[my Reaction Emoji]",
           "message": "非[我的回應表情符號]"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W215X3JlYWN0aW9uX2Vtb2ppXQ.short_desc": {
-          "source": "'<Negated>' Returns merge requests reacted by the authenticated user by the given 'emoji'. 'None' returns issues not given a reaction. 'Any' returns issues given at least one reaction",
-          "message": "'<Negated>' 傳回已驗證使用者透過指定 'emoji' 回應的合併請求。'None' 傳回未獲任何回應的議題。'Any' 傳回獲得至少一個回應的議題"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W21pbGVzdG9uZV0.desc": {
           "source": "Milestone title",
           "message": "里程碑標題"
@@ -2915,10 +2847,6 @@
           "source": "Not Assigned To",
           "message": "Not Assigned To"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W2Fzc2lnbmVlX2lkXQ.short_desc": {
-          "source": "'<Negated>' Returns merge requests assigned to the given user 'id'. 'None' returns unassigned merge requests. 'Any' returns merge requests with an assignee",
-          "message": "'<Negated>' 傳回指派給指定使用者 'id' 的合併請求。'None' 傳回未指派的合併請求。'Any' 傳回有指派對象的合併請求"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W2Fzc2lnbmVlX3VzZXJuYW1lXQ.desc": {
           "source": "Return issues which are not assigned to the user with the given username",
           "message": "傳回未指派給指定使用者名稱之使用者的議題"
@@ -2951,10 +2879,6 @@
           "source": "Not Reviewed By",
           "message": "未由其審查"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W3Jldmlld2VyX2lkXQ.short_desc": {
-          "source": "'<Negated>' Returns merge requests which have the user as a reviewer with the given user 'id'. 'None' returns merge requests with no reviewers. 'Any' returns merge requests with any reviewer. Mutually exclusive with 'reviewer_username'",
-          "message": "'<Negated>' 傳回將指定使用者 'id' 作為審查者的合併請求。'None' 傳回沒有審查者的合併請求。'Any' 傳回具有任何審查者的合併請求。與 'reviewer_username' 互斥"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W3Jldmlld2VyX3VzZXJuYW1lXQ.desc": {
           "source": "`<Negated>` Returns merge requests which have the user as a reviewer with the given `username`. `None` returns merge requests with no reviewers. `Any` returns merge requests with any reviewer. Mutually exclusive with `reviewer_id`. Introduced in GitLab 13.8.",
           "message": "`<Negated>` 傳回將指定 `username` 作為審查者的合併請求。`None` 傳回沒有審查者的合併請求。`Any` 傳回具有任何審查者的合併請求。與 `reviewer_id` 互斥。於 GitLab 13.8 引入。"
@@ -2962,10 +2886,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W3Jldmlld2VyX3VzZXJuYW1lXQ.display_name": {
           "source": "Not[reviewer Username]",
           "message": "非[審查者使用者名稱]"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W3Jldmlld2VyX3VzZXJuYW1lXQ.short_desc": {
-          "source": "'<Negated>' Returns merge requests which have the user as a reviewer with the given 'username'. 'None' returns merge requests with no reviewers. 'Any' returns merge requests with any reviewer. Mutually exclusive with 'reviewer_id'. Introduced in GitLab 13",
-          "message": "'<Negated>' 傳回將指定 'username' 作為審查者的合併請求。'None' 傳回沒有審查者的合併請求。'Any' 傳回具有任何審查者的合併請求。與 'reviewer_id' 互斥。於 GitLab 13 引入"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c291cmNlX2JyYW5jaA.desc": {
           "source": "Returns merge requests with the given source branch",
@@ -3043,10 +2963,6 @@
           "source": "Scope",
           "message": "範圍"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c2NvcGU.short_desc": {
-          "source": "Returns merge requests for the given scope: 'created_by_me', 'assigned_to_me', 'reviews_for_me' or 'all'",
-          "message": "傳回指定範圍的合併請求：'created_by_me'、'assigned_to_me'、'reviews_for_me' 或 'all'"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c2VhcmNo.desc": {
           "source": "Return list of branches matching the search criteria",
           "message": "返回符合搜尋準則的分支清單"
@@ -3087,10 +3003,6 @@
           "source": "State",
           "message": "州/省"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c3RhdGU.short_desc": {
-          "source": "Returns 'all' merge requests or just those that are 'opened', 'closed', 'locked', or 'merged'",
-          "message": "傳回 'all' 合併請求，或僅傳回狀態為 'opened'、'closed'、'locked' 或 'merged' 的合併請求"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cGFnZQ.desc": {
           "source": "Current page number",
           "message": "目前頁碼"
@@ -3123,10 +3035,6 @@
           "source": "Reviewer",
           "message": "審查者"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cmV2aWV3ZXJfaWQ.short_desc": {
-          "source": "Returns merge requests which have the user as a reviewer with the given user 'id'. 'None' returns merge requests with no reviewers. 'Any' returns merge requests with any reviewer. Mutually exclusive with 'reviewer_username'",
-          "message": "傳回將指定使用者 'id' 作為審查者的合併請求。'None' 傳回沒有審查者的合併請求。'Any' 傳回具有任何審查者的合併請求。與 'reviewer_username' 互斥"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cmV2aWV3ZXJfdXNlcm5hbWU.desc": {
           "source": "Returns merge requests which have the user as a reviewer with the given `username`. `None` returns merge requests with no reviewers. `Any` returns merge requests with any reviewer. Mutually exclusive with `reviewer_id`. Introduced in GitLab 13.8.",
           "message": "傳回將指定 `username` 作為審查者的合併請求。`None` 傳回沒有審查者的合併請求。`Any` 傳回具有任何審查者的合併請求。與 `reviewer_id` 互斥。於 GitLab 13.8 引入。"
@@ -3134,10 +3042,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cmV2aWV3ZXJfdXNlcm5hbWU.display_name": {
           "source": "Reviewer Username",
           "message": "審查者使用者名稱"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cmV2aWV3ZXJfdXNlcm5hbWU.short_desc": {
-          "source": "Returns merge requests which have the user as a reviewer with the given 'username'. 'None' returns merge requests with no reviewers. 'Any' returns merge requests with any reviewer. Mutually exclusive with 'reviewer_id'. Introduced in GitLab 13",
-          "message": "傳回將指定 'username' 作為審查者的合併請求。'None' 傳回沒有審查者的合併請求。'Any' 傳回具有任何審查者的合併請求。與 'reviewer_id' 互斥。於 GitLab 13 引入"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.d2l0aF9sYWJlbHNfZGV0YWlscw.desc": {
           "source": "Return titles of labels and other details",
@@ -3158,10 +3062,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.d2l0aF9tZXJnZV9zdGF0dXNfcmVjaGVjaw.display_name": {
           "source": "With Merge Status Recheck",
           "message": "包含合併狀態重新檢查"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.d2l0aF9tZXJnZV9zdGF0dXNfcmVjaGVjaw.short_desc": {
-          "source": "If 'true', this projection requests (but does not guarantee) that the 'merge_status' field be recalculated asynchronously",
-          "message": "若為 'true'，此投影會請求（但不保證）非同步重新計算 'merge_status' 欄位"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.d2lw.allowed-value.c3RyaW5nOm5v.display_name": {
           "source": "no",
@@ -3230,10 +3130,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.dmlldw.display_name": {
           "source": "View",
           "message": "檢視"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.dmlldw.short_desc": {
-          "source": "If simple, returns the 'iid', URL, title, description, and basic state of merge request",
-          "message": "若為 simple，傳回合併請求的 'iid'、URL、標題、描述及基本狀態"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.short_desc": {
           "source": "List the merge requests in a project",
@@ -5915,10 +5811,6 @@
           "source": "URI Path",
           "message": "URI 路徑"
         },
-        "app.R2l0bGFi.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "相對於連線 API 根 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
-        },
         "app.R2l0bGFi.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "代入 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}`，框架會傳送 `/users/123`。值均經過 URL 編碼。"
@@ -6274,10 +6166,6 @@
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZW1haWxzX2Rpc2FibGVk.display_name": {
           "source": "Emails Disabled",
           "message": "已停用電子郵件"
-        },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZW1haWxzX2Rpc2FibGVk.short_desc": {
-          "source": "_(Deprecated)_ Disable email notifications",
-          "message": "_(已棄用)_ 停用電子郵件通知"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZW1haWxzX2VuYWJsZWQ.desc": {
           "source": "Enable email notifications",
@@ -6955,10 +6843,6 @@
           "source": "Container Registry Access Level",
           "message": "容器登錄檔存取層級"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2FjY2Vzc19sZXZlbA.short_desc": {
-          "source": "Controls visibility of the container registry. One of 'disabled', 'private' or 'enabled'. 'private' will make the container registry accessible only to project members (reporter role and above). 'enabled' will make the container registry accessible to everyone who has access to the project. 'disabled' will disable the container registry",
-          "message": "控制容器登錄檔的可見度。可為 'disabled'、'private' 或 'enabled' 之一。'private' 將使容器登錄檔僅可供專案成員（報告者角色及以上）存取。'enabled' 將使所有有權存取專案的人都能存取容器登錄檔。'disabled' 將停用容器登錄檔"
-        },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2VuYWJsZWQ.desc": {
           "source": "Deprecated: Use :container_registry_access_level instead. Flag indication if the container registry is enabled for that project",
           "message": "已棄用：請改用 :container_registry_access_level。指出該專案是否啟用容器登錄檔的旗標"
@@ -7463,10 +7347,6 @@
           "source": "Initialize With Readme",
           "message": "使用 Readme 初始化"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aW5pdGlhbGl6ZV93aXRoX3JlYWRtZQ.short_desc": {
-          "source": "Initialize a project with a README",
-          "message": "使用 README 初始化專案"
-        },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aXNzdWVfYnJhbmNoX3RlbXBsYXRl.desc": {
           "source": "Template used to create a branch from an issue",
           "message": "用於從議題建立分支的範本"
@@ -7931,10 +7811,6 @@
           "source": "Spp Repository Pipeline Access",
           "message": "SPP 儲存庫管道存取權"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c3BwX3JlcG9zaXRvcnlfcGlwZWxpbmVfYWNjZXNz.short_desc": {
-          "source": "Grant read-only access to security policy configurations for enforcement in linked CI/CD projects",
-          "message": "授予對安全政策設定的唯讀存取權限，以在連結的 CI/CD 專案中強制執行"
-        },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c3F1YXNoX29wdGlvbg.allowed-value.c3RyaW5nOm5ldmVy.display_name": {
           "source": "never",
           "message": "never"
@@ -8022,10 +7898,6 @@
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.display_name": {
           "source": "Package Registry Access Level",
           "message": "套件註冊表存取層級"
-        },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.short_desc": {
-          "source": "Controls visibility of the package registry. One of 'disabled', 'private', 'enabled' or 'public'. 'private' will make the package registry accessible only to project members (reporter role and above). 'enabled' will make the package registry accessible to everyone who has access to the project. 'public' will make the package registry accessible to everyone. 'disabled' will disable the package registry",
-          "message": "控制套件註冊表的可見性。可為 'disabled'、'private'、'enabled' 或 'public' 之一。'private' 將使套件註冊表僅供專案成員（報告者角色及以上）存取。'enabled' 將使所有有權存取專案的人均可存取套件註冊表。'public' 將使所有人均可存取套件註冊表。'disabled' 將停用套件註冊表"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.cGFja2FnZXNfZW5hYmxlZA.desc": {
           "source": "Deprecated: Use :package_registry_access_level instead. Enable project packages feature",
@@ -8639,10 +8511,6 @@
           "source": "Milestone",
           "message": "里程碑"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.option.bWlsZXN0b25l.short_desc": {
-          "source": "The title of a project or ancestor-group milestone to assign the merge request to",
-          "message": "要指派此合併請求的專案或祖先群組里程碑標題"
-        },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.option.bWlsZXN0b25lX2lk.desc": {
           "source": "The global ID of a milestone to assign the merge request to.",
           "message": "要指派此合併請求的里程碑全域 ID。"
@@ -9058,10 +8926,6 @@
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl90b19yZXNvbHZl.display_name": {
           "source": "Discussion To Resolve",
           "message": "要解決的討論"
-        },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl90b19yZXNvbHZl.short_desc": {
-          "source": "The ID of a discussion to resolve, also pass 'merge_request_to_resolve_discussions_of'",
-          "message": "要解決的討論 ID，亦請傳遞 'merge_request_to_resolve_discussions_of'"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl9sb2NrZWQ.desc": {
           "source": " Boolean parameter indicating if the issue's discussion is locked",
@@ -9927,10 +9791,6 @@
           "source": "Auto Ban User On Excessive Projects Download",
           "message": "下載過多專案時自動封鎖使用者"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YXV0b19iYW5fdXNlcl9vbl9leGNlc3NpdmVfcHJvamVjdHNfZG93bmxvYWQ.short_desc": {
-          "source": "Ban users from the group when they exceed maximum number of unique projects download in the specified time period",
-          "message": "當使用者在指定時間內超過下載不重複專案的上限時，將其從群組封鎖"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YXV0b19kZXZvcHNfZW5hYmxlZA.desc": {
           "source": "Default to Auto DevOps pipeline for all projects within this group",
           "message": "預設對此群組內的所有專案使用 Auto DevOps 管線"
@@ -10119,10 +9979,6 @@
           "source": "Duo Core Features Enabled",
           "message": "已啟用 Duo Core 功能"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZHVvX2NvcmVfZmVhdHVyZXNfZW5hYmxlZA.short_desc": {
-          "source": "[Experimental] Indicates whether GitLab Duo Core features are enabled for the group",
-          "message": "[實驗性] 指出是否為群組啟用 GitLab Duo Core 功能"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZHVvX2V4dGVybmFsX2FnZW50c19hdmFpbGFiaWxpdHk.desc": {
           "source": "Enable GitLab Duo external agents for this group",
           "message": "為此群組啟用 GitLab Duo 外部代理"
@@ -10179,10 +10035,6 @@
           "source": "Duo Template Project Id",
           "message": "Duo 範本專案 ID"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZHVvX3RlbXBsYXRlX3Byb2plY3RfaWQ.short_desc": {
-          "source": "The ID of a project to use as the Duo Code Review custom instructions template for this group",
-          "message": "用作此群組的 Duo Code Review 自訂指示範本的專案 ID"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZW1haWxzX2Rpc2FibGVk.desc": {
           "source": "_(Deprecated)_ Disable email notifications. Use: emails_enabled",
           "message": "_(已棄用)_ 停用電子郵件通知。請使用：emails_enabled"
@@ -10190,10 +10042,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZW1haWxzX2Rpc2FibGVk.display_name": {
           "source": "Emails Disabled",
           "message": "已停用電子郵件"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZW1haWxzX2Rpc2FibGVk.short_desc": {
-          "source": "_(Deprecated)_ Disable email notifications",
-          "message": "_(已棄用)_ 停用電子郵件通知"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZW1haWxzX2VuYWJsZWQ.desc": {
           "source": "Enable email notifications",
@@ -10347,10 +10195,6 @@
           "source": "Lock Ai Audit Events Storage Enabled",
           "message": "鎖定啟用 AI 稽核事件儲存"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19haV9hdWRpdF9ldmVudHNfc3RvcmFnZV9lbmFibGVk.short_desc": {
-          "source": "Indicates whether AI audit events storage is enforced for all subgroups and projects",
-          "message": "指出是否對所有子群組和專案強制啟用 AI 稽核事件儲存"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19idWlsdF9pbl9wcm9qZWN0X3RlbXBsYXRlc19lbmFibGVk.desc": {
           "source": "Enforce the built-in project templates setting for all subgroups",
           "message": "對所有子群組強制套用內建專案範本設定"
@@ -10370,10 +10214,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19kdW9fZmVhdHVyZXNfZW5hYmxlZA.display_name": {
           "source": "Lock Duo Features Enabled",
           "message": "鎖定啟用 Duo 功能"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19kdW9fZmVhdHVyZXNfZW5hYmxlZA.short_desc": {
-          "source": "Indicates if the GitLab Duo features enabled setting is enforced for all subgroups",
-          "message": "指出是否對所有子群組強制套用啟用 GitLab Duo 功能設定"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19tYXRoX3JlbmRlcmluZ19saW1pdHNfZW5hYmxlZA.desc": {
           "source": "Indicates if math rendering limits are locked for all descendent groups.",
@@ -10643,10 +10483,6 @@
           "source": "Prevent Sharing Groups Outside Hierarchy",
           "message": "防止共享階層外部的群組"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.cHJldmVudF9zaGFyaW5nX2dyb3Vwc19vdXRzaWRlX2hpZXJhcmNoeQ.short_desc": {
-          "source": "Prevent sharing groups within this namespace with any groups outside the namespace",
-          "message": "防止將此命名空間內的群組與命名空間外的任何群組共享"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.cHJvamVjdF9jcmVhdGlvbl9sZXZlbA.allowed-value.c3RyaW5nOm1haW50YWluZXI.display_name": {
           "source": "maintainer",
           "message": "維護者"
@@ -10795,10 +10631,6 @@
           "source": "Unique Project Download Limit",
           "message": "不重複專案下載限制"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXQ.short_desc": {
-          "source": "Maximum number of unique projects a user can download in the specified time period before they are banned",
-          "message": "使用者在被封禁前，於指定時間內可下載的不重複專案數量上限"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXRfYWxlcnRsaXN0.desc": {
           "source": "List of user ids who will be emailed when Git abuse rate limit is exceeded",
           "message": "超過 Git 濫用速率限制時將收到電子郵件的使用者 ID 清單"
@@ -10830,10 +10662,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXRfaW50ZXJ2YWxfaW5fc2Vjb25kcw.display_name": {
           "source": "Unique Project Download Limit Interval In Seconds",
           "message": "不重複專案下載限制間隔 (秒)"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXRfaW50ZXJ2YWxfaW5fc2Vjb25kcw.short_desc": {
-          "source": "Time period during which a user can download a maximum amount of projects before they are banned",
-          "message": "使用者在被封禁前可下載最多專案數量的時間間隔"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmludGVybmFs.display_name": {
           "source": "internal",
@@ -11103,10 +10931,6 @@
           "source": "Container Registry Access Level",
           "message": "容器登錄檔存取層級"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2FjY2Vzc19sZXZlbA.short_desc": {
-          "source": "Controls visibility of the container registry. One of 'disabled', 'private' or 'enabled'. 'private' will make the container registry accessible only to project members (reporter role and above). 'enabled' will make the container registry accessible to everyone who has access to the project. 'disabled' will disable the container registry",
-          "message": "控制容器登錄檔的可見度。可為 'disabled'、'private' 或 'enabled' 之一。'private' 將使容器登錄檔僅可供專案成員（報告者角色及以上）存取。'enabled' 將使所有有權存取專案的人都能存取容器登錄檔。'disabled' 將停用容器登錄檔"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2VuYWJsZWQ.desc": {
           "source": "Deprecated: Use :container_registry_access_level instead. Flag indication if the container registry is enabled for that project",
           "message": "已棄用：請改用 :container_registry_access_level。指出該專案是否啟用容器登錄檔的旗標"
@@ -11174,10 +10998,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGlzcGxheV9waXBlbGluZV92YXJpYWJsZXM.display_name": {
           "source": "Ci Display Pipeline Variables",
           "message": "CI 顯示流水線變數"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGlzcGxheV9waXBlbGluZV92YXJpYWJsZXM.short_desc": {
-          "source": "Display all manually-defined variables in the pipeline details page after running a pipeline manually",
-          "message": "手動執行流水線後，在流水線詳細資料頁面中顯示所有手動定義的變數"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X2VuYWJsZWQ.desc": {
           "source": "Prevent older deployment jobs that are still pending",
@@ -11251,10 +11071,6 @@
           "source": "Ci Pipeline Variables Minimum Override Role",
           "message": "CI 管線變數最低覆寫角色"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcGlwZWxpbmVfdmFyaWFibGVzX21pbmltdW1fb3ZlcnJpZGVfcm9sZQ.short_desc": {
-          "source": "Limit ability to override CI/CD variables when triggering a pipeline to only users with at least the set minimum role",
-          "message": "限制僅具有至少所設定最低角色的使用者才能在觸發管線時覆寫 CI/CD 變數"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.desc": {
           "source": "Allow pushing to this project's repository by authenticating with a CI/CD job token generated in this project.",
           "message": "允許使用在此專案中產生的 CI/CD 作業權杖進行驗證以推送至此專案的存放庫。"
@@ -11262,10 +11078,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.display_name": {
           "source": "Ci Push Repository For Job Token Allowed",
           "message": "允許透過作業權杖推送存放庫"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.short_desc": {
-          "source": "Allow pushing to this project's repository by authenticating with a CI/CD job token generated in this project",
-          "message": "允許使用在此專案中產生的 CI/CD 作業權杖進行驗證以推送至此專案的存放庫"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcmVzdHJpY3RfcGlwZWxpbmVfY2FuY2VsbGF0aW9uX3JvbGU.desc": {
           "source": "Roles allowed to cancel pipelines and jobs.",
@@ -12179,10 +11991,6 @@
           "source": "Merge Trains Skip Train Allowed",
           "message": "允許合併列車略過列車"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWVyZ2VfdHJhaW5zX3NraXBfdHJhaW5fYWxsb3dlZA.short_desc": {
-          "source": "Allow merge train merge requests to be merged without waiting for pipelines to finish",
-          "message": "允許合併列車合併請求在無需等待管線完成的情況下進行合併"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWlycm9y.desc": {
           "source": "[Deprecated] Enables pull mirroring in a project",
           "message": "[已棄用] 在專案中啟用拉取鏡像"
@@ -12238,10 +12046,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWlycm9yX3VzZXJfaWQ.display_name": {
           "source": "Mirror User Id",
           "message": "鏡像使用者 ID"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWlycm9yX3VzZXJfaWQ.short_desc": {
-          "source": "[Deprecated] User responsible for all the activity surrounding a pull mirror event",
-          "message": "[已棄用] 負責提取鏡像事件所有相關活動的使用者"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bXJfZGVmYXVsdF90YXJnZXRfc2VsZg.desc": {
           "source": "Merge requests of this forked project targets itself by default",
@@ -12347,10 +12151,6 @@
           "source": "Security Policy Pipeline Must Succeed",
           "message": "安全政策管線必須成功"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2VjdXJpdHlfcG9saWN5X3BpcGVsaW5lX211c3Rfc3VjY2VlZA.short_desc": {
-          "source": "Require all security policy pipelines to succeed before merge requests can be merged",
-          "message": "在合併請求可以合併之前，要求所有安全政策管線必須成功"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2VydmljZV9kZXNrX2VuYWJsZWQ.desc": {
           "source": "Disable or enable the service desk",
           "message": "停用或啟用服務台"
@@ -12406,10 +12206,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c3BwX3JlcG9zaXRvcnlfcGlwZWxpbmVfYWNjZXNz.display_name": {
           "source": "Spp Repository Pipeline Access",
           "message": "SPP 儲存庫管道存取權"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c3BwX3JlcG9zaXRvcnlfcGlwZWxpbmVfYWNjZXNz.short_desc": {
-          "source": "Grant read-only access to security policy configurations for enforcement in linked CI/CD projects",
-          "message": "授予對安全政策設定的唯讀存取權限，以在連結的 CI/CD 專案中強制執行"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c3F1YXNoX29wdGlvbg.allowed-value.c3RyaW5nOm5ldmVy.display_name": {
           "source": "never",
@@ -12498,10 +12294,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.display_name": {
           "source": "Package Registry Access Level",
           "message": "套件註冊表存取層級"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.short_desc": {
-          "source": "Controls visibility of the package registry. One of 'disabled', 'private', 'enabled' or 'public'. 'private' will make the package registry accessible only to project members (reporter role and above). 'enabled' will make the package registry accessible to everyone who has access to the project. 'public' will make the package registry accessible to everyone. 'disabled' will disable the package registry",
-          "message": "控制套件註冊表的可見性。可為 'disabled'、'private'、'enabled' 或 'public' 之一。'private' 將使套件註冊表僅供專案成員（報告者角色及以上）存取。'enabled' 將使所有有權存取專案的人均可存取套件註冊表。'public' 將使所有人均可存取套件註冊表。'disabled' 將停用套件註冊表"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.cGFja2FnZXNfZW5hYmxlZA.desc": {
           "source": "Deprecated: Use :package_registry_access_level instead. Enable project packages feature",
@@ -13526,10 +13318,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.bWlsZXN0b25l.display_name": {
           "source": "Milestone",
           "message": "里程碑"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.bWlsZXN0b25l.short_desc": {
-          "source": "The title of a project or ancestor-group milestone to assign the merge request to",
-          "message": "要指派此合併請求的專案或祖先群組里程碑標題"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.bWlsZXN0b25lX2lk.desc": {
           "source": "The global ID of a milestone to assign the merge request to.",

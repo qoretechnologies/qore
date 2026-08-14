@@ -163,10 +163,6 @@
           "source": "Text",
           "message": "Texte"
         },
-        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.short_desc": {
-          "source": "If 'True' the file will be returned as a string, 'False' (the default) as binary data",
-          "message": "Si 'True', le fichier sera retourné sous forme de chaîne, 'False' (valeur par défaut) sous forme de données binaires"
-        },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
           "source": "Get a file on the server filesystem",
           "message": "Obtenir un fichier sur le système de fichiers du serveur"
@@ -318,10 +314,6 @@
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.display_name": {
           "source": "Symlink",
           "message": "Lien symbolique"
-        },
-        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.short_desc": {
-          "source": "If 'True', then if the target path is a symbolic link, information about the link itself will be returned instead of the target",
-          "message": "Si 'True', et si le chemin cible est un lien symbolique, des informations sur le lien lui-même seront renvoyées au lieu de la cible"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.desc": {
           "source": "The file path",

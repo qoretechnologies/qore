@@ -283,10 +283,6 @@
           "source": "Background",
           "message": "背景"
         },
-        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.short_desc": {
-          "source": "Allows to set transparency for the background of the generated image(s) when using 'gpt-image-1'",
-          "message": "'gpt-image-1'の使用時に、生成された画像の背景の透明度を設定できます"
-        },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2NvbXByZXNzaW9u.desc": {
           "source": "The compression level (0-100%) for the generated image(s). This parameter is only supported for `gpt-image-1` with the `webp` or `jpeg` output formats, and defaults to `100`",
           "message": "生成された画像の圧縮レベル（0〜100%）。このパラメーターは出力形式が`webp`または`jpeg`の`gpt-image-1`でのみサポートされ、デフォルトは`100`です"
@@ -511,10 +507,6 @@
           "source": "Prompt",
           "message": "プロンプト"
         },
-        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cHJvbXB0.short_desc": {
-          "source": "A text description of the desired image(s).",
-          "message": "希望する画像の説明テキスト。"
-        },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
           "source": "Medium quality (`gpt-image-1` only)",
           "message": "中品質（`gpt-image-1` のみ）"
@@ -582,10 +574,6 @@
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.dXNlcg.display_name": {
           "source": "User",
           "message": "ユーザー"
-        },
-        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.dXNlcg.short_desc": {
-          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
-          "message": "OpenAI が不正利用を監視および検出するのに役立つ、エンドユーザーを表す一意の識別子"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.short_desc": {
           "source": "Generate an image from a prompt",
@@ -986,10 +974,6 @@
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.display_name": {
           "source": "User",
           "message": "ユーザー"
-        },
-        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.short_desc": {
-          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
-          "message": "OpenAI が不正利用を監視および検出するのに役立つ、エンドユーザーを表す一意の識別子"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
           "source": "Process a request with a model",
@@ -1731,10 +1715,6 @@
           "source": "URI Path",
           "message": "URIパス"
         },
-        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
-        },
         "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
@@ -2030,10 +2010,6 @@
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dXNlcg.short_desc": {
           "source": "A unique identifier representing your end-user",
           "message": "エンドユーザーを表す一意の識別子"
-        },
-        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.short_desc": {
-          "source": "Chat with an AI model by sending multiple messages at once and potentially getting multiple replies",
-          "message": "一度に複数のメッセージを送信し、複数の返答を受け取る可能性のあるAIモデルとのチャットを行います"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.desc": {
           "source": "Chat with an AI model by sending a single message and receiving a single reply",
@@ -2774,10 +2750,6 @@
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.display_name": {
           "source": "User",
           "message": "ユーザー"
-        },
-        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.short_desc": {
-          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
-          "message": "OpenAI が不正利用を監視および検出するのに役立つ、エンドユーザーを表す一意の識別子"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
           "source": "Stream a response from a model",

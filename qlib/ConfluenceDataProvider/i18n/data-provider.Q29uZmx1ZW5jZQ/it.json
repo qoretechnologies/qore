@@ -87,10 +87,6 @@
           "source": "Status",
           "message": "Stato"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.c3RhdHVz.short_desc": {
-          "source": "The status of the blog post, specifies if the blog post will be created as a new blog post or a draft",
-          "message": "Lo stato del post del blog, specifica se il post del blog verrà creato come nuovo post del blog o come bozza"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.cHJpdmF0ZQ.desc": {
           "source": "The page will be private. Only the user who creates this page will have permission to view and edit one.",
           "message": "La pagina sarà privata. Solo l'utente che crea questa pagina avrà i permessi per visualizzarla e modificarla."
@@ -231,10 +227,6 @@
           "source": "Root Level",
           "message": "Livello root"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.cm9vdC1sZXZlbA.short_desc": {
-          "source": "The page will be created at the root level of the space (outside the space homepage tree)",
-          "message": "La pagina verrà creata a livello di root dello spazio (all'esterno dell'albero della home page dello spazio)"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.dGl0bGU.desc": {
           "source": "Title of the page, required if page status is not draft.",
           "message": "Titolo della pagina, obbligatorio se lo stato della pagina non è bozza."
@@ -331,10 +323,6 @@
           "source": "Sort",
           "message": "Ordinamento"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "Utilizzato per ordinare i risultati in base a un campo specifico"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.c3RhdHVz.desc": {
           "source": "Filter the results to attachments based on their status. By default, `current` and `archived` are used.",
           "message": "Filtra i risultati relativi agli allegati in base al loro stato. Per impostazione predefinita, vengono utilizzati `current` e `archived`."
@@ -394,10 +382,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "Formato corpo"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "I tipi di formato del contenuto da restituire nel campo 'body' della risposta. Se disponibile, la rappresentazione sarà disponibile sotto un campo di risposta con lo stesso nome nel campo 'body'"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Z2V0LWRyYWZ0.desc": {
           "source": "Retrieve the draft version of this page.",
@@ -503,10 +487,6 @@
           "source": "Include Operations",
           "message": "Includi operazioni"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
-          "source": "Includes operations associated with this page in the response, as defined in the 'Operation' object",
-          "message": "Include nella risposta le operazioni associate a questa pagina, come definito nell'oggetto 'Operation'"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.desc": {
           "source": "Includes content properties associated with this page in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
           "message": "Include nella risposta le proprietà del contenuto associate a questa pagina.\nIl numero di risultati sarà limitato a 50 e ordinato secondo l'ordinamento predefinito.\nSaranno presenti le proprietà `meta` e `_links` per indicare se sono disponibili altri risultati e un link per recuperare i restanti risultati."
@@ -595,10 +575,6 @@
           "source": "Body Format",
           "message": "Formato corpo"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "I tipi di formato del contenuto da restituire nel campo 'body' della risposta. Se disponibile, la rappresentazione sarà disponibile sotto un campo di risposta con lo stesso nome nel campo 'body'"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.aWQ.desc": {
           "source": "Filter the results based on page ids. Multiple page ids can be specified as a comma-separated list.",
           "message": "Filtra i risultati in base agli ID delle pagine. È possibile specificare più ID di pagina come elenco separato da virgole."
@@ -654,10 +630,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "Ordinamento"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "Utilizzato per ordinare i risultati in base a un campo specifico"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
@@ -735,10 +707,6 @@
           "source": "Body Format",
           "message": "Formato corpo"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "I tipi di formato del contenuto da restituire nel campo 'body' della risposta. Se disponibile, la rappresentazione sarà disponibile sotto un campo di risposta con lo stesso nome nel campo 'body'"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
           "message": "L'ID della pagina da restituire. Se non conosci l'ID della pagina, usa Get pages e filtra i risultati."
@@ -794,10 +762,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "Ordinamento"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "Utilizzato per ordinare i risultati in base a un campo specifico"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.c3RhdHVz.desc": {
           "source": "Filter the results to blog posts based on their status. By default, `current` is used.",
@@ -863,10 +827,6 @@
           "source": "Body Format",
           "message": "Formato corpo"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "I tipi di formato del contenuto da restituire nel campo 'body' della risposta. Se disponibile, la rappresentazione sarà disponibile sotto un campo di risposta con lo stesso nome nel campo 'body'"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
           "message": "L'ID della pagina da restituire. Se non conosci l'ID della pagina, usa Get pages e filtra i risultati."
@@ -923,10 +883,6 @@
           "source": "Sort",
           "message": "Ordinamento"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "Utilizzato per ordinare i risultati in base a un campo specifico"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
           "message": "Filtra i risultati in base agli ID spazio. È possibile specificare più ID spazio come elenco separato da virgole."
@@ -978,10 +934,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "Formato corpo"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "I tipi di formato del contenuto da restituire nel campo 'body' della risposta. Se disponibile, la rappresentazione sarà disponibile sotto un campo di risposta con lo stesso nome nel campo 'body'"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
@@ -1046,10 +998,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "Ordinamento"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "Utilizzato per ordinare i risultati in base a un campo specifico"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
@@ -1163,10 +1111,6 @@
           "source": "Description Format",
           "message": "Formato descrizione"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
-          "source": "The content format type to be returned in the 'description' field of the response. If available, the representation will be available under a response field of the same name under the 'description' field",
-          "message": "Il tipo di formato del contenuto da restituire nel campo 'description' della risposta. Se disponibile, la rappresentazione sarà disponibile in un campo di risposta con lo stesso nome nel campo 'description'"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1pY29u.desc": {
           "source": "If the icon for the space should be fetched or not.",
           "message": "Indica se recuperare o meno l'icona dello spazio."
@@ -1198,10 +1142,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
           "source": "Include Operations",
           "message": "Includi operazioni"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
-          "source": "Includes operations associated with this page in the response, as defined in the 'Operation' object",
-          "message": "Include nella risposta le operazioni associate a questa pagina, come definito nell'oggetto 'Operation'"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wZXJtaXNzaW9ucw.desc": {
           "source": "Includes space permissions associated with this space in the response.\nThe number of results will be limited to 50 and sorted in the default sort order.\nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
@@ -1291,10 +1231,6 @@
           "source": "Description Format",
           "message": "Formato descrizione"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
-          "source": "The content format type to be returned in the 'description' field of the response. If available, the representation will be available under a response field of the same name under the 'description' field",
-          "message": "Il tipo di formato del contenuto da restituire nel campo 'description' della risposta. Se disponibile, la rappresentazione sarà disponibile in un campo di risposta con lo stesso nome nel campo 'description'"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZmF2b3JpdGVkLWJ5.desc": {
           "source": "Filter the results to spaces favorited by the user with the specified account ID.",
           "message": "Filtra i risultati in base agli spazi aggiunti ai preferiti dall'utente con l'ID account specificato."
@@ -1375,10 +1311,6 @@
           "source": "Not Favorited By",
           "message": "Non aggiunto ai preferiti da"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.bm90LWZhdm9yaXRlZC1ieQ.short_desc": {
-          "source": "Filter the results to spaces NOT favorited by the user with the specified account ID",
-          "message": "Filtra i risultati in base agli spazi NON aggiunti ai preferiti dall'utente con l'ID account specificato"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c29ydA.allowed-value.c3RyaW5nOi1pZA.display_name": {
           "source": "-id",
           "message": "-id"
@@ -1410,10 +1342,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "Ordinamento"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "Utilizzato per ordinare i risultati in base a un campo specifico"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.display_name": {
           "source": "archived",
@@ -1523,10 +1451,6 @@
           "source": "Body Format",
           "message": "Formato corpo"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "I tipi di formato del contenuto da restituire nel campo 'body' della risposta. Se disponibile, la rappresentazione sarà disponibile sotto un campo di risposta con lo stesso nome nel campo 'body'"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Z2V0LWRyYWZ0.desc": {
           "source": "Retrieve the draft version of this page.",
           "message": "Recupera la versione bozza di questa pagina."
@@ -1595,10 +1519,6 @@
           "source": "Include Direct Children",
           "message": "Includi figli diretti"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1kaXJlY3QtY2hpbGRyZW4.short_desc": {
-          "source": "Includes direct children of the page, as defined in the 'ChildrenResponse' object",
-          "message": "Include i figli diretti della pagina, come definito nell'oggetto 'ChildrenResponse'"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.desc": {
           "source": "Includes whether this page has been favorited by the current user.",
           "message": "Include l'indicazione se questa pagina è stata aggiunta ai preferiti dall'utente corrente."
@@ -1642,10 +1562,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
           "source": "Include Operations",
           "message": "Includi operazioni"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
-          "source": "Includes operations associated with this page in the response, as defined in the 'Operation' object",
-          "message": "Include nella risposta le operazioni associate a questa pagina, come definito nell'oggetto 'Operation'"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1wcm9wZXJ0aWVz.desc": {
           "source": "Includes content properties associated with this page in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
@@ -1735,10 +1651,6 @@
           "source": "Body Format",
           "message": "Formato corpo"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "I tipi di formato del contenuto da restituire nel campo 'body' della risposta. Se disponibile, la rappresentazione sarà disponibile sotto un campo di risposta con lo stesso nome nel campo 'body'"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.aWQ.desc": {
           "source": "Filter the results based on page ids. Multiple page ids can be specified as a comma-separated list.",
           "message": "Filtra i risultati in base agli ID delle pagine. È possibile specificare più ID di pagina come elenco separato da virgole."
@@ -1802,10 +1714,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "Ordinamento"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "Utilizzato per ordinare i risultati in base a un campo specifico"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
@@ -1903,10 +1811,6 @@
           "source": "Body Format",
           "message": "Formato corpo"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "I tipi di formato del contenuto da restituire nel campo 'body' della risposta. Se disponibile, la rappresentazione sarà disponibile sotto un campo di risposta con lo stesso nome nel campo 'body'"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.ZGVwdGg.allowed-value.c3RyaW5nOmFsbA.display_name": {
           "source": "all",
           "message": "all"
@@ -1922,10 +1826,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.ZGVwdGg.display_name": {
           "source": "Depth",
           "message": "Profondità"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.ZGVwdGg.short_desc": {
-          "source": "Filter the results to pages at the root level of the space or to all pages in the space",
-          "message": "Filtra i risultati in base alle pagine al livello principale dello spazio o a tutte le pagine nello spazio"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
@@ -1991,10 +1891,6 @@
           "source": "Sort",
           "message": "Ordinamento"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "Utilizzato per ordinare i risultati in base a un campo specifico"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.c3RhdHVz.desc": {
           "source": "Filter the results to pages based on their status. By default, `current` and `archived` are used.",
           "message": "Filtra i risultati in base allo stato delle pagine. Per impostazione predefinita, vengono utilizzati `current` e `archived`."
@@ -2046,10 +1942,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "Formato corpo"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "I tipi di formato del contenuto da restituire nel campo 'body' della risposta. Se disponibile, la rappresentazione sarà disponibile sotto un campo di risposta con lo stesso nome nel campo 'body'"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
@@ -2186,10 +2078,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "Formato corpo"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "I tipi di formato del contenuto da restituire nel campo 'body' della risposta. Se disponibile, la rappresentazione sarà disponibile sotto un campo di risposta con lo stesso nome nel campo 'body'"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YmxvZ3Bvc3QtaWQ.desc": {
           "source": "Filters on the blog post ID of the task. Multiple IDs can be specified. Note - page and blog post filters can be used in conjunction.",
@@ -2723,10 +2611,6 @@
           "source": "URI Path",
           "message": "Percorso URI"
         },
-        "app.Q29uZmx1ZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
-        },
         "app.Q29uZmx1ZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
@@ -3222,10 +3106,6 @@
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "Formato corpo"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "I tipi di formato del contenuto da restituire nel campo 'body' della risposta. Se disponibile, la rappresentazione sarà disponibile sotto un campo di risposta con lo stesso nome nel campo 'body'"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.desc": {
           "source": "ID of the blog post the task is in.",

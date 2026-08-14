@@ -67,10 +67,6 @@
           "source": "All Available",
           "message": "Všechny dostupné"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.YWxsX2F2YWlsYWJsZQ.short_desc": {
-          "source": "When 'true', returns all accessible groups. When 'false', returns only groups where the user is a member",
-          "message": "Při 'true' vrátí všechny přístupné skupiny. Při 'false' vrátí pouze skupiny, kde je uživatel členem"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.YXJjaGl2ZWQ.desc": {
           "source": "Limit by archived status",
           "message": "Omezit podle stavu archivace"
@@ -751,10 +747,6 @@
           "source": "Due Date",
           "message": "Datum splnění"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.ZHVlX2RhdGU.short_desc": {
-          "source": "Return issues that have no due date ('{{0}}'), or whose due date is this week, this month, between two weeks ago and next month, or which are overdue. Accepts: 'overdue', 'week', 'month', 'next_month_and_previous_two_weeks', '{{0}}'",
-          "message": "Vrátit issue, které nemají žádné datum splnění ('{{0}}'), nebo jejichž datum splnění je tento týden, tento měsíc, mezi dobou před dvěma týdny a příštím měsícem, nebo které jsou po termínu. Přijímá: 'overdue', 'week', 'month', 'next_month_and_previous_two_weeks', '{{0}}'"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.ZXBpY19pZA.desc": {
           "source": "The ID of an epic associated with the issues",
           "message": "ID epiku přidruženého k issue"
@@ -931,10 +923,6 @@
           "source": "Order By",
           "message": "Seřadit podle"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.b3JkZXJfYnk.short_desc": {
-          "source": "Return issues ordered by 'created_at', 'due_date', 'label_priority', 'milestone_due', 'popularity', 'priority', 'relative_position', 'title', or 'updated_at' fields",
-          "message": "Vrátí issues seřazené podle polí 'created_at', 'due_date', 'label_priority', 'milestone_due', 'popularity', 'priority', 'relative_position', 'title' nebo 'updated_at'"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bGFiZWxz.desc": {
           "source": "Comma-separated list of label names",
           "message": "Čárkami oddělený seznam názvů štítků"
@@ -982,10 +970,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bWlsZXN0b25lX2lk.display_name": {
           "source": "Milestone Id",
           "message": "ID milníku"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bWlsZXN0b25lX2lk.short_desc": {
-          "source": "Return issues assigned to milestones with the specified timebox value (\"Any\", \"None\", \"Upcoming\" or \"Started\")",
-          "message": "Vrátí issues přiřazené k milníkům se zadanou hodnotou časového rámce („Any“, „None“, „Upcoming“ nebo „Started“)"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bXlfcmVhY3Rpb25fZW1vamk.desc": {
           "source": "Return issues reacted by the authenticated user by the given emoji",
@@ -1046,10 +1030,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bm90W21pbGVzdG9uZV9pZF0.display_name": {
           "source": "Not[milestone Id]",
           "message": "Not[milestone Id]"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bm90W21pbGVzdG9uZV9pZF0.short_desc": {
-          "source": "Return issues assigned to milestones without the specified timebox value (\"Any\", \"None\", \"Upcoming\" or \"Started\")",
-          "message": "Vrátí issues přiřazené k milníkům bez zadané hodnoty časového rámce („Any“, „None“, „Upcoming“ nebo „Started“)"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bm90W2F1dGhvcl91c2VybmFtZV0.desc": {
           "source": "Return issues which are not authored by the user with the given username",
@@ -1647,10 +1627,6 @@
           "source": "Due Date",
           "message": "Datum splnění"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.ZHVlX2RhdGU.short_desc": {
-          "source": "Return issues that have no due date ('{{0}}'), or whose due date is this week, this month, between two weeks ago and next month, or which are overdue. Accepts: 'overdue', 'week', 'month', 'next_month_and_previous_two_weeks', '{{0}}'",
-          "message": "Vrátit issue, které nemají žádné datum splnění ('{{0}}'), nebo jejichž datum splnění je tento týden, tento měsíc, mezi dobou před dvěma týdny a příštím měsícem, nebo které jsou po termínu. Přijímá: 'overdue', 'week', 'month', 'next_month_and_previous_two_weeks', '{{0}}'"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.ZXBpY19pZA.desc": {
           "source": "The ID of an epic associated with the issues",
           "message": "ID epiku přidruženého k issue"
@@ -1839,10 +1815,6 @@
           "source": "Order By",
           "message": "Seřadit podle"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.b3JkZXJfYnk.short_desc": {
-          "source": "Return issues ordered by 'created_at', 'due_date', 'label_priority', 'milestone_due', 'popularity', 'priority', 'relative_position', 'title', or 'updated_at' fields",
-          "message": "Vrátí issues seřazené podle polí 'created_at', 'due_date', 'label_priority', 'milestone_due', 'popularity', 'priority', 'relative_position', 'title' nebo 'updated_at'"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bGFiZWxz.desc": {
           "source": "Comma-separated list of label names",
           "message": "Čárkami oddělený seznam názvů štítků"
@@ -1890,10 +1862,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bWlsZXN0b25lX2lk.display_name": {
           "source": "Milestone",
           "message": "Milník"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bWlsZXN0b25lX2lk.short_desc": {
-          "source": "Return issues assigned to milestones with the specified timebox value (\"Any\", \"None\", \"Upcoming\" or \"Started\")",
-          "message": "Vrátí issues přiřazené k milníkům se zadanou hodnotou časového rámce („Any“, „None“, „Upcoming“ nebo „Started“)"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bXlfcmVhY3Rpb25fZW1vamk.desc": {
           "source": "Return issues reacted by the authenticated user by the given emoji",
@@ -1954,10 +1922,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bm90W21pbGVzdG9uZV9pZF0.display_name": {
           "source": "Not In Milestone",
           "message": "Není v milníku"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bm90W21pbGVzdG9uZV9pZF0.short_desc": {
-          "source": "Return issues assigned to milestones without the specified timebox value (\"Any\", \"None\", \"Upcoming\" or \"Started\")",
-          "message": "Vrátí issues přiřazené k milníkům bez zadané hodnoty časového rámce („Any“, „None“, „Upcoming“ nebo „Started“)"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bm90W2F1dGhvcl91c2VybmFtZV0.desc": {
           "source": "Return issues which are not authored by the user with the given username",
@@ -2559,10 +2523,6 @@
           "source": "Approved By Ids",
           "message": "Schváleno uživateli podle ID"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfaWRz.short_desc": {
-          "source": "Return merge requests which have been approved by the specified users with the given IDs",
-          "message": "Vrátit merge requesty schválené zadanými uživateli s danými ID"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfdXNlcm5hbWVz.desc": {
           "source": "Return merge requests which have been approved by the specified users with the given\n            usernames",
           "message": "Vrátit merge requesty schválené zadanými uživateli s danými\n            uživatelskými jmény"
@@ -2571,10 +2531,6 @@
           "source": "Approved By Usernames",
           "message": "Schváleno uživateli podle uživatelských jmen"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfdXNlcm5hbWVz.short_desc": {
-          "source": "Return merge requests which have been approved by the specified users with the given",
-          "message": "Vrátit merge requesty schválené zadanými uživateli s daným"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZXJfaWRz.desc": {
           "source": "Return merge requests which have specified the users with the given IDs as an individual approver",
           "message": "Vrátit merge requesty, které mají jako individuálního schvalovatele určené uživatele s danými ID"
@@ -2582,10 +2538,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZXJfaWRz.display_name": {
           "source": "Approver Ids",
           "message": "ID schvalovatelů"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZXJfaWRz.short_desc": {
-          "source": "Return merge requests which have specified the users with the given IDs as an individual approver",
-          "message": "Vrátit merge requesty, které mají jako individuálního schvalovatele určené uživatele s danými ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXNzaWduZWVfaWQ.desc": {
           "source": "Return issues which are assigned to the user with the given ID",
@@ -2666,10 +2618,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.ZHJhZnQ.display_name": {
           "source": "Draft",
           "message": "Koncept"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.ZHJhZnQ.short_desc": {
-          "source": "Filter merge requests against their 'draft' status. 'true' to return only draft merge requests, 'false' to return non-draft merge requests",
-          "message": "Filtrovat merge requesty podle stavu 'draft'. 'true' vrátí pouze koncepty merge requestů, 'false' vrátí merge requesty, které nejsou koncepty"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.ZW52aXJvbm1lbnQ.desc": {
           "source": "Returns merge requests deployed to the given environment",
@@ -2759,10 +2707,6 @@
           "source": "Order By",
           "message": "Seřadit podle"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.b3JkZXJfYnk.short_desc": {
-          "source": "Returns merge requests ordered by 'created_at', 'label_priority', 'milestone_due', 'popularity', 'priority', 'title', 'updated_at' or 'merged_at' fields",
-          "message": "Vrátí merge requesty seřazené podle polí 'created_at', 'label_priority', 'milestone_due', 'popularity', 'priority', 'title', 'updated_at' nebo 'merged_at'"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bGFiZWxz.desc": {
           "source": "Comma-separated list of label names",
           "message": "Čárkami oddělený seznam názvů štítků"
@@ -2783,10 +2727,6 @@
           "source": "Merge User Username",
           "message": "Uživatelské jméno slučujícího uživatele"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VfdXNlcl91c2VybmFtZQ.short_desc": {
-          "source": "Returns merge requests which have been merged by the user with the given 'username'. Mutually exclusive with 'merge_user_id'",
-          "message": "Vrátí merge requesty sloučené uživatelem se zadaným 'username'. Vzájemně se vylučuje s 'merge_user_id'"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VfdXNlcl9pZA.desc": {
           "source": "Returns merge requests which have been merged by the user with the given user `id`. Mutually exclusive with `merge_user_username`.",
           "message": "Vrátí merge requesty sloučené uživatelem se zadaným uživatelským `id`. Vzájemně se vylučuje s `merge_user_username`."
@@ -2794,10 +2734,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VfdXNlcl9pZA.display_name": {
           "source": "Merged By",
           "message": "Sloučil(a)"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VfdXNlcl9pZA.short_desc": {
-          "source": "Returns merge requests which have been merged by the user with the given user 'id'. Mutually exclusive with 'merge_user_username'",
-          "message": "Vrátí merge requesty sloučené uživatelem se zadaným uživatelským 'id'. Vzájemně se vylučuje s 'merge_user_username'"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VkX2FmdGVy.desc": {
           "source": "Returns merge requests merged on or after the given time. Expected in ISO 8601 format.",
@@ -2867,10 +2803,6 @@
           "source": "Not[my Reaction Emoji]",
           "message": "Ne[moje emoji reakce]"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W215X3JlYWN0aW9uX2Vtb2ppXQ.short_desc": {
-          "source": "'<Negated>' Returns merge requests reacted by the authenticated user by the given 'emoji'. 'None' returns issues not given a reaction. 'Any' returns issues given at least one reaction",
-          "message": "'<Negated>' Vrátí požadavky na sloučení, na které ověřený uživatel reagoval zadaným 'emoji'. 'None' vrátí položky bez reakce. 'Any' vrátí položky s alespoň jednou reakcí"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W21pbGVzdG9uZV0.desc": {
           "source": "Milestone title",
           "message": "Název milníku"
@@ -2915,10 +2847,6 @@
           "source": "Not Assigned To",
           "message": "Není přiřazeno"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W2Fzc2lnbmVlX2lkXQ.short_desc": {
-          "source": "'<Negated>' Returns merge requests assigned to the given user 'id'. 'None' returns unassigned merge requests. 'Any' returns merge requests with an assignee",
-          "message": "'<Negated>' Vrátí požadavky na sloučení přiřazené zadanému uživateli 'id'. 'None' vrátí nepřiřazené požadavky na sloučení. 'Any' vrátí požadavky na sloučení s přiřazeným uživatelem"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W2Fzc2lnbmVlX3VzZXJuYW1lXQ.desc": {
           "source": "Return issues which are not assigned to the user with the given username",
           "message": "Vrátí issues, které nejsou přiřazeny uživateli se zadaným uživatelským jménem"
@@ -2951,10 +2879,6 @@
           "source": "Not Reviewed By",
           "message": "Nekontrolováno uživatelem"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W3Jldmlld2VyX2lkXQ.short_desc": {
-          "source": "'<Negated>' Returns merge requests which have the user as a reviewer with the given user 'id'. 'None' returns merge requests with no reviewers. 'Any' returns merge requests with any reviewer. Mutually exclusive with 'reviewer_username'",
-          "message": "'<Negated>' Vrátí požadavky na sloučení, které mají jako kontrolujícího uživatele se zadaným uživatelem 'id'. 'None' vrátí požadavky na sloučení bez kontrolujících. 'Any' vrátí požadavky na sloučení s libovolným kontrolujícím. Vzájemně se vylučuje s 'reviewer_username'"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W3Jldmlld2VyX3VzZXJuYW1lXQ.desc": {
           "source": "`<Negated>` Returns merge requests which have the user as a reviewer with the given `username`. `None` returns merge requests with no reviewers. `Any` returns merge requests with any reviewer. Mutually exclusive with `reviewer_id`. Introduced in GitLab 13.8.",
           "message": "`<Negated>` Vrátí požadavky na sloučení, které mají jako kontrolujícího uživatele se zadaným `username`. `None` vrátí požadavky na sloučení bez kontrolujících. `Any` vrátí požadavky na sloučení s libovolným kontrolujícím. Vzájemně se vylučuje s `reviewer_id`. Zavedeno v GitLabu 13.8."
@@ -2962,10 +2886,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W3Jldmlld2VyX3VzZXJuYW1lXQ.display_name": {
           "source": "Not[reviewer Username]",
           "message": "Ne[uživatelské jméno kontrolujícího]"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W3Jldmlld2VyX3VzZXJuYW1lXQ.short_desc": {
-          "source": "'<Negated>' Returns merge requests which have the user as a reviewer with the given 'username'. 'None' returns merge requests with no reviewers. 'Any' returns merge requests with any reviewer. Mutually exclusive with 'reviewer_id'. Introduced in GitLab 13",
-          "message": "'<Negated>' Vrátí požadavky na sloučení, které mají jako kontrolujícího uživatele se zadaným 'username'. 'None' vrátí požadavky na sloučení bez kontrolujících. 'Any' vrátí požadavky na sloučení s libovolným kontrolujícím. Vzájemně se vylučuje s 'reviewer_id'. Zavedeno v GitLabu 13"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c291cmNlX2JyYW5jaA.desc": {
           "source": "Returns merge requests with the given source branch",
@@ -3043,10 +2963,6 @@
           "source": "Scope",
           "message": "Rozsah"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c2NvcGU.short_desc": {
-          "source": "Returns merge requests for the given scope: 'created_by_me', 'assigned_to_me', 'reviews_for_me' or 'all'",
-          "message": "Vrátí požadavky na sloučení pro zadaný rozsah: 'created_by_me', 'assigned_to_me', 'reviews_for_me' nebo 'all'"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c2VhcmNo.desc": {
           "source": "Return list of branches matching the search criteria",
           "message": "Vrátit seznam větví odpovídajících kritériím vyhledávání"
@@ -3087,10 +3003,6 @@
           "source": "State",
           "message": "Stát"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c3RhdGU.short_desc": {
-          "source": "Returns 'all' merge requests or just those that are 'opened', 'closed', 'locked', or 'merged'",
-          "message": "Vrátí 'all' požadavky na sloučení nebo pouze ty, které jsou 'opened', 'closed', 'locked' nebo 'merged'"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cGFnZQ.desc": {
           "source": "Current page number",
           "message": "Aktuální číslo stránky"
@@ -3123,10 +3035,6 @@
           "source": "Reviewer",
           "message": "Kontrolující"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cmV2aWV3ZXJfaWQ.short_desc": {
-          "source": "Returns merge requests which have the user as a reviewer with the given user 'id'. 'None' returns merge requests with no reviewers. 'Any' returns merge requests with any reviewer. Mutually exclusive with 'reviewer_username'",
-          "message": "Vrátí požadavky na sloučení, které mají jako kontrolujícího uživatele se zadaným uživatelem 'id'. 'None' vrátí požadavky na sloučení bez kontrolujících. 'Any' vrátí požadavky na sloučení s libovolným kontrolujícím. Vzájemně se vylučuje s 'reviewer_username'"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cmV2aWV3ZXJfdXNlcm5hbWU.desc": {
           "source": "Returns merge requests which have the user as a reviewer with the given `username`. `None` returns merge requests with no reviewers. `Any` returns merge requests with any reviewer. Mutually exclusive with `reviewer_id`. Introduced in GitLab 13.8.",
           "message": "Vrátí požadavky na sloučení, které mají jako kontrolujícího uživatele se zadaným `username`. `None` vrátí požadavky na sloučení bez kontrolujících. `Any` vrátí požadavky na sloučení s libovolným kontrolujícím. Vzájemně se vylučuje s `reviewer_id`. Zavedeno v GitLabu 13.8."
@@ -3134,10 +3042,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cmV2aWV3ZXJfdXNlcm5hbWU.display_name": {
           "source": "Reviewer Username",
           "message": "Uživatelské jméno kontrolujícího"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cmV2aWV3ZXJfdXNlcm5hbWU.short_desc": {
-          "source": "Returns merge requests which have the user as a reviewer with the given 'username'. 'None' returns merge requests with no reviewers. 'Any' returns merge requests with any reviewer. Mutually exclusive with 'reviewer_id'. Introduced in GitLab 13",
-          "message": "Vrátí požadavky na sloučení, které mají jako kontrolujícího uživatele se zadaným 'username'. 'None' vrátí požadavky na sloučení bez kontrolujících. 'Any' vrátí požadavky na sloučení s libovolným kontrolujícím. Vzájemně se vylučuje s 'reviewer_id'. Zavedeno v GitLabu 13"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.d2l0aF9sYWJlbHNfZGV0YWlscw.desc": {
           "source": "Return titles of labels and other details",
@@ -3158,10 +3062,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.d2l0aF9tZXJnZV9zdGF0dXNfcmVjaGVjaw.display_name": {
           "source": "With Merge Status Recheck",
           "message": "S přepočtem stavu sloučení"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.d2l0aF9tZXJnZV9zdGF0dXNfcmVjaGVjaw.short_desc": {
-          "source": "If 'true', this projection requests (but does not guarantee) that the 'merge_status' field be recalculated asynchronously",
-          "message": "Pokud je 'true', tato projekce požaduje (ale nezaručuje), aby pole 'merge_status' bylo asynchronně přepočítáno"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.d2lw.allowed-value.c3RyaW5nOm5v.display_name": {
           "source": "no",
@@ -3230,10 +3130,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.dmlldw.display_name": {
           "source": "View",
           "message": "Zobrazení"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.dmlldw.short_desc": {
-          "source": "If simple, returns the 'iid', URL, title, description, and basic state of merge request",
-          "message": "Při hodnotě simple vrátí 'iid', URL, název, popis a základní stav požadavku na sloučení"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.short_desc": {
           "source": "List the merge requests in a project",
@@ -5915,10 +5811,6 @@
           "source": "URI Path",
           "message": "Cesta URI"
         },
-        "app.R2l0bGFi.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
-        },
         "app.R2l0bGFi.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
@@ -6274,10 +6166,6 @@
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZW1haWxzX2Rpc2FibGVk.display_name": {
           "source": "Emails Disabled",
           "message": "E-maily zakázány"
-        },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZW1haWxzX2Rpc2FibGVk.short_desc": {
-          "source": "_(Deprecated)_ Disable email notifications",
-          "message": "_(Zastaralé)_ Zakázat e-mailová oznámení"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZW1haWxzX2VuYWJsZWQ.desc": {
           "source": "Enable email notifications",
@@ -6955,10 +6843,6 @@
           "source": "Container Registry Access Level",
           "message": "Úroveň přístupu k registru kontejnerů"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2FjY2Vzc19sZXZlbA.short_desc": {
-          "source": "Controls visibility of the container registry. One of 'disabled', 'private' or 'enabled'. 'private' will make the container registry accessible only to project members (reporter role and above). 'enabled' will make the container registry accessible to everyone who has access to the project. 'disabled' will disable the container registry",
-          "message": "Řídí viditelnost registru kontejnerů. Jedna z hodnot 'disabled', 'private' nebo 'enabled'. 'private' zpřístupní registr kontejnerů pouze členům projektu (role reporter a vyšší). 'enabled' zpřístupní registr kontejnerů všem, kteří mají k projektu přístup. 'disabled' registr kontejnerů zakáže"
-        },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2VuYWJsZWQ.desc": {
           "source": "Deprecated: Use :container_registry_access_level instead. Flag indication if the container registry is enabled for that project",
           "message": "Zastaralé: Použijte místo toho :container_registry_access_level. Příznak určující, zda je registr kontejnerů pro tento projekt povolen"
@@ -7463,10 +7347,6 @@
           "source": "Initialize With Readme",
           "message": "Inicializovat se souborem README"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aW5pdGlhbGl6ZV93aXRoX3JlYWRtZQ.short_desc": {
-          "source": "Initialize a project with a README",
-          "message": "Inicializovat projekt se souborem README"
-        },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aXNzdWVfYnJhbmNoX3RlbXBsYXRl.desc": {
           "source": "Template used to create a branch from an issue",
           "message": "Šablona použitá k vytvoření větve z issue"
@@ -7931,10 +7811,6 @@
           "source": "Spp Repository Pipeline Access",
           "message": "Přístup k pipeline repozitáře SPP"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c3BwX3JlcG9zaXRvcnlfcGlwZWxpbmVfYWNjZXNz.short_desc": {
-          "source": "Grant read-only access to security policy configurations for enforcement in linked CI/CD projects",
-          "message": "Udělit přístup pouze pro čtení ke konfiguracím bezpečnostních zásad pro vynucení v propojených CI/CD projektech"
-        },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c3F1YXNoX29wdGlvbg.allowed-value.c3RyaW5nOm5ldmVy.display_name": {
           "source": "never",
           "message": "never"
@@ -8022,10 +7898,6 @@
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.display_name": {
           "source": "Package Registry Access Level",
           "message": "Úroveň přístupu k registru balíčků"
-        },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.short_desc": {
-          "source": "Controls visibility of the package registry. One of 'disabled', 'private', 'enabled' or 'public'. 'private' will make the package registry accessible only to project members (reporter role and above). 'enabled' will make the package registry accessible to everyone who has access to the project. 'public' will make the package registry accessible to everyone. 'disabled' will disable the package registry",
-          "message": "Řídí viditelnost registru balíčků. Jedna z možností 'disabled', 'private', 'enabled' nebo 'public'. 'private' zpřístupní registr balíčků pouze členům projektu (role reportér a vyšší). 'enabled' zpřístupní registr balíčků všem, kteří mají přístup k projektu. 'public' zpřístupní registr balíčků všem. 'disabled' registr balíčků zakáže"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.cGFja2FnZXNfZW5hYmxlZA.desc": {
           "source": "Deprecated: Use :package_registry_access_level instead. Enable project packages feature",
@@ -8639,10 +8511,6 @@
           "source": "Milestone",
           "message": "Milník"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.option.bWlsZXN0b25l.short_desc": {
-          "source": "The title of a project or ancestor-group milestone to assign the merge request to",
-          "message": "Název milníku projektu nebo nadřazené skupiny, ke kterému má být merge request přiřazen"
-        },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.option.bWlsZXN0b25lX2lk.desc": {
           "source": "The global ID of a milestone to assign the merge request to.",
           "message": "Globální ID milníku, ke kterému má být merge request přiřazen."
@@ -9058,10 +8926,6 @@
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl90b19yZXNvbHZl.display_name": {
           "source": "Discussion To Resolve",
           "message": "Diskuze k vyřešení"
-        },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl90b19yZXNvbHZl.short_desc": {
-          "source": "The ID of a discussion to resolve, also pass 'merge_request_to_resolve_discussions_of'",
-          "message": "ID diskuze k vyřešení, předejte také 'merge_request_to_resolve_discussions_of'"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl9sb2NrZWQ.desc": {
           "source": " Boolean parameter indicating if the issue's discussion is locked",
@@ -9927,10 +9791,6 @@
           "source": "Auto Ban User On Excessive Projects Download",
           "message": "Automaticky zablokovat uživatele při nadměrném stahování projektů"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YXV0b19iYW5fdXNlcl9vbl9leGNlc3NpdmVfcHJvamVjdHNfZG93bmxvYWQ.short_desc": {
-          "source": "Ban users from the group when they exceed maximum number of unique projects download in the specified time period",
-          "message": "Zablokovat uživatele ze skupiny, pokud překročí maximální počet stažení jedinečných projektů v zadaném časovém období"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YXV0b19kZXZvcHNfZW5hYmxlZA.desc": {
           "source": "Default to Auto DevOps pipeline for all projects within this group",
           "message": "Nastavit výchozí pipeline Auto DevOps pro všechny projekty v této skupině"
@@ -10119,10 +9979,6 @@
           "source": "Duo Core Features Enabled",
           "message": "Funkce Duo Core povoleny"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZHVvX2NvcmVfZmVhdHVyZXNfZW5hYmxlZA.short_desc": {
-          "source": "[Experimental] Indicates whether GitLab Duo Core features are enabled for the group",
-          "message": "[Experimentální] Určuje, zda jsou pro skupinu povoleny funkce GitLab Duo Core"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZHVvX2V4dGVybmFsX2FnZW50c19hdmFpbGFiaWxpdHk.desc": {
           "source": "Enable GitLab Duo external agents for this group",
           "message": "Povolit externí agenty GitLab Duo pro tuto skupinu"
@@ -10179,10 +10035,6 @@
           "source": "Duo Template Project Id",
           "message": "ID projektu šablony Duo"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZHVvX3RlbXBsYXRlX3Byb2plY3RfaWQ.short_desc": {
-          "source": "The ID of a project to use as the Duo Code Review custom instructions template for this group",
-          "message": "ID projektu, který se má použít jako šablona vlastních instrukcí pro Duo Code Review v této skupině"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZW1haWxzX2Rpc2FibGVk.desc": {
           "source": "_(Deprecated)_ Disable email notifications. Use: emails_enabled",
           "message": "_(Zastaralé)_ Zakázat e-mailová oznámení. Použijte: emails_enabled"
@@ -10190,10 +10042,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZW1haWxzX2Rpc2FibGVk.display_name": {
           "source": "Emails Disabled",
           "message": "E-maily zakázány"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZW1haWxzX2Rpc2FibGVk.short_desc": {
-          "source": "_(Deprecated)_ Disable email notifications",
-          "message": "_(Zastaralé)_ Zakázat e-mailová oznámení"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZW1haWxzX2VuYWJsZWQ.desc": {
           "source": "Enable email notifications",
@@ -10347,10 +10195,6 @@
           "source": "Lock Ai Audit Events Storage Enabled",
           "message": "Uzamknout povolení úložiště auditních událostí AI"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19haV9hdWRpdF9ldmVudHNfc3RvcmFnZV9lbmFibGVk.short_desc": {
-          "source": "Indicates whether AI audit events storage is enforced for all subgroups and projects",
-          "message": "Určuje, zda je ukládání událostí auditu AI vynuceno pro všechny podskupiny a projekty"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19idWlsdF9pbl9wcm9qZWN0X3RlbXBsYXRlc19lbmFibGVk.desc": {
           "source": "Enforce the built-in project templates setting for all subgroups",
           "message": "Vynutit nastavení vestavěných šablon projektů pro všechny podskupiny"
@@ -10370,10 +10214,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19kdW9fZmVhdHVyZXNfZW5hYmxlZA.display_name": {
           "source": "Lock Duo Features Enabled",
           "message": "Uzamknout povolení funkcí Duo"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19kdW9fZmVhdHVyZXNfZW5hYmxlZA.short_desc": {
-          "source": "Indicates if the GitLab Duo features enabled setting is enforced for all subgroups",
-          "message": "Určuje, zda je nastavení zapnutí funkcí GitLab Duo vynuceno pro všechny podskupiny"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19tYXRoX3JlbmRlcmluZ19saW1pdHNfZW5hYmxlZA.desc": {
           "source": "Indicates if math rendering limits are locked for all descendent groups.",
@@ -10643,10 +10483,6 @@
           "source": "Prevent Sharing Groups Outside Hierarchy",
           "message": "Zabránit sdílení skupin mimo hierarchii"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.cHJldmVudF9zaGFyaW5nX2dyb3Vwc19vdXRzaWRlX2hpZXJhcmNoeQ.short_desc": {
-          "source": "Prevent sharing groups within this namespace with any groups outside the namespace",
-          "message": "Zabránit sdílení skupin v tomto jmenném prostoru s jakýmikoli skupinami mimo tento jmenný prostor"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.cHJvamVjdF9jcmVhdGlvbl9sZXZlbA.allowed-value.c3RyaW5nOm1haW50YWluZXI.display_name": {
           "source": "maintainer",
           "message": "maintainer"
@@ -10795,10 +10631,6 @@
           "source": "Unique Project Download Limit",
           "message": "Limit stahování jedinečných projektů"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXQ.short_desc": {
-          "source": "Maximum number of unique projects a user can download in the specified time period before they are banned",
-          "message": "Maximální počet jedinečných projektů, které může uživatel stáhnout v zadaném časovém období, než bude zablokován"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXRfYWxlcnRsaXN0.desc": {
           "source": "List of user ids who will be emailed when Git abuse rate limit is exceeded",
           "message": "Seznam ID uživatelů, kterým bude odeslán e-mail při překročení limitu míry zneužití Gitu"
@@ -10830,10 +10662,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXRfaW50ZXJ2YWxfaW5fc2Vjb25kcw.display_name": {
           "source": "Unique Project Download Limit Interval In Seconds",
           "message": "Interval limitu stahování jedinečných projektů v sekundách"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXRfaW50ZXJ2YWxfaW5fc2Vjb25kcw.short_desc": {
-          "source": "Time period during which a user can download a maximum amount of projects before they are banned",
-          "message": "Časové období, během kterého může uživatel stáhnout maximální množství projektů, než bude zablokován"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmludGVybmFs.display_name": {
           "source": "internal",
@@ -11103,10 +10931,6 @@
           "source": "Container Registry Access Level",
           "message": "Úroveň přístupu k registru kontejnerů"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2FjY2Vzc19sZXZlbA.short_desc": {
-          "source": "Controls visibility of the container registry. One of 'disabled', 'private' or 'enabled'. 'private' will make the container registry accessible only to project members (reporter role and above). 'enabled' will make the container registry accessible to everyone who has access to the project. 'disabled' will disable the container registry",
-          "message": "Řídí viditelnost registru kontejnerů. Jedna z hodnot 'disabled', 'private' nebo 'enabled'. 'private' zpřístupní registr kontejnerů pouze členům projektu (role reporter a vyšší). 'enabled' zpřístupní registr kontejnerů všem, kteří mají k projektu přístup. 'disabled' registr kontejnerů zakáže"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2VuYWJsZWQ.desc": {
           "source": "Deprecated: Use :container_registry_access_level instead. Flag indication if the container registry is enabled for that project",
           "message": "Zastaralé: Použijte místo toho :container_registry_access_level. Příznak určující, zda je registr kontejnerů pro tento projekt povolen"
@@ -11174,10 +10998,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGlzcGxheV9waXBlbGluZV92YXJpYWJsZXM.display_name": {
           "source": "Ci Display Pipeline Variables",
           "message": "CI zobrazit proměnné pipeline"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGlzcGxheV9waXBlbGluZV92YXJpYWJsZXM.short_desc": {
-          "source": "Display all manually-defined variables in the pipeline details page after running a pipeline manually",
-          "message": "Zobrazit všechny ručně definované proměnné na stránce podrobností pipeline po jejím ručním spuštění"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X2VuYWJsZWQ.desc": {
           "source": "Prevent older deployment jobs that are still pending",
@@ -11251,10 +11071,6 @@
           "source": "Ci Pipeline Variables Minimum Override Role",
           "message": "Minimální role pro přepis proměnných CI pipeline"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcGlwZWxpbmVfdmFyaWFibGVzX21pbmltdW1fb3ZlcnJpZGVfcm9sZQ.short_desc": {
-          "source": "Limit ability to override CI/CD variables when triggering a pipeline to only users with at least the set minimum role",
-          "message": "Omezit možnost přepisovat proměnné CI/CD při spuštění pipeline pouze na uživatele s alespoň nastavenou minimální rolí"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.desc": {
           "source": "Allow pushing to this project's repository by authenticating with a CI/CD job token generated in this project.",
           "message": "Povolit odesílání do repozitáře tohoto projektu pomocí autentizace s tokenem CI/CD úlohy vygenerovaným v tomto projektu."
@@ -11262,10 +11078,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.display_name": {
           "source": "Ci Push Repository For Job Token Allowed",
           "message": "Povoleno odesílání do repozitáře pro token CI úlohy"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.short_desc": {
-          "source": "Allow pushing to this project's repository by authenticating with a CI/CD job token generated in this project",
-          "message": "Povolit odesílání do repozitáře tohoto projektu pomocí autentizace s tokenem CI/CD úlohy vygenerovaným v tomto projektu"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcmVzdHJpY3RfcGlwZWxpbmVfY2FuY2VsbGF0aW9uX3JvbGU.desc": {
           "source": "Roles allowed to cancel pipelines and jobs.",
@@ -12179,10 +11991,6 @@
           "source": "Merge Trains Skip Train Allowed",
           "message": "Povoleno přeskočení merge trainu"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWVyZ2VfdHJhaW5zX3NraXBfdHJhaW5fYWxsb3dlZA.short_desc": {
-          "source": "Allow merge train merge requests to be merged without waiting for pipelines to finish",
-          "message": "Povolit sloučení merge requestů v merge trainu bez čekání na dokončení pipeline"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWlycm9y.desc": {
           "source": "[Deprecated] Enables pull mirroring in a project",
           "message": "[Zastaralé] Povolí pull zrcadlení v projektu"
@@ -12238,10 +12046,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWlycm9yX3VzZXJfaWQ.display_name": {
           "source": "Mirror User Id",
           "message": "ID uživatele pro zrcadlení"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWlycm9yX3VzZXJfaWQ.short_desc": {
-          "source": "[Deprecated] User responsible for all the activity surrounding a pull mirror event",
-          "message": "[Zastaralé] Uživatel zodpovědný za veškerou aktivitu spojenou s událostí pull mirroru"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bXJfZGVmYXVsdF90YXJnZXRfc2VsZg.desc": {
           "source": "Merge requests of this forked project targets itself by default",
@@ -12347,10 +12151,6 @@
           "source": "Security Policy Pipeline Must Succeed",
           "message": "Pipeline bezpečnostních zásad musí uspět"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2VjdXJpdHlfcG9saWN5X3BpcGVsaW5lX211c3Rfc3VjY2VlZA.short_desc": {
-          "source": "Require all security policy pipelines to succeed before merge requests can be merged",
-          "message": "Vyžadovat úspěšné dokončení všech pipeline bezpečnostních zásad před sloučením merge requestů"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2VydmljZV9kZXNrX2VuYWJsZWQ.desc": {
           "source": "Disable or enable the service desk",
           "message": "Zakázat nebo povolit Service Desk"
@@ -12406,10 +12206,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c3BwX3JlcG9zaXRvcnlfcGlwZWxpbmVfYWNjZXNz.display_name": {
           "source": "Spp Repository Pipeline Access",
           "message": "Přístup k pipeline repozitáře SPP"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c3BwX3JlcG9zaXRvcnlfcGlwZWxpbmVfYWNjZXNz.short_desc": {
-          "source": "Grant read-only access to security policy configurations for enforcement in linked CI/CD projects",
-          "message": "Udělit přístup pouze pro čtení ke konfiguracím bezpečnostních zásad pro vynucení v propojených CI/CD projektech"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c3F1YXNoX29wdGlvbg.allowed-value.c3RyaW5nOm5ldmVy.display_name": {
           "source": "never",
@@ -12498,10 +12294,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.display_name": {
           "source": "Package Registry Access Level",
           "message": "Úroveň přístupu k registru balíčků"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.short_desc": {
-          "source": "Controls visibility of the package registry. One of 'disabled', 'private', 'enabled' or 'public'. 'private' will make the package registry accessible only to project members (reporter role and above). 'enabled' will make the package registry accessible to everyone who has access to the project. 'public' will make the package registry accessible to everyone. 'disabled' will disable the package registry",
-          "message": "Řídí viditelnost registru balíčků. Jedna z možností 'disabled', 'private', 'enabled' nebo 'public'. 'private' zpřístupní registr balíčků pouze členům projektu (role reportér a vyšší). 'enabled' zpřístupní registr balíčků všem, kteří mají přístup k projektu. 'public' zpřístupní registr balíčků všem. 'disabled' registr balíčků zakáže"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.cGFja2FnZXNfZW5hYmxlZA.desc": {
           "source": "Deprecated: Use :package_registry_access_level instead. Enable project packages feature",
@@ -13526,10 +13318,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.bWlsZXN0b25l.display_name": {
           "source": "Milestone",
           "message": "Milník"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.bWlsZXN0b25l.short_desc": {
-          "source": "The title of a project or ancestor-group milestone to assign the merge request to",
-          "message": "Název milníku projektu nebo nadřazené skupiny, ke kterému má být merge request přiřazen"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.bWlsZXN0b25lX2lk.desc": {
           "source": "The global ID of a milestone to assign the merge request to.",

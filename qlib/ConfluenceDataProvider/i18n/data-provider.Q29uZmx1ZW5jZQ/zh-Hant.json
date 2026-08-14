@@ -87,10 +87,6 @@
           "source": "Status",
           "message": "狀態"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.c3RhdHVz.short_desc": {
-          "source": "The status of the blog post, specifies if the blog post will be created as a new blog post or a draft",
-          "message": "部落格文章的狀態，指定部落格文章將建立為新部落格文章還是草稿"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.cHJpdmF0ZQ.desc": {
           "source": "The page will be private. Only the user who creates this page will have permission to view and edit one.",
           "message": "此頁面將設為私人。只有建立此頁面的使用者才有檢視和編輯的權限。"
@@ -231,10 +227,6 @@
           "source": "Root Level",
           "message": "根層級"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.cm9vdC1sZXZlbA.short_desc": {
-          "source": "The page will be created at the root level of the space (outside the space homepage tree)",
-          "message": "頁面將建立在空間的根層級 (位於空間首頁樹狀結構之外)"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.dGl0bGU.desc": {
           "source": "Title of the page, required if page status is not draft.",
           "message": "頁面的標題，如果頁面狀態不是 draft 則為必填。"
@@ -331,10 +323,6 @@
           "source": "Sort",
           "message": "排序"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "用於依特定欄位對結果進行排序"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.c3RhdHVz.desc": {
           "source": "Filter the results to attachments based on their status. By default, `current` and `archived` are used.",
           "message": "根據附件狀態篩選結果。預設使用 `current` 和 `archived`。"
@@ -394,10 +382,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "內文格式"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "在回應的 'body' 欄位中傳回的內容格式類型。如果可用，該表示形式將顯示在 'body' 欄位下同名的回應欄位中"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Z2V0LWRyYWZ0.desc": {
           "source": "Retrieve the draft version of this page.",
@@ -503,10 +487,6 @@
           "source": "Include Operations",
           "message": "包含作業"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
-          "source": "Includes operations associated with this page in the response, as defined in the 'Operation' object",
-          "message": "在回應中包含與此頁面關聯的作業（如 'Operation' 物件中所定義）"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.desc": {
           "source": "Includes content properties associated with this page in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
           "message": "在回應中包含與此頁面關聯的內容屬性。\n結果數量將限制為 50 個，並按預設排序順序排序。\n將提供 `meta` 和 `_links` 屬性，以指示是否有更多可用結果以及用於檢索其餘結果的連結。"
@@ -595,10 +575,6 @@
           "source": "Body Format",
           "message": "內文格式"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "在回應的 'body' 欄位中傳回的內容格式類型。如果可用，該表示形式將顯示在 'body' 欄位下同名的回應欄位中"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.aWQ.desc": {
           "source": "Filter the results based on page ids. Multiple page ids can be specified as a comma-separated list.",
           "message": "根據頁面 ID 篩選結果。多個頁面 ID 可以指定為以逗號分隔的清單。"
@@ -654,10 +630,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "排序"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "用於依特定欄位對結果進行排序"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
@@ -735,10 +707,6 @@
           "source": "Body Format",
           "message": "內文格式"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "在回應的 'body' 欄位中傳回的內容格式類型。如果可用，該表示形式將顯示在 'body' 欄位下同名的回應欄位中"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
           "message": "要傳回之頁面的 ID。如果您不知道頁面 ID，請使用「取得頁面」並篩選結果。"
@@ -794,10 +762,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "排序"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "用於依特定欄位對結果進行排序"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.c3RhdHVz.desc": {
           "source": "Filter the results to blog posts based on their status. By default, `current` is used.",
@@ -863,10 +827,6 @@
           "source": "Body Format",
           "message": "內文格式"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "在回應的 'body' 欄位中傳回的內容格式類型。如果可用，該表示形式將顯示在 'body' 欄位下同名的回應欄位中"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
           "message": "要傳回之頁面的 ID。如果您不知道頁面 ID，請使用「取得頁面」並篩選結果。"
@@ -923,10 +883,6 @@
           "source": "Sort",
           "message": "排序"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "用於依特定欄位對結果進行排序"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
           "message": "根據空間 ID 篩選結果。多個空間 ID 可以指定為以逗號分隔的清單。"
@@ -978,10 +934,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "內文格式"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "在回應的 'body' 欄位中傳回的內容格式類型。如果可用，該表示形式將顯示在 'body' 欄位下同名的回應欄位中"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
@@ -1046,10 +998,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "排序"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "用於依特定欄位對結果進行排序"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
@@ -1163,10 +1111,6 @@
           "source": "Description Format",
           "message": "描述格式"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
-          "source": "The content format type to be returned in the 'description' field of the response. If available, the representation will be available under a response field of the same name under the 'description' field",
-          "message": "要在回應的 'description' 欄位中傳回的內容格式類型。如果可用，該表示形式將在 'description' 欄位下同名的回應欄位中提供"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1pY29u.desc": {
           "source": "If the icon for the space should be fetched or not.",
           "message": "是否應擷取空間的圖示。"
@@ -1198,10 +1142,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
           "source": "Include Operations",
           "message": "包含作業"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
-          "source": "Includes operations associated with this page in the response, as defined in the 'Operation' object",
-          "message": "在回應中包含與此頁面關聯的作業（如 'Operation' 物件中所定義）"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wZXJtaXNzaW9ucw.desc": {
           "source": "Includes space permissions associated with this space in the response.\nThe number of results will be limited to 50 and sorted in the default sort order.\nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
@@ -1291,10 +1231,6 @@
           "source": "Description Format",
           "message": "描述格式"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
-          "source": "The content format type to be returned in the 'description' field of the response. If available, the representation will be available under a response field of the same name under the 'description' field",
-          "message": "要在回應的 'description' 欄位中傳回的內容格式類型。如果可用，該表示形式將在 'description' 欄位下同名的回應欄位中提供"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZmF2b3JpdGVkLWJ5.desc": {
           "source": "Filter the results to spaces favorited by the user with the specified account ID.",
           "message": "將結果篩選為指定帳戶 ID 的使用者所收藏的空間。"
@@ -1375,10 +1311,6 @@
           "source": "Not Favorited By",
           "message": "未收藏者"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.bm90LWZhdm9yaXRlZC1ieQ.short_desc": {
-          "source": "Filter the results to spaces NOT favorited by the user with the specified account ID",
-          "message": "將結果篩選為指定帳戶 ID 的使用者未收藏的空間"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c29ydA.allowed-value.c3RyaW5nOi1pZA.display_name": {
           "source": "-id",
           "message": "-id"
@@ -1410,10 +1342,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "排序"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "用於依特定欄位對結果進行排序"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.display_name": {
           "source": "archived",
@@ -1523,10 +1451,6 @@
           "source": "Body Format",
           "message": "內文格式"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "在回應的 'body' 欄位中傳回的內容格式類型。如果可用，該表示形式將顯示在 'body' 欄位下同名的回應欄位中"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Z2V0LWRyYWZ0.desc": {
           "source": "Retrieve the draft version of this page.",
           "message": "擷取此頁面的草稿版本。"
@@ -1595,10 +1519,6 @@
           "source": "Include Direct Children",
           "message": "包含直接子頁面"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1kaXJlY3QtY2hpbGRyZW4.short_desc": {
-          "source": "Includes direct children of the page, as defined in the 'ChildrenResponse' object",
-          "message": "包含頁面的直接子頁面，如 'ChildrenResponse' 物件中所定義"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.desc": {
           "source": "Includes whether this page has been favorited by the current user.",
           "message": "包含目前使用者是否已將此頁面加入我的最愛。"
@@ -1642,10 +1562,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
           "source": "Include Operations",
           "message": "包含作業"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
-          "source": "Includes operations associated with this page in the response, as defined in the 'Operation' object",
-          "message": "在回應中包含與此頁面關聯的作業（如 'Operation' 物件中所定義）"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1wcm9wZXJ0aWVz.desc": {
           "source": "Includes content properties associated with this page in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
@@ -1735,10 +1651,6 @@
           "source": "Body Format",
           "message": "內文格式"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "在回應的 'body' 欄位中傳回的內容格式類型。如果可用，該表示形式將顯示在 'body' 欄位下同名的回應欄位中"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.aWQ.desc": {
           "source": "Filter the results based on page ids. Multiple page ids can be specified as a comma-separated list.",
           "message": "根據頁面 ID 篩選結果。多個頁面 ID 可以指定為以逗號分隔的清單。"
@@ -1802,10 +1714,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "排序"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "用於依特定欄位對結果進行排序"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
@@ -1903,10 +1811,6 @@
           "source": "Body Format",
           "message": "內文格式"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "在回應的 'body' 欄位中傳回的內容格式類型。如果可用，該表示形式將顯示在 'body' 欄位下同名的回應欄位中"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.ZGVwdGg.allowed-value.c3RyaW5nOmFsbA.display_name": {
           "source": "all",
           "message": "全部"
@@ -1922,10 +1826,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.ZGVwdGg.display_name": {
           "source": "Depth",
           "message": "深度"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.ZGVwdGg.short_desc": {
-          "source": "Filter the results to pages at the root level of the space or to all pages in the space",
-          "message": "將結果篩選為空間根層級的頁面或空間中的所有頁面"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
@@ -1991,10 +1891,6 @@
           "source": "Sort",
           "message": "排序"
         },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.c29ydA.short_desc": {
-          "source": "Used to sort the result by a particular field",
-          "message": "用於依特定欄位對結果進行排序"
-        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.c3RhdHVz.desc": {
           "source": "Filter the results to pages based on their status. By default, `current` and `archived` are used.",
           "message": "依據頁面狀態篩選結果。預設使用 `current` 和 `archived`。"
@@ -2046,10 +1942,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "內文格式"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "在回應的 'body' 欄位中傳回的內容格式類型。如果可用，該表示形式將顯示在 'body' 欄位下同名的回應欄位中"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
@@ -2186,10 +2078,6 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "內文格式"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "在回應的 'body' 欄位中傳回的內容格式類型。如果可用，該表示形式將顯示在 'body' 欄位下同名的回應欄位中"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YmxvZ3Bvc3QtaWQ.desc": {
           "source": "Filters on the blog post ID of the task. Multiple IDs can be specified. Note - page and blog post filters can be used in conjunction.",
@@ -2723,10 +2611,6 @@
           "source": "URI Path",
           "message": "URI 路徑"
         },
-        "app.Q29uZmx1ZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "相對於連線 API 根 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
-        },
         "app.Q29uZmx1ZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "代入 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}`，框架會傳送 `/users/123`。值均經過 URL 編碼。"
@@ -3222,10 +3106,6 @@
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "內文格式"
-        },
-        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response. If available, the representation will be available under a response field of the same name under the 'body' field",
-          "message": "在回應的 'body' 欄位中傳回的內容格式類型。如果可用，該表示形式將顯示在 'body' 欄位下同名的回應欄位中"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.desc": {
           "source": "ID of the blog post the task is in.",

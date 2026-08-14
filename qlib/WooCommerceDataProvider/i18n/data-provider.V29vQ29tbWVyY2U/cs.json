@@ -79,10 +79,6 @@
           "source": "Created Via",
           "message": "Vytvořeno přes"
         },
-        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3JlYXRlZF92aWE.short_desc": {
-          "source": "Identifier showing where the order originated (e",
-          "message": "Identifikátor uvádějící, odkud objednávka pochází (např."
-        },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.desc": {
           "source": "Three-letter ISO currency code (e.g., `USD`, `EUR`)",
           "message": "Třípísmenný kód měny ISO (např. `USD`, `EUR`)"
@@ -90,10 +86,6 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.display_name": {
           "source": "Currency",
           "message": "Měna"
-        },
-        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.short_desc": {
-          "source": "Three-letter ISO currency code (e",
-          "message": "Třípísmenný ISO kód měny (např."
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJfaWQ.desc": {
           "source": "The customer ID for the order",
@@ -286,10 +278,6 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.cGF5bWVudF9tZXRob2Q.display_name": {
           "source": "Payment Method",
           "message": "Způsob platby"
-        },
-        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.cGF5bWVudF9tZXRob2Q.short_desc": {
-          "source": "Payment method identifier (e",
-          "message": "Identifikátor platební metody (např."
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.cGF5bWVudF9tZXRob2RfdGl0bGU.desc": {
           "source": "Human-readable payment method title",
@@ -659,10 +647,6 @@
           "source": "Email Restrictions",
           "message": "Omezení na e-maily"
         },
-        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.option.ZW1haWxfcmVzdHJpY3Rpb25z.short_desc": {
-          "source": "List of email addresses (or domain wildcards like '*@example.com') that can use this coupon",
-          "message": "Seznam e-mailových adres (nebo zástupných znaků domény jako '*@example.com'), které mohou tento kupón použít"
-        },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.option.ZXhjbHVkZV9zYWxlX2l0ZW1z.desc": {
           "source": "If `True`, the coupon will not apply to items on sale",
           "message": "Pokud je `True`, kupón se nebude vztahovat na zlevněné položky"
@@ -951,10 +935,6 @@
           "source": "Download Expiry",
           "message": "Expirace stažení"
         },
-        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfZXhwaXJ5.short_desc": {
-          "source": "Number of days before download access expires ('-1' for never) — only used when 'downloadable' is 'True'",
-          "message": "Počet dní do vypršení platnosti přístupu ke stažení ('-1' pro neomezeně) — používá se pouze tehdy, když je 'downloadable' 'True'"
-        },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.desc": {
           "source": "Maximum number of downloads per purchase (`-1` for unlimited) — only used when `downloadable` is `True`",
           "message": "Maximální počet stažení na nákup (`-1` pro neomezeně) — používá se pouze v případě, že `downloadable` je `True`"
@@ -962,10 +942,6 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.display_name": {
           "source": "Download Limit",
           "message": "Limit stahování"
-        },
-        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.short_desc": {
-          "source": "Maximum number of downloads per purchase ('-1' for unlimited) — only used when 'downloadable' is 'True'",
-          "message": "Maximální počet stažení na nákup ('-1' pro neomezeně) — používá se pouze v případě, že 'downloadable' je 'True'"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRhYmxl.desc": {
           "source": "If `True`, the product is downloadable. Selecting this exposes the `downloads`, `download_limit`, and `download_expiry` fields.",
@@ -1378,10 +1354,6 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGF4X2NsYXNz.display_name": {
           "source": "Tax Class",
           "message": "Daňová třída"
-        },
-        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGF4X2NsYXNz.short_desc": {
-          "source": "Tax class slug (e",
-          "message": "Identifikátor (slug) daňové třídy (např."
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGF4X3N0YXR1cw.allowed-value.c3RyaW5nOm5vbmU.desc": {
           "source": "None",
@@ -2398,10 +2370,6 @@
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.option.Z3JvdXA.display_name": {
           "source": "Group",
           "message": "Skupina"
-        },
-        "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.option.Z3JvdXA.short_desc": {
-          "source": "The settings group ID (e",
-          "message": "ID skupiny nastavení (např."
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.option.c2V0dGluZ19pZA.desc": {
           "source": "The setting identifier within the group",
@@ -5091,10 +5059,6 @@
           "source": "URI Path",
           "message": "Cesta URI"
         },
-        "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
-        },
         "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
@@ -6171,10 +6135,6 @@
           "source": "Download Expiry",
           "message": "Expirace stažení"
         },
-        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfZXhwaXJ5.short_desc": {
-          "source": "Number of days before download access expires ('-1' for never) — only used when 'downloadable' is 'True'",
-          "message": "Počet dní do vypršení platnosti přístupu ke stažení ('-1' pro neomezeně) — používá se pouze tehdy, když je 'downloadable' 'True'"
-        },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.desc": {
           "source": "Maximum number of downloads per purchase (`-1` for unlimited) — only used when `downloadable` is `True`",
           "message": "Maximální počet stažení na nákup (`-1` pro neomezeně) — používá se pouze v případě, že `downloadable` je `True`"
@@ -6182,10 +6142,6 @@
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.display_name": {
           "source": "Download Limit",
           "message": "Limit stahování"
-        },
-        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.short_desc": {
-          "source": "Maximum number of downloads per purchase ('-1' for unlimited) — only used when 'downloadable' is 'True'",
-          "message": "Maximální počet stažení na nákup ('-1' pro neomezeně) — používá se pouze v případě, že 'downloadable' je 'True'"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRhYmxl.desc": {
           "source": "If `True`, the product is downloadable. Selecting this exposes the `downloads`, `download_limit`, and `download_expiry` fields.",
@@ -6611,10 +6567,6 @@
           "source": "Tax Class",
           "message": "Daňová třída"
         },
-        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGF4X2NsYXNz.short_desc": {
-          "source": "Tax class slug (e",
-          "message": "Identifikátor (slug) daňové třídy (např."
-        },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGF4X3N0YXR1cw.allowed-value.c3RyaW5nOm5vbmU.desc": {
           "source": "None",
           "message": "Žádné"
@@ -6786,10 +6738,6 @@
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.option.Z3JvdXA.display_name": {
           "source": "Group",
           "message": "Skupina"
-        },
-        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.option.Z3JvdXA.short_desc": {
-          "source": "The settings group ID (e",
-          "message": "ID skupiny nastavení (např."
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.option.c2V0dGluZ19pZA.desc": {
           "source": "The setting identifier within the group",
@@ -7422,10 +7370,6 @@
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.option.dG9waWM.display_name": {
           "source": "Topic",
           "message": "Téma"
-        },
-        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.option.dG9waWM.short_desc": {
-          "source": "The webhook topic (e",
-          "message": "Téma webhooku (např."
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
           "source": "Update an existing webhook",

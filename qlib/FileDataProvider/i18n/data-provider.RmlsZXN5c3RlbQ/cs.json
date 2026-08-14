@@ -163,10 +163,6 @@
           "source": "Text",
           "message": "Text"
         },
-        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.short_desc": {
-          "source": "If 'True' the file will be returned as a string, 'False' (the default) as binary data",
-          "message": "Pokud 'True', soubor bude vrácen jako řetězec, při 'False' (výchozí) jako binární data"
-        },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
           "source": "Get a file on the server filesystem",
           "message": "Získat soubor v souborovém systému serveru"
@@ -318,10 +314,6 @@
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.display_name": {
           "source": "Symlink",
           "message": "Symbolický odkaz"
-        },
-        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.short_desc": {
-          "source": "If 'True', then if the target path is a symbolic link, information about the link itself will be returned instead of the target",
-          "message": "Pokud je 'True' a cílová cesta je symbolický odkaz, vrátí se informace o samotném odkazu namísto cíle"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.desc": {
           "source": "The file path",

@@ -211,10 +211,6 @@
           "source": "Style Preset",
           "message": "風格預設"
         },
-        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.short_desc": {
-          "source": "Pre-baked style preset (`core` model only)",
-          "message": "預設風格（僅限 `core` 模型）"
-        },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.desc": {
           "source": "Text prompt describing the desired image.  Be specific about subject, style, lighting, and composition for best results.",
           "message": "描述所需圖片的文字提示。請具體說明主題、風格、光影和構圖以獲得最佳效果。"
@@ -522,10 +518,6 @@
         "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "URI 路徑"
-        },
-        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "相對於連線 API 根 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
         },
         "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",

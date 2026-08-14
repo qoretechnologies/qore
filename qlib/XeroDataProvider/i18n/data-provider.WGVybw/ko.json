@@ -63,10 +63,6 @@
           "source": "Summarize Errors",
           "message": "오류 요약"
         },
-        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "false인 경우 200 OK와 함께 성공적으로 생성된 개체 및 유효성 검사 오류가 있는 개체를 혼합하여 반환합니다."
-        },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.short_desc": {
           "source": "Apply a credit note to an invoice",
           "message": "인보이스에 크레딧 노트 적용"
@@ -119,10 +115,6 @@
           "source": "Code",
           "message": "코드"
         },
-        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q29kZQ.short_desc": {
-          "source": "Code of account you are using to make the payment e",
-          "message": "결제에 사용할 계정 코드(예:"
-        },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZQ.display_name": {
           "source": "Credit Note",
           "message": "크레딧 노트"
@@ -138,10 +130,6 @@
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZU51bWJlcg.display_name": {
           "source": "Credit Note Number",
           "message": "대변전표 번호"
-        },
-        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZU51bWJlcg.short_desc": {
-          "source": "Number of invoice or credit note you are applying payment to e",
-          "message": "결제를 적용할 인보이스 또는 크레딧 노트의 번호(예:"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3VycmVuY3lSYXRl.desc": {
           "source": "Exchange rate when payment is received. Only used for non base currency invoices and credit notes e.g. 0.7500",
@@ -223,10 +211,6 @@
           "source": "Date",
           "message": "날짜"
         },
-        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGF0ZQ.short_desc": {
-          "source": "Date the payment is being made (YYYY-MM-DD) e",
-          "message": "결제 날짜(YYYY-MM-DD)(예:"
-        },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGV0YWlscw.desc": {
           "source": "The information to appear on the supplier's bank account",
           "message": "공급업체의 은행 계좌에 표시될 정보"
@@ -254,10 +238,6 @@
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZU51bWJlcg.display_name": {
           "source": "Invoice Number",
           "message": "인보이스 번호"
-        },
-        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZU51bWJlcg.short_desc": {
-          "source": "Number of invoice or credit note you are applying payment to e",
-          "message": "결제를 적용할 인보이스 또는 크레딧 노트의 번호(예:"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SXNSZWNvbmNpbGVk.desc": {
           "source": "An optional parameter for the payment. A boolean indicating whether you would like the payment to be created as reconciled when using PUT, or whether a payment has been reconciled when using GET",
@@ -302,10 +282,6 @@
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudElE.display_name": {
           "source": "Payment ID",
           "message": "결제 ID"
-        },
-        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudElE.short_desc": {
-          "source": "The Xero identifier for an Payment e",
-          "message": "결제에 대한 Xero 식별자"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFDQ1BBWVBBWU1FTlQ.display_name": {
           "source": "ACCPAYPAYMENT",
@@ -374,10 +350,6 @@
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UmVmZXJlbmNl.display_name": {
           "source": "Reference",
           "message": "참조"
-        },
-        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UmVmZXJlbmNl.short_desc": {
-          "source": "An optional description for the payment e",
-          "message": "결제에 대한 선택적 설명"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.short_desc": {
           "source": "Record a payment against an invoice",
@@ -551,10 +523,6 @@
           "source": "Include Archived",
           "message": "보관 항목 포함"
         },
-        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.aW5jbHVkZUFyY2hpdmVk.short_desc": {
-          "source": "e",
-          "message": "e"
-        },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.b3JkZXI.desc": {
           "source": "Order by an any element",
           "message": "임의의 요소를 기준으로 정렬"
@@ -575,10 +543,6 @@
           "source": "Search Term",
           "message": "검색어"
         },
-        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c2VhcmNoVGVybQ.short_desc": {
-          "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields",
-          "message": "Name, FirstName, LastName, ContactNumber 및 EmailAddress 필드에서 대소문자를 구분하지 않는 텍스트 검색을 수행하는 검색 매개변수"
-        },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.desc": {
           "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object. This returns only lightweight fields, excluding computation-heavy fields from the response, making the API calls quick and efficient.",
           "message": "GET Contacts 및 Invoices 엔드포인트에서 summaryOnly=true를 사용하여 더 작은 크기의 응답 객체를 검색합니다. 응답에서 계산이 많이 필요한 필드를 제외하고 가벼운 필드만 반환하여 API 호출을 빠르고 효율적으로 만듭니다."
@@ -586,10 +550,6 @@
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.display_name": {
           "source": "Summary Only",
           "message": "요약만"
-        },
-        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.short_desc": {
-          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object",
-          "message": "GET Contacts 및 Invoices 엔드포인트에서 summaryOnly=true를 사용하여 더 작은 크기의 응답 객체 검색"
         },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZQ.desc": {
           "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
@@ -706,10 +666,6 @@
         "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
-        },
-        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "e"
         },
         "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.short_desc": {
           "source": "List the credit notes in the organisation",
@@ -851,10 +807,6 @@
           "source": "Unitdp",
           "message": "Unitdp"
         },
-        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "e"
-        },
         "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.short_desc": {
           "source": "List the bank transactions in the organisation",
           "message": "조직의 은행 거래 목록 조회"
@@ -983,10 +935,6 @@
           "source": "Include Archived",
           "message": "보관 항목 포함"
         },
-        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.aW5jbHVkZUFyY2hpdmVk.short_desc": {
-          "source": "e",
-          "message": "e"
-        },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.b3JkZXI.desc": {
           "source": "Order by an any element",
           "message": "임의의 요소를 기준으로 정렬"
@@ -1007,10 +955,6 @@
           "source": "Search Term",
           "message": "검색어"
         },
-        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c2VhcmNoVGVybQ.short_desc": {
-          "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields",
-          "message": "Name, FirstName, LastName, ContactNumber 및 EmailAddress 필드에서 대소문자를 구분하지 않는 텍스트 검색을 수행하는 검색 매개변수"
-        },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.desc": {
           "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object. This returns only lightweight fields, excluding computation-heavy fields from the response, making the API calls quick and efficient.",
           "message": "GET Contacts 및 Invoices 엔드포인트에서 summaryOnly=true를 사용하여 더 작은 크기의 응답 객체를 검색합니다. 응답에서 계산이 많이 필요한 필드를 제외하고 가벼운 필드만 반환하여 API 호출을 빠르고 효율적으로 만듭니다."
@@ -1018,10 +962,6 @@
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.display_name": {
           "source": "Summary Only",
           "message": "요약만"
-        },
-        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.short_desc": {
-          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object",
-          "message": "GET Contacts 및 Invoices 엔드포인트에서 summaryOnly=true를 사용하여 더 작은 크기의 응답 객체 검색"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZQ.desc": {
           "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
@@ -1066,10 +1006,6 @@
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
-        },
-        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "e"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.short_desc": {
           "source": "List invoices and bills",
@@ -1126,10 +1062,6 @@
         "app.WGVybw.action.Z2V0SXRlbXM.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
-        },
-        "app.WGVybw.action.Z2V0SXRlbXM.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "e"
         },
         "app.WGVybw.action.Z2V0SXRlbXM.short_desc": {
           "source": "List the items in the organisation",
@@ -1543,10 +1475,6 @@
           "source": "Task Ids",
           "message": "작업 ID"
         },
-        "app.WGVybw.action.Z2V0VGFza3M.option.dGFza0lkcw.short_desc": {
-          "source": "Search for all tasks that match a comma separated list of taskIds, i",
-          "message": "쉼표로 구분된 taskIds 목록과 일치하는 모든 작업을 검색합니다(예:"
-        },
         "app.WGVybw.action.Z2V0VGFza3M.short_desc": {
           "source": "List the tasks in a project",
           "message": "프로젝트의 작업 목록 조회"
@@ -1879,10 +1807,6 @@
           "source": "URI Path",
           "message": "URI 경로"
         },
-        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
-        },
         "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
@@ -2091,10 +2015,6 @@
           "source": "Summarize Errors",
           "message": "오류 요약"
         },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "false인 경우 200 OK와 함께 성공적으로 생성된 개체 및 유효성 검사 오류가 있는 개체를 혼합하여 반환합니다."
-        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.desc": {
           "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
           "message": "예: unitdp=4 – (단위 소수점 자릿수) 단위 금액에 소수점 4자리를 사용하도록 선택할 수 있습니다."
@@ -2102,10 +2022,6 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
-        },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "e"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.short_desc": {
           "source": "Record money spent or received against a bank account",
@@ -2134,10 +2050,6 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
           "source": "Summarize Errors",
           "message": "오류 요약"
-        },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "false인 경우 200 OK와 함께 성공적으로 생성된 개체 및 유효성 검사 오류가 있는 개체를 혼합하여 반환합니다."
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.short_desc": {
           "source": "Create contacts, or update them by ID",
@@ -2179,10 +2091,6 @@
           "source": "Allow Backorders",
           "message": "백오더 허용"
         },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.YWxsb3dCYWNrb3JkZXJz.short_desc": {
-          "source": "Allows an invoice to be created even when one or more line items contain tracked inventory where the invoice quantity would cause the available quantity to go negative",
-          "message": "인보이스 수량으로 인해 사용 가능한 수량이 음수가 될 수 있는 추적 인벤토리가 하나 이상의 품목에 포함되어 있더라도 인보이스를 생성할 수 있도록 허용합니다"
-        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
           "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
           "message": "false인 경우 200 OK와 함께 성공적으로 생성된 개체 및 유효성 검사 오류가 있는 개체를 혼합하여 반환합니다."
@@ -2191,10 +2099,6 @@
           "source": "Summarize Errors",
           "message": "오류 요약"
         },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "false인 경우 200 OK와 함께 성공적으로 생성된 개체 및 유효성 검사 오류가 있는 개체를 혼합하여 반환합니다."
-        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.desc": {
           "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
           "message": "예: unitdp=4 – (단위 소수점 자릿수) 단위 금액에 소수점 4자리를 사용하도록 선택할 수 있습니다."
@@ -2202,10 +2106,6 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
-        },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "e"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.short_desc": {
           "source": "Create invoices or bills, or update them by ID",
@@ -2235,10 +2135,6 @@
           "source": "Summarize Errors",
           "message": "오류 요약"
         },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "false인 경우 200 OK와 함께 성공적으로 생성된 개체 및 유효성 검사 오류가 있는 개체를 혼합하여 반환합니다."
-        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.desc": {
           "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
           "message": "예: unitdp=4 – (단위 소수점 자릿수) 단위 금액에 소수점 4자리를 사용하도록 선택할 수 있습니다."
@@ -2246,10 +2142,6 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
-        },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "e"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.short_desc": {
           "source": "Create items, or update them by ID",
@@ -2279,10 +2171,6 @@
           "source": "Summarize Errors",
           "message": "오류 요약"
         },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "false인 경우 200 OK와 함께 성공적으로 생성된 개체 및 유효성 검사 오류가 있는 개체를 혼합하여 반환합니다."
-        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.short_desc": {
           "source": "Create quotes, or update them by ID",
           "message": "견적을 생성하거나 ID로 업데이트"
@@ -2310,10 +2198,6 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
           "source": "Summarize Errors",
           "message": "오류 요약"
-        },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "false인 경우 200 OK와 함께 성공적으로 생성된 개체 및 유효성 검사 오류가 있는 개체를 혼합하여 반환합니다."
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.short_desc": {
           "source": "Set up an invoice that repeats on a schedule",

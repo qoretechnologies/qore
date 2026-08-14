@@ -163,10 +163,6 @@
           "source": "Model Options",
           "message": "Opciones del modelo"
         },
-        "app.T2xsYW1h.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3B0aW9ucw.short_desc": {
-          "source": "Per-model runtime options (`num_ctx`, etc.)",
-          "message": "Opciones de tiempo de ejecución por modelo (`num_ctx`, etc.)"
-        },
         "app.T2xsYW1h.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.desc": {
           "source": "Name of the installed Ollama embedding model, e.g. `nomic-embed-text`, `mxbai-embed-large`, `snowflake-arctic-embed`.",
           "message": "Nombre del modelo de embedding Ollama instalado, p. ej. `nomic-embed-text`, `mxbai-embed-large`, `snowflake-arctic-embed`."
@@ -498,10 +494,6 @@
         "app.T2xsYW1h.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "Ruta URI"
-        },
-        "app.T2xsYW1h.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "La ruta URI relativa a la URL base de la API de la conexión. Puede contener marcadores de posición '{name}' que se reemplazan desde 'path_vars'. Ejemplo: '/users/{id}/comments'"
         },
         "app.T2xsYW1h.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",

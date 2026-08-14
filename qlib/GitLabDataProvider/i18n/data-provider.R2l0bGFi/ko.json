@@ -67,10 +67,6 @@
           "source": "All Available",
           "message": "사용 가능한 전체"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.YWxsX2F2YWlsYWJsZQ.short_desc": {
-          "source": "When 'true', returns all accessible groups. When 'false', returns only groups where the user is a member",
-          "message": "'true'인 경우 접근 가능한 모든 그룹을 반환합니다. 'false'인 경우 사용자가 멤버로 속한 그룹만 반환합니다"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.YXJjaGl2ZWQ.desc": {
           "source": "Limit by archived status",
           "message": "보관 상태로 제한"
@@ -751,10 +747,6 @@
           "source": "Due Date",
           "message": "마감일"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.ZHVlX2RhdGU.short_desc": {
-          "source": "Return issues that have no due date ('{{0}}'), or whose due date is this week, this month, between two weeks ago and next month, or which are overdue. Accepts: 'overdue', 'week', 'month', 'next_month_and_previous_two_weeks', '{{0}}'",
-          "message": "마감일이 없는 이슈('{{0}}'), 마감일이 이번 주, 이번 달, 2주 전부터 다음 달 사이인 이슈 또는 기한이 지난 이슈를 반환합니다. 허용되는 값: 'overdue', 'week', 'month', 'next_month_and_previous_two_weeks', '{{0}}'"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.ZXBpY19pZA.desc": {
           "source": "The ID of an epic associated with the issues",
           "message": "이슈와 연결된 에픽의 ID"
@@ -931,10 +923,6 @@
           "source": "Order By",
           "message": "정렬 기준"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.b3JkZXJfYnk.short_desc": {
-          "source": "Return issues ordered by 'created_at', 'due_date', 'label_priority', 'milestone_due', 'popularity', 'priority', 'relative_position', 'title', or 'updated_at' fields",
-          "message": "'created_at', 'due_date', 'label_priority', 'milestone_due', 'popularity', 'priority', 'relative_position', 'title' 또는 'updated_at' 필드 기준으로 정렬된 이슈를 반환합니다"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bGFiZWxz.desc": {
           "source": "Comma-separated list of label names",
           "message": "쉼표로 구분된 레이블 이름 목록"
@@ -982,10 +970,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bWlsZXN0b25lX2lk.display_name": {
           "source": "Milestone Id",
           "message": "마일스톤 ID"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bWlsZXN0b25lX2lk.short_desc": {
-          "source": "Return issues assigned to milestones with the specified timebox value (\"Any\", \"None\", \"Upcoming\" or \"Started\")",
-          "message": "지정된 타임박스 값(\"Any\", \"None\", \"Upcoming\" 또는 \"Started\")을 가진 마일스톤에 할당된 이슈를 반환합니다."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bXlfcmVhY3Rpb25fZW1vamk.desc": {
           "source": "Return issues reacted by the authenticated user by the given emoji",
@@ -1046,10 +1030,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bm90W21pbGVzdG9uZV9pZF0.display_name": {
           "source": "Not[milestone Id]",
           "message": "Not[milestone Id]"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bm90W21pbGVzdG9uZV9pZF0.short_desc": {
-          "source": "Return issues assigned to milestones without the specified timebox value (\"Any\", \"None\", \"Upcoming\" or \"Started\")",
-          "message": "지정된 타임박스 값(\"Any\", \"None\", \"Upcoming\" 또는 \"Started\")이 없는 마일스톤에 할당된 이슈를 반환합니다."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bm90W2F1dGhvcl91c2VybmFtZV0.desc": {
           "source": "Return issues which are not authored by the user with the given username",
@@ -1647,10 +1627,6 @@
           "source": "Due Date",
           "message": "마감일"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.ZHVlX2RhdGU.short_desc": {
-          "source": "Return issues that have no due date ('{{0}}'), or whose due date is this week, this month, between two weeks ago and next month, or which are overdue. Accepts: 'overdue', 'week', 'month', 'next_month_and_previous_two_weeks', '{{0}}'",
-          "message": "마감일이 없는 이슈('{{0}}'), 마감일이 이번 주, 이번 달, 2주 전부터 다음 달 사이인 이슈 또는 기한이 지난 이슈를 반환합니다. 허용되는 값: 'overdue', 'week', 'month', 'next_month_and_previous_two_weeks', '{{0}}'"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.ZXBpY19pZA.desc": {
           "source": "The ID of an epic associated with the issues",
           "message": "이슈와 연결된 에픽의 ID"
@@ -1839,10 +1815,6 @@
           "source": "Order By",
           "message": "정렬 기준"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.b3JkZXJfYnk.short_desc": {
-          "source": "Return issues ordered by 'created_at', 'due_date', 'label_priority', 'milestone_due', 'popularity', 'priority', 'relative_position', 'title', or 'updated_at' fields",
-          "message": "'created_at', 'due_date', 'label_priority', 'milestone_due', 'popularity', 'priority', 'relative_position', 'title' 또는 'updated_at' 필드 기준으로 정렬된 이슈를 반환합니다"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bGFiZWxz.desc": {
           "source": "Comma-separated list of label names",
           "message": "쉼표로 구분된 레이블 이름 목록"
@@ -1890,10 +1862,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bWlsZXN0b25lX2lk.display_name": {
           "source": "Milestone",
           "message": "마일스톤"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bWlsZXN0b25lX2lk.short_desc": {
-          "source": "Return issues assigned to milestones with the specified timebox value (\"Any\", \"None\", \"Upcoming\" or \"Started\")",
-          "message": "지정된 타임박스 값(\"Any\", \"None\", \"Upcoming\" 또는 \"Started\")을 가진 마일스톤에 할당된 이슈를 반환합니다."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bXlfcmVhY3Rpb25fZW1vamk.desc": {
           "source": "Return issues reacted by the authenticated user by the given emoji",
@@ -1954,10 +1922,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bm90W21pbGVzdG9uZV9pZF0.display_name": {
           "source": "Not In Milestone",
           "message": "마일스톤 제외"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bm90W21pbGVzdG9uZV9pZF0.short_desc": {
-          "source": "Return issues assigned to milestones without the specified timebox value (\"Any\", \"None\", \"Upcoming\" or \"Started\")",
-          "message": "지정된 타임박스 값(\"Any\", \"None\", \"Upcoming\" 또는 \"Started\")이 없는 마일스톤에 할당된 이슈를 반환합니다."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bm90W2F1dGhvcl91c2VybmFtZV0.desc": {
           "source": "Return issues which are not authored by the user with the given username",
@@ -2559,10 +2523,6 @@
           "source": "Approved By Ids",
           "message": "Approved By Ids"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfaWRz.short_desc": {
-          "source": "Return merge requests which have been approved by the specified users with the given IDs",
-          "message": "지정된 ID를 가진 사용자가 승인한 병합 요청을 반환합니다"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfdXNlcm5hbWVz.desc": {
           "source": "Return merge requests which have been approved by the specified users with the given\n            usernames",
           "message": "지정된 사용자 이름을 가진 사용자가 승인한 병합 요청을\n            반환합니다"
@@ -2571,10 +2531,6 @@
           "source": "Approved By Usernames",
           "message": "Approved By Usernames"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfdXNlcm5hbWVz.short_desc": {
-          "source": "Return merge requests which have been approved by the specified users with the given",
-          "message": "지정된 사용자가 승인한 병합 요청을 반환합니다"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZXJfaWRz.desc": {
           "source": "Return merge requests which have specified the users with the given IDs as an individual approver",
           "message": "지정된 ID의 사용자가 개별 승인자로 지정된 병합 요청을 반환합니다"
@@ -2582,10 +2538,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZXJfaWRz.display_name": {
           "source": "Approver Ids",
           "message": "Approver Ids"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZXJfaWRz.short_desc": {
-          "source": "Return merge requests which have specified the users with the given IDs as an individual approver",
-          "message": "지정된 ID의 사용자가 개별 승인자로 지정된 병합 요청을 반환합니다"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXNzaWduZWVfaWQ.desc": {
           "source": "Return issues which are assigned to the user with the given ID",
@@ -2666,10 +2618,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.ZHJhZnQ.display_name": {
           "source": "Draft",
           "message": "임시 저장"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.ZHJhZnQ.short_desc": {
-          "source": "Filter merge requests against their 'draft' status. 'true' to return only draft merge requests, 'false' to return non-draft merge requests",
-          "message": "'draft' 상태에 따라 병합 요청을 필터링합니다. 초안 병합 요청만 반환하려면 'true', 초안이 아닌 병합 요청을 반환하려면 'false'를 지정합니다"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.ZW52aXJvbm1lbnQ.desc": {
           "source": "Returns merge requests deployed to the given environment",
@@ -2759,10 +2707,6 @@
           "source": "Order By",
           "message": "정렬 기준"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.b3JkZXJfYnk.short_desc": {
-          "source": "Returns merge requests ordered by 'created_at', 'label_priority', 'milestone_due', 'popularity', 'priority', 'title', 'updated_at' or 'merged_at' fields",
-          "message": "'created_at', 'label_priority', 'milestone_due', 'popularity', 'priority', 'title', 'updated_at' 또는 'merged_at' 필드를 기준으로 정렬된 병합 요청을 반환합니다"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bGFiZWxz.desc": {
           "source": "Comma-separated list of label names",
           "message": "쉼표로 구분된 레이블 이름 목록"
@@ -2783,10 +2727,6 @@
           "source": "Merge User Username",
           "message": "병합 사용자 이름"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VfdXNlcl91c2VybmFtZQ.short_desc": {
-          "source": "Returns merge requests which have been merged by the user with the given 'username'. Mutually exclusive with 'merge_user_id'",
-          "message": "지정된 'username'을 가진 사용자가 병합한 병합 요청을 반환합니다. 'merge_user_id'와 상호 배타적입니다"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VfdXNlcl9pZA.desc": {
           "source": "Returns merge requests which have been merged by the user with the given user `id`. Mutually exclusive with `merge_user_username`.",
           "message": "지정된 사용자 `id`을(를) 가진 사용자가 병합한 병합 요청을 반환합니다. `merge_user_username`과(와) 상호 배타적입니다."
@@ -2794,10 +2734,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VfdXNlcl9pZA.display_name": {
           "source": "Merged By",
           "message": "병합자"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VfdXNlcl9pZA.short_desc": {
-          "source": "Returns merge requests which have been merged by the user with the given user 'id'. Mutually exclusive with 'merge_user_username'",
-          "message": "지정된 사용자 'id'를 가진 사용자가 병합한 병합 요청을 반환합니다. 'merge_user_username'과 상호 배타적입니다"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VkX2FmdGVy.desc": {
           "source": "Returns merge requests merged on or after the given time. Expected in ISO 8601 format.",
@@ -2867,10 +2803,6 @@
           "source": "Not[my Reaction Emoji]",
           "message": "Not[my Reaction Emoji]"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W215X3JlYWN0aW9uX2Vtb2ppXQ.short_desc": {
-          "source": "'<Negated>' Returns merge requests reacted by the authenticated user by the given 'emoji'. 'None' returns issues not given a reaction. 'Any' returns issues given at least one reaction",
-          "message": "'<부정>' 인증된 사용자가 지정된 'emoji'로 반응한 병합 요청을 반환합니다. 'None'은 반응이 없는 이슈를 반환합니다. 'Any'는 하나 이상의 반응이 있는 이슈를 반환합니다"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W21pbGVzdG9uZV0.desc": {
           "source": "Milestone title",
           "message": "마일스톤 제목"
@@ -2915,10 +2847,6 @@
           "source": "Not Assigned To",
           "message": "담당자 제외"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W2Fzc2lnbmVlX2lkXQ.short_desc": {
-          "source": "'<Negated>' Returns merge requests assigned to the given user 'id'. 'None' returns unassigned merge requests. 'Any' returns merge requests with an assignee",
-          "message": "'<부정>' 지정된 사용자 'id'에게 할당된 병합 요청을 반환합니다. 'None'은 담당자가 없는 병합 요청을 반환합니다. 'Any'는 담당자가 있는 병합 요청을 반환합니다"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W2Fzc2lnbmVlX3VzZXJuYW1lXQ.desc": {
           "source": "Return issues which are not assigned to the user with the given username",
           "message": "지정된 사용자 이름을 가진 사용자에게 할당되지 않은 이슈를 반환합니다."
@@ -2951,10 +2879,6 @@
           "source": "Not Reviewed By",
           "message": "리뷰어 제외"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W3Jldmlld2VyX2lkXQ.short_desc": {
-          "source": "'<Negated>' Returns merge requests which have the user as a reviewer with the given user 'id'. 'None' returns merge requests with no reviewers. 'Any' returns merge requests with any reviewer. Mutually exclusive with 'reviewer_username'",
-          "message": "'<부정>' 지정된 사용자 'id'를 리뷰어로 가진 병합 요청을 반환합니다. 'None'은 리뷰어가 없는 병합 요청을 반환합니다. 'Any'는 리뷰어가 있는 병합 요청을 반환합니다. 'reviewer_username'과(과) 상호 배타적입니다"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W3Jldmlld2VyX3VzZXJuYW1lXQ.desc": {
           "source": "`<Negated>` Returns merge requests which have the user as a reviewer with the given `username`. `None` returns merge requests with no reviewers. `Any` returns merge requests with any reviewer. Mutually exclusive with `reviewer_id`. Introduced in GitLab 13.8.",
           "message": "`<Negated>` 지정된 `username`를 리뷰어로 가진 병합 요청을 반환합니다. `None`는 리뷰어가 없는 병합 요청을 반환합니다. `Any`는 리뷰어가 있는 병합 요청을 반환합니다. `reviewer_id`와(과) 상호 배타적입니다. GitLab 13.8에서 도입되었습니다."
@@ -2962,10 +2886,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W3Jldmlld2VyX3VzZXJuYW1lXQ.display_name": {
           "source": "Not[reviewer Username]",
           "message": "리뷰어 사용자 이름 제외"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W3Jldmlld2VyX3VzZXJuYW1lXQ.short_desc": {
-          "source": "'<Negated>' Returns merge requests which have the user as a reviewer with the given 'username'. 'None' returns merge requests with no reviewers. 'Any' returns merge requests with any reviewer. Mutually exclusive with 'reviewer_id'. Introduced in GitLab 13",
-          "message": "'<부정>' 지정된 'username'을 리뷰어로 가진 병합 요청을 반환합니다. 'None'은 리뷰어가 없는 병합 요청을 반환합니다. 'Any'는 리뷰어가 있는 병합 요청을 반환합니다. 'reviewer_id'와(과) 상호 배타적입니다. GitLab 13에서 도입되었습니다"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c291cmNlX2JyYW5jaA.desc": {
           "source": "Returns merge requests with the given source branch",
@@ -3043,10 +2963,6 @@
           "source": "Scope",
           "message": "범위"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c2NvcGU.short_desc": {
-          "source": "Returns merge requests for the given scope: 'created_by_me', 'assigned_to_me', 'reviews_for_me' or 'all'",
-          "message": "지정된 범위의 병합 요청을 반환합니다: 'created_by_me', 'assigned_to_me', 'reviews_for_me' 또는 'all'"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c2VhcmNo.desc": {
           "source": "Return list of branches matching the search criteria",
           "message": "검색 기준과 일치하는 브랜치 목록 반환"
@@ -3087,10 +3003,6 @@
           "source": "State",
           "message": "주/도"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c3RhdGU.short_desc": {
-          "source": "Returns 'all' merge requests or just those that are 'opened', 'closed', 'locked', or 'merged'",
-          "message": "'all' 병합 요청 또는 'opened', 'closed', 'locked', 'merged' 상태인 병합 요청만 반환합니다"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cGFnZQ.desc": {
           "source": "Current page number",
           "message": "현재 페이지 번호"
@@ -3123,10 +3035,6 @@
           "source": "Reviewer",
           "message": "리뷰어"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cmV2aWV3ZXJfaWQ.short_desc": {
-          "source": "Returns merge requests which have the user as a reviewer with the given user 'id'. 'None' returns merge requests with no reviewers. 'Any' returns merge requests with any reviewer. Mutually exclusive with 'reviewer_username'",
-          "message": "지정된 사용자 'id'를 리뷰어로 가진 병합 요청을 반환합니다. 'None'은 리뷰어가 없는 병합 요청을 반환합니다. 'Any'는 리뷰어가 있는 병합 요청을 반환합니다. 'reviewer_username'과(과) 상호 배타적입니다"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cmV2aWV3ZXJfdXNlcm5hbWU.desc": {
           "source": "Returns merge requests which have the user as a reviewer with the given `username`. `None` returns merge requests with no reviewers. `Any` returns merge requests with any reviewer. Mutually exclusive with `reviewer_id`. Introduced in GitLab 13.8.",
           "message": "지정된 `username`를 리뷰어로 가진 병합 요청을 반환합니다. `None`는 리뷰어가 없는 병합 요청을 반환합니다. `Any`는 리뷰어가 있는 병합 요청을 반환합니다. `reviewer_id`와(과) 상호 배타적입니다. GitLab 13.8에서 도입되었습니다."
@@ -3134,10 +3042,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cmV2aWV3ZXJfdXNlcm5hbWU.display_name": {
           "source": "Reviewer Username",
           "message": "리뷰어 사용자 이름"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cmV2aWV3ZXJfdXNlcm5hbWU.short_desc": {
-          "source": "Returns merge requests which have the user as a reviewer with the given 'username'. 'None' returns merge requests with no reviewers. 'Any' returns merge requests with any reviewer. Mutually exclusive with 'reviewer_id'. Introduced in GitLab 13",
-          "message": "지정된 'username'을 리뷰어로 가진 병합 요청을 반환합니다. 'None'은 리뷰어가 없는 병합 요청을 반환합니다. 'Any'는 리뷰어가 있는 병합 요청을 반환합니다. 'reviewer_id'와(과) 상호 배타적입니다. GitLab 13에서 도입되었습니다"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.d2l0aF9sYWJlbHNfZGV0YWlscw.desc": {
           "source": "Return titles of labels and other details",
@@ -3158,10 +3062,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.d2l0aF9tZXJnZV9zdGF0dXNfcmVjaGVjaw.display_name": {
           "source": "With Merge Status Recheck",
           "message": "병합 상태 재확인 포함"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.d2l0aF9tZXJnZV9zdGF0dXNfcmVjaGVjaw.short_desc": {
-          "source": "If 'true', this projection requests (but does not guarantee) that the 'merge_status' field be recalculated asynchronously",
-          "message": "'true'인 경우, 이 프로젝션은 'merge_status' 필드가 비동기적으로 다시 계산되도록 요청합니다(보장되지는 않음)"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.d2lw.allowed-value.c3RyaW5nOm5v.display_name": {
           "source": "no",
@@ -3230,10 +3130,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.dmlldw.display_name": {
           "source": "View",
           "message": "뷰"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.dmlldw.short_desc": {
-          "source": "If simple, returns the 'iid', URL, title, description, and basic state of merge request",
-          "message": "simple인 경우, 병합 요청의 'iid', URL, 제목, 설명 및 기본 상태를 반환합니다"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.short_desc": {
           "source": "List the merge requests in a project",
@@ -5915,10 +5811,6 @@
           "source": "URI Path",
           "message": "URI 경로"
         },
-        "app.R2l0bGFi.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
-        },
         "app.R2l0bGFi.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
@@ -6274,10 +6166,6 @@
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZW1haWxzX2Rpc2FibGVk.display_name": {
           "source": "Emails Disabled",
           "message": "이메일 비활성화됨"
-        },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZW1haWxzX2Rpc2FibGVk.short_desc": {
-          "source": "_(Deprecated)_ Disable email notifications",
-          "message": "_(지원 중단됨)_ 이메일 알림 비활성화"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZW1haWxzX2VuYWJsZWQ.desc": {
           "source": "Enable email notifications",
@@ -6955,10 +6843,6 @@
           "source": "Container Registry Access Level",
           "message": "컨테이너 레지스트리 접근 수준"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2FjY2Vzc19sZXZlbA.short_desc": {
-          "source": "Controls visibility of the container registry. One of 'disabled', 'private' or 'enabled'. 'private' will make the container registry accessible only to project members (reporter role and above). 'enabled' will make the container registry accessible to everyone who has access to the project. 'disabled' will disable the container registry",
-          "message": "컨테이너 레지스트리의 가시성을 제어합니다. 'disabled', 'private' 또는 'enabled' 중 하나입니다. 'private'은 컨테이너 레지스트리를 프로젝트 멤버(리포터 역할 이상)만 접근할 수 있도록 설정합니다. 'enabled'는 프로젝트에 접근할 수 있는 모든 사용자가 컨테이너 레지스트리에 접근할 수 있도록 설정합니다. 'disabled'는 컨테이너 레지스트리를 비활성화합니다."
-        },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2VuYWJsZWQ.desc": {
           "source": "Deprecated: Use :container_registry_access_level instead. Flag indication if the container registry is enabled for that project",
           "message": "더 이상 사용되지 않음: 대신 :container_registry_access_level을 사용하세요. 해당 프로젝트에 컨테이너 레지스트리가 활성화되어 있는지를 나타내는 플래그"
@@ -7463,10 +7347,6 @@
           "source": "Initialize With Readme",
           "message": "README로 초기화"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aW5pdGlhbGl6ZV93aXRoX3JlYWRtZQ.short_desc": {
-          "source": "Initialize a project with a README",
-          "message": "README로 프로젝트 초기화"
-        },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aXNzdWVfYnJhbmNoX3RlbXBsYXRl.desc": {
           "source": "Template used to create a branch from an issue",
           "message": "이슈에서 브랜치를 생성하는 데 사용되는 템플릿"
@@ -7931,10 +7811,6 @@
           "source": "Spp Repository Pipeline Access",
           "message": "SPP 저장소 파이프라인 접근 권한"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c3BwX3JlcG9zaXRvcnlfcGlwZWxpbmVfYWNjZXNz.short_desc": {
-          "source": "Grant read-only access to security policy configurations for enforcement in linked CI/CD projects",
-          "message": "연결된 CI/CD 프로젝트에서 적용할 보안 정책 구성에 대한 읽기 전용 액세스를 부여합니다"
-        },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c3F1YXNoX29wdGlvbg.allowed-value.c3RyaW5nOm5ldmVy.display_name": {
           "source": "never",
           "message": "never"
@@ -8022,10 +7898,6 @@
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.display_name": {
           "source": "Package Registry Access Level",
           "message": "패키지 레지스트리 접근 수준"
-        },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.short_desc": {
-          "source": "Controls visibility of the package registry. One of 'disabled', 'private', 'enabled' or 'public'. 'private' will make the package registry accessible only to project members (reporter role and above). 'enabled' will make the package registry accessible to everyone who has access to the project. 'public' will make the package registry accessible to everyone. 'disabled' will disable the package registry",
-          "message": "패키지 레지스트리의 가시성을 제어합니다. 'disabled', 'private', 'enabled' 또는 'public' 중 하나입니다. 'private'은 패키지 레지스트리를 프로젝트 멤버(리포터 역할 이상)에게만 공개합니다. 'enabled'는 프로젝트에 접근 권한이 있는 모든 사람에게 패키지 레지스트리를 공개합니다. 'public'은 모든 사람에게 패키지 레지스트리를 공개합니다. 'disabled'는 패키지 레지스트리를 비활성화합니다."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.cGFja2FnZXNfZW5hYmxlZA.desc": {
           "source": "Deprecated: Use :package_registry_access_level instead. Enable project packages feature",
@@ -8639,10 +8511,6 @@
           "source": "Milestone",
           "message": "마일스톤"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.option.bWlsZXN0b25l.short_desc": {
-          "source": "The title of a project or ancestor-group milestone to assign the merge request to",
-          "message": "병합 요청을 할당할 프로젝트 또는 상위 그룹 마일스톤의 제목"
-        },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.option.bWlsZXN0b25lX2lk.desc": {
           "source": "The global ID of a milestone to assign the merge request to.",
           "message": "병합 요청을 할당할 마일스톤의 글로벌 ID입니다."
@@ -9058,10 +8926,6 @@
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl90b19yZXNvbHZl.display_name": {
           "source": "Discussion To Resolve",
           "message": "해결할 토론"
-        },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl90b19yZXNvbHZl.short_desc": {
-          "source": "The ID of a discussion to resolve, also pass 'merge_request_to_resolve_discussions_of'",
-          "message": "해결할 토론의 ID이며, 'merge_request_to_resolve_discussions_of'도 함께 전달해야 합니다."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl9sb2NrZWQ.desc": {
           "source": " Boolean parameter indicating if the issue's discussion is locked",
@@ -9927,10 +9791,6 @@
           "source": "Auto Ban User On Excessive Projects Download",
           "message": "과도한 프로젝트 다운로드 시 사용자 자동 차단"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YXV0b19iYW5fdXNlcl9vbl9leGNlc3NpdmVfcHJvamVjdHNfZG93bmxvYWQ.short_desc": {
-          "source": "Ban users from the group when they exceed maximum number of unique projects download in the specified time period",
-          "message": "지정된 기간 동안 고유 프로젝트 다운로드 최대 수를 초과할 경우 그룹에서 사용자를 차단합니다."
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YXV0b19kZXZvcHNfZW5hYmxlZA.desc": {
           "source": "Default to Auto DevOps pipeline for all projects within this group",
           "message": "이 그룹 내 모든 프로젝트에 대해 Auto DevOps 파이프라인 기본 설정"
@@ -10119,10 +9979,6 @@
           "source": "Duo Core Features Enabled",
           "message": "Duo Core 기능 활성화 여부"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZHVvX2NvcmVfZmVhdHVyZXNfZW5hYmxlZA.short_desc": {
-          "source": "[Experimental] Indicates whether GitLab Duo Core features are enabled for the group",
-          "message": "[실험적 기능] 그룹에 GitLab Duo Core 기능이 활성화되어 있는지 여부를 나타냅니다."
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZHVvX2V4dGVybmFsX2FnZW50c19hdmFpbGFiaWxpdHk.desc": {
           "source": "Enable GitLab Duo external agents for this group",
           "message": "이 그룹에 GitLab Duo 외부 에이전트 활성화"
@@ -10179,10 +10035,6 @@
           "source": "Duo Template Project Id",
           "message": "Duo 템플릿 프로젝트 ID"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZHVvX3RlbXBsYXRlX3Byb2plY3RfaWQ.short_desc": {
-          "source": "The ID of a project to use as the Duo Code Review custom instructions template for this group",
-          "message": "이 그룹의 Duo Code Review 맞춤형 지침 템플릿으로 사용할 프로젝트의 ID"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZW1haWxzX2Rpc2FibGVk.desc": {
           "source": "_(Deprecated)_ Disable email notifications. Use: emails_enabled",
           "message": "_(지원 중단됨)_ 이메일 알림 비활성화. 사용: emails_enabled"
@@ -10190,10 +10042,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZW1haWxzX2Rpc2FibGVk.display_name": {
           "source": "Emails Disabled",
           "message": "이메일 비활성화됨"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZW1haWxzX2Rpc2FibGVk.short_desc": {
-          "source": "_(Deprecated)_ Disable email notifications",
-          "message": "_(지원 중단됨)_ 이메일 알림 비활성화"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZW1haWxzX2VuYWJsZWQ.desc": {
           "source": "Enable email notifications",
@@ -10347,10 +10195,6 @@
           "source": "Lock Ai Audit Events Storage Enabled",
           "message": "AI 감사 이벤트 저장 잠금 사용 여부"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19haV9hdWRpdF9ldmVudHNfc3RvcmFnZV9lbmFibGVk.short_desc": {
-          "source": "Indicates whether AI audit events storage is enforced for all subgroups and projects",
-          "message": "모든 하위 그룹 및 프로젝트에 대해 AI 감사 이벤트 저장이 강제 적용되는지 여부를 나타냅니다."
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19idWlsdF9pbl9wcm9qZWN0X3RlbXBsYXRlc19lbmFibGVk.desc": {
           "source": "Enforce the built-in project templates setting for all subgroups",
           "message": "모든 하위 그룹에 기본 제공 프로젝트 템플릿 설정을 강제 적용합니다."
@@ -10370,10 +10214,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19kdW9fZmVhdHVyZXNfZW5hYmxlZA.display_name": {
           "source": "Lock Duo Features Enabled",
           "message": "Duo 기능 잠금 활성화됨"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19kdW9fZmVhdHVyZXNfZW5hYmxlZA.short_desc": {
-          "source": "Indicates if the GitLab Duo features enabled setting is enforced for all subgroups",
-          "message": "모든 하위 그룹에 GitLab Duo 기능 활성화 설정이 강제 적용되는지 여부를 나타냅니다"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19tYXRoX3JlbmRlcmluZ19saW1pdHNfZW5hYmxlZA.desc": {
           "source": "Indicates if math rendering limits are locked for all descendent groups.",
@@ -10643,10 +10483,6 @@
           "source": "Prevent Sharing Groups Outside Hierarchy",
           "message": "계층 구조 외부 그룹 공유 방지"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.cHJldmVudF9zaGFyaW5nX2dyb3Vwc19vdXRzaWRlX2hpZXJhcmNoeQ.short_desc": {
-          "source": "Prevent sharing groups within this namespace with any groups outside the namespace",
-          "message": "이 네임스페이스 내의 그룹을 네임스페이스 외부의 그룹과 공유하지 못하도록 차단"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.cHJvamVjdF9jcmVhdGlvbl9sZXZlbA.allowed-value.c3RyaW5nOm1haW50YWluZXI.display_name": {
           "source": "maintainer",
           "message": "유지 관리자"
@@ -10795,10 +10631,6 @@
           "source": "Unique Project Download Limit",
           "message": "고유 프로젝트 다운로드 제한"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXQ.short_desc": {
-          "source": "Maximum number of unique projects a user can download in the specified time period before they are banned",
-          "message": "차단되기 전에 사용자가 지정된 기간 동안 다운로드할 수 있는 고유 프로젝트의 최대 개수"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXRfYWxlcnRsaXN0.desc": {
           "source": "List of user ids who will be emailed when Git abuse rate limit is exceeded",
           "message": "Git 남용 속도 제한을 초과했을 때 이메일을 받을 사용자 ID 목록"
@@ -10830,10 +10662,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXRfaW50ZXJ2YWxfaW5fc2Vjb25kcw.display_name": {
           "source": "Unique Project Download Limit Interval In Seconds",
           "message": "고유 프로젝트 다운로드 제한 간격(초)"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXRfaW50ZXJ2YWxfaW5fc2Vjb25kcw.short_desc": {
-          "source": "Time period during which a user can download a maximum amount of projects before they are banned",
-          "message": "차단되기 전에 사용자가 최대 수량의 프로젝트를 다운로드할 수 있는 기간"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmludGVybmFs.display_name": {
           "source": "internal",
@@ -11103,10 +10931,6 @@
           "source": "Container Registry Access Level",
           "message": "컨테이너 레지스트리 접근 수준"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2FjY2Vzc19sZXZlbA.short_desc": {
-          "source": "Controls visibility of the container registry. One of 'disabled', 'private' or 'enabled'. 'private' will make the container registry accessible only to project members (reporter role and above). 'enabled' will make the container registry accessible to everyone who has access to the project. 'disabled' will disable the container registry",
-          "message": "컨테이너 레지스트리의 가시성을 제어합니다. 'disabled', 'private' 또는 'enabled' 중 하나입니다. 'private'은 컨테이너 레지스트리를 프로젝트 멤버(리포터 역할 이상)만 접근할 수 있도록 설정합니다. 'enabled'는 프로젝트에 접근할 수 있는 모든 사용자가 컨테이너 레지스트리에 접근할 수 있도록 설정합니다. 'disabled'는 컨테이너 레지스트리를 비활성화합니다."
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2VuYWJsZWQ.desc": {
           "source": "Deprecated: Use :container_registry_access_level instead. Flag indication if the container registry is enabled for that project",
           "message": "더 이상 사용되지 않음: 대신 :container_registry_access_level을 사용하세요. 해당 프로젝트에 컨테이너 레지스트리가 활성화되어 있는지를 나타내는 플래그"
@@ -11174,10 +10998,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGlzcGxheV9waXBlbGluZV92YXJpYWJsZXM.display_name": {
           "source": "Ci Display Pipeline Variables",
           "message": "CI 파이프라인 변수 표시"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGlzcGxheV9waXBlbGluZV92YXJpYWJsZXM.short_desc": {
-          "source": "Display all manually-defined variables in the pipeline details page after running a pipeline manually",
-          "message": "파이프라인을 수동으로 실행한 후 파이프라인 세부 정보 페이지에 모든 수동 정의 변수 표시"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X2VuYWJsZWQ.desc": {
           "source": "Prevent older deployment jobs that are still pending",
@@ -11251,10 +11071,6 @@
           "source": "Ci Pipeline Variables Minimum Override Role",
           "message": "CI 파이프라인 변수 최소 재정의 역할"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcGlwZWxpbmVfdmFyaWFibGVzX21pbmltdW1fb3ZlcnJpZGVfcm9sZQ.short_desc": {
-          "source": "Limit ability to override CI/CD variables when triggering a pipeline to only users with at least the set minimum role",
-          "message": "파이프라인을 트리거할 때 CI/CD 변수를 재정의하는 권한을 최소 설정된 역할 이상의 사용자에게만 제한합니다."
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.desc": {
           "source": "Allow pushing to this project's repository by authenticating with a CI/CD job token generated in this project.",
           "message": "이 프로젝트에서 생성된 CI/CD 작업 토큰으로 인증하여 이 프로젝트의 저장소에 푸시할 수 있도록 허용합니다."
@@ -11262,10 +11078,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.display_name": {
           "source": "Ci Push Repository For Job Token Allowed",
           "message": "작업 토큰에 대한 CI 저장소 푸시 허용"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.short_desc": {
-          "source": "Allow pushing to this project's repository by authenticating with a CI/CD job token generated in this project",
-          "message": "이 프로젝트에서 생성된 CI/CD 작업 토큰으로 인증하여 이 프로젝트의 저장소에 푸시 허용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcmVzdHJpY3RfcGlwZWxpbmVfY2FuY2VsbGF0aW9uX3JvbGU.desc": {
           "source": "Roles allowed to cancel pipelines and jobs.",
@@ -12179,10 +11991,6 @@
           "source": "Merge Trains Skip Train Allowed",
           "message": "머지 트레인 건너뛰기 허용"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWVyZ2VfdHJhaW5zX3NraXBfdHJhaW5fYWxsb3dlZA.short_desc": {
-          "source": "Allow merge train merge requests to be merged without waiting for pipelines to finish",
-          "message": "머지 트레인 병합 요청이 파이프라인 완료를 기다리지 않고 병합되도록 허용"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWlycm9y.desc": {
           "source": "[Deprecated] Enables pull mirroring in a project",
           "message": "[사용 중단됨] 프로젝트에서 풀 미러링을 활성화합니다"
@@ -12238,10 +12046,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWlycm9yX3VzZXJfaWQ.display_name": {
           "source": "Mirror User Id",
           "message": "미러 사용자 ID"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWlycm9yX3VzZXJfaWQ.short_desc": {
-          "source": "[Deprecated] User responsible for all the activity surrounding a pull mirror event",
-          "message": "[더 이상 사용되지 않음] 풀 미러 이벤트와 관련된 모든 활동을 담당하는 사용자"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bXJfZGVmYXVsdF90YXJnZXRfc2VsZg.desc": {
           "source": "Merge requests of this forked project targets itself by default",
@@ -12347,10 +12151,6 @@
           "source": "Security Policy Pipeline Must Succeed",
           "message": "보안 정책 파이프라인 성공 필수"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2VjdXJpdHlfcG9saWN5X3BpcGVsaW5lX211c3Rfc3VjY2VlZA.short_desc": {
-          "source": "Require all security policy pipelines to succeed before merge requests can be merged",
-          "message": "병합 요청을 병합하기 전에 모든 보안 정책 파이프라인이 성공해야 함"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2VydmljZV9kZXNrX2VuYWJsZWQ.desc": {
           "source": "Disable or enable the service desk",
           "message": "서비스 데스크를 활성화하거나 비활성화합니다"
@@ -12406,10 +12206,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c3BwX3JlcG9zaXRvcnlfcGlwZWxpbmVfYWNjZXNz.display_name": {
           "source": "Spp Repository Pipeline Access",
           "message": "SPP 저장소 파이프라인 접근 권한"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c3BwX3JlcG9zaXRvcnlfcGlwZWxpbmVfYWNjZXNz.short_desc": {
-          "source": "Grant read-only access to security policy configurations for enforcement in linked CI/CD projects",
-          "message": "연결된 CI/CD 프로젝트에서 적용할 보안 정책 구성에 대한 읽기 전용 액세스를 부여합니다"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c3F1YXNoX29wdGlvbg.allowed-value.c3RyaW5nOm5ldmVy.display_name": {
           "source": "never",
@@ -12498,10 +12294,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.display_name": {
           "source": "Package Registry Access Level",
           "message": "패키지 레지스트리 접근 수준"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.short_desc": {
-          "source": "Controls visibility of the package registry. One of 'disabled', 'private', 'enabled' or 'public'. 'private' will make the package registry accessible only to project members (reporter role and above). 'enabled' will make the package registry accessible to everyone who has access to the project. 'public' will make the package registry accessible to everyone. 'disabled' will disable the package registry",
-          "message": "패키지 레지스트리의 가시성을 제어합니다. 'disabled', 'private', 'enabled' 또는 'public' 중 하나입니다. 'private'은 패키지 레지스트리를 프로젝트 멤버(리포터 역할 이상)에게만 공개합니다. 'enabled'는 프로젝트에 접근 권한이 있는 모든 사람에게 패키지 레지스트리를 공개합니다. 'public'은 모든 사람에게 패키지 레지스트리를 공개합니다. 'disabled'는 패키지 레지스트리를 비활성화합니다."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.cGFja2FnZXNfZW5hYmxlZA.desc": {
           "source": "Deprecated: Use :package_registry_access_level instead. Enable project packages feature",
@@ -13526,10 +13318,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.bWlsZXN0b25l.display_name": {
           "source": "Milestone",
           "message": "마일스톤"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.bWlsZXN0b25l.short_desc": {
-          "source": "The title of a project or ancestor-group milestone to assign the merge request to",
-          "message": "병합 요청을 할당할 프로젝트 또는 상위 그룹 마일스톤의 제목"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.bWlsZXN0b25lX2lk.desc": {
           "source": "The global ID of a milestone to assign the merge request to.",

@@ -283,10 +283,6 @@
           "source": "Background",
           "message": "Pozadie"
         },
-        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.short_desc": {
-          "source": "Allows to set transparency for the background of the generated image(s) when using 'gpt-image-1'",
-          "message": "Umožňuje nastaviť priehľadnosť pozadia vygenerovaného obrázka (obrázkov) pri použití 'gpt-image-1'"
-        },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2NvbXByZXNzaW9u.desc": {
           "source": "The compression level (0-100%) for the generated image(s). This parameter is only supported for `gpt-image-1` with the `webp` or `jpeg` output formats, and defaults to `100`",
           "message": "Úroveň kompresie (0 – 100 %) pre vygenerovaný obrázok (obrázky). Tento parameter je podporovaný iba pre `gpt-image-1` s výstupnými formátmi `webp` alebo `jpeg` a predvolene má hodnotu `100`"
@@ -511,10 +507,6 @@
           "source": "Prompt",
           "message": "Prompt"
         },
-        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cHJvbXB0.short_desc": {
-          "source": "A text description of the desired image(s).",
-          "message": "Textový popis požadovaného obrázka (obrázkov)."
-        },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
           "source": "Medium quality (`gpt-image-1` only)",
           "message": "Stredná kvalita (iba `gpt-image-1`)"
@@ -582,10 +574,6 @@
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.dXNlcg.display_name": {
           "source": "User",
           "message": "Používateľ"
-        },
-        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.dXNlcg.short_desc": {
-          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
-          "message": "Jedinečný identifikátor reprezentujúci vášho koncového používateľa, ktorý môže pomôcť OpenAI monitorovať a zisťovať zneužitie"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.short_desc": {
           "source": "Generate an image from a prompt",
@@ -986,10 +974,6 @@
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.display_name": {
           "source": "User",
           "message": "Používateľ"
-        },
-        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.short_desc": {
-          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
-          "message": "Jedinečný identifikátor reprezentujúci vášho koncového používateľa, ktorý môže pomôcť OpenAI monitorovať a zisťovať zneužitie"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
           "source": "Process a request with a model",
@@ -1731,10 +1715,6 @@
           "source": "URI Path",
           "message": "Cesta URI"
         },
-        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
-        },
         "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
@@ -2030,10 +2010,6 @@
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dXNlcg.short_desc": {
           "source": "A unique identifier representing your end-user",
           "message": "Jedinečný identifikátor reprezentujúci vášho koncového používateľa"
-        },
-        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.short_desc": {
-          "source": "Chat with an AI model by sending multiple messages at once and potentially getting multiple replies",
-          "message": "Chatujte s modelom AI odoslaním viacerých správ naraz a potenciálnym získaním viacerých odpovedí"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.desc": {
           "source": "Chat with an AI model by sending a single message and receiving a single reply",
@@ -2774,10 +2750,6 @@
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.display_name": {
           "source": "User",
           "message": "Používateľ"
-        },
-        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.short_desc": {
-          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
-          "message": "Jedinečný identifikátor reprezentujúci vášho koncového používateľa, ktorý môže pomôcť OpenAI monitorovať a zisťovať zneužitie"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
           "source": "Stream a response from a model",

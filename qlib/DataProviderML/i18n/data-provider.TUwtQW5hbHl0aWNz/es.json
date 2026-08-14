@@ -2995,10 +2995,6 @@
           "source": "Schema defining validation rules for each field",
           "message": "Esquema que define las reglas de validación para cada campo"
         },
-        "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.short_desc": {
-          "source": "Validates each record against a defined schema with configurable violation handling",
-          "message": "Valida cada registro contra un esquema definido con gestión configurable de infracciones"
-        },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.desc": {
           "source": "Answers 'is this increase real growth or just a seasonal spike?' by separating a time series into its component parts. For example, monthly sales of $120K might decompose into $100K trend + $25K seasonal holiday boost - $5K random dip.\n\nRecords accumulate per field in a window; when full, all values are decomposed. Each record receives:\n- `trend` — long-term direction\n- `seasonal` — cyclical pattern (e.g., holiday shopping cycles)\n- `residual` — random noise remaining after removing trend and seasonal",
           "message": "Responde a '¿este aumento es crecimiento real o solo un pico estacional?' separando una serie temporal en sus partes componentes. Por ejemplo, unas ventas mensuales de $120K podrían descomponerse en $100K de tendencia + $25K de impulso navideño estacional - $5K de caída aleatoria.\n\nLos registros se acumulan por campo en una ventana; cuando está llena, se descomponen todos los valores. Cada registro recibe:\n- `trend` — dirección a largo plazo\n- `seasonal` — patrón cíclico (p. ej., ciclos de compras navideñas)\n- `residual` — ruido aleatorio restante tras eliminar la tendencia y la estacionalidad"

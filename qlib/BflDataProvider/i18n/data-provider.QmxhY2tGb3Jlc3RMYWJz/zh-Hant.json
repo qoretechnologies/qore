@@ -43,10 +43,6 @@
           "source": "Input Image (base64)",
           "message": "輸入影像 (base64)"
         },
-        "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.aW5wdXRfaW1hZ2U.short_desc": {
-          "source": "Base64-encoded input image (for `flux-kontext-*` models)",
-          "message": "Base64 編碼的輸入影像（用於 `flux-kontext-*` 模型）"
-        },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.Z2VuZXJhdGUtaW1hZ2U.option.bW9kZWw.allowed-value.c3RyaW5nOmZsdXgtZGV2.display_name": {
           "source": "FLUX Dev",
           "message": "FLUX Dev"
@@ -438,10 +434,6 @@
         "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "URI 路徑"
-        },
-        "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "相對於連線 API 根 URL 的 URI 路徑。可能包含從 'path_vars' 替換的 '{name}' 預留位置。範例：'/users/{id}/comments'"
         },
         "app.QmxhY2tGb3Jlc3RMYWJz.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",

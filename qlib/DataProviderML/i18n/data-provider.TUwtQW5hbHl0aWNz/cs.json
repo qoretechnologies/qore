@@ -2995,10 +2995,6 @@
           "source": "Schema defining validation rules for each field",
           "message": "Schéma definující validační pravidla pro jednotlivá pole"
         },
-        "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.short_desc": {
-          "source": "Validates each record against a defined schema with configurable violation handling",
-          "message": "Ověřuje každý záznam vůči definovanému schématu s konfigurovatelným zpracováním porušení pravidel"
-        },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.desc": {
           "source": "Answers 'is this increase real growth or just a seasonal spike?' by separating a time series into its component parts. For example, monthly sales of $120K might decompose into $100K trend + $25K seasonal holiday boost - $5K random dip.\n\nRecords accumulate per field in a window; when full, all values are decomposed. Each record receives:\n- `trend` — long-term direction\n- `seasonal` — cyclical pattern (e.g., holiday shopping cycles)\n- `residual` — random noise remaining after removing trend and seasonal",
           "message": "Odpovídá na otázku „je tento nárůst skutečným růstem, nebo jen sezónním výkyvem?“ rozložením časové řady na její jednotlivé složky. Například měsíční tržby ve výši 120 tis. $ se mohou rozložit na trend 100 tis. $ + sezónní sváteční nárůst 25 tis. $ - náhodný pokles 5 tis. $.\n\nZáznamy se pro každé pole shromažďují v okně; po jeho naplnění jsou všechny hodnoty dekomponovány. Každý záznam získá:\n- `trend` — dlouhodobý směr\n- `seasonal` — cyklický vzor (např. nákupní cykly o svátcích)\n- `residual` — náhodný šum zbývající po odstranění trendu a sezónnosti"

@@ -79,10 +79,6 @@
           "source": "Created Via",
           "message": "Creato tramite"
         },
-        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3JlYXRlZF92aWE.short_desc": {
-          "source": "Identifier showing where the order originated (e",
-          "message": "Identificatore che mostra l'origine dell'ordine (e"
-        },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.desc": {
           "source": "Three-letter ISO currency code (e.g., `USD`, `EUR`)",
           "message": "Codice valuta ISO a tre lettere (es. `USD`, `EUR`)"
@@ -90,10 +86,6 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.display_name": {
           "source": "Currency",
           "message": "Valuta"
-        },
-        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.short_desc": {
-          "source": "Three-letter ISO currency code (e",
-          "message": "Codice valuta ISO a tre lettere (es."
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJfaWQ.desc": {
           "source": "The customer ID for the order",
@@ -286,10 +278,6 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.cGF5bWVudF9tZXRob2Q.display_name": {
           "source": "Payment Method",
           "message": "Metodo di pagamento"
-        },
-        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.cGF5bWVudF9tZXRob2Q.short_desc": {
-          "source": "Payment method identifier (e",
-          "message": "Identificatore del metodo di pagamento (es."
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.cGF5bWVudF9tZXRob2RfdGl0bGU.desc": {
           "source": "Human-readable payment method title",
@@ -659,10 +647,6 @@
           "source": "Email Restrictions",
           "message": "Restrizioni email"
         },
-        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.option.ZW1haWxfcmVzdHJpY3Rpb25z.short_desc": {
-          "source": "List of email addresses (or domain wildcards like '*@example.com') that can use this coupon",
-          "message": "Elenco di indirizzi email (o caratteri jolly per domini come '*@example.com') che possono utilizzare questo coupon"
-        },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.option.ZXhjbHVkZV9zYWxlX2l0ZW1z.desc": {
           "source": "If `True`, the coupon will not apply to items on sale",
           "message": "Se `True`, il coupon non verrà applicato agli articoli in saldo"
@@ -951,10 +935,6 @@
           "source": "Download Expiry",
           "message": "Scadenza del download"
         },
-        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfZXhwaXJ5.short_desc": {
-          "source": "Number of days before download access expires ('-1' for never) — only used when 'downloadable' is 'True'",
-          "message": "Numero di giorni prima della scadenza dell'accesso al download ('-1' per mai) — utilizzato solo quando 'downloadable' è 'True'"
-        },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.desc": {
           "source": "Maximum number of downloads per purchase (`-1` for unlimited) — only used when `downloadable` is `True`",
           "message": "Numero massimo di download per acquisto (`-1` per illimitato) — utilizzato solo quando `downloadable` è `True`"
@@ -962,10 +942,6 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.display_name": {
           "source": "Download Limit",
           "message": "Limite di download"
-        },
-        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.short_desc": {
-          "source": "Maximum number of downloads per purchase ('-1' for unlimited) — only used when 'downloadable' is 'True'",
-          "message": "Numero massimo di download per acquisto ('-1' per illimitato) — utilizzato solo quando 'downloadable' è 'True'"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRhYmxl.desc": {
           "source": "If `True`, the product is downloadable. Selecting this exposes the `downloads`, `download_limit`, and `download_expiry` fields.",
@@ -1378,10 +1354,6 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGF4X2NsYXNz.display_name": {
           "source": "Tax Class",
           "message": "Classe fiscale"
-        },
-        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGF4X2NsYXNz.short_desc": {
-          "source": "Tax class slug (e",
-          "message": "Slug della classe fiscale (es"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGF4X3N0YXR1cw.allowed-value.c3RyaW5nOm5vbmU.desc": {
           "source": "None",
@@ -2398,10 +2370,6 @@
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.option.Z3JvdXA.display_name": {
           "source": "Group",
           "message": "Gruppo"
-        },
-        "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.option.Z3JvdXA.short_desc": {
-          "source": "The settings group ID (e",
-          "message": "L'ID del gruppo di impostazioni (es"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.option.c2V0dGluZ19pZA.desc": {
           "source": "The setting identifier within the group",
@@ -5091,10 +5059,6 @@
           "source": "URI Path",
           "message": "Percorso URI"
         },
-        "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "Il percorso URI relativo all'URL di base dell'API della connessione. Può contenere segnaposto '{name}' che vengono sostituiti da 'path_vars'. Esempio: '/users/{id}/comments'"
-        },
         "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
@@ -6171,10 +6135,6 @@
           "source": "Download Expiry",
           "message": "Scadenza del download"
         },
-        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfZXhwaXJ5.short_desc": {
-          "source": "Number of days before download access expires ('-1' for never) — only used when 'downloadable' is 'True'",
-          "message": "Numero di giorni prima della scadenza dell'accesso al download ('-1' per mai) — utilizzato solo quando 'downloadable' è 'True'"
-        },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.desc": {
           "source": "Maximum number of downloads per purchase (`-1` for unlimited) — only used when `downloadable` is `True`",
           "message": "Numero massimo di download per acquisto (`-1` per illimitato) — utilizzato solo quando `downloadable` è `True`"
@@ -6182,10 +6142,6 @@
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.display_name": {
           "source": "Download Limit",
           "message": "Limite di download"
-        },
-        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.short_desc": {
-          "source": "Maximum number of downloads per purchase ('-1' for unlimited) — only used when 'downloadable' is 'True'",
-          "message": "Numero massimo di download per acquisto ('-1' per illimitato) — utilizzato solo quando 'downloadable' è 'True'"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRhYmxl.desc": {
           "source": "If `True`, the product is downloadable. Selecting this exposes the `downloads`, `download_limit`, and `download_expiry` fields.",
@@ -6611,10 +6567,6 @@
           "source": "Tax Class",
           "message": "Classe fiscale"
         },
-        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGF4X2NsYXNz.short_desc": {
-          "source": "Tax class slug (e",
-          "message": "Slug della classe fiscale (es"
-        },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGF4X3N0YXR1cw.allowed-value.c3RyaW5nOm5vbmU.desc": {
           "source": "None",
           "message": "Nessuno"
@@ -6786,10 +6738,6 @@
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.option.Z3JvdXA.display_name": {
           "source": "Group",
           "message": "Gruppo"
-        },
-        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.option.Z3JvdXA.short_desc": {
-          "source": "The settings group ID (e",
-          "message": "L'ID del gruppo di impostazioni (es"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.option.c2V0dGluZ19pZA.desc": {
           "source": "The setting identifier within the group",
@@ -7422,10 +7370,6 @@
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.option.dG9waWM.display_name": {
           "source": "Topic",
           "message": "Topic"
-        },
-        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.option.dG9waWM.short_desc": {
-          "source": "The webhook topic (e",
-          "message": "L'argomento del webhook (es"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
           "source": "Update an existing webhook",

@@ -163,10 +163,6 @@
           "source": "Text",
           "message": "Текст"
         },
-        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.short_desc": {
-          "source": "If 'True' the file will be returned as a string, 'False' (the default) as binary data",
-          "message": "Якщо 'True', файл буде повернуто як рядок, якщо 'False' (за замовчуванням) — як двійкові дані"
-        },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
           "source": "Get a file on the server filesystem",
           "message": "Отримати файл у файловій системі сервера"
@@ -318,10 +314,6 @@
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.display_name": {
           "source": "Symlink",
           "message": "Символічне посилання"
-        },
-        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.short_desc": {
-          "source": "If 'True', then if the target path is a symbolic link, information about the link itself will be returned instead of the target",
-          "message": "Якщо 'True', і цільовий шлях є символічним посиланням, замість інформації про ціль буде повернуто інформацію про саме посилання"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.desc": {
           "source": "The file path",

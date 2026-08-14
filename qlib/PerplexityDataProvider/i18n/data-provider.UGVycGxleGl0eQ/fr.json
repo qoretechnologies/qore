@@ -295,10 +295,6 @@
           "source": "URI Path",
           "message": "Chemin URI"
         },
-        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "Le chemin URI relatif à l'URL de base de l'API de la connexion. Peut contenir des espaces réservés '{name}' qui sont remplacés à partir de 'path_vars'. Exemple : '/users/{id}/comments'"
-        },
         "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hachage des valeurs substituées dans les espaces réservés `{name}` dans le chemin URI. Exemple : avec `path = /users/{id}` et `path_vars = {id: 123}`, le framework envoie `/users/123`. Les valeurs sont encodées en URL."
@@ -862,10 +858,6 @@
         "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.short_desc": {
           "source": "The sampling temperature to use, between 0 and 2",
           "message": "La température d'échantillonnage à utiliser, entre 0 et 2"
-        },
-        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.short_desc": {
-          "source": "Chat with a Perplexity AI model by sending multiple messages at once and getting web-grounded responses with citations",
-          "message": "Discuter avec un modèle Perplexity AI en envoyant plusieurs messages à la fois et en obtenant des réponses ancrées sur le Web avec des citations"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.desc": {
           "source": "Search the web using Perplexity's dedicated search API returning structured results with titles, URLs, and snippets",
@@ -1618,10 +1610,6 @@
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
           "source": "The sampling temperature to use, between 0 and 2",
           "message": "La température d'échantillonnage à utiliser, entre 0 et 2"
-        },
-        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.short_desc": {
-          "source": "Chat with a Perplexity AI model by sending a single message and receiving a single web-grounded reply with citations",
-          "message": "Discuter avec un modèle Perplexity AI en envoyant un seul message et en recevant une seule réponse ancrée dans le web avec des citations"
         },
         "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.desc": {
           "source": "Stream a chat response from Perplexity AI via Server-Sent Events with real-time token delivery",

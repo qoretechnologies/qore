@@ -295,10 +295,6 @@
           "source": "URI Path",
           "message": "URI 경로"
         },
-        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
-        },
         "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
@@ -862,10 +858,6 @@
         "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.short_desc": {
           "source": "The sampling temperature to use, between 0 and 2",
           "message": "0과 2 사이의 사용할 샘플링 온도"
-        },
-        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.short_desc": {
-          "source": "Chat with a Perplexity AI model by sending multiple messages at once and getting web-grounded responses with citations",
-          "message": "한 번에 여러 메시지를 전송하여 Perplexity AI 모델과 대화하고 인용 출처가 포함된 웹 기반 응답을 받습니다"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.desc": {
           "source": "Search the web using Perplexity's dedicated search API returning structured results with titles, URLs, and snippets",
@@ -1618,10 +1610,6 @@
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
           "source": "The sampling temperature to use, between 0 and 2",
           "message": "0과 2 사이의 사용할 샘플링 온도"
-        },
-        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.short_desc": {
-          "source": "Chat with a Perplexity AI model by sending a single message and receiving a single web-grounded reply with citations",
-          "message": "단일 메시지를 보내고 인용 출처가 포함된 웹 기반 응답을 받아 Perplexity AI 모델과 대화합니다"
         },
         "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.desc": {
           "source": "Stream a chat response from Perplexity AI via Server-Sent Events with real-time token delivery",

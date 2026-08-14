@@ -327,10 +327,6 @@
           "source": "OAuth2 Auto Refresh",
           "message": "OAuth2 자동 새로 고침"
         },
-        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.short_desc": {
-          "source": "Sets if OAuth2 tokens should be automatically refreshed; also enables any custom token refresh in case pure OAuth2 is not in use",
-          "message": "OAuth2 토큰을 자동으로 새로 고칠지 여부를 설정합니다. 순수 OAuth2가 사용되지 않는 경우 사용자 지정 토큰 새로 고침도 활성화합니다"
-        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.desc": {
           "source": "Optional arguments for authentication requests for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
           "message": "`authorization_code` 부여 유형의 인증 요청에 대한 선택적 인수입니다. `token` 옵션이 설정된 경우 무시됩니다. `authorization_code` 부여 유형은 액세스 토큰을 획득하기 위해 외부 사용자 인증이 필요합니다"
@@ -338,10 +334,6 @@
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.display_name": {
           "source": "OAuth2 Authorization Args",
           "message": "OAuth2 인증 인수"
-        },
-        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.short_desc": {
-          "source": "Optional arguments for authentication requests for the authorization_code grant type",
-          "message": "authorization_code 부여 유형의 인증 요청에 대한 선택적 인수"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfdXJs.desc": {
           "source": "The OAuth2 authorization URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
@@ -467,10 +459,6 @@
           "source": "OAuth2 PKCE",
           "message": "OAuth2 PKCE"
         },
-        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.short_desc": {
-          "source": "Sets a hint to external applications to use PKCE (Proof Key Code Exchange) with the authorization code flow",
-          "message": "외부 애플리케이션에 권한 부여 코드 흐름과 함께 PKCE(Proof Key Code Exchange)를 사용하도록 힌트를 설정합니다"
-        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.desc": {
           "source": "Per OAuth2 spec (RFC 6749), the state parameter should be returned by the authorization server. Some providers (like Trello) do not pass through the state parameter. Set this to False to embed the state in the redirect_uri as a workaround for non-compliant providers. Default: True (spec-compliant behavior).",
           "message": "OAuth2 사양(RFC 6749)에 따르면 state 매개변수는 인증 서버에서 반환되어야 합니다. 일부 제공자(예: Trello)는 state 매개변수를 전달하지 않습니다. 표준을 준수하지 않는 제공자를 위한 해결 방법으로 redirect_uri에 state를 포함하려면 이 값을 False로 설정하세요. 기본값: True(사양 준수 동작)."
@@ -575,10 +563,6 @@
           "source": "OAuth2 Token Lifetime Hint in Minutes",
           "message": "OAuth2 토큰 수명 힌트(분 단위)"
         },
-        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.short_desc": {
-          "source": "The expected number of minutes that a token will remain valid before it must be refreshed",
-          "message": "토큰을 갱신해야 하기 전까지 유효하게 유지될 예상 시간(분)"
-        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VybA.desc": {
           "source": "The token URL for OAuth2 flows; ignored for logins if the `token` option is set",
           "message": "OAuth2 플로우용 토큰 URL입니다. `token` 옵션이 설정되어 있으면 로그인 시 무시됩니다"
@@ -598,10 +582,6 @@
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.display_name": {
           "source": "OAuth2 Token Use Basic Auth?",
           "message": "OAuth2 토큰에 기본 인증을 사용하시겠습니까?"
-        },
-        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.short_desc": {
-          "source": "Use basic authorization with the client ID and client secret when making token requests",
-          "message": "토큰 요청 시 클라이언트 ID 및 클라이언트 시크릿으로 기본 인증을 사용합니다"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b3BlbmFwaTM.desc": {
           "source": "An OpenApi 3 schema location or file data for the REST connection",
@@ -974,10 +954,6 @@
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.display_name": {
           "source": "REST Body Auth Error Check",
           "message": "REST 본문 인증 오류 검사"
-        },
-        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.short_desc": {
-          "source": "A hash to check all deserialized bodies in 200 OK server responses for authentication errors",
-          "message": "200 OK 서버 응답에서 역직렬화된 모든 본문의 인증 오류를 검사하는 해시"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW4.desc": {
           "source": "Any authorization token to use for the connection; will be passed as `Authorization: Bearer ...` (assuming that `token_type` is `Bearer`) in request headers; this option cannot be used with username and password options or authentication information in the URL; if this option is set then most OAuth2 options are ignored for logins",

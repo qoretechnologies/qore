@@ -91,10 +91,6 @@
           "source": "Enforce Header Order",
           "message": "Appliquer l'ordre des en-têtes"
         },
-        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
-          "source": "If true, then the input data will be reordered in the order of `headers`",
-          "message": "Si true, les données d'entrée seront réordonnées selon l'ordre de `headers`"
-        },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVycw.desc": {
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
           "message": "Liste des noms d'en-tête / de colonne pour les données itérées ; si cette option est présente, `header_names` doit être `false`"
@@ -319,10 +315,6 @@
           "source": "Enforce Header Order",
           "message": "Appliquer l'ordre des en-têtes"
         },
-        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
-          "source": "If true, then the input data will be reordered in the order of `headers`",
-          "message": "Si true, les données d'entrée seront réordonnées selon l'ordre de `headers`"
-        },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
           "message": "Liste des noms d'en-tête / de colonne pour les données itérées ; si cette option est présente, `header_names` doit être `false`"
@@ -534,10 +526,6 @@
         "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
           "message": "Appliquer l'ordre des en-têtes"
-        },
-        "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
-          "source": "If true, then the output data will be reordered in the order of `headers`",
-          "message": "Si défini à true, les données de sortie seront réordonnées selon l'ordre de `headers`"
         },
         "app.Q3N2.action.d3JpdGU.option.aGVhZGVycw.desc": {
           "source": "List of field / header names for the data output",

@@ -327,10 +327,6 @@
           "source": "OAuth2 Auto Refresh",
           "message": "OAuth2-Auto-Refresh"
         },
-        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.short_desc": {
-          "source": "Sets if OAuth2 tokens should be automatically refreshed; also enables any custom token refresh in case pure OAuth2 is not in use",
-          "message": "Legt fest, ob OAuth2-Tokens automatisch aktualisiert werden sollen; aktiviert auch jede benutzerdefinierte Token-Aktualisierung, falls kein reines OAuth2 verwendet wird"
-        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.desc": {
           "source": "Optional arguments for authentication requests for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
           "message": "Optionale Argumente für Authentifizierungsanfragen für den Grant-Typ `authorization_code`; wird ignoriert, wenn die Option `token` gesetzt ist. Beachten Sie, dass der Grant-Typ `authorization_code` eine externe Benutzerautorisierung erfordert, um ein Zugriffstoken zu erhalten"
@@ -338,10 +334,6 @@
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.display_name": {
           "source": "OAuth2 Authorization Args",
           "message": "OAuth2-Autorisierungsargumente"
-        },
-        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.short_desc": {
-          "source": "Optional arguments for authentication requests for the authorization_code grant type",
-          "message": "Optionale Argumente für Authentifizierungsanfragen für den authorization_code-Grant-Typ"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfdXJs.desc": {
           "source": "The OAuth2 authorization URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
@@ -467,10 +459,6 @@
           "source": "OAuth2 PKCE",
           "message": "OAuth2-PKCE"
         },
-        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.short_desc": {
-          "source": "Sets a hint to external applications to use PKCE (Proof Key Code Exchange) with the authorization code flow",
-          "message": "Legt einen Hinweis für externe Anwendungen fest, PKCE (Proof Key Code Exchange) mit dem Authorization-Code-Flow zu verwenden"
-        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.desc": {
           "source": "Per OAuth2 spec (RFC 6749), the state parameter should be returned by the authorization server. Some providers (like Trello) do not pass through the state parameter. Set this to False to embed the state in the redirect_uri as a workaround for non-compliant providers. Default: True (spec-compliant behavior).",
           "message": "Gemäß OAuth2-Spezifikation (RFC 6749) sollte der state-Parameter vom Autorisierungsserver zurückgegeben werden. Einige Anbieter (wie Trello) reichen den state-Parameter nicht durch. Setzen Sie dies auf False, um den State in der redirect_uri als Workaround für nicht konforme Anbieter einzubetten. Standard: True (spezifikationskonformes Verhalten)."
@@ -575,10 +563,6 @@
           "source": "OAuth2 Token Lifetime Hint in Minutes",
           "message": "OAuth2-Token-Gültigkeitsdauer-Hinweis in Minuten"
         },
-        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.short_desc": {
-          "source": "The expected number of minutes that a token will remain valid before it must be refreshed",
-          "message": "Die erwartete Anzahl von Minuten, die ein Token gültig bleibt, bevor es aktualisiert werden muss"
-        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VybA.desc": {
           "source": "The token URL for OAuth2 flows; ignored for logins if the `token` option is set",
           "message": "Die Token-URL für OAuth2-Flows; wird für Anmeldungen ignoriert, wenn die Option `token` festgelegt ist"
@@ -598,10 +582,6 @@
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.display_name": {
           "source": "OAuth2 Token Use Basic Auth?",
           "message": "OAuth2-Token Basic-Authentifizierung verwenden?"
-        },
-        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.short_desc": {
-          "source": "Use basic authorization with the client ID and client secret when making token requests",
-          "message": "Bei Token-Anfragen Basic-Autorisierung mit der Client-ID und dem Client-Secret verwenden"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b3BlbmFwaTM.desc": {
           "source": "An OpenApi 3 schema location or file data for the REST connection",
@@ -974,10 +954,6 @@
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.display_name": {
           "source": "REST Body Auth Error Check",
           "message": "REST-Body-Authentifizierungsfehlerprüfung"
-        },
-        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.short_desc": {
-          "source": "A hash to check all deserialized bodies in 200 OK server responses for authentication errors",
-          "message": "Ein Hash zur Überprüfung aller deserialisierten Bodies in 200-OK-Serverantworten auf Authentifizierungsfehler"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW4.desc": {
           "source": "Any authorization token to use for the connection; will be passed as `Authorization: Bearer ...` (assuming that `token_type` is `Bearer`) in request headers; this option cannot be used with username and password options or authentication information in the URL; if this option is set then most OAuth2 options are ignored for logins",

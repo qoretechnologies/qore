@@ -895,10 +895,6 @@
           "source": "Milestone",
           "message": "마일스톤"
         },
-        "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.option.bWlsZXN0b25l.short_desc": {
-          "source": "If an 'integer' is passed, it should refer to a milestone by its 'number' field. If the string '*' is passed, issues with any milestone are accepted. If the string 'none' is passed, issues without milestones are returned",
-          "message": "'integer'가 전달되는 경우, 해당 마일스톤의 'number' 필드로 마일스톤을 참조해야 합니다. 문자열 '*'이 전달되면 마일스톤이 있는 모든 이슈를 허용합니다. 문자열 'none'이 전달되면 마일스톤이 없는 이슈가 반환됩니다"
-        },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.option.c29ydA.allowed-value.c3RyaW5nOmNvbW1lbnRz.display_name": {
           "source": "comments",
           "message": "댓글 수"
@@ -1174,10 +1170,6 @@
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.display_name": {
           "source": "Duplicate Issue Id",
           "message": "중복 이슈 ID"
-        },
-        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.short_desc": {
-          "source": "The ID of the issue to mark as the canonical duplicate when 'state_reason' is 'duplicate'. The issue must exist and be accessible to the authenticated user. Ignored when 'state_reason' is not 'duplicate'",
-          "message": "'state_reason'이 'duplicate'일 때 표준 중복으로 표시할 이슈의 ID입니다. 해당 이슈가 존재해야 하며 인증된 사용자가 액세스할 수 있어야 합니다. 'state_reason'이 'duplicate'가 아닌 경우 무시됩니다"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.aXNzdWVfZmllbGRfdmFsdWVz.desc": {
           "source": "An array of issue field values to set on this issue. Each field value must include the field ID and the value to set. Only users with push access can set field values for issues",
@@ -1743,10 +1735,6 @@
           "source": "URI Path",
           "message": "URI 경로"
         },
-        "app.R2l0aHVi.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "연결의 API 기본 URL에 대한 상대 URI 경로입니다. 'path_vars'에서 대체되는 '{name}' 자리 표시자를 포함할 수 있습니다. 예: '/users/{id}/comments'"
-        },
         "app.R2l0aHVi.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
@@ -1919,10 +1907,6 @@
           "source": "Order",
           "message": "정렬"
         },
-        "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.b3JkZXI.short_desc": {
-          "source": "Determines whether the first search result returned is the highest number of matches ('desc') or lowest number of matches ('asc'). This parameter is ignored unless you provide 'sort'",
-          "message": "반환되는 첫 번째 검색 결과가 일치 항목 수가 가장 많은 것('desc')인지, 가장 적은 것('asc')인지를 결정합니다. 이 매개변수는 'sort'를 제공하지 않으면 무시됩니다"
-        },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c29ydA.allowed-value.c3RyaW5nOmNvbW1lbnRz.display_name": {
           "source": "comments",
           "message": "댓글 수"
@@ -1974,10 +1958,6 @@
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "정렬"
-        },
-        "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c29ydA.short_desc": {
-          "source": "Sorts the results of your query by the number of 'comments', 'reactions', 'reactions-+1', 'reactions--1', 'reactions-smile', 'reactions-thinking_face', 'reactions-heart', 'reactions-tada', or 'interactions'. You can also sort results by how recently the items were 'created' or 'updated', Default: [best match](https://docs",
-          "message": "'comments', 'reactions', 'reactions-+1', 'reactions--1', 'reactions-smile', 'reactions-thinking_face', 'reactions-heart', 'reactions-tada' 또는 'interactions' 수에 따라 쿼리 결과를 정렬합니다. 항목이 얼마나 최근에 'created'되었는지 또는 'updated'되었는지에 따라 정렬할 수도 있습니다. 기본값: [best match](https://docs"
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c2VhcmNoX3R5cGU.allowed-value.c3RyaW5nOmh5YnJpZA.display_name": {
           "source": "hybrid",
@@ -2063,10 +2043,6 @@
           "source": "Order",
           "message": "정렬"
         },
-        "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.b3JkZXI.short_desc": {
-          "source": "Determines whether the first search result returned is the highest number of matches ('desc') or lowest number of matches ('asc'). This parameter is ignored unless you provide 'sort'",
-          "message": "반환되는 첫 번째 검색 결과가 일치 항목 수가 가장 많은 것('desc')인지, 가장 적은 것('asc')인지를 결정합니다. 이 매개변수는 'sort'를 제공하지 않으면 무시됩니다"
-        },
         "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.c29ydA.allowed-value.c3RyaW5nOmZvcmtz.display_name": {
           "source": "forks",
           "message": "forks"
@@ -2090,10 +2066,6 @@
         "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "정렬"
-        },
-        "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.c29ydA.short_desc": {
-          "source": "Sorts the results of your query by number of 'stars', 'forks', or 'help-wanted-issues' or how recently the items were 'updated'",
-          "message": "쿼리 결과를 'stars', 'forks' 또는 'help-wanted-issues' 수나 항목이 얼마나 최근에 'updated'되었는지에 따라 정렬합니다"
         },
         "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.cGFnZQ.desc": {
           "source": "The page number of the results to fetch. For more information, see \"[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api).\"",
@@ -2258,10 +2230,6 @@
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.display_name": {
           "source": "Maintainer Can Modify",
           "message": "메인테이너 수정 가능 여부"
-        },
-        "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.short_desc": {
-          "source": "Indicates whether [maintainers can modify](https://docs",
-          "message": "[메인테이너가 수정할 수 있는지](https://docs 여부를 나타냅니다"
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.cmVwbw.desc": {
           "source": "The repository name on its own, **not** `owner/name`.\n\nFor `qoretechnologies/qorus` this is `qorus`.",
@@ -2739,10 +2707,6 @@
           "source": "Maintainer Can Modify",
           "message": "메인테이너 수정 가능 여부"
         },
-        "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.short_desc": {
-          "source": "Indicates whether [maintainers can modify](https://docs",
-          "message": "[메인테이너가 수정할 수 있는지](https://docs 여부를 나타냅니다"
-        },
         "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.option.c3RhdGU.allowed-value.c3RyaW5nOm9wZW4.display_name": {
           "source": "open",
           "message": "열림"
@@ -2999,10 +2963,6 @@
           "source": "Gitignore Template",
           "message": "Gitignore 템플릿"
         },
-        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.Z2l0aWdub3JlX3RlbXBsYXRl.short_desc": {
-          "source": "The desired language or platform to apply to the",
-          "message": "적용할 원하는 언어 또는 플랫폼"
-        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.desc": {
           "source": "Whether to delete head branches when pull requests are merged",
           "message": "풀 리퀘스트가 병합될 때 헤드 브랜치를 삭제할지 여부"
@@ -3106,10 +3066,6 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aXNfdGVtcGxhdGU.display_name": {
           "source": "Is Template",
           "message": "템플릿 여부"
-        },
-        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aXNfdGVtcGxhdGU.short_desc": {
-          "source": "Whether this repository acts as a template that can be used to generate new repositories",
-          "message": "이 리포지토리가 새 리포지토리를 생성하는 데 사용할 수 있는 템플릿 역할을 할지 여부"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.bGljZW5zZV90ZW1wbGF0ZQ.desc": {
           "source": "The license keyword of the open source license for this repository.",
@@ -3279,10 +3235,6 @@
           "source": "Allow Auto Merge",
           "message": "자동 병합 허용"
         },
-        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfYXV0b19tZXJnZQ.short_desc": {
-          "source": "Either 'true' to allow auto-merge on pull requests, or 'false' to disallow auto-merge",
-          "message": "풀 리퀘스트의 자동 병합을 허용하려면 'true', 허용하지 않으려면 'false'"
-        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfbWVyZ2VfY29tbWl0.desc": {
           "source": "Either `true` to allow merging pull requests with a merge commit, or `false` to prevent merging pull requests with merge commits.",
           "message": "병합 커밋을 통한 풀 리퀘스트 병합을 허용하려면 `true`, 병합 커밋을 통한 풀 리퀘스트 병합을 방지하려면 `false`을 지정합니다."
@@ -3290,10 +3242,6 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfbWVyZ2VfY29tbWl0.display_name": {
           "source": "Allow Merge Commit",
           "message": "병합 커밋 허용"
-        },
-        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfbWVyZ2VfY29tbWl0.short_desc": {
-          "source": "Either 'true' to allow merging pull requests with a merge commit, or 'false' to prevent merging pull requests with merge commits",
-          "message": "병합 커밋을 통한 풀 리퀘스트 병합을 허용하려면 'true', 병합 커밋을 통한 풀 리퀘스트 병합을 방지하려면 'false'"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfc3F1YXNoX21lcmdl.desc": {
           "source": "Either `true` to allow squash-merging pull requests, or `false` to prevent squash-merging.",
@@ -3303,10 +3251,6 @@
           "source": "Allow Squash Merge",
           "message": "스쿼시 병합 허용"
         },
-        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfc3F1YXNoX21lcmdl.short_desc": {
-          "source": "Either 'true' to allow squash-merging pull requests, or 'false' to prevent squash-merging",
-          "message": "풀 리퀘스트의 스쿼시 병합을 허용하려면 'true', 스쿼시 병합을 방지하려면 'false'"
-        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfcmViYXNlX21lcmdl.desc": {
           "source": "Either `true` to allow rebase-merging pull requests, or `false` to prevent rebase-merging.",
           "message": "풀 리퀘스트의 리베이스 병합을 허용하려면 `true`, 리베이스 병합을 방지하려면 `false`을 지정합니다."
@@ -3314,10 +3258,6 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfcmViYXNlX21lcmdl.display_name": {
           "source": "Allow Rebase Merge",
           "message": "리베이스 병합 허용"
-        },
-        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfcmViYXNlX21lcmdl.short_desc": {
-          "source": "Either 'true' to allow rebase-merging pull requests, or 'false' to prevent rebase-merging",
-          "message": "풀 리퀘스트의 리베이스 병합을 허용하려면 'true', 리베이스 병합을 방지하려면 'false'"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YXV0b19pbml0.desc": {
           "source": "Pass `true` to create an initial commit with empty README.",
@@ -3339,10 +3279,6 @@
           "source": "Gitignore Template",
           "message": "Gitignore 템플릿"
         },
-        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.Z2l0aWdub3JlX3RlbXBsYXRl.short_desc": {
-          "source": "Desired language or platform [",
-          "message": "원하는 언어 또는 플랫폼 ["
-        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.desc": {
           "source": "Either `true` to allow automatically deleting head branches when pull requests are merged, or `false` to prevent automatic deletion. **The authenticated user must be an organization owner to set this property to `true`.**",
           "message": "풀 리퀘스트 병합 시 헤드 브랜치를 자동으로 삭제하도록 허용하려면 `true`, 자동 삭제를 방지하려면 `false`를 지정합니다. **이 속성을 `true`로 설정하려면 인증된 사용자가 조직 소유자여야 합니다.**"
@@ -3350,10 +3286,6 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
           "source": "Delete Branch On Merge",
           "message": "병합 시 브랜치 삭제"
-        },
-        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
-          "source": "Either 'true' to allow automatically deleting head branches when pull requests are merged, or 'false' to prevent automatic deletion. **The authenticated user must be an organization owner to set this property to 'true'",
-          "message": "풀 리퀘스트 병합 시 헤드 브랜치를 자동으로 삭제하도록 허용하려면 'true', 자동 삭제를 방지하려면 'false'. **이 속성을 'true'로 설정하려면 인증된 사용자가 조직 소유자여야 합니다**"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVzY3JpcHRpb24.desc": {
           "source": "A short description of the repository.",
@@ -3411,10 +3343,6 @@
           "source": "Has Projects",
           "message": "프로젝트 사용"
         },
-        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3Byb2plY3Rz.short_desc": {
-          "source": "Either 'true' to enable projects for this repository or 'false' to disable them. **Note:** If you're creating a repository in an organization that has disabled repository projects, the default is 'false', and if you pass 'true', the API returns an error",
-          "message": "이 리포지토리에 대해 프로젝트를 활성화하려면 'true', 비활성화하려면 'false'. **참고:** 리포지토리 프로젝트를 비활성화한 조직에서 리포지토리를 생성하는 경우 기본값은 'false'이며, 'true'를 전달하면 API에서 오류를 반환합니다"
-        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3dpa2k.desc": {
           "source": "Either `true` to enable the wiki for this repository or `false` to disable it.",
           "message": "이 리포지토리에 대해 위키를 활성화하려면 `true`, 비활성화하려면 `false`을 지정합니다."
@@ -3435,10 +3363,6 @@
           "source": "Is Template",
           "message": "템플릿 여부"
         },
-        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aXNfdGVtcGxhdGU.short_desc": {
-          "source": "Either 'true' to make this repo available as a template repository or 'false' to prevent it",
-          "message": "이 리포지토리를 템플릿 리포지토리로 사용할 수 있도록 하려면 'true', 방지하려면 'false'"
-        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.b3Jn.desc": {
           "source": "The organization name. The name is not case sensitive.",
           "message": "조직 이름입니다. 대소문자를 구분하지 않습니다."
@@ -3458,10 +3382,6 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bGljZW5zZV90ZW1wbGF0ZQ.display_name": {
           "source": "License Template",
           "message": "라이선스 템플릿"
-        },
-        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bGljZW5zZV90ZW1wbGF0ZQ.short_desc": {
-          "source": "Choose an [open source license template](https://choosealicense",
-          "message": "[오픈 소스 라이선스 템플릿](https://choosealicense 선택"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bWVyZ2VfY29tbWl0X21lc3NhZ2U.allowed-value.c3RyaW5nOkJMQU5L.display_name": {
           "source": "BLANK",
@@ -3595,10 +3515,6 @@
           "source": "Use Squash Pr Title As Default",
           "message": "스쿼시 PR 제목을 기본값으로 사용"
         },
-        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.short_desc": {
-          "source": "Either 'true' to allow squash-merge commits to use pull request title, or 'false' to use commit message. **This property is closing down. Please use 'squash_merge_commit_title' instead",
-          "message": "스쿼시 병합 커밋에서 풀 리퀘스트 제목을 사용하도록 허용하려면 'true', 커밋 메시지를 사용하려면 'false'. **이 속성은 곧 지원 중단됩니다. 대신 'squash_merge_commit_title'을 사용하세요"
-        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
           "source": "public",
           "message": "공개"
@@ -3663,10 +3579,6 @@
           "source": "Discussion Category Name",
           "message": "토론 카테고리 이름"
         },
-        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZGlzY3Vzc2lvbl9jYXRlZ29yeV9uYW1l.short_desc": {
-          "source": "If specified, a discussion of the specified category is created and linked to the release",
-          "message": "지정된 경우 지정된 카테고리의 토론이 생성되어 릴리스에 연결됨"
-        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZHJhZnQ.desc": {
           "source": "`true` to create a draft (unpublished) release, `false` to create a published one.",
           "message": "초안(게시되지 않은) 릴리스를 생성하려면 `true`, 게시된 릴리스를 생성하려면 `false`을 지정합니다."
@@ -3674,10 +3586,6 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZHJhZnQ.display_name": {
           "source": "Draft",
           "message": "임시 저장"
-        },
-        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZHJhZnQ.short_desc": {
-          "source": "'true' to create a draft (unpublished) release, 'false' to create a published one",
-          "message": "초안(게시되지 않은) 릴리스를 생성하려면 'true', 게시된 릴리스를 생성하려면 'false'"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.b3duZXI.desc": {
           "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
@@ -3711,10 +3619,6 @@
           "source": "Make Latest",
           "message": "최신 릴리스로 설정"
         },
-        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.bWFrZV9sYXRlc3Q.short_desc": {
-          "source": "Specifies whether this release should be set as the latest release for the repository",
-          "message": "이 릴리스를 리포지토리의 최신 릴리스로 설정할지 여부를 지정"
-        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.bmFtZQ.desc": {
           "source": "The name of the release.",
           "message": "릴리스의 이름입니다."
@@ -3734,10 +3638,6 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.cHJlcmVsZWFzZQ.display_name": {
           "source": "Prerelease",
           "message": "사전 릴리스"
-        },
-        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.cHJlcmVsZWFzZQ.short_desc": {
-          "source": "'true' to identify the release as a prerelease. 'false' to identify the release as a full release",
-          "message": "릴리스를 사전 릴리스로 식별하려면 'true', 정식 릴리스로 식별하려면 'false'"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.cmVwbw.desc": {
           "source": "The repository name on its own, **not** `owner/name`.\n\nFor `qoretechnologies/qorus` this is `qorus`.",
@@ -4118,10 +4018,6 @@
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1icmFuY2hlcw.option.cHJvdGVjdGVk.display_name": {
           "source": "Protected",
           "message": "보호됨"
-        },
-        "app.R2l0aHVi.action.cmVwb3MtbGlzdC1icmFuY2hlcw.option.cHJvdGVjdGVk.short_desc": {
-          "source": "Setting to 'true' returns only branches protected by branch protections or rulesets. When set to 'false', only unprotected branches are returned",
-          "message": "'true'로 설정하면 브랜치 보호 또는 규칙 세트에 의해 보호된 브랜치만 반환됩니다. 'false'로 설정하면 보호되지 않은 브랜치만 반환됩니다"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1icmFuY2hlcw.option.cmVwbw.desc": {
           "source": "The repository name on its own, **not** `owner/name`.\n\nFor `qoretechnologies/qorus` this is `qorus`.",
@@ -4959,10 +4855,6 @@
           "source": "Allow Auto Merge",
           "message": "자동 병합 허용"
         },
-        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfYXV0b19tZXJnZQ.short_desc": {
-          "source": "Either 'true' to allow auto-merge on pull requests, or 'false' to disallow auto-merge",
-          "message": "풀 리퀘스트의 자동 병합을 허용하려면 'true', 허용하지 않으려면 'false'"
-        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfZm9ya2luZw.desc": {
           "source": "Either `true` to allow private forks, or `false` to prevent private forks.",
           "message": "비공개 포크를 허용하려면 `true`, 비공개 포크를 방지하려면 `false`입니다."
@@ -4983,10 +4875,6 @@
           "source": "Allow Merge Commit",
           "message": "병합 커밋 허용"
         },
-        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfbWVyZ2VfY29tbWl0.short_desc": {
-          "source": "Either 'true' to allow merging pull requests with a merge commit, or 'false' to prevent merging pull requests with merge commits",
-          "message": "병합 커밋을 통한 풀 리퀘스트 병합을 허용하려면 'true', 병합 커밋을 통한 풀 리퀘스트 병합을 방지하려면 'false'"
-        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfc3F1YXNoX21lcmdl.desc": {
           "source": "Either `true` to allow squash-merging pull requests, or `false` to prevent squash-merging.",
           "message": "풀 리퀘스트의 스쿼시 병합을 허용하려면 `true`, 스쿼시 병합을 방지하려면 `false`을 지정합니다."
@@ -4994,10 +4882,6 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfc3F1YXNoX21lcmdl.display_name": {
           "source": "Allow Squash Merge",
           "message": "스쿼시 병합 허용"
-        },
-        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfc3F1YXNoX21lcmdl.short_desc": {
-          "source": "Either 'true' to allow squash-merging pull requests, or 'false' to prevent squash-merging",
-          "message": "풀 리퀘스트의 스쿼시 병합을 허용하려면 'true', 스쿼시 병합을 방지하려면 'false'"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfcmViYXNlX21lcmdl.desc": {
           "source": "Either `true` to allow rebase-merging pull requests, or `false` to prevent rebase-merging.",
@@ -5007,10 +4891,6 @@
           "source": "Allow Rebase Merge",
           "message": "리베이스 병합 허용"
         },
-        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfcmViYXNlX21lcmdl.short_desc": {
-          "source": "Either 'true' to allow rebase-merging pull requests, or 'false' to prevent rebase-merging",
-          "message": "풀 리퀘스트의 리베이스 병합을 허용하려면 'true', 리베이스 병합을 방지하려면 'false'"
-        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfdXBkYXRlX2JyYW5jaA.desc": {
           "source": "Either `true` to always allow a pull request head branch that is behind its base branch to be updated even if it is not required to be up to date before merging, or false otherwise.",
           "message": "기본 브랜치보다 뒤처진 풀 리퀘스트 헤드 브랜치를 병합 전에 최신 상태로 유지할 필요가 없더라도 항상 업데이트하도록 허용하려면 `true`, 그렇지 않으면 false입니다."
@@ -5018,10 +4898,6 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfdXBkYXRlX2JyYW5jaA.display_name": {
           "source": "Allow Update Branch",
           "message": "브랜치 업데이트 허용"
-        },
-        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfdXBkYXRlX2JyYW5jaA.short_desc": {
-          "source": "Either 'true' to always allow a pull request head branch that is behind its base branch to be updated even if it is not required to be up to date before merging, or false otherwise",
-          "message": "기본 브랜치보다 뒤처진 풀 리퀘스트 헤드 브랜치를 병합 전에 최신 상태로 유지할 필요가 없더라도 항상 업데이트하도록 허용하려면 'true', 그렇지 않으면 false"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YXJjaGl2ZWQ.desc": {
           "source": "Whether to archive this repository. `false` will unarchive a previously archived repository.",
@@ -5054,10 +4930,6 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
           "source": "Delete Branch On Merge",
           "message": "병합 시 브랜치 삭제"
-        },
-        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
-          "source": "Either 'true' to allow automatically deleting head branches when pull requests are merged, or 'false' to prevent automatic deletion",
-          "message": "풀 리퀘스트가 병합될 때 헤드 브랜치를 자동으로 삭제하도록 허용하려면 'true', 자동 삭제를 방지하려면 'false'"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVzY3JpcHRpb24.desc": {
           "source": "A short description of the repository.",
@@ -5103,10 +4975,6 @@
           "source": "Has Pull Requests",
           "message": "풀 리퀘스트 활성화"
         },
-        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3B1bGxfcmVxdWVzdHM.short_desc": {
-          "source": "Either 'true' to allow pull requests for this repository or 'false' to prevent pull requests",
-          "message": "이 리포지토리에 대한 풀 리퀘스트를 허용하려면 'true', 풀 리퀘스트를 방지하려면 'false'"
-        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3Byb2plY3Rz.desc": {
           "source": "Either `true` to enable projects for this repository or `false` to disable them. **Note:** If you're creating a repository in an organization that has disabled repository projects, the default is `false`, and if you pass `true`, the API returns an error.",
           "message": "이 리포지토리에 대해 프로젝트를 활성화하려면 `true`, 비활성화하려면 `false`를 지정합니다. **참고:** 리포지토리 프로젝트를 비활성화한 조직에서 리포지토리를 생성하는 경우 기본값은 `false`이며, `true`을 전달하면 API에서 오류를 반환합니다."
@@ -5114,10 +4982,6 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3Byb2plY3Rz.display_name": {
           "source": "Has Projects",
           "message": "프로젝트 사용"
-        },
-        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3Byb2plY3Rz.short_desc": {
-          "source": "Either 'true' to enable projects for this repository or 'false' to disable them. **Note:** If you're creating a repository in an organization that has disabled repository projects, the default is 'false', and if you pass 'true', the API returns an error",
-          "message": "이 리포지토리에 대해 프로젝트를 활성화하려면 'true', 비활성화하려면 'false'. **참고:** 리포지토리 프로젝트를 비활성화한 조직에서 리포지토리를 생성하는 경우 기본값은 'false'이며, 'true'를 전달하면 API에서 오류를 반환합니다"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3dpa2k.desc": {
           "source": "Either `true` to enable the wiki for this repository or `false` to disable it.",
@@ -5138,10 +5002,6 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aXNfdGVtcGxhdGU.display_name": {
           "source": "Is Template",
           "message": "템플릿 여부"
-        },
-        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aXNfdGVtcGxhdGU.short_desc": {
-          "source": "Either 'true' to make this repo available as a template repository or 'false' to prevent it",
-          "message": "이 리포지토리를 템플릿 리포지토리로 사용할 수 있도록 하려면 'true', 방지하려면 'false'"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.b3duZXI.desc": {
           "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
@@ -5219,10 +5079,6 @@
           "source": "Security And Analysis",
           "message": "보안 및 분석"
         },
-        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.short_desc": {
-          "source": "Specify which security and analysis features to enable or disable for the repository",
-          "message": "리포지토리에 대해 활성화하거나 비활성화할 보안 및 분석 기능 지정"
-        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.allowed-value.c3RyaW5nOkNPTU1JVF9PUl9QUl9USVRMRQ.display_name": {
           "source": "COMMIT_OR_PR_TITLE",
           "message": "COMMIT_OR_PR_TITLE"
@@ -5275,10 +5131,6 @@
           "source": "Private",
           "message": "비공개"
         },
-        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHJpdmF0ZQ.short_desc": {
-          "source": "Either 'true' to make the repository private or 'false' to make it public. Default: 'false'",
-          "message": "리포지토리를 비공개로 설정하려면 'true', 공개로 설정하려면 'false'. 기본값: 'false'"
-        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHVsbF9yZXF1ZXN0X2NyZWF0aW9uX3BvbGljeQ.allowed-value.c3RyaW5nOmFsbA.display_name": {
           "source": "all",
           "message": "all"
@@ -5294,10 +5146,6 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHVsbF9yZXF1ZXN0X2NyZWF0aW9uX3BvbGljeQ.display_name": {
           "source": "Pull Request Creation Policy",
           "message": "풀 리퀘스트 생성 정책"
-        },
-        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHVsbF9yZXF1ZXN0X2NyZWF0aW9uX3BvbGljeQ.short_desc": {
-          "source": "The policy that controls who can create pull requests for this repository: 'all' or 'collaborators_only'",
-          "message": "이 리포지토리에 풀 리퀘스트를 생성할 수 있는 대상을 제어하는 정책: 'all' 또는 'collaborators_only'"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cmVwbw.desc": {
           "source": "The repository name on its own, **not** `owner/name`.\n\nFor `qoretechnologies/qorus` this is `qorus`.",
@@ -5319,10 +5167,6 @@
           "source": "Web Commit Signoff Required",
           "message": "웹 커밋 서명 필요"
         },
-        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.d2ViX2NvbW1pdF9zaWdub2ZmX3JlcXVpcmVk.short_desc": {
-          "source": "Either 'true' to require contributors to sign off on web-based commits, or 'false' to not require contributors to sign off on web-based commits",
-          "message": "기여자가 웹 기반 커밋에 서명하도록 요구하려면 'true', 요구하지 않으려면 'false'"
-        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.desc": {
           "source": "Either `true` to allow squash-merge commits to use pull request title, or `false` to use commit message. **This property is closing down. Please use `squash_merge_commit_title` instead.",
           "message": "스쿼시 병합 커밋에서 풀 리퀘스트 제목을 사용하도록 허용하려면 `true`, 커밋 메시지를 사용하려면 `false`을 지정합니다. **이 속성은 곧 지원 중단됩니다. 대신 `squash_merge_commit_title`를 사용하세요.**"
@@ -5330,10 +5174,6 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
           "source": "Use Squash Pr Title As Default",
           "message": "스쿼시 PR 제목을 기본값으로 사용"
-        },
-        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.short_desc": {
-          "source": "Either 'true' to allow squash-merge commits to use pull request title, or 'false' to use commit message. **This property is closing down. Please use 'squash_merge_commit_title' instead",
-          "message": "스쿼시 병합 커밋에서 풀 리퀘스트 제목을 사용하도록 허용하려면 'true', 커밋 메시지를 사용하려면 'false'. **이 속성은 곧 지원 중단됩니다. 대신 'squash_merge_commit_title'을 사용하세요"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
           "source": "public",

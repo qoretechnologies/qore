@@ -111,10 +111,6 @@
           "source": "Collection Options",
           "message": "Параметри збору"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.Y29sbGVjdGlvbl9vcHRpb25z.short_desc": {
-          "source": "Specifies the requirements that Stripe collects from connected accounts in the Connect Onboarding flow",
-          "message": "Визначає вимоги, які Stripe збирає з підключених акаунтів під час процесу адаптації Connect Onboarding"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.YWNjb3VudA.desc": {
           "source": "The identifier of the account to create an account link for.",
           "message": "Ідентифікатор акаунта, для якого створюється посилання на акаунт."
@@ -147,10 +143,6 @@
           "source": "Return Url",
           "message": "URL повернення"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmV0dXJuX3VybA.short_desc": {
-          "source": "The URL that the user will be redirected to upon leaving or completing the linked flow",
-          "message": "URL-адреса, на яку буде перенаправлено користувача після виходу або завершення пов'язаного процесу"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmVmcmVzaF91cmw.desc": {
           "source": "The URL the user will be redirected to if the account link is expired, has been previously-visited, or is otherwise invalid. The URL you specify should attempt to generate a new account link with the same parameters used to create the original account link, then redirect the user to the new account link's URL so they can continue with Connect Onboarding. If a new account link cannot be generated or the redirect fails you should display a useful error to the user.",
           "message": "URL-адреса, на яку буде перенаправлено користувача, якщо термін дії посилання на акаунт минув, його вже відвідували або воно з іншої причини недійсне. Вказана вами URL-адреса має спробувати згенерувати нове посилання на акаунт із тими самими параметрами, що й початкове посилання, а потім перенаправити користувача на нову URL-адресу посилання на акаунт, щоб він міг продовжити процес Connect Onboarding. Якщо нове посилання створити не вдалося або перенаправлення зазнало невдачі, слід показати користувачеві відповідне повідомлення про помилку."
@@ -158,10 +150,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmVmcmVzaF91cmw.display_name": {
           "source": "Refresh Url",
           "message": "URL оновлення"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmVmcmVzaF91cmw.short_desc": {
-          "source": "The URL the user will be redirected to if the account link is expired, has been previously-visited, or is otherwise invalid",
-          "message": "URL-адреса, на яку буде перенаправлено користувача, якщо термін дії посилання на акаунт закінчився, його вже відвідували або воно є недійсним"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmFjY291bnRfb25ib2FyZGluZw.display_name": {
           "source": "account_onboarding",
@@ -207,10 +195,6 @@
           "source": "Additional Tos Acceptances",
           "message": "Додаткові прийняття Умов обслуговування"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.YWRkaXRpb25hbF90b3NfYWNjZXB0YW5jZXM.short_desc": {
-          "source": "Details on the legal guardian's or authorizer's acceptance of the required Stripe agreements",
-          "message": "Дані про прийняття обов'язкових угод Stripe законним опікуном або уповноваженою особою"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.YWRkcmVzc19rYW5h.desc": {
           "source": "The Kana variation of the person's address (Japan only).",
           "message": "Варіант адреси особи азбукою кана (лише для Японії)."
@@ -254,10 +238,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.Z2VuZGVy.display_name": {
           "source": "Gender",
           "message": "Стать"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.Z2VuZGVy.short_desc": {
-          "source": "The person's gender (International regulations require either \"male\" or \"female\")",
-          "message": "Стать особи (міжнародні правила вимагають \"male\" або \"female\")"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.ZG9i.desc": {
           "source": "The person's date of birth.",
@@ -375,10 +355,6 @@
           "source": "Id Number Secondary",
           "message": "Вторинний ідентифікаційний номер"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.aWRfbnVtYmVyX3NlY29uZGFyeQ.short_desc": {
-          "source": "The person's secondary ID number, as appropriate for their country, will be used for enhanced verification checks",
-          "message": "Вторинний ідентифікаційний номер особи відповідно до її країни, який використовуватиметься для розширеної перевірки"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.bGFzdF9uYW1l.desc": {
           "source": "The person's last name.",
           "message": "Прізвище особи."
@@ -435,10 +411,6 @@
           "source": "Metadata",
           "message": "Метадані"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Набір [пар ключ-значення](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.bmF0aW9uYWxpdHk.desc": {
           "source": "The country where the person is a national. Two-letter country code ([ISO 3166-1 alpha-2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2)), or \"XX\" if unavailable.",
           "message": "Країна громадянства особи. Дволітерний код країни ([ISO 3166-1 alpha-2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2)) або \"XX\", якщо недоступно."
@@ -459,10 +431,6 @@
           "source": "Ssn Last 4",
           "message": "Останні 4 цифри SSN"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.c3NuX2xhc3RfNA.short_desc": {
-          "source": "The last four digits of the person's Social Security number (U",
-          "message": "Останні чотири цифри номера соціального страхування особи (США"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.cG9saXRpY2FsX2V4cG9zdXJl.allowed-value.c3RyaW5nOm5vbmU.display_name": {
           "source": "none",
           "message": "none"
@@ -479,10 +447,6 @@
           "source": "Political Exposure",
           "message": "Політична значущість (PEP)"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.cG9saXRpY2FsX2V4cG9zdXJl.short_desc": {
-          "source": "Indicates if the person or any of their representatives, family members, or other closely related persons, declares that they hold or have held an important public job or function, in any jurisdiction",
-          "message": "Вказує, чи особа або будь-який із її представників, членів сім'ї чи інших близьких осіб заявляє, що обіймає або обіймала важливу державну посаду чи виконує державну функцію в будь-якій юрисдикції"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.cGVyc29uX3Rva2Vu.desc": {
           "source": "A [person token](https://docs.stripe.com/connect/account-tokens), used to securely provide details to the person.",
           "message": "[Токен особи](https://docs.stripe.com/connect/account-tokens), який використовується для безпечної передачі даних особі."
@@ -490,10 +454,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.cGVyc29uX3Rva2Vu.display_name": {
           "source": "Person Token",
           "message": "Токен особи"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.cGVyc29uX3Rva2Vu.short_desc": {
-          "source": "A [person token](https://docs",
-          "message": "[Токен особи](https://docs"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.cGhvbmU.desc": {
           "source": "The person's phone number.",
@@ -599,10 +559,6 @@
           "source": "Balance",
           "message": "Баланс"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.YmFsYW5jZQ.short_desc": {
-          "source": "An integer amount in cents (or local equivalent) that represents the customer's current balance, which affect the customer's future invoices",
-          "message": "Цілочисельна сума в центах (або місцевому еквіваленті), яка представляє поточний баланс клієнта та впливає на майбутні інвойси клієнта"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.YnVzaW5lc3NfbmFtZQ.desc": {
           "source": "The customer's business name. This may be up to *150 characters*.",
           "message": "Назва компанії клієнта. Може містити до *150 символів*."
@@ -634,10 +590,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
           "source": "Email",
           "message": "Електронна пошта"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
-          "source": "Customer's email address. It's displayed alongside the customer in your dashboard and can be useful for searching and tracking",
-          "message": "Електронна адреса клієнта. Вона відображається поруч із клієнтом на вашій інформаційній панелі та може бути корисною для пошуку й відстеження"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZXhwYW5k.desc": {
           "source": "Specifies which fields in the response should be expanded.",
@@ -847,10 +799,6 @@
           "source": "Currency",
           "message": "Валюта"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLWJhbGFuY2UtdHJhbnNhY3Rpb24.option.Y3VycmVuY3k.short_desc": {
-          "source": "Three-letter [ISO currency code](https://www",
-          "message": "Трилітерний [код валюти за ISO](https://www"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLWJhbGFuY2UtdHJhbnNhY3Rpb24.option.Y3VzdG9tZXI.desc": {
           "source": "Only return charges for the customer specified by this customer ID.",
           "message": "Повертати лише платежі для клієнта, вказаного цим ідентифікатором клієнта."
@@ -907,10 +855,6 @@
           "source": "Metadata",
           "message": "Метадані"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLWJhbGFuY2UtdHJhbnNhY3Rpb24.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Набір [пар ключ-значення](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLWJhbGFuY2UtdHJhbnNhY3Rpb24.short_desc": {
           "source": "Credit or debit a customer's balance",
           "message": "Кредитувати або дебетувати баланс клієнта"
@@ -939,10 +883,6 @@
           "source": "Collection Method",
           "message": "Спосіб стягнення коштів"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y29sbGVjdGlvbl9tZXRob2Q.short_desc": {
-          "source": "Either 'charge_automatically', or 'send_invoice'. When charging automatically, Stripe will attempt to pay this subscription at the end of the cycle using the default source attached to the customer. When sending an invoice, Stripe will email your customer an invoice with payment instructions and mark the subscription as 'active'. Defaults to 'charge_automatically'",
-          "message": "Або 'charge_automatically', або 'send_invoice'. У разі автоматичного списання Stripe спробує оплатити цю підписку наприкінці циклу за допомогою джерела за замовчуванням, прив'язаного до клієнта. У разі надсилання рахунка-фактури Stripe надішле клієнту електронною поштою рахунок-фактуру з інструкціями щодо оплати та позначить підписку як 'active'. За замовчуванням — 'charge_automatically'"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y2FuY2VsX2F0.desc": {
           "source": "A timestamp at which the subscription should cancel. If set to a date before the current period ends, this will cause a proration if prorations have been enabled using `proration_behavior`. If set during a future period, this will always cause a proration for that period.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
           "message": "Мітка часу, коли підписку має бути скасовано. Якщо встановлено дату до завершення поточного періоду, це призведе до пропорційного перерахунку (proration), якщо його ввімкнено за допомогою `proration_behavior`. Якщо встановлено на майбутній період, це завжди спричинить пропорційний перерахунок для цього періоду.\n\nЦе значення надсилається як ціле число секунд із 1970-01-01Z."
@@ -963,10 +903,6 @@
           "source": "Cancel At Period End",
           "message": "Скасувати наприкінці періоду"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y2FuY2VsX2F0X3BlcmlvZF9lbmQ.short_desc": {
-          "source": "Indicate whether this subscription should cancel at the end of the current period ('current_period_end'). Defaults to 'false'",
-          "message": "Вказує, чи слід скасувати цю підписку наприкінці поточного періоду ('current_period_end'). За замовчуванням — 'false'"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y3VycmVuY3k.desc": {
           "source": "Three-letter [ISO currency code](https://www.iso.org/iso-4217-currency-codes.html), in lowercase. Must be a [supported currency](https://stripe.com/docs/currencies).",
           "message": "Трилітерний [код валюти за ISO](https://www.iso.org/iso-4217-currency-codes.html) у нижньому регістрі. Має бути [підтримуваною валютою](https://stripe.com/docs/currencies)."
@@ -974,10 +910,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y3VycmVuY3k.display_name": {
           "source": "Currency",
           "message": "Валюта"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y3VycmVuY3k.short_desc": {
-          "source": "Three-letter [ISO currency code](https://www",
-          "message": "Трилітерний [код валюти за ISO](https://www"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y3VzdG9tZXI.desc": {
           "source": "Only return charges for the customer specified by this customer ID.",
@@ -998,10 +930,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.YWRkX2ludm9pY2VfaXRlbXM.display_name": {
           "source": "Add Invoice Items",
           "message": "Додати позиції інвойсу"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.YWRkX2ludm9pY2VfaXRlbXM.short_desc": {
-          "source": "A list of prices and quantities that will generate invoice items appended to the next invoice for this subscription",
-          "message": "Список цін і кількостей, які створять позиції інвойсу, додані до наступного інвойсу для цієї підписки"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.YXBwbGljYXRpb25fZmVlX3BlcmNlbnQ.desc": {
           "source": "A non-negative decimal between 0 and 100, with at most two decimal places. This represents the percentage of the subscription invoice total that will be transferred to the application owner's Stripe account. The request must be made by a platform account on a connected account in order to set an application fee percentage. For more information, see the application fees [documentation](https://stripe.com/docs/connect/subscriptions#collecting-fees-on-subscriptions).",
@@ -1047,10 +975,6 @@
           "source": "Billing Thresholds",
           "message": "Платіжні порогові значення"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.YmlsbGluZ190aHJlc2hvbGRz.short_desc": {
-          "source": "Define thresholds at which an invoice will be sent, and the subscription advanced to a new billing period",
-          "message": "Визначте порогові значення, за яких надсилатиметься інвойс, а підписка переходитиме до нового платіжного періоду"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.YmlsbGluZ19jeWNsZV9hbmNob3I.desc": {
           "source": "A future timestamp in UTC format to anchor the subscription's [billing cycle](https://docs.stripe.com/subscriptions/billing-cycle). The anchor is the reference point that aligns future billing cycle dates. It sets the day of week for `week` intervals, the day of month for `month` and `year` intervals, and the month of year for `year` intervals.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
           "message": "Мітка часу в майбутньому у форматі UTC для прив'язки [платіжного циклу](https://docs.stripe.com/subscriptions/billing-cycle) підписки. Прив'язка є опорною точкою, яка вирівнює майбутні дати платіжного циклу. Вона встановлює день тижня для інтервалів `week`, день місяця для інтервалів `month` і `year`, а також місяць року для інтервалів `year`.\n\nЦе значення надсилається як ціле число секунд із 1970-01-01Z."
@@ -1058,10 +982,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.YmlsbGluZ19jeWNsZV9hbmNob3I.display_name": {
           "source": "Billing Cycle Anchor",
           "message": "Прив'язка платіжного циклу"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.YmlsbGluZ19jeWNsZV9hbmNob3I.short_desc": {
-          "source": "A future timestamp in UTC format to anchor the subscription's [billing cycle](https://docs.stripe.com/subscriptions/billing-cycle). The anchor is the reference point that aligns future billing cycle dates. It sets the day of week for 'week' intervals, the day of month for 'month' and 'year' intervals, and the month of year for 'year' intervals",
-          "message": "Мітка часу в майбутньому у форматі UTC для прив'язки [платіжного циклу](https://docs.stripe.com/subscriptions/billing-cycle) підписки. Прив'язка є опорною точкою, яка вирівнює майбутні дати платіжного циклу. Вона встановлює день тижня для інтервалів 'week', день місяця для інтервалів 'month' і 'year', а також місяць року для інтервалів 'year'"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.ZGF5c191bnRpbF9kdWU.desc": {
           "source": "Number of days a customer has to pay invoices generated by this subscription. Valid only for subscriptions where `collection_method` is set to `send_invoice`.",
@@ -1082,10 +1002,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.ZGVmYXVsdF90YXhfcmF0ZXM.display_name": {
           "source": "Default Tax Rates",
           "message": "Податкові ставки за замовчуванням"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.ZGVmYXVsdF90YXhfcmF0ZXM.short_desc": {
-          "source": "The tax rates that will apply to any subscription item that does not have 'tax_rates' set. Invoices created will have their 'default_tax_rates' populated from the subscription",
-          "message": "Податкові ставки, які застосовуватимуться до будь-якої позиції підписки, для якої не встановлено 'tax_rates'. Створені інвойси матимуть свій параметр 'default_tax_rates', заповнений із підписки"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.ZGVmYXVsdF9wYXltZW50X21ldGhvZA.desc": {
           "source": "ID of the default payment method for the subscription. It must belong to the customer associated with the subscription. This takes precedence over `default_source`. If neither are set, invoices will use the customer's [invoice_settings.default_payment_method](https://docs.stripe.com/api/customers/object#customer_object-invoice_settings-default_payment_method) or [default_source](https://docs.stripe.com/api/customers/object#customer_object-default_source).",
@@ -1167,10 +1083,6 @@
           "source": "Off Session",
           "message": "Поза сесією"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.b2ZmX3Nlc3Npb24.short_desc": {
-          "source": "Indicates if a customer is on or off-session while an invoice payment is attempted",
-          "message": "Вказує, чи клієнт перебуває в активній сесії чи поза сесією під час спроби оплати інвойсу"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.bWV0YWRhdGE.desc": {
           "source": "Set of [key-value pairs](https://docs.stripe.com/api/metadata) that you can attach to an object. This can be useful for storing additional information about the object in a structured format. Individual keys can be unset by posting an empty value to them. All keys can be unset by posting an empty value to `metadata`.",
           "message": "Набір [пар ключ-значення](https://docs.stripe.com/api/metadata), які можна прикріпити до об'єкта. Це може бути корисно для зберігання додаткової інформації про об'єкт у структурованому форматі. Окремі ключі можна скинути, передавши їм порожнє значення. Усі ключі можна скинути, передавши порожнє значення в `metadata`."
@@ -1178,10 +1090,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.bWV0YWRhdGE.display_name": {
           "source": "Metadata",
           "message": "Метадані"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Набір [пар ключ-значення](https://docs"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.cGF5bWVudF9iZWhhdmlvcg.allowed-value.c3RyaW5nOmFsbG93X2luY29tcGxldGU.display_name": {
           "source": "allow_incomplete",
@@ -1206,10 +1114,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.cGF5bWVudF9iZWhhdmlvcg.display_name": {
           "source": "Payment Behavior",
           "message": "Поведінка платежу"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.cGF5bWVudF9iZWhhdmlvcg.short_desc": {
-          "source": "Controls how Stripe handles the first invoice when payment is required and 'collection_method=charge_automatically'. Subscriptions with 'collection_method=send_invoice' are automatically activated regardless of the first Invoice status",
-          "message": "Керує тим, як Stripe обробляє перший інвойс, коли потрібна оплата і 'collection_method=charge_automatically'. Підписки з 'collection_method=send_invoice' активуються автоматично незалежно від статусу першого інвойсу"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.cGF5bWVudF9zZXR0aW5ncw.desc": {
           "source": "Payment settings to pass to invoices created by the subscription.",
@@ -1255,10 +1159,6 @@
           "source": "Proration Behavior",
           "message": "Поведінка пропорційного розподілу"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.cHJvcmF0aW9uX2JlaGF2aW9y.short_desc": {
-          "source": "Determines how to handle [prorations](https://docs",
-          "message": "Визначає спосіб обробки [пропорційного розподілу](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJhbnNmZXJfZGF0YQ.desc": {
           "source": "If specified, the funds from the subscription's invoices will be transferred to the destination and the ID of the resulting transfers will be found on the resulting charges.",
           "message": "Якщо вказано, кошти з інвойсів підписки будуть переказані на рахунок призначення, а ідентифікатор результуючих переказів буде відображено в результуючих списаннях."
@@ -1266,10 +1166,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJhbnNmZXJfZGF0YQ.display_name": {
           "source": "Transfer Data",
           "message": "Дані переказу"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJhbnNmZXJfZGF0YQ.short_desc": {
-          "source": "If specified, the funds from the subscription's invoices will be transferred to the destination and the ID of the resulting transfers will be found on the resulting charges",
-          "message": "Якщо вказано, кошти з інвойсів підписки будуть переказані на рахунок призначення, а ідентифікатор результуючих переказів буде відображено в результуючих списаннях"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfZW5k.desc": {
           "source": "Unix timestamp representing the end of the trial period the customer will get before being charged for the first time. If set, trial_end will override the default trial period of the plan the customer is being subscribed to. The special value `now` can be provided to end the customer's trial immediately. Can be at most two years from `billing_cycle_anchor`. See [Using trial periods on subscriptions](https://docs.stripe.com/billing/subscriptions/trials) to learn more.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
@@ -1279,10 +1175,6 @@
           "source": "Trial End",
           "message": "Кінець пробного періоду"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfZW5k.short_desc": {
-          "source": "Unix timestamp representing the end of the trial period the customer will get before being charged for the first time",
-          "message": "Мітка часу Unix, що представляє кінець пробного періоду, який клієнт отримає до першого списання коштів"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfZnJvbV9wbGFu.desc": {
           "source": "Indicates if a plan's `trial_period_days` should be applied to the subscription. Setting `trial_end` per subscription is preferred, and this defaults to `false`. Setting this flag to `true` together with `trial_end` is not allowed. See [Using trial periods on subscriptions](https://docs.stripe.com/billing/subscriptions/trials) to learn more.",
           "message": "Вказує, чи слід застосовувати `trial_period_days` плану до підписки. Рекомендується встановлювати `trial_end` для кожної підписки окремо, а це значення за замовчуванням дорівнює `false`. Установлення цього прапорця в `true` разом із `trial_end` не дозволяється. Докладніше див. у розділі [Використання пробних періодів для підписок](https://docs.stripe.com/billing/subscriptions/trials)."
@@ -1290,10 +1182,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfZnJvbV9wbGFu.display_name": {
           "source": "Trial From Plan",
           "message": "Пробний період із плану"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfZnJvbV9wbGFu.short_desc": {
-          "source": "Indicates if a plan's 'trial_period_days' should be applied to the subscription. Setting 'trial_end' per subscription is preferred, and this defaults to 'false'",
-          "message": "Вказує, чи слід застосовувати 'trial_period_days' плану до підписки. Бажано встановлювати 'trial_end' для кожної підписки окремо; за замовчуванням має значення 'false'"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfc2V0dGluZ3M.desc": {
           "source": "Settings related to subscription trials.",
@@ -1315,10 +1203,6 @@
           "source": "Trial Period Days",
           "message": "Днів пробного періоду"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfcGVyaW9kX2RheXM.short_desc": {
-          "source": "Integer representing the number of trial period days before the customer is charged for the first time",
-          "message": "Ціле число, що позначає кількість днів пробного періоду до першого списання коштів із клієнта"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.short_desc": {
           "source": "Subscribe a customer to one or more prices",
           "message": "Оформити підписку клієнта на одну або кілька цін"
@@ -1338,10 +1222,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.Y2FyZA.display_name": {
           "source": "Card",
           "message": "Card"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.Y2FyZA.short_desc": {
-          "source": "A token, like the ones returned by [Stripe",
-          "message": "Токен, подібний до тих, що повертаються [Stripe"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.Y3VzdG9tZXI.desc": {
           "source": "Only return charges for the customer specified by this customer ID.",
@@ -1363,10 +1243,6 @@
           "source": "Alipay Account",
           "message": "Акаунт Alipay"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.YWxpcGF5X2FjY291bnQ.short_desc": {
-          "source": "A token returned by [Stripe",
-          "message": "Токен, повернутий [Stripe"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.YmFua19hY2NvdW50.desc": {
           "source": "Either a token, like the ones returned by [Stripe.js](https://stripe.com/docs/js), or a dictionary containing a user's bank account details.",
           "message": "Або токен, подібний до тих, що повертаються [Stripe.js](https://stripe.com/docs/js), або словник із банківськими реквізитами користувача."
@@ -1374,10 +1250,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.YmFua19hY2NvdW50.display_name": {
           "source": "Bank Account",
           "message": "Банківський рахунок"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.YmFua19hY2NvdW50.short_desc": {
-          "source": "Either a token, like the ones returned by [Stripe",
-          "message": "Або токен, подібний до тих, що повертаються [Stripe"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.ZXhwYW5k.desc": {
           "source": "Specifies which fields in the response should be expanded.",
@@ -1399,10 +1271,6 @@
           "source": "Metadata",
           "message": "Метадані"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Набір [пар ключ-значення](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.c291cmNl.desc": {
           "source": "Please refer to full [documentation](https://api.stripe.com) instead.",
           "message": "Будь ласка, зверніться до повної [документації](https://api.stripe.com)."
@@ -1410,10 +1278,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.c291cmNl.display_name": {
           "source": "Source",
           "message": "Джерело"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.c291cmNl.short_desc": {
-          "source": "Please refer to full [documentation](https://api",
-          "message": "Будь ласка, зверніться до повної [документації](https://api"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.short_desc": {
           "source": "Attach a payment source to a customer",
@@ -1447,10 +1311,6 @@
           "source": "Card",
           "message": "Card"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.Y2FyZA.short_desc": {
-          "source": "A token, like the ones returned by [Stripe",
-          "message": "Токен, подібний до тих, що повертаються [Stripe"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.Y3VycmVuY3k.desc": {
           "source": "Three-letter [ISO currency code](https://www.iso.org/iso-4217-currency-codes.html), in lowercase. Must be a [supported currency](https://stripe.com/docs/currencies).",
           "message": "Трилітерний [код валюти за ISO](https://www.iso.org/iso-4217-currency-codes.html) у нижньому регістрі. Має бути [підтримуваною валютою](https://stripe.com/docs/currencies)."
@@ -1458,10 +1318,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.Y3VycmVuY3k.display_name": {
           "source": "Currency",
           "message": "Валюта"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.Y3VycmVuY3k.short_desc": {
-          "source": "Three-letter [ISO currency code](https://www",
-          "message": "Трилітерний [код валюти за ISO](https://www"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.Y3VzdG9tZXI.desc": {
           "source": "The ID of an existing customer that will be charged in this request.",
@@ -1499,10 +1355,6 @@
           "source": "Application Fee Amount",
           "message": "Сума комісії додатка"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.YXBwbGljYXRpb25fZmVlX2Ftb3VudA.short_desc": {
-          "source": "A fee in cents (or local equivalent) that will be applied to the charge and transferred to the application owner's Stripe account. The request must be made with an OAuth key or the 'Stripe-Account' header in order to take an application fee",
-          "message": "Комісія в центах (або місцевому еквіваленті), яка застосовуватиметься до списання та перераховуватиметься на Stripe-акаунт власника додатка. Запит має бути виконано з ключем OAuth або заголовком 'Stripe-Account', щоб стягнути комісію додатка"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.ZGVzY3JpcHRpb24.desc": {
           "source": "An arbitrary string which you can attach to a `Charge` object. It is displayed when in the web interface alongside the charge. Note that if you use Stripe to send automatic email receipts to your customers, your receipt emails will include the `description` of the charge(s) that they are describing.",
           "message": "Довільний рядок, який можна додати до об'єкта `Charge`. Він відображається у веб-інтерфейсі поруч зі списанням. Зверніть увагу: якщо ви використовуєте Stripe для автоматичного надсилання квитанцій клієнтам на електронну пошту, ваші листи міститимуть `description` відповідних списань."
@@ -1510,10 +1362,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "Опис"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.ZGVzY3JpcHRpb24.short_desc": {
-          "source": "An arbitrary string which you can attach to a 'Charge' object. It is displayed when in the web interface alongside the charge. Note that if you use Stripe to send automatic email receipts to your customers, your receipt emails will include the 'description' of the charge(s) that they are describing",
-          "message": "Довільний рядок, який можна додати до об'єкта 'Charge'. Він відображається у веб-інтерфейсі поруч зі списанням. Зверніть увагу: якщо ви використовуєте Stripe для автоматичного надсилання квитанцій клієнтам на електронну пошту, ваші листи міститимуть 'description' відповідних списань"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.ZGVzdGluYXRpb24.display_name": {
           "source": "Destination",
@@ -1551,10 +1399,6 @@
           "source": "Metadata",
           "message": "Метадані"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Набір [пар ключ-значення](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.c291cmNl.desc": {
           "source": "A payment source to be charged. This can be the ID of a [card](https://docs.stripe.com/api#cards) (i.e., credit or debit card), a [bank account](https://docs.stripe.com/api#bank_accounts), a [source](https://docs.stripe.com/api#sources), a [token](https://docs.stripe.com/api#tokens), or a [connected account](https://docs.stripe.com/connect/account-debits#charging-a-connected-account). For certain sources---namely, [cards](https://docs.stripe.com/api#cards), [bank accounts](https://docs.stripe.com/api#bank_accounts), and attached [sources](https://docs.stripe.com/api#sources)---you must also pass the ID of the associated customer.",
           "message": "Джерело платежу для списання. Це може бути ID [картки](https://docs.stripe.com/api#cards) (тобто кредитної або дебетової), [банківського рахунку](https://docs.stripe.com/api#bank_accounts), [джерела](https://docs.stripe.com/api#sources), [токена](https://docs.stripe.com/api#tokens) або [підключеного акаунта](https://docs.stripe.com/connect/account-debits#charging-a-connected-account). Для деяких джерел, зокрема [карток](https://docs.stripe.com/api#cards), [банківських рахунків](https://docs.stripe.com/api#bank_accounts) і прикріплених [джерел](https://docs.stripe.com/api#sources), необхідно також передати ID відповідного клієнта."
@@ -1586,10 +1430,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.c3RhdGVtZW50X2Rlc2NyaXB0b3I.display_name": {
           "source": "Statement Descriptor",
           "message": "Дескриптор виписки"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.c3RhdGVtZW50X2Rlc2NyaXB0b3I.short_desc": {
-          "source": "For a non-card charge, text that appears on the customer's statement as the statement descriptor. This value overrides the account's default statement descriptor",
-          "message": "Для безкарткових списань — текст, який відображається у виписці клієнта як дескриптор виписки. Це значення перевизначає стандартний дескриптор виписки акаунта"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.c3RhdGVtZW50X2Rlc2NyaXB0b3Jfc3VmZml4.desc": {
           "source": "Provides information about a card charge. Concatenated to the account's [statement descriptor prefix](https://docs.stripe.com/get-started/account/statement-descriptors#static) to form the complete statement descriptor that appears on the customer's statement. If the account has no prefix value, the suffix is concatenated to the account's statement descriptor.",
@@ -1623,10 +1463,6 @@
           "source": "Receipt Email",
           "message": "Email для квитанцій"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.cmVjZWlwdF9lbWFpbA.short_desc": {
-          "source": "The email address to which this charge's [receipt](https://docs.stripe.com/dashboard/receipts) will be sent. The receipt will not be sent until the charge is paid, and no receipts will be sent for test mode charges. If this charge is for a [Customer](https://docs.stripe.com/api/customers/object), the email address specified here will override the customer's email address. If 'receipt_email' is specified for a charge in live mode, a receipt will be sent regardless of your [email settings](https://dashboard",
-          "message": "Адреса електронної пошти, на яку буде надіслано [квитанцію](https://docs.stripe.com/dashboard/receipts) про це списання. Квитанцію буде надіслано лише після успішної оплати; для тестових списань квитанції не надсилаються. Якщо списання здійснюється для [Клієнта](https://docs.stripe.com/api/customers/object), зазначена тут адреса перевизначить адресу клієнта. Якщо 'receipt_email' вказано для списання в реальному режимі, квитанція буде надіслана незалежно від ваших [налаштувань електронної пошти](https://dashboard"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.dHJhbnNmZXJfZ3JvdXA.desc": {
           "source": "A string that identifies this transaction as part of a group. For details, see [Grouping transactions](https://docs.stripe.com/connect/separate-charges-and-transfers#transfer-options).",
           "message": "Рядок, що ідентифікує цю транзакцію як частину групи. Подробиці див. у розділі [Групування транзакцій](https://docs.stripe.com/connect/separate-charges-and-transfers#transfer-options)."
@@ -1646,10 +1482,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.dHJhbnNmZXJfZGF0YQ.display_name": {
           "source": "Transfer Data",
           "message": "Дані переказу"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.dHJhbnNmZXJfZGF0YQ.short_desc": {
-          "source": "An optional dictionary including the account to automatically transfer to as part of a destination charge",
-          "message": "Необов'язковий словник, що містить акаунт для автоматичного переказу в межах цільового списання"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.short_desc": {
           "source": "Charge a card directly (legacy; prefer a payment intent)",
@@ -1675,10 +1507,6 @@
           "source": "Bank Account",
           "message": "Банківський рахунок"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.YmFua19hY2NvdW50.short_desc": {
-          "source": "Either a token, like the ones returned by [Stripe",
-          "message": "Або токен, подібний до тих, що повертаються [Stripe"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZGVmYXVsdF9mb3JfY3VycmVuY3k.desc": {
           "source": "When set to true, or if this is the first external account added in this currency, this account becomes the default external account for its currency.",
           "message": "Якщо встановлено значення true або якщо це перший зовнішній рахунок, доданий у цій валюті, цей рахунок стає типовим зовнішнім рахунком для своєї валюти."
@@ -1687,10 +1515,6 @@
           "source": "Default For Currency",
           "message": "За замовчуванням для валюти"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZGVmYXVsdF9mb3JfY3VycmVuY3k.short_desc": {
-          "source": "When set to true, or if this is the first external account added in this currency, this account becomes the default external account for its currency",
-          "message": "Якщо встановлено значення true або якщо це перший зовнішній рахунок, доданий у цій валюті, цей рахунок стає зовнішнім рахунком за замовчуванням для своєї валюти"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZXh0ZXJuYWxfYWNjb3VudA.desc": {
           "source": "A token, like the ones returned by [Stripe.js](https://docs.stripe.com/js) or a dictionary containing a user's external account details (with the options shown below). Please refer to full [documentation](https://stripe.com/docs/api/external_accounts) instead.",
           "message": "Токен, подібний до тих, що повертає [Stripe.js](https://docs.stripe.com/js), або словник із реквізитами зовнішнього рахунку користувача (з параметрами, наведеними нижче). Будь ласка, зверніться до повної [документації](https://stripe.com/docs/api/external_accounts)."
@@ -1698,10 +1522,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZXh0ZXJuYWxfYWNjb3VudA.display_name": {
           "source": "External Account",
           "message": "Зовнішній рахунок"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZXh0ZXJuYWxfYWNjb3VudA.short_desc": {
-          "source": "A token, like the ones returned by [Stripe",
-          "message": "Токен, подібний до тих, що повертаються [Stripe"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZXhwYW5k.desc": {
           "source": "Specifies which fields in the response should be expanded.",
@@ -1722,10 +1542,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.bWV0YWRhdGE.display_name": {
           "source": "Metadata",
           "message": "Метадані"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Набір [пар ключ-значення](https://docs"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.short_desc": {
           "source": "Attach a payout destination to a connected account",
@@ -1754,10 +1570,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.Y29sbGVjdGlvbl9tZXRob2Q.display_name": {
           "source": "Collection Method",
           "message": "Спосіб стягнення коштів"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.Y29sbGVjdGlvbl9tZXRob2Q.short_desc": {
-          "source": "Either 'charge_automatically', or 'send_invoice'. When charging automatically, Stripe will attempt to pay this invoice using the default source attached to the customer. When sending an invoice, Stripe will email this invoice to the customer with payment instructions. Defaults to 'charge_automatically'",
-          "message": "Або 'charge_automatically', або 'send_invoice'. У разі автоматичного стягнення Stripe спробує оплатити цей рахунок-фактуру за допомогою джерела за замовчуванням, прив'язаного до клієнта. У разі надсилання рахунка-фактури Stripe надішле його електронною поштою клієнту з інструкціями щодо оплати. Значення за замовчуванням: 'charge_automatically'"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.Y3VycmVuY3k.desc": {
           "source": "The currency to create this invoice in. Defaults to that of `customer` if not specified.",
@@ -1827,10 +1639,6 @@
           "source": "Application Fee Amount",
           "message": "Сума комісії додатка"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.YXBwbGljYXRpb25fZmVlX2Ftb3VudA.short_desc": {
-          "source": "A fee in cents (or local equivalent) that will be applied to the invoice and transferred to the application owner's Stripe account",
-          "message": "Комісія в центах (або місцевому еквіваленті), яка буде застосована до рахунка-фактури та перерахована на обліковий запис Stripe власника програми"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.YXV0b19hZHZhbmNl.desc": {
           "source": "Controls whether Stripe performs [automatic collection](https://docs.stripe.com/invoicing/integration/automatic-advancement-collection) of the invoice. If `false`, the invoice's state doesn't automatically advance without an explicit action. Defaults to false.",
           "message": "Визначає, чи виконує Stripe [автоматичне стягнення](https://docs.stripe.com/invoicing/integration/automatic-advancement-collection) за рахунком-фактурою. Якщо `false`, стан рахунка-фактури не змінюється автоматично без явної дії. За замовчуванням: false."
@@ -1838,10 +1646,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.YXV0b19hZHZhbmNl.display_name": {
           "source": "Auto Advance",
           "message": "Автоматичне просування"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.YXV0b19hZHZhbmNl.short_desc": {
-          "source": "Controls whether Stripe performs [automatic collection](https://docs",
-          "message": "Визначає, чи виконує Stripe [автоматичне стягнення](https://docs"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.YXV0b21hdGljX3RheA.desc": {
           "source": "Settings for automatic tax lookup for this invoice.",
@@ -1863,10 +1667,6 @@
           "source": "Automatically Finalizes At",
           "message": "Автоматично фіналізується о"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.YXV0b21hdGljYWxseV9maW5hbGl6ZXNfYXQ.short_desc": {
-          "source": "The time when this invoice should be scheduled to finalize (up to 5 years in the future)",
-          "message": "Час, на який має бути заплановано фіналізацію цього рахунка-фактури (до 5 років у майбутньому)"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.ZGF5c191bnRpbF9kdWU.desc": {
           "source": "The number of days from when the invoice is created until it is due. Valid only for invoices where `collection_method=send_invoice`.",
           "message": "Кількість днів від моменту створення рахунка-фактури до настання терміну його оплати. Дійсно лише для рахунків-фактур, де `collection_method=send_invoice`."
@@ -1886,10 +1686,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.ZGVmYXVsdF90YXhfcmF0ZXM.display_name": {
           "source": "Default Tax Rates",
           "message": "Податкові ставки за замовчуванням"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.ZGVmYXVsdF90YXhfcmF0ZXM.short_desc": {
-          "source": "The tax rates that will apply to any line item that does not have 'tax_rates' set",
-          "message": "Податкові ставки, які застосовуватимуться до будь-якої позиції, де не встановлено 'tax_rates'"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.ZGVmYXVsdF9wYXltZW50X21ldGhvZA.desc": {
           "source": "ID of the default payment method for the invoice. It must belong to the customer associated with the invoice. If not set, defaults to the subscription's default payment method, if any, or to the default payment method in the customer's invoice settings.",
@@ -2031,10 +1827,6 @@
           "source": "Metadata",
           "message": "Метадані"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Набір [пар ключ-значення](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.bnVtYmVy.desc": {
           "source": "Set the number for this invoice. If no number is present then a number will be assigned automatically when the invoice is finalized. In many markets, regulations require invoices to be unique, sequential and / or gapless. You are responsible for ensuring this is true across all your different invoicing systems in the event that you edit the invoice number using our API. If you use only Stripe for your invoices and do not change invoice numbers, Stripe handles this aspect of compliance for you automatically.",
           "message": "Встановіть номер для цього рахунка-фактури. Якщо номер відсутній, його буде призначено автоматично після фіналізації рахунка-фактури. На багатьох ринках нормативні вимоги вимагають, щоб рахунки-фактури були унікальними, послідовними та/або без пропусків. Ви несете відповідальність за дотримання цих вимог у всіх ваших різних системах виставлення рахунків, якщо ви редагуєте номер рахунка-фактури за допомогою нашого API. Якщо ви використовуєте лише Stripe для своїх рахунків-фактур і не змінюєте номери рахунків-фактур, Stripe автоматично забезпечує відповідність цим вимогам."
@@ -2079,10 +1871,6 @@
           "source": "Statement Descriptor",
           "message": "Дескриптор виписки"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.c3RhdGVtZW50X2Rlc2NyaXB0b3I.short_desc": {
-          "source": "Extra information about a charge for the customer's credit card statement. It must contain at least one letter. If not specified and this invoice is part of a subscription, the default 'statement_descriptor' will be set to the first subscription item's product's 'statement_descriptor'",
-          "message": "Додаткова інформація про списання коштів для виписки за кредитною карткою клієнта. Вона має містити принаймні одну літеру. Якщо не вказано й цей рахунок-фактура є частиною підписки, значення 'statement_descriptor' за замовчуванням буде встановлено на 'statement_descriptor' продукту першої позиції підписки"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.c3Vic2NyaXB0aW9u.desc": {
           "source": "The ID of the subscription to invoice, if any. If set, the created invoice will only include pending invoice items for that subscription. The subscription's billing cycle and regular subscription events won't be affected.",
           "message": "Ідентифікатор підписки для виставлення рахунка (якщо є). Якщо вказано, створений рахунок міститиме лише елементи рахунка в очікуванні для цієї підписки. Платіжний цикл підписки та регулярні події підписки не зміняться."
@@ -2102,10 +1890,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9zZXR0aW5ncw.display_name": {
           "source": "Payment Settings",
           "message": "Параметри платежу"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9zZXR0aW5ncw.short_desc": {
-          "source": "Configuration settings for the PaymentIntent that is generated when the invoice is finalized",
-          "message": "Параметри конфігурації для PaymentIntent, який генерується під час фіналізації рахунка"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.cGVuZGluZ19pbnZvaWNlX2l0ZW1zX2JlaGF2aW9y.allowed-value.c3RyaW5nOmV4Y2x1ZGU.display_name": {
           "source": "exclude",
@@ -2135,10 +1919,6 @@
           "source": "Rendering",
           "message": "Рендеринг"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.cmVuZGVyaW5n.short_desc": {
-          "source": "The rendering-related settings that control how the invoice is displayed on customer-facing surfaces such as PDF and Hosted Invoice Page",
-          "message": "Параметри рендерингу, які визначають вигляд рахунка на клієнтських поверхнях, таких як PDF і Hosted Invoice Page"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.dHJhbnNmZXJfZGF0YQ.desc": {
           "source": "If specified, the funds from the invoice will be transferred to the destination and the ID of the resulting transfer will be found on the invoice's charge.",
           "message": "Якщо вказано, кошти з рахунка буде переказано до місця призначення, а ідентифікатор отриманого переказу буде відображено в операції списання за рахунком."
@@ -2146,10 +1926,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.dHJhbnNmZXJfZGF0YQ.display_name": {
           "source": "Transfer Data",
           "message": "Дані переказу"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.dHJhbnNmZXJfZGF0YQ.short_desc": {
-          "source": "If specified, the funds from the invoice will be transferred to the destination and the ID of the resulting transfer will be found on the invoice's charge",
-          "message": "Якщо вказано, кошти з рахунка буде переказано до місця призначення, а ідентифікатор отриманого переказу буде відображено в операції списання за рахунком"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.short_desc": {
           "source": "Create a draft invoice for a customer",
@@ -2199,10 +1975,6 @@
           "source": "Confirm",
           "message": "Підтвердити"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.Y29uZmlybQ.short_desc": {
-          "source": "Set to 'true' to attempt to [confirm this PaymentIntent](https://docs.stripe.com/api/payment_intents/confirm) immediately. This parameter defaults to 'false'",
-          "message": "Встановіть 'true', щоб спробувати [підтвердити цей PaymentIntent](https://docs.stripe.com/api/payment_intents/confirm) негайно. За замовчуванням цей параметр має значення 'false'"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.Y29uZmlybWF0aW9uX21ldGhvZA.allowed-value.c3RyaW5nOm1hbnVhbA.display_name": {
           "source": "manual",
           "message": "manual"
@@ -2218,10 +1990,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.Y29uZmlybWF0aW9uX21ldGhvZA.display_name": {
           "source": "Confirmation Method",
           "message": "Метод підтвердження"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.Y29uZmlybWF0aW9uX21ldGhvZA.short_desc": {
-          "source": "Describes whether we can confirm this PaymentIntent automatically, or if it requires customer action to confirm the payment",
-          "message": "Описує, чи можна підтвердити цей PaymentIntent автоматично, чи для підтвердження платежу потрібна дія клієнта"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.Y29uZmlybWF0aW9uX3Rva2Vu.desc": {
           "source": "ID of the ConfirmationToken used to confirm this PaymentIntent.\n\nIf the provided ConfirmationToken contains properties that are also being provided in this request, such as `payment_method`, then the values in this request will take precedence.",
@@ -2267,10 +2035,6 @@
           "source": "Currency",
           "message": "Валюта"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.Y3VycmVuY3k.short_desc": {
-          "source": "Three-letter [ISO currency code](https://www",
-          "message": "Трилітерний [код валюти за ISO](https://www"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.Y3VzdG9tZXI.desc": {
           "source": "ID of the Customer this PaymentIntent belongs to, if one exists.\n\nPayment methods attached to other Customers cannot be used with this PaymentIntent.\n\nIf [setup_future_usage](https://api.stripe.com#payment_intent_object-setup_future_usage) is set and this PaymentIntent's payment method is not `card_present`, then the payment method attaches to the Customer after the PaymentIntent has been confirmed and any required actions from the user are complete. If the payment method is `card_present` and isn't a digital wallet, then a [generated_card](https://docs.stripe.com/api/charges/object#charge_object-payment_method_details-card_present-generated_card) payment method representing the card is created and attached to the Customer instead.",
           "message": "Ідентифікатор Customer, якому належить цей PaymentIntent (якщо існує).\n\nСпособи оплати, прив'язані до інших Customer, не можна використовувати з цим PaymentIntent.\n\nЯкщо вказано [setup_future_usage](https://api.stripe.com#payment_intent_object-setup_future_usage) і спосіб оплати цього PaymentIntent не є `card_present`, спосіб оплати прив'язується до Customer після підтвердження PaymentIntent і виконання всіх необхідних дій користувачем. Якщо спосіб оплати є `card_present` і не є цифровим гаманцем, замість нього створюється та прив'язується до Customer спосіб оплати [generated_card](https://docs.stripe.com/api/charges/object#charge_object-payment_method_details-card_present-generated_card), що представляє картку."
@@ -2290,10 +2054,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.Y3VzdG9tZXJfYWNjb3VudA.display_name": {
           "source": "Customer Account",
           "message": "Обліковий запис клієнта"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.Y3VzdG9tZXJfYWNjb3VudA.short_desc": {
-          "source": "ID of the Account representing the customer that this PaymentIntent belongs to, if one exists",
-          "message": "Ідентифікатор Account, що представляє клієнта, якому належить цей PaymentIntent (якщо існує)"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.YW1vdW50.desc": {
           "source": "Amount intended to be collected by this PaymentIntent. A positive integer representing how much to charge in the [smallest currency unit](https://docs.stripe.com/currencies#zero-decimal) (e.g., 100 cents to charge $1.00 or 100 to charge ¥100, a zero-decimal currency). The minimum amount is $0.50 US or [equivalent in charge currency](https://docs.stripe.com/currencies#minimum-and-maximum-charge-amounts). The amount value supports up to eight digits (e.g., a value of 99999999 for a USD charge of $999,999.99).",
@@ -2339,10 +2099,6 @@
           "source": "Application Fee Amount",
           "message": "Сума комісії додатка"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.YXBwbGljYXRpb25fZmVlX2Ftb3VudA.short_desc": {
-          "source": "The amount of the application fee (if any) that will be requested to be applied to the payment and transferred to the application owner's Stripe account",
-          "message": "Сума комісії додатка (якщо є), яку буде запрошено застосувати до платежу та переказати на Stripe-акаунт власника додатка"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.YXV0b21hdGljX3BheW1lbnRfbWV0aG9kcw.desc": {
           "source": "When you enable this parameter, this PaymentIntent accepts payment methods that you enable in the Dashboard and that are compatible with this PaymentIntent's other parameters.",
           "message": "Якщо цей параметр увімкнено, цей PaymentIntent приймає способи оплати, які ви вмикаєте в Dashboard і які сумісні з іншими параметрами цього PaymentIntent."
@@ -2350,10 +2106,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.YXV0b21hdGljX3BheW1lbnRfbWV0aG9kcw.display_name": {
           "source": "Automatic Payment Methods",
           "message": "Автоматичні способи оплати"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.YXV0b21hdGljX3BheW1lbnRfbWV0aG9kcw.short_desc": {
-          "source": "When you enable this parameter, this PaymentIntent accepts payment methods that you enable in the Dashboard and that are compatible with this PaymentIntent's other parameters",
-          "message": "Якщо цей параметр увімкнено, цей PaymentIntent приймає способи оплати, які ви вмикаєте в Dashboard і які сумісні з іншими параметрами цього PaymentIntent"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.ZGVzY3JpcHRpb24.desc": {
           "source": "An arbitrary string attached to the object. Often useful for displaying to users.",
@@ -2374,10 +2126,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.ZXJyb3Jfb25fcmVxdWlyZXNfYWN0aW9u.display_name": {
           "source": "Error On Requires Action",
           "message": "Помилка при потребі дії"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.ZXJyb3Jfb25fcmVxdWlyZXNfYWN0aW9u.short_desc": {
-          "source": "Set to 'true' to fail the payment attempt if the PaymentIntent transitions into 'requires_action'. Use this parameter for simpler integrations that don't handle customer actions, such as [saving cards without authentication](https://docs.stripe.com/payments/save-card-without-authentication). This parameter can only be used with ['confirm=true'](https://docs",
-          "message": "Встановіть 'true', щоб спроба оплати завершувалася помилкою, якщо PaymentIntent переходить у стан 'requires_action'. Використовуйте цей параметр для простіших інтеграцій, які не обробляють дії клієнта, наприклад [збереження карток без автентифікації](https://docs.stripe.com/payments/save-card-without-authentication). Цей параметр можна використовувати лише разом із ['confirm=true'](https://docs"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.ZXhjbHVkZWRfcGF5bWVudF9tZXRob2RfdHlwZXM.desc": {
           "source": "The list of payment method types to exclude from use with this payment.",
@@ -2435,10 +2183,6 @@
           "source": "Off Session",
           "message": "Поза сесією"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.b2ZmX3Nlc3Npb24.short_desc": {
-          "source": "Set to 'true' to indicate that the customer isn't in your checkout flow during this payment attempt and can't authenticate. Use this parameter in scenarios where you collect payment method details and [charge them later](https://docs.stripe.com/payments/save-during-payment). This parameter can only be used with ['confirm=true'](https://docs",
-          "message": "Встановіть 'true', щоб указати, що клієнт не перебуває у процесі оформлення замовлення під час цієї спроби оплати та не може пройти автентифікацію. Використовуйте цей параметр у сценаріях, коли ви збираєте дані способу оплати та [списуєте кошти пізніше](https://docs.stripe.com/payments/save-during-payment). Цей параметр можна використовувати лише разом із ['confirm=true'](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.bWFuZGF0ZQ.desc": {
           "source": "ID of the mandate that's used for this payment. This parameter can only be used with [`confirm=true`](https://docs.stripe.com/api/payment_intents/create#create_payment_intent-confirm).",
           "message": "Ідентифікатор мандата, який використовується для цього платежу. Цей параметр можна використовувати лише разом із [`confirm=true`](https://docs.stripe.com/api/payment_intents/create#create_payment_intent-confirm)."
@@ -2446,10 +2190,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.bWFuZGF0ZQ.display_name": {
           "source": "Mandate",
           "message": "Мандат"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.bWFuZGF0ZQ.short_desc": {
-          "source": "ID of the mandate that's used for this payment. This parameter can only be used with ['confirm=true'](https://docs",
-          "message": "Ідентифікатор мандата, який використовується для цього платежу. Цей параметр можна використовувати лише разом із ['confirm=true'](https://docs"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.bWFuZGF0ZV9kYXRh.desc": {
           "source": "This hash contains details about the Mandate to create. This parameter can only be used with [`confirm=true`](https://docs.stripe.com/api/payment_intents/create#create_payment_intent-confirm).",
@@ -2471,10 +2211,6 @@
           "source": "Metadata",
           "message": "Метадані"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Набір [пар ключ-значення](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.c2V0dXBfZnV0dXJlX3VzYWdl.allowed-value.c3RyaW5nOm9mZl9zZXNzaW9u.display_name": {
           "source": "off_session",
           "message": "off_session"
@@ -2490,10 +2226,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.c2V0dXBfZnV0dXJlX3VzYWdl.display_name": {
           "source": "Setup Future Usage",
           "message": "Налаштування майбутнього використання"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.c2V0dXBfZnV0dXJlX3VzYWdl.short_desc": {
-          "source": "Indicates that you intend to make future payments with this PaymentIntent's payment method",
-          "message": "Вказує, що ви маєте намір здійснювати майбутні платежі за допомогою методу оплати цього PaymentIntent"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.c2hpcHBpbmc.desc": {
           "source": "Shipping information for this PaymentIntent.",
@@ -2514,10 +2246,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.c3RhdGVtZW50X2Rlc2NyaXB0b3I.display_name": {
           "source": "Statement Descriptor",
           "message": "Дескриптор виписки"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.c3RhdGVtZW50X2Rlc2NyaXB0b3I.short_desc": {
-          "source": "Text that appears on the customer's statement as the statement descriptor for a non-card charge. This value overrides the account's default statement descriptor",
-          "message": "Текст, який відображається у виписці клієнта як опис операції для безкарткового платежу. Це значення перевизначає стандартний опис операції в обліковому записі"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.c3RhdGVtZW50X2Rlc2NyaXB0b3Jfc3VmZml4.desc": {
           "source": "Provides information about a card charge. Concatenated to the account's [statement descriptor prefix](https://docs.stripe.com/get-started/account/statement-descriptors#static) to form the complete statement descriptor that appears on the customer's statement.",
@@ -2551,10 +2279,6 @@
           "source": "Payment Method",
           "message": "Спосіб оплати"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cGF5bWVudF9tZXRob2Q.short_desc": {
-          "source": "ID of the payment method (a PaymentMethod, Card, or [compatible Source](https://docs",
-          "message": "ID методу оплати (об'єкт PaymentMethod, Card або [сумісний Source](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cGF5bWVudF9tZXRob2RfY29uZmlndXJhdGlvbg.desc": {
           "source": "The ID of the [payment method configuration](https://docs.stripe.com/api/payment_method_configurations) to use with this PaymentIntent.",
           "message": "ID [конфігурації методу оплати](https://docs.stripe.com/api/payment_method_configurations) для використання з цим PaymentIntent."
@@ -2562,10 +2286,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cGF5bWVudF9tZXRob2RfY29uZmlndXJhdGlvbg.display_name": {
           "source": "Payment Method Configuration",
           "message": "Конфігурація методу оплати"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cGF5bWVudF9tZXRob2RfY29uZmlndXJhdGlvbg.short_desc": {
-          "source": "The ID of the [payment method configuration](https://docs",
-          "message": "ID [конфігурації методу оплати](https://docs"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cGF5bWVudF9tZXRob2RfZGF0YQ.desc": {
           "source": "If provided, this hash will be used to create a PaymentMethod. The new PaymentMethod will appear\nin the [payment_method](https://docs.stripe.com/api/payment_intents/object#payment_intent_object-payment_method)\nproperty on the PaymentIntent.",
@@ -2599,10 +2319,6 @@
           "source": "Payment Method Types",
           "message": "Типи методів оплати"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cGF5bWVudF9tZXRob2RfdHlwZXM.short_desc": {
-          "source": "The list of payment method types (for example, a card) that this PaymentIntent can use",
-          "message": "Список типів методів оплати (наприклад, картка), які може використовувати цей PaymentIntent"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cmFkYXJfb3B0aW9ucw.desc": {
           "source": "Options to configure Radar. Learn more about [Radar Sessions](https://docs.stripe.com/radar/radar-session).",
           "message": "Параметри для налаштування Radar. Дізнайтеся більше про [сесії Radar](https://docs.stripe.com/radar/radar-session)."
@@ -2622,10 +2338,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cmV0dXJuX3VybA.display_name": {
           "source": "Return Url",
           "message": "URL повернення"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cmV0dXJuX3VybA.short_desc": {
-          "source": "The URL to redirect your customer back to after they authenticate or cancel their payment on the payment method's app or site. If you'd prefer to redirect to a mobile application, you can alternatively supply an application URI scheme. This parameter can only be used with ['confirm=true'](https://docs",
-          "message": "URL-адреса для перенаправлення вашого клієнта після автентифікації або скасування платежу в додатку чи на сайті методу оплати. Якщо ви бажаєте перенаправити до мобільного додатка, ви можете надати схему URI додатка. Цей параметр можна використовувати лише з ['confirm=true'](https://docs"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cmVjZWlwdF9lbWFpbA.desc": {
           "source": "Email address to send the receipt to. If you specify `receipt_email` for a payment in live mode, you send a receipt regardless of your [email settings](https://dashboard.stripe.com/account/emails).",
@@ -2671,10 +2383,6 @@
           "source": "Use Stripe Sdk",
           "message": "Використовувати Stripe SDK"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.dXNlX3N0cmlwZV9zZGs.short_desc": {
-          "source": "Set to 'true' when confirming server-side and using Stripe",
-          "message": "Встановіть значення 'true', якщо підтвердження виконується на стороні сервера та використовується Stripe"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.short_desc": {
           "source": "Start a payment",
           "message": "Розпочати платіж"
@@ -2706,10 +2414,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.Y3VycmVuY3k.display_name": {
           "source": "Currency",
           "message": "Валюта"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.Y3VycmVuY3k.short_desc": {
-          "source": "Three-letter [ISO currency code](https://www",
-          "message": "Трилітерний [код валюти за ISO](https://www"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.Y3VzdG9tZXI.desc": {
           "source": "Customer whose customer balance to refund from.",
@@ -2751,10 +2455,6 @@
           "source": "Instructions Email",
           "message": "Електронна пошта для інструкцій"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.aW5zdHJ1Y3Rpb25zX2VtYWls.short_desc": {
-          "source": "For payment methods without native refund support (e",
-          "message": "Для методів оплати без вбудованої підтримки повернення коштів (напр."
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.b3JpZ2lu.allowed-value.c3RyaW5nOmN1c3RvbWVyX2JhbGFuY2U.display_name": {
           "source": "customer_balance",
           "message": "customer_balance"
@@ -2779,10 +2479,6 @@
           "source": "Metadata",
           "message": "Метадані"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Набір [пар ключ-значення](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.cGF5bWVudF9pbnRlbnQ.desc": {
           "source": "The identifier of the PaymentIntent to refund.",
           "message": "Ідентифікатор PaymentIntent для повернення коштів."
@@ -2802,10 +2498,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.cmV2ZXJzZV90cmFuc2Zlcg.display_name": {
           "source": "Reverse Transfer",
           "message": "Скасувати переказ"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.cmV2ZXJzZV90cmFuc2Zlcg.short_desc": {
-          "source": "Boolean indicating whether the transfer should be reversed when refunding this charge",
-          "message": "Логічне значення, яке вказує, чи слід скасувати переказ під час повернення коштів за цей платіж"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.cmVhc29u.allowed-value.c3RyaW5nOmR1cGxpY2F0ZQ.display_name": {
           "source": "duplicate",
@@ -2838,10 +2530,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.cmVmdW5kX2FwcGxpY2F0aW9uX2ZlZQ.display_name": {
           "source": "Refund Application Fee",
           "message": "Повернути комісію додатка"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.cmVmdW5kX2FwcGxpY2F0aW9uX2ZlZQ.short_desc": {
-          "source": "Boolean indicating whether the application fee should be refunded when refunding this charge",
-          "message": "Булеве значення, яке вказує, чи слід повертати комісію додатка під час повернення коштів за цей платіж"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.short_desc": {
           "source": "Refund a charge or payment intent",
@@ -3283,10 +2971,6 @@
           "source": "Relationship",
           "message": "Зв'язок"
         },
-        "app.U3RyaXBl.action.bGlzdC1hY2NvdW50LXBlb3BsZQ.option.cmVsYXRpb25zaGlw.short_desc": {
-          "source": "Filters on the list of people returned based on the person's relationship to the account's company",
-          "message": "Фільтрує список повернутих осіб на основі зв'язку особи з компанією облікового запису"
-        },
         "app.U3RyaXBl.action.bGlzdC1hY2NvdW50LXBlb3BsZQ.short_desc": {
           "source": "List the people associated with a connected account",
           "message": "Отримати список осіб, пов'язаних із підключеним обліковим записом"
@@ -3498,10 +3182,6 @@
         "app.U3RyaXBl.action.bGlzdC1jaGFyZ2Vz.option.cGF5bWVudF9pbnRlbnQ.display_name": {
           "source": "Payment Intent",
           "message": "Намір платежу"
-        },
-        "app.U3RyaXBl.action.bGlzdC1jaGFyZ2Vz.option.cGF5bWVudF9pbnRlbnQ.short_desc": {
-          "source": "Only return charges that were created by the PaymentIntent specified by this PaymentIntent ID",
-          "message": "Повертати лише платежі, створені PaymentIntent, визначеним цим PaymentIntent ID"
         },
         "app.U3RyaXBl.action.bGlzdC1jaGFyZ2Vz.option.dHJhbnNmZXJfZ3JvdXA.desc": {
           "source": "Only return charges for this transfer group, limited to 100.",
@@ -4083,10 +3763,6 @@
           "source": "Customer Account",
           "message": "Обліковий запис клієнта"
         },
-        "app.U3RyaXBl.action.bGlzdC1pbnZvaWNlcw.option.Y3VzdG9tZXJfYWNjb3VudA.short_desc": {
-          "source": "Only return invoices for the account representing the customer specified by this account ID",
-          "message": "Повертати лише рахунки для акаунта, що представляє клієнта, вказаного цим ID акаунта"
-        },
         "app.U3RyaXBl.action.bGlzdC1pbnZvaWNlcw.option.ZHVlX2RhdGU.display_name": {
           "source": "Due Date",
           "message": "Кінцевий термін"
@@ -4167,10 +3843,6 @@
           "source": "Status",
           "message": "Статус"
         },
-        "app.U3RyaXBl.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.short_desc": {
-          "source": "The status of the invoice, one of 'draft', 'open', 'paid', 'uncollectible', or 'void'",
-          "message": "Статус рахунка, один із: 'draft', 'open', 'paid', 'uncollectible' або 'void'"
-        },
         "app.U3RyaXBl.action.bGlzdC1pbnZvaWNlcw.option.c3Vic2NyaXB0aW9u.desc": {
           "source": "Only return invoices for the subscription specified by this subscription ID.",
           "message": "Повертати лише рахунки для підписки, вказаної цим ID підписки."
@@ -4226,10 +3898,6 @@
         "app.U3RyaXBl.action.bGlzdC1wYXltZW50LWludGVudHM.option.Y3VzdG9tZXJfYWNjb3VudA.display_name": {
           "source": "Customer Account",
           "message": "Обліковий запис клієнта"
-        },
-        "app.U3RyaXBl.action.bGlzdC1wYXltZW50LWludGVudHM.option.Y3VzdG9tZXJfYWNjb3VudA.short_desc": {
-          "source": "Only return invoices for the account representing the customer specified by this account ID",
-          "message": "Повертати лише рахунки для акаунта, що представляє клієнта, вказаного цим ID акаунта"
         },
         "app.U3RyaXBl.action.bGlzdC1wYXltZW50LWludGVudHM.option.ZW5kaW5nX2JlZm9yZQ.desc": {
           "source": "A cursor for use in pagination. `ending_before` is an object ID that defines your place in the list. For instance, if you make a list request and receive 100 objects, starting with `obj_bar`, your subsequent call can include `ending_before=obj_bar` in order to fetch the previous page of the list.",
@@ -4370,10 +4038,6 @@
         "app.U3RyaXBl.action.bGlzdC1yZWZ1bmRz.option.cGF5bWVudF9pbnRlbnQ.display_name": {
           "source": "Payment Intent",
           "message": "Намір платежу"
-        },
-        "app.U3RyaXBl.action.bGlzdC1yZWZ1bmRz.option.cGF5bWVudF9pbnRlbnQ.short_desc": {
-          "source": "Only return charges that were created by the PaymentIntent specified by this PaymentIntent ID",
-          "message": "Повертати лише платежі, створені PaymentIntent, визначеним цим PaymentIntent ID"
         },
         "app.U3RyaXBl.action.bGlzdC1yZWZ1bmRz.short_desc": {
           "source": "List refunds, most recent first",
@@ -4671,10 +4335,6 @@
           "source": "URI Path",
           "message": "Шлях URI"
         },
-        "app.U3RyaXBl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
-        },
         "app.U3RyaXBl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
@@ -4827,10 +4487,6 @@
           "source": "Card",
           "message": "Card"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.Y2FyZA.short_desc": {
-          "source": "A token, like the ones returned by [Stripe",
-          "message": "Токен, подібний до тих, що повертаються [Stripe"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.Y2FzaF9iYWxhbmNl.desc": {
           "source": "Balance information and default balance settings for this customer.",
           "message": "Інформація про баланс і налаштування балансу за замовчуванням для цього клієнта."
@@ -4875,10 +4531,6 @@
           "source": "Balance",
           "message": "Баланс"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.YmFsYW5jZQ.short_desc": {
-          "source": "An integer amount in cents (or local equivalent) that represents the customer's current balance, which affect the customer's future invoices",
-          "message": "Цілочисельна сума в центах (або місцевому еквіваленті), яка представляє поточний баланс клієнта та впливає на майбутні інвойси клієнта"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.YmFua19hY2NvdW50.desc": {
           "source": "Either a token, like the ones returned by [Stripe.js](https://stripe.com/docs/js), or a dictionary containing a user's bank account details.",
           "message": "Або токен, подібний до тих, що повертаються [Stripe.js](https://stripe.com/docs/js), або словник із банківськими реквізитами користувача."
@@ -4886,10 +4538,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.YmFua19hY2NvdW50.display_name": {
           "source": "Bank Account",
           "message": "Банківський рахунок"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.YmFua19hY2NvdW50.short_desc": {
-          "source": "Either a token, like the ones returned by [Stripe",
-          "message": "Або токен, подібний до тих, що повертаються [Stripe"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.YnVzaW5lc3NfbmFtZQ.desc": {
           "source": "The customer's business name. This may be up to *150 characters*.",
@@ -4947,10 +4595,6 @@
           "source": "Default Source",
           "message": "Джерело за замовчуванням"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.ZGVmYXVsdF9zb3VyY2U.short_desc": {
-          "source": "If you are using payment methods created via the PaymentMethods API, see the [invoice_settings",
-          "message": "Якщо ви використовуєте методи оплати, створені через PaymentMethods API, перегляньте [invoice_settings"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.ZGVzY3JpcHRpb24.desc": {
           "source": "An arbitrary string that you can attach to a customer object. It is displayed alongside the customer in the dashboard.",
           "message": "Довільний рядок, який можна прикріпити до об'єкта клієнта. Він відображається поруч із клієнтом на інформаційній панелі."
@@ -4970,10 +4614,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
           "source": "Email",
           "message": "Електронна пошта"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
-          "source": "Customer's email address. It's displayed alongside the customer in your dashboard and can be useful for searching and tracking",
-          "message": "Електронна адреса клієнта. Вона відображається поруч із клієнтом на вашій інформаційній панелі та може бути корисною для пошуку й відстеження"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.ZXhwYW5k.desc": {
           "source": "Specifies which fields in the response should be expanded.",
@@ -5030,10 +4670,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.bWV0YWRhdGE.display_name": {
           "source": "Metadata",
           "message": "Метадані"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Набір [пар ключ-значення](https://docs"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.desc": {
           "source": "The customer's full name or business name.",
@@ -5195,10 +4831,6 @@
           "source": "Fraud Details",
           "message": "Дані про шахрайство"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.option.ZnJhdWRfZGV0YWlscw.short_desc": {
-          "source": "A set of key-value pairs you can attach to a charge giving information about its riskiness",
-          "message": "Набір пар ключ-значення, які можна додати до платежу, з інформацією про його ризикованість"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.option.bWV0YWRhdGE.desc": {
           "source": "Set of [key-value pairs](https://docs.stripe.com/api/metadata) that you can attach to an object. This can be useful for storing additional information about the object in a structured format. Individual keys can be unset by posting an empty value to them. All keys can be unset by posting an empty value to `metadata`.",
           "message": "Набір [пар ключ-значення](https://docs.stripe.com/api/metadata), які можна прикріпити до об'єкта. Це може бути корисно для зберігання додаткової інформації про об'єкт у структурованому форматі. Окремі ключі можна скинути, передавши їм порожнє значення. Усі ключі можна скинути, передавши порожнє значення в `metadata`."
@@ -5206,10 +4838,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.option.bWV0YWRhdGE.display_name": {
           "source": "Metadata",
           "message": "Метадані"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Набір [пар ключ-значення](https://docs"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.option.c2hpcHBpbmc.desc": {
           "source": "Shipping information for the charge. Helps prevent fraud on charges for physical goods.",
@@ -5294,10 +4922,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.option.YWNjb3VudF90b2tlbg.display_name": {
           "source": "Account Token",
           "message": "Токен облікового запису"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.option.YWNjb3VudF90b2tlbg.short_desc": {
-          "source": "An [account token](https://api",
-          "message": "[Токен облікового запису](https://api"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.option.YnVzaW5lc3NfcHJvZmlsZQ.desc": {
           "source": "Business information about the account.",
@@ -5395,10 +5019,6 @@
           "source": "External Account",
           "message": "Зовнішній рахунок"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.option.ZXh0ZXJuYWxfYWNjb3VudA.short_desc": {
-          "source": "A card or bank account to attach to the account for receiving [payouts](/connect/bank-debit-card-payouts) (you won’t be able to use it for top-ups)",
-          "message": "Карта або банківський рахунок для прив'язки до облікового запису для отримання [виплат](/connect/bank-debit-card-payouts) (ви не зможете використовувати це для поповнень)"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.option.ZXhwYW5k.desc": {
           "source": "Specifies which fields in the response should be expanded.",
           "message": "Визначає, які поля у відповіді слід розгорнути."
@@ -5431,10 +5051,6 @@
           "source": "Metadata",
           "message": "Метадані"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Набір [пар ключ-значення](https://docs"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.option.c2V0dGluZ3M.desc": {
           "source": "Options for customizing how the account functions within Stripe.",
           "message": "Параметри для налаштування роботи облікового запису в межах Stripe."
@@ -5454,10 +5070,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.option.dG9zX2FjY2VwdGFuY2U.display_name": {
           "source": "Tos Acceptance",
           "message": "Прийняття умов обслуговування"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.option.dG9zX2FjY2VwdGFuY2U.short_desc": {
-          "source": "Details on the account's acceptance of the [Stripe Services Agreement](/connect/updating-accounts#tos-acceptance). This property can only be updated for accounts where [controller.requirement_collection](/api/accounts/object#account_object-controller-requirement_collection) is 'application', which includes Custom accounts. This property defaults to a 'full' service agreement when empty",
-          "message": "Відомості про прийняття обліковим записом [Угоди про надання послуг Stripe](/connect/updating-accounts#tos-acceptance). Цю властивість можна оновити лише для облікових записів, у яких [controller.requirement_collection](/api/accounts/object#account_object-controller-requirement_collection) має значення 'application', включно з обліковими записами типу Custom. За замовчуванням ця властивість має значення повної угоди про надання послуг ('full'), якщо вона порожня"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.short_desc": {
           "source": "Update a connected account",
@@ -5486,10 +5098,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.Y29sbGVjdGlvbl9tZXRob2Q.display_name": {
           "source": "Collection Method",
           "message": "Спосіб стягнення коштів"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.Y29sbGVjdGlvbl9tZXRob2Q.short_desc": {
-          "source": "Either 'charge_automatically' or 'send_invoice'. This field can be updated only on 'draft' invoices",
-          "message": "Або 'charge_automatically', або 'send_invoice'. Це поле можна оновити лише для рахунків-фактур зі статусом 'draft'"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.desc": {
           "source": "A list of up to 4 custom fields to be displayed on the invoice. If a value for `custom_fields` is specified, the list specified will replace the existing custom field list on this invoice. Pass an empty string to remove previously-defined fields.",
@@ -5523,10 +5131,6 @@
           "source": "Application Fee Amount",
           "message": "Сума комісії додатка"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.YXBwbGljYXRpb25fZmVlX2Ftb3VudA.short_desc": {
-          "source": "A fee in cents (or local equivalent) that will be applied to the invoice and transferred to the application owner's Stripe account",
-          "message": "Комісія в центах (або місцевому еквіваленті), яка буде застосована до рахунка-фактури та перерахована на обліковий запис Stripe власника програми"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.YXV0b19hZHZhbmNl.desc": {
           "source": "Controls whether Stripe performs [automatic collection](https://docs.stripe.com/invoicing/integration/automatic-advancement-collection) of the invoice.",
           "message": "Визначає, чи виконує Stripe [автоматичне стягнення](https://docs.stripe.com/invoicing/integration/automatic-advancement-collection) за рахунком-фактурою."
@@ -5534,10 +5138,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.YXV0b19hZHZhbmNl.display_name": {
           "source": "Auto Advance",
           "message": "Автоматичне просування"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.YXV0b19hZHZhbmNl.short_desc": {
-          "source": "Controls whether Stripe performs [automatic collection](https://docs",
-          "message": "Визначає, чи виконує Stripe [автоматичне стягнення](https://docs"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.YXV0b21hdGljX3RheA.desc": {
           "source": "Settings for automatic tax lookup for this invoice.",
@@ -5559,10 +5159,6 @@
           "source": "Automatically Finalizes At",
           "message": "Автоматично фіналізується о"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.YXV0b21hdGljYWxseV9maW5hbGl6ZXNfYXQ.short_desc": {
-          "source": "The time when this invoice should be scheduled to finalize (up to 5 years in the future)",
-          "message": "Час, на який має бути заплановано фіналізацію цього рахунка-фактури (до 5 років у майбутньому)"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.ZGF5c191bnRpbF9kdWU.desc": {
           "source": "The number of days from which the invoice is created until it is due. Only valid for invoices where `collection_method=send_invoice`. This field can only be updated on `draft` invoices.",
           "message": "Кількість днів від створення рахунка-фактури до терміну його сплати. Дійсно лише для рахунків-фактур, де `collection_method=send_invoice`. Це поле можна оновити лише для рахунків-фактур зі статусом `draft`."
@@ -5582,10 +5178,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.ZGVmYXVsdF90YXhfcmF0ZXM.display_name": {
           "source": "Default Tax Rates",
           "message": "Податкові ставки за замовчуванням"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.ZGVmYXVsdF90YXhfcmF0ZXM.short_desc": {
-          "source": "The tax rates that will apply to any line item that does not have 'tax_rates' set",
-          "message": "Податкові ставки, які застосовуватимуться до будь-якої позиції, де не встановлено 'tax_rates'"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.ZGVmYXVsdF9wYXltZW50X21ldGhvZA.desc": {
           "source": "ID of the default payment method for the invoice. It must belong to the customer associated with the invoice. If not set, defaults to the subscription's default payment method, if any, or to the default payment method in the customer's invoice settings.",
@@ -5727,10 +5319,6 @@
           "source": "Metadata",
           "message": "Метадані"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Набір [пар ключ-значення](https://docs"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.bnVtYmVy.desc": {
           "source": "Set the number for this invoice. If no number is present then a number will be assigned automatically when the invoice is finalized. In many markets, regulations require invoices to be unique, sequential and / or gapless. You are responsible for ensuring this is true across all your different invoicing systems in the event that you edit the invoice number using our API. If you use only Stripe for your invoices and do not change invoice numbers, Stripe handles this aspect of compliance for you automatically.",
           "message": "Встановіть номер для цього рахунка-фактури. Якщо номер відсутній, його буде призначено автоматично після фіналізації рахунка-фактури. На багатьох ринках нормативні вимоги вимагають, щоб рахунки-фактури були унікальними, послідовними та/або без пропусків. Ви несете відповідальність за дотримання цих вимог у всіх ваших різних системах виставлення рахунків, якщо ви редагуєте номер рахунка-фактури за допомогою нашого API. Якщо ви використовуєте лише Stripe для своїх рахунків-фактур і не змінюєте номери рахунків-фактур, Stripe автоматично забезпечує відповідність цим вимогам."
@@ -5775,10 +5363,6 @@
           "source": "Statement Descriptor",
           "message": "Дескриптор виписки"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.c3RhdGVtZW50X2Rlc2NyaXB0b3I.short_desc": {
-          "source": "Extra information about a charge for the customer's credit card statement. It must contain at least one letter. If not specified and this invoice is part of a subscription, the default 'statement_descriptor' will be set to the first subscription item's product's 'statement_descriptor'",
-          "message": "Додаткова інформація про списання коштів для виписки за кредитною карткою клієнта. Вона має містити принаймні одну літеру. Якщо не вказано й цей рахунок-фактура є частиною підписки, значення 'statement_descriptor' за замовчуванням буде встановлено на 'statement_descriptor' продукту першої позиції підписки"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF9zZXR0aW5ncw.desc": {
           "source": "Configuration settings for the PaymentIntent that is generated when the invoice is finalized.",
           "message": "Параметри конфігурації для PaymentIntent, який генерується під час фіналізації рахунка."
@@ -5786,10 +5370,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF9zZXR0aW5ncw.display_name": {
           "source": "Payment Settings",
           "message": "Параметри платежу"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF9zZXR0aW5ncw.short_desc": {
-          "source": "Configuration settings for the PaymentIntent that is generated when the invoice is finalized",
-          "message": "Параметри конфігурації для PaymentIntent, який генерується під час фіналізації рахунка"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.cmVuZGVyaW5n.desc": {
           "source": "The rendering-related settings that control how the invoice is displayed on customer-facing surfaces such as PDF and Hosted Invoice Page.",
@@ -5799,10 +5379,6 @@
           "source": "Rendering",
           "message": "Рендеринг"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.cmVuZGVyaW5n.short_desc": {
-          "source": "The rendering-related settings that control how the invoice is displayed on customer-facing surfaces such as PDF and Hosted Invoice Page",
-          "message": "Параметри рендерингу, які визначають вигляд рахунка на клієнтських поверхнях, таких як PDF і Hosted Invoice Page"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.dHJhbnNmZXJfZGF0YQ.desc": {
           "source": "If specified, the funds from the invoice will be transferred to the destination and the ID of the resulting transfer will be found on the invoice's charge. This will be unset if you POST an empty value.",
           "message": "Якщо вказано, кошти з рахунка-фактури будуть переказані до місця призначення, а ідентифікатор результуючого переказу міститиметься в списанні за рахунком-фактурою. Буде скасовано, якщо надіслати порожнє значення через POST."
@@ -5810,10 +5386,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.dHJhbnNmZXJfZGF0YQ.display_name": {
           "source": "Transfer Data",
           "message": "Дані переказу"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.dHJhbnNmZXJfZGF0YQ.short_desc": {
-          "source": "If specified, the funds from the invoice will be transferred to the destination and the ID of the resulting transfer will be found on the invoice's charge",
-          "message": "Якщо вказано, кошти з рахунка буде переказано до місця призначення, а ідентифікатор отриманого переказу буде відображено в операції списання за рахунком"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.short_desc": {
           "source": "Update an invoice",

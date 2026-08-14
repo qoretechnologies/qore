@@ -67,10 +67,6 @@
           "source": "All Available",
           "message": "Alle verfügbaren"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.YWxsX2F2YWlsYWJsZQ.short_desc": {
-          "source": "When 'true', returns all accessible groups. When 'false', returns only groups where the user is a member",
-          "message": "Wenn 'true', werden alle zugänglichen Gruppen zurückgegeben. Wenn 'false', werden nur Gruppen zurückgegeben, in denen der Benutzer Mitglied ist"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.YXJjaGl2ZWQ.desc": {
           "source": "Limit by archived status",
           "message": "Nach Archivierungsstatus einschränken"
@@ -751,10 +747,6 @@
           "source": "Due Date",
           "message": "Fälligkeitsdatum"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.ZHVlX2RhdGU.short_desc": {
-          "source": "Return issues that have no due date ('{{0}}'), or whose due date is this week, this month, between two weeks ago and next month, or which are overdue. Accepts: 'overdue', 'week', 'month', 'next_month_and_previous_two_weeks', '{{0}}'",
-          "message": "Issues zurückgeben, die kein Fälligkeitsdatum haben ('{{0}}') oder deren Fälligkeitsdatum in dieser Woche, diesem Monat, zwischen vor zwei Wochen und nächstem Monat liegt oder die überfällig sind. Akzeptiert: 'overdue', 'week', 'month', 'next_month_and_previous_two_weeks', '{{0}}'"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.ZXBpY19pZA.desc": {
           "source": "The ID of an epic associated with the issues",
           "message": "Die ID eines mit den Issues verknüpften Epics"
@@ -931,10 +923,6 @@
           "source": "Order By",
           "message": "Sortieren nach"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.b3JkZXJfYnk.short_desc": {
-          "source": "Return issues ordered by 'created_at', 'due_date', 'label_priority', 'milestone_due', 'popularity', 'priority', 'relative_position', 'title', or 'updated_at' fields",
-          "message": "Issues geordnet nach den Feldern 'created_at', 'due_date', 'label_priority', 'milestone_due', 'popularity', 'priority', 'relative_position', 'title' oder 'updated_at' zurückgeben"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bGFiZWxz.desc": {
           "source": "Comma-separated list of label names",
           "message": "Kommagetrennte Liste von Label-Namen"
@@ -982,10 +970,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bWlsZXN0b25lX2lk.display_name": {
           "source": "Milestone Id",
           "message": "Meilenstein-ID"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bWlsZXN0b25lX2lk.short_desc": {
-          "source": "Return issues assigned to milestones with the specified timebox value (\"Any\", \"None\", \"Upcoming\" or \"Started\")",
-          "message": "Issues zurückgeben, die Meilensteinen mit dem angegebenen Timebox-Wert (\"Any\", \"None\", \"Upcoming\" oder \"Started\") zugewiesen sind"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bXlfcmVhY3Rpb25fZW1vamk.desc": {
           "source": "Return issues reacted by the authenticated user by the given emoji",
@@ -1046,10 +1030,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bm90W21pbGVzdG9uZV9pZF0.display_name": {
           "source": "Not[milestone Id]",
           "message": "Not[milestone Id]"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bm90W21pbGVzdG9uZV9pZF0.short_desc": {
-          "source": "Return issues assigned to milestones without the specified timebox value (\"Any\", \"None\", \"Upcoming\" or \"Started\")",
-          "message": "Issues zurückgeben, die Meilensteinen ohne den angegebenen Timebox-Wert (\"Any\", \"None\", \"Upcoming\" oder \"Started\") zugewiesen sind"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bm90W2F1dGhvcl91c2VybmFtZV0.desc": {
           "source": "Return issues which are not authored by the user with the given username",
@@ -1647,10 +1627,6 @@
           "source": "Due Date",
           "message": "Fälligkeitsdatum"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.ZHVlX2RhdGU.short_desc": {
-          "source": "Return issues that have no due date ('{{0}}'), or whose due date is this week, this month, between two weeks ago and next month, or which are overdue. Accepts: 'overdue', 'week', 'month', 'next_month_and_previous_two_weeks', '{{0}}'",
-          "message": "Issues zurückgeben, die kein Fälligkeitsdatum haben ('{{0}}') oder deren Fälligkeitsdatum in dieser Woche, diesem Monat, zwischen vor zwei Wochen und nächstem Monat liegt oder die überfällig sind. Akzeptiert: 'overdue', 'week', 'month', 'next_month_and_previous_two_weeks', '{{0}}'"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.ZXBpY19pZA.desc": {
           "source": "The ID of an epic associated with the issues",
           "message": "Die ID eines mit den Issues verknüpften Epics"
@@ -1839,10 +1815,6 @@
           "source": "Order By",
           "message": "Sortieren nach"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.b3JkZXJfYnk.short_desc": {
-          "source": "Return issues ordered by 'created_at', 'due_date', 'label_priority', 'milestone_due', 'popularity', 'priority', 'relative_position', 'title', or 'updated_at' fields",
-          "message": "Issues geordnet nach den Feldern 'created_at', 'due_date', 'label_priority', 'milestone_due', 'popularity', 'priority', 'relative_position', 'title' oder 'updated_at' zurückgeben"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bGFiZWxz.desc": {
           "source": "Comma-separated list of label names",
           "message": "Kommagetrennte Liste von Label-Namen"
@@ -1890,10 +1862,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bWlsZXN0b25lX2lk.display_name": {
           "source": "Milestone",
           "message": "Milestone"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bWlsZXN0b25lX2lk.short_desc": {
-          "source": "Return issues assigned to milestones with the specified timebox value (\"Any\", \"None\", \"Upcoming\" or \"Started\")",
-          "message": "Issues zurückgeben, die Meilensteinen mit dem angegebenen Timebox-Wert (\"Any\", \"None\", \"Upcoming\" oder \"Started\") zugewiesen sind"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bXlfcmVhY3Rpb25fZW1vamk.desc": {
           "source": "Return issues reacted by the authenticated user by the given emoji",
@@ -1954,10 +1922,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bm90W21pbGVzdG9uZV9pZF0.display_name": {
           "source": "Not In Milestone",
           "message": "Nicht im Meilenstein"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bm90W21pbGVzdG9uZV9pZF0.short_desc": {
-          "source": "Return issues assigned to milestones without the specified timebox value (\"Any\", \"None\", \"Upcoming\" or \"Started\")",
-          "message": "Issues zurückgeben, die Meilensteinen ohne den angegebenen Timebox-Wert (\"Any\", \"None\", \"Upcoming\" oder \"Started\") zugewiesen sind"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bm90W2F1dGhvcl91c2VybmFtZV0.desc": {
           "source": "Return issues which are not authored by the user with the given username",
@@ -2559,10 +2523,6 @@
           "source": "Approved By Ids",
           "message": "Genehmigt von (IDs)"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfaWRz.short_desc": {
-          "source": "Return merge requests which have been approved by the specified users with the given IDs",
-          "message": "Merge Requests zurückgeben, die von den angegebenen Benutzern mit den angegebenen IDs genehmigt wurden"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfdXNlcm5hbWVz.desc": {
           "source": "Return merge requests which have been approved by the specified users with the given\n            usernames",
           "message": "Merge Requests zurückgeben, die von den angegebenen Benutzern mit den angegebenen\n            Benutzernamen genehmigt wurden"
@@ -2571,10 +2531,6 @@
           "source": "Approved By Usernames",
           "message": "Genehmigt von (Benutzernamen)"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfdXNlcm5hbWVz.short_desc": {
-          "source": "Return merge requests which have been approved by the specified users with the given",
-          "message": "Merge Requests zurückgeben, die von den angegebenen Benutzern mit den angegebenen genehmigt wurden"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZXJfaWRz.desc": {
           "source": "Return merge requests which have specified the users with the given IDs as an individual approver",
           "message": "Merge Requests zurückgeben, die die Benutzer mit den angegebenen IDs als einzelnen Genehmiger angegeben haben"
@@ -2582,10 +2538,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZXJfaWRz.display_name": {
           "source": "Approver Ids",
           "message": "Genehmiger-IDs"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZXJfaWRz.short_desc": {
-          "source": "Return merge requests which have specified the users with the given IDs as an individual approver",
-          "message": "Merge Requests zurückgeben, die die Benutzer mit den angegebenen IDs als einzelnen Genehmiger angegeben haben"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXNzaWduZWVfaWQ.desc": {
           "source": "Return issues which are assigned to the user with the given ID",
@@ -2666,10 +2618,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.ZHJhZnQ.display_name": {
           "source": "Draft",
           "message": "Entwurf"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.ZHJhZnQ.short_desc": {
-          "source": "Filter merge requests against their 'draft' status. 'true' to return only draft merge requests, 'false' to return non-draft merge requests",
-          "message": "Merge Requests nach ihrem 'draft'-Status filtern. 'true', um nur Entwurfs-Merge-Requests zurückzugeben, 'false', um Nicht-Entwurfs-Merge-Requests zurückzugeben"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.ZW52aXJvbm1lbnQ.desc": {
           "source": "Returns merge requests deployed to the given environment",
@@ -2759,10 +2707,6 @@
           "source": "Order By",
           "message": "Sortieren nach"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.b3JkZXJfYnk.short_desc": {
-          "source": "Returns merge requests ordered by 'created_at', 'label_priority', 'milestone_due', 'popularity', 'priority', 'title', 'updated_at' or 'merged_at' fields",
-          "message": "Gibt Merge Requests sortiert nach den Feldern 'created_at', 'label_priority', 'milestone_due', 'popularity', 'priority', 'title', 'updated_at' oder 'merged_at' zurück"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bGFiZWxz.desc": {
           "source": "Comma-separated list of label names",
           "message": "Kommagetrennte Liste von Label-Namen"
@@ -2783,10 +2727,6 @@
           "source": "Merge User Username",
           "message": "Benutzername des Zusammenführenden"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VfdXNlcl91c2VybmFtZQ.short_desc": {
-          "source": "Returns merge requests which have been merged by the user with the given 'username'. Mutually exclusive with 'merge_user_id'",
-          "message": "Gibt Merge Requests zurück, die von dem Benutzer mit dem angegebenen 'username' zusammengeführt wurden. Schließt sich gegenseitig mit 'merge_user_id' aus"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VfdXNlcl9pZA.desc": {
           "source": "Returns merge requests which have been merged by the user with the given user `id`. Mutually exclusive with `merge_user_username`.",
           "message": "Gibt Merge Requests zurück, die von dem Benutzer mit der angegebenen Benutzer-`id` zusammengeführt wurden. Schließt sich gegenseitig mit `merge_user_username` aus."
@@ -2794,10 +2734,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VfdXNlcl9pZA.display_name": {
           "source": "Merged By",
           "message": "Zusammengeführt von"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VfdXNlcl9pZA.short_desc": {
-          "source": "Returns merge requests which have been merged by the user with the given user 'id'. Mutually exclusive with 'merge_user_username'",
-          "message": "Gibt Merge Requests zurück, die von dem Benutzer mit der angegebenen Benutzer-'id' zusammengeführt wurden. Schließt sich gegenseitig mit 'merge_user_username' aus"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bWVyZ2VkX2FmdGVy.desc": {
           "source": "Returns merge requests merged on or after the given time. Expected in ISO 8601 format.",
@@ -2867,10 +2803,6 @@
           "source": "Not[my Reaction Emoji]",
           "message": "Not[my Reaction Emoji]"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W215X3JlYWN0aW9uX2Vtb2ppXQ.short_desc": {
-          "source": "'<Negated>' Returns merge requests reacted by the authenticated user by the given 'emoji'. 'None' returns issues not given a reaction. 'Any' returns issues given at least one reaction",
-          "message": "'<Negated>' Gibt Merge-Requests zurück, auf die der authentifizierte Benutzer mit dem angegebenen 'emoji' reagiert hat. 'None' gibt Issues ohne Reaktion zurück. 'Any' gibt Issues mit mindestens einer Reaktion zurück"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W21pbGVzdG9uZV0.desc": {
           "source": "Milestone title",
           "message": "Meilenstein-Titel"
@@ -2915,10 +2847,6 @@
           "source": "Not Assigned To",
           "message": "Nicht zugewiesen an"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W2Fzc2lnbmVlX2lkXQ.short_desc": {
-          "source": "'<Negated>' Returns merge requests assigned to the given user 'id'. 'None' returns unassigned merge requests. 'Any' returns merge requests with an assignee",
-          "message": "'<Negated>' Gibt Merge-Requests zurück, die der angegebenen Benutzer-'id' zugewiesen sind. 'None' gibt nicht zugewiesene Merge-Requests zurück. 'Any' gibt Merge-Requests mit einem Zugewiesenen zurück"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W2Fzc2lnbmVlX3VzZXJuYW1lXQ.desc": {
           "source": "Return issues which are not assigned to the user with the given username",
           "message": "Issues zurückgeben, die nicht dem Benutzer mit dem angegebenen Benutzernamen zugewiesen sind"
@@ -2951,10 +2879,6 @@
           "source": "Not Reviewed By",
           "message": "Nicht überprüft von"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W3Jldmlld2VyX2lkXQ.short_desc": {
-          "source": "'<Negated>' Returns merge requests which have the user as a reviewer with the given user 'id'. 'None' returns merge requests with no reviewers. 'Any' returns merge requests with any reviewer. Mutually exclusive with 'reviewer_username'",
-          "message": "'<Negated>' Gibt Merge-Requests zurück, bei denen der Benutzer mit der angegebenen Benutzer-'id' als Reviewer eingetragen ist. 'None' gibt Merge-Requests ohne Reviewer zurück. 'Any' gibt Merge-Requests mit beliebigen Reviewern zurück. Schließt sich mit 'reviewer_username' gegenseitig aus"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W3Jldmlld2VyX3VzZXJuYW1lXQ.desc": {
           "source": "`<Negated>` Returns merge requests which have the user as a reviewer with the given `username`. `None` returns merge requests with no reviewers. `Any` returns merge requests with any reviewer. Mutually exclusive with `reviewer_id`. Introduced in GitLab 13.8.",
           "message": "`<Negated>` Gibt Merge-Requests zurück, bei denen der Benutzer mit dem angegebenen `username` als Reviewer eingetragen ist. `None` gibt Merge-Requests ohne Reviewer zurück. `Any` gibt Merge-Requests mit beliebigen Reviewern zurück. Schließt sich mit `reviewer_id` gegenseitig aus. Eingeführt in GitLab 13.8."
@@ -2962,10 +2886,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W3Jldmlld2VyX3VzZXJuYW1lXQ.display_name": {
           "source": "Not[reviewer Username]",
           "message": "Not[reviewer Username]"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W3Jldmlld2VyX3VzZXJuYW1lXQ.short_desc": {
-          "source": "'<Negated>' Returns merge requests which have the user as a reviewer with the given 'username'. 'None' returns merge requests with no reviewers. 'Any' returns merge requests with any reviewer. Mutually exclusive with 'reviewer_id'. Introduced in GitLab 13",
-          "message": "'<Negated>' Gibt Merge-Requests zurück, bei denen der Benutzer mit dem angegebenen 'username' als Reviewer eingetragen ist. 'None' gibt Merge-Requests ohne Reviewer zurück. 'Any' gibt Merge-Requests mit beliebigen Reviewern zurück. Schließt sich mit 'reviewer_id' gegenseitig aus. Eingeführt in GitLab 13"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c291cmNlX2JyYW5jaA.desc": {
           "source": "Returns merge requests with the given source branch",
@@ -3043,10 +2963,6 @@
           "source": "Scope",
           "message": "Geltungsbereich"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c2NvcGU.short_desc": {
-          "source": "Returns merge requests for the given scope: 'created_by_me', 'assigned_to_me', 'reviews_for_me' or 'all'",
-          "message": "Gibt Merge-Requests für den angegebenen Bereich zurück: 'created_by_me', 'assigned_to_me', 'reviews_for_me' oder 'all'"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c2VhcmNo.desc": {
           "source": "Return list of branches matching the search criteria",
           "message": "Liste der Branches zurückgeben, die den Suchkriterien entsprechen"
@@ -3087,10 +3003,6 @@
           "source": "State",
           "message": "Bundesstaat"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c3RhdGU.short_desc": {
-          "source": "Returns 'all' merge requests or just those that are 'opened', 'closed', 'locked', or 'merged'",
-          "message": "Gibt 'all' Merge-Requests zurück oder nur diejenigen, die 'opened', 'closed', 'locked' oder 'merged' sind"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cGFnZQ.desc": {
           "source": "Current page number",
           "message": "Aktuelle Seitennummer"
@@ -3123,10 +3035,6 @@
           "source": "Reviewer",
           "message": "Reviewer"
         },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cmV2aWV3ZXJfaWQ.short_desc": {
-          "source": "Returns merge requests which have the user as a reviewer with the given user 'id'. 'None' returns merge requests with no reviewers. 'Any' returns merge requests with any reviewer. Mutually exclusive with 'reviewer_username'",
-          "message": "Gibt Merge-Requests zurück, bei denen der Benutzer mit der angegebenen Benutzer-'id' als Reviewer eingetragen ist. 'None' gibt Merge-Requests ohne Reviewer zurück. 'Any' gibt Merge-Requests mit beliebigen Reviewern zurück. Schließt sich mit 'reviewer_username' gegenseitig aus"
-        },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cmV2aWV3ZXJfdXNlcm5hbWU.desc": {
           "source": "Returns merge requests which have the user as a reviewer with the given `username`. `None` returns merge requests with no reviewers. `Any` returns merge requests with any reviewer. Mutually exclusive with `reviewer_id`. Introduced in GitLab 13.8.",
           "message": "Gibt Merge-Requests zurück, bei denen der Benutzer mit dem angegebenen `username` als Reviewer eingetragen ist. `None` gibt Merge-Requests ohne Reviewer zurück. `Any` gibt Merge-Requests mit beliebigen Reviewern zurück. Schließt sich mit `reviewer_id` gegenseitig aus. Eingeführt in GitLab 13.8."
@@ -3134,10 +3042,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cmV2aWV3ZXJfdXNlcm5hbWU.display_name": {
           "source": "Reviewer Username",
           "message": "Reviewer-Benutzername"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.cmV2aWV3ZXJfdXNlcm5hbWU.short_desc": {
-          "source": "Returns merge requests which have the user as a reviewer with the given 'username'. 'None' returns merge requests with no reviewers. 'Any' returns merge requests with any reviewer. Mutually exclusive with 'reviewer_id'. Introduced in GitLab 13",
-          "message": "Gibt Merge-Requests zurück, bei denen der Benutzer mit dem angegebenen 'username' als Reviewer eingetragen ist. 'None' gibt Merge-Requests ohne Reviewer zurück. 'Any' gibt Merge-Requests mit beliebigen Reviewern zurück. Schließt sich mit 'reviewer_id' gegenseitig aus. Eingeführt in GitLab 13"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.d2l0aF9sYWJlbHNfZGV0YWlscw.desc": {
           "source": "Return titles of labels and other details",
@@ -3158,10 +3062,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.d2l0aF9tZXJnZV9zdGF0dXNfcmVjaGVjaw.display_name": {
           "source": "With Merge Status Recheck",
           "message": "Mit Merge-Status-Neuberechnung"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.d2l0aF9tZXJnZV9zdGF0dXNfcmVjaGVjaw.short_desc": {
-          "source": "If 'true', this projection requests (but does not guarantee) that the 'merge_status' field be recalculated asynchronously",
-          "message": "Wenn 'true', fordert diese Projektion an (garantiert jedoch nicht), dass das Feld 'merge_status' asynchron neu berechnet wird"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.d2lw.allowed-value.c3RyaW5nOm5v.display_name": {
           "source": "no",
@@ -3230,10 +3130,6 @@
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.dmlldw.display_name": {
           "source": "View",
           "message": "Ansicht"
-        },
-        "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.dmlldw.short_desc": {
-          "source": "If simple, returns the 'iid', URL, title, description, and basic state of merge request",
-          "message": "Wenn simple, gibt die 'iid', URL, den Titel, die Beschreibung und den grundlegenden Status des Merge-Requests zurück"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.short_desc": {
           "source": "List the merge requests in a project",
@@ -5915,10 +5811,6 @@
           "source": "URI Path",
           "message": "URI-Pfad"
         },
-        "app.R2l0bGFi.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann '{name}'-Platzhalter enthalten, die aus 'path_vars' ersetzt werden. Beispiel: '/users/{id}/comments'"
-        },
         "app.R2l0bGFi.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash von Werten, die in `{name}`-Platzhalter im URI-Pfad eingesetzt werden. Beispiel: Bei `path = /users/{id}` und `path_vars = {id: 123}` sendet das Framework `/users/123`. Werte werden URL-codiert."
@@ -6274,10 +6166,6 @@
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZW1haWxzX2Rpc2FibGVk.display_name": {
           "source": "Emails Disabled",
           "message": "E-Mails deaktiviert"
-        },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZW1haWxzX2Rpc2FibGVk.short_desc": {
-          "source": "_(Deprecated)_ Disable email notifications",
-          "message": "_(Veraltet)_ E-Mail-Benachrichtigungen deaktivieren"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.ZW1haWxzX2VuYWJsZWQ.desc": {
           "source": "Enable email notifications",
@@ -6955,10 +6843,6 @@
           "source": "Container Registry Access Level",
           "message": "Zugriffsebene der Container-Registry"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2FjY2Vzc19sZXZlbA.short_desc": {
-          "source": "Controls visibility of the container registry. One of 'disabled', 'private' or 'enabled'. 'private' will make the container registry accessible only to project members (reporter role and above). 'enabled' will make the container registry accessible to everyone who has access to the project. 'disabled' will disable the container registry",
-          "message": "Steuert die Sichtbarkeit der Container-Registry. Einer von 'disabled', 'private' oder 'enabled'. 'private' macht die Container-Registry nur für Projektmitglieder (Reporter-Rolle und höher) zugänglich. 'enabled' macht die Container-Registry für jeden zugänglich, der Zugriff auf das Projekt hat. 'disabled' deaktiviert die Container-Registry"
-        },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2VuYWJsZWQ.desc": {
           "source": "Deprecated: Use :container_registry_access_level instead. Flag indication if the container registry is enabled for that project",
           "message": "Veraltet: Verwenden Sie stattdessen :container_registry_access_level. Flag, das angibt, ob die Container-Registry für dieses Projekt aktiviert ist"
@@ -7463,10 +7347,6 @@
           "source": "Initialize With Readme",
           "message": "Mit README initialisieren"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aW5pdGlhbGl6ZV93aXRoX3JlYWRtZQ.short_desc": {
-          "source": "Initialize a project with a README",
-          "message": "Ein Projekt mit einer README initialisieren"
-        },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aXNzdWVfYnJhbmNoX3RlbXBsYXRl.desc": {
           "source": "Template used to create a branch from an issue",
           "message": "Vorlage zum Erstellen eines Branches aus einem Issue"
@@ -7931,10 +7811,6 @@
           "source": "Spp Repository Pipeline Access",
           "message": "SPP-Repository-Pipeline-Zugriff"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c3BwX3JlcG9zaXRvcnlfcGlwZWxpbmVfYWNjZXNz.short_desc": {
-          "source": "Grant read-only access to security policy configurations for enforcement in linked CI/CD projects",
-          "message": "Gewährt schreibgeschützten Zugriff auf Sicherheitsrichtlinienkonfigurationen zur Durchsetzung in verknüpften CI/CD-Projekten"
-        },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c3F1YXNoX29wdGlvbg.allowed-value.c3RyaW5nOm5ldmVy.display_name": {
           "source": "never",
           "message": "never"
@@ -8022,10 +7898,6 @@
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.display_name": {
           "source": "Package Registry Access Level",
           "message": "Zugriffsebene für Package Registry"
-        },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.short_desc": {
-          "source": "Controls visibility of the package registry. One of 'disabled', 'private', 'enabled' or 'public'. 'private' will make the package registry accessible only to project members (reporter role and above). 'enabled' will make the package registry accessible to everyone who has access to the project. 'public' will make the package registry accessible to everyone. 'disabled' will disable the package registry",
-          "message": "Steuert die Sichtbarkeit der Package Registry. Einer der Werte 'disabled', 'private', 'enabled' oder 'public'. 'private' macht die Package Registry nur für Projektmitglieder zugänglich (Reporter-Rolle und höher). 'enabled' macht die Package Registry für alle zugänglich, die Zugriff auf das Projekt haben. 'public' macht die Package Registry für alle zugänglich. 'disabled' deaktiviert die Package Registry"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.cGFja2FnZXNfZW5hYmxlZA.desc": {
           "source": "Deprecated: Use :package_registry_access_level instead. Enable project packages feature",
@@ -8639,10 +8511,6 @@
           "source": "Milestone",
           "message": "Milestone"
         },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.option.bWlsZXN0b25l.short_desc": {
-          "source": "The title of a project or ancestor-group milestone to assign the merge request to",
-          "message": "Der Titel eines Meilensteins eines Projekts oder einer übergeordneten Gruppe, dem der Merge Request zugewiesen werden soll"
-        },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.option.bWlsZXN0b25lX2lk.desc": {
           "source": "The global ID of a milestone to assign the merge request to.",
           "message": "Die globale ID eines Meilensteins, dem der Merge Request zugewiesen werden soll."
@@ -9058,10 +8926,6 @@
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl90b19yZXNvbHZl.display_name": {
           "source": "Discussion To Resolve",
           "message": "Aufzulösende Diskussion"
-        },
-        "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl90b19yZXNvbHZl.short_desc": {
-          "source": "The ID of a discussion to resolve, also pass 'merge_request_to_resolve_discussions_of'",
-          "message": "Die ID einer aufzulösenden Diskussion, übergeben Sie auch 'merge_request_to_resolve_discussions_of'"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl9sb2NrZWQ.desc": {
           "source": " Boolean parameter indicating if the issue's discussion is locked",
@@ -9927,10 +9791,6 @@
           "source": "Auto Ban User On Excessive Projects Download",
           "message": "Benutzer bei übermäßigem Projektdownload automatisch sperren"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YXV0b19iYW5fdXNlcl9vbl9leGNlc3NpdmVfcHJvamVjdHNfZG93bmxvYWQ.short_desc": {
-          "source": "Ban users from the group when they exceed maximum number of unique projects download in the specified time period",
-          "message": "Benutzer aus der Gruppe sperren, wenn sie die maximale Anzahl an Downloads eindeutiger Projekte im angegebenen Zeitraum überschreiten"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YXV0b19kZXZvcHNfZW5hYmxlZA.desc": {
           "source": "Default to Auto DevOps pipeline for all projects within this group",
           "message": "Standardmäßig Auto-DevOps-Pipeline für alle Projekte innerhalb dieser Gruppe verwenden"
@@ -10119,10 +9979,6 @@
           "source": "Duo Core Features Enabled",
           "message": "Duo Core-Funktionen aktiviert"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZHVvX2NvcmVfZmVhdHVyZXNfZW5hYmxlZA.short_desc": {
-          "source": "[Experimental] Indicates whether GitLab Duo Core features are enabled for the group",
-          "message": "[Experimentell] Gibt an, ob GitLab Duo Core-Funktionen für die Gruppe aktiviert sind"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZHVvX2V4dGVybmFsX2FnZW50c19hdmFpbGFiaWxpdHk.desc": {
           "source": "Enable GitLab Duo external agents for this group",
           "message": "Externe GitLab Duo-Agents für diese Gruppe aktivieren"
@@ -10179,10 +10035,6 @@
           "source": "Duo Template Project Id",
           "message": "Duo-Vorlagen-Projekt-ID"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZHVvX3RlbXBsYXRlX3Byb2plY3RfaWQ.short_desc": {
-          "source": "The ID of a project to use as the Duo Code Review custom instructions template for this group",
-          "message": "Die ID eines Projekts, das als benutzerdefinierte Anweisungsvorlage für Duo Code Review für diese Gruppe verwendet werden soll"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZW1haWxzX2Rpc2FibGVk.desc": {
           "source": "_(Deprecated)_ Disable email notifications. Use: emails_enabled",
           "message": "_(Veraltet)_ E-Mail-Benachrichtigungen deaktivieren. Verwenden Sie: emails_enabled"
@@ -10190,10 +10042,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZW1haWxzX2Rpc2FibGVk.display_name": {
           "source": "Emails Disabled",
           "message": "E-Mails deaktiviert"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZW1haWxzX2Rpc2FibGVk.short_desc": {
-          "source": "_(Deprecated)_ Disable email notifications",
-          "message": "_(Veraltet)_ E-Mail-Benachrichtigungen deaktivieren"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZW1haWxzX2VuYWJsZWQ.desc": {
           "source": "Enable email notifications",
@@ -10347,10 +10195,6 @@
           "source": "Lock Ai Audit Events Storage Enabled",
           "message": "Sperre für KI-Audit-Ereignisspeicherung aktiviert"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19haV9hdWRpdF9ldmVudHNfc3RvcmFnZV9lbmFibGVk.short_desc": {
-          "source": "Indicates whether AI audit events storage is enforced for all subgroups and projects",
-          "message": "Gibt an, ob die Speicherung von KI-Audit-Ereignissen für alle Untergruppen und Projekte erzwungen wird"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19idWlsdF9pbl9wcm9qZWN0X3RlbXBsYXRlc19lbmFibGVk.desc": {
           "source": "Enforce the built-in project templates setting for all subgroups",
           "message": "Die Einstellung für integrierte Projektvorlagen für alle Untergruppen erzwingen"
@@ -10370,10 +10214,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19kdW9fZmVhdHVyZXNfZW5hYmxlZA.display_name": {
           "source": "Lock Duo Features Enabled",
           "message": "Sperre für Duo-Funktionen aktiviert"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19kdW9fZmVhdHVyZXNfZW5hYmxlZA.short_desc": {
-          "source": "Indicates if the GitLab Duo features enabled setting is enforced for all subgroups",
-          "message": "Gibt an, ob die Einstellung zur Aktivierung von GitLab Duo-Funktionen für alle Untergruppen erzwungen wird"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19tYXRoX3JlbmRlcmluZ19saW1pdHNfZW5hYmxlZA.desc": {
           "source": "Indicates if math rendering limits are locked for all descendent groups.",
@@ -10643,10 +10483,6 @@
           "source": "Prevent Sharing Groups Outside Hierarchy",
           "message": "Freigabe von Gruppen außerhalb der Hierarchie verhindern"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.cHJldmVudF9zaGFyaW5nX2dyb3Vwc19vdXRzaWRlX2hpZXJhcmNoeQ.short_desc": {
-          "source": "Prevent sharing groups within this namespace with any groups outside the namespace",
-          "message": "Freigabe von Gruppen innerhalb dieses Namensraums für Gruppen außerhalb des Namensraums verhindern"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.cHJvamVjdF9jcmVhdGlvbl9sZXZlbA.allowed-value.c3RyaW5nOm1haW50YWluZXI.display_name": {
           "source": "maintainer",
           "message": "Maintainer"
@@ -10795,10 +10631,6 @@
           "source": "Unique Project Download Limit",
           "message": "Download-Limit für eindeutige Projekte"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXQ.short_desc": {
-          "source": "Maximum number of unique projects a user can download in the specified time period before they are banned",
-          "message": "Maximale Anzahl eindeutiger Projekte, die ein Benutzer im angegebenen Zeitraum herunterladen kann, bevor er gesperrt wird"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXRfYWxlcnRsaXN0.desc": {
           "source": "List of user ids who will be emailed when Git abuse rate limit is exceeded",
           "message": "Liste der Benutzer-IDs, die per E-Mail benachrichtigt werden, wenn das Git-Missbrauchs-Ratenlimit überschritten wird"
@@ -10830,10 +10662,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXRfaW50ZXJ2YWxfaW5fc2Vjb25kcw.display_name": {
           "source": "Unique Project Download Limit Interval In Seconds",
           "message": "Intervall für Download-Limit für eindeutige Projekte in Sekunden"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXRfaW50ZXJ2YWxfaW5fc2Vjb25kcw.short_desc": {
-          "source": "Time period during which a user can download a maximum amount of projects before they are banned",
-          "message": "Zeitraum, in dem ein Benutzer eine maximale Anzahl von Projekten herunterladen kann, bevor er gesperrt wird"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmludGVybmFs.display_name": {
           "source": "internal",
@@ -11103,10 +10931,6 @@
           "source": "Container Registry Access Level",
           "message": "Zugriffsebene der Container-Registry"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2FjY2Vzc19sZXZlbA.short_desc": {
-          "source": "Controls visibility of the container registry. One of 'disabled', 'private' or 'enabled'. 'private' will make the container registry accessible only to project members (reporter role and above). 'enabled' will make the container registry accessible to everyone who has access to the project. 'disabled' will disable the container registry",
-          "message": "Steuert die Sichtbarkeit der Container-Registry. Einer von 'disabled', 'private' oder 'enabled'. 'private' macht die Container-Registry nur für Projektmitglieder (Reporter-Rolle und höher) zugänglich. 'enabled' macht die Container-Registry für jeden zugänglich, der Zugriff auf das Projekt hat. 'disabled' deaktiviert die Container-Registry"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2VuYWJsZWQ.desc": {
           "source": "Deprecated: Use :container_registry_access_level instead. Flag indication if the container registry is enabled for that project",
           "message": "Veraltet: Verwenden Sie stattdessen :container_registry_access_level. Flag, das angibt, ob die Container-Registry für dieses Projekt aktiviert ist"
@@ -11174,10 +10998,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGlzcGxheV9waXBlbGluZV92YXJpYWJsZXM.display_name": {
           "source": "Ci Display Pipeline Variables",
           "message": "CI-Pipeline-Variablen anzeigen"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGlzcGxheV9waXBlbGluZV92YXJpYWJsZXM.short_desc": {
-          "source": "Display all manually-defined variables in the pipeline details page after running a pipeline manually",
-          "message": "Alle manuell definierten Variablen auf der Pipeline-Detailseite anzeigen, nachdem eine Pipeline manuell ausgeführt wurde"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X2VuYWJsZWQ.desc": {
           "source": "Prevent older deployment jobs that are still pending",
@@ -11251,10 +11071,6 @@
           "source": "Ci Pipeline Variables Minimum Override Role",
           "message": "Mindestrolle zum Überschreiben von CI-Pipeline-Variablen"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcGlwZWxpbmVfdmFyaWFibGVzX21pbmltdW1fb3ZlcnJpZGVfcm9sZQ.short_desc": {
-          "source": "Limit ability to override CI/CD variables when triggering a pipeline to only users with at least the set minimum role",
-          "message": "Möglichkeit zum Überschreiben von CI/CD-Variablen beim Auslösen einer Pipeline auf Benutzer mit mindestens der festgelegten Mindestrolle beschränken"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.desc": {
           "source": "Allow pushing to this project's repository by authenticating with a CI/CD job token generated in this project.",
           "message": "Pushen in das Repository dieses Projekts durch Authentifizierung mit einem in diesem Projekt generierten CI/CD-Job-Token zulassen."
@@ -11262,10 +11078,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.display_name": {
           "source": "Ci Push Repository For Job Token Allowed",
           "message": "CI-Push ins Repository für Job-Token zulassen"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.short_desc": {
-          "source": "Allow pushing to this project's repository by authenticating with a CI/CD job token generated in this project",
-          "message": "Pushen in das Repository dieses Projekts durch Authentifizierung mit einem in diesem Projekt generierten CI/CD-Job-Token zulassen"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcmVzdHJpY3RfcGlwZWxpbmVfY2FuY2VsbGF0aW9uX3JvbGU.desc": {
           "source": "Roles allowed to cancel pipelines and jobs.",
@@ -12179,10 +11991,6 @@
           "source": "Merge Trains Skip Train Allowed",
           "message": "Überspringen des Merge Trains zulassen"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWVyZ2VfdHJhaW5zX3NraXBfdHJhaW5fYWxsb3dlZA.short_desc": {
-          "source": "Allow merge train merge requests to be merged without waiting for pipelines to finish",
-          "message": "Zulassen, dass Merge-Requests von Merge Trains zusammengeführt werden, ohne auf den Abschluss von Pipelines zu warten"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWlycm9y.desc": {
           "source": "[Deprecated] Enables pull mirroring in a project",
           "message": "[Veraltet] Aktiviert Pull-Spiegelung in einem Projekt"
@@ -12238,10 +12046,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWlycm9yX3VzZXJfaWQ.display_name": {
           "source": "Mirror User Id",
           "message": "Spiegel-Benutzer-ID"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWlycm9yX3VzZXJfaWQ.short_desc": {
-          "source": "[Deprecated] User responsible for all the activity surrounding a pull mirror event",
-          "message": "[Veraltet] Benutzer, der für alle Aktivitäten rund um ein Pull-Spiegel-Ereignis verantwortlich ist"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bXJfZGVmYXVsdF90YXJnZXRfc2VsZg.desc": {
           "source": "Merge requests of this forked project targets itself by default",
@@ -12347,10 +12151,6 @@
           "source": "Security Policy Pipeline Must Succeed",
           "message": "Sicherheitsrichtlinien-Pipeline muss erfolgreich sein"
         },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2VjdXJpdHlfcG9saWN5X3BpcGVsaW5lX211c3Rfc3VjY2VlZA.short_desc": {
-          "source": "Require all security policy pipelines to succeed before merge requests can be merged",
-          "message": "Erfordern, dass alle Sicherheitsrichtlinien-Pipelines erfolgreich sind, bevor Merge-Requests zusammengeführt werden können"
-        },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2VydmljZV9kZXNrX2VuYWJsZWQ.desc": {
           "source": "Disable or enable the service desk",
           "message": "Service Desk aktivieren oder deaktivieren"
@@ -12406,10 +12206,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c3BwX3JlcG9zaXRvcnlfcGlwZWxpbmVfYWNjZXNz.display_name": {
           "source": "Spp Repository Pipeline Access",
           "message": "SPP-Repository-Pipeline-Zugriff"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c3BwX3JlcG9zaXRvcnlfcGlwZWxpbmVfYWNjZXNz.short_desc": {
-          "source": "Grant read-only access to security policy configurations for enforcement in linked CI/CD projects",
-          "message": "Gewährt schreibgeschützten Zugriff auf Sicherheitsrichtlinienkonfigurationen zur Durchsetzung in verknüpften CI/CD-Projekten"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c3F1YXNoX29wdGlvbg.allowed-value.c3RyaW5nOm5ldmVy.display_name": {
           "source": "never",
@@ -12498,10 +12294,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.display_name": {
           "source": "Package Registry Access Level",
           "message": "Zugriffsebene für Package Registry"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.short_desc": {
-          "source": "Controls visibility of the package registry. One of 'disabled', 'private', 'enabled' or 'public'. 'private' will make the package registry accessible only to project members (reporter role and above). 'enabled' will make the package registry accessible to everyone who has access to the project. 'public' will make the package registry accessible to everyone. 'disabled' will disable the package registry",
-          "message": "Steuert die Sichtbarkeit der Package Registry. Einer der Werte 'disabled', 'private', 'enabled' oder 'public'. 'private' macht die Package Registry nur für Projektmitglieder zugänglich (Reporter-Rolle und höher). 'enabled' macht die Package Registry für alle zugänglich, die Zugriff auf das Projekt haben. 'public' macht die Package Registry für alle zugänglich. 'disabled' deaktiviert die Package Registry"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.cGFja2FnZXNfZW5hYmxlZA.desc": {
           "source": "Deprecated: Use :package_registry_access_level instead. Enable project packages feature",
@@ -13526,10 +13318,6 @@
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.bWlsZXN0b25l.display_name": {
           "source": "Milestone",
           "message": "Milestone"
-        },
-        "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.bWlsZXN0b25l.short_desc": {
-          "source": "The title of a project or ancestor-group milestone to assign the merge request to",
-          "message": "Der Titel eines Meilensteins eines Projekts oder einer übergeordneten Gruppe, dem der Merge Request zugewiesen werden soll"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.bWlsZXN0b25lX2lk.desc": {
           "source": "The global ID of a milestone to assign the merge request to.",

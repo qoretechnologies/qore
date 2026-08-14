@@ -211,10 +211,6 @@
           "source": "Style Preset",
           "message": "Predvoľba štýlu"
         },
-        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.short_desc": {
-          "source": "Pre-baked style preset (`core` model only)",
-          "message": "Predpripravená predvoľba štýlu (iba model `core`)"
-        },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.desc": {
           "source": "Text prompt describing the desired image.  Be specific about subject, style, lighting, and composition for best results.",
           "message": "Textové zadanie popisujúce požadovaný obrázok. Pre dosiahnutie najlepších výsledkov buďte konkrétni v predmete, štýle, osvetlení a kompozícii."
@@ -522,10 +518,6 @@
         "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "Cesta URI"
-        },
-        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "Cesta URI relatívna k základnej URL adrese API pripojenia. Môže obsahovať zastupiteľné objekty '{name}', ktoré sa nahradia z 'path_vars'. Príklad: '/users/{id}/comments'"
         },
         "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",

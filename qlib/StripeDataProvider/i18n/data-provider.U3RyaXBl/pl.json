@@ -111,10 +111,6 @@
           "source": "Collection Options",
           "message": "Opcje zbierania danych"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.Y29sbGVjdGlvbl9vcHRpb25z.short_desc": {
-          "source": "Specifies the requirements that Stripe collects from connected accounts in the Connect Onboarding flow",
-          "message": "Określa wymagania, które Stripe zbiera od połączonych kont w ramach procesu Connect Onboarding"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.YWNjb3VudA.desc": {
           "source": "The identifier of the account to create an account link for.",
           "message": "Identyfikator konta, dla którego ma zostać utworzony link."
@@ -147,10 +143,6 @@
           "source": "Return Url",
           "message": "Adres URL powrotu"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmV0dXJuX3VybA.short_desc": {
-          "source": "The URL that the user will be redirected to upon leaving or completing the linked flow",
-          "message": "Adres URL, na który użytkownik zostanie przekierowany po opuszczeniu lub zakończeniu powiązanego procesu"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmVmcmVzaF91cmw.desc": {
           "source": "The URL the user will be redirected to if the account link is expired, has been previously-visited, or is otherwise invalid. The URL you specify should attempt to generate a new account link with the same parameters used to create the original account link, then redirect the user to the new account link's URL so they can continue with Connect Onboarding. If a new account link cannot be generated or the redirect fails you should display a useful error to the user.",
           "message": "Adres URL, na który użytkownik zostanie przekierowany, jeśli link do konta wygasł, został już wcześniej odwiedzony lub jest w inny sposób nieprawidłowy. Podany adres URL powinien podjąć próbę wygenerowania nowego linku do konta z tymi samymi parametrami, które posłużyły do utworzenia oryginalnego linku, a następnie przekierować użytkownika na adres nowego linku, aby umożliwić kontynuację Connect Onboarding. Jeśli nie można wygenerować nowego linku lub przekierowanie się nie powiedzie, należy wyświetlić użytkownikowi odpowiedni komunikat o błędzie."
@@ -158,10 +150,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmVmcmVzaF91cmw.display_name": {
           "source": "Refresh Url",
           "message": "Adres URL odświeżenia"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmVmcmVzaF91cmw.short_desc": {
-          "source": "The URL the user will be redirected to if the account link is expired, has been previously-visited, or is otherwise invalid",
-          "message": "Adres URL, na który użytkownik zostanie przekierowany, jeśli link do konta wygasł, był już odwiedzony lub jest nieprawidłowy"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmFjY291bnRfb25ib2FyZGluZw.display_name": {
           "source": "account_onboarding",
@@ -207,10 +195,6 @@
           "source": "Additional Tos Acceptances",
           "message": "Dodatkowe akceptacje warunków świadczenia usług"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.YWRkaXRpb25hbF90b3NfYWNjZXB0YW5jZXM.short_desc": {
-          "source": "Details on the legal guardian's or authorizer's acceptance of the required Stripe agreements",
-          "message": "Szczegóły dotyczące akceptacji wymaganych umów Stripe przez opiekuna prawnego lub osobę upoważnioną"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.YWRkcmVzc19rYW5h.desc": {
           "source": "The Kana variation of the person's address (Japan only).",
           "message": "Zapis adresu osoby w alfabecie Kana (tylko Japonia)."
@@ -254,10 +238,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.Z2VuZGVy.display_name": {
           "source": "Gender",
           "message": "Płeć"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.Z2VuZGVy.short_desc": {
-          "source": "The person's gender (International regulations require either \"male\" or \"female\")",
-          "message": "Płeć osoby (przepisy międzynarodowe wymagają wartości „male” lub „female”)"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.ZG9i.desc": {
           "source": "The person's date of birth.",
@@ -375,10 +355,6 @@
           "source": "Id Number Secondary",
           "message": "Dodatkowy numer identyfikacyjny"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.aWRfbnVtYmVyX3NlY29uZGFyeQ.short_desc": {
-          "source": "The person's secondary ID number, as appropriate for their country, will be used for enhanced verification checks",
-          "message": "Dodatkowy numer identyfikacyjny osoby, właściwy dla jej kraju, zostanie użyty do rozszerzonej weryfikacji"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.bGFzdF9uYW1l.desc": {
           "source": "The person's last name.",
           "message": "Nazwisko osoby."
@@ -435,10 +411,6 @@
           "source": "Metadata",
           "message": "Metadane"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Zestaw [par klucz-wartość](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.bmF0aW9uYWxpdHk.desc": {
           "source": "The country where the person is a national. Two-letter country code ([ISO 3166-1 alpha-2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2)), or \"XX\" if unavailable.",
           "message": "Kraj, którego obywatelem jest dana osoba. Dwuliterowy kod kraju ([ISO 3166-1 alpha-2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2)) lub \"XX\", jeśli jest niedostępny."
@@ -459,10 +431,6 @@
           "source": "Ssn Last 4",
           "message": "Ostatnie 4 cyfry SSN"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.c3NuX2xhc3RfNA.short_desc": {
-          "source": "The last four digits of the person's Social Security number (U",
-          "message": "Ostatnie cztery cyfry numeru ubezpieczenia społecznego osoby (U"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.cG9saXRpY2FsX2V4cG9zdXJl.allowed-value.c3RyaW5nOm5vbmU.display_name": {
           "source": "none",
           "message": "none"
@@ -479,10 +447,6 @@
           "source": "Political Exposure",
           "message": "Ekspozycja polityczna"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.cG9saXRpY2FsX2V4cG9zdXJl.short_desc": {
-          "source": "Indicates if the person or any of their representatives, family members, or other closely related persons, declares that they hold or have held an important public job or function, in any jurisdiction",
-          "message": "Wskazuje, czy osoba lub którykolwiek z jej przedstawicieli, członków rodziny lub innych blisko powiązanych osób deklaruje, że pełni lub pełnił ważną funkcję publiczną w dowolnej jurysdykcji"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.cGVyc29uX3Rva2Vu.desc": {
           "source": "A [person token](https://docs.stripe.com/connect/account-tokens), used to securely provide details to the person.",
           "message": "[Token osoby](https://docs.stripe.com/connect/account-tokens), używany do bezpiecznego przekazywania danych osoby."
@@ -490,10 +454,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.cGVyc29uX3Rva2Vu.display_name": {
           "source": "Person Token",
           "message": "Token osoby"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.cGVyc29uX3Rva2Vu.short_desc": {
-          "source": "A [person token](https://docs",
-          "message": "[Token osoby](https://docs"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.cGhvbmU.desc": {
           "source": "The person's phone number.",
@@ -599,10 +559,6 @@
           "source": "Balance",
           "message": "Saldo"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.YmFsYW5jZQ.short_desc": {
-          "source": "An integer amount in cents (or local equivalent) that represents the customer's current balance, which affect the customer's future invoices",
-          "message": "Wartość całkowita w centach (lub lokalnym odpowiedniku) reprezentująca bieżące saldo klienta, która wpływa na przyszłe faktury klienta"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.YnVzaW5lc3NfbmFtZQ.desc": {
           "source": "The customer's business name. This may be up to *150 characters*.",
           "message": "Nazwa firmy klienta. Może zawierać do *150 znaków*."
@@ -634,10 +590,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
           "source": "Email",
           "message": "E-mail"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
-          "source": "Customer's email address. It's displayed alongside the customer in your dashboard and can be useful for searching and tracking",
-          "message": "Adres e-mail klienta. Jest wyświetlany obok klienta w panelu nawigacyjnym i może być przydatny do wyszukiwania oraz śledzenia"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.ZXhwYW5k.desc": {
           "source": "Specifies which fields in the response should be expanded.",
@@ -847,10 +799,6 @@
           "source": "Currency",
           "message": "Waluta"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLWJhbGFuY2UtdHJhbnNhY3Rpb24.option.Y3VycmVuY3k.short_desc": {
-          "source": "Three-letter [ISO currency code](https://www",
-          "message": "Trzyliterowy [kod waluty ISO](https://www"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLWJhbGFuY2UtdHJhbnNhY3Rpb24.option.Y3VzdG9tZXI.desc": {
           "source": "Only return charges for the customer specified by this customer ID.",
           "message": "Zwracaj tylko opłaty dla klienta określonego przez ten identyfikator klienta."
@@ -907,10 +855,6 @@
           "source": "Metadata",
           "message": "Metadane"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLWJhbGFuY2UtdHJhbnNhY3Rpb24.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Zestaw [par klucz-wartość](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLWJhbGFuY2UtdHJhbnNhY3Rpb24.short_desc": {
           "source": "Credit or debit a customer's balance",
           "message": "Uznaj lub obciąż saldo klienta"
@@ -939,10 +883,6 @@
           "source": "Collection Method",
           "message": "Metoda pobierania płatności"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y29sbGVjdGlvbl9tZXRob2Q.short_desc": {
-          "source": "Either 'charge_automatically', or 'send_invoice'. When charging automatically, Stripe will attempt to pay this subscription at the end of the cycle using the default source attached to the customer. When sending an invoice, Stripe will email your customer an invoice with payment instructions and mark the subscription as 'active'. Defaults to 'charge_automatically'",
-          "message": "Albo 'charge_automatically', albo 'send_invoice'. W przypadku automatycznego obciążania Stripe podejmie próbę opłacenia tej subskrypcji na koniec cyklu przy użyciu domyślnego źródła przypisanego do klienta. W przypadku wysyłania faktury Stripe wyśle do klienta fakturę z instrukcjami płatności i oznaczy subskrypcję jako 'active'. Domyślnie 'charge_automatically'"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y2FuY2VsX2F0.desc": {
           "source": "A timestamp at which the subscription should cancel. If set to a date before the current period ends, this will cause a proration if prorations have been enabled using `proration_behavior`. If set during a future period, this will always cause a proration for that period.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
           "message": "Znacznik czasu, w którym subskrypcja powinna zostać anulowana. Jeśli zostanie ustawiony na datę przed końcem bieżącego okresu, spowoduje to naliczenie proporcjonalne (proration), jeśli naliczanie proporcjonalne zostało włączone za pomocą `proration_behavior`. Jeśli zostanie ustawiony w przyszłym okresie, zawsze spowoduje to naliczenie proporcjonalne dla tego okresu.\n\nTa wartość jest przesyłana jako liczba całkowita sekund od 1970-01-01Z."
@@ -963,10 +903,6 @@
           "source": "Cancel At Period End",
           "message": "Anuluj na koniec okresu"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y2FuY2VsX2F0X3BlcmlvZF9lbmQ.short_desc": {
-          "source": "Indicate whether this subscription should cancel at the end of the current period ('current_period_end'). Defaults to 'false'",
-          "message": "Wskaż, czy ta subskrypcja powinna zostać anulowana na koniec bieżącego okresu ('current_period_end'). Domyślnie 'false'"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y3VycmVuY3k.desc": {
           "source": "Three-letter [ISO currency code](https://www.iso.org/iso-4217-currency-codes.html), in lowercase. Must be a [supported currency](https://stripe.com/docs/currencies).",
           "message": "Trzyliterowy [kod waluty ISO](https://www.iso.org/iso-4217-currency-codes.html), pisany małymi literami. Musi to być [obsługiwana waluta](https://stripe.com/docs/currencies)."
@@ -974,10 +910,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y3VycmVuY3k.display_name": {
           "source": "Currency",
           "message": "Waluta"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y3VycmVuY3k.short_desc": {
-          "source": "Three-letter [ISO currency code](https://www",
-          "message": "Trzyliterowy [kod waluty ISO](https://www"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y3VzdG9tZXI.desc": {
           "source": "Only return charges for the customer specified by this customer ID.",
@@ -998,10 +930,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.YWRkX2ludm9pY2VfaXRlbXM.display_name": {
           "source": "Add Invoice Items",
           "message": "Dodaj pozycje faktury"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.YWRkX2ludm9pY2VfaXRlbXM.short_desc": {
-          "source": "A list of prices and quantities that will generate invoice items appended to the next invoice for this subscription",
-          "message": "Lista cen i ilości, które wygenerują pozycje faktury dołączone do następnej faktury dla tej subskrypcji"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.YXBwbGljYXRpb25fZmVlX3BlcmNlbnQ.desc": {
           "source": "A non-negative decimal between 0 and 100, with at most two decimal places. This represents the percentage of the subscription invoice total that will be transferred to the application owner's Stripe account. The request must be made by a platform account on a connected account in order to set an application fee percentage. For more information, see the application fees [documentation](https://stripe.com/docs/connect/subscriptions#collecting-fees-on-subscriptions).",
@@ -1047,10 +975,6 @@
           "source": "Billing Thresholds",
           "message": "Progi rozliczeniowe"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.YmlsbGluZ190aHJlc2hvbGRz.short_desc": {
-          "source": "Define thresholds at which an invoice will be sent, and the subscription advanced to a new billing period",
-          "message": "Zdefiniuj progi, po osiągnięciu których zostanie wysłana faktura, a subskrypcja przejdzie do nowego okresu rozliczeniowego"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.YmlsbGluZ19jeWNsZV9hbmNob3I.desc": {
           "source": "A future timestamp in UTC format to anchor the subscription's [billing cycle](https://docs.stripe.com/subscriptions/billing-cycle). The anchor is the reference point that aligns future billing cycle dates. It sets the day of week for `week` intervals, the day of month for `month` and `year` intervals, and the month of year for `year` intervals.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
           "message": "Przyszły znacznik czasu w formacie UTC stanowiący punkt odniesienia dla [cyklu rozliczeniowego](https://docs.stripe.com/subscriptions/billing-cycle) subskrypcji. Punkt odniesienia to wartość referencyjna wyrównująca daty przyszłych cykli rozliczeniowych. Ustala dzień tygodnia dla interwałów `week`, dzień miesiąca dla interwałów `month` i `year` oraz miesiąc roku dla interwałów `year`.\n\nWartość ta jest przesyłana jako liczba całkowita sekund od 1970-01-01Z."
@@ -1058,10 +982,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.YmlsbGluZ19jeWNsZV9hbmNob3I.display_name": {
           "source": "Billing Cycle Anchor",
           "message": "Punkt odniesienia cyklu rozliczeniowego"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.YmlsbGluZ19jeWNsZV9hbmNob3I.short_desc": {
-          "source": "A future timestamp in UTC format to anchor the subscription's [billing cycle](https://docs.stripe.com/subscriptions/billing-cycle). The anchor is the reference point that aligns future billing cycle dates. It sets the day of week for 'week' intervals, the day of month for 'month' and 'year' intervals, and the month of year for 'year' intervals",
-          "message": "Przyszły znacznik czasu w formacie UTC stanowiący punkt odniesienia dla [cyklu rozliczeniowego](https://docs.stripe.com/subscriptions/billing-cycle) subskrypcji. Punkt odniesienia to wartość referencyjna wyrównująca daty przyszłych cykli rozliczeniowych. Ustala dzień tygodnia dla interwałów 'week', dzień miesiąca dla interwałów 'month' i 'year' oraz miesiąc roku dla interwałów 'year'"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.ZGF5c191bnRpbF9kdWU.desc": {
           "source": "Number of days a customer has to pay invoices generated by this subscription. Valid only for subscriptions where `collection_method` is set to `send_invoice`.",
@@ -1082,10 +1002,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.ZGVmYXVsdF90YXhfcmF0ZXM.display_name": {
           "source": "Default Tax Rates",
           "message": "Domyślne stawki podatkowe"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.ZGVmYXVsdF90YXhfcmF0ZXM.short_desc": {
-          "source": "The tax rates that will apply to any subscription item that does not have 'tax_rates' set. Invoices created will have their 'default_tax_rates' populated from the subscription",
-          "message": "Stawki podatkowe, które będą miały zastosowanie do każdej pozycji subskrypcji niemającej ustawionego 'tax_rates'. Utworzone faktury będą miały pole 'default_tax_rates' wypełnione z subskrypcji"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.ZGVmYXVsdF9wYXltZW50X21ldGhvZA.desc": {
           "source": "ID of the default payment method for the subscription. It must belong to the customer associated with the subscription. This takes precedence over `default_source`. If neither are set, invoices will use the customer's [invoice_settings.default_payment_method](https://docs.stripe.com/api/customers/object#customer_object-invoice_settings-default_payment_method) or [default_source](https://docs.stripe.com/api/customers/object#customer_object-default_source).",
@@ -1167,10 +1083,6 @@
           "source": "Off Session",
           "message": "Poza sesją"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.b2ZmX3Nlc3Npb24.short_desc": {
-          "source": "Indicates if a customer is on or off-session while an invoice payment is attempted",
-          "message": "Wskazuje, czy klient jest obecny w sesji, czy poza nią podczas próby płatności za fakturę"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.bWV0YWRhdGE.desc": {
           "source": "Set of [key-value pairs](https://docs.stripe.com/api/metadata) that you can attach to an object. This can be useful for storing additional information about the object in a structured format. Individual keys can be unset by posting an empty value to them. All keys can be unset by posting an empty value to `metadata`.",
           "message": "Zestaw [par klucz-wartość](https://docs.stripe.com/api/metadata), które można dołączyć do obiektu. Może być przydatny do przechowywania dodatkowych informacji o obiekcie w ustrukturyzowanym formacie. Poszczególne klucze można wyczyścić, przypisując im pustą wartość. Wszystkie klucze można wyczyścić, przypisując pustą wartość do `metadata`."
@@ -1178,10 +1090,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.bWV0YWRhdGE.display_name": {
           "source": "Metadata",
           "message": "Metadane"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Zestaw [par klucz-wartość](https://docs"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.cGF5bWVudF9iZWhhdmlvcg.allowed-value.c3RyaW5nOmFsbG93X2luY29tcGxldGU.display_name": {
           "source": "allow_incomplete",
@@ -1206,10 +1114,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.cGF5bWVudF9iZWhhdmlvcg.display_name": {
           "source": "Payment Behavior",
           "message": "Zachowanie płatności"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.cGF5bWVudF9iZWhhdmlvcg.short_desc": {
-          "source": "Controls how Stripe handles the first invoice when payment is required and 'collection_method=charge_automatically'. Subscriptions with 'collection_method=send_invoice' are automatically activated regardless of the first Invoice status",
-          "message": "Steruje sposobem obsługi pierwszej faktury przez Stripe, gdy płatność jest wymagana oraz 'collection_method=charge_automatically'. Subskrypcje z 'collection_method=send_invoice' są aktywowane automatycznie bez względu na status pierwszej faktury"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.cGF5bWVudF9zZXR0aW5ncw.desc": {
           "source": "Payment settings to pass to invoices created by the subscription.",
@@ -1255,10 +1159,6 @@
           "source": "Proration Behavior",
           "message": "Zachowanie rozliczeń proporcjonalnych"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.cHJvcmF0aW9uX2JlaGF2aW9y.short_desc": {
-          "source": "Determines how to handle [prorations](https://docs",
-          "message": "Określa sposób obsługi [rozliczeń proporcjonalnych](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJhbnNmZXJfZGF0YQ.desc": {
           "source": "If specified, the funds from the subscription's invoices will be transferred to the destination and the ID of the resulting transfers will be found on the resulting charges.",
           "message": "Jeśli określono, środki z faktur subskrypcji zostaną przesłane do miejsca docelowego, a identyfikatory wynikowych transferów znajdą się w wynikowych obciążeniach."
@@ -1266,10 +1166,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJhbnNmZXJfZGF0YQ.display_name": {
           "source": "Transfer Data",
           "message": "Dane transferu"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJhbnNmZXJfZGF0YQ.short_desc": {
-          "source": "If specified, the funds from the subscription's invoices will be transferred to the destination and the ID of the resulting transfers will be found on the resulting charges",
-          "message": "Jeśli określono, środki z faktur subskrypcji zostaną przesłane do miejsca docelowego, a identyfikatory wynikowych transferów znajdą się w wynikowych obciążeniach"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfZW5k.desc": {
           "source": "Unix timestamp representing the end of the trial period the customer will get before being charged for the first time. If set, trial_end will override the default trial period of the plan the customer is being subscribed to. The special value `now` can be provided to end the customer's trial immediately. Can be at most two years from `billing_cycle_anchor`. See [Using trial periods on subscriptions](https://docs.stripe.com/billing/subscriptions/trials) to learn more.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
@@ -1279,10 +1175,6 @@
           "source": "Trial End",
           "message": "Koniec okresu próbnego"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfZW5k.short_desc": {
-          "source": "Unix timestamp representing the end of the trial period the customer will get before being charged for the first time",
-          "message": "Znacznik czasu Unix reprezentujący koniec okresu próbnego, jaki klient otrzyma przed pierwszym obciążeniem"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfZnJvbV9wbGFu.desc": {
           "source": "Indicates if a plan's `trial_period_days` should be applied to the subscription. Setting `trial_end` per subscription is preferred, and this defaults to `false`. Setting this flag to `true` together with `trial_end` is not allowed. See [Using trial periods on subscriptions](https://docs.stripe.com/billing/subscriptions/trials) to learn more.",
           "message": "Wskazuje, czy `trial_period_days` planu powinno zostać zastosowane do subskrypcji. Zaleca się ustawienie `trial_end` dla subskrypcji; wartość domyślna to `false`. Ustawienie tej flagi na `true` łącznie z `trial_end` jest niedozwolone. Zobacz [Using trial periods on subscriptions](https://docs.stripe.com/billing/subscriptions/trials), aby dowiedzieć się więcej."
@@ -1290,10 +1182,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfZnJvbV9wbGFu.display_name": {
           "source": "Trial From Plan",
           "message": "Okres próbny z planu"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfZnJvbV9wbGFu.short_desc": {
-          "source": "Indicates if a plan's 'trial_period_days' should be applied to the subscription. Setting 'trial_end' per subscription is preferred, and this defaults to 'false'",
-          "message": "Wskazuje, czy 'trial_period_days' planu powinno zostać zastosowane do subskrypcji. Zaleca się ustawienie 'trial_end' dla subskrypcji; wartość domyślna to 'false'"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfc2V0dGluZ3M.desc": {
           "source": "Settings related to subscription trials.",
@@ -1315,10 +1203,6 @@
           "source": "Trial Period Days",
           "message": "Dni okresu próbnego"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfcGVyaW9kX2RheXM.short_desc": {
-          "source": "Integer representing the number of trial period days before the customer is charged for the first time",
-          "message": "Liczba całkowita reprezentująca liczbę dni okresu próbnego przed pierwszym obciążeniem klienta"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.short_desc": {
           "source": "Subscribe a customer to one or more prices",
           "message": "Zasubskrybuj klienta do jednej lub więcej cen"
@@ -1338,10 +1222,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.Y2FyZA.display_name": {
           "source": "Card",
           "message": "Karta"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.Y2FyZA.short_desc": {
-          "source": "A token, like the ones returned by [Stripe",
-          "message": "Token, taki jak te zwracane przez [Stripe"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.Y3VzdG9tZXI.desc": {
           "source": "Only return charges for the customer specified by this customer ID.",
@@ -1363,10 +1243,6 @@
           "source": "Alipay Account",
           "message": "Konto Alipay"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.YWxpcGF5X2FjY291bnQ.short_desc": {
-          "source": "A token returned by [Stripe",
-          "message": "Token zwracany przez [Stripe"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.YmFua19hY2NvdW50.desc": {
           "source": "Either a token, like the ones returned by [Stripe.js](https://stripe.com/docs/js), or a dictionary containing a user's bank account details.",
           "message": "Token, taki jak te zwracane przez [Stripe.js](https://stripe.com/docs/js), lub słownik zawierający dane konta bankowego użytkownika."
@@ -1374,10 +1250,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.YmFua19hY2NvdW50.display_name": {
           "source": "Bank Account",
           "message": "Konto bankowe"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.YmFua19hY2NvdW50.short_desc": {
-          "source": "Either a token, like the ones returned by [Stripe",
-          "message": "Token, taki jak te zwracane przez [Stripe"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.ZXhwYW5k.desc": {
           "source": "Specifies which fields in the response should be expanded.",
@@ -1399,10 +1271,6 @@
           "source": "Metadata",
           "message": "Metadane"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Zestaw [par klucz-wartość](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.c291cmNl.desc": {
           "source": "Please refer to full [documentation](https://api.stripe.com) instead.",
           "message": "Zapoznaj się z pełną [dokumentacją](https://api.stripe.com)."
@@ -1410,10 +1278,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.c291cmNl.display_name": {
           "source": "Source",
           "message": "Źródło"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.option.c291cmNl.short_desc": {
-          "source": "Please refer to full [documentation](https://api",
-          "message": "Zapoznaj się z pełną [dokumentacją](https://api"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXNvdXJjZQ.short_desc": {
           "source": "Attach a payment source to a customer",
@@ -1447,10 +1311,6 @@
           "source": "Card",
           "message": "Karta"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.Y2FyZA.short_desc": {
-          "source": "A token, like the ones returned by [Stripe",
-          "message": "Token, taki jak te zwracane przez [Stripe"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.Y3VycmVuY3k.desc": {
           "source": "Three-letter [ISO currency code](https://www.iso.org/iso-4217-currency-codes.html), in lowercase. Must be a [supported currency](https://stripe.com/docs/currencies).",
           "message": "Trzyliterowy [kod waluty ISO](https://www.iso.org/iso-4217-currency-codes.html), pisany małymi literami. Musi to być [obsługiwana waluta](https://stripe.com/docs/currencies)."
@@ -1458,10 +1318,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.Y3VycmVuY3k.display_name": {
           "source": "Currency",
           "message": "Waluta"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.Y3VycmVuY3k.short_desc": {
-          "source": "Three-letter [ISO currency code](https://www",
-          "message": "Trzyliterowy [kod waluty ISO](https://www"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.Y3VzdG9tZXI.desc": {
           "source": "The ID of an existing customer that will be charged in this request.",
@@ -1499,10 +1355,6 @@
           "source": "Application Fee Amount",
           "message": "Kwota opłaty aplikacji"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.YXBwbGljYXRpb25fZmVlX2Ftb3VudA.short_desc": {
-          "source": "A fee in cents (or local equivalent) that will be applied to the charge and transferred to the application owner's Stripe account. The request must be made with an OAuth key or the 'Stripe-Account' header in order to take an application fee",
-          "message": "Opłata w centach (lub lokalnym odpowiedniku), która zostanie naliczona do obciążenia i przekazana na konto Stripe właściciela aplikacji. Żądanie musi być wykonane z kluczem OAuth lub nagłówkiem 'Stripe-Account', aby pobrać opłatę aplikacji"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.ZGVzY3JpcHRpb24.desc": {
           "source": "An arbitrary string which you can attach to a `Charge` object. It is displayed when in the web interface alongside the charge. Note that if you use Stripe to send automatic email receipts to your customers, your receipt emails will include the `description` of the charge(s) that they are describing.",
           "message": "Dowolny ciąg znaków, który można dołączyć do obiektu `Charge`. Jest wyświetlany w interfejsie internetowym obok obciążenia. Pamiętaj, że jeśli używasz Stripe do wysyłania automatycznych potwierdzeń e-mail do klientów, wiadomości e-mail z potwierdzeniem będą zawierać `description` opisywanych obciążeń."
@@ -1510,10 +1362,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.ZGVzY3JpcHRpb24.display_name": {
           "source": "Description",
           "message": "Opis"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.ZGVzY3JpcHRpb24.short_desc": {
-          "source": "An arbitrary string which you can attach to a 'Charge' object. It is displayed when in the web interface alongside the charge. Note that if you use Stripe to send automatic email receipts to your customers, your receipt emails will include the 'description' of the charge(s) that they are describing",
-          "message": "Dowolny ciąg znaków, który można dołączyć do obiektu 'Charge'. Jest wyświetlany w interfejsie internetowym obok obciążenia. Pamiętaj, że jeśli używasz Stripe do wysyłania automatycznych potwierdzeń e-mail do klientów, wiadomości e-mail z potwierdzeniem będą zawierać 'description' opisywanych obciążeń"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.ZGVzdGluYXRpb24.display_name": {
           "source": "Destination",
@@ -1551,10 +1399,6 @@
           "source": "Metadata",
           "message": "Metadane"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Zestaw [par klucz-wartość](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.c291cmNl.desc": {
           "source": "A payment source to be charged. This can be the ID of a [card](https://docs.stripe.com/api#cards) (i.e., credit or debit card), a [bank account](https://docs.stripe.com/api#bank_accounts), a [source](https://docs.stripe.com/api#sources), a [token](https://docs.stripe.com/api#tokens), or a [connected account](https://docs.stripe.com/connect/account-debits#charging-a-connected-account). For certain sources---namely, [cards](https://docs.stripe.com/api#cards), [bank accounts](https://docs.stripe.com/api#bank_accounts), and attached [sources](https://docs.stripe.com/api#sources)---you must also pass the ID of the associated customer.",
           "message": "Źródło płatności do obciążenia. Może to być identyfikator [karty](https://docs.stripe.com/api#cards) (tj. karty kredytowej lub debetowej), [konta bankowego](https://docs.stripe.com/api#bank_accounts), [źródła](https://docs.stripe.com/api#sources), [tokena](https://docs.stripe.com/api#tokens) lub [konta połączonego](https://docs.stripe.com/connect/account-debits#charging-a-connected-account). W przypadku niektórych źródeł — mianowicie [kart](https://docs.stripe.com/api#cards), [kont bankowych](https://docs.stripe.com/api#bank_accounts) i dołączonych [źródeł](https://docs.stripe.com/api#sources) — należy również przekazać identyfikator powiązanego klienta."
@@ -1586,10 +1430,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.c3RhdGVtZW50X2Rlc2NyaXB0b3I.display_name": {
           "source": "Statement Descriptor",
           "message": "Opis na wyciągu"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.c3RhdGVtZW50X2Rlc2NyaXB0b3I.short_desc": {
-          "source": "For a non-card charge, text that appears on the customer's statement as the statement descriptor. This value overrides the account's default statement descriptor",
-          "message": "W przypadku obciążenia bez użycia karty jest to tekst, który pojawia się na wyciągu klienta jako opis na wyciągu. Ta wartość zastępuje domyślny opis na wyciągu konta"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.c3RhdGVtZW50X2Rlc2NyaXB0b3Jfc3VmZml4.desc": {
           "source": "Provides information about a card charge. Concatenated to the account's [statement descriptor prefix](https://docs.stripe.com/get-started/account/statement-descriptors#static) to form the complete statement descriptor that appears on the customer's statement. If the account has no prefix value, the suffix is concatenated to the account's statement descriptor.",
@@ -1623,10 +1463,6 @@
           "source": "Receipt Email",
           "message": "Adres e-mail potwierdzenia"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.cmVjZWlwdF9lbWFpbA.short_desc": {
-          "source": "The email address to which this charge's [receipt](https://docs.stripe.com/dashboard/receipts) will be sent. The receipt will not be sent until the charge is paid, and no receipts will be sent for test mode charges. If this charge is for a [Customer](https://docs.stripe.com/api/customers/object), the email address specified here will override the customer's email address. If 'receipt_email' is specified for a charge in live mode, a receipt will be sent regardless of your [email settings](https://dashboard",
-          "message": "Adres e-mail, na który zostanie wysłane [potwierdzenie](https://docs.stripe.com/dashboard/receipts) tego obciążenia. Potwierdzenie nie zostanie wysłane, dopóki obciążenie nie zostanie opłacone, i żadne potwierdzenia nie będą wysyłane dla obciążeń w trybie testowym. Jeśli to obciążenie dotyczy obiektu [Customer](https://docs.stripe.com/api/customers/object), podany tutaj adres e-mail zastąpi adres e-mail klienta. Jeśli 'receipt_email' zostanie określone dla obciążenia w trybie produkcyjnym, potwierdzenie zostanie wysłane niezależnie od Twoich [ustawień poczty e-mail](https://dashboard"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.dHJhbnNmZXJfZ3JvdXA.desc": {
           "source": "A string that identifies this transaction as part of a group. For details, see [Grouping transactions](https://docs.stripe.com/connect/separate-charges-and-transfers#transfer-options).",
           "message": "Ciąg znaków identyfikujący tę transakcję jako część grupy. Szczegółowe informacje zawiera sekcja [Grouping transactions](https://docs.stripe.com/connect/separate-charges-and-transfers#transfer-options)."
@@ -1646,10 +1482,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.dHJhbnNmZXJfZGF0YQ.display_name": {
           "source": "Transfer Data",
           "message": "Dane transferu"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.option.dHJhbnNmZXJfZGF0YQ.short_desc": {
-          "source": "An optional dictionary including the account to automatically transfer to as part of a destination charge",
-          "message": "Opcjonalny słownik zawierający konto, na które nastąpi automatyczny transfer w ramach obciążenia docelowego"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWNoYXJnZQ.short_desc": {
           "source": "Charge a card directly (legacy; prefer a payment intent)",
@@ -1675,10 +1507,6 @@
           "source": "Bank Account",
           "message": "Konto bankowe"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.YmFua19hY2NvdW50.short_desc": {
-          "source": "Either a token, like the ones returned by [Stripe",
-          "message": "Token, taki jak te zwracane przez [Stripe"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZGVmYXVsdF9mb3JfY3VycmVuY3k.desc": {
           "source": "When set to true, or if this is the first external account added in this currency, this account becomes the default external account for its currency.",
           "message": "Gdy ustawiono na true lub jeśli jest to pierwsze konto zewnętrzne dodane w tej walucie, to konto staje się domyślnym kontem zewnętrznym dla swojej waluty."
@@ -1687,10 +1515,6 @@
           "source": "Default For Currency",
           "message": "Domyślne dla waluty"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZGVmYXVsdF9mb3JfY3VycmVuY3k.short_desc": {
-          "source": "When set to true, or if this is the first external account added in this currency, this account becomes the default external account for its currency",
-          "message": "Gdy ustawiono na true lub jeśli jest to pierwsze konto zewnętrzne dodane w tej walucie, to konto staje się domyślnym kontem zewnętrznym dla swojej waluty"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZXh0ZXJuYWxfYWNjb3VudA.desc": {
           "source": "A token, like the ones returned by [Stripe.js](https://docs.stripe.com/js) or a dictionary containing a user's external account details (with the options shown below). Please refer to full [documentation](https://stripe.com/docs/api/external_accounts) instead.",
           "message": "Token, taki jak zwracany przez [Stripe.js](https://docs.stripe.com/js), lub słownik zawierający dane konta zewnętrznego użytkownika (z opcjami pokazanymi poniżej). Zamiast tego zapoznaj się z pełną [dokumentacją](https://stripe.com/docs/api/external_accounts)."
@@ -1698,10 +1522,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZXh0ZXJuYWxfYWNjb3VudA.display_name": {
           "source": "External Account",
           "message": "Konto zewnętrzne"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZXh0ZXJuYWxfYWNjb3VudA.short_desc": {
-          "source": "A token, like the ones returned by [Stripe",
-          "message": "Token, taki jak te zwracane przez [Stripe"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZXhwYW5k.desc": {
           "source": "Specifies which fields in the response should be expanded.",
@@ -1722,10 +1542,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.bWV0YWRhdGE.display_name": {
           "source": "Metadata",
           "message": "Metadane"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Zestaw [par klucz-wartość](https://docs"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.short_desc": {
           "source": "Attach a payout destination to a connected account",
@@ -1754,10 +1570,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.Y29sbGVjdGlvbl9tZXRob2Q.display_name": {
           "source": "Collection Method",
           "message": "Metoda pobierania płatności"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.Y29sbGVjdGlvbl9tZXRob2Q.short_desc": {
-          "source": "Either 'charge_automatically', or 'send_invoice'. When charging automatically, Stripe will attempt to pay this invoice using the default source attached to the customer. When sending an invoice, Stripe will email this invoice to the customer with payment instructions. Defaults to 'charge_automatically'",
-          "message": "Wartość 'charge_automatically' lub 'send_invoice'. W przypadku automatycznego obciążania Stripe spróbuje opłacić tę fakturę przy użyciu domyślnego źródła przypisanego do klienta. W przypadku wysyłania faktury Stripe prześle tę fakturę pocztą e-mail do klienta wraz z instrukcjami dotyczącymi płatności. Domyślnie: 'charge_automatically'"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.Y3VycmVuY3k.desc": {
           "source": "The currency to create this invoice in. Defaults to that of `customer` if not specified.",
@@ -1827,10 +1639,6 @@
           "source": "Application Fee Amount",
           "message": "Kwota opłaty aplikacji"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.YXBwbGljYXRpb25fZmVlX2Ftb3VudA.short_desc": {
-          "source": "A fee in cents (or local equivalent) that will be applied to the invoice and transferred to the application owner's Stripe account",
-          "message": "Opłata w centach (lub lokalnym odpowiedniku), która zostanie naliczona na fakturze i przekazana na konto Stripe właściciela aplikacji"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.YXV0b19hZHZhbmNl.desc": {
           "source": "Controls whether Stripe performs [automatic collection](https://docs.stripe.com/invoicing/integration/automatic-advancement-collection) of the invoice. If `false`, the invoice's state doesn't automatically advance without an explicit action. Defaults to false.",
           "message": "Określa, czy Stripe wykonuje [automatyczną windykację](https://docs.stripe.com/invoicing/integration/automatic-advancement-collection) faktury. Jeśli `false`, stan faktury nie zmienia się automatycznie bez wyraźnego działania. Domyślnie false."
@@ -1838,10 +1646,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.YXV0b19hZHZhbmNl.display_name": {
           "source": "Auto Advance",
           "message": "Automatyczne przejście"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.YXV0b19hZHZhbmNl.short_desc": {
-          "source": "Controls whether Stripe performs [automatic collection](https://docs",
-          "message": "Określa, czy Stripe wykonuje [automatyczną windykację](https://docs"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.YXV0b21hdGljX3RheA.desc": {
           "source": "Settings for automatic tax lookup for this invoice.",
@@ -1863,10 +1667,6 @@
           "source": "Automatically Finalizes At",
           "message": "Automatyczna finalizacja o"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.YXV0b21hdGljYWxseV9maW5hbGl6ZXNfYXQ.short_desc": {
-          "source": "The time when this invoice should be scheduled to finalize (up to 5 years in the future)",
-          "message": "Czas, na który zaplanowano sfinalizowanie tej faktury (do 5 lat w przyszłości)"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.ZGF5c191bnRpbF9kdWU.desc": {
           "source": "The number of days from when the invoice is created until it is due. Valid only for invoices where `collection_method=send_invoice`.",
           "message": "Liczba dni od utworzenia faktury do terminu jej płatności. Prawidłowe tylko dla faktur, gdzie `collection_method=send_invoice`."
@@ -1886,10 +1686,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.ZGVmYXVsdF90YXhfcmF0ZXM.display_name": {
           "source": "Default Tax Rates",
           "message": "Domyślne stawki podatkowe"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.ZGVmYXVsdF90YXhfcmF0ZXM.short_desc": {
-          "source": "The tax rates that will apply to any line item that does not have 'tax_rates' set",
-          "message": "Stawki podatkowe, które będą miały zastosowanie do każdej pozycji, która nie ma ustawionej opcji 'tax_rates'"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.ZGVmYXVsdF9wYXltZW50X21ldGhvZA.desc": {
           "source": "ID of the default payment method for the invoice. It must belong to the customer associated with the invoice. If not set, defaults to the subscription's default payment method, if any, or to the default payment method in the customer's invoice settings.",
@@ -2031,10 +1827,6 @@
           "source": "Metadata",
           "message": "Metadane"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Zestaw [par klucz-wartość](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.bnVtYmVy.desc": {
           "source": "Set the number for this invoice. If no number is present then a number will be assigned automatically when the invoice is finalized. In many markets, regulations require invoices to be unique, sequential and / or gapless. You are responsible for ensuring this is true across all your different invoicing systems in the event that you edit the invoice number using our API. If you use only Stripe for your invoices and do not change invoice numbers, Stripe handles this aspect of compliance for you automatically.",
           "message": "Ustaw numer tej faktury. Jeśli brak numeru, zostanie on przypisany automatycznie po sfinalizowaniu faktury. Na wielu rynkach przepisy wymagają, aby faktury były unikalne, sekwencyjne i/lub bez luk w numeracji. Odpowiadasz za zapewnienie tego we wszystkich swoich systemach fakturowania w przypadku edycji numeru faktury za pomocą naszego API. Jeśli używasz tylko Stripe do faktur i nie zmieniasz numerów faktur, Stripe obsługuje ten aspekt zgodności z przepisami automatycznie."
@@ -2079,10 +1871,6 @@
           "source": "Statement Descriptor",
           "message": "Opis na wyciągu"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.c3RhdGVtZW50X2Rlc2NyaXB0b3I.short_desc": {
-          "source": "Extra information about a charge for the customer's credit card statement. It must contain at least one letter. If not specified and this invoice is part of a subscription, the default 'statement_descriptor' will be set to the first subscription item's product's 'statement_descriptor'",
-          "message": "Dodatkowe informacje o obciążeniu na wyciągu z karty kredytowej klienta. Muszą zawierać co najmniej jedną literę. Jeśli nie zostaną określone, a ta faktura jest częścią subskrypcji, domyślny parametr 'statement_descriptor' zostanie ustawiony na 'statement_descriptor' produktu pierwszej pozycji subskrypcji"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.c3Vic2NyaXB0aW9u.desc": {
           "source": "The ID of the subscription to invoice, if any. If set, the created invoice will only include pending invoice items for that subscription. The subscription's billing cycle and regular subscription events won't be affected.",
           "message": "Identyfikator subskrypcji do zafakturowania, jeśli istnieje. W przypadku ustawienia utworzona faktura będzie zawierać tylko oczekujące pozycje faktury dla tej subskrypcji. Cykl rozliczeniowy subskrypcji oraz regularne zdarzenia subskrypcji pozostaną bez zmian."
@@ -2102,10 +1890,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9zZXR0aW5ncw.display_name": {
           "source": "Payment Settings",
           "message": "Ustawienia płatności"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.cGF5bWVudF9zZXR0aW5ncw.short_desc": {
-          "source": "Configuration settings for the PaymentIntent that is generated when the invoice is finalized",
-          "message": "Ustawienia konfiguracyjne dla PaymentIntent generowanego po sfinalizowaniu faktury"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.cGVuZGluZ19pbnZvaWNlX2l0ZW1zX2JlaGF2aW9y.allowed-value.c3RyaW5nOmV4Y2x1ZGU.display_name": {
           "source": "exclude",
@@ -2135,10 +1919,6 @@
           "source": "Rendering",
           "message": "Renderowanie"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.cmVuZGVyaW5n.short_desc": {
-          "source": "The rendering-related settings that control how the invoice is displayed on customer-facing surfaces such as PDF and Hosted Invoice Page",
-          "message": "Ustawienia renderowania kontrolujące sposób wyświetlania faktury na powierzchniach widocznych dla klienta, takich jak plik PDF i strona Hosted Invoice Page"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.dHJhbnNmZXJfZGF0YQ.desc": {
           "source": "If specified, the funds from the invoice will be transferred to the destination and the ID of the resulting transfer will be found on the invoice's charge.",
           "message": "W przypadku określenia środki z faktury zostaną przesłane do miejsca docelowego, a identyfikator wynikowego transferu znajdzie się w obciążeniu faktury."
@@ -2146,10 +1926,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.dHJhbnNmZXJfZGF0YQ.display_name": {
           "source": "Transfer Data",
           "message": "Dane transferu"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.option.dHJhbnNmZXJfZGF0YQ.short_desc": {
-          "source": "If specified, the funds from the invoice will be transferred to the destination and the ID of the resulting transfer will be found on the invoice's charge",
-          "message": "W przypadku określenia środki z faktury zostaną przesłane do miejsca docelowego, a identyfikator wynikowego transferu znajdzie się w obciążeniu faktury"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWludm9pY2U.short_desc": {
           "source": "Create a draft invoice for a customer",
@@ -2199,10 +1975,6 @@
           "source": "Confirm",
           "message": "Potwierdź"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.Y29uZmlybQ.short_desc": {
-          "source": "Set to 'true' to attempt to [confirm this PaymentIntent](https://docs.stripe.com/api/payment_intents/confirm) immediately. This parameter defaults to 'false'",
-          "message": "Ustaw na 'true', aby spróbować natychmiast [potwierdzić ten PaymentIntent](https://docs.stripe.com/api/payment_intents/confirm). Wartość domyślna tego parametru to 'false'"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.Y29uZmlybWF0aW9uX21ldGhvZA.allowed-value.c3RyaW5nOm1hbnVhbA.display_name": {
           "source": "manual",
           "message": "manual"
@@ -2218,10 +1990,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.Y29uZmlybWF0aW9uX21ldGhvZA.display_name": {
           "source": "Confirmation Method",
           "message": "Metoda potwierdzenia"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.Y29uZmlybWF0aW9uX21ldGhvZA.short_desc": {
-          "source": "Describes whether we can confirm this PaymentIntent automatically, or if it requires customer action to confirm the payment",
-          "message": "Określa, czy ten PaymentIntent może zostać potwierdzony automatycznie, czy też wymaga działania klienta w celu potwierdzenia płatności"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.Y29uZmlybWF0aW9uX3Rva2Vu.desc": {
           "source": "ID of the ConfirmationToken used to confirm this PaymentIntent.\n\nIf the provided ConfirmationToken contains properties that are also being provided in this request, such as `payment_method`, then the values in this request will take precedence.",
@@ -2267,10 +2035,6 @@
           "source": "Currency",
           "message": "Waluta"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.Y3VycmVuY3k.short_desc": {
-          "source": "Three-letter [ISO currency code](https://www",
-          "message": "Trzyliterowy [kod waluty ISO](https://www"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.Y3VzdG9tZXI.desc": {
           "source": "ID of the Customer this PaymentIntent belongs to, if one exists.\n\nPayment methods attached to other Customers cannot be used with this PaymentIntent.\n\nIf [setup_future_usage](https://api.stripe.com#payment_intent_object-setup_future_usage) is set and this PaymentIntent's payment method is not `card_present`, then the payment method attaches to the Customer after the PaymentIntent has been confirmed and any required actions from the user are complete. If the payment method is `card_present` and isn't a digital wallet, then a [generated_card](https://docs.stripe.com/api/charges/object#charge_object-payment_method_details-card_present-generated_card) payment method representing the card is created and attached to the Customer instead.",
           "message": "Identyfikator Customer, do którego należy ten PaymentIntent, jeśli istnieje.\n\nMetody płatności przypisane do innych obiektów Customer nie mogą być używane z tym PaymentIntent.\n\nJeśli ustawiono [setup_future_usage](https://api.stripe.com#payment_intent_object-setup_future_usage), a metodą płatności tego PaymentIntent nie jest `card_present`, metoda płatności zostaje przypisana do obiektu Customer po potwierdzeniu PaymentIntent i ukończeniu wszelkich wymaganych działań użytkownika. Jeśli metodą płatności jest `card_present` i nie jest to portfel cyfrowy, tworzona i przypisywana do obiektu Customer jest metoda płatności [generated_card](https://docs.stripe.com/api/charges/object#charge_object-payment_method_details-card_present-generated_card) reprezentująca kartę."
@@ -2290,10 +2054,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.Y3VzdG9tZXJfYWNjb3VudA.display_name": {
           "source": "Customer Account",
           "message": "Konto klienta"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.Y3VzdG9tZXJfYWNjb3VudA.short_desc": {
-          "source": "ID of the Account representing the customer that this PaymentIntent belongs to, if one exists",
-          "message": "Identyfikator Account reprezentującego klienta, do którego należy ten PaymentIntent, jeśli istnieje"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.YW1vdW50.desc": {
           "source": "Amount intended to be collected by this PaymentIntent. A positive integer representing how much to charge in the [smallest currency unit](https://docs.stripe.com/currencies#zero-decimal) (e.g., 100 cents to charge $1.00 or 100 to charge ¥100, a zero-decimal currency). The minimum amount is $0.50 US or [equivalent in charge currency](https://docs.stripe.com/currencies#minimum-and-maximum-charge-amounts). The amount value supports up to eight digits (e.g., a value of 99999999 for a USD charge of $999,999.99).",
@@ -2339,10 +2099,6 @@
           "source": "Application Fee Amount",
           "message": "Kwota opłaty aplikacji"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.YXBwbGljYXRpb25fZmVlX2Ftb3VudA.short_desc": {
-          "source": "The amount of the application fee (if any) that will be requested to be applied to the payment and transferred to the application owner's Stripe account",
-          "message": "Kwota opłaty aplikacyjnej (jeśli występuje), która zostanie zażądana do zastosowania do płatności i przekazana na konto Stripe właściciela aplikacji"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.YXV0b21hdGljX3BheW1lbnRfbWV0aG9kcw.desc": {
           "source": "When you enable this parameter, this PaymentIntent accepts payment methods that you enable in the Dashboard and that are compatible with this PaymentIntent's other parameters.",
           "message": "Po włączeniu tego parametru ten PaymentIntent akceptuje metody płatności włączone w Dashboardzie i zgodne z innymi parametrami tego PaymentIntent."
@@ -2350,10 +2106,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.YXV0b21hdGljX3BheW1lbnRfbWV0aG9kcw.display_name": {
           "source": "Automatic Payment Methods",
           "message": "Automatyczne metody płatności"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.YXV0b21hdGljX3BheW1lbnRfbWV0aG9kcw.short_desc": {
-          "source": "When you enable this parameter, this PaymentIntent accepts payment methods that you enable in the Dashboard and that are compatible with this PaymentIntent's other parameters",
-          "message": "Po włączeniu tego parametru ten PaymentIntent akceptuje metody płatności włączone w Dashboardzie i zgodne z innymi parametrami tego PaymentIntent"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.ZGVzY3JpcHRpb24.desc": {
           "source": "An arbitrary string attached to the object. Often useful for displaying to users.",
@@ -2374,10 +2126,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.ZXJyb3Jfb25fcmVxdWlyZXNfYWN0aW9u.display_name": {
           "source": "Error On Requires Action",
           "message": "Błąd przy wymaganym działaniu"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.ZXJyb3Jfb25fcmVxdWlyZXNfYWN0aW9u.short_desc": {
-          "source": "Set to 'true' to fail the payment attempt if the PaymentIntent transitions into 'requires_action'. Use this parameter for simpler integrations that don't handle customer actions, such as [saving cards without authentication](https://docs.stripe.com/payments/save-card-without-authentication). This parameter can only be used with ['confirm=true'](https://docs",
-          "message": "Ustaw na 'true', aby próba płatności zakończyła się niepowodzeniem, jeśli PaymentIntent przejdzie w stan 'requires_action'. Użyj tego parametru w przypadku prostszych integracji, które nie obsługują działań klienta, takich jak [zapisywanie kart bez uwierzytelniania](https://docs.stripe.com/payments/save-card-without-authentication). Ten parametr może być używany tylko z ['confirm=true'](https://docs"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.ZXhjbHVkZWRfcGF5bWVudF9tZXRob2RfdHlwZXM.desc": {
           "source": "The list of payment method types to exclude from use with this payment.",
@@ -2435,10 +2183,6 @@
           "source": "Off Session",
           "message": "Poza sesją"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.b2ZmX3Nlc3Npb24.short_desc": {
-          "source": "Set to 'true' to indicate that the customer isn't in your checkout flow during this payment attempt and can't authenticate. Use this parameter in scenarios where you collect payment method details and [charge them later](https://docs.stripe.com/payments/save-during-payment). This parameter can only be used with ['confirm=true'](https://docs",
-          "message": "Ustaw na 'true', aby wskazać, że klient nie znajduje się w procesie realizacji zakupu podczas tej próby płatności i nie może się uwierzytelnić. Użyj tego parametru w scenariuszach, w których zbierasz dane metody płatności i [obciążasz je później](https://docs.stripe.com/payments/save-during-payment). Ten parametr może być używany tylko z ['confirm=true'](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.bWFuZGF0ZQ.desc": {
           "source": "ID of the mandate that's used for this payment. This parameter can only be used with [`confirm=true`](https://docs.stripe.com/api/payment_intents/create#create_payment_intent-confirm).",
           "message": "Identyfikator mandatu używanego do tej płatności. Ten parametr może być używany tylko z [`confirm=true`](https://docs.stripe.com/api/payment_intents/create#create_payment_intent-confirm)."
@@ -2446,10 +2190,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.bWFuZGF0ZQ.display_name": {
           "source": "Mandate",
           "message": "Mandat"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.bWFuZGF0ZQ.short_desc": {
-          "source": "ID of the mandate that's used for this payment. This parameter can only be used with ['confirm=true'](https://docs",
-          "message": "Identyfikator mandatu używanego do tej płatności. Ten parametr może być używany tylko z ['confirm=true'](https://docs"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.bWFuZGF0ZV9kYXRh.desc": {
           "source": "This hash contains details about the Mandate to create. This parameter can only be used with [`confirm=true`](https://docs.stripe.com/api/payment_intents/create#create_payment_intent-confirm).",
@@ -2471,10 +2211,6 @@
           "source": "Metadata",
           "message": "Metadane"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Zestaw [par klucz-wartość](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.c2V0dXBfZnV0dXJlX3VzYWdl.allowed-value.c3RyaW5nOm9mZl9zZXNzaW9u.display_name": {
           "source": "off_session",
           "message": "off_session"
@@ -2490,10 +2226,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.c2V0dXBfZnV0dXJlX3VzYWdl.display_name": {
           "source": "Setup Future Usage",
           "message": "Skonfiguruj przyszłe użycie"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.c2V0dXBfZnV0dXJlX3VzYWdl.short_desc": {
-          "source": "Indicates that you intend to make future payments with this PaymentIntent's payment method",
-          "message": "Wskazuje zamiar dokonywania przyszłych płatności za pomocą metody płatności tego obiektu PaymentIntent"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.c2hpcHBpbmc.desc": {
           "source": "Shipping information for this PaymentIntent.",
@@ -2514,10 +2246,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.c3RhdGVtZW50X2Rlc2NyaXB0b3I.display_name": {
           "source": "Statement Descriptor",
           "message": "Opis na wyciągu"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.c3RhdGVtZW50X2Rlc2NyaXB0b3I.short_desc": {
-          "source": "Text that appears on the customer's statement as the statement descriptor for a non-card charge. This value overrides the account's default statement descriptor",
-          "message": "Tekst wyświetlany na wyciągu klienta jako opis na wyciągu dla obciążenia niekartowego. Ta wartość zastępuje domyślny opis na wyciągu dla konta"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.c3RhdGVtZW50X2Rlc2NyaXB0b3Jfc3VmZml4.desc": {
           "source": "Provides information about a card charge. Concatenated to the account's [statement descriptor prefix](https://docs.stripe.com/get-started/account/statement-descriptors#static) to form the complete statement descriptor that appears on the customer's statement.",
@@ -2551,10 +2279,6 @@
           "source": "Payment Method",
           "message": "Metoda płatności"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cGF5bWVudF9tZXRob2Q.short_desc": {
-          "source": "ID of the payment method (a PaymentMethod, Card, or [compatible Source](https://docs",
-          "message": "Identyfikator metody płatności (obiekt PaymentMethod, Card lub [zgodny obiekt Source](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cGF5bWVudF9tZXRob2RfY29uZmlndXJhdGlvbg.desc": {
           "source": "The ID of the [payment method configuration](https://docs.stripe.com/api/payment_method_configurations) to use with this PaymentIntent.",
           "message": "Identyfikator [konfiguracji metody płatności](https://docs.stripe.com/api/payment_method_configurations) do użycia z tym obiektem PaymentIntent."
@@ -2562,10 +2286,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cGF5bWVudF9tZXRob2RfY29uZmlndXJhdGlvbg.display_name": {
           "source": "Payment Method Configuration",
           "message": "Konfiguracja metody płatności"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cGF5bWVudF9tZXRob2RfY29uZmlndXJhdGlvbg.short_desc": {
-          "source": "The ID of the [payment method configuration](https://docs",
-          "message": "Identyfikator [konfiguracji metody płatności](https://docs"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cGF5bWVudF9tZXRob2RfZGF0YQ.desc": {
           "source": "If provided, this hash will be used to create a PaymentMethod. The new PaymentMethod will appear\nin the [payment_method](https://docs.stripe.com/api/payment_intents/object#payment_intent_object-payment_method)\nproperty on the PaymentIntent.",
@@ -2599,10 +2319,6 @@
           "source": "Payment Method Types",
           "message": "Typy metod płatności"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cGF5bWVudF9tZXRob2RfdHlwZXM.short_desc": {
-          "source": "The list of payment method types (for example, a card) that this PaymentIntent can use",
-          "message": "Lista typów metod płatności (na przykład karta), z których może korzystać ten obiekt PaymentIntent"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cmFkYXJfb3B0aW9ucw.desc": {
           "source": "Options to configure Radar. Learn more about [Radar Sessions](https://docs.stripe.com/radar/radar-session).",
           "message": "Opcje konfiguracji Radar. Dowiedz się więcej o [sesjach Radar](https://docs.stripe.com/radar/radar-session)."
@@ -2622,10 +2338,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cmV0dXJuX3VybA.display_name": {
           "source": "Return Url",
           "message": "Adres URL powrotu"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cmV0dXJuX3VybA.short_desc": {
-          "source": "The URL to redirect your customer back to after they authenticate or cancel their payment on the payment method's app or site. If you'd prefer to redirect to a mobile application, you can alternatively supply an application URI scheme. This parameter can only be used with ['confirm=true'](https://docs",
-          "message": "Adres URL, pod który klient zostanie przekierowany po uwierzytelnieniu lub anulowaniu płatności w aplikacji lub witrynie metody płatności. Jeśli wolisz przekierowywać do aplikacji mobilnej, możesz alternatywnie podać schemat URI aplikacji. Ten parametr może być używany tylko z ['confirm=true'](https://docs"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cmVjZWlwdF9lbWFpbA.desc": {
           "source": "Email address to send the receipt to. If you specify `receipt_email` for a payment in live mode, you send a receipt regardless of your [email settings](https://dashboard.stripe.com/account/emails).",
@@ -2671,10 +2383,6 @@
           "source": "Use Stripe Sdk",
           "message": "Użyj Stripe SDK"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.dXNlX3N0cmlwZV9zZGs.short_desc": {
-          "source": "Set to 'true' when confirming server-side and using Stripe",
-          "message": "Ustaw na 'true' w przypadku potwierdzania po stronie serwera i używania Stripe"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.short_desc": {
           "source": "Start a payment",
           "message": "Rozpocznij płatność"
@@ -2706,10 +2414,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.Y3VycmVuY3k.display_name": {
           "source": "Currency",
           "message": "Waluta"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.Y3VycmVuY3k.short_desc": {
-          "source": "Three-letter [ISO currency code](https://www",
-          "message": "Trzyliterowy [kod waluty ISO](https://www"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.Y3VzdG9tZXI.desc": {
           "source": "Customer whose customer balance to refund from.",
@@ -2751,10 +2455,6 @@
           "source": "Instructions Email",
           "message": "E-mail z instrukcjami"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.aW5zdHJ1Y3Rpb25zX2VtYWls.short_desc": {
-          "source": "For payment methods without native refund support (e",
-          "message": "W przypadku metod płatności bez natywnej obsługi zwrotów (np."
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.b3JpZ2lu.allowed-value.c3RyaW5nOmN1c3RvbWVyX2JhbGFuY2U.display_name": {
           "source": "customer_balance",
           "message": "customer_balance"
@@ -2779,10 +2479,6 @@
           "source": "Metadata",
           "message": "Metadane"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Zestaw [par klucz-wartość](https://docs"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.cGF5bWVudF9pbnRlbnQ.desc": {
           "source": "The identifier of the PaymentIntent to refund.",
           "message": "Identyfikator obiektu PaymentIntent do zwrotu."
@@ -2802,10 +2498,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.cmV2ZXJzZV90cmFuc2Zlcg.display_name": {
           "source": "Reverse Transfer",
           "message": "Wycofaj transfer"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.cmV2ZXJzZV90cmFuc2Zlcg.short_desc": {
-          "source": "Boolean indicating whether the transfer should be reversed when refunding this charge",
-          "message": "Wartość logiczna wskazująca, czy transfer powinien zostać wycofany podczas zwracania tego obciążenia"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.cmVhc29u.allowed-value.c3RyaW5nOmR1cGxpY2F0ZQ.display_name": {
           "source": "duplicate",
@@ -2838,10 +2530,6 @@
         "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.cmVmdW5kX2FwcGxpY2F0aW9uX2ZlZQ.display_name": {
           "source": "Refund Application Fee",
           "message": "Zwróć opłatę za aplikację"
-        },
-        "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.option.cmVmdW5kX2FwcGxpY2F0aW9uX2ZlZQ.short_desc": {
-          "source": "Boolean indicating whether the application fee should be refunded when refunding this charge",
-          "message": "Wartość logiczna wskazująca, czy opłata za aplikację powinna zostać zwrócona podczas dokonywania zwrotu tej płatności"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXJlZnVuZA.short_desc": {
           "source": "Refund a charge or payment intent",
@@ -3283,10 +2971,6 @@
           "source": "Relationship",
           "message": "Relacja"
         },
-        "app.U3RyaXBl.action.bGlzdC1hY2NvdW50LXBlb3BsZQ.option.cmVsYXRpb25zaGlw.short_desc": {
-          "source": "Filters on the list of people returned based on the person's relationship to the account's company",
-          "message": "Filtruje zwracaną listę osób na podstawie relacji danej osoby z firmą posiadającą konto"
-        },
         "app.U3RyaXBl.action.bGlzdC1hY2NvdW50LXBlb3BsZQ.short_desc": {
           "source": "List the people associated with a connected account",
           "message": "Wyświetl listę osób powiązanych z połączonym kontem"
@@ -3498,10 +3182,6 @@
         "app.U3RyaXBl.action.bGlzdC1jaGFyZ2Vz.option.cGF5bWVudF9pbnRlbnQ.display_name": {
           "source": "Payment Intent",
           "message": "Zamiar płatności"
-        },
-        "app.U3RyaXBl.action.bGlzdC1jaGFyZ2Vz.option.cGF5bWVudF9pbnRlbnQ.short_desc": {
-          "source": "Only return charges that were created by the PaymentIntent specified by this PaymentIntent ID",
-          "message": "Zwracaj tylko opłaty utworzone przez PaymentIntent określony przez ten identyfikator PaymentIntent"
         },
         "app.U3RyaXBl.action.bGlzdC1jaGFyZ2Vz.option.dHJhbnNmZXJfZ3JvdXA.desc": {
           "source": "Only return charges for this transfer group, limited to 100.",
@@ -4083,10 +3763,6 @@
           "source": "Customer Account",
           "message": "Konto klienta"
         },
-        "app.U3RyaXBl.action.bGlzdC1pbnZvaWNlcw.option.Y3VzdG9tZXJfYWNjb3VudA.short_desc": {
-          "source": "Only return invoices for the account representing the customer specified by this account ID",
-          "message": "Zwracaj tylko faktury dla konta reprezentującego klienta określonego przez ten identyfikator konta"
-        },
         "app.U3RyaXBl.action.bGlzdC1pbnZvaWNlcw.option.ZHVlX2RhdGU.display_name": {
           "source": "Due Date",
           "message": "Termin wykonania"
@@ -4167,10 +3843,6 @@
           "source": "Status",
           "message": "Status"
         },
-        "app.U3RyaXBl.action.bGlzdC1pbnZvaWNlcw.option.c3RhdHVz.short_desc": {
-          "source": "The status of the invoice, one of 'draft', 'open', 'paid', 'uncollectible', or 'void'",
-          "message": "Status faktury, jeden z: 'draft', 'open', 'paid', 'uncollectible' lub 'void'"
-        },
         "app.U3RyaXBl.action.bGlzdC1pbnZvaWNlcw.option.c3Vic2NyaXB0aW9u.desc": {
           "source": "Only return invoices for the subscription specified by this subscription ID.",
           "message": "Zwracaj tylko faktury dla subskrypcji określonej przez ten identyfikator subskrypcji."
@@ -4226,10 +3898,6 @@
         "app.U3RyaXBl.action.bGlzdC1wYXltZW50LWludGVudHM.option.Y3VzdG9tZXJfYWNjb3VudA.display_name": {
           "source": "Customer Account",
           "message": "Konto klienta"
-        },
-        "app.U3RyaXBl.action.bGlzdC1wYXltZW50LWludGVudHM.option.Y3VzdG9tZXJfYWNjb3VudA.short_desc": {
-          "source": "Only return invoices for the account representing the customer specified by this account ID",
-          "message": "Zwracaj tylko faktury dla konta reprezentującego klienta określonego przez ten identyfikator konta"
         },
         "app.U3RyaXBl.action.bGlzdC1wYXltZW50LWludGVudHM.option.ZW5kaW5nX2JlZm9yZQ.desc": {
           "source": "A cursor for use in pagination. `ending_before` is an object ID that defines your place in the list. For instance, if you make a list request and receive 100 objects, starting with `obj_bar`, your subsequent call can include `ending_before=obj_bar` in order to fetch the previous page of the list.",
@@ -4370,10 +4038,6 @@
         "app.U3RyaXBl.action.bGlzdC1yZWZ1bmRz.option.cGF5bWVudF9pbnRlbnQ.display_name": {
           "source": "Payment Intent",
           "message": "Zamiar płatności"
-        },
-        "app.U3RyaXBl.action.bGlzdC1yZWZ1bmRz.option.cGF5bWVudF9pbnRlbnQ.short_desc": {
-          "source": "Only return charges that were created by the PaymentIntent specified by this PaymentIntent ID",
-          "message": "Zwracaj tylko opłaty utworzone przez PaymentIntent określony przez ten identyfikator PaymentIntent"
         },
         "app.U3RyaXBl.action.bGlzdC1yZWZ1bmRz.short_desc": {
           "source": "List refunds, most recent first",
@@ -4671,10 +4335,6 @@
           "source": "URI Path",
           "message": "Ścieżka URI"
         },
-        "app.U3RyaXBl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "Ścieżka URI względna wobec bazowego adresu URL API połączenia. Może zawierać symbole zastępcze '{name}', które są zastępowane z 'path_vars'. Przykład: '/users/{id}/comments'"
-        },
         "app.U3RyaXBl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
@@ -4827,10 +4487,6 @@
           "source": "Card",
           "message": "Karta"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.Y2FyZA.short_desc": {
-          "source": "A token, like the ones returned by [Stripe",
-          "message": "Token, taki jak te zwracane przez [Stripe"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.Y2FzaF9iYWxhbmNl.desc": {
           "source": "Balance information and default balance settings for this customer.",
           "message": "Informacje o saldzie i domyślne ustawienia salda dla tego klienta."
@@ -4875,10 +4531,6 @@
           "source": "Balance",
           "message": "Saldo"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.YmFsYW5jZQ.short_desc": {
-          "source": "An integer amount in cents (or local equivalent) that represents the customer's current balance, which affect the customer's future invoices",
-          "message": "Wartość całkowita w centach (lub lokalnym odpowiedniku) reprezentująca bieżące saldo klienta, która wpływa na przyszłe faktury klienta"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.YmFua19hY2NvdW50.desc": {
           "source": "Either a token, like the ones returned by [Stripe.js](https://stripe.com/docs/js), or a dictionary containing a user's bank account details.",
           "message": "Token, taki jak te zwracane przez [Stripe.js](https://stripe.com/docs/js), lub słownik zawierający dane konta bankowego użytkownika."
@@ -4886,10 +4538,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.YmFua19hY2NvdW50.display_name": {
           "source": "Bank Account",
           "message": "Konto bankowe"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.YmFua19hY2NvdW50.short_desc": {
-          "source": "Either a token, like the ones returned by [Stripe",
-          "message": "Token, taki jak te zwracane przez [Stripe"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.YnVzaW5lc3NfbmFtZQ.desc": {
           "source": "The customer's business name. This may be up to *150 characters*.",
@@ -4947,10 +4595,6 @@
           "source": "Default Source",
           "message": "Domyślne źródło"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.ZGVmYXVsdF9zb3VyY2U.short_desc": {
-          "source": "If you are using payment methods created via the PaymentMethods API, see the [invoice_settings",
-          "message": "Jeśli używasz metod płatności utworzonych za pomocą PaymentMethods API, zobacz [invoice_settings"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.ZGVzY3JpcHRpb24.desc": {
           "source": "An arbitrary string that you can attach to a customer object. It is displayed alongside the customer in the dashboard.",
           "message": "Dowolny ciąg znaków, który można dołączyć do obiektu klienta. Jest wyświetlany obok klienta w panelu nawigacyjnym."
@@ -4970,10 +4614,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.display_name": {
           "source": "Email",
           "message": "E-mail"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.ZW1haWw.short_desc": {
-          "source": "Customer's email address. It's displayed alongside the customer in your dashboard and can be useful for searching and tracking",
-          "message": "Adres e-mail klienta. Jest wyświetlany obok klienta w panelu nawigacyjnym i może być przydatny do wyszukiwania oraz śledzenia"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.ZXhwYW5k.desc": {
           "source": "Specifies which fields in the response should be expanded.",
@@ -5030,10 +4670,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.bWV0YWRhdGE.display_name": {
           "source": "Metadata",
           "message": "Metadane"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Zestaw [par klucz-wartość](https://docs"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.bmFtZQ.desc": {
           "source": "The customer's full name or business name.",
@@ -5195,10 +4831,6 @@
           "source": "Fraud Details",
           "message": "Szczegóły oszustwa"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.option.ZnJhdWRfZGV0YWlscw.short_desc": {
-          "source": "A set of key-value pairs you can attach to a charge giving information about its riskiness",
-          "message": "Zestaw par klucz-wartość, które można dołączyć do obciążenia, dostarczający informacji o jego poziomie ryzyka"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.option.bWV0YWRhdGE.desc": {
           "source": "Set of [key-value pairs](https://docs.stripe.com/api/metadata) that you can attach to an object. This can be useful for storing additional information about the object in a structured format. Individual keys can be unset by posting an empty value to them. All keys can be unset by posting an empty value to `metadata`.",
           "message": "Zestaw [par klucz-wartość](https://docs.stripe.com/api/metadata), które można dołączyć do obiektu. Może być przydatny do przechowywania dodatkowych informacji o obiekcie w ustrukturyzowanym formacie. Poszczególne klucze można wyczyścić, przypisując im pustą wartość. Wszystkie klucze można wyczyścić, przypisując pustą wartość do `metadata`."
@@ -5206,10 +4838,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.option.bWV0YWRhdGE.display_name": {
           "source": "Metadata",
           "message": "Metadane"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Zestaw [par klucz-wartość](https://docs"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNoYXJnZQ.option.c2hpcHBpbmc.desc": {
           "source": "Shipping information for the charge. Helps prevent fraud on charges for physical goods.",
@@ -5294,10 +4922,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.option.YWNjb3VudF90b2tlbg.display_name": {
           "source": "Account Token",
           "message": "Token konta"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.option.YWNjb3VudF90b2tlbg.short_desc": {
-          "source": "An [account token](https://api",
-          "message": "[Token konta](https://api"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.option.YnVzaW5lc3NfcHJvZmlsZQ.desc": {
           "source": "Business information about the account.",
@@ -5395,10 +5019,6 @@
           "source": "External Account",
           "message": "Konto zewnętrzne"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.option.ZXh0ZXJuYWxfYWNjb3VudA.short_desc": {
-          "source": "A card or bank account to attach to the account for receiving [payouts](/connect/bank-debit-card-payouts) (you won’t be able to use it for top-ups)",
-          "message": "Karta lub rachunek bankowy do przypisania do konta w celu otrzymywania [wypłat](/connect/bank-debit-card-payouts) (nie będzie można używać ich do doładowań)"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.option.ZXhwYW5k.desc": {
           "source": "Specifies which fields in the response should be expanded.",
           "message": "Określa, które pola w odpowiedzi powinny zostać rozwinięte."
@@ -5431,10 +5051,6 @@
           "source": "Metadata",
           "message": "Metadane"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Zestaw [par klucz-wartość](https://docs"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.option.c2V0dGluZ3M.desc": {
           "source": "Options for customizing how the account functions within Stripe.",
           "message": "Opcje dostosowywania sposobu działania konta w ramach Stripe."
@@ -5454,10 +5070,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.option.dG9zX2FjY2VwdGFuY2U.display_name": {
           "source": "Tos Acceptance",
           "message": "Akceptacja warunków świadczenia usług"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.option.dG9zX2FjY2VwdGFuY2U.short_desc": {
-          "source": "Details on the account's acceptance of the [Stripe Services Agreement](/connect/updating-accounts#tos-acceptance). This property can only be updated for accounts where [controller.requirement_collection](/api/accounts/object#account_object-controller-requirement_collection) is 'application', which includes Custom accounts. This property defaults to a 'full' service agreement when empty",
-          "message": "Szczegóły dotyczące zaakceptowania przez konto umowy [Stripe Services Agreement](/connect/updating-accounts#tos-acceptance). Tę właściwość można zaktualizować tylko dla kont, w których [controller.requirement_collection](/api/accounts/object#account_object-controller-requirement_collection) ma wartość 'application', co obejmuje konta Custom. Ta właściwość domyślnie przyjmuje wartość umowy o świadczenie usług 'full', gdy jest pusta"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWNvbm5lY3RlZC1hY2NvdW50.short_desc": {
           "source": "Update a connected account",
@@ -5486,10 +5098,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.Y29sbGVjdGlvbl9tZXRob2Q.display_name": {
           "source": "Collection Method",
           "message": "Metoda pobierania płatności"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.Y29sbGVjdGlvbl9tZXRob2Q.short_desc": {
-          "source": "Either 'charge_automatically' or 'send_invoice'. This field can be updated only on 'draft' invoices",
-          "message": "Wartość 'charge_automatically' lub 'send_invoice'. To pole można aktualizować tylko na fakturach o statusie 'draft'"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.Y3VzdG9tX2ZpZWxkcw.desc": {
           "source": "A list of up to 4 custom fields to be displayed on the invoice. If a value for `custom_fields` is specified, the list specified will replace the existing custom field list on this invoice. Pass an empty string to remove previously-defined fields.",
@@ -5523,10 +5131,6 @@
           "source": "Application Fee Amount",
           "message": "Kwota opłaty aplikacji"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.YXBwbGljYXRpb25fZmVlX2Ftb3VudA.short_desc": {
-          "source": "A fee in cents (or local equivalent) that will be applied to the invoice and transferred to the application owner's Stripe account",
-          "message": "Opłata w centach (lub lokalnym odpowiedniku), która zostanie naliczona na fakturze i przekazana na konto Stripe właściciela aplikacji"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.YXV0b19hZHZhbmNl.desc": {
           "source": "Controls whether Stripe performs [automatic collection](https://docs.stripe.com/invoicing/integration/automatic-advancement-collection) of the invoice.",
           "message": "Określa, czy Stripe wykonuje [automatyczną windykację](https://docs.stripe.com/invoicing/integration/automatic-advancement-collection) faktury."
@@ -5534,10 +5138,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.YXV0b19hZHZhbmNl.display_name": {
           "source": "Auto Advance",
           "message": "Automatyczne przejście"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.YXV0b19hZHZhbmNl.short_desc": {
-          "source": "Controls whether Stripe performs [automatic collection](https://docs",
-          "message": "Określa, czy Stripe wykonuje [automatyczną windykację](https://docs"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.YXV0b21hdGljX3RheA.desc": {
           "source": "Settings for automatic tax lookup for this invoice.",
@@ -5559,10 +5159,6 @@
           "source": "Automatically Finalizes At",
           "message": "Automatyczna finalizacja o"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.YXV0b21hdGljYWxseV9maW5hbGl6ZXNfYXQ.short_desc": {
-          "source": "The time when this invoice should be scheduled to finalize (up to 5 years in the future)",
-          "message": "Czas, na który zaplanowano sfinalizowanie tej faktury (do 5 lat w przyszłości)"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.ZGF5c191bnRpbF9kdWU.desc": {
           "source": "The number of days from which the invoice is created until it is due. Only valid for invoices where `collection_method=send_invoice`. This field can only be updated on `draft` invoices.",
           "message": "Liczba dni od momentu utworzenia faktury do terminu jej płatności. Obowiązuje tylko dla faktur, w których `collection_method=send_invoice`. To pole można aktualizować tylko dla faktur o statusie `draft`."
@@ -5582,10 +5178,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.ZGVmYXVsdF90YXhfcmF0ZXM.display_name": {
           "source": "Default Tax Rates",
           "message": "Domyślne stawki podatkowe"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.ZGVmYXVsdF90YXhfcmF0ZXM.short_desc": {
-          "source": "The tax rates that will apply to any line item that does not have 'tax_rates' set",
-          "message": "Stawki podatkowe, które będą miały zastosowanie do każdej pozycji, która nie ma ustawionej opcji 'tax_rates'"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.ZGVmYXVsdF9wYXltZW50X21ldGhvZA.desc": {
           "source": "ID of the default payment method for the invoice. It must belong to the customer associated with the invoice. If not set, defaults to the subscription's default payment method, if any, or to the default payment method in the customer's invoice settings.",
@@ -5727,10 +5319,6 @@
           "source": "Metadata",
           "message": "Metadane"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.bWV0YWRhdGE.short_desc": {
-          "source": "Set of [key-value pairs](https://docs",
-          "message": "Zestaw [par klucz-wartość](https://docs"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.bnVtYmVy.desc": {
           "source": "Set the number for this invoice. If no number is present then a number will be assigned automatically when the invoice is finalized. In many markets, regulations require invoices to be unique, sequential and / or gapless. You are responsible for ensuring this is true across all your different invoicing systems in the event that you edit the invoice number using our API. If you use only Stripe for your invoices and do not change invoice numbers, Stripe handles this aspect of compliance for you automatically.",
           "message": "Ustaw numer tej faktury. Jeśli brak numeru, zostanie on przypisany automatycznie po sfinalizowaniu faktury. Na wielu rynkach przepisy wymagają, aby faktury były unikalne, sekwencyjne i/lub bez luk w numeracji. Odpowiadasz za zapewnienie tego we wszystkich swoich systemach fakturowania w przypadku edycji numeru faktury za pomocą naszego API. Jeśli używasz tylko Stripe do faktur i nie zmieniasz numerów faktur, Stripe obsługuje ten aspekt zgodności z przepisami automatycznie."
@@ -5775,10 +5363,6 @@
           "source": "Statement Descriptor",
           "message": "Opis na wyciągu"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.c3RhdGVtZW50X2Rlc2NyaXB0b3I.short_desc": {
-          "source": "Extra information about a charge for the customer's credit card statement. It must contain at least one letter. If not specified and this invoice is part of a subscription, the default 'statement_descriptor' will be set to the first subscription item's product's 'statement_descriptor'",
-          "message": "Dodatkowe informacje o obciążeniu na wyciągu z karty kredytowej klienta. Muszą zawierać co najmniej jedną literę. Jeśli nie zostaną określone, a ta faktura jest częścią subskrypcji, domyślny parametr 'statement_descriptor' zostanie ustawiony na 'statement_descriptor' produktu pierwszej pozycji subskrypcji"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF9zZXR0aW5ncw.desc": {
           "source": "Configuration settings for the PaymentIntent that is generated when the invoice is finalized.",
           "message": "Ustawienia konfiguracyjne dla PaymentIntent generowanego po sfinalizowaniu faktury."
@@ -5786,10 +5370,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF9zZXR0aW5ncw.display_name": {
           "source": "Payment Settings",
           "message": "Ustawienia płatności"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.cGF5bWVudF9zZXR0aW5ncw.short_desc": {
-          "source": "Configuration settings for the PaymentIntent that is generated when the invoice is finalized",
-          "message": "Ustawienia konfiguracyjne dla PaymentIntent generowanego po sfinalizowaniu faktury"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.cmVuZGVyaW5n.desc": {
           "source": "The rendering-related settings that control how the invoice is displayed on customer-facing surfaces such as PDF and Hosted Invoice Page.",
@@ -5799,10 +5379,6 @@
           "source": "Rendering",
           "message": "Renderowanie"
         },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.cmVuZGVyaW5n.short_desc": {
-          "source": "The rendering-related settings that control how the invoice is displayed on customer-facing surfaces such as PDF and Hosted Invoice Page",
-          "message": "Ustawienia renderowania kontrolujące sposób wyświetlania faktury na powierzchniach widocznych dla klienta, takich jak plik PDF i strona Hosted Invoice Page"
-        },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.dHJhbnNmZXJfZGF0YQ.desc": {
           "source": "If specified, the funds from the invoice will be transferred to the destination and the ID of the resulting transfer will be found on the invoice's charge. This will be unset if you POST an empty value.",
           "message": "Jeśli określono, środki z faktury zostaną przesłane do miejsca docelowego, a identyfikator wynikowego przelewu znajdzie się w obciążeniu faktury. Wartość ta zostanie usunięta, jeśli prześlesz pustą wartość metodą POST."
@@ -5810,10 +5386,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.dHJhbnNmZXJfZGF0YQ.display_name": {
           "source": "Transfer Data",
           "message": "Dane transferu"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.option.dHJhbnNmZXJfZGF0YQ.short_desc": {
-          "source": "If specified, the funds from the invoice will be transferred to the destination and the ID of the resulting transfer will be found on the invoice's charge",
-          "message": "W przypadku określenia środki z faktury zostaną przesłane do miejsca docelowego, a identyfikator wynikowego transferu znajdzie się w obciążeniu faktury"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWludm9pY2U.short_desc": {
           "source": "Update an invoice",

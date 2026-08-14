@@ -63,10 +63,6 @@
           "source": "Summarize Errors",
           "message": "Підсумувати помилки"
         },
-        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "Якщо false, повертає 200 OK та суміш успішно створених об'єктів і об'єктів із помилками валідації"
-        },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.short_desc": {
           "source": "Apply a credit note to an invoice",
           "message": "Застосувати кредитну ноту до рахунку"
@@ -119,10 +115,6 @@
           "source": "Code",
           "message": "Код"
         },
-        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q29kZQ.short_desc": {
-          "source": "Code of account you are using to make the payment e",
-          "message": "Код рахунку, який використовується для здійснення платежу (н"
-        },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZQ.display_name": {
           "source": "Credit Note",
           "message": "Кредитна нота"
@@ -138,10 +130,6 @@
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZU51bWJlcg.display_name": {
           "source": "Credit Note Number",
           "message": "Номер кредит-ноти"
-        },
-        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZU51bWJlcg.short_desc": {
-          "source": "Number of invoice or credit note you are applying payment to e",
-          "message": "Номер рахунку або кредитної ноти, до якої застосовується платіж (н"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3VycmVuY3lSYXRl.desc": {
           "source": "Exchange rate when payment is received. Only used for non base currency invoices and credit notes e.g. 0.7500",
@@ -223,10 +211,6 @@
           "source": "Date",
           "message": "Дата"
         },
-        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGF0ZQ.short_desc": {
-          "source": "Date the payment is being made (YYYY-MM-DD) e",
-          "message": "Дата здійснення платежу (РРРР-ММ-ДД), напр."
-        },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGV0YWlscw.desc": {
           "source": "The information to appear on the supplier's bank account",
           "message": "Інформація, яка відображатиметься на банківському рахунку постачальника"
@@ -254,10 +238,6 @@
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZU51bWJlcg.display_name": {
           "source": "Invoice Number",
           "message": "Номер рахунка-фактури"
-        },
-        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZU51bWJlcg.short_desc": {
-          "source": "Number of invoice or credit note you are applying payment to e",
-          "message": "Номер рахунку або кредитної ноти, до якої застосовується платіж (н"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SXNSZWNvbmNpbGVk.desc": {
           "source": "An optional parameter for the payment. A boolean indicating whether you would like the payment to be created as reconciled when using PUT, or whether a payment has been reconciled when using GET",
@@ -302,10 +282,6 @@
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudElE.display_name": {
           "source": "Payment ID",
           "message": "Ідентифікатор платежу"
-        },
-        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudElE.short_desc": {
-          "source": "The Xero identifier for an Payment e",
-          "message": "Ідентифікатор Xero для платежу, напр."
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFDQ1BBWVBBWU1FTlQ.display_name": {
           "source": "ACCPAYPAYMENT",
@@ -374,10 +350,6 @@
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UmVmZXJlbmNl.display_name": {
           "source": "Reference",
           "message": "Посилання"
-        },
-        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UmVmZXJlbmNl.short_desc": {
-          "source": "An optional description for the payment e",
-          "message": "Необов'язковий опис для платежу, напр."
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.short_desc": {
           "source": "Record a payment against an invoice",
@@ -551,10 +523,6 @@
           "source": "Include Archived",
           "message": "Включати заархівовані"
         },
-        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.aW5jbHVkZUFyY2hpdmVk.short_desc": {
-          "source": "e",
-          "message": "напр."
-        },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.b3JkZXI.desc": {
           "source": "Order by an any element",
           "message": "Сортувати за будь-яким елементом"
@@ -575,10 +543,6 @@
           "source": "Search Term",
           "message": "Пошуковий запит"
         },
-        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c2VhcmNoVGVybQ.short_desc": {
-          "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields",
-          "message": "Параметр пошуку, який виконує нечутливий до регістру пошук тексту в полях Name, FirstName, LastName, ContactNumber та EmailAddress"
-        },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.desc": {
           "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object. This returns only lightweight fields, excluding computation-heavy fields from the response, making the API calls quick and efficient.",
           "message": "Використовуйте summaryOnly=true в ендпоінті GET Contacts та Invoices, щоб отримати зменшену версію об'єкта відповіді. Це повертає лише легковажні поля, виключаючи з відповіді ресурсомісткі для обчислення поля, що робить виклики API швидкими та ефективними."
@@ -586,10 +550,6 @@
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.display_name": {
           "source": "Summary Only",
           "message": "Лише зведення"
-        },
-        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.short_desc": {
-          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object",
-          "message": "Використовуйте summaryOnly=true в ендпоінті GET Contacts та Invoices, щоб отримати зменшену версію об'єкта відповіді"
         },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZQ.desc": {
           "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
@@ -706,10 +666,6 @@
         "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
-        },
-        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "напр."
         },
         "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.short_desc": {
           "source": "List the credit notes in the organisation",
@@ -851,10 +807,6 @@
           "source": "Unitdp",
           "message": "Unitdp"
         },
-        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "напр."
-        },
         "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.short_desc": {
           "source": "List the bank transactions in the organisation",
           "message": "Отримати список банківських транзакцій в організації"
@@ -983,10 +935,6 @@
           "source": "Include Archived",
           "message": "Включати заархівовані"
         },
-        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.aW5jbHVkZUFyY2hpdmVk.short_desc": {
-          "source": "e",
-          "message": "напр."
-        },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.b3JkZXI.desc": {
           "source": "Order by an any element",
           "message": "Сортувати за будь-яким елементом"
@@ -1007,10 +955,6 @@
           "source": "Search Term",
           "message": "Пошуковий запит"
         },
-        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c2VhcmNoVGVybQ.short_desc": {
-          "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields",
-          "message": "Параметр пошуку, який виконує нечутливий до регістру пошук тексту в полях Name, FirstName, LastName, ContactNumber та EmailAddress"
-        },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.desc": {
           "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object. This returns only lightweight fields, excluding computation-heavy fields from the response, making the API calls quick and efficient.",
           "message": "Використовуйте summaryOnly=true в ендпоінті GET Contacts та Invoices, щоб отримати зменшену версію об'єкта відповіді. Це повертає лише легковажні поля, виключаючи з відповіді ресурсомісткі для обчислення поля, що робить виклики API швидкими та ефективними."
@@ -1018,10 +962,6 @@
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.display_name": {
           "source": "Summary Only",
           "message": "Лише зведення"
-        },
-        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.short_desc": {
-          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object",
-          "message": "Використовуйте summaryOnly=true в ендпоінті GET Contacts та Invoices, щоб отримати зменшену версію об'єкта відповіді"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZQ.desc": {
           "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
@@ -1066,10 +1006,6 @@
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
-        },
-        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "напр."
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.short_desc": {
           "source": "List invoices and bills",
@@ -1126,10 +1062,6 @@
         "app.WGVybw.action.Z2V0SXRlbXM.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
-        },
-        "app.WGVybw.action.Z2V0SXRlbXM.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "напр."
         },
         "app.WGVybw.action.Z2V0SXRlbXM.short_desc": {
           "source": "List the items in the organisation",
@@ -1543,10 +1475,6 @@
           "source": "Task Ids",
           "message": "Ідентифікатори завдань"
         },
-        "app.WGVybw.action.Z2V0VGFza3M.option.dGFza0lkcw.short_desc": {
-          "source": "Search for all tasks that match a comma separated list of taskIds, i",
-          "message": "Пошук усіх завдань, які відповідають розділеному комами списку taskIds, i"
-        },
         "app.WGVybw.action.Z2V0VGFza3M.short_desc": {
           "source": "List the tasks in a project",
           "message": "Список завдань у проєкті"
@@ -1879,10 +1807,6 @@
           "source": "URI Path",
           "message": "Шлях URI"
         },
-        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "Шлях URI відносно базового URL API підключення. Може містити заповнювачі '{name}', які замінюються з 'path_vars'. Приклад: '/users/{id}/comments'"
-        },
         "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
@@ -2091,10 +2015,6 @@
           "source": "Summarize Errors",
           "message": "Підсумувати помилки"
         },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "Якщо false, повертає 200 OK та суміш успішно створених об'єктів і об'єктів із помилками валідації"
-        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.desc": {
           "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
           "message": "наприклад, unitdp=4 – (Unit Decimal Places) Ви можете ввімкнути використання чотирьох десяткових знаків для сум за одиницю"
@@ -2102,10 +2022,6 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
-        },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "напр."
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.short_desc": {
           "source": "Record money spent or received against a bank account",
@@ -2134,10 +2050,6 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
           "source": "Summarize Errors",
           "message": "Підсумувати помилки"
-        },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "Якщо false, повертає 200 OK та суміш успішно створених об'єктів і об'єктів із помилками валідації"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.short_desc": {
           "source": "Create contacts, or update them by ID",
@@ -2179,10 +2091,6 @@
           "source": "Allow Backorders",
           "message": "Дозволити невиконані замовлення"
         },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.YWxsb3dCYWNrb3JkZXJz.short_desc": {
-          "source": "Allows an invoice to be created even when one or more line items contain tracked inventory where the invoice quantity would cause the available quantity to go negative",
-          "message": "Дозволяє створити рахунок-фактуру, навіть якщо одна чи кілька позицій містять відстежувані запаси, кількість яких у рахунку-фактурі призведе до від’ємного залишку"
-        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
           "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
           "message": "Якщо false, повертає 200 OK та суміш успішно створених об'єктів і об'єктів із помилками валідації"
@@ -2191,10 +2099,6 @@
           "source": "Summarize Errors",
           "message": "Підсумувати помилки"
         },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "Якщо false, повертає 200 OK та суміш успішно створених об'єктів і об'єктів із помилками валідації"
-        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.desc": {
           "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
           "message": "наприклад, unitdp=4 – (Unit Decimal Places) Ви можете ввімкнути використання чотирьох десяткових знаків для сум за одиницю"
@@ -2202,10 +2106,6 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
-        },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "напр."
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.short_desc": {
           "source": "Create invoices or bills, or update them by ID",
@@ -2235,10 +2135,6 @@
           "source": "Summarize Errors",
           "message": "Підсумувати помилки"
         },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "Якщо false, повертає 200 OK та суміш успішно створених об'єктів і об'єктів із помилками валідації"
-        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.desc": {
           "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
           "message": "наприклад, unitdp=4 – (Unit Decimal Places) Ви можете ввімкнути використання чотирьох десяткових знаків для сум за одиницю"
@@ -2246,10 +2142,6 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
-        },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.short_desc": {
-          "source": "e",
-          "message": "напр."
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.short_desc": {
           "source": "Create items, or update them by ID",
@@ -2279,10 +2171,6 @@
           "source": "Summarize Errors",
           "message": "Підсумувати помилки"
         },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "Якщо false, повертає 200 OK та суміш успішно створених об'єктів і об'єктів із помилками валідації"
-        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.short_desc": {
           "source": "Create quotes, or update them by ID",
           "message": "Створити комерційні пропозиції або оновити їх за ID"
@@ -2310,10 +2198,6 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
           "source": "Summarize Errors",
           "message": "Підсумувати помилки"
-        },
-        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
-          "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
-          "message": "Якщо false, повертає 200 OK та суміш успішно створених об'єктів і об'єктів із помилками валідації"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.short_desc": {
           "source": "Set up an invoice that repeats on a schedule",

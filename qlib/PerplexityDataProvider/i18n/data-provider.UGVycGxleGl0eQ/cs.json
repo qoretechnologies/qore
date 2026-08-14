@@ -295,10 +295,6 @@
           "source": "URI Path",
           "message": "Cesta URI"
         },
-        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "Cesta URI relativní vůči základní URL API připojení. Může obsahovat zástupné symboly '{name}', které jsou nahrazeny z 'path_vars'. Příklad: '/users/{id}/comments'"
-        },
         "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
@@ -862,10 +858,6 @@
         "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.short_desc": {
           "source": "The sampling temperature to use, between 0 and 2",
           "message": "Teplota vzorkování, která se má použít, mezi 0 a 2"
-        },
-        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.short_desc": {
-          "source": "Chat with a Perplexity AI model by sending multiple messages at once and getting web-grounded responses with citations",
-          "message": "Chatujte s modelem Perplexity AI odesláním více zpráv najednou a získejte odpovědi podložené webovými zdroji včetně citací"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.desc": {
           "source": "Search the web using Perplexity's dedicated search API returning structured results with titles, URLs, and snippets",
@@ -1618,10 +1610,6 @@
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
           "source": "The sampling temperature to use, between 0 and 2",
           "message": "Teplota vzorkování, která se má použít, mezi 0 a 2"
-        },
-        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.short_desc": {
-          "source": "Chat with a Perplexity AI model by sending a single message and receiving a single web-grounded reply with citations",
-          "message": "Chatujte s modelem Perplexity AI odesláním jedné zprávy a přijetím jedné odpovědi podložené webem včetně citací"
         },
         "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.desc": {
           "source": "Stream a chat response from Perplexity AI via Server-Sent Events with real-time token delivery",

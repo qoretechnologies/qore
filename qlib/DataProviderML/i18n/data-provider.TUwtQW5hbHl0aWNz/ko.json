@@ -2995,10 +2995,6 @@
           "source": "Schema defining validation rules for each field",
           "message": "각 필드의 유효성 검사 규칙을 정의하는 스키마"
         },
-        "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.short_desc": {
-          "source": "Validates each record against a defined schema with configurable violation handling",
-          "message": "구성 가능한 위반 처리 방식으로 정의된 스키마에 대해 각 레코드의 유효성을 검사합니다."
-        },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.desc": {
           "source": "Answers 'is this increase real growth or just a seasonal spike?' by separating a time series into its component parts. For example, monthly sales of $120K might decompose into $100K trend + $25K seasonal holiday boost - $5K random dip.\n\nRecords accumulate per field in a window; when full, all values are decomposed. Each record receives:\n- `trend` — long-term direction\n- `seasonal` — cyclical pattern (e.g., holiday shopping cycles)\n- `residual` — random noise remaining after removing trend and seasonal",
           "message": "시계열을 구성 요소로 분해하여 '이 증가가 실질적인 성장인지 아니면 단순한 계절적 급증인지'에 대한 답을 제공합니다. 예를 들어 월간 매출 12만 달러는 10만 달러의 추세 + 2만 5천 달러의 계절적 휴일 증가 - 5천 달러의 무작위 하락으로 분해될 수 있습니다.\n\n레코드는 윈도우 내에서 필드별로 누적되며, 윈도우가 가득 차면 모든 값이 분해됩니다. 각 레코드는 다음을 수신합니다:\n- `trend` — 장기적 방향\n- `seasonal` — 주기적 패턴(예: 연말연시 쇼핑 주기)\n- `residual` — 추세 및 계절성을 제거한 후 남은 무작위 노이즈"

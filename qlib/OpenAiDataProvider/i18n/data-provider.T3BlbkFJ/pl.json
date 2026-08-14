@@ -283,10 +283,6 @@
           "source": "Background",
           "message": "Informacje ogólne"
         },
-        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.short_desc": {
-          "source": "Allows to set transparency for the background of the generated image(s) when using 'gpt-image-1'",
-          "message": "Pozwala ustawić przezroczystość tła wygenerowanego obrazu (obrazów) przy użyciu 'gpt-image-1'"
-        },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2NvbXByZXNzaW9u.desc": {
           "source": "The compression level (0-100%) for the generated image(s). This parameter is only supported for `gpt-image-1` with the `webp` or `jpeg` output formats, and defaults to `100`",
           "message": "Poziom kompresji (0-100%) dla wygenerowanego obrazu (obrazów). Ten parametr jest obsługiwany tylko dla `gpt-image-1` z formatami wyjściowymi `webp` lub `jpeg` i domyślnie przyjmuje wartość `100`"
@@ -511,10 +507,6 @@
           "source": "Prompt",
           "message": "Prompt"
         },
-        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cHJvbXB0.short_desc": {
-          "source": "A text description of the desired image(s).",
-          "message": "Opis tekstowy żądanego obrazu (obrazów)."
-        },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
           "source": "Medium quality (`gpt-image-1` only)",
           "message": "Średnia jakość (tylko `gpt-image-1`)"
@@ -582,10 +574,6 @@
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.dXNlcg.display_name": {
           "source": "User",
           "message": "Użytkownik"
-        },
-        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.dXNlcg.short_desc": {
-          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
-          "message": "Unikatowy identyfikator reprezentujący użytkownika końcowego, który może pomóc OpenAI w monitorowaniu i wykrywaniu nadużyć"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.short_desc": {
           "source": "Generate an image from a prompt",
@@ -986,10 +974,6 @@
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.display_name": {
           "source": "User",
           "message": "Użytkownik"
-        },
-        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.short_desc": {
-          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
-          "message": "Unikatowy identyfikator reprezentujący użytkownika końcowego, który może pomóc OpenAI w monitorowaniu i wykrywaniu nadużyć"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
           "source": "Process a request with a model",
@@ -1731,10 +1715,6 @@
           "source": "URI Path",
           "message": "Ścieżka URI"
         },
-        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "Ścieżka URI względna wobec bazowego adresu URL API połączenia. Może zawierać symbole zastępcze '{name}', które są zastępowane z 'path_vars'. Przykład: '/users/{id}/comments'"
-        },
         "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
@@ -2030,10 +2010,6 @@
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dXNlcg.short_desc": {
           "source": "A unique identifier representing your end-user",
           "message": "Unikalny identyfikator reprezentujący użytkownika końcowego"
-        },
-        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.short_desc": {
-          "source": "Chat with an AI model by sending multiple messages at once and potentially getting multiple replies",
-          "message": "Rozmawiaj z modelem AI, wysyłając wiele wiadomości jednocześnie i potencjalnie otrzymując wiele odpowiedzi"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.desc": {
           "source": "Chat with an AI model by sending a single message and receiving a single reply",
@@ -2774,10 +2750,6 @@
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.display_name": {
           "source": "User",
           "message": "Użytkownik"
-        },
-        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.short_desc": {
-          "source": "A unique identifier representing your end-user, which can help OpenAI to monitor and detect abuse",
-          "message": "Unikatowy identyfikator reprezentujący użytkownika końcowego, który może pomóc OpenAI w monitorowaniu i wykrywaniu nadużyć"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
           "source": "Stream a response from a model",

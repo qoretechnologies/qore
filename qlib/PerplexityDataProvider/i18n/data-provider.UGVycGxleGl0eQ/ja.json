@@ -295,10 +295,6 @@
           "source": "URI Path",
           "message": "URIパス"
         },
-        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name}' placeholders that are replaced from 'path_vars'. Example: '/users/{id}/comments'",
-          "message": "接続のAPIベースURLに対する相対URIパス。'path_vars' から置換される '{name}' プレースホルダーを含めることができます。例: '/users/{id}/comments'"
-        },
         "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
@@ -862,10 +858,6 @@
         "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.short_desc": {
           "source": "The sampling temperature to use, between 0 and 2",
           "message": "使用するサンプリング温度（0から2の間）"
-        },
-        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.short_desc": {
-          "source": "Chat with a Perplexity AI model by sending multiple messages at once and getting web-grounded responses with citations",
-          "message": "複数のメッセージを一度に送信し、引用付きのWeb検索に基づく回答を取得してPerplexity AIモデルとチャットします"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.desc": {
           "source": "Search the web using Perplexity's dedicated search API returning structured results with titles, URLs, and snippets",
@@ -1618,10 +1610,6 @@
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
           "source": "The sampling temperature to use, between 0 and 2",
           "message": "使用するサンプリング温度（0から2の間）"
-        },
-        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.short_desc": {
-          "source": "Chat with a Perplexity AI model by sending a single message and receiving a single web-grounded reply with citations",
-          "message": "1つのメッセージを送信して、引用付きのWeb情報に基づいた1つの返答を受信することで、Perplexity AIモデルとチャットします"
         },
         "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.desc": {
           "source": "Stream a chat response from Perplexity AI via Server-Sent Events with real-time token delivery",
