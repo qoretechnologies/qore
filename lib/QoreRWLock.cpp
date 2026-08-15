@@ -1,13 +1,13 @@
 /*
     QoreRWLock.cpp
 
-    Read-Write Lock object (default: prefer readers to allow recursively grabbing the read lock)
-    prefer writers not yet tested/completely implemented (ex: should throw an exception if a
-    thread holding the read lock tries to recursively grab the read lock)
+    Read-Write Lock objects; readers are always preferred, which is what allows the read lock to be
+    grabbed recursively.  Preferring writers is not implemented: a thread holding the read lock
+    that grabs it again would deadlock behind a queued writer.
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 David Nichols
+    Copyright (C) 2003 - 2026 David Nichols
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -34,6 +34,36 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/qore_var_rwlock_priv.h"
+
+QoreRWLock::QoreRWLock() : priv(new qore_var_rwlock_priv) {
+}
+
+QoreRWLock::~QoreRWLock() {
+    delete priv;
+}
+
+int QoreRWLock::wrlock() {
+    priv->wrlock();
+    return 0;
+}
+
+int QoreRWLock::trywrlock() {
+    return priv->trywrlock();
+}
+
+int QoreRWLock::unlock() {
+    priv->unlock();
+    return 0;
+}
+
+int QoreRWLock::rdlock() {
+    priv->rdlock();
+    return 0;
+}
+
+int QoreRWLock::tryrdlock() {
+    return priv->tryrdlock();
+}
 
 QoreVarRWLock::QoreVarRWLock(qore_var_rwlock_priv* p) : priv(p) {
 }
