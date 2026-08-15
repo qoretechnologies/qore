@@ -742,8 +742,10 @@ int PollPipelinePriv::addMakePop3ApopCommand(const char* command_key, const char
         bool found = false;
         QoreString command;
         if (ctx.last_output.getType() == NT_STRING) {
-            const QoreStringNode* str_node = ctx.last_output.get<const QoreStringNode>();
-            std::string line(str_node->c_str(), str_node->size());
+            // note: the value can be held in inline short string storage, which has no
+            // QoreStringNode, so the data helper must be used to read the bytes
+            QoreStringDataHelper str_node(ctx.last_output);
+            std::string line(str_node.c_str(), str_node.size());
             while (!line.empty() && (line.back() == '\n' || line.back() == '\r' || line.back() == ' ')) {
                 line.pop_back();
             }

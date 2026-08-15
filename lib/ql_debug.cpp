@@ -306,6 +306,102 @@ static void ut_qorevalue_operator_bool_null(UnitTestCounters& c) {
     UT_ASSERT(c, !(bool)simple_null, "QoreSimpleValue NULL is false in C++ bool context");
 }
 
+//! verifies that QoreStringDataHelper reads both string representations identically
+/** A string of QoreValue::SHORTSTR_MAX_BYTES bytes or fewer is stored inline in the QoreValue
+    itself, so QoreValue::get<QoreStringNode>() returns nullptr for it even though getType() returns
+    NT_STRING.  QoreStringDataHelper is the representation-independent accessor; if it ever stops
+    handling one of the two representations, the C++ code that reads string values out of hashes,
+    lists, object members and exceptions dereferences a null pointer and kills the process.
+*/
+static void ut_string_data_helper(UnitTestCounters& c) {
+    // inline short string ("1.0" is 3 bytes, so it is always stored inline)
+    QoreValue short_value = QoreValue::makeStringValue("1.0");
+    UT_ASSERT(c, short_value.isShortString(), "a 3-byte string is stored inline");
+    UT_ASSERT(c, short_value.getType() == NT_STRING, "an inline short string reports NT_STRING");
+    // note: this is why get<QoreStringNode>() cannot work for an inline short string; the call
+    // itself is not made here because it asserts in debug builds, which is the point of the guard
+    UT_ASSERT(c, !short_value.isPointer(), "an inline short string has no AbstractQoreNode pointer");
+    {
+        QoreStringDataHelper s(short_value);
+        UT_ASSERT(c, (bool)s, "the data helper accepts an inline short string");
+        UT_ASSERT(c, !strcmp(s.c_str(), "1.0"), "the data helper returns the inline bytes");
+        UT_ASSERT_EQ(c, 3, (int)s.size(), "the data helper returns the inline byte length");
+        UT_ASSERT(c, s.getEncoding() == QCS_UTF8, "inline short strings are always UTF-8");
+        UT_ASSERT(c, !s.empty(), "a non-empty inline short string is not empty()");
+        UT_ASSERT(c, s == "1.0", "operator==(const char*) matches an inline short string");
+        UT_ASSERT(c, s != "1.1", "operator!=(const char*) rejects a different string");
+        UT_ASSERT(c, s == std::string("1.0"), "operator==(const std::string&) matches");
+    }
+
+    // a string longer than the inline limit is a heap QoreStringNode
+    SimpleRefHolder<QoreStringNode> node(new QoreStringNode("1234567", QCS_UTF8));
+    QoreValue node_value(*node);
+    UT_ASSERT(c, !node_value.isShortString(), "a 7-byte string is not stored inline");
+    {
+        QoreStringDataHelper s(node_value);
+        UT_ASSERT(c, (bool)s, "the data helper accepts a heap string node");
+        UT_ASSERT(c, !strcmp(s.c_str(), "1234567"), "the data helper returns the heap bytes");
+        UT_ASSERT_EQ(c, 7, (int)s.size(), "the data helper returns the heap byte length");
+        UT_ASSERT(c, s == "1234567", "operator==(const char*) matches a heap string");
+    }
+
+    // the exact inline boundary: SHORTSTR_MAX_BYTES bytes still fits inline and has no room for a
+    // terminator in the value itself, so the helper's own buffer must supply one
+    QoreValue boundary = QoreValue::makeStringValue("123456");
+    UT_ASSERT(c, boundary.isShortString(), "a 6-byte string is stored inline");
+    {
+        QoreStringDataHelper s(boundary);
+        UT_ASSERT_EQ(c, (int)QoreValue::SHORTSTR_MAX_BYTES, (int)s.size(),
+            "the maximum-length inline string reports its full length");
+        UT_ASSERT(c, !strcmp(s.c_str(), "123456"),
+            "the maximum-length inline string is null-terminated by the helper");
+    }
+
+    // an empty string is stored inline with zero length
+    QoreValue empty_value = QoreValue::makeStringValue("");
+    {
+        QoreStringDataHelper s(empty_value);
+        UT_ASSERT(c, (bool)s, "the data helper accepts an empty string");
+        UT_ASSERT(c, s.empty(), "an empty string reports empty()");
+        UT_ASSERT(c, s == "", "an empty string compares equal to \"\"");
+    }
+
+    // non-string values leave the helper empty rather than producing a bogus pointer
+    QoreValue not_a_string(static_cast<int64>(42));
+    {
+        QoreStringDataHelper s(not_a_string);
+        UT_ASSERT(c, !(bool)s, "the data helper rejects a non-string value");
+        UT_ASSERT(c, !s.c_str(), "a non-string value yields a null pointer");
+        UT_ASSERT(c, s.empty(), "a non-string value reports empty()");
+        UT_ASSERT(c, !(s == "42"), "a non-string value never compares equal");
+        UT_ASSERT(c, !s.getEncoding(), "a non-string value has no encoding");
+    }
+
+    // the two representations of the same text compare equal to each other
+    QoreValue short_abc = QoreValue::makeStringValue("abc");
+    SimpleRefHolder<QoreStringNode> node_abc(new QoreStringNode("abc", QCS_UTF8));
+    QoreValue heap_abc(*node_abc);
+    {
+        QoreStringDataHelper a(short_abc);
+        QoreStringDataHelper b(heap_abc);
+        UT_ASSERT(c, a == b, "inline and heap representations of the same text compare equal");
+        UT_ASSERT(c, b == "abc", "the heap representation matches the literal");
+    }
+
+    // values held in a hash keep their representation, which is exactly how the crash was reached
+    {
+        ExceptionSink xsink;
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), &xsink);
+        h->setKeyValue("version", QoreValue::makeStringValue("1.0"), &xsink);
+        QoreValue v = h->getKeyValue("version");
+        UT_ASSERT(c, v.isShortString(), "a short string stays inline inside a hash");
+        UT_ASSERT(c, v.getType() == NT_STRING, "a hash value reports NT_STRING");
+        QoreStringDataHelper s(v);
+        UT_ASSERT(c, s == "1.0", "the data helper reads a short string out of a hash");
+        UT_ASSERT(c, !xsink, "no exception was raised building the test hash");
+    }
+}
+
 class TestRSectionPriv : public qore_rsection_priv {
 public:
     DLLLOCAL void setFakeWriter(int tid) {
@@ -2678,9 +2774,10 @@ static void ut_asyncio_exec_rejects_io_thread(UnitTestCounters& c) {
     UT_ASSERT(c, !result, "exec returns no result from async I/O thread");
     UT_ASSERT(c, (bool)xsink, "exec raises from async I/O thread");
     if (xsink) {
-        const QoreValue err_val = xsink.getExceptionErr();
-        const QoreStringNode* err = err_val.get<const QoreStringNode>();
-        UT_ASSERT(c, err && *err == "ASYNC-IO-ERROR", "exception is ASYNC-IO-ERROR");
+        // note: the error code can be held in inline short string storage, which has no
+        // QoreStringNode, so the data helper must be used to compare it
+        QoreStringDataHelper err(xsink.getExceptionErr());
+        UT_ASSERT(c, err == "ASYNC-IO-ERROR", "exception is ASYNC-IO-ERROR");
 
         QoreStringValueHelper desc(xsink.getExceptionDesc());
         UT_ASSERT(c, !strcmp(desc->c_str(), "exec() cannot be called from the async I/O thread"),
@@ -2708,9 +2805,10 @@ static void ut_asyncio_wait_for_processing_rejects_io_thread(UnitTestCounters& c
     UT_ASSERT(c, !processed, "waitForProcessing returns false from async I/O thread");
     UT_ASSERT(c, (bool)xsink, "waitForProcessing raises from async I/O thread");
     if (xsink) {
-        const QoreValue err_val = xsink.getExceptionErr();
-        const QoreStringNode* err = err_val.get<const QoreStringNode>();
-        UT_ASSERT(c, err && *err == "ASYNC-IO-ERROR", "exception is ASYNC-IO-ERROR");
+        // note: the error code can be held in inline short string storage, which has no
+        // QoreStringNode, so the data helper must be used to compare it
+        QoreStringDataHelper err(xsink.getExceptionErr());
+        UT_ASSERT(c, err == "ASYNC-IO-ERROR", "exception is ASYNC-IO-ERROR");
 
         QoreStringValueHelper desc(xsink.getExceptionDesc());
         UT_ASSERT(c, !strcmp(desc->c_str(), "waitForProcessing() cannot be called from the async I/O thread"),
@@ -2725,9 +2823,10 @@ static void ut_asyncio_wait_for_processing_rejects_io_thread(UnitTestCounters& c
     UT_ASSERT(c, !processed, "keyed waitForProcessing returns false from async I/O thread");
     UT_ASSERT(c, (bool)xsink, "keyed waitForProcessing raises from async I/O thread");
     if (xsink) {
-        const QoreValue err_val = xsink.getExceptionErr();
-        const QoreStringNode* err = err_val.get<const QoreStringNode>();
-        UT_ASSERT(c, err && *err == "ASYNC-IO-ERROR", "keyed exception is ASYNC-IO-ERROR");
+        // note: the error code can be held in inline short string storage, which has no
+        // QoreStringNode, so the data helper must be used to compare it
+        QoreStringDataHelper err(xsink.getExceptionErr());
+        UT_ASSERT(c, err == "ASYNC-IO-ERROR", "keyed exception is ASYNC-IO-ERROR");
         xsink.clear();
     }
 
@@ -2947,9 +3046,10 @@ static void ut_socket_async_sequence_lifecycle(UnitTestCounters& c) {
         rv = sp->setNonBlock(&xsink, NB_SEND);
         UT_ASSERT(c, rv == -1, "same-direction operation is rejected when another TID owns send sequence");
         UT_ASSERT(c, (bool)xsink, "same-direction sequence conflict raises exception");
-        const QoreValue err_val = xsink.getExceptionErr();
-        const QoreStringNode* err = err_val.get<const QoreStringNode>();
-        UT_ASSERT(c, err && *err == "SOCKET-ASYNC-MODE-ERROR",
+        // note: the error code can be held in inline short string storage, which has no
+        // QoreStringNode, so the data helper must be used to compare it
+        QoreStringDataHelper err(xsink.getExceptionErr());
+        UT_ASSERT(c, err == "SOCKET-ASYNC-MODE-ERROR",
             "same-direction sequence conflict exception is SOCKET-ASYNC-MODE-ERROR");
         xsink.clear();
 
@@ -3279,7 +3379,9 @@ static QoreValue f_dbg_ds_arm_connection_abort(const QoreListNode* params, Runti
             "dbg_ds_arm_connection_abort() requires an AbstractDatasource argument");
         return QoreValue();
     }
-    const QoreStringNode* op_id = get_param_value(params, 1).get<const QoreStringNode>();
+    // note: the value can be held in inline short string storage, which has no QoreStringNode; the
+    // helper must stay in scope for as long as "op_id" is used below
+    QoreStringDataHelper op_id(get_param_value(params, 1));
     const int when = (int)get_param_value(params, 2).getAsBigInt();
 
     QoreObject* o = const_cast<QoreObject*>(obj);
@@ -3293,7 +3395,7 @@ static QoreValue f_dbg_ds_arm_connection_abort(const QoreListNode* params, Runti
         return QoreValue();
     }
     if (mds) {
-        mds->getOrCreateMutationContext()->dbgArmFault(op_id ? op_id->c_str() : nullptr, when);
+        mds->getOrCreateMutationContext()->dbgArmFault(op_id ? op_id.c_str() : nullptr, when);
         return QoreValue();
     }
 
@@ -3304,7 +3406,7 @@ static QoreValue f_dbg_ds_arm_connection_abort(const QoreListNode* params, Runti
     }
     if (dsp) {
         // the pool owns the context under its own lock, so it does the arming itself
-        dsp->dbgArmConnectionAbort(op_id ? op_id->c_str() : nullptr, when);
+        dsp->dbgArmConnectionAbort(op_id ? op_id.c_str() : nullptr, when);
         return QoreValue();
     }
 
@@ -3396,8 +3498,9 @@ static QoreValue f_dbg_flags_effect_count(const QoreListNode* params, RuntimeCon
  */
 static QoreValue f_dbg_flags_pure_latin1(const QoreListNode* params, RuntimeConfig& rc,
         ExceptionSink* xsink) {
-    const QoreStringNode* str = get_param_value(params, 0).get<const QoreStringNode>();
-    return new QoreStringNode(str->c_str(), str->size(), QCS_ISO_8859_1);
+    // note: the value can be held in inline short string storage, which has no QoreStringNode
+    QoreStringDataHelper str(get_param_value(params, 0));
+    return new QoreStringNode(str.c_str(), str.size(), QCS_ISO_8859_1);
 }
 
 static QoreValue f_dbg_flags_pure_throw(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
@@ -3456,6 +3559,7 @@ static QoreHashNode* make_unit_test_result(UnitTestCounters& c, ExceptionSink* x
 static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     UnitTestCounters c;
     ut_qorevalue_operator_bool_null(c);
+    ut_string_data_helper(c);
     ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     return make_unit_test_result(c, xsink);
@@ -3465,6 +3569,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     UnitTestCounters c;
 
     ut_qorevalue_operator_bool_null(c);
+    ut_string_data_helper(c);
     ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_event_loop_remove_recycled_fd(c);
@@ -3526,57 +3631,102 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     return make_unit_test_result(c, xsink);
 }
 
+#ifdef DEBUG
+//! returns the argument stored in inline short string storage
+/** Whether a string value uses inline short string storage or a heap QoreStringNode depends on the
+    execution mode that produced it, which makes the representation awkward to pin down from a
+    script.  This function produces it on demand so that tests can push an inline string through the
+    C++ code that reads string values out of containers.
+
+    @throw DBG-ARGUMENT-ERROR the value is not a string, or does not fit in inline storage
+*/
+static QoreValue f_dbg_make_short_string(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreStringDataHelper str(get_param_value(params, 0));
+    if (!str) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_make_short_string() requires a string argument");
+        return QoreValue();
+    }
+    QoreValue rv;
+    if (!QoreValue::tryMakeShortString(rv, str.c_str(), str.size())) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_make_short_string() requires a string of no more than "
+            QSD " bytes; got " QSD " bytes", (size_t)QoreValue::SHORTSTR_MAX_BYTES, str.size());
+        return QoreValue();
+    }
+    return rv;
+}
+
+//! returns True if the argument is stored in inline short string storage
+static QoreValue f_dbg_is_short_string(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return get_param_value(params, 0).isShortString();
+}
+#endif
+
+//! functional domain for debug and unit-test hooks
+/** These builtins reach into process-global state and library internals, so they must only be
+    callable by trusted (unsandboxed) code; tagging them keeps %Qore's sandboxing controls effective
+    even in a debug build, where the debug-only hooks are compiled in.
+*/
+#define QDOM_DEBUG_HOOK (QDOM_PROCESS | QDOM_UNCONTROLLED_API)
+
 void init_debug_functions(QoreNamespace& qns) {
-    qns.addBuiltinVariant("dbg_node_info", f_dbg_node_info, QCF_NO_FLAGS, QDOM_DEFAULT, stringTypeInfo, 2,
+
+    qns.addBuiltinVariant("dbg_node_info", f_dbg_node_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, stringTypeInfo, 2,
         autoTypeInfo, QORE_PARAM_NO_ARG, "node", softBoolOrNothingTypeInfo, QORE_PARAM_NO_ARG, "shallow");
-    qns.addBuiltinVariant("dbg_global_vars", f_dbg_global_vars, QCF_NO_FLAGS, QDOM_DEFAULT, listTypeInfo);
-    qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEFAULT, hashTypeInfo);
-    qns.addBuiltinVariant("run_debug_unit_tests", f_run_debug_unit_tests, QCF_NO_FLAGS, QDOM_DEFAULT, hashTypeInfo);
-    qns.addBuiltinVariant("run_unit_tests", f_run_unit_tests, QCF_NO_FLAGS, QDOM_DEFAULT, hashTypeInfo);
+    qns.addBuiltinVariant("dbg_global_vars", f_dbg_global_vars, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, listTypeInfo);
+    qns.addBuiltinVariant("dbg_get_ns_info", f_dbg_get_ns_info, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("run_debug_unit_tests", f_run_debug_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
+    qns.addBuiltinVariant("run_unit_tests", f_run_unit_tests, QCF_NO_FLAGS, QDOM_DEBUG_HOOK, hashTypeInfo);
 #ifdef DEBUG
     qns.addBuiltinVariant("dbg_force_fd_swap_next_wait", f_dbg_force_fd_swap_next_wait,
-        QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 1,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         QC_SOCKET->getTypeInfo(), QORE_PARAM_NO_ARG, "sock");
     qns.addBuiltinVariant("dbg_ds_arm_connection_abort", f_dbg_ds_arm_connection_abort,
-        QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 3,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 3,
         QC_ABSTRACTDATASOURCE->getTypeInfo(), QORE_PARAM_NO_ARG, "ds",
         stringTypeInfo, QORE_PARAM_NO_ARG, "op_id",
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "when");
+    qns.addBuiltinVariant("dbg_make_short_string", f_dbg_make_short_string, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "value");
+    qns.addBuiltinVariant("dbg_is_short_string", f_dbg_is_short_string, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        boolTypeInfo, 1, autoTypeInfo, QORE_PARAM_NO_ARG, "value");
 #endif
 
     // code flag oracle; the mask on each of these is the point of the declaration, so it must match
     // what the corresponding body actually does
     qns.addBuiltinVariant("dbg_flags_legacy_constant", f_dbg_flags_legacy_constant,
-        QCF_CONSTANT, QDOM_DEFAULT, bigIntTypeInfo);
+        QCF_CONSTANT, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_flags_total", f_dbg_flags_total,
-        QCF_TOTAL, QDOM_DEFAULT, bigIntTypeInfo);
+        QCF_TOTAL, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_flags_pure", f_dbg_flags_pure,
-        QCF_PURE, QDOM_DEFAULT, bigIntTypeInfo);
+        QCF_PURE, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_flags_retval_only", f_dbg_flags_retval_only,
-        QCF_RET_VALUE_ONLY, QDOM_DEFAULT, bigIntTypeInfo);
+        QCF_RET_VALUE_ONLY, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_flags_nodomain_with_effects", f_dbg_flags_nodomain_with_effects,
-        QCF_NO_DOMAIN_THROW, QDOM_DEFAULT, bigIntTypeInfo);
+        QCF_NO_DOMAIN_THROW, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_flags_unflagged", f_dbg_flags_unflagged,
-        QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_flags_effect_count", f_dbg_flags_effect_count,
-        QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_flags_pure_throw", f_dbg_flags_pure_throw,
-        QCF_PURE | QCF_HOST_PORTABLE, QDOM_DEFAULT, bigIntTypeInfo, 1,
+        QCF_PURE | QCF_HOST_PORTABLE, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "value");
     qns.addBuiltinVariant("dbg_flags_pure_latin1", f_dbg_flags_pure_latin1,
-        QCF_PURE | QCF_HOST_PORTABLE, QDOM_DEFAULT, stringTypeInfo, 1,
+        QCF_PURE | QCF_HOST_PORTABLE, QDOM_DEBUG_HOOK, stringTypeInfo, 1,
         stringTypeInfo, QORE_PARAM_NO_ARG, "value");
 
     // the two liars: these declare QCF_NO_DOMAIN_THROW and then raise, so that the runtime check in
     // ~CodeEvaluationHelper() can be shown to detect a violation and to exempt the carve-outs
     qns.addBuiltinVariant("dbg_flags_lying_nodomain_throw", f_dbg_flags_lying_nodomain_throw,
-        QCF_NO_DOMAIN_THROW, QDOM_DEFAULT, nothingTypeInfo);
+        QCF_NO_DOMAIN_THROW, QDOM_DEBUG_HOOK, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_flags_exempt_throw", f_dbg_flags_exempt_throw,
-        QCF_NO_DOMAIN_THROW, QDOM_DEFAULT, nothingTypeInfo);
+        QCF_NO_DOMAIN_THROW, QDOM_DEBUG_HOOK, nothingTypeInfo);
 
     qns.addBuiltinVariant("dbg_set_flag_violation_mode", f_dbg_set_flag_violation_mode,
-        QCF_NO_FLAGS, QDOM_DEFAULT, nothingTypeInfo, 1,
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "mode");
     qns.addBuiltinVariant("dbg_get_flag_violations", f_dbg_get_flag_violations,
-        QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
+        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
 }
+
+#undef QDOM_DEBUG_HOOK

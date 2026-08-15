@@ -1319,8 +1319,10 @@ MessageCatalog::constructor(list<string> paths) [dom=FILESYSTEM] {
         if (i && !(i % 100) && qore_check_cancel(xsink, "loading i18n catalog files")) {
             return;
         }
-        const QoreStringNode* path = paths->retrieveEntry(i).get<const QoreStringNode>();
-        holder->loadCatalogFile(path, I18N_CATALOG_DEFAULT_MAX_FILE_LEN, xsink);
+        // note: list elements can be held in inline short string storage, which has no
+        // QoreStringNode; the node value helper materializes such values
+        QoreStringNodeValueHelper path(paths->retrieveEntry(i));
+        holder->loadCatalogFile(*path, I18N_CATALOG_DEFAULT_MAX_FILE_LEN, xsink);
         if (*xsink) {
             return;
         }
@@ -1353,8 +1355,10 @@ MessageCatalog::constructor(list<string> paths, *hash<auto> opts) [dom=FILESYSTE
         if (i && !(i % 100) && qore_check_cancel(xsink, "loading i18n catalog files")) {
             return;
         }
-        const QoreStringNode* path = paths->retrieveEntry(i).get<const QoreStringNode>();
-        holder->loadCatalogFile(path, max_file_len, xsink);
+        // note: list elements can be held in inline short string storage, which has no
+        // QoreStringNode; the node value helper materializes such values
+        QoreStringNodeValueHelper path(paths->retrieveEntry(i));
+        holder->loadCatalogFile(*path, max_file_len, xsink);
         if (*xsink) {
             return;
         }

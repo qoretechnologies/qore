@@ -7643,12 +7643,15 @@ static uint64_t qore_rt_fold_string_join_checked(
         return toBits(list->retrieveEntry(0).refSelf());
     }
 
-    const QoreStringNode* separator = separator_value.get<const QoreStringNode>();
+    // note: these values can be held in inline short string storage, which has no QoreStringNode;
+    // the node value helper materializes such values
+    QoreStringNodeValueHelper separator_helper(separator_value);
+    const QoreStringNode* separator = *separator_helper;
     size_t first_index = reverse ? size - 1 : 0;
     QoreValue first = list->retrieveEntry(first_index);
     const QoreEncoding* encoding = separator->getEncoding();
     if (first.getType() == NT_STRING) {
-        encoding = first.get<const QoreStringNode>()->getEncoding();
+        encoding = QoreStringDataHelper(first).getEncoding();
     }
 
     QoreStringNodeHolder result(new QoreStringNode(encoding));
@@ -7658,7 +7661,10 @@ static uint64_t qore_rt_fold_string_join_checked(
         if (entry.getType() != NT_STRING) {
             return true;
         }
-        result_priv->concat(entry.get<const QoreStringNode>(), xsink);
+        // note: list elements can be held in inline short string storage, which has no
+        // QoreStringNode; without materializing them the join would silently drop them
+        QoreStringNodeValueHelper entry_str(entry);
+        result_priv->concat(*entry_str, xsink);
         return !(xsink && *xsink);
     };
     if (!append_value(first)) {
@@ -7699,9 +7705,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_string_join_checked(
         }
         return toBits(QoreValue());
     }
-    const QoreStringNode* separator = separator_value.get<const QoreStringNode>();
+    // note: the separator can be held in inline short string storage, which has no QoreStringNode
+    QoreStringNodeValueHelper separator(separator_value);
     const QoreListNode* list = list_value.get<const QoreListNode>();
-    return toBits(QoreValue(join_intern(separator, list, 0, xsink)));
+    return toBits(QoreValue(join_intern(*separator, list, 0, xsink)));
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_list_string_join_identity_map_checked(
@@ -7729,8 +7736,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_string_join_identity_map_checked(
         }
     }
 
-    const QoreStringNode* separator = separator_value.get<const QoreStringNode>();
-    return toBits(QoreValue(join_intern(separator, list, 0, xsink)));
+    // note: the separator can be held in inline short string storage, which has no QoreStringNode
+    QoreStringNodeValueHelper separator(separator_value);
+    return toBits(QoreValue(join_intern(*separator, list, 0, xsink)));
 }
 
 static bool qore_rt_is_optional_string(const QoreValue& value) {
@@ -7809,6 +7817,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_string_join_append(
         return toBits(QoreValue());
     }
 
+    // note: safe; the accumulator is always a heap QoreStringNode created by StringJoinStart, so
+    // it is never held in inline short string storage
     QoreStringNode* result = accumulator.get<QoreStringNode>();
     // The accumulator is created by StringJoinStart and cannot escape the
     // fused fold before completion.  Its additional references are compiler
@@ -13561,6 +13571,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_ternary(
                     }
                 }
             } else if (vt == NT_STRING) {
+                // note: safe; lvh.ensureUnique() above materializes any inline short string
                 QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
                 if (length_val.isNothing() && replacement_val.isNothing()) {
                     res = vs->extract(offset, xsink);

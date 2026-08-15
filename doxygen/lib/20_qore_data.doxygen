@@ -54,6 +54,11 @@
     }
     @endcode
 
+    @warning This pattern must <b>not</b> be used for strings; see @ref string_value_access
+    "Accessing String Values".  A string value has two possible representations, and
+    @ref QoreValue::get() "get<QoreStringNode>()" returns \c nullptr for one of them even though
+    @ref QoreValue::getType() "getType()" returns \ref NT_STRING.
+
     For inline types, use the type-specific fast extraction methods:
     @code{.cpp}
     // For integers (fast path for inline 48-bit integers)
@@ -77,6 +82,79 @@
        val.getShortString(buf);  // extracts the inline string
     }
     @endcode
+
+    @subsection string_value_access Accessing String Values
+
+    A %Qore string value has <b>two</b> runtime representations, and both report \ref NT_STRING from
+    @ref QoreValue::getType() "getType()":
+    - a reference-counted, heap-allocated QoreStringNode, and
+    - an inline <i>short string</i> of up to \c QoreValue::SHORTSTR_MAX_BYTES (6) bytes stored
+      directly in the QoreValue itself, always in UTF-8
+
+    Which representation a given value uses is not predictable from the source: the
+    @ref exec_mode_ir "IR interpreter", the @ref exec_mode_jit "JIT", and @ref exec_mode_aot "AOT"
+    constants all produce inline strings for text that fits, and those values then flow into hashes,
+    lists, object members, and exceptions like any other value.
+
+    Because an inline short string has no AbstractQoreNode,
+    @ref QoreValue::get() "get<QoreStringNode>()" returns \c nullptr for it.  The following common
+    idiom is therefore a null pointer dereference — and a process crash — for any string of 6 bytes
+    or fewer:
+
+    @code{.cpp}
+    // WRONG: crashes whenever the value happens to fit in inline storage
+    if (val.getType() == NT_STRING) {
+        const char* str = val.get<const QoreStringNode>()->c_str();
+    }
+    @endcode
+
+    Use QoreStringDataHelper instead; it reads the bytes, the byte length, and the encoding of either
+    representation with no memory allocation and no encoding conversion:
+
+    @code{.cpp}
+    QoreStringDataHelper str(val);
+    if (str) {
+        printf("%s (%zu bytes, %s)\n", str.c_str(), str.size(), str.getEncoding()->getCode());
+    }
+    @endcode
+
+    QoreStringDataHelper also provides \c ==  and \c != against another QoreStringDataHelper, a
+    QoreString, a \c std::string, or a \c const \c char*, so error-code comparisons need no
+    intermediate copy:
+
+    @code{.cpp}
+    if (QoreStringDataHelper(xsink->getExceptionErr()) == "SOCKET-CLOSED") {
+        // ...
+    }
+    @endcode
+
+    Note that pointers returned by QoreStringDataHelper::c_str() are only valid for the lifetime of
+    the helper, because an inline string is unpacked into a buffer held by the helper itself.  Keep
+    the helper in scope for as long as the pointer is used, and copy the bytes if they must outlive
+    it.
+
+    When an actual QoreStringNode is required — to take a reference, or to pass to an API that takes
+    a \c const \c QoreStringNode* — use QoreStringNodeValueHelper, which materializes an inline
+    string into a temporary node and returns the existing node otherwise:
+
+    @code{.cpp}
+    QoreStringNodeValueHelper str(val);
+    return str.getReferencedValue();
+    @endcode
+
+    @note Builtin function and method parameters declared \c string or \c *string are already
+    marshalled through QoreStringNodeValueHelper by \c qpp, so declared string arguments are always
+    safe to use directly.  The hazard applies to string values read out of containers, object
+    members, exceptions, and lvalues.
+
+    @note Code that mutates a string through an lvalue (for example the \c trim, \c chomp,
+    \c splice, and \c extract operators) must call \c LValueHelper::ensureUnique() or
+    \c ensure_unique() first; both materialize an inline string into a unique heap QoreStringNode, so
+    \c get<QoreStringNode>() is safe afterwards.
+
+    @see QoreStringDataHelper
+    @see QoreStringNodeValueHelper
+    @see QoreStringValueHelper
 
     @subsection qorevalue_init QoreValue Initialization
 

@@ -2586,7 +2586,10 @@ struct qore_socket_private : public QoreReferenceCounter {
 #ifndef _Q_WINDOWS
         else if (family_id == AF_UNIX) {
             QoreStringNode* astr = new QoreStringNode;
-            astr->sprintf("UNIX socket: %s", address.get<const QoreStringNode>()->c_str());
+            // note: the address can be held in inline short string storage, which has no
+            // QoreStringNode, so the data helper must be used to read the bytes
+            QoreStringDataHelper addr_data(address);
+            astr->sprintf("UNIX socket: %s", addr_data ? addr_data.c_str() : "");
             o->setValue("source", astr, 0);
             o->setValue("source_host", new QoreStringNode("localhost"), 0);
         }

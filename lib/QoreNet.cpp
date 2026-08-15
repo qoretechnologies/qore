@@ -147,7 +147,7 @@ int q_get_port_from_addr(const struct sockaddr* ai_addr) {
 }
 
 static const QoreHashNode* q_net_get_hash(const QoreValue& v);
-static const QoreStringNode* q_net_get_hash_string_value(const QoreHashNode& h, const char* key);
+static QoreStringNode* q_net_get_hash_string_value(const QoreHashNode& h, const char* key);
 static int q_net_get_hash_int_value(const QoreHashNode& h, const char* key, int def);
 
 //! Get host's IP address (struct in_addr*) from name.
@@ -168,7 +168,7 @@ int q_gethostbyname(const char* host, struct in_addr* sin_addr) {
         if (!h || q_net_get_hash_int_value(*h, "family", AF_UNSPEC) != AF_INET) {
             continue;
         }
-        const QoreStringNode* address = q_net_get_hash_string_value(*h, "address");
+        SimpleRefHolder<QoreStringNode> address(q_net_get_hash_string_value(*h, "address"));
         if (address && inet_pton(AF_INET, address->c_str(), sin_addr) == 1) {
             return 0;
         }
@@ -208,9 +208,14 @@ static const QoreHashNode* q_net_get_hash(const QoreValue& v) {
     return v.getType() == NT_HASH ? v.get<const QoreHashNode>() : nullptr;
 }
 
-static const QoreStringNode* q_net_get_hash_string_value(const QoreHashNode& h, const char* key) {
+// note: the value can be held in inline short string storage, which has no QoreStringNode, so the
+// node value helper is used to materialize such values; the caller owns the returned reference
+static QoreStringNode* q_net_get_hash_string_value(const QoreHashNode& h, const char* key) {
     QoreValue v = h.getKeyValue(key);
-    return v.getType() == NT_STRING ? v.get<const QoreStringNode>() : nullptr;
+    if (v.getType() != NT_STRING) {
+        return nullptr;
+    }
+    return QoreStringNodeValueHelper(v).getReferencedValue();
 }
 
 static int q_net_get_hash_int_value(const QoreHashNode& h, const char* key, int def = 0) {
@@ -259,7 +264,7 @@ static QoreHashNode* q_net_addrinfo_list_to_host_hash(const char* host, QoreList
             first_family = q_net_get_hash_int_value(*h, "family", AF_UNSPEC);
         }
         if (q_net_get_hash_int_value(*h, "family", AF_UNSPEC) == first_family) {
-            const QoreStringNode* address = q_net_get_hash_string_value(*h, "address");
+            SimpleRefHolder<QoreStringNode> address(q_net_get_hash_string_value(*h, "address"));
             if (address) {
                 addresses->push(address->stringRefSelf(), &xsink);
                 if (xsink) {
@@ -275,7 +280,7 @@ static QoreHashNode* q_net_addrinfo_list_to_host_hash(const char* host, QoreList
     }
 
     qore_hash_private* rh = qore_hash_private::get(**result);
-    const QoreStringNode* canonname = q_net_get_hash_string_value(*first, "canonname");
+    SimpleRefHolder<QoreStringNode> canonname(q_net_get_hash_string_value(*first, "canonname"));
     rh->setKeyValueIntern("name", canonname ? canonname->stringRefSelf() : new QoreStringNode(host));
     rh->setKeyValueIntern("aliases", new QoreListNode(stringTypeInfo));
     q_net_set_host_family(**result, first_family, 0);
@@ -374,7 +379,7 @@ QoreStringNode* q_gethostbyname_to_string(const char* host) {
         if (!h) {
             continue;
         }
-        const QoreStringNode* address = q_net_get_hash_string_value(*h, "address");
+        SimpleRefHolder<QoreStringNode> address(q_net_get_hash_string_value(*h, "address"));
         if (address) {
             return address->stringRefSelf();
         }
@@ -398,7 +403,7 @@ char* q_gethostbyaddr(const char* addr, int len, int type) {
         return nullptr;
     }
 
-    const QoreStringNode* name = q_net_get_hash_string_value(**result, "name");
+    SimpleRefHolder<QoreStringNode> name(q_net_get_hash_string_value(**result, "name"));
     return name ? strdup(name->c_str()) : nullptr;
 }
 
@@ -429,7 +434,7 @@ QoreStringNode* q_gethostbyaddr_to_string(ExceptionSink* xsink, const char* addr
         return nullptr;
     }
 
-    const QoreStringNode* name = q_net_get_hash_string_value(**result, "name");
+    SimpleRefHolder<QoreStringNode> name(q_net_get_hash_string_value(**result, "name"));
     return name ? name->stringRefSelf() : nullptr;
 }
 
@@ -449,7 +454,7 @@ static void q_net_free_addrinfo(struct addrinfo* ai) {
 
 static int q_net_append_addrinfo_node(ExceptionSink* xsink, struct addrinfo*& head, struct addrinfo*& tail,
         const QoreHashNode& h, int flags, int default_socktype, int default_protocol, bool has_svc) {
-    const QoreStringNode* address = q_net_get_hash_string_value(h, "address");
+    SimpleRefHolder<QoreStringNode> address(q_net_get_hash_string_value(h, "address"));
     if (!address) {
         return 0;
     }
@@ -511,7 +516,7 @@ static int q_net_append_addrinfo_node(ExceptionSink* xsink, struct addrinfo*& he
     ai->ai_addrlen = addr_size;
     ai->ai_addr = sa;
 
-    const QoreStringNode* canonname = q_net_get_hash_string_value(h, "canonname");
+    SimpleRefHolder<QoreStringNode> canonname(q_net_get_hash_string_value(h, "canonname"));
     if (canonname && *canonname->c_str()) {
         ai->ai_canonname = strdup(canonname->c_str());
         if (!ai->ai_canonname) {

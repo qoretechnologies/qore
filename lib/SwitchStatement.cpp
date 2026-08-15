@@ -311,8 +311,8 @@ int SwitchStatement::parseInitImpl(QoreParseContext& parse_context) {
                 QoreValue ex_err = xsink.getExceptionErr();
                 bool defer_case = false;
                 if (ex_err.getType() == NT_STRING) {
-                    QoreStringValueHelper ex_err_str(ex_err);
-                    defer_case = !strcmp(ex_err_str->c_str(), "AOT-PENDING-CONSTANT");
+                    // note: the data helper reads an inline short string without allocating
+                    defer_case = QoreStringDataHelper(ex_err) == "AOT-PENDING-CONSTANT";
                 }
                 if (defer_case) {
                     xsink.clear();

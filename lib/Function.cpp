@@ -1029,8 +1029,9 @@ static bool qore_exception_is_exempt_from_flags(ExceptionSink* xsink) {
     if (err.getType() != NT_STRING) {
         return false;
     }
-    const char* e = err.get<const QoreStringNode>()->c_str();
-    return !strcmp(e, "STACK-LIMIT-EXCEEDED") || !strcmp(e, "THREAD-CANCELLED");
+    // note: the error code can be held in inline short string storage, which has no QoreStringNode
+    QoreStringDataHelper e(err);
+    return e == "STACK-LIMIT-EXCEEDED" || e == "THREAD-CANCELLED";
 }
 
 //! reports a variant that raised an exception after declaring QCF_NO_DOMAIN_THROW
@@ -1047,9 +1048,10 @@ static void qore_report_flag_violation(const AbstractQoreFunctionVariant* varian
     if (qore_flag_violation_mode.load(std::memory_order_relaxed) == QORE_FLAG_VIOLATION_RECORD) {
         return;
     }
-    const QoreValue err = xsink->getExceptionErr();
+    // note: the error code can be held in inline short string storage, which has no QoreStringNode
+    QoreStringDataHelper err(xsink->getExceptionErr());
     printd(0, "QCF_NO_DOMAIN_THROW violated by '%s()': raised '%s'\n", name ? name : "<unknown>",
-        err.getType() == NT_STRING ? err.get<const QoreStringNode>()->c_str() : "<non-string>");
+        err ? err.c_str() : "<non-string>");
     assert(false);
 }
 #endif

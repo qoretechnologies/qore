@@ -356,9 +356,6 @@ private:
     //! Maximum 48-bit signed integer value: 140,737,488,355,327
     static constexpr int64_t INT48_MAX = (1LL << 47) - 1;
 
-    //! Maximum bytes for inline short string storage
-    static constexpr size_t SHORTSTR_MAX_BYTES = 6;
-
     //! Maximum Unicode codepoint value.
     static constexpr unsigned CHAR_MAX_CODEPOINT = 0x10FFFF;
 
@@ -382,6 +379,19 @@ private:
 
     //! Returns the internal node pointer without reference count change
     DLLLOCAL AbstractQoreNode* takeNodeIntern();
+
+    //! Aborts in debug builds if a string-typed get<T>() is applied to an inline short string
+    /** An inline short string has no AbstractQoreNode, so get<T>() must return nullptr for it even
+        though getType() returns NT_STRING; callers that dereference the result then crash.  Use
+        QoreStringDataHelper for representation-independent access instead.
+    */
+    template <typename T>
+    DLLLOCAL void checkShortStringAccess() const {
+        using Base = typename std::remove_cv<typename std::remove_pointer<T>::type>::type;
+        if constexpr (std::is_same<Base, QoreStringNode>::value || std::is_same<Base, QoreString>::value) {
+            assert(!isShortString());
+        }
+    }
 
 public:
     // ========================================================================
@@ -843,6 +853,13 @@ public:
     //! Returns the value as the given type (for pointer types, returns T directly)
     //! Returns nullptr if the value is not a pointer (e.g., NOTHING, inline int/float/bool)
     //! For TAG_ENUM values, delegates to the base value's get<T>()
+    /** @warning this also returns nullptr for a string held in inline short string storage, even
+        though getType() returns NT_STRING for such a value; never write
+        <tt>v.get<QoreStringNode>()->c_str()</tt> after a <tt>getType() == NT_STRING</tt> check, as
+        that is a null pointer dereference for any string of QoreValue::SHORTSTR_MAX_BYTES bytes or
+        fewer.  Use QoreStringDataHelper for allocation-free, conversion-free access to the bytes,
+        byte length, and encoding of a Qore string value in either representation.
+    */
     template<typename T>
     DLLLOCAL typename std::enable_if<std::is_pointer<T>::value, T>::type get() {
         if (isEnum()) {
@@ -850,6 +867,7 @@ public:
             return base.get<T>();
         }
         if (!isPointer()) {
+            checkShortStringAccess<T>();
             return nullptr;
         }
         assert(!getPointerUnsafe() || dynamic_cast<T>(getPointerUnsafe()));
@@ -859,6 +877,13 @@ public:
     //! Returns the value as T* (for non-pointer types like const ReferenceNode, returns pointer to T)
     //! Returns nullptr if the value is not a pointer (e.g., NOTHING, inline int/float/bool)
     //! For TAG_ENUM values, delegates to the base value's get<T>()
+    /** @warning this also returns nullptr for a string held in inline short string storage, even
+        though getType() returns NT_STRING for such a value; never write
+        <tt>v.get<QoreStringNode>()->c_str()</tt> after a <tt>getType() == NT_STRING</tt> check, as
+        that is a null pointer dereference for any string of QoreValue::SHORTSTR_MAX_BYTES bytes or
+        fewer.  Use QoreStringDataHelper for allocation-free, conversion-free access to the bytes,
+        byte length, and encoding of a Qore string value in either representation.
+    */
     template<typename T>
     DLLLOCAL typename std::enable_if<!std::is_pointer<T>::value && std::is_class<T>::value, T*>::type get() {
         if (isEnum()) {
@@ -866,6 +891,7 @@ public:
             return base.get<T>();
         }
         if (!isPointer()) {
+            checkShortStringAccess<T>();
             return nullptr;
         }
         assert(!getPointerUnsafe() || dynamic_cast<T*>(getPointerUnsafe()));
@@ -875,6 +901,13 @@ public:
     //! Returns the value as T* const version (for non-pointer types like const ReferenceNode)
     //! Returns nullptr if the value is not a pointer (e.g., NOTHING, inline int/float/bool)
     //! For TAG_ENUM values, delegates to the base value's get<T>()
+    /** @warning this also returns nullptr for a string held in inline short string storage, even
+        though getType() returns NT_STRING for such a value; never write
+        <tt>v.get<QoreStringNode>()->c_str()</tt> after a <tt>getType() == NT_STRING</tt> check, as
+        that is a null pointer dereference for any string of QoreValue::SHORTSTR_MAX_BYTES bytes or
+        fewer.  Use QoreStringDataHelper for allocation-free, conversion-free access to the bytes,
+        byte length, and encoding of a Qore string value in either representation.
+    */
     template<typename T>
     DLLLOCAL typename std::enable_if<!std::is_pointer<T>::value && std::is_class<T>::value, T*>::type get() const {
         if (isEnum()) {
@@ -882,6 +915,7 @@ public:
             return base.get<T>();
         }
         if (!isPointer()) {
+            checkShortStringAccess<T>();
             return nullptr;
         }
         assert(!getPointerUnsafe() || dynamic_cast<T*>(const_cast<AbstractQoreNode*>(getPointerUnsafe())));
@@ -1000,6 +1034,11 @@ public:
     // ========================================================================
     // Integer range constants
     // ========================================================================
+
+    //! Maximum bytes for inline short string storage
+    /** @see QoreStringDataHelper for representation-independent access to Qore string values
+    */
+    static constexpr size_t SHORTSTR_MAX_BYTES = 6;
 
     //! Minimum value that can be stored inline (larger values use QoreBigIntNode)
     static constexpr int64 InlineIntMin = INT48_MIN;

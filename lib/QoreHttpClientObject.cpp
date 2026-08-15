@@ -3453,11 +3453,12 @@ QoreHashNode* QoreHttpClientObject::sendHttp2Connect(const char* path, const Qor
         QoreHashNode* h = rv->get<QoreHashNode>();
         QoreValue err_val = h->getKeyValue("err");
         if (err_val.getType() == NT_STRING) {
-            const char* err_str = err_val.get<const QoreStringNode>()->c_str();
-            QoreValue desc_val = h->getKeyValue("desc");
-            const char* desc_str = desc_val.getType() == NT_STRING
-                ? desc_val.get<const QoreStringNode>()->c_str()
-                : "HTTP/2 CONNECT request failed";
+            // note: these values can be held in inline short string storage, which has no
+            // QoreStringNode; the helpers must stay in scope while the char pointers are used
+            QoreStringDataHelper err_data(err_val);
+            QoreStringDataHelper desc_data(h->getKeyValue("desc"));
+            const char* err_str = err_data.c_str();
+            const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/2 CONNECT request failed";
             cleanup_failed_connect();
             xsink->raiseException(err_str, "%s", desc_str);
             return nullptr;
@@ -3685,11 +3686,12 @@ QoreHashNode* QoreHttpClientObject::sendHttp3Connect(const char* path, const Qor
         QoreHashNode* h = rv->get<QoreHashNode>();
         QoreValue err_val = h->getKeyValue("err");
         if (err_val.getType() == NT_STRING) {
-            const char* err_str = err_val.get<const QoreStringNode>()->c_str();
-            QoreValue desc_val = h->getKeyValue("desc");
-            const char* desc_str = desc_val.getType() == NT_STRING
-                ? desc_val.get<const QoreStringNode>()->c_str()
-                : "HTTP/3 CONNECT request failed";
+            // note: these values can be held in inline short string storage, which has no
+            // QoreStringNode; the helpers must stay in scope while the char pointers are used
+            QoreStringDataHelper err_data(err_val);
+            QoreStringDataHelper desc_data(h->getKeyValue("desc"));
+            const char* err_str = err_data.c_str();
+            const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/3 CONNECT request failed";
             cleanup_failed_connect();
             restore_forced_h3();
             xsink->raiseException(err_str, "%s", desc_str);
@@ -3834,11 +3836,12 @@ BinaryNode* QoreHttpClientObject::readHttp2StreamData(int32_t stream_id, int tim
             QoreHashNode* h = rv->get<QoreHashNode>();
             QoreValue err_val = h->getKeyValue("err");
             if (err_val.getType() == NT_STRING) {
-                const char* err_str = err_val.get<const QoreStringNode>()->c_str();
-                QoreValue desc_val = h->getKeyValue("desc");
-                const char* desc_str = desc_val.getType() == NT_STRING
-                    ? desc_val.get<const QoreStringNode>()->c_str()
-                    : "HTTP/2 stream read failed";
+                // note: these values can be held in inline short string storage, which has no
+                // QoreStringNode; the helpers must stay in scope while the char pointers are used
+                QoreStringDataHelper err_data(err_val);
+                QoreStringDataHelper desc_data(h->getKeyValue("desc"));
+                const char* err_str = err_data.c_str();
+                const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/2 stream read failed";
                 xsink->raiseException(err_str, "%s", desc_str);
                 return nullptr;
             }
@@ -3864,9 +3867,11 @@ BinaryNode* QoreHttpClientObject::readHttp2StreamData(int32_t stream_id, int tim
                     return static_cast<BinaryNode*>(body_val.get<const BinaryNode>()->refSelf());
                 }
                 if (body_val.getType() == NT_STRING) {
-                    const QoreStringNode* str = body_val.get<const QoreStringNode>();
+                    // note: the body can be held in inline short string storage, which has no
+                    // QoreStringNode, so the data helper must be used to read the bytes
+                    QoreStringDataHelper str(body_val);
                     SimpleRefHolder<BinaryNode> bin(new BinaryNode);
-                    bin->append(str->c_str(), str->size());
+                    bin->append(str.c_str(), str.size());
                     return bin.release();
                 }
             }
@@ -4039,11 +4044,12 @@ BinaryNode* QoreHttpClientObject::readHttp3StreamData(int64_t stream_id, int tim
             QoreHashNode* h = rv->get<QoreHashNode>();
             QoreValue err_val = h->getKeyValue("err");
             if (err_val.getType() == NT_STRING) {
-                const char* err_str = err_val.get<const QoreStringNode>()->c_str();
-                QoreValue desc_val = h->getKeyValue("desc");
-                const char* desc_str = desc_val.getType() == NT_STRING
-                    ? desc_val.get<const QoreStringNode>()->c_str()
-                    : "HTTP/3 stream read failed";
+                // note: these values can be held in inline short string storage, which has no
+                // QoreStringNode; the helpers must stay in scope while the char pointers are used
+                QoreStringDataHelper err_data(err_val);
+                QoreStringDataHelper desc_data(h->getKeyValue("desc"));
+                const char* err_str = err_data.c_str();
+                const char* desc_str = desc_data ? desc_data.c_str() : "HTTP/3 stream read failed";
                 xsink->raiseException(err_str, "%s", desc_str);
                 return nullptr;
             }
@@ -4069,9 +4075,11 @@ BinaryNode* QoreHttpClientObject::readHttp3StreamData(int64_t stream_id, int tim
                     return static_cast<BinaryNode*>(body_val.get<const BinaryNode>()->refSelf());
                 }
                 if (body_val.getType() == NT_STRING) {
-                    const QoreStringNode* str = body_val.get<const QoreStringNode>();
+                    // note: the body can be held in inline short string storage, which has no
+                    // QoreStringNode, so the data helper must be used to read the bytes
+                    QoreStringDataHelper str(body_val);
                     SimpleRefHolder<BinaryNode> bin(new BinaryNode);
-                    bin->append(str->c_str(), str->size());
+                    bin->append(str.c_str(), str.size());
                     return bin.release();
                 }
             }
@@ -5939,13 +5947,12 @@ QoreHashNode* qore_httpclient_priv::send_websocket_upgrade_conn_mgr(ExceptionSin
         QoreValue err_val = h->getKeyValue("err");
         if (!err_val.isNullOrNothing()) {
             channel->close();
-            const char* err_str = err_val.getType() == NT_STRING
-                ? err_val.get<const QoreStringNode>()->c_str()
-                : "HTTP-CLIENT-RECEIVE-ERROR";
-            QoreValue desc_val = h->getKeyValue("desc");
-            const char* desc_str = desc_val.getType() == NT_STRING
-                ? desc_val.get<const QoreStringNode>()->c_str()
-                : "WebSocket Upgrade request failed";
+            // note: these values can be held in inline short string storage, which has no
+            // QoreStringNode; the helpers must stay in scope while the char pointers are used
+            QoreStringDataHelper err_data(err_val);
+            QoreStringDataHelper desc_data(h->getKeyValue("desc"));
+            const char* err_str = err_data ? err_data.c_str() : "HTTP-CLIENT-RECEIVE-ERROR";
+            const char* desc_str = desc_data ? desc_data.c_str() : "WebSocket Upgrade request failed";
             xsink->raiseException(err_str, desc_str);
             return nullptr;
         }
@@ -6547,15 +6554,15 @@ public:
                 pending_conn->getReferencedErrorInfo(), xsink);
             const char* err_str = "HTTP-CLIENT-CONNECT-ERROR";
             const char* desc_str = "connection failed during poll connect";
-            if (err_info) {
-                QoreValue ev = err_info->getKeyValue("err");
-                QoreValue dv = err_info->getKeyValue("desc");
-                if (ev.getType() == NT_STRING) {
-                    err_str = ev.get<const QoreStringNode>()->c_str();
-                }
-                if (dv.getType() == NT_STRING) {
-                    desc_str = dv.get<const QoreStringNode>()->c_str();
-                }
+            // note: these values can be held in inline short string storage, which has no
+            // QoreStringNode; the helpers must stay in scope while the char pointers are used
+            QoreStringDataHelper ev(err_info ? err_info->getKeyValue("err") : QoreValue());
+            QoreStringDataHelper dv(err_info ? err_info->getKeyValue("desc") : QoreValue());
+            if (ev) {
+                err_str = ev.c_str();
+            }
+            if (dv) {
+                desc_str = dv.c_str();
             }
             xsink->raiseException(err_str, "%s", desc_str);
             done = true;

@@ -1183,7 +1183,9 @@ static std::string describeUnresolvedAOTSymbol(const char* what, const char* sym
             ConstListIterator li(*features);
             bool first = true;
             while (li.next()) {
-                const QoreStringNode* f = li.getValue().get<const QoreStringNode>();
+                // note: feature names can be held in inline short string storage (ex: "json"),
+                // which has no QoreStringNode, so the data helper must be used to read the bytes
+                QoreStringDataHelper f(li.getValue());
                 if (!f) {
                     continue;
                 }
@@ -1191,7 +1193,7 @@ static std::string describeUnresolvedAOTSymbol(const char* what, const char* sym
                     msg += ", ";
                 }
                 first = false;
-                msg += f->c_str();
+                msg += f.c_str();
             }
             msg += ")";
         }

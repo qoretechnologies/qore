@@ -358,6 +358,8 @@ QoreStringNode* sshutil_normalize_ssh_host(const QoreStringNode* host) {
 
 QoreStringNode* sshutil_format_known_hosts_host(const QoreStringNode* host, int64 port) {
     ValueHolder normalized_holder(sshutil_normalize_ssh_host(host), nullptr);
+    // note: safe; sshutil_normalize_ssh_host() always returns a heap QoreStringNode, so the value
+    // is never held in inline short string storage
     QoreStringNode* normalized = normalized_holder->get<QoreStringNode>();
     std::string rv(normalized->c_str());
     if (port == 22 && rv.find(':') == std::string::npos) {

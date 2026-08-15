@@ -309,8 +309,8 @@ static void qore_socket_raise_poll_result_exception(const QoreHashNode* ex, Exce
 
 static bool qore_socket_exec_exception_is(const QoreHashNode& ex, const char* err) {
     QoreValue ex_err = ex.getKeyValue("err");
-    QoreStringValueHelper ex_err_str(ex_err);
-    return ex_err.getType() == NT_STRING && ex_err_str && !strcmp(ex_err_str->c_str(), err);
+    // note: the data helper reads an inline short string without allocating
+    return QoreStringDataHelper(ex_err) == err;
 }
 
 static int qore_socket_private_check_async_sequence_allowed_intern(const qore_socket_private& priv,
@@ -2921,14 +2921,16 @@ public:
             while (hi.next()) {
                 const char* key = hi.getKey();
                 QoreValue val = hi.get();
+                // note: header values can be held in inline short string storage (ex: "gzip"),
+                // which has no QoreStringNode, so the data helper must be used to read the bytes
                 if (val.getType() == NT_STRING) {
-                    hdr_pairs.emplace_back(key, val.get<const QoreStringNode>()->c_str());
+                    hdr_pairs.emplace_back(key, QoreStringDataHelper(val).c_str());
                 } else if (val.getType() == NT_LIST) {
                     const QoreListNode* l = val.get<const QoreListNode>();
                     for (size_t i = 0; i < l->size(); ++i) {
                         QoreValue lv = l->retrieveEntry(i);
                         if (lv.getType() == NT_STRING) {
-                            hdr_pairs.emplace_back(key, lv.get<const QoreStringNode>()->c_str());
+                            hdr_pairs.emplace_back(key, QoreStringDataHelper(lv).c_str());
                         }
                     }
                 }
@@ -3202,8 +3204,10 @@ private:
         ConstHashIterator hi(headers);
         while (hi.next()) {
             QoreValue val = hi.get();
+            // note: header values can be held in inline short string storage (ex: "gzip"), which
+            // has no QoreStringNode, so the data helper must be used to read the bytes
             if (val.getType() == NT_STRING) {
-                out[hi.getKey()] = val.get<const QoreStringNode>()->c_str();
+                out[hi.getKey()] = QoreStringDataHelper(val).c_str();
             }
         }
     }
@@ -3233,14 +3237,16 @@ private:
             const char* key = hi.getKey();
             QoreValue val = hi.get();
             std::string skey(key);
+            // note: header values can be held in inline short string storage (ex: "GET"), which has
+            // no QoreStringNode, so the data helper must be used to read the bytes
             if (val.getType() == NT_STRING) {
-                append(skey, val.get<const QoreStringNode>()->c_str());
+                append(skey, QoreStringDataHelper(val).c_str());
             } else if (val.getType() == NT_LIST) {
                 const QoreListNode* l = val.get<const QoreListNode>();
                 for (size_t i = 0; i < l->size(); ++i) {
                     QoreValue elem = l->retrieveEntry(i);
                     if (elem.getType() == NT_STRING) {
-                        append(skey, elem.get<const QoreStringNode>()->c_str());
+                        append(skey, QoreStringDataHelper(elem).c_str());
                     }
                 }
             }
@@ -4067,7 +4073,10 @@ static QoreStringNode* qore_socket_exec_recv_string(QoreSocket* s, qore_offset_t
         return nullptr;
     }
 
-    QoreStringNode* str = result.release().get<QoreStringNode>();
+    // note: the value can be held in inline short string storage, which has no QoreStringNode; the
+    // node value helper materializes such values so that a reference can be returned to the caller
+    QoreStringNodeValueHelper str_helper(*result);
+    QoreStringNode* str = str_helper.getReferencedValue();
     if (source > 0) {
         priv->do_data_event(QORE_EVENT_SOCKET_DATA_READ, source, *str);
     }
@@ -4096,7 +4105,9 @@ static QoreStringNode* qore_socket_exec_recv_until_string(QoreSocket* s, const c
             result->getFullTypeName());
         return nullptr;
     }
-    return result.release().get<QoreStringNode>();
+    // note: the value can be held in inline short string storage, which has no QoreStringNode; the
+    // node value helper materializes such values so that a reference can be returned to the caller
+    return QoreStringNodeValueHelper(*result).getReferencedValue();
 }
 
 static bool qore_socket_exec_is_data_available(QoreSocket* s, int timeout_ms, ExceptionSink* xsink) {
@@ -4271,14 +4282,16 @@ static QoreHashNode* qore_socket_get_addr_info_from_output(const QoreValue outpu
 
     std::string socketname;
     QoreValue socketname_value = h->getKeyValue("socketname");
+    // note: these values can be held in inline short string storage, which has no QoreStringNode,
+    // so the data helper must be used to read the bytes
     if (socketname_value.getType() == NT_STRING) {
-        socketname = socketname_value.get<const QoreStringNode>()->c_str();
+        socketname = QoreStringDataHelper(socketname_value).c_str();
     }
 
     std::string hostname;
     QoreValue hostname_value = h->getKeyValue("hostname");
     if (hostname_value.getType() == NT_STRING) {
-        hostname = hostname_value.get<const QoreStringNode>()->c_str();
+        hostname = QoreStringDataHelper(hostname_value).c_str();
     }
 
     return qore_socket_private::makeAddrInfo(addr, static_cast<socklen_t>(raw_len), socketname,
@@ -4567,10 +4580,15 @@ static int qore_socket_exec_send_http_chunked_body_callback(QoreSocket* s,
         size_t size = 0;
         const QoreStringNode* body_event = nullptr;
         bool done = false;
+        // note: a string value can be held in inline short string storage, which has no
+        // QoreStringNode; the node value helper materializes such values, and the holder keeps the
+        // node alive for as long as "data" and "body_event" are used below
+        SimpleRefHolder<QoreStringNode> str_holder;
 
         switch (res->getType()) {
             case NT_STRING: {
-                const QoreStringNode* str = res->get<const QoreStringNode>();
+                str_holder = QoreStringNodeValueHelper(*res).getReferencedValue();
+                const QoreStringNode* str = *str_holder;
                 if (str->empty()) {
                     done = true;
                     break;
@@ -5067,8 +5085,10 @@ private:
             return -1;
         }
 
-        const QoreStringNode* line = line_val->get<const QoreStringNode>();
-        size_t line_len = qore_socket_exec_http_line_payload_size(*line);
+        // note: the value can be held in inline short string storage, which has no QoreStringNode;
+        // the node value helper materializes such values
+        QoreStringNodeValueHelper line(*line_val);
+        size_t line_len = qore_socket_exec_http_line_payload_size(**line);
         const char* line_str = line->c_str();
         int64_t chunk_size = 0;
         if (qore_socket_exec_parse_http_chunk_size(line_str, line_len, chunk_size, xsink)) {
@@ -5156,9 +5176,11 @@ private:
             return -1;
         }
 
-        const QoreStringNode* line = line_val->get<const QoreStringNode>();
+        // note: the value can be held in inline short string storage, which has no QoreStringNode;
+        // the node value helper materializes such values
+        QoreStringNodeValueHelper line(*line_val);
         bytes_consumed = true;
-        if (qore_socket_exec_http_blank_line(*line)) {
+        if (qore_socket_exec_http_blank_line(**line)) {
             if (!trailers.empty()) {
                 priv.convertHeaderToHash(*out, const_cast<char*>(trailers.c_str()), 0, nullptr, nullptr,
                     "response-headers-raw");
@@ -6554,13 +6576,15 @@ public:
         if (ex_hash) {
             const char* err = "QOREADDRINFO-GETINFO-ERROR";
             const char* desc = "async address resolution failed";
-            QoreValue err_v = ex_hash->getKeyValue("err");
-            if (err_v.getType() == NT_STRING) {
-                err = err_v.get<const QoreStringNode>()->c_str();
+            // note: these values can be held in inline short string storage, which has no
+            // QoreStringNode; the helpers must stay in scope while "err" and "desc" are used below
+            QoreStringDataHelper err_v(ex_hash->getKeyValue("err"));
+            QoreStringDataHelper desc_v(ex_hash->getKeyValue("desc"));
+            if (err_v) {
+                err = err_v.c_str();
             }
-            QoreValue desc_v = ex_hash->getKeyValue("desc");
-            if (desc_v.getType() == NT_STRING) {
-                desc = desc_v.get<const QoreStringNode>()->c_str();
+            if (desc_v) {
+                desc = desc_v.c_str();
             }
             action->executeError(err, desc, xsink);
             cleanupAction(xsink);
@@ -7175,13 +7199,15 @@ public:
         if (ex_hash) {
             const char* err = "QOREADDRINFO-GETNAMEINFO-ERROR";
             const char* desc = "async reverse address resolution failed";
-            QoreValue err_v = ex_hash->getKeyValue("err");
-            if (err_v.getType() == NT_STRING) {
-                err = err_v.get<const QoreStringNode>()->c_str();
+            // note: these values can be held in inline short string storage, which has no
+            // QoreStringNode; the helpers must stay in scope while "err" and "desc" are used below
+            QoreStringDataHelper err_v(ex_hash->getKeyValue("err"));
+            QoreStringDataHelper desc_v(ex_hash->getKeyValue("desc"));
+            if (err_v) {
+                err = err_v.c_str();
             }
-            QoreValue desc_v = ex_hash->getKeyValue("desc");
-            if (desc_v.getType() == NT_STRING) {
-                desc = desc_v.get<const QoreStringNode>()->c_str();
+            if (desc_v) {
+                desc = desc_v.c_str();
             }
             action->executeError(err, desc, xsink);
             cleanupAction(xsink);
@@ -15258,9 +15284,11 @@ int SocketReadHttpChunkedBodyPollOperation::handleChunkSize(ExceptionSink* xsink
         return -1;
     }
 
-    const QoreStringNode* line = line_val->get<const QoreStringNode>();
-    const char* line_str = line->c_str();
-    size_t line_len = line->size();
+    // note: the value can be held in inline short string storage, which has no QoreStringNode, so
+    // the data helper must be used to read the bytes
+    QoreStringDataHelper line(*line_val);
+    const char* line_str = line.c_str();
+    size_t line_len = line.size();
     if (line_len >= 2) {
         line_len -= 2;
     }
@@ -15352,9 +15380,11 @@ int SocketReadHttpChunkedBodyPollOperation::handleTrailer(ExceptionSink* xsink) 
         return -1;
     }
 
-    const QoreStringNode* line = line_val->get<const QoreStringNode>();
+    // note: a blank line is always held in inline short string storage, which has no
+    // QoreStringNode, so the data helper must be used to compare it
+    QoreStringDataHelper line(*line_val);
     bytes_consumed = true;
-    if (line->size() == 2 && !strcmp(line->c_str(), "\r\n")) {
+    if (line == "\r\n") {
         if (!trailers.empty()) {
             my_socket_priv* priv = my_socket_priv::getPriv(*sock);
             priv->convertHeaderToHash(**out, trailers);
@@ -15368,7 +15398,7 @@ int SocketReadHttpChunkedBodyPollOperation::handleTrailer(ExceptionSink* xsink) 
         return 0;
     }
 
-    trailers.concat(line->c_str(), line->size());
+    trailers.concat(line.c_str(), line.size());
     return 0;
 }
 

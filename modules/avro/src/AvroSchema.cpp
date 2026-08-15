@@ -159,9 +159,17 @@ private:
     DLLLOCAL int convertDefault(QoreValue& out, const AvroNode* node, QoreValue json,
             const char* field_name, unsigned depth);
 
-    DLLLOCAL const char* getStringKey(const QoreHashNode* h, const char* key) {
-        QoreValue v = h->getKeyValue(key);
-        return v.getType() == NT_STRING ? v.get<const QoreStringNode>()->c_str() : nullptr;
+    //! returns the string value of the given key, or nullptr if missing or not a string
+    /** note: the value can be held in inline short string storage, which has no QoreStringNode, so
+        the bytes are copied into \a scratch, which must outlive the returned pointer
+    */
+    DLLLOCAL const char* getStringKey(const QoreHashNode* h, const char* key, std::string& scratch) {
+        QoreStringDataHelper v(h->getKeyValue(key));
+        if (!v) {
+            return nullptr;
+        }
+        scratch.assign(v.c_str(), v.size());
+        return scratch.c_str();
     }
 };
 
@@ -172,8 +180,12 @@ const AvroNode* AvroSchemaParser::parse(QoreValue v, const std::string& enc_ns, 
         return nullptr;
     }
     switch (v.getType()) {
-        case NT_STRING:
-            return parseTypeName(v.get<const QoreStringNode>()->c_str(), enc_ns);
+        case NT_STRING: {
+            // note: type names are held in inline short string storage (ex: "int"), which has no
+            // QoreStringNode, so the data helper must be used to read the bytes
+            QoreStringDataHelper type_name(v);
+            return parseTypeName(type_name.c_str(), enc_ns);
+        }
         case NT_LIST:
             return parseUnion(v.get<const QoreListNode>(), enc_ns, depth);
         case NT_HASH:
@@ -254,7 +266,10 @@ const AvroNode* AvroSchemaParser::parseObject(const QoreHashNode* h, const std::
         return parse(tv, enc_ns, depth + 1);
     }
 
-    const char* tname = tv.get<const QoreStringNode>()->c_str();
+    // note: type names are held in inline short string storage (ex: "enum"), which has no
+    // QoreStringNode; the helper must stay in scope for as long as "tname" is used below
+    QoreStringDataHelper tname_data(tv);
+    const char* tname = tname_data.c_str();
     if (!strcmp(tname, "record") || !strcmp(tname, "error")) {
         return parseRecord(h, enc_ns, depth);
     }
@@ -309,7 +324,8 @@ const AvroNode* AvroSchemaParser::parseObject(const QoreHashNode* h, const std::
 
 int AvroSchemaParser::registerName(AvroNode* node, const QoreHashNode* h, const std::string& enc_ns,
         const char* kind) {
-    const char* name = getStringKey(h, "name");
+    std::string name_scratch;
+    const char* name = getStringKey(h, "name", name_scratch);
     if (!name) {
         xsink->raiseException("AVRO-SCHEMA-ERROR", "%s schema is missing the required 'name' "
             "attribute", kind);
@@ -317,7 +333,8 @@ int AvroSchemaParser::registerName(AvroNode* node, const QoreHashNode* h, const 
     }
     std::string fullname(name);
     if (fullname.find('.') == std::string::npos) {
-        const char* ns = getStringKey(h, "namespace");
+        std::string ns_scratch;
+        const char* ns = getStringKey(h, "namespace", ns_scratch);
         std::string use_ns = ns ? std::string(ns) : enc_ns;
         if (!avro_valid_name(name)) {
             xsink->raiseException("AVRO-SCHEMA-ERROR", "'%s' is not a valid Avro name for a %s "
@@ -362,7 +379,8 @@ int AvroSchemaParser::registerName(AvroNode* node, const QoreHashNode* h, const 
                     li.getValue().getTypeName());
                 return -1;
             }
-            std::string alias(li.getValue().get<const QoreStringNode>()->c_str());
+            // note: the value can be held in inline short string storage, which has no QoreStringNode
+            std::string alias(QoreStringDataHelper(li.getValue()).c_str());
             if (alias.find('.') == std::string::npos && !node_ns.empty()) {
                 alias = node_ns + "." + alias;
             }
@@ -411,7 +429,8 @@ const AvroNode* AvroSchemaParser::parseRecord(const QoreHashNode* h, const std::
             return nullptr;
         }
         const QoreHashNode* fh = li.getValue().get<const QoreHashNode>();
-        const char* fname = getStringKey(fh, "name");
+        std::string fname_scratch;
+        const char* fname = getStringKey(fh, "name", fname_scratch);
         if (!fname || !avro_valid_name(fname)) {
             xsink->raiseException("AVRO-SCHEMA-ERROR", "field %d of record '%s' has a missing or "
                 "invalid 'name' attribute", (int)li.index(), node->fullname.c_str());
@@ -447,7 +466,9 @@ const AvroNode* AvroSchemaParser::parseRecord(const QoreHashNode* h, const std::
                         node->fullname.c_str(), ai.getValue().getTypeName());
                     return nullptr;
                 }
-                field.aliases.push_back(ai.getValue().get<const QoreStringNode>()->c_str());
+                // note: the value can be held in inline short string storage, which has no
+                // QoreStringNode
+                field.aliases.push_back(QoreStringDataHelper(ai.getValue()).c_str());
             }
         }
 
@@ -494,7 +515,10 @@ const AvroNode* AvroSchemaParser::parseEnum(const QoreHashNode* h, const std::st
                 li.getValue().getTypeName());
             return nullptr;
         }
-        const char* sym = li.getValue().get<const QoreStringNode>()->c_str();
+        // note: enum symbols can be held in inline short string storage, which has no
+        // QoreStringNode; the helper must stay in scope for as long as "sym" is used below
+        QoreStringDataHelper sym_data(li.getValue());
+        const char* sym = sym_data.c_str();
         if (!avro_valid_name(sym)) {
             xsink->raiseException("AVRO-SCHEMA-ERROR", "'%s' is not a valid symbol name in enum "
                 "'%s'", sym, node->fullname.c_str());
@@ -521,11 +545,13 @@ const AvroNode* AvroSchemaParser::parseEnum(const QoreHashNode* h, const std::st
                 "be a string; got type '%s'", node->fullname.c_str(), dv.getTypeName());
             return nullptr;
         }
-        node->enum_default = node->findSymbol(dv.get<const QoreStringNode>()->c_str());
+        // note: the value can be held in inline short string storage, which has no QoreStringNode
+        QoreStringDataHelper dv_data(dv);
+        node->enum_default = node->findSymbol(dv_data.c_str());
         if (node->enum_default < 0) {
             xsink->raiseException("AVRO-SCHEMA-ERROR", "the 'default' attribute of enum '%s' is "
                 "'%s', which is not one of its symbols", node->fullname.c_str(),
-                dv.get<const QoreStringNode>()->c_str());
+                dv_data.c_str());
             return nullptr;
         }
     }
@@ -560,7 +586,10 @@ void AvroSchemaParser::applyLogicalType(AvroNode* node, const QoreHashNode* h) {
     if (lv.getType() != NT_STRING) {
         return;
     }
-    const char* lt = lv.get<const QoreStringNode>()->c_str();
+    // note: logical type names can be held in inline short string storage (ex: "date"), which has
+    // no QoreStringNode; the helper must stay in scope for as long as "lt" is used below
+    QoreStringDataHelper lt_data(lv);
+    const char* lt = lt_data.c_str();
 
     // The specification requires implementations to ignore a logical type they do not recognise,
     // or one that is invalid for its base type, and fall back to the base type.  Every early
@@ -698,8 +727,10 @@ int AvroSchemaParser::convertDefault(QoreValue& out, const AvroNode* node, QoreV
             if (json.getType() != NT_STRING) {
                 break;
             }
-            const QoreStringNode* str = json.get<const QoreStringNode>();
-            TempEncodingHelper utf8(str, QCS_UTF8, xsink);
+            // note: the value can be held in inline short string storage, which has no
+            // QoreStringNode; the node value helper materializes such values
+            QoreStringNodeValueHelper str(json);
+            TempEncodingHelper utf8(*str, QCS_UTF8, xsink);
             if (*xsink) {
                 return -1;
             }
@@ -737,14 +768,17 @@ int AvroSchemaParser::convertDefault(QoreValue& out, const AvroNode* node, QoreV
             if (json.getType() != NT_STRING) {
                 break;
             }
-            const QoreStringNode* str = json.get<const QoreStringNode>();
+            // note: the value can be held in inline short string storage, which has no
+            // QoreStringNode; the node value helper materializes such values so that a reference
+            // can be taken below
+            QoreStringNodeValueHelper str(json);
             if (node->type == AT_ENUM && node->findSymbol(str->c_str()) < 0) {
                 xsink->raiseException("AVRO-SCHEMA-ERROR", "the default value of field '%s' is "
                     "'%s', which is not a symbol of enum '%s'", field_name, str->c_str(),
                     node->fullname.c_str());
                 return -1;
             }
-            out = str->stringRefSelf();
+            out = str.getReferencedValue();
             return 0;
         }
 

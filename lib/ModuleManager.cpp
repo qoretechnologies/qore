@@ -3483,13 +3483,15 @@ ModuleLoadMapHelper::~ModuleLoadMapHelper() {
     // this load failed; a clean xsink means it succeeded.
     if (xsink) {
         i->second.state = QoreModuleManager::MLS_FAILED;
-        QoreValue err = xsink.getExceptionErr();
-        if (err.getType() == NT_STRING) {
-            i->second.err = err.get<const QoreStringNode>()->c_str();
+        // note: these values can be held in inline short string storage, which has no
+        // QoreStringNode, so the data helper must be used to read the bytes
+        QoreStringDataHelper err(xsink.getExceptionErr());
+        if (err) {
+            i->second.err = err.c_str();
         }
-        QoreValue edesc = xsink.getExceptionDesc();
-        if (edesc.getType() == NT_STRING) {
-            i->second.desc = edesc.get<const QoreStringNode>()->c_str();
+        QoreStringDataHelper edesc(xsink.getExceptionDesc());
+        if (edesc) {
+            i->second.desc = edesc.c_str();
         }
     } else {
         i->second.state = QoreModuleManager::MLS_LOADED;

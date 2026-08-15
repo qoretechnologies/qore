@@ -61,10 +61,11 @@ static bool qore_minus_parse_fold_exception_is_deferred(ParseExceptionSink& xsin
         return false;
     }
 
-    QoreStringValueHelper ex_err_str(ex_err);
-    return !strcmp(ex_err_str->c_str(), "EXTERNAL-STUB-CONSTANT")
-        || !strcmp(ex_err_str->c_str(), "AOT-PENDING-CONSTANT")
-        || !strcmp(ex_err_str->c_str(), "AOT-PENDING-FUNCTION");
+    // note: the data helper reads an inline short string without allocating
+    QoreStringDataHelper ex_err_str(ex_err);
+    return ex_err_str == "EXTERNAL-STUB-CONSTANT"
+        || ex_err_str == "AOT-PENDING-CONSTANT"
+        || ex_err_str == "AOT-PENDING-FUNCTION";
 }
 
 static bool qore_minus_parse_type_is_unknown(const QoreTypeInfo* ti) {

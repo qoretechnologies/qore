@@ -305,9 +305,14 @@ static const QoreHashNode* qore_mongo_get_hash(const QoreValue& v) {
     return v.getType() == NT_HASH ? v.get<const QoreHashNode>() : nullptr;
 }
 
-static const QoreStringNode* qore_mongo_get_hash_string_value(const QoreHashNode& h, const char* key) {
+// note: the value can be held in inline short string storage, which has no QoreStringNode, so the
+// node value helper is used to materialize such values; the caller owns the returned reference
+static QoreStringNode* qore_mongo_get_hash_string_value(const QoreHashNode& h, const char* key) {
     QoreValue v = h.getKeyValue(key);
-    return v.getType() == NT_STRING ? v.get<const QoreStringNode>() : nullptr;
+    if (v.getType() != NT_STRING) {
+        return nullptr;
+    }
+    return QoreStringNodeValueHelper(v).getReferencedValue();
 }
 
 static int qore_mongo_get_hash_int_value(const QoreHashNode& h, const char* key, int def = 0) {
@@ -317,7 +322,7 @@ static int qore_mongo_get_hash_int_value(const QoreHashNode& h, const char* key,
 
 static int qore_mongo_addrinfo_hash_to_sockaddr(const QoreHashNode& h, uint16_t default_port,
         struct sockaddr_storage& addr, mongoc_socklen_t& addrlen) {
-    const QoreStringNode* address = qore_mongo_get_hash_string_value(h, "address");
+    SimpleRefHolder<QoreStringNode> address(qore_mongo_get_hash_string_value(h, "address"));
     if (!address) {
         return -1;
     }
@@ -350,9 +355,11 @@ static int qore_mongo_addrinfo_hash_to_sockaddr(const QoreHashNode& h, uint16_t 
     return -1;
 }
 
-static const char* qore_mongo_exception_desc(ExceptionSink& xsink, const char* fallback) {
-    QoreValue desc = xsink.getExceptionDesc();
-    return desc.getType() == NT_STRING ? desc.get<const QoreStringNode>()->c_str() : fallback;
+// note: the description can be held in inline short string storage, which has no QoreStringNode;
+// the bytes are copied out because the data helper's buffer does not outlive this call
+static std::string qore_mongo_exception_desc(ExceptionSink& xsink, const char* fallback) {
+    QoreStringDataHelper desc(xsink.getExceptionDesc());
+    return desc ? std::string(desc.c_str(), desc.size()) : std::string(fallback);
 }
 
 mongoc_stream_t* qore_mongo_stream_initiator(
@@ -378,10 +385,13 @@ mongoc_stream_t* qore_mongo_stream_initiator(
     ReferenceHolder<QoreListNode> addrs(
         q_getaddrinfo_to_list(&resolve_xsink, host->host, port_str, host->family, 0, SOCK_STREAM), &resolve_xsink);
     if (resolve_xsink || !addrs || addrs->empty()) {
+        // note: bson_set_error() is a varargs function, so the description must be held in a
+        // named std::string and passed as a const char*
+        std::string resolve_desc = resolve_xsink
+            ? qore_mongo_exception_desc(resolve_xsink, "name resolution failed")
+            : std::string("name resolution returned no addresses");
         bson_set_error(error, MONGOC_ERROR_STREAM, MONGOC_ERROR_STREAM_NAME_RESOLUTION,
-            "Failed to resolve '%s': %s", host->host,
-            resolve_xsink ? qore_mongo_exception_desc(resolve_xsink, "name resolution failed")
-                : "name resolution returned no addresses");
+            "Failed to resolve '%s': %s", host->host, resolve_desc.c_str());
         if (resolve_xsink) {
             resolve_xsink.clear();
         }

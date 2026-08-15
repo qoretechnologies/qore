@@ -93,7 +93,8 @@ int AvroEncoder::encodeDecimal(const AvroNode* node, QoreValue v, ExceptionSink*
             }
             break;
         case NT_STRING:
-            str.concat(v.get<const QoreStringNode>()->c_str());
+            // note: the value can be held in inline short string storage, which has no QoreStringNode
+            str.concat(QoreStringDataHelper(v).c_str());
             break;
         default:
             return typeError(node, v, xsink);
@@ -281,8 +282,10 @@ int AvroEncoder::encodeScalar(const AvroNode* node, QoreValue v, unsigned depth,
                 return 0;
             }
             if (v.getType() == NT_STRING) {
-                const QoreStringNode* str = v.get<const QoreStringNode>();
-                writeByteSeq(str->c_str(), str->size());
+                // note: the value can be held in inline short string storage, which has no
+                // QoreStringNode, so the data helper must be used to read the bytes
+                QoreStringDataHelper str(v);
+                writeByteSeq(str.c_str(), str.size());
                 return 0;
             }
             return typeError(node, v, xsink);
@@ -292,7 +295,10 @@ int AvroEncoder::encodeScalar(const AvroNode* node, QoreValue v, unsigned depth,
             if (v.getType() != NT_STRING) {
                 return typeError(node, v, xsink);
             }
-            TempEncodingHelper utf8(v.get<const QoreStringNode>(), QCS_UTF8, xsink);
+            // note: the value can be held in inline short string storage, which has no
+            // QoreStringNode; the node value helper materializes such values
+            QoreStringNodeValueHelper str(v);
+            TempEncodingHelper utf8(*str, QCS_UTF8, xsink);
             if (*xsink) {
                 return -1;
             }
@@ -324,10 +330,13 @@ int AvroEncoder::encodeScalar(const AvroNode* node, QoreValue v, unsigned depth,
         case AT_ENUM: {
             int idx = -1;
             if (v.getType() == NT_STRING) {
-                idx = node->findSymbol(v.get<const QoreStringNode>()->c_str());
+                // note: the value can be held in inline short string storage, which has no
+                // QoreStringNode, so the data helper must be used to read the bytes
+                QoreStringDataHelper sym(v);
+                idx = node->findSymbol(sym.c_str());
                 if (idx < 0) {
                     xsink->raiseException("AVRO-ENCODE-ERROR", "'%s' is not a symbol of enum "
-                        "'%s'", v.get<const QoreStringNode>()->c_str(), node->fullname.c_str());
+                        "'%s'", sym.c_str(), node->fullname.c_str());
                     return -1;
                 }
             } else if (v.getType() == NT_INT) {
@@ -397,7 +406,9 @@ static bool avro_branch_accepts(const AvroNode* node, QoreValue v) {
 
         case NT_STRING: {
             if (node->type == AT_ENUM) {
-                return node->findSymbol(v.get<const QoreStringNode>()->c_str()) >= 0;
+                // note: the value can be held in inline short string storage, which has no
+                // QoreStringNode
+                return node->findSymbol(QoreStringDataHelper(v).c_str()) >= 0;
             }
             if (node->type == AT_STRING) {
                 return true;

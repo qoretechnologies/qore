@@ -183,8 +183,9 @@ QoreValue QoreFoldlOperatorNode::doFold(bool fwd, bool& needs_deref, ExceptionSi
         const QoreStringNode* separator = get_string_join_separator(left);
         assert(separator);
         const QoreEncoding* encoding = separator->getEncoding();
+        // note: the value can be held in inline short string storage, which has no QoreStringNode
         if (result->getType() == NT_STRING) {
-            encoding = result->get<const QoreStringNode>()->getEncoding();
+            encoding = QoreStringDataHelper(*result).getEncoding();
         }
         QoreStringNodeHolder joined(new QoreStringNode(encoding));
         qore_string_private* joined_priv = qore_string_private::get(*joined);
@@ -192,7 +193,10 @@ QoreValue QoreFoldlOperatorNode::doFold(bool fwd, bool& needs_deref, ExceptionSi
             if (value.getType() != NT_STRING) {
                 return true;
             }
-            joined_priv->concat(value.get<const QoreStringNode>(), xsink);
+            // note: values can be held in inline short string storage, which has no
+            // QoreStringNode; without materializing them the join would silently drop them
+            QoreStringNodeValueHelper value_str(value);
+            joined_priv->concat(*value_str, xsink);
             return !*xsink;
         };
         if (!append_value(*result)

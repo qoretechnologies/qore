@@ -77,19 +77,23 @@ static void http2_raise_poll_result_exception(const QoreHashNode* ex, ExceptionS
     QoreValue err = ex->getKeyValue("err");
     QoreValue desc = ex->getKeyValue("desc");
     QoreValue arg = ex->getKeyValue("arg");
+    // note: these values can be held in inline short string storage, which has no QoreStringNode;
+    // the node value helper materializes such values so that a reference can be taken
+    QoreStringNodeValueHelper err_str(err);
+    QoreStringNodeValueHelper desc_str(desc);
     xsink->raiseException(
         err.getType() == NT_STRING
-            ? err.get<const QoreStringNode>()->stringRefSelf()
+            ? err_str.getReferencedValue()
             : new QoreStringNode("ASYNC-IO-ERROR"),
         desc.getType() == NT_STRING
-            ? desc.get<const QoreStringNode>()->stringRefSelf()
+            ? desc_str.getReferencedValue()
             : new QoreStringNode("async HTTP/2 socket operation failed"),
         arg.refSelf());
 }
 
 static bool http2_poll_exception_is(const QoreHashNode& ex, const char* err) {
-    QoreValue ex_err = ex.getKeyValue("err");
-    return ex_err.getType() == NT_STRING && !strcmp(ex_err.get<const QoreStringNode>()->c_str(), err);
+    // note: the error code can be held in inline short string storage, which has no QoreStringNode
+    return QoreStringDataHelper(ex.getKeyValue("err")) == err;
 }
 
 class Http2SocketControllerPollable : public AbstractPollableIoObjectBase {

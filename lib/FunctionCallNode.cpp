@@ -83,16 +83,18 @@ static void record_source_parse_reflection_class_for_name_import(QoreProgram* pg
         return;
     }
 
-    const QoreStringNode* class_name = arg.get<const QoreStringNode>();
-    if (!class_name || !class_name->size()) {
+    // note: the value can be held in inline short string storage, which has no QoreStringNode, so
+    // the data helper must be used to read the bytes
+    QoreStringDataHelper class_name(arg);
+    if (!class_name || !class_name.size()) {
         return;
     }
 
     std::string type_path = "object<";
-    type_path += class_name->c_str();
+    type_path += class_name.c_str();
     type_path += '>';
     const QoreProgramLocation* arg_loc = parse_args->getLocation(0);
-    qore_program_private::recordSourceParseTypeImport(pgm, arg_loc ? arg_loc : loc, class_name->c_str(),
+    qore_program_private::recordSourceParseTypeImport(pgm, arg_loc ? arg_loc : loc, class_name.c_str(),
         type_path.c_str(), false, false);
 }
 

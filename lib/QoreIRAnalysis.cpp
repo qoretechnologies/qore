@@ -4762,15 +4762,17 @@ static bool qore_ir_pure_fold_evaluate(const QoreIRCallDirectInstruction* call,
             constant.bool_value = result->getAsBool();
             return true;
         case QoreIRConstant::Kind::String: {
-            const QoreStringNode* str = result->get<const QoreStringNode>();
+            // note: the value can be held in inline short string storage, which has no
+            // QoreStringNode, so the data helper must be used to read the bytes
+            QoreStringDataHelper str(*result);
             // the fold is only reached on the same host, but a callee that returns a string in an
             // encoding other than QCS_DEFAULT would still lose it in the literal
-            if (!str || str->getEncoding() != QCS_DEFAULT) {
+            if (!str || str.getEncoding() != QCS_DEFAULT) {
                 return false;
             }
             // copy by length: a ConstString is emitted with an explicit byte count and may hold
             // embedded NULs
-            constant.string_value.assign(str->c_str(), str->size());
+            constant.string_value.assign(str.c_str(), str.size());
             return true;
         }
         default:

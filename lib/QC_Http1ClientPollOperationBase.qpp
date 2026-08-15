@@ -478,8 +478,10 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSslUpgrade(ExceptionSink* xsin
         if (output_val->getType() == NT_HASH) {
             QoreHashNode* output = output_val->get<QoreHashNode>();
             QoreValue proto_val = output->getKeyValue("negotiated_protocol");
+            // note: the protocol id is held in inline short string storage (ex: "h2"), which has
+            // no QoreStringNode, so the data helper must be used to read the bytes
             if (proto_val.getType() == NT_STRING) {
-                alpn_id = proto_val.get<const QoreStringNode>()->c_str();
+                alpn_id = QoreStringDataHelper(proto_val).c_str();
             }
         }
         {
@@ -1016,13 +1018,13 @@ QoreHashNode* Http1ClientPollOperationPriv::handleSending(ExceptionSink* xsink) 
                     ASYNC_IO_TRACE("H1 handleSending: stale connection detected "
                         "(checkIdleData rc=%d) fd=%d stream=%d\n", idle_rc, fd, next_stream_id);
                     if (idle_xsink) {
-                        const QoreStringNode* err_str = idle_xsink.getExceptionErr()
-                            .get<const QoreStringNode>();
-                        const QoreStringNode* desc_str = idle_xsink.getExceptionDesc()
-                            .get<const QoreStringNode>();
-                        std::string err = err_str ? err_str->c_str()
+                        // note: these values can be held in inline short string storage, which
+                        // has no QoreStringNode, so the data helper must be used
+                        QoreStringDataHelper err_str(idle_xsink.getExceptionErr());
+                        QoreStringDataHelper desc_str(idle_xsink.getExceptionDesc());
+                        std::string err = err_str ? err_str.c_str()
                             : "HTTP1-CONNECTION-CLOSED";
-                        std::string desc = desc_str ? desc_str->c_str()
+                        std::string desc = desc_str ? desc_str.c_str()
                             : "server closed the keep-alive connection";
                         idle_xsink.clear();
                         setError(err.c_str(), desc.c_str(), xsink);

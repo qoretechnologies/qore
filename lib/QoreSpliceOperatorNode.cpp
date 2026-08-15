@@ -230,6 +230,7 @@ QoreValue QoreSpliceOperatorNode::evalImpl(bool& needs_deref, ExceptionSink* xsi
             }
         }
     } else if (vt == NT_STRING) {
+        // note: safe; val.ensureUnique() above materializes any inline short string
         QoreStringNode *vs = val.getValue().get<QoreStringNode>();
         if (!length_exp && !new_exp)
             vs->splice(offset, xsink);

@@ -470,6 +470,173 @@ private:
     DLLEXPORT void setup(ExceptionSink* xsink, const QoreValue n, const QoreEncoding* enc = nullptr);
 };
 
+//! provides allocation-free and conversion-free access to the byte data of a Qore string value
+/** Qore string values have two runtime representations: a reference-counted, heap-allocated
+    QoreStringNode, and an inline "short string" of up to QoreValue::SHORTSTR_MAX_BYTES bytes stored
+    directly in the QoreValue itself (always in UTF-8 encoding).  QoreValue::getType() returns
+    NT_STRING for both, but QoreValue::get<QoreStringNode>() returns nullptr for the inline
+    representation, because there is no node to point to.  The following common idiom therefore
+    dereferences a null pointer whenever the string is short enough to be stored inline:
+    @code
+    // WRONG: null pointer dereference for any string of 6 bytes or fewer
+    if (v.getType() == NT_STRING) {
+        const char* str = v.get<const QoreStringNode>()->c_str();
+    }
+    @endcode
+
+    This class gives uniform access to a string value's bytes, byte length, and encoding in either
+    representation.  No memory is allocated and no encoding conversion is ever performed; inline
+    strings are unpacked into a buffer held by this object, so pointers returned by c_str() are
+    valid only for the lifetime of this object.
+    @code
+    QoreStringDataHelper str(v);
+    if (str) {
+        printf("%s (%zu bytes, %s)\n", str.c_str(), str.size(), str.getEncoding()->getCode());
+    }
+    @endcode
+
+    Values that are not strings leave the object empty; in that case c_str() returns nullptr,
+    operator bool() returns false, and all comparison operators return false.
+
+    @note stack only; may not be dynamically allocated
+    @note use QoreStringValueHelper or QoreStringNodeValueHelper instead when non-string values must
+    be stringified, when a QoreStringNode is required, or when a specific encoding is required
+
+    @see QoreStringValueHelper
+    @see QoreStringNodeValueHelper
+
+    @since %Qore 3.0
+*/
+class QoreStringDataHelper {
+public:
+    //! acquires access to the string data in the value; the value is not referenced
+    /** @param n the value to access; if it is not a string, the object is left empty
+    */
+    DLLLOCAL QoreStringDataHelper(const QoreValue n) {
+        // a TAG_ENUM value carries its base value, which can itself be an inline short string
+        setup(n.isEnum() ? n.getEnumBaseValue() : n);
+    }
+
+    //! returns true if the value is a string
+    DLLLOCAL explicit operator bool() const {
+        return str != nullptr;
+    }
+
+    //! returns the string's bytes, always null-terminated, or nullptr if the value is not a string
+    DLLLOCAL const char* c_str() const {
+        return str;
+    }
+
+    //! returns the number of bytes in the string (not including the terminating null)
+    DLLLOCAL size_t size() const {
+        return len;
+    }
+
+    //! returns the number of bytes in the string (not including the terminating null)
+    DLLLOCAL size_t strlen() const {
+        return len;
+    }
+
+    //! returns the string's encoding, or nullptr if the value is not a string
+    DLLLOCAL const QoreEncoding* getEncoding() const {
+        return enc;
+    }
+
+    //! returns true if the value is not a string or is a zero-length string
+    DLLLOCAL bool empty() const {
+        return !len;
+    }
+
+    //! compares the string with another string value; the encodings must also match
+    DLLLOCAL bool operator==(const QoreStringDataHelper& other) const {
+        if (!str || !other.str || enc != other.enc || len != other.len) {
+            return false;
+        }
+        return !memcmp(str, other.str, len);
+    }
+
+    //! compares the string with a QoreString; the encodings must also match
+    DLLLOCAL bool operator==(const QoreString& other) const {
+        if (!str || enc != other.getEncoding() || len != other.size()) {
+            return false;
+        }
+        return !memcmp(str, other.c_str(), len);
+    }
+
+    //! compares the string's bytes with the given string
+    DLLLOCAL bool operator==(const std::string& other) const {
+        if (!str || len != other.size()) {
+            return false;
+        }
+        return !memcmp(str, other.c_str(), len);
+    }
+
+    //! compares the string's bytes with the given null-terminated string
+    /** @note as with QoreString, this does not work with UTF-16 or other non-ASCII-compatible
+        multi-byte encodings
+    */
+    DLLLOCAL bool operator==(const char* other) const {
+        assert(other);
+        if (!str || len != ::strlen(other)) {
+            return false;
+        }
+        return !memcmp(str, other, len);
+    }
+
+    //! returns the logical inverse of the corresponding operator==()
+    DLLLOCAL bool operator!=(const QoreStringDataHelper& other) const {
+        return !(*this == other);
+    }
+
+    //! returns the logical inverse of the corresponding operator==()
+    DLLLOCAL bool operator!=(const QoreString& other) const {
+        return !(*this == other);
+    }
+
+    //! returns the logical inverse of the corresponding operator==()
+    DLLLOCAL bool operator!=(const std::string& other) const {
+        return !(*this == other);
+    }
+
+    //! returns the logical inverse of the corresponding operator==()
+    DLLLOCAL bool operator!=(const char* other) const {
+        return !(*this == other);
+    }
+
+private:
+    //! the string's bytes; points either into the QoreStringNode or into buf
+    const char* str = nullptr;
+    //! the byte length of the string
+    size_t len = 0;
+    //! the string's encoding
+    const QoreEncoding* enc = nullptr;
+    //! inline short string storage, unpacked from the QoreValue
+    char buf[QoreValue::SHORTSTR_MAX_BYTES + 1];
+
+    //! sets up the object / common initialization
+    DLLLOCAL void setup(const QoreValue n) {
+        if (n.isShortString()) {
+            n.getShortString(buf);
+            str = buf;
+            len = n.shortStringLen();
+            // strings are only stored inline when the encoding is UTF-8
+            enc = QCS_UTF8;
+            return;
+        }
+        if (n.getType() == NT_STRING) {
+            const QoreStringNode* s = n.get<const QoreStringNode>();
+            assert(s);
+            str = s->c_str();
+            len = s->size();
+            enc = s->getEncoding();
+        }
+    }
+
+    QoreStringDataHelper(const QoreStringDataHelper&) = delete;
+    QoreStringDataHelper& operator=(const QoreStringDataHelper&) = delete;
+    void* operator new(size_t) = delete;
+};
+
 #include <qore/ReferenceHolder.h>
 
 //! For use on the stack only: manages a QoreStringNode reference count

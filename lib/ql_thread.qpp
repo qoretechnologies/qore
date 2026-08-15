@@ -1856,9 +1856,11 @@ auto channel_select(list<auto> cases, timeout timeout = 0) [flags=NAMED_ARGS;dom
                 "channel_select() case %d: 'op' is not a string", i);
             return QoreValue();
         }
-        QoreStringValueHelper op_str(op_val);
-        bool is_send = !strcmp(op_str->c_str(), "send");
-        if (!is_send && strcmp(op_str->c_str(), "recv")) {
+        // note: "send" and "recv" are always held in inline short string storage; the data helper
+        // reads either representation without allocating
+        QoreStringDataHelper op_str(op_val);
+        bool is_send = op_str == "send";
+        if (!is_send && op_str != "recv") {
             channel->deref(xsink);
             for (auto& ci : case_info) {
                 ci.channel->deref(xsink);
@@ -1868,7 +1870,7 @@ auto channel_select(list<auto> cases, timeout timeout = 0) [flags=NAMED_ARGS;dom
             }
             xsink->raiseException("CHANNEL-SELECT-ERROR",
                 "channel_select() case %d: 'op' must be 'send' or 'recv', got '%s'",
-                i, op_str->c_str());
+                i, op_str.c_str());
             return QoreValue();
         }
 

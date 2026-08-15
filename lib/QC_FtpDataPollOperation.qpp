@@ -44,8 +44,8 @@
 // ============================================================
 
 static bool ftp_data_exception_is(ExceptionSink& xsink, const char* err) {
-    const QoreStringNode* err_str = xsink.getExceptionErr().get<const QoreStringNode>();
-    return err_str && !strcmp(err_str->c_str(), err);
+    // note: the error code can be held in inline short string storage, which has no QoreStringNode
+    return QoreStringDataHelper(xsink.getExceptionErr()) == err;
 }
 
 FtpDataPollOperationPriv::FtpDataPollOperationPriv(QoreObject* self,

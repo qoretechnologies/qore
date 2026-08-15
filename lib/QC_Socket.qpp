@@ -84,12 +84,16 @@ static void socket_raise_poll_result_exception(const QoreHashNode* ex, Exception
     QoreValue err = ex->getKeyValue("err");
     QoreValue desc = ex->getKeyValue("desc");
     QoreValue arg = ex->getKeyValue("arg");
+    // note: these values can be held in inline short string storage, which has no QoreStringNode;
+    // the node value helper materializes such values so that a reference can be taken
+    QoreStringNodeValueHelper err_str(err);
+    QoreStringNodeValueHelper desc_str(desc);
     xsink->raiseException(
         err.getType() == NT_STRING
-            ? err.get<const QoreStringNode>()->stringRefSelf()
+            ? err_str.getReferencedValue()
             : new QoreStringNode("ASYNC-IO-ERROR"),
         desc.getType() == NT_STRING
-            ? desc.get<const QoreStringNode>()->stringRefSelf()
+            ? desc_str.getReferencedValue()
             : new QoreStringNode("async socket operation failed"),
         arg.refSelf());
 }
@@ -635,10 +639,15 @@ static int socket_exec_send_http_chunked_body_callback(QoreObject* self, QoreSoc
         size_t size = 0;
         const QoreStringNode* body_event = nullptr;
         bool done = false;
+        // note: a string value can be held in inline short string storage, which has no
+        // QoreStringNode; the node value helper materializes such values, and the holder keeps the
+        // node alive for as long as "data" and "body_event" are used below
+        SimpleRefHolder<QoreStringNode> str_holder;
 
         switch (res->getType()) {
             case NT_STRING: {
-                const QoreStringNode* str = res->get<const QoreStringNode>();
+                str_holder = QoreStringNodeValueHelper(*res).getReferencedValue();
+                const QoreStringNode* str = *str_holder;
                 if (str->empty()) {
                     done = true;
                     break;
@@ -882,8 +891,8 @@ static int socket_exec_upgrade_ssl(QoreObject* self, QoreSocketObject* s, int ti
 }
 
 static bool socket_exec_exception_is(const QoreHashNode* ex, const char* err_name) {
-    QoreValue err = ex->getKeyValue("err");
-    return err.getType() == NT_STRING && !strcmp(err.get<const QoreStringNode>()->c_str(), err_name);
+    // note: the error code can be held in inline short string storage, which has no QoreStringNode
+    return QoreStringDataHelper(ex->getKeyValue("err")) == err_name;
 }
 
 static QoreValue socket_exec_accept(QoreObject* self, QoreSocketObject* s, int timeout_ms, bool ssl,
@@ -1024,7 +1033,9 @@ static QoreStringNode* socket_exec_recv_string(QoreObject* self, QoreSocketObjec
             result->getFullTypeName());
         return nullptr;
     }
-    return result.release().get<QoreStringNode>();
+    // note: the value can be held in inline short string storage, which has no QoreStringNode; the
+    // node value helper materializes such values so that a reference can be returned to the caller
+    return QoreStringNodeValueHelper(*result).getReferencedValue();
 }
 
 static BinaryNode* socket_exec_recv_binary(QoreObject* self, QoreSocketObject* s, int64 size,
@@ -1352,14 +1363,16 @@ static QoreStringNode* socket_exec_read_http_header_string(QoreObject* self, Qor
         return nullptr;
     }
 
-    QoreStringNode* raw = result->get<QoreStringNode>();
+    // note: the value can be held in inline short string storage, which has no QoreStringNode; the
+    // node value helper materializes such values
+    QoreStringNodeValueHelper raw(*result);
     const size_t len = raw->size();
     SimpleRefHolder<QoreStringNode> hdr;
     if (len >= 4 && !memcmp(raw->c_str() + len - 4, "\r\n\r\n", 4)) {
         hdr = new QoreStringNode(raw->c_str(), len - 4, raw->getEncoding());
         hdr->concat('\n');
     } else {
-        hdr = raw->stringRefSelf();
+        hdr = raw.getReferencedValue();
     }
 
     my_socket_priv::getPriv(*s)->doDataEvent(QORE_EVENT_HTTP_HEADERS_READ, QORE_SOURCE_SOCKET, **hdr);
@@ -1629,7 +1642,9 @@ static QoreStringNode* socket_exec_recv_http_line(QoreObject* self, QoreSocketOb
             result->getFullTypeName());
         return nullptr;
     }
-    return result.release().get<QoreStringNode>();
+    // note: the value can be held in inline short string storage, which has no QoreStringNode; the
+    // node value helper materializes such values so that a reference can be returned to the caller
+    return QoreStringNodeValueHelper(*result).getReferencedValue();
 }
 
 static int socket_exec_read_http_chunked_trailers(QoreObject* self, QoreSocketObject* s, QoreHashNode& output,
@@ -1880,6 +1895,8 @@ static int extractDataBodyPtrLen(const QoreValue& body, const void*& ptr, size_t
         ptr = b->getPtr();
         len = b->size();
     } else if (t == NT_STRING) {
+        // note: safe; inline short strings are handled above, so any string reaching here has a
+        // QoreStringNode.  The caller owns short_buf because "ptr" must outlive this call.
         const QoreStringNode* s = body.get<const QoreStringNode>();
         ptr = s->c_str();
         len = s->size();

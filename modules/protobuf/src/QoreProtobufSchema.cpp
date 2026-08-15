@@ -1136,8 +1136,9 @@ void QoreProtobufSchema::buildFromHash(const QoreHashNode* schema_def, Exception
 
     // Set syntax
     QoreValue syntax_val = schema_def->getKeyValue("syntax");
-    fdp.set_syntax(syntax_val.isNullOrNothing()
-        ? "proto3" : QoreStringValueHelper(syntax_val)->c_str());
+    // note: the data helper reads an inline short string (ex: "proto3") without allocating
+    QoreStringDataHelper syntax_str(syntax_val);
+    fdp.set_syntax(syntax_val.isNullOrNothing() ? "proto3" : syntax_str.c_str());
 
     // Set package
     QoreValue pkg_val = schema_def->getKeyValue("package");

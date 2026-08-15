@@ -1,0 +1,207 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# Strings of QoreValue::SHORTSTR_MAX_BYTES (6) bytes or fewer can be stored inline in the QoreValue
+# itself instead of as a heap-allocated QoreStringNode.  Both representations must be completely
+# interchangeable at the language level.
+#
+# The representation matters because C++ code reading a string out of a hash, list, object member or
+# exception sees NT_STRING from QoreValue::getType() for both, but QoreValue::get<QoreStringNode>()
+# returns nullptr for the inline one.  Code that dereferences that result crashes the process, so
+# these tests push inline strings through the C++ paths that read string values.
+#
+# Forcing the inline representation requires the dbg_make_short_string() hook, and the C++ coverage
+# requires run_debug_unit_tests(); both are registered by init_debug_functions(), which is only
+# called when the library is built with DEBUG.  The whole suite is therefore parsed only when the
+# QoreDebug parse define is set, and skips with a reason otherwise.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ShortStringTest
+
+class ShortStringTest inherits QUnit::Test {
+    constructor() : Test("ShortStringTest", "1.0", \ARGV) {
+%ifndef QoreDebug
+        addTestCase("inline short string tests", \testRequiresDebugBuild());
+%endif
+%ifdef QoreDebug
+        addTestCase("C++ QoreStringDataHelper unit tests", \testHelperUnitTests());
+        addTestCase("inline storage representation", \testRepresentation());
+        addTestCase("value semantics match heap strings", \testValueSemantics());
+        addTestCase("containers preserve inline storage", \testContainers());
+        addTestCase("string join reads inline values", \testJoin());
+        addTestCase("foldl string join reads inline values", \testFoldlJoin());
+        addTestCase("lvalue operators materialize inline values", \testLvalueOperators());
+        addTestCase("builtin string arguments accept inline values", \testBuiltinArguments());
+%endif
+        set_return_value(main());
+    }
+
+%ifndef QoreDebug
+    private testRequiresDebugBuild() {
+        testSkip("these tests require a debug build of the Qore library: the dbg_* hooks and "
+            "run_debug_unit_tests() are registered by init_debug_functions(), which is only called "
+            "when the library is built with DEBUG");
+    }
+%endif
+
+%ifdef QoreDebug
+    private testHelperUnitTests() {
+        # the C++ side: QoreStringDataHelper against both representations, the inline boundary,
+        # the empty string, non-string values, cross-representation comparison, and a short string
+        # read back out of a hash
+        hash<auto> res = run_debug_unit_tests();
+        assertGt(0, res.test_count, "the C++ unit tests ran");
+        assertEq(0, res.fail_count, sprintf("all %d C++ unit test assertions passed", res.test_count));
+    }
+
+    private testRepresentation() {
+        # a 3-byte string fits inline
+        assertTrue(dbg_is_short_string(dbg_make_short_string("1.0")), "3-byte string is stored inline");
+
+        # the boundary: exactly SHORTSTR_MAX_BYTES bytes still fits, one more does not
+        assertTrue(dbg_is_short_string(dbg_make_short_string("123456")), "6-byte string is stored inline");
+        assertThrows("DBG-ARGUMENT-ERROR", \dbg_make_short_string(), "1234567",
+            "a 7-byte string does not fit in inline storage");
+
+        # non-strings are never inline strings
+        assertFalse(dbg_is_short_string(1), "an integer is not an inline string");
+        assertFalse(dbg_is_short_string(NOTHING), "NOTHING is not an inline string");
+    }
+
+    private testValueSemantics() {
+        string inline_str = dbg_make_short_string("abc");
+        string heap_str = "abcdefgh";
+        assertFalse(dbg_is_short_string(heap_str), "an 8-byte value is not stored inline");
+
+        assertEq("abc", inline_str, "an inline string equals its text");
+        assertEq("string", inline_str.type(), "an inline string reports the string type");
+        assertEq(3, inline_str.size(), "an inline string reports its byte length");
+        assertEq(3, inline_str.length(), "an inline string reports its character length");
+        assertEq("UTF-8", inline_str.encoding(), "inline strings are always UTF-8");
+        assertEq("ABC", inline_str.upr(), "case conversion works on an inline string");
+        assertEq("abcabc", inline_str + inline_str, "two inline strings concatenate");
+        assertEq("abcabcdefgh", inline_str + heap_str, "inline and heap strings concatenate");
+        # indexing yields a char value, so compare its string form
+        assertEq("b", sprintf("%s", inline_str[1]), "an inline string can be indexed");
+        assertEq("bc", inline_str.substr(1), "an inline string can be sliced");
+
+        # the two representations of the same text must be indistinguishable
+        string same_inline = dbg_make_short_string("abcdef");
+        string same_heap = "abcdef" + "";
+        assertEq(same_heap, same_inline, "inline and heap strings with the same text are equal");
+        assertTrue(same_inline == same_heap, "soft equality matches across representations");
+        assertFalse(same_inline != same_heap, "soft inequality matches across representations");
+        assertEq(0, same_inline <=> same_heap, "ordered comparison matches across representations");
+
+        # an empty string
+        string empty_str = dbg_make_short_string("");
+        assertEq("", empty_str, "an empty inline string equals the empty string");
+        assertEq(0, empty_str.size(), "an empty inline string has zero length");
+        assertTrue(empty_str.empty(), "an empty inline string reports empty()");
+    }
+
+    private testContainers() {
+        # this is exactly the shape that crashed qorus-core: a short string reached C++ code as a
+        # hash value, where get<QoreStringNode>() returned nullptr
+        hash<auto> h = {"version": dbg_make_short_string("1.0")};
+        assertTrue(dbg_is_short_string(h.version), "a short string stays inline inside a hash");
+        assertEq("1.0", h.version, "the hash value round-trips");
+        assertEq("string", h.version.type(), "the hash value reports the string type");
+
+        list<auto> l = (dbg_make_short_string("a"), dbg_make_short_string("bc"), "long enough value");
+        assertTrue(dbg_is_short_string(l[0]), "a short string stays inline inside a list");
+        assertEq(("a", "bc", "long enough value"), l, "the list round-trips");
+
+        # nested containers
+        hash<auto> nested = {"outer": {"inner": (dbg_make_short_string("x"),)}};
+        assertTrue(dbg_is_short_string(nested.outer.inner[0]), "inline storage survives nesting");
+        assertEq("x", nested.outer.inner[0], "the nested value round-trips");
+
+        # serialization must see the text, not an empty or missing value
+        assertEq("1.0", sprintf("%s", h.version), "an inline string formats with %s");
+        assertEq("\"1.0\"", sprintf("%y", h.version), "an inline string formats with %y");
+    }
+
+    private testJoin() {
+        # join() reads the separator and every list element through C++ string accessors
+        list<auto> parts = (dbg_make_short_string("ab"), dbg_make_short_string("cd"),
+            dbg_make_short_string("ef"));
+        assertEq("ab-cd-ef", join(dbg_make_short_string("-"), parts),
+            "join() with an inline separator and inline elements");
+        assertEq("ab, cd, ef", join(", ", parts), "join() with a heap separator and inline elements");
+        assertEq("ab-cd-ef", parts.join(dbg_make_short_string("-")),
+            "the list join pseudo-method with an inline separator");
+
+        # mixed representations must all appear in the output
+        list<auto> mixed = (dbg_make_short_string("ab"), "a much longer element",
+            dbg_make_short_string("cd"));
+        assertEq("ab|a much longer element|cd", join("|", mixed),
+            "join() keeps inline and heap elements in order");
+    }
+
+    private testFoldlJoin() {
+        # the foldl/foldr string-join fast path reads each element through C++ string accessors; if
+        # inline values are not handled it silently drops them from the result
+        list<auto> parts = (dbg_make_short_string("ab"), dbg_make_short_string("cd"),
+            dbg_make_short_string("ef"));
+        assertEq("ab-cd-ef", (foldl $1 + "-" + $2, parts), "foldl string join over inline elements");
+        assertEq("ef-cd-ab", (foldr $1 + "-" + $2, parts), "foldr string join over inline elements");
+
+        list<auto> mixed = (dbg_make_short_string("ab"), "a much longer element",
+            dbg_make_short_string("cd"));
+        assertEq("ab-a much longer element-cd", (foldl $1 + "-" + $2, mixed),
+            "foldl string join over mixed representations");
+    }
+
+    private testLvalueOperators() {
+        # these operators mutate the string in place, so an inline value has to be materialized into
+        # a heap string first
+        string trim_target = dbg_make_short_string("  ab  ");
+        assertTrue(dbg_is_short_string(trim_target), "the trim target starts inline");
+        trim trim_target;
+        assertEq("ab", trim_target, "trim works on an inline string");
+
+        string chomp_target = dbg_make_short_string("ab\n");
+        chomp chomp_target;
+        assertEq("ab", chomp_target, "chomp works on an inline string");
+
+        string splice_target = dbg_make_short_string("abcdef");
+        splice splice_target, 1, 2;
+        assertEq("adef", splice_target, "splice works on an inline string");
+
+        string extract_target = dbg_make_short_string("abcdef");
+        string extracted = extract extract_target, 1, 2;
+        assertEq("bc", extracted, "extract returns the removed part of an inline string");
+        assertEq("adef", extract_target, "extract updates the inline string in place");
+
+        string append_target = dbg_make_short_string("ab");
+        append_target += "cdefgh";
+        assertEq("abcdefgh", append_target, "+= works on an inline string");
+
+        # inside a container, where the lvalue is a hash entry rather than a variable
+        hash<auto> h = {"v": dbg_make_short_string("  ab  ")};
+        trim h.v;
+        assertEq("ab", h.v, "trim works on an inline string held in a hash");
+    }
+
+    private testBuiltinArguments() {
+        string inline_str = dbg_make_short_string("abc");
+
+        # builtin string parameters are marshalled through QoreStringNodeValueHelper by qpp
+        assertEq(3, strlen(inline_str), "strlen() accepts an inline string");
+        assertEq("ABC", toupper(inline_str), "toupper() accepts an inline string");
+        assertEq(1, index(inline_str, dbg_make_short_string("b")),
+            "index() accepts inline string arguments");
+        assertEq("a-c", replace(inline_str, dbg_make_short_string("b"), dbg_make_short_string("-")),
+            "replace() accepts inline string arguments");
+        assertEq(("a", "c"), split(dbg_make_short_string("b"), inline_str),
+            "split() accepts inline string arguments");
+    }
+%endif
+}

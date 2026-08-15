@@ -638,7 +638,10 @@ int QoreAvroFileWriter::writeHeader(const QoreHashNode* opts, ExceptionSink* xsi
                     "got type '%s'", cv.getTypeName());
                 return -1;
             }
-            const char* c = cv.get<const QoreStringNode>()->c_str();
+            // note: the codec name is held in inline short string storage ("null"), which has no
+            // QoreStringNode; the helper must stay in scope for as long as "c" is used below
+            QoreStringDataHelper codec_data(cv);
+            const char* c = codec_data.c_str();
             if (!strcmp(c, "deflate")) {
                 deflate_codec = true;
             } else if (strcmp(c, "null")) {
@@ -734,7 +737,10 @@ int QoreAvroFileWriter::writeHeader(const QoreHashNode* opts, ExceptionSink* xsi
                 const BinaryNode* b = v.get<const BinaryNode>();
                 hdr.writeByteSeq(b->getPtr(), b->size());
             } else if (v.getType() == NT_STRING) {
-                TempEncodingHelper utf8(v.get<const QoreStringNode>(), QCS_UTF8, xsink);
+                // note: the value can be held in inline short string storage, which has no
+                // QoreStringNode; the node value helper materializes such values
+                QoreStringNodeValueHelper str(v);
+                TempEncodingHelper utf8(*str, QCS_UTF8, xsink);
                 if (*xsink) {
                     return -1;
                 }

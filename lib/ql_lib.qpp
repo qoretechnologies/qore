@@ -112,9 +112,14 @@ static const QoreHashNode* q_get_addrinfo_hash(const QoreValue& v) {
     return v.getType() == NT_HASH ? v.get<const QoreHashNode>() : nullptr;
 }
 
-static const QoreStringNode* q_get_hash_string_value(const QoreHashNode& h, const char* key) {
+// note: the value can be held in inline short string storage, which has no QoreStringNode, so the
+// node value helper is used to materialize such values; the caller owns the returned reference
+static QoreStringNode* q_get_hash_string_value(const QoreHashNode& h, const char* key) {
     QoreValue v = h.getKeyValue(key);
-    return v.getType() == NT_STRING ? v.get<const QoreStringNode>() : nullptr;
+    if (v.getType() != NT_STRING) {
+        return nullptr;
+    }
+    return QoreStringNodeValueHelper(v).getReferencedValue();
 }
 
 static int q_get_hash_int_value(const QoreHashNode& h, const char* key, int def = 0) {
@@ -141,7 +146,7 @@ static QoreStringNode* q_gethostbyname_to_string_asyncio(ExceptionSink* xsink, c
         if (!h) {
             continue;
         }
-        const QoreStringNode* address = q_get_hash_string_value(*h, "address");
+        SimpleRefHolder<QoreStringNode> address(q_get_hash_string_value(*h, "address"));
         if (address) {
             return address->stringRefSelf();
         }
@@ -182,7 +187,7 @@ static QoreHashNode* q_gethostbyname_to_hash_asyncio(ExceptionSink* xsink, const
             first_family = q_get_hash_int_value(*h, "family", AF_UNSPEC);
         }
         if (q_get_hash_int_value(*h, "family", AF_UNSPEC) == first_family) {
-            const QoreStringNode* address = q_get_hash_string_value(*h, "address");
+            SimpleRefHolder<QoreStringNode> address(q_get_hash_string_value(*h, "address"));
             if (address) {
                 addresses->push(address->stringRefSelf(), xsink);
                 if (*xsink) {
@@ -197,7 +202,7 @@ static QoreHashNode* q_gethostbyname_to_hash_asyncio(ExceptionSink* xsink, const
     }
 
     qore_hash_private* rh = qore_hash_private::get(**result);
-    const QoreStringNode* canonname = q_get_hash_string_value(*first, "canonname");
+    SimpleRefHolder<QoreStringNode> canonname(q_get_hash_string_value(*first, "canonname"));
     rh->setKeyValueIntern("name", canonname ? canonname->stringRefSelf() : new QoreStringNode(host));
     rh->setKeyValueIntern("aliases", new QoreListNode(stringTypeInfo));
     switch (first_family) {
@@ -315,7 +320,7 @@ static QoreStringNode* q_gethostbyaddr_to_string_asyncio(ExceptionSink* xsink, c
         return nullptr;
     }
 
-    const QoreStringNode* name = q_get_hash_string_value(**result, "name");
+    SimpleRefHolder<QoreStringNode> name(q_get_hash_string_value(**result, "name"));
     return name ? name->stringRefSelf() : nullptr;
 }
 

@@ -132,7 +132,9 @@ int SqlMutationContext::checkDeclaration(const QoreHashNode* info, ExceptionSink
 
     bool exists = false;
     QoreValue v = info->getKeyValueExistence("op_id", exists);
-    if (!exists || v.getType() != NT_STRING || v.get<const QoreStringNode>()->empty()) {
+    // note: the value can be held in inline short string storage, which has no QoreStringNode; the
+    // data helper reports a non-string value as empty, which is the same outcome as before
+    if (!exists || QoreStringDataHelper(v).empty()) {
         xsink->raiseException(SQL_MUTATION_DECLARATION_ERR, "the \"op_id\" key must be present and must be a "
             "non-empty string; it provides the stable operation identity that must survive a restartable "
             "transaction replay");
@@ -140,7 +142,9 @@ int SqlMutationContext::checkDeclaration(const QoreHashNode* info, ExceptionSink
     }
 
     v = info->getKeyValueExistence("path_id", exists);
-    if (!exists || v.getType() != NT_STRING || v.get<const QoreStringNode>()->empty()) {
+    // note: the value can be held in inline short string storage, which has no QoreStringNode; the
+    // data helper reports a non-string value as empty, which is the same outcome as before
+    if (!exists || QoreStringDataHelper(v).empty()) {
         xsink->raiseException(SQL_MUTATION_DECLARATION_ERR, "the \"path_id\" key must be present and must be a "
             "non-empty string; it identifies the reviewed managed path issuing the operation");
         return -1;
@@ -173,7 +177,8 @@ int SqlMutationContext::checkDeclaration(const QoreHashNode* info, ExceptionSink
 
     v = info->getKeyValueExistence("reclaim_audit_id", exists);
     if (exists && !v.isNothing()) {
-        if (v.getType() != NT_STRING || v.get<const QoreStringNode>()->empty()) {
+        // note: the value can be held in inline short string storage, which has no QoreStringNode
+        if (QoreStringDataHelper(v).empty()) {
             xsink->raiseException(SQL_MUTATION_DECLARATION_ERR, "the \"reclaim_audit_id\" key must be a non-empty "
                 "string when present");
             return -1;

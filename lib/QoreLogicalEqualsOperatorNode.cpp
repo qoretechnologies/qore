@@ -195,7 +195,9 @@ bool QoreLogicalEqualsOperatorNode::softEqual(const QoreValue& left, const QoreV
         // conversion direction matches QoreString::equalSoft's own internal logic.
         const QoreEncoding* common = ls->getEncoding();
         if (common == QCS_USASCII && rt == NT_STRING) {
-            const QoreEncoding* renc = r.get<const QoreStringNode>()->getEncoding();
+            // note: the value can be held in inline short string storage, which has no
+            // QoreStringNode, so the data helper must be used to read the encoding
+            const QoreEncoding* renc = QoreStringDataHelper(r).getEncoding();
             if (renc) {
                 common = renc;
             }

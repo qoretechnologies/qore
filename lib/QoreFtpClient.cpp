@@ -77,12 +77,16 @@ static void qore_ftp_raise_poll_result_exception(const QoreHashNode* ex, Excepti
     QoreValue err = ex->getKeyValue("err");
     QoreValue desc = ex->getKeyValue("desc");
     QoreValue arg = ex->getKeyValue("arg");
+    // note: these values can be held in inline short string storage, which has no QoreStringNode;
+    // the node value helper materializes such values so that a reference can be taken
+    QoreStringNodeValueHelper err_str(err);
+    QoreStringNodeValueHelper desc_str(desc);
     xsink->raiseException(
         err.getType() == NT_STRING
-            ? err.get<const QoreStringNode>()->stringRefSelf()
+            ? err_str.getReferencedValue()
             : new QoreStringNode("FTP-ASYNC-IO-ERROR"),
         desc.getType() == NT_STRING
-            ? desc.get<const QoreStringNode>()->stringRefSelf()
+            ? desc_str.getReferencedValue()
             : new QoreStringNode("async FTP socket operation failed"),
         arg.refSelf());
 }
@@ -168,8 +172,9 @@ static void qore_ftp_cancel_and_close_controller_socket(QoreSocketObject* sock) 
 }
 
 static void qore_ftp_raise_file_open_error(ExceptionSink& open_xsink, const char* path, ExceptionSink* xsink) {
-    const QoreStringNode* desc = open_xsink.getExceptionDesc().get<const QoreStringNode>();
-    QoreString msg(desc ? desc->c_str() : path ? path : "file open error");
+    // note: the description can be held in inline short string storage, which has no QoreStringNode
+    QoreStringDataHelper desc(open_xsink.getExceptionDesc());
+    QoreString msg(desc ? desc.c_str() : path ? path : "file open error");
     open_xsink.clear();
     xsink->raiseException("FTP-FILE-OPEN-ERROR", "%s", msg.c_str());
 }
@@ -1121,7 +1126,10 @@ struct qore_ftp_private {
                 "cannot determine IPv4 local interface address for PORT mode");
             return -1;
         }
-        const char* ifname_buf = address_value.get<const QoreStringNode>()->c_str();
+        // note: the address can be held in inline short string storage, which has no QoreStringNode;
+        // the helper must stay in scope for as long as "ifname_buf" is used below
+        QoreStringDataHelper address_data(address_value);
+        const char* ifname_buf = address_data.c_str();
 
         // 2. Create a fresh QoreSocketObject for listening, bind + listen.
         // Refcount plan: new=1 (consumed below by `new QoreObject(QC_SOCKET...)`

@@ -2363,11 +2363,13 @@ static AbstractQoreNode* processCall(int sline, int eline, QoreValue $1, QorePar
         if (hodon) {
             // create an object method call node
             // take the string
-            QoreStringNode* str = hodon->swapRight(QoreValue()).get<QoreStringNode>();
+            // note: the value can be held in inline short string storage, which has no
+            // QoreStringNode; the node value helper materializes such values
+            ValueHolder rv(hodon->swapRight(QoreValue()), nullptr);
+            QoreStringNodeValueHelper str(*rv);
             assert(str->getEncoding() == QCS_DEFAULT);
-            char* cstr = str->giveBuffer();
+            char* cstr = strdup(str->c_str());
             assert(cstr);
-            str->deref();
 
             MethodCallNode* mc = new MethodCallNode(loc, cstr, args);
 

@@ -1028,13 +1028,13 @@ void Http3ClientPollOperationPriv::dispatchBufferedResponses(int64_t stream_id,
             completeStream(stream_id, xsink);
         }
 
-        const QoreStringNode* err_str =
-            resp->getKeyValue("err").get<const QoreStringNode>();
-        const QoreStringNode* desc_str =
-            resp->getKeyValue("desc").get<const QoreStringNode>();
+        // note: these values can be held in inline short string storage, which has no
+        // QoreStringNode, so the data helper must be used to read the bytes
+        QoreStringDataHelper err_str(resp->getKeyValue("err"));
+        QoreStringDataHelper desc_str(resp->getKeyValue("desc"));
         if (err_str) {
-            std::string err_copy = err_str->c_str();
-            std::string desc_copy = desc_str ? desc_str->c_str() : "";
+            std::string err_copy = err_str.c_str();
+            std::string desc_copy = desc_str ? desc_str.c_str() : "";
             action->executeError(err_copy.c_str(), desc_copy.c_str(), xsink);
         } else {
             action->execute(v.refSelf(), xsink);

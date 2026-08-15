@@ -13538,6 +13538,8 @@ lvalue_path_unary_done:
                                 }
                             }
                         } else if (vt == NT_STRING) {
+                            // note: safe; lvh.ensureUnique() above materializes any inline
+                            // short string
                             QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
                             if (length_val.isNothing() && replacement_val.isNothing()) {
                                 res = vs->extract(offset, xsink);

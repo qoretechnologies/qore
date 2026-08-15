@@ -69,8 +69,9 @@ static void qore_socket_object_raise_poll_result_exception(const QoreHashNode* e
 
 static bool qore_socket_object_exec_exception_is(const QoreHashNode& ex, const char* err) {
     QoreValue ex_err = ex.getKeyValue("err");
-    // a NT_STRING value may be an inline (SSO) short string with no QoreStringNode; access it safely
-    return ex_err.getType() == NT_STRING && !strcmp(QoreStringValueHelper(ex_err)->c_str(), err);
+    // a NT_STRING value may be an inline (SSO) short string with no QoreStringNode; the data
+    // helper reads either representation without allocating
+    return QoreStringDataHelper(ex_err) == err;
 }
 
 static QoreHashNode* qore_socket_object_exec_poll_operation(QoreSocketObject* s, QoreObject* sock_obj,
@@ -1645,7 +1646,7 @@ static void qore_socket_object_set_h2_headers(strcase_str_map_t& out, const Qore
         QoreValue val = hi.get();
         // NT_STRING may be an inline (SSO) short string with no QoreStringNode; access it safely
         if (val.getType() == NT_STRING) {
-            out[hi.getKey()] = QoreStringValueHelper(val)->c_str();
+            out[hi.getKey()] = QoreStringDataHelper(val).c_str();
         }
     }
 }
@@ -3188,13 +3189,13 @@ static QoreHashNode* qore_socket_object_get_addr_info_from_output(const QoreValu
     std::string socketname;
     QoreValue socketname_value = h->getKeyValue("socketname");
     if (socketname_value.getType() == NT_STRING) {
-        socketname = QoreStringValueHelper(socketname_value)->c_str();
+        socketname = QoreStringDataHelper(socketname_value).c_str();
     }
 
     std::string hostname;
     QoreValue hostname_value = h->getKeyValue("hostname");
     if (hostname_value.getType() == NT_STRING) {
-        hostname = QoreStringValueHelper(hostname_value)->c_str();
+        hostname = QoreStringDataHelper(hostname_value).c_str();
     }
 
     return qore_socket_private::makeAddrInfo(addr, static_cast<socklen_t>(raw_len), socketname,
