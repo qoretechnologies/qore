@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -89,11 +89,19 @@ public:
     }
 
     //! unlocks the lock (assumes the lock is locked)
+    /** releases the write lock if one is held, otherwise releases a read lock
+    */
     DLLLOCAL void unlock() {
-        int tid = q_gettid();
-        assert(tid >= 0);
         AutoLocker al(l);
-        if (write_tid == tid) {
+        // A held write lock excludes all readers and all other writers, so it can only belong to
+        // the calling thread; test for it directly instead of comparing the current TID to
+        // write_tid.  q_gettid() returns 0 once the calling thread's data has been destroyed, and
+        // locks are still grabbed while objects in the static namespace are destroyed, so the
+        // comparison would fail for the write owner in exactly that window and take the read
+        // branch instead: an abort on the assertion below in debug builds, and a corrupted reader
+        // count that hangs every later writer in release builds.
+        assert(write_tid == -1 || !q_gettid() || write_tid == q_gettid());
+        if (write_tid != -1) {
             write_tid = -1;
             if (has_notify) {
                 notifyIntern();
