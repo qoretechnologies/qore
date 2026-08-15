@@ -3693,35 +3693,41 @@ void init_debug_functions(QoreNamespace& qns) {
 #endif
 
     // code flag oracle; the mask on each of these is the point of the declaration, so it must match
-    // what the corresponding body actually does
+    // what the corresponding body actually does.  These deliberately keep QDOM_DEFAULT: their bodies
+    // do nothing that belongs to a functional domain, and a non-zero domain would make the calls
+    // non-foldable, which would silently defeat the constant-folding behavior they exist to verify
+    // (see examples/test/ir/PureCallFolding.qtest).  They are unreachable from untrusted code in any
+    // case, because init_debug_functions() is only called in debug builds.
     qns.addBuiltinVariant("dbg_flags_legacy_constant", f_dbg_flags_legacy_constant,
-        QCF_CONSTANT, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+        QCF_CONSTANT, QDOM_DEFAULT, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_flags_total", f_dbg_flags_total,
-        QCF_TOTAL, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+        QCF_TOTAL, QDOM_DEFAULT, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_flags_pure", f_dbg_flags_pure,
-        QCF_PURE, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+        QCF_PURE, QDOM_DEFAULT, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_flags_retval_only", f_dbg_flags_retval_only,
-        QCF_RET_VALUE_ONLY, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+        QCF_RET_VALUE_ONLY, QDOM_DEFAULT, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_flags_nodomain_with_effects", f_dbg_flags_nodomain_with_effects,
-        QCF_NO_DOMAIN_THROW, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+        QCF_NO_DOMAIN_THROW, QDOM_DEFAULT, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_flags_unflagged", f_dbg_flags_unflagged,
-        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+        QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_flags_effect_count", f_dbg_flags_effect_count,
-        QCF_NO_FLAGS, QDOM_DEBUG_HOOK, bigIntTypeInfo);
+        QCF_NO_FLAGS, QDOM_DEFAULT, bigIntTypeInfo);
     qns.addBuiltinVariant("dbg_flags_pure_throw", f_dbg_flags_pure_throw,
-        QCF_PURE | QCF_HOST_PORTABLE, QDOM_DEBUG_HOOK, bigIntTypeInfo, 1,
+        QCF_PURE | QCF_HOST_PORTABLE, QDOM_DEFAULT, bigIntTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "value");
     qns.addBuiltinVariant("dbg_flags_pure_latin1", f_dbg_flags_pure_latin1,
-        QCF_PURE | QCF_HOST_PORTABLE, QDOM_DEBUG_HOOK, stringTypeInfo, 1,
+        QCF_PURE | QCF_HOST_PORTABLE, QDOM_DEFAULT, stringTypeInfo, 1,
         stringTypeInfo, QORE_PARAM_NO_ARG, "value");
 
     // the two liars: these declare QCF_NO_DOMAIN_THROW and then raise, so that the runtime check in
     // ~CodeEvaluationHelper() can be shown to detect a violation and to exempt the carve-outs
     qns.addBuiltinVariant("dbg_flags_lying_nodomain_throw", f_dbg_flags_lying_nodomain_throw,
-        QCF_NO_DOMAIN_THROW, QDOM_DEBUG_HOOK, nothingTypeInfo);
+        QCF_NO_DOMAIN_THROW, QDOM_DEFAULT, nothingTypeInfo);
     qns.addBuiltinVariant("dbg_flags_exempt_throw", f_dbg_flags_exempt_throw,
-        QCF_NO_DOMAIN_THROW, QDOM_DEBUG_HOOK, nothingTypeInfo);
+        QCF_NO_DOMAIN_THROW, QDOM_DEFAULT, nothingTypeInfo);
 
+    // these two mutate and read process-global state, so unlike the oracle above they do belong to
+    // a functional domain; they are never folded, so restricting them costs nothing
     qns.addBuiltinVariant("dbg_set_flag_violation_mode", f_dbg_set_flag_violation_mode,
         QCF_NO_FLAGS, QDOM_DEBUG_HOOK, nothingTypeInfo, 1,
         bigIntTypeInfo, QORE_PARAM_NO_ARG, "mode");
