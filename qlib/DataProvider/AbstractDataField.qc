@@ -71,7 +71,7 @@ public hashdecl DataFieldInfo {
 #! describes a data type based on a hashdecl
 public class AbstractDataField inherits Qore::Serializable {
     public {
-        #! The length a derived short description is capped at, in characters
+        #! The width a derived short description is capped at, in display columns
         /** A short description is a **one-line summary** shown beside a field, so it has to fit on one line.
             @ref getShortDescription() takes the first sentence of a long description, and a first sentence
             is very often longer than a line: an API's own parameter documentation regularly opens with a
@@ -568,8 +568,9 @@ public class AbstractDataField inherits Qore::Serializable {
         desc =~ s/\*\*([^*]+)\*\*/$1/g;
         desc =~ s/(^|[[:space:]])_([^_]+)_(?=[[:space:][:punct:]]|$)/$1$2/g;
 
-        # get single-quoted strings
-        *list<string> sq = (desc =~ x/'([^\'\n]*)'/g);
+        # get single-quoted strings; an apostrophe inside a word is not an
+        # opening quote (for example, the apostrophe in "connection's")
+        *list<string> sq = (desc =~ x/(?<![[:alnum:]])'([^\'\n]*)'/g);
         # replace them with markers
         if (sq) {
             map desc = replace(desc, $1, "{{" + $# + "}}"), sq;
@@ -592,20 +593,88 @@ public class AbstractDataField inherits Qore::Serializable {
         map desc = replace(desc, "{{" + $# + "}}", $1), sq;
         map desc = replace(desc, "{{" + $# + "}}", $1), dq;
 
-        if (maxlen > 0 && desc.length() > maxlen) {
-            # cut on a word boundary so that the summary does not end in the middle of a word; the ellipsis
-            # counts towards the cap, and a "word" longer than the cap is cut where it falls
-            string cut = desc.substr(0, maxlen - ShortDescriptionEllipsis.length());
-            int sp = cut.rfind(" ");
-            if (sp > 0) {
-                splice cut, sp;
-            }
-            # a summary ending in punctuation reads badly once the ellipsis is added
-            cut =~ s/[[:space:][:punct:]]+$//;
-            desc = cut + ShortDescriptionEllipsis;
+        if (maxlen > 0 && char_width(desc) > maxlen) {
+            desc = AbstractDataField::truncateShortDescription(desc,
+                maxlen);
         }
 
         return desc;
+    }
+
+    #! Truncates plain presentation text on a safe display boundary
+    /** The result is measured in terminal display columns rather than code
+        points, so wide scripts obey the same visual limit as Latin text.
+        Balanced brace, bracket, parenthesis, and quoted groups are atomic:
+        a placeholder such as <tt>{name}</tt> is either present in full or
+        omitted in full.
+
+        @param desc plain presentation text
+        @param max_width maximum display width including the ellipsis
+
+        @return the safely truncated presentation text
+    */
+    private static string truncateShortDescription(string desc,
+            int max_width) {
+        int content_width = max_width
+            - char_width(ShortDescriptionEllipsis);
+        if (content_width <= 0) {
+            return ShortDescriptionEllipsis;
+        }
+
+        int pos = 0;
+        int width = 0;
+        int safe_pos = 0;
+        int word_boundary = -1;
+        list<string> closers = ();
+        while (pos < desc.length()) {
+            string ch = desc.substr(pos, 1);
+            int ch_width = char_width(ch);
+            if (width + ch_width > content_width) {
+                break;
+            }
+
+            string closer = closers ? closers[-1] : "";
+            if (closer.val() && ch == closer) {
+                splice closers, closers.size() - 1;
+            } else if (closer != "'" && closer != "\"") {
+                switch (ch) {
+                    case "{":
+                        closers += "}";
+                        break;
+                    case "[":
+                        closers += "]";
+                        break;
+                    case "(":
+                        closers += ")";
+                        break;
+                    case "'":
+                    case "\"": {
+                        string previous = pos
+                            ? desc.substr(pos - 1, 1) : "";
+                        if (!previous.val()
+                                || previous =~ /[[:space:][:punct:]]/) {
+                            closers += ch;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            width += ch_width;
+            ++pos;
+            if (!closers) {
+                safe_pos = pos;
+                if (ch =~ /[[:space:]]/) {
+                    word_boundary = pos - 1;
+                }
+            }
+        }
+
+        int cut_pos = word_boundary > 0 ? word_boundary : safe_pos;
+        string cut = desc.substr(0, cut_pos);
+        trim cut;
+        return cut.val() ? cut + ShortDescriptionEllipsis
+            : ShortDescriptionEllipsis;
     }
 
     #! Returns the offset of the end of the first sentence, or -1 where the text is a single sentence

@@ -5265,6 +5265,12 @@ public class DataProviderTest inherits QUnit::Test {
         # the first sentence is taken, and markdown is rendered away: a short description is plain text
         assertEq("A simple summary", AbstractDataField::getShortDescription("A simple summary. More here."));
         assertEq("Use the 'id' field", AbstractDataField::getShortDescription("Use the `id` field"));
+        assertEq("The URI path relative to the connection's API base URL",
+            AbstractDataField::getShortDescription("The URI path relative to the connection's API base URL. "
+                "May contain '{name}' placeholders that are replaced from 'path_vars'."),
+            "an apostrophe inside a word does not start a quoted span");
+        assertEq("Use 'a.b' here", AbstractDataField::getShortDescription("Use 'a.b' here. More here."),
+            "sentence punctuation inside a quoted span remains protected");
         assertEq("The important part", AbstractDataField::getShortDescription("The **important** part"));
         assertEq("(Deprecated) Disable email notifications",
             AbstractDataField::getShortDescription("_(Deprecated)_ Disable email notifications"),
@@ -5304,6 +5310,24 @@ public class DataProviderTest inherits QUnit::Test {
         assertFalse(short_desc =~ / …$/, "with no space before the ellipsis");
         assertEq(0, long_desc.find(short_desc.substr(0, short_desc.length() - 1)),
             "the summary is a prefix of the description");
+
+        # display width, not code-point count, is the language-independent line limit
+        string wide_desc = "ステップの例ステップの例ステップの例ステップの例ステップの例ステップの例"
+            "ステップの例ステップの例";
+        *string wide_short_desc = AbstractDataField::getShortDescription(wide_desc);
+        assertLe(AbstractDataField::ShortDescriptionMaxLength, char_width(wide_short_desc),
+            "wide-script summaries fit the same display-width cap");
+        assertTrue(wide_short_desc =~ /…$/, "wide-script truncation is explicit");
+
+        string grouped_desc = "Prefix words before a placeholder {a_very_long_placeholder_that_must_not_be_cut} "
+            "and more presentation text that exceeds the configured line width";
+        *string grouped_short_desc = AbstractDataField::getShortDescription(grouped_desc);
+        assertLe(AbstractDataField::ShortDescriptionMaxLength, char_width(grouped_short_desc),
+            "group-aware truncation fits the display-width cap");
+        assertFalse(grouped_short_desc =~ /\{[^}]*…$/,
+            "truncation never emits a partial brace group");
+        assertFalse(grouped_short_desc =~ /\{[^}]*$/,
+            "truncation never emits an unbalanced brace group");
 
         # a caller that wants the whole first sentence asks for it
         assertEq(long_desc, AbstractDataField::getShortDescription(long_desc, 0), "0 means no cap");
