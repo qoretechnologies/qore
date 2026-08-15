@@ -52,6 +52,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \ownerFragmentConflictTest());
         addTestCase("catalog search paths shadow repeated owner layers",
             \catalogSearchPathShadowingTest());
+        addTestCase("composable catalog files are parsed exactly once",
+            \catalogParseCountTest());
         addTestCase("source catalogs cover provider presentation metadata",
             \sourceCatalogTest());
         addTestCase("producer locale validation is metadata-only and comprehensive",
@@ -485,6 +487,91 @@ class DataProviderPresentationTest inherits QUnit::Test {
         assertEq("新しい直接翻訳",
             direct_catalog.projectAction(app(), action()).display_name,
             "flat and nested direct layouts share one precedence layer");
+    }
+
+    catalogParseCountTest() {
+        string root = make_tmp_dir("data-provider-presentation-parse-count-");
+        on_exit remove_tree(root);
+        mkdir(root + DirSep + Domain);
+        string ja_dir = root + DirSep + Domain + DirSep + "ja";
+        mkdir(ja_dir);
+        string app_id = DataProviderPresentation::appMessageId(App,
+            "display_name");
+        string action_id = DataProviderPresentation::actionMessageId(App,
+            Action, "display_name");
+        string option_id = DataProviderPresentation::optionMessageId(App,
+            Action, Option, "display_name");
+        writeJson(root + DirSep + Domain + DirSep + "root.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"root": {"messages": {
+                app_id: {"source": "Poštovní služba",
+                    "message": "Poštovní služba"},
+            }}},
+        });
+        # Distinct owners contribute disjoint ids for the same locale, so the
+        # catalog composes more than one file per locale layer.
+        writeJson(root + DirSep + Domain + DirSep + "ja.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": {
+                app_id: messages(){app_id},
+            }}},
+        });
+        writeJson(ja_dir + DirSep + "OwnerOne.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": {
+                action_id: messages(){action_id},
+            }}},
+        });
+        writeJson(ja_dir + DirSep + "OwnerTwo.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": {
+                option_id: messages(){option_id},
+            }}},
+        });
+
+        hash<auto> discovery_opts = {"search_path": (root,)};
+        list<string> files = I18n::discover_catalog_files(Domain, "ja",
+            discovery_opts);
+        assertEq(4, files.size(),
+            "the catalog under test composes four independent files");
+
+        int before = I18n::get_catalog_file_parse_count();
+        DataProviderPresentationCatalog catalog(Domain, "ja",
+            discovery_opts);
+        assertEq(files.size(),
+            I18n::get_catalog_file_parse_count() - before,
+            "collision validation and catalog construction share one parse "
+                "per discovered file");
+
+        # Without a per-file counter the assertion above could also be
+        # satisfied by a single increment per catalog, so prove the counter
+        # itself is per file.
+        before = I18n::get_catalog_file_parse_count();
+        foreach string path in (files) {
+            I18n::load_native_catalog(path);
+        }
+        assertEq(files.size(),
+            I18n::get_catalog_file_parse_count() - before,
+            "each native catalog file load is counted exactly once");
+
+        # Every parsed layer must still reach the composed catalog.
+        assertEq("メールサービス", catalog.projectApp(app()).display_name,
+            "the direct locale layer is composed");
+        assertEq("メッセージを送信",
+            catalog.projectAction(app(), action()).display_name,
+            "the first owner fragment is composed");
+        assertEq("受信者", catalog.projectOption(app(), action(), Option,
+                option()).display_name,
+            "the second owner fragment is composed");
+
+        before = I18n::get_catalog_file_parse_count();
+        DataProviderPresentationCatalog empty(Domain, "ja",
+            {"search_path": ()});
+        assertEq(0, I18n::get_catalog_file_parse_count() - before,
+            "a catalog with no discovered files parses nothing");
+        assertEq(Action,
+            empty.projectAction(app(), action()).display_name,
+            "an empty catalog falls back to the exact technical identity");
     }
 
     sourceCatalogTest() {

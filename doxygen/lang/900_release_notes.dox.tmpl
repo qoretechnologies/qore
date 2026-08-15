@@ -1410,6 +1410,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         identical shared-app contributions remain composable
       - provider presentation embedding exposes producer-first, per-locale documents in addition to the combined
         compatibility document, allowing vector indexes to avoid semantic dilution as translations are added
+      - provider presentation catalogs read and parse each discovered catalog file exactly once; owner-collision
+        validation and catalog construction previously parsed every file twice, which doubled the CPU and I/O cost
+        of building presentation catalogs for many application domains and locales
       - added 67 generic DPQL expressions (arithmetic, string, type/encoding/crypto, regex, date/time,
         collection, serialization) and streaming-style operators (\c select, \c first, \c take, etc.)
       - added HTTP/3 debug tracking, context-sensitive action filtering, and \c amqp factory registration
@@ -1690,6 +1693,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         installation manifest could have recorded
       - message catalogs can treat non-plural entries as literal text, allowing producer descriptions with JSON
         examples and path templates to be localized without interpreting braces as placeholders
+      - the new \c I18n::get_catalog_file_parse_count() function reports how many native catalog files the process
+        has parsed, so composition layers that validate catalogs before composing them can prove in tests that they
+        parse each file only once
       - locale-sensitive number/currency/date formatting, collation, and string-predicate APIs, plus a
         \c qore-i18n catalog extraction and management tool
 

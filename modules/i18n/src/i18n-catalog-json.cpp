@@ -29,6 +29,7 @@
 
 #include "qore/QoreFile.h"
 
+#include <atomic>
 #include <cerrno>
 #include <cmath>
 #include <cstdlib>
@@ -560,7 +561,16 @@ static int64 i18n_catalog_checked_max_file_len(int64 max_file_len, ExceptionSink
     return max_file_len;
 }
 
+// Counts native catalog files read and parsed in this process.  A composition layer that parses one file more than
+// once is not visible from any other API, so the count is exported for tests and diagnostics rather than inferred
+// from elapsed time.
+static std::atomic<int64> i18n_catalog_file_parse_count{0};
+
 } // namespace
+
+int64 i18n_get_catalog_file_parse_count() {
+    return i18n_catalog_file_parse_count.load(std::memory_order_relaxed);
+}
 
 QoreHashNode* i18n_parse_native_catalog_json(const QoreStringNode* json, ExceptionSink* xsink) {
     TempEncodingHelper tmp(json, QCS_UTF8, xsink);
@@ -614,5 +624,6 @@ QoreHashNode* i18n_load_native_catalog_json(const QoreStringNode* path, int64 ma
         return nullptr;
     }
 
+    i18n_catalog_file_parse_count.fetch_add(1, std::memory_order_relaxed);
     return i18n_parse_native_catalog_json(*data, xsink);
 }

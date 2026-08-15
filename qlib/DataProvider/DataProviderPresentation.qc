@@ -767,12 +767,18 @@ public class DataProviderPresentationCatalog {
 
         Malformed native catalogs are left to @ref I18n::MessageCatalog, which
         remains the schema and placeholder-validation authority.
+
+        @param files discovered catalog file paths in load order
+        @param native_catalogs the parsed catalog for each entry of \a files,
+            in the same order; validation and catalog construction share one
+            parse of every file
     */
-    private static validateComposableCatalogFiles(list<string> files) {
+    private static validateComposableCatalogFiles(list<string> files,
+            list<hash<auto>> native_catalogs) {
         hash<string, hash<auto>> messages_by_locale = {};
         hash<string, hash<string, string>> paths_by_locale = {};
         foreach string path in (files) {
-            hash<auto> native_catalog = I18n::load_native_catalog(path);
+            hash<auto> native_catalog = native_catalogs[$#];
             if (native_catalog.locales.typeCode() != NT_HASH) {
                 continue;
             }
@@ -832,8 +838,16 @@ public class DataProviderPresentationCatalog {
             discovery_opts);
         if (files) {
             files = selectEffectiveComposableCatalogFiles(domain, files);
-            validateComposableCatalogFiles(files);
-            catalog = new I18n::MessageCatalog(files,
+            # Parse each effective file exactly once. Collision validation and
+            # catalog composition consume the same parsed native catalogs;
+            # letting I18n::MessageCatalog re-read the files would double both
+            # the file I/O and the JSON parsing for every catalog built.
+            list<hash<auto>> native_catalogs = ();
+            foreach string path in (files) {
+                native_catalogs += I18n::load_native_catalog(path);
+            }
+            validateComposableCatalogFiles(files, native_catalogs);
+            catalog = new I18n::MessageCatalog(native_catalogs,
                 {"literal_messages": True});
         } else {
             catalog = new I18n::MessageCatalog({

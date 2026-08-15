@@ -2048,6 +2048,31 @@ int get_catalog_schema_version() [flags=CONSTANT] {
     return I18N_CATALOG_SCHEMA_VERSION;
 }
 
+//! Returns the number of native catalog files parsed from disk in this process.
+/** The count is process-global and monotonically increasing; it covers every catalog file read by
+    @ref I18n::load_native_catalog(), the file-loading @ref I18n::MessageCatalog constructors, and any other native
+    catalog file load, including loads that then fail to parse.  It does not count
+    @ref I18n::parse_native_catalog_json(), which parses data already in memory.
+
+    Composition layers that read one catalog file more than once cost CPU and memory that no other API makes
+    visible, so the count exists to let tests and diagnostics assert the exact number of parses performed by an
+    operation.
+
+    @return number of native catalog files parsed since the module was loaded
+
+    @par Example:
+    @code{.py}
+int before = I18n::get_catalog_file_parse_count();
+DataProviderPresentationCatalog catalog(domain, "ja");
+assertEq(files.size(), I18n::get_catalog_file_parse_count() - before);
+    @endcode
+
+    @note Concurrent catalog loads in other threads also increment the count.
+*/
+int get_catalog_file_parse_count() [flags=RET_VALUE_ONLY] {
+    return i18n_get_catalog_file_parse_count();
+}
+
 //! Returns the canonical BCP 47 form of a locale tag.
 /** @param locale locale tag such as \c "en_US" or \c "iw"
     @return canonical BCP 47 locale tag

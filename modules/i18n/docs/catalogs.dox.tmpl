@@ -55,6 +55,22 @@ I18n::MessageCatalog layered_catalog(("base.json", "override.json"));
     File-loading APIs and constructors are tagged with the \c FILESYSTEM functional domain and enforce a bounded file
     size. JSON parsing is strict, rejects duplicate object keys, and validates UTF-8 strings.
 
+    A caller that inspects catalog files before composing them - to enforce its own ownership or collision rules, for
+    example - should not let the file-loading constructors read those files a second time. Parse each file once with
+    \c I18n::load_native_catalog() and pass the parsed catalogs to the list-of-hashes \c I18n::MessageCatalog
+    constructor, which applies exactly the same schema, placeholder, state, and precedence rules as the file
+    constructors:
+
+    @code{.py}
+list<hash<auto>> native_catalogs = map I18n::load_native_catalog($1), files;
+inspect(native_catalogs);
+I18n::MessageCatalog catalog(native_catalogs);
+    @endcode
+
+    \c I18n::get_catalog_file_parse_count() returns the number of catalog files this process has parsed from disk, so
+    a test can assert that composing \c N files performs exactly \c N parses rather than inferring it from elapsed
+    time.
+
     @section i18ncatalogsdiscovery Discovery
 
     Discovery uses the configured system catalog directory by default.  \c QORE_CATALOG_DIR replaces that default,

@@ -33,6 +33,7 @@ class I18nTest inherits QUnit::Test {
         addTestCase("message catalog layer precedence", \messageCatalogLayerPrecedenceTest());
         addTestCase("message catalog JSON file loading", \messageCatalogJsonFileLoadingTest());
         addTestCase("message catalog JSON validation", \messageCatalogJsonValidationTest());
+        addTestCase("catalog file parse counter", \catalogFileParseCountTest());
         addTestCase("message catalog discovery", \messageCatalogDiscoveryTest());
         addTestCase("message catalog discovery sandbox", \messageCatalogDiscoverySandboxTest());
         addTestCase("message catalog literal text", \messageCatalogLiteralTextTest());
@@ -477,6 +478,37 @@ class I18nTest inherits QUnit::Test {
         assertThrows("I18N-CATALOG-JSON-ERROR", auto sub() {
             return new I18n::MessageCatalog(bad.path);
         });
+    }
+
+    catalogFileParseCountTest() {
+        TmpFile base("qore-i18n-count-", ".json");
+        base.file.write(createCatalogJson("Ahoj"));
+        base.file.close();
+        TmpFile other("qore-i18n-count-", ".json");
+        other.file.write(createCatalogJson("Cau"));
+        other.file.close();
+
+        int before = I18n::get_catalog_file_parse_count();
+        I18n::load_native_catalog(base.path);
+        assertEq(1, I18n::get_catalog_file_parse_count() - before,
+            "one file load is one parse");
+
+        before = I18n::get_catalog_file_parse_count();
+        I18n::MessageCatalog layered((base.path, other.path));
+        assertEq(2, I18n::get_catalog_file_parse_count() - before,
+            "a two-file catalog parses two files");
+        assertEq("Cau, Eva", layered.t("Hello, {name}", "cs", {"name": "Eva"}),
+            "counting does not disturb layer precedence");
+
+        # in-memory parsing does not read a file and is not counted
+        before = I18n::get_catalog_file_parse_count();
+        hash<auto> parsed = I18n::parse_native_catalog_json(
+            createCatalogJson("Zdar"));
+        I18n::MessageCatalog memory_catalog(parsed);
+        assertEq("Zdar, Eva", memory_catalog.t("Hello, {name}", "cs",
+            {"name": "Eva"}));
+        assertEq(0, I18n::get_catalog_file_parse_count() - before,
+            "catalogs built from parsed data perform no file parses");
     }
 
     messageCatalogDiscoveryTest() {
