@@ -54,6 +54,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \catalogSearchPathShadowingTest());
         addTestCase("composable catalog files are parsed exactly once",
             \catalogParseCountTest());
+        addTestCase("a discovery index is reused across catalogs",
+            \catalogDiscoveryIndexTest());
         addTestCase("source catalogs cover provider presentation metadata",
             \sourceCatalogTest());
         addTestCase("producer locale validation is metadata-only and comprehensive",
@@ -572,6 +574,56 @@ class DataProviderPresentationTest inherits QUnit::Test {
         assertEq(Action,
             empty.projectAction(app(), action()).display_name,
             "an empty catalog falls back to the exact technical identity");
+    }
+
+    catalogDiscoveryIndexTest() {
+        string root = make_tmp_dir("data-provider-presentation-index-");
+        on_exit remove_tree(root);
+        mkdir(root + DirSep + Domain);
+        writeJson(root + DirSep + Domain + DirSep + "ja.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": messages()}},
+        });
+        writeJson(root + DirSep + Domain + DirSep + "ar-EG.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ar-EG": {"messages": arabicMessages()}},
+        });
+
+        hash<auto> discovery_opts = {"search_path": (root,)};
+        list<string> locales = ("ja", "ar-EG", "sk");
+        I18n::CatalogDiscoveryIndex discovery_index();
+        foreach string locale in (locales) {
+            DataProviderPresentationCatalog direct(Domain, locale,
+                discovery_opts);
+            DataProviderPresentationCatalog indexed(Domain, locale,
+                discovery_opts, discovery_index);
+            assertEq(direct.projectAction(app(), action()),
+                indexed.projectAction(app(), action()),
+                sprintf("an indexed %y catalog projects identical "
+                    "presentation", locale));
+        }
+
+        int scans = discovery_index.getDirectoryScanCount();
+        assertGt(0, scans, "building the catalogs read catalog directories");
+        foreach string locale in (locales) {
+            DataProviderPresentationCatalog repeated(Domain, locale,
+                discovery_opts, discovery_index);
+            assertEq(locale == "ar-EG" ? "ar-EG" : locale,
+                repeated.getLocale(),
+                "a repeated catalog keeps its requested locale");
+        }
+        assertEq(scans, discovery_index.getDirectoryScanCount(),
+            "rebuilding the same catalogs reads no catalog directory again");
+
+        # embedding population builds one catalog per discovered locale and
+        # must reuse one index for the whole population
+        DataProviderPresentationEmbeddingCatalog embedding(app(),
+            discovery_opts);
+        hash<auto> document = embedding.projectAction(action());
+        assertEq("mul", document.embedding_language,
+            "the population still discovers every installed locale");
+        assertTrue(document.embedding_text.find("メッセージを送信") >= 0,
+            "the population still projects translated presentation");
     }
 
     sourceCatalogTest() {

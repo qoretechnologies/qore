@@ -1413,6 +1413,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - provider presentation catalogs read and parse each discovered catalog file exactly once; owner-collision
         validation and catalog construction previously parsed every file twice, which doubled the CPU and I/O cost
         of building presentation catalogs for many application domains and locales
+      - @ref DataProvider::DataProviderPresentationCatalog "DataProviderPresentationCatalog" accepts a catalog
+        discovery index so that an operation building catalogs for many domains and locales reads each catalog
+        directory once; multilingual embedding population uses one index per domain population
       - added 67 generic DPQL expressions (arithmetic, string, type/encoding/crypto, regex, date/time,
         collection, serialization) and streaming-style operators (\c select, \c first, \c take, etc.)
       - added HTTP/3 debug tracking, context-sensitive action filtering, and \c amqp factory registration
@@ -1696,6 +1699,10 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - the new \c I18n::get_catalog_file_parse_count() function reports how many native catalog files the process
         has parsed, so composition layers that validate catalogs before composing them can prove in tests that they
         parse each file only once
+      - the new \c I18n::CatalogDiscoveryIndex class lets one operation reuse catalog directory reads across many
+        domains and locales instead of re-probing the same directories for every catalog; the index is owned and
+        scoped by the caller, so it has no stale process-global state, and it never changes which catalog files a
+        program can discover
       - locale-sensitive number/currency/date formatting, collation, and string-predicate APIs, plus a
         \c qore-i18n catalog extraction and management tool
 

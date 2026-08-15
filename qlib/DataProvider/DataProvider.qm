@@ -1360,6 +1360,10 @@ fetch
     - provider presentation catalogs read and parse each discovered catalog file exactly once; collision validation
       and catalog construction previously parsed every file twice, which doubled the CPU and I/O cost of building
       presentation catalogs for many domains and locales
+    - @ref DataProvider::DataProviderPresentationCatalog "DataProviderPresentationCatalog" accepts an optional
+      \c I18n::CatalogDiscoveryIndex so that an operation building catalogs for many domains and locales reads
+      each catalog directory once instead of once per catalog; multilingual embedding population uses one index for
+      each domain population
     - fixed app and action module ownership when a deferred initialization closure loads another module; apps and
       actions registered by the loaded module while its own initializer runs were attributed to the module whose
       pending app was being initialized, so

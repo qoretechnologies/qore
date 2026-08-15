@@ -36,6 +36,8 @@ class I18nTest inherits QUnit::Test {
         addTestCase("catalog file parse counter", \catalogFileParseCountTest());
         addTestCase("message catalog discovery", \messageCatalogDiscoveryTest());
         addTestCase("message catalog discovery sandbox", \messageCatalogDiscoverySandboxTest());
+        addTestCase("catalog discovery index", \catalogDiscoveryIndexTest());
+        addTestCase("catalog discovery index sandbox", \catalogDiscoveryIndexSandboxTest());
         addTestCase("message catalog literal text", \messageCatalogLiteralTextTest());
         addTestCase("message catalog validation", \messageCatalogValidationTest());
 
@@ -588,6 +590,99 @@ list<string> sub discover_catalogs(string domain, string locale, string path) {
         assertThrows("FILESYSTEM-ACCESS-DENIED", auto sub() {
             return p.callFunction("discover_catalogs", "billing", "root", "/etc");
         });
+    }
+
+    catalogDiscoveryIndexTest() {
+        string base_dir = make_tmp_dir("qore-i18n-index-");
+        on_exit remove_tree(base_dir);
+
+        mkdir(base_dir + "/billing");
+        mkdir(base_dir + "/billing/cs");
+        string base_root = base_dir + "/billing/root.json";
+        string base_cs = base_dir + "/billing/cs.json";
+        string base_cs_fragment = base_dir + "/billing/cs/first.json";
+        string flat_de = base_dir + "/billing.de.json";
+        writeTextFile(base_root, createCatalogJson("Root"));
+        writeTextFile(base_cs, createCatalogJson("Ahoj"));
+        writeTextFile(base_cs_fragment, createCatalogJson("Nazdar"));
+        writeTextFile(flat_de, createCatalogJson("Hallo"));
+        # a non-catalog file in a fragment directory must stay invisible
+        writeTextFile(base_dir + "/billing/cs/notes.txt", "ignored");
+
+        hash<auto> opts = {"search_path": (base_dir,)};
+        list<string> locales = ("root", "cs-CZ", "de", "ja");
+        I18n::CatalogDiscoveryIndex index();
+        foreach string locale in (locales) {
+            assertEq(I18n::discover_catalog_files("billing", locale, opts),
+                index.discover("billing", locale, opts),
+                sprintf("indexed discovery matches direct discovery for %y",
+                    locale));
+        }
+        assertEq((base_root, base_cs, base_cs_fragment),
+            index.discover("billing", "cs-CZ", opts),
+            "fragment directories contribute only .json files");
+
+        int scans = index.getDirectoryScanCount();
+        assertGt(0, scans, "the first discovery reads catalog directories");
+        foreach string locale in (locales) {
+            index.discover("billing", locale, opts);
+        }
+        assertEq(scans, index.getDirectoryScanCount(),
+            "repeating the same discoveries reads no directory again");
+        assertEq(scans, index.getDirectoryCount(),
+            "every directory read is retained in the snapshot");
+
+        # the snapshot is bounded by the lifetime of the index, not refreshed
+        string late = base_dir + "/billing/ja.json";
+        writeTextFile(late, createCatalogJson("Konnichiwa"));
+        assertEq((base_root,), index.discover("billing", "ja", opts),
+            "an index reports the catalog tree it snapshotted");
+        assertEq((base_root, late),
+            I18n::discover_catalog_files("billing", "ja", opts),
+            "direct discovery always sees the current catalog tree");
+        index.clear();
+        assertEq(0, index.getDirectoryScanCount(),
+            "clearing the index resets the scan count");
+        assertEq((base_root, late), index.discover("billing", "ja", opts),
+            "a cleared index takes a new snapshot");
+
+        assertThrows("I18N-CATALOG-ERROR", auto sub() {
+            return index.discover("../billing", "cs", opts);
+        }, NOTHING, "an index validates the domain like direct discovery");
+        assertThrows("COPY-ERROR", auto sub() {
+            return index.copy();
+        });
+    }
+
+    catalogDiscoveryIndexSandboxTest() {
+        string base_dir = make_tmp_dir("qore-i18n-index-sandbox-");
+        on_exit remove_tree(base_dir);
+
+        mkdir(base_dir + "/billing");
+        string base_root = base_dir + "/billing/root.json";
+        writeTextFile(base_root, createCatalogJson("Root"));
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("
+%modern
+%requires i18n
+
+list<string> sub discover_catalogs(string domain, string locale, string path) {
+    I18n::CatalogDiscoveryIndex index();
+    return index.discover(domain, locale, {\"search_path\": (path,)});
+}
+        ", "i18n_sandbox_index_discovery");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(base_dir);
+        p.setSandboxManager(sm);
+
+        assertEq((base_root,), p.callFunction("discover_catalogs", "billing",
+            "root", base_dir), "an index respects an allowed sandbox root");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", auto sub() {
+            return p.callFunction("discover_catalogs", "billing", "root",
+                "/etc");
+        }, NOTHING, "an index cannot discover catalogs outside the sandbox");
     }
 
     messageCatalogLiteralTextTest() {

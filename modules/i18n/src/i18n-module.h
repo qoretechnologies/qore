@@ -38,4 +38,8 @@ DLLLOCAL QoreHashNode* i18n_load_native_catalog_json(const QoreStringNode* path,
     ExceptionSink* xsink);
 DLLLOCAL int64 i18n_get_catalog_file_parse_count();
 
+class I18nCatalogDirIndex;
+DLLLOCAL QoreListNode* i18n_discover_catalog_files_api(const QoreStringNode* domain, const QoreStringNode* locale,
+    const QoreHashNode* opts, I18nCatalogDirIndex* index, ExceptionSink* xsink);
+
 #endif

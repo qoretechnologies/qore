@@ -53,11 +53,13 @@ include_directories(${CMAKE_BINARY_DIR}/include)
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
 set(I18N_QPP_SRC
+    src/QC_CatalogDiscoveryIndex.qpp
     src/QC_MessageCatalog.qpp
     src/ql_i18n.qpp
 )
 
 set(I18N_CPP_SRC
+    src/i18n-catalog-dir-index.cpp
     src/i18n-catalog-json.cpp
     src/i18n-module.cpp
 )

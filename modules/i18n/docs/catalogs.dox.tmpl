@@ -98,6 +98,29 @@ list<string> files = I18n::discover_catalog_files("billing", "cs-CZ", {
 I18n::MessageCatalog billing_catalog(files);
     @endcode
 
+    Every \c I18n::discover_catalog_files() call reads the filesystem: it probes the candidate paths and scans the
+    fragment directory for each search root and locale-fallback entry. An operation that discovers many domains or
+    locales at once therefore reads the same directories repeatedly. \c I18n::CatalogDiscoveryIndex answers those
+    reads from a snapshot instead, reading each directory at most once and returning exactly what
+    \c I18n::discover_catalog_files() returns for the same arguments:
+
+    @code{.py}
+I18n::CatalogDiscoveryIndex index();
+foreach string domain in (domains) {
+    foreach string locale in (locales) {
+        I18n::MessageCatalog catalog(index.discover(domain, locale, opts));
+    }
+}
+    @endcode
+
+    An index is never refreshed and has no invalidation: how stale its view of the catalog tree can become is
+    bounded by the lifetime of the object, so it belongs to one operation and must not be kept as a process-global
+    cache, where catalogs installed or removed after it was created would stay invisible or keep being reported.
+    \c CatalogDiscoveryIndex::clear() takes a new snapshot with the same object, and
+    \c CatalogDiscoveryIndex::getDirectoryScanCount() reports how many directories were actually read. Access
+    control is unchanged: a directory a sandbox manager does not allow the program to read as a whole is probed path
+    by path exactly as it is without an index, so an index never changes which catalog files a program can discover.
+
     Runtime state policy follows gettext's conservative behavior by default: \c fuzzy, \c needs-review, and
     \c stale entries are stored but not used at runtime. Pass \c {"use_unreviewed": True} to the constructor to preview
     those entries in development.

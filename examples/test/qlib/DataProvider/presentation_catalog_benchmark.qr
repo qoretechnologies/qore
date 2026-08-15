@@ -1,0 +1,264 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+# SPDX-License-Identifier: MIT
+
+#! Cold-population benchmark for provider presentation catalogs
+/** Builds one DataProviderPresentationCatalog for every (domain, locale) pair of a generated catalog tree, which is
+    the shape of a design-capability request that expands every installed provider action in every translated
+    locale.
+
+    Reported per run: elapsed time, native catalog files parsed, catalogs constructed, catalog directories read, and
+    resident memory.  The parse and directory-read counts are what the timings are explained by, so they are
+    reported rather than inferred.
+
+    Usage:
+        qore examples/test/qlib/DataProvider/presentation_catalog_benchmark.qr
+
+    Environment variables:
+        BENCH_DOMAINS   number of catalog domains to generate (default: 250)
+        BENCH_LOCALES   comma-separated locale tags (default: the standard provider translation locales)
+        BENCH_OWNERS    owner fragments per translated locale (default: 2)
+        BENCH_KEEP      set to 1 to keep the generated catalog tree
+*/
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+
+%requires DataProvider
+%requires FsUtil
+%requires Util
+%requires i18n
+
+%exec-class PresentationCatalogBenchmark
+
+class PresentationCatalogBenchmark {
+    private {
+        int domain_count;
+        list<string> locales;
+        int owners_per_locale;
+        bool keep_tree;
+        string root;
+        list<string> domains = ();
+        hash<auto> app;
+        hash<auto> action;
+    }
+
+    constructor() {
+        domain_count = (ENV.BENCH_DOMAINS ?? "250").toInt();
+        owners_per_locale = (ENV.BENCH_OWNERS ?? "2").toInt();
+        keep_tree = ENV.BENCH_KEEP == "1";
+        locales = ENV.BENCH_LOCALES.val()
+            ? ENV.BENCH_LOCALES.split(",")
+            : DataProviderPresentation::StandardTranslationLocales;
+        if (domain_count < 1 || owners_per_locale < 1) {
+            throw "BENCHMARK-ERROR", "BENCH_DOMAINS and BENCH_OWNERS must be positive";
+        }
+
+        app = {
+            "name": "BenchmarkProvider",
+            "display_name": "Benchmark Provider",
+            "short_desc": "Provides benchmark operations",
+            "desc": "Provides benchmark operations for catalog population.",
+            "presentation_source_locale": "en",
+        };
+        action = {
+            "app": "BenchmarkProvider",
+            "action": "benchmark",
+            "display_name": "Run benchmark",
+            "short_desc": "Runs one benchmark action",
+            "desc": "Runs one benchmark action against the generated catalog tree.",
+        };
+
+        root = make_tmp_dir("data-provider-presentation-benchmark-");
+        on_exit {
+            if (keep_tree) {
+                printf("catalog tree kept: %s\n", root);
+            } else {
+                remove_tree(root);
+            }
+        }
+
+        generateCatalogTree();
+        printf("catalog tree: %d domain(s) x %d locale(s), %d file(s) below %s\n\n",
+            domain_count, locales.size(), countInstalledFiles(), root);
+
+        # the first population reads every catalog file from a cold page cache, which is what a first
+        # design-capability request after a restart pays; the later runs compare the composition paths against each
+        # other without that one-time cost
+        hash<auto> cold = run("catalogs, no index (cold)", False);
+        report(cold, (
+            run("catalogs, no index", False),
+            run("catalogs, shared discovery index", True),
+            compose("composition only, one parse", False),
+            compose("composition only, two parses", True),
+        ));
+    }
+
+    #! Writes one root catalog plus per-locale owner fragments for every domain
+    private generateCatalogTree() {
+        foreach int i in (xrange(domain_count)) {
+            string domain = sprintf("data-provider.benchmark-%03d", i);
+            domains += domain;
+            string domain_dir = root + DirSep + domain;
+            mkdir(domain_dir);
+            writeJson(domain_dir + DirSep + "root.json", catalog("root", "en"));
+            foreach string locale in (locales) {
+                string locale_dir = domain_dir + DirSep + locale;
+                mkdir(locale_dir);
+                foreach int owner in (xrange(owners_per_locale)) {
+                    writeJson(locale_dir + DirSep + sprintf("Owner%02d.json", owner),
+                        catalog(locale, locale, owner));
+                }
+            }
+        }
+    }
+
+    #! Returns a native catalog for one locale; distinct owners contribute disjoint message ids
+    private hash<auto> catalog(string catalog_locale, string text_locale, int owner = 0) {
+        hash<auto> messages = {};
+        if (!owner) {
+            messages{DataProviderPresentation::appMessageId(app.name, "display_name")} = {
+                "source": app.display_name,
+                "message": sprintf("%s [%s]", app.display_name, text_locale),
+            };
+            messages{DataProviderPresentation::actionMessageId(app.name, action.action, "display_name")} = {
+                "source": action.display_name,
+                "message": sprintf("%s [%s]", action.display_name, text_locale),
+            };
+        }
+        # every owner contributes its own option presentation so composition has real work to do
+        messages{DataProviderPresentation::optionMessageId(app.name, action.action,
+            sprintf("option%02d", owner), "display_name")} = {
+            "source": "Option",
+            "message": sprintf("Option %d [%s]", owner, text_locale),
+        };
+        messages{DataProviderPresentation::optionMessageId(app.name, action.action,
+            sprintf("option%02d", owner), "desc")} = {
+            "source": "Long option description used to give the catalog realistic size.",
+            "message": sprintf("Long option description used to give the catalog realistic size. [%s/%d]",
+                text_locale, owner),
+        };
+        return {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {catalog_locale: {"messages": messages}},
+        };
+    }
+
+    private writeJson(string path, hash<auto> value) {
+        File f();
+        f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(make_json(value));
+        f.close();
+    }
+
+    #! Returns the number of catalog files written to the tree
+    private int countInstalledFiles() {
+        return domain_count * (1 + locales.size() * owners_per_locale);
+    }
+
+    #! Returns the number of catalog files one run composes, counting each layer of each catalog
+    private int countComposedFiles() {
+        return domain_count * locales.size() * (1 + owners_per_locale);
+    }
+
+    #! Builds every (domain, locale) catalog once and returns the cost of doing so
+    private hash<auto> run(string label, bool use_index) {
+        hash<auto> discovery_opts = {"search_path": (root,)};
+        *I18n::CatalogDiscoveryIndex discovery_index = use_index ? new I18n::CatalogDiscoveryIndex() : NOTHING;
+        int parses_before = I18n::get_catalog_file_parse_count();
+        int start = clock_get_monotonic_us();
+        int catalogs = 0;
+        int projections = 0;
+        foreach string domain in (domains) {
+            foreach string locale in (locales) {
+                DataProviderPresentationCatalog catalog(domain, locale, discovery_opts, discovery_index);
+                ++catalogs;
+                if (catalog.projectAction(app, action).display_name.val()) {
+                    ++projections;
+                }
+            }
+        }
+        int elapsed_us = clock_get_monotonic_us() - start;
+        return {
+            "label": label,
+            "elapsed_ms": elapsed_us / 1000.0,
+            "parses": I18n::get_catalog_file_parse_count() - parses_before,
+            "catalogs": catalogs,
+            "projections": projections,
+            "directory_scans": discovery_index ? discovery_index.getDirectoryScanCount() : NOTHING,
+            "rss_kb": residentMemoryKb(),
+        };
+    }
+
+    #! Composes every (domain, locale) catalog without projecting, isolating the cost of the parse pass
+    /** @param twice reproduces composition before the parse-once fix: the collision-validation pass parsed every
+        discovered file and the file-loading catalog constructor then read and parsed all of them again
+    */
+    private hash<auto> compose(string label, bool twice) {
+        hash<auto> discovery_opts = {"search_path": (root,)};
+        int parses_before = I18n::get_catalog_file_parse_count();
+        int start = clock_get_monotonic_us();
+        int catalogs = 0;
+        foreach string domain in (domains) {
+            foreach string locale in (locales) {
+                list<string> files = I18n::discover_catalog_files(domain, locale, discovery_opts);
+                list<hash<auto>> native_catalogs = ();
+                foreach string path in (files) {
+                    native_catalogs += I18n::load_native_catalog(path);
+                }
+                if (twice) {
+                    I18n::MessageCatalog reparsed(files, {"literal_messages": True});
+                } else {
+                    I18n::MessageCatalog composed(native_catalogs, {"literal_messages": True});
+                }
+                ++catalogs;
+            }
+        }
+        int elapsed_us = clock_get_monotonic_us() - start;
+        return {
+            "label": label,
+            "elapsed_ms": elapsed_us / 1000.0,
+            "parses": I18n::get_catalog_file_parse_count() - parses_before,
+            "catalogs": catalogs,
+            "rss_kb": residentMemoryKb(),
+        };
+    }
+
+    private report(hash<auto> cold, list<hash<auto>> results) {
+        printf("%-34s %12s %10s %10s %10s %10s\n", "run", "elapsed (ms)", "parses", "catalogs", "dir reads",
+            "RSS (KB)");
+        foreach hash<auto> result in ((cold,) + results) {
+            printf("%-34s %12.1f %10d %10d %10s %10s\n", result.label, result.elapsed_ms, result.parses,
+                result.catalogs, result.directory_scans ?? "-", result.rss_kb ?? "-");
+        }
+        printf("\ncatalog layers composed per run: %d; file parses per composed layer: %.2f\n",
+            countComposedFiles(), results[0].parses.toFloat() / countComposedFiles());
+        if (results[0].elapsed_ms > 0) {
+            printf("shared discovery index: %.1f%% of the elapsed time without an index, %d directory read(s) for "
+                "%d catalogs\n", results[1].elapsed_ms * 100.0 / results[0].elapsed_ms,
+                results[1].directory_scans, results[1].catalogs);
+            printf("  (without an index every catalog probes its own candidate paths and fragment directories "
+                "again; the elapsed saving is small on a warm local page cache and larger on cold, container, or "
+                "network storage)\n");
+        }
+        if (results[3].elapsed_ms > 0) {
+            printf("parsing each file once: %.1f%% of the elapsed time of the previous double-parse composition\n",
+                results[2].elapsed_ms * 100.0 / results[3].elapsed_ms);
+        }
+    }
+
+    #! Returns the resident set size of this process in KB, or NOTHING where it cannot be read
+    private *int residentMemoryKb() {
+        if (is_readable("/proc/self/status")) {
+            # VmHWM is the peak; it is only available on Linux
+            *list<string> hwm = regex_extract(ReadOnlyFile::readTextFile("/proc/self/status"),
+                "VmHWM:\\s+([0-9]+) kB");
+            if (hwm) {
+                return hwm[0].toInt();
+            }
+        }
+        string rss = trim(backquote(sprintf("ps -o rss= -p %d", getpid())));
+        return rss.val() ? rss.toInt() : NOTHING;
+    }
+}

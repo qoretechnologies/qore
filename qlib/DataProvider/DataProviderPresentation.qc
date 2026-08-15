@@ -817,6 +817,10 @@ public class DataProviderPresentationCatalog {
     /** @param domain native i18n catalog domain
         @param requested_locale requested BCP 47 locale or \c root for producer-source presentation
         @param discovery_opts options passed to @ref I18n::discover_catalog_files()
+        @param discovery_index optional discovery index reused by every catalog
+            built for one operation; catalog discovery for many domains and
+            locales otherwise re-reads the same catalog directories for each
+            catalog
 
         @throw I18N-CATALOG-ERROR if catalog discovery or parsing fails
         @throw I18N-LOCALE-ERROR if \a requested_locale is invalid
@@ -829,13 +833,20 @@ public class DataProviderPresentationCatalog {
         DataProviderPresentationCatalog catalog("data-provider.UW9yZQ", "pt-BR");
         hash<auto> localized = catalog.projectAction(app, action);
         @endcode
+
+        @note A discovery index reports the catalog tree as it was when the
+            index first read each directory, so it must be created for one
+            operation and discarded with it; see
+            \c I18n::CatalogDiscoveryIndex.
     */
     constructor(string domain, string requested_locale,
-            *hash<auto> discovery_opts = NOTHING) {
+            *hash<auto> discovery_opts = NOTHING,
+            *I18n::CatalogDiscoveryIndex discovery_index = NOTHING) {
         locale = requested_locale == DataProviderPresentation::RootLocale
             ? requested_locale : I18n::canonicalize_locale(requested_locale);
-        list<string> files = I18n::discover_catalog_files(domain, locale,
-            discovery_opts);
+        list<string> files = discovery_index
+            ? discovery_index.discover(domain, locale, discovery_opts)
+            : I18n::discover_catalog_files(domain, locale, discovery_opts);
         if (files) {
             files = selectEffectiveComposableCatalogFiles(domain, files);
             # Parse each effective file exactly once. Collision validation and
@@ -1222,11 +1233,16 @@ public class DataProviderPresentationEmbeddingCatalog {
             return catalog_cache{domain};
         }
         list<DataProviderPresentationCatalog> catalogs = ();
+        # Every locale of one domain resolves against the same catalog
+        # directories; an index scoped to this population reads each of them
+        # once instead of once per locale. It is discarded on return, so a
+        # later population sees catalogs installed in the meantime.
+        I18n::CatalogDiscoveryIndex discovery_index();
         foreach string locale in (
                 DataProviderPresentation::discoverCatalogLocales(domain,
                     discovery_opts)) {
             DataProviderPresentationCatalog catalog(domain, locale,
-                discovery_opts);
+                discovery_opts, discovery_index);
             # Root source text is already present in the canonical provider
             # metadata and must not be duplicated in the embedding document.
             # Construct its catalog anyway so owner-fragment conflicts fail

@@ -27,6 +27,8 @@
 
 #include "i18n-module.h"
 
+#include "i18n-catalog-dir-index.h"
+
 #include "qore/QoreSandboxManager.h"
 #include "qore/QoreBufferNode.h"
 #include "qore/SystemEnvironment.h"
@@ -853,10 +855,39 @@ static std::string i18n_join_catalog_path(const std::string& dir, const std::str
     return dir + "/" + rel;
 }
 
-static bool i18n_regular_file_exists(const std::string& path, ExceptionSink* xsink) {
+// Returns true if the whole directory may be read on behalf of the current program.
+//
+// A discovery index reads a directory in one pass instead of probing individual paths, so it can only be used where
+// a sandbox manager permits reading the directory itself.  A denial is deliberately not reported: discovery falls
+// back to the per-path checks it performs without an index, so an index never changes which catalog files a program
+// can see.
+static bool i18n_catalog_dir_readable(const std::string& dir) {
+    QoreSandboxManagerHelper smh;
+    if (!smh) {
+        return true;
+    }
+
+    ExceptionSink discard;
+    bool rv = smh->checkFilesystemAccess(dir.c_str(), QSEC_READ, &discard);
+    discard.clear();
+    return rv;
+}
+
+static bool i18n_regular_file_exists(const std::string& dir, const std::string& name, const std::string& path,
+        I18nCatalogDirIndex* index, ExceptionSink* xsink) {
     QoreSandboxManagerHelper smh;
     if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink)) {
         return false;
+    }
+
+    if (index && i18n_catalog_dir_readable(dir)) {
+        I18nCatalogDirIndex::EntryQuery query = index->checkRegularFile(dir, name, xsink);
+        if (*xsink) {
+            return false;
+        }
+        if (query != I18nCatalogDirIndex::EQ_UNAVAILABLE) {
+            return query == I18nCatalogDirIndex::EQ_REGULAR;
+        }
     }
 
     struct stat sbuf;
@@ -869,11 +900,49 @@ struct I18nCatalogDirCloser {
     }
 };
 
+static bool i18n_append_indexed_fragment_files(std::vector<std::string>& files, const std::string& path,
+        I18nCatalogDirIndex* index, ExceptionSink* xsink) {
+    std::vector<std::string> names;
+    bool listed = index->listJsonFiles(path, names, xsink);
+    if (*xsink) {
+        return false;
+    }
+    if (!listed) {
+        int err = index->getScanError(path, xsink);
+        if (*xsink) {
+            return false;
+        }
+        xsink->raiseErrnoException("I18N-CATALOG-ERROR", err,
+            "cannot open catalog fragment directory '%s'", path.c_str());
+        return false;
+    }
+
+    // the snapshot returns names in filename order, which defines fragment precedence within one search root
+    QoreSandboxManagerHelper smh;
+    for (size_t i = 0; i < names.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(xsink, "discovering i18n catalog fragments")) {
+            return false;
+        }
+
+        std::string file = i18n_join_catalog_path(path, names[i]);
+        if (smh && !smh->checkFilesystemAccess(file.c_str(), QSEC_READ, xsink)) {
+            return false;
+        }
+        files.push_back(std::move(file));
+    }
+    return true;
+}
+
 static bool i18n_append_catalog_fragment_files(std::vector<std::string>& files, const std::string& path,
-        ExceptionSink* xsink) {
+        I18nCatalogDirIndex* index, ExceptionSink* xsink) {
     QoreSandboxManagerHelper smh;
     if (smh && !smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink)) {
         return false;
+    }
+
+    // the access check above covers the directory itself, so an index can always be used here
+    if (index) {
+        return i18n_append_indexed_fragment_files(files, path, index, xsink);
     }
 
     DIR* raw_dir = nullptr;
@@ -924,7 +993,7 @@ static bool i18n_append_catalog_fragment_files(std::vector<std::string>& files, 
             continue;
         }
         std::string file = i18n_join_catalog_path(path, name);
-        if (i18n_regular_file_exists(file, xsink)) {
+        if (i18n_regular_file_exists(path, name, file, nullptr, xsink)) {
             fragments.push_back(std::move(file));
         }
         if (*xsink) {
@@ -938,7 +1007,7 @@ static bool i18n_append_catalog_fragment_files(std::vector<std::string>& files, 
 }
 
 static std::vector<std::string> i18n_discover_catalog_files(const std::string& domain, const std::string& locale,
-        const QoreHashNode* opts, ExceptionSink* xsink) {
+        const QoreHashNode* opts, I18nCatalogDirIndex* index, ExceptionSink* xsink) {
     std::vector<std::string> files;
     if (!i18n_validate_catalog_domain(domain, xsink)) {
         return files;
@@ -966,18 +1035,19 @@ static std::vector<std::string> i18n_discover_catalog_files(const std::string& d
                 return files;
             }
 
-            const std::string rels[] = {
-                domain + "/" + locales[l] + ".json",
-                domain + "." + locales[l] + ".json",
+            const std::string domain_dir = i18n_join_catalog_path(paths[p], domain);
+            const std::pair<std::string, std::string> candidates[] = {
+                std::make_pair(domain_dir, locales[l] + ".json"),
+                std::make_pair(paths[p], domain + "." + locales[l] + ".json"),
             };
 
-            for (const std::string& rel : rels) {
-                std::string path = i18n_join_catalog_path(paths[p], rel);
+            for (const std::pair<std::string, std::string>& candidate : candidates) {
+                std::string path = i18n_join_catalog_path(candidate.first, candidate.second);
                 if (seen.find(path) != seen.end()) {
                     continue;
                 }
                 seen.insert(path);
-                if (i18n_regular_file_exists(path, xsink)) {
+                if (i18n_regular_file_exists(candidate.first, candidate.second, path, index, xsink)) {
                     if (*xsink) {
                         return files;
                     }
@@ -988,8 +1058,8 @@ static std::vector<std::string> i18n_discover_catalog_files(const std::string& d
             // Source-owned catalogs are installed as independently composable fragments so two modules can
             // contribute disjoint messages to the same domain without overwriting each other.  A fragment lives at
             // domain/locale/owner.json; deterministic filename order defines precedence within one search root.
-            std::string fragment_dir = i18n_join_catalog_path(paths[p], domain + "/" + locales[l]);
-            if (!i18n_append_catalog_fragment_files(files, fragment_dir, xsink)) {
+            std::string fragment_dir = i18n_join_catalog_path(domain_dir, locales[l]);
+            if (!i18n_append_catalog_fragment_files(files, fragment_dir, index, xsink)) {
                 return files;
             }
         }
@@ -1029,6 +1099,26 @@ static std::string i18n_string_arg_to_utf8(const QoreStringNode* str, ExceptionS
         return std::string();
     }
     return tmp->c_str();
+}
+
+// Native catalog discovery entry point shared by I18n::discover_catalog_files() and
+// I18n::CatalogDiscoveryIndex::discover(); \a index is optional and only reuses directory reads.
+QoreListNode* i18n_discover_catalog_files_api(const QoreStringNode* domain, const QoreStringNode* locale,
+        const QoreHashNode* opts, I18nCatalogDirIndex* index, ExceptionSink* xsink) {
+    std::string domain_str = i18n_string_arg_to_utf8(domain, xsink, "domain", 128);
+    if (*xsink) {
+        return nullptr;
+    }
+    std::string locale_str = i18n_qore_string_to_utf8(locale, xsink, "locale");
+    if (*xsink) {
+        return nullptr;
+    }
+
+    std::vector<std::string> files = i18n_discover_catalog_files(domain_str, locale_str, opts, index, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return i18n_string_vector_to_list(files, xsink, "returning discovered i18n catalog files");
 }
 
 static icu::Locale i18n_make_locale(const QoreStringNode* locale_arg, ExceptionSink* xsink) {
@@ -2342,22 +2432,12 @@ list<string> get_catalog_search_path(*hash<auto> opts) [flags=RET_VALUE_ONLY;dom
     });
     I18n::MessageCatalog catalog(files);
     @endcode
+
+    @note Every call reads the filesystem.  An operation discovering many domains or locales at once can reuse
+    directory reads with @ref Qore::I18n::CatalogDiscoveryIndex "CatalogDiscoveryIndex" instead.
 */
 list<string> discover_catalog_files(string domain, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY;dom=FILESYSTEM,EXTERNAL_INFO] {
-    std::string domain_str = i18n_string_arg_to_utf8(domain, xsink, "domain", 128);
-    if (*xsink) {
-        return QoreValue();
-    }
-    std::string locale_str = i18n_qore_string_to_utf8(locale, xsink, "locale");
-    if (*xsink) {
-        return QoreValue();
-    }
-
-    std::vector<std::string> files = i18n_discover_catalog_files(domain_str, locale_str, opts, xsink);
-    if (*xsink) {
-        return QoreValue();
-    }
-    return i18n_string_vector_to_list(files, xsink, "returning discovered i18n catalog files");
+    return i18n_discover_catalog_files_api(domain, locale, opts, nullptr, xsink);
 }
 
 //! Formats a decimal number with explicit locale data.
