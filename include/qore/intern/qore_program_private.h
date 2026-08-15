@@ -1231,38 +1231,36 @@ public:
         return thread_count;
     }
 
+    //! Claims parse ownership, which serializes namespace writers for this Program
+    /** Parse ownership excludes other writers but not runtime readers in other threads.  Readers
+        are fenced separately, by RuntimeNamespaceMergeLocker around each committed-namespace merge,
+        rather than for this whole window: arbitrary module initialization code runs under parse
+        ownership, and holding the namespace write lock across it deadlocks against any thread that
+        must resolve a name here while this thread waits for it.
+    */
     DLLLOCAL int lockParsing(ExceptionSink* xsink) {
         int tid = q_gettid();
-        bool lock_runtime_namespace = false;
-        {
-            // Grab the program-level lock only while claiming parse ownership. Do not hold it while waiting for the
-            // namespace write lock: a running reader can need plock while completing its Program thread context.
-            AutoLocker al(plock);
+        // grab program-level lock
+        AutoLocker al(plock);
 
-            while (parse_tid != -1 && parse_tid != tid && !ptid) {
-                ++thread_waiting;
-                pcond.wait(plock);
-                --thread_waiting;
-            }
-
-            if (ptid && ptid != q_gettid()) {
-                if (xsink) {
-                    xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and "
-                        "therefore cannot be accessed");
-                }
-                return -1;
-            }
-
-            //printd(5, "qore_program_private::lockParsing() this: %p ptid: %d thread_count: %d parse_count: %d -> %d\n",
-            //  this, ptid, thread_count, parse_count, parse_count + 1);
-            lock_runtime_namespace = !parse_count && RootNS;
-            ++parse_count;
-            parse_tid = tid;
+        while (parse_tid != -1 && parse_tid != tid && !ptid) {
+            ++thread_waiting;
+            pcond.wait(plock);
+            --thread_waiting;
         }
 
-        if (lock_runtime_namespace) {
-            qore_root_ns_private::runtimeNamespaceWriteLock(*RootNS);
+        if (ptid && ptid != q_gettid()) {
+            if (xsink) {
+                xsink->raiseException("PROGRAM-ERROR", "the Program accessed has already been deleted and "
+                    "therefore cannot be accessed");
+            }
+            return -1;
         }
+
+        //printd(5, "qore_program_private::lockParsing() this: %p ptid: %d thread_count: %d parse_count: %d -> %d\n",
+        //  this, ptid, thread_count, parse_count, parse_count + 1);
+        ++parse_count;
+        parse_tid = tid;
         return 0;
     }
 
@@ -1272,9 +1270,6 @@ public:
         assert(parse_tid == q_gettid());
         assert(parse_count > 0);
         if (!(--parse_count)) {
-            if (RootNS) {
-                qore_root_ns_private::runtimeNamespaceWriteUnlock(*RootNS);
-            }
             parse_tid = -1;
             if (thread_waiting) {
                 pcond.broadcast();

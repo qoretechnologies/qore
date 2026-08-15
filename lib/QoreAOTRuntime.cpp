@@ -13195,25 +13195,34 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
     printd(5, "AOT module ns_init '%s': starting merge\n", mod_name);
 
     QoreModuleContext qmc(mod_name, qore_root_ns_private::get(*target_root), xsink);
-    printd(5, "AOT module ns_init '%s': calling scanMergeCommittedNamespace\n", mod_name);
-    qore_root_ns_private::scanMergeCommittedNamespace(*target_root, *mod_root, qmc);
-    printd(5, "AOT module ns_init '%s': scanMergeCommittedNamespace done\n", mod_name);
+    {
+        // Fence runtime readers of the target namespace for the merge transaction only: until the
+        // indexes are rebuilt below, another thread resolving a name here can see merged items that
+        // are not yet indexed.  The deferred initialization further down must run outside this
+        // scope, because it waits for the per-module shadow builder whose owner needs to read this
+        // same namespace.
+        RuntimeNamespaceMergeLocker rnml(*target_root);
 
-    if (qmc.hasError()) {
-        printd(5, "AOT module ns_init '%s': error during namespace scan/merge\n", mod_name);
-        qmc.rollback();
-        return;
+        printd(5, "AOT module ns_init '%s': calling scanMergeCommittedNamespace\n", mod_name);
+        qore_root_ns_private::scanMergeCommittedNamespace(*target_root, *mod_root, qmc);
+        printd(5, "AOT module ns_init '%s': scanMergeCommittedNamespace done\n", mod_name);
+
+        if (qmc.hasError()) {
+            printd(5, "AOT module ns_init '%s': error during namespace scan/merge\n", mod_name);
+            qmc.rollback();
+            return;
+        }
+
+        printd(5, "AOT module ns_init '%s': calling copyMergeCommittedNamespace\n", mod_name);
+        qore_root_ns_private::copyMergeCommittedNamespace(*target_root, *mod_root);
+        printd(5, "AOT module ns_init '%s': copyMergeCommittedNamespace done\n", mod_name);
+
+        // Rebuild indexes so the merged items can be found during name resolution
+        // This is needed because copyMergeCommittedNamespace adds items directly without
+        // going through the module commit mechanism that normally rebuilds indexes
+        printd(5, "AOT module ns_init '%s': calling rebuildAllIndexes\n", mod_name);
+        qore_root_ns_private::get(*target_root)->rebuildAllIndexes();
     }
-
-    printd(5, "AOT module ns_init '%s': calling copyMergeCommittedNamespace\n", mod_name);
-    qore_root_ns_private::copyMergeCommittedNamespace(*target_root, *mod_root);
-    printd(5, "AOT module ns_init '%s': copyMergeCommittedNamespace done\n", mod_name);
-
-    // Rebuild indexes so the merged items can be found during name resolution
-    // This is needed because copyMergeCommittedNamespace adds items directly without
-    // going through the module commit mechanism that normally rebuilds indexes
-    printd(5, "AOT module ns_init '%s': calling rebuildAllIndexes\n", mod_name);
-    qore_root_ns_private::get(*target_root)->rebuildAllIndexes();
 
     // Check for exceptions during merge operations
     if (xsink) {

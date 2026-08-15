@@ -3304,4 +3304,34 @@ public:
     }
 };
 
+//! Excludes runtime namespace readers for the duration of a committed-namespace merge
+/** Concurrent \a writers are already excluded by the target Program's parse lock, which every
+    merge below runs under; this locker adds the only thing the parse lock does not provide, which
+    is exclusion against runtime readers in other threads, so that no thread can resolve a name
+    against a half-merged namespace.
+
+    Scope it to the merge transaction alone - scan, copy and index rebuild - and never hold it
+    across the deferred AOT initialization that follows.  That initialization waits for the
+    per-module shadow builder, whose owner resolves class references against this same namespace
+    and would therefore need a read lock: holding the write lock while waiting for the shadow
+    builder deadlocks the two threads against each other.  Reader preference does not help there,
+    because the writer is active rather than merely queued.
+*/
+class RuntimeNamespaceMergeLocker {
+public:
+    DLLLOCAL RuntimeNamespaceMergeLocker(RootQoreNamespace& rns) : rns(rns) {
+        qore_root_ns_private::runtimeNamespaceWriteLock(rns);
+    }
+
+    DLLLOCAL ~RuntimeNamespaceMergeLocker() {
+        qore_root_ns_private::runtimeNamespaceWriteUnlock(rns);
+    }
+
+private:
+    RootQoreNamespace& rns;
+
+    RuntimeNamespaceMergeLocker(const RuntimeNamespaceMergeLocker&) = delete;
+    RuntimeNamespaceMergeLocker& operator=(const RuntimeNamespaceMergeLocker&) = delete;
+};
+
 #endif
