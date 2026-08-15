@@ -1936,18 +1936,29 @@ struct qore_httpclient_priv {
         } else {
             // concat mpath to pstr, performing minimal URL encoding until '?'
             const char* p = mpath;
+            size_t cancel_check = 0;
             while (*p) {
-                // always encode control characters
-                if ((*p) < 32) {
-                    pstr.concat("%%%02X", *p);
+                if (++cancel_check % 100 == 0 && qore_check_cancel(xsink, "HTTP request path encoding")) {
+                    return nullptr;
+                }
+                // Treat path data as bytes.  Plain char is signed on common
+                // platforms, so using *p directly would classify every
+                // non-ASCII UTF-8 byte as a control character and then pass
+                // that negative value as QoreString::concat()'s size.
+                const unsigned char c = static_cast<unsigned char>(*p);
+                // Always encode control characters and non-ASCII UTF-8
+                // bytes; an HTTP request target is an ASCII URI.
+                if (c < 0x20 || c == 0x7f || c >= 0x80) {
+                    pstr.sprintf("%%%02X", c);
                 } else {
-                    pct_encoding_map_t::const_iterator i = pct_encoding_map.find(*p);
+                    const char ch = static_cast<char>(c);
+                    pct_encoding_map_t::const_iterator i = pct_encoding_map.find(ch);
                     if (i == pct_encoding_map.end()) {
-                        pct_encoding_set_t::iterator j = local_pct_encoding_set.find(*p);
+                        pct_encoding_set_t::iterator j = local_pct_encoding_set.find(ch);
                         if (j == local_pct_encoding_set.end()) {
-                            pstr.concat(*p);
+                            pstr.concat(ch);
                         } else {
-                            QoreStringMaker tmp("%%%X", *p);
+                            QoreStringMaker tmp("%%%02X", c);
                             pstr.concat(tmp.c_str());
                         }
                     } else {

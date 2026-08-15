@@ -380,6 +380,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         addTestCase("serialization", \serializationTest());
         addTestCase("timeouts", \timeoutTest());
         addTestCase("pre-encoded-urls", \preEncodedUrlsTest());
+        addTestCase("Unicode request paths", \unicodeRequestPathTest());
         addTestCase("connect primes connection manager", \connectPrimesConnectionManagerTest());
         addTestCase("poll proxy test", \pollProxyTest());
         addTestCase("poll test", \pollTest());
@@ -464,6 +465,29 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
 
         assertEq("hello[]", decode_url(hc.send(NOTHING, "PUT", "?hello[]").body));
         assertEq("hello%5B%5D", decode_url(hc.send(NOTHING, "PUT", "?hello%5B%5D").body));
+    }
+
+    unicodeRequestPathTest() {
+        HttpTestServer serv("HTTP/1.1 204 No Content\r\n"
+            "Connection: close\r\nContent-Length: 0\r\n\r\n");
+        on_exit serv.done();
+
+        HTTPClient hc({
+            "url": "http://localhost:" + serv.port,
+            "http_version": "1.1",
+        });
+        list<auto> messages;
+        code<nothing(auto)> receive_callback = sub (auto message) {
+            messages += message;
+        };
+        string segment = "支払いサービス-エラー";
+        hc.sendWithRecvCallback(receive_callback, NOTHING, "DELETE",
+            "/" + segment, {"Connection": "close"});
+
+        assertEq("/" + encode_url(segment, True), serv.getHeader().path,
+            "sendWithRecvCallback percent-encodes non-ASCII UTF-8 path bytes");
+        assertTrue(messages.size() > 0,
+            "sendWithRecvCallback receives the Unicode-path response");
     }
 
     connectPrimesConnectionManagerTest() {
