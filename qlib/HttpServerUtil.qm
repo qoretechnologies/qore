@@ -129,6 +129,10 @@ module HttpServerUtil {
     @section httpserverutil_relnotes HttpServerUtil Module Release Notes
 
     @subsection httputil1_6 HttpServerUtil 1.6
+    - fixed listener lifecycle accounting for dedicated socket handlers so normally managed connections release their
+      listener reference when \c startImpl() returns; previously only exceptions and externally managed completion
+      callbacks released the reference, so normal WebSocket connection closures leaked the count and could leave the
+      listener-stop flag set permanently
     - documented that request paths have URL decoding applied only to the resource path; the query string remains
       percent-encoded until parsed with @ref HttpServer::parse_uri_query() "parse_uri_query()"
     - added @ref HttpServer::mask_sensitive_url_query_values() "mask_sensitive_url_query_values()" so HTTP server
@@ -3669,7 +3673,10 @@ public class AbstractHttpSocketHandlerInterface {
             on_exit m.unlock();
             ++lh{lid};
         }
-        on_error handlerStopped(lid);
+        bool externally_managed = False;
+        on_exit if (!externally_managed) {
+            handlerStopped(lid);
+        }
         bool h2_ws_debug_handler = False;
         @debug {
             if (cx."header-info".http2 && cx."header-info".is_websocket_connect
@@ -3683,7 +3690,8 @@ public class AbstractHttpSocketHandlerInterface {
             cx.listener.log("HTTP/2 WS startImpl dispatch: cid %y stream_id %d handler %y", cx.id, stream_id,
                 handler_name);
         }
-        return startImpl(lid, cx, hdr, s);
+        externally_managed = startImpl(lid, cx, hdr, s);
+        return externally_managed;
     }
 
     #! called from the HTTP server when the socket should be closed due to an HTTP listener being stopped

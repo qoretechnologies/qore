@@ -1,6 +1,8 @@
 #!/usr/bin/env qore
 # -*- mode: qore; indent-tabs-mode: nil -*-
 
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
@@ -11,10 +13,60 @@
 
 %exec-class HttpServerUtilTest
 
+#! Test handler exposing inherited listener lifecycle state for deterministic unit tests
+class ListenerRefcountHandler inherits AbstractHttpSocketHandlerInterface {
+    private {
+        bool externally_managed = False;
+        bool throw_on_start = False;
+        bool listener_stopped = False;
+    }
+
+    setReturnExternallyManaged(bool externally_managed) {
+        self.externally_managed = externally_managed;
+    }
+
+    setThrowOnStart(bool throw_on_start) {
+        self.throw_on_start = throw_on_start;
+    }
+
+    int getListenerRefcount(string lid) {
+        m.lock();
+        on_exit m.unlock();
+        return lh{lid} ?? 0;
+    }
+
+    bool isListenerStopped(string lid) {
+        m.lock();
+        on_exit m.unlock();
+        return lsh{lid} ?? False;
+    }
+
+    bool observedListenerStopped() {
+        return listener_stopped;
+    }
+
+    releaseExternallyManaged(string lid) {
+        handlerStopped(lid);
+    }
+
+    private bool startImpl(softstring lid, hash<auto> cx, hash<auto> hdr, Socket s) {
+        {
+            m.lock();
+            on_exit m.unlock();
+            listener_stopped = lsh{lid} ?? False;
+        }
+        if (throw_on_start) {
+            throw "LISTENER-REFCOUNT-TEST-ERROR", "requested start failure";
+        }
+        return externally_managed;
+    }
+}
+
 public class HttpServerUtilTest inherits QUnit::Test {
     constructor() : Test("HttpServerUtilTest", "1.0") {
         addTestCase("funcs", \funcTests());
         addTestCase("hashdecl tests", \hashdeclTests());
+        addTestCase("socket handler listener refcount", \socketHandlerListenerRefcountTest());
 
         # Return for compatibility with test harness that checks the process's return value
         set_return_value(main());
@@ -123,5 +175,58 @@ public class HttpServerUtilTest inherits QUnit::Test {
             assertFalse(resp.streaming, "default streaming should be False");
             assertNothing(resp.stream_type, "default stream_type should be NOTHING");
         }
+    }
+
+    socketHandlerListenerRefcountTest() {
+        ListenerRefcountHandler handler();
+        Socket socket();
+
+        # A normally managed handler owns its listener reference only until startImpl() returns.
+        assertFalse(handler.start("normal", {}, {}, socket), "normal handler is not externally managed");
+        assertEq(0, handler.getListenerRefcount("normal"),
+            "normal startImpl() return releases the listener reference");
+
+        # An exception must release the same stack-owned reference.
+        handler.setThrowOnStart(True);
+        assertThrows("LISTENER-REFCOUNT-TEST-ERROR", sub () {
+            handler.start("exception", {}, {}, socket);
+        });
+        assertEq(0, handler.getListenerRefcount("exception"),
+            "startImpl() exception releases the listener reference");
+        handler.setThrowOnStart(False);
+
+        # External management transfers ownership to the completion callback instead.
+        handler.setReturnExternallyManaged(True);
+        assertTrue(handler.start("external", {}, {}, socket), "handler transferred listener reference ownership");
+        assertEq(1, handler.getListenerRefcount("external"),
+            "externally managed handler retains the listener reference after startImpl() returns");
+        handler.stop("external");
+        assertTrue(handler.isListenerStopped("external"),
+            "listener stop flag remains set while an externally managed handler is active");
+        handler.releaseExternallyManaged("external");
+        assertEq(0, handler.getListenerRefcount("external"),
+            "external completion releases the listener reference");
+        assertFalse(handler.isListenerStopped("external"),
+            "external completion clears the listener stop flag with the last reference");
+        handler.setReturnExternallyManaged(False);
+
+        # stop() can precede start() in the dedicated-handler registration race. The first
+        # handler must observe the flag, then its normal completion must clear it so the same
+        # listener id is not poisoned permanently.
+        handler.stop("stale-flag");
+        assertTrue(handler.isListenerStopped("stale-flag"),
+            "listener stop is published before a handler increments its reference");
+        assertFalse(handler.start("stale-flag", {}, {}, socket), "late handler is normally managed");
+        assertTrue(handler.observedListenerStopped(), "late handler observes the listener stop flag");
+        assertEq(0, handler.getListenerRefcount("stale-flag"),
+            "late handler releases its listener reference");
+        assertFalse(handler.isListenerStopped("stale-flag"),
+            "last handler completion clears the listener stop flag");
+
+        assertFalse(handler.start("stale-flag", {}, {}, socket), "listener id can be used again");
+        assertFalse(handler.observedListenerStopped(),
+            "a reused listener id does not inherit a stale stop flag");
+        assertEq(0, handler.getListenerRefcount("stale-flag"),
+            "reused listener id also has balanced references");
     }
 }
