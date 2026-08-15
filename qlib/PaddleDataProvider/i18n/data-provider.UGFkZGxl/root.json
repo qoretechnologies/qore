@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "The URI path relative to the connection's API base URL"
         },
         "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -2368,8 +2368,8 @@
           "message": "Address Id"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.short_desc": {
-          "source": "Paddle ID of the address that this transaction is for, prefixed with 'add…",
-          "message": "Paddle ID of the address that this transaction is for, prefixed with 'add…"
+          "source": "Paddle ID of the address that this transaction is for, prefixed with 'add_'.…",
+          "message": "Paddle ID of the address that this transaction is for, prefixed with 'add_'.…"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.desc": {
           "source": "Paddle ID of the address that this transaction is for, prefixed with `add_`. Requires `customer_id`. If omitted, transaction status is `draft`.",
@@ -2380,8 +2380,8 @@
           "message": "Business Id"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.short_desc": {
-          "source": "Paddle ID of the business that this transaction is for, prefixed with 'biz…",
-          "message": "Paddle ID of the business that this transaction is for, prefixed with 'biz…"
+          "source": "Paddle ID of the business that this transaction is for, prefixed with 'biz_'.…",
+          "message": "Paddle ID of the business that this transaction is for, prefixed with 'biz_'.…"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.desc": {
           "source": "Paddle ID of the business that this transaction is for, prefixed with `biz_`. Requires `customer_id`. ",
@@ -2608,8 +2608,8 @@
           "message": "Billed At"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.short_desc": {
-          "source": "RFC 3339 datetime string of when this transaction was marked as 'billed…",
-          "message": "RFC 3339 datetime string of when this transaction was marked as 'billed…"
+          "source": "RFC 3339 datetime string of when this transaction was marked as 'billed'",
+          "message": "RFC 3339 datetime string of when this transaction was marked as 'billed'"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.desc": {
           "source": "RFC 3339 datetime string of when this transaction was marked as `billed`. `null` for transactions that aren't `billed` or `completed`. Set automatically by Paddle.",

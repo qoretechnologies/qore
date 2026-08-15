@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.R2l0bGFi.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "The URI path relative to the connection's API base URL"
         },
         "app.R2l0bGFi.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -1452,8 +1452,8 @@
           "message": "All Available"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.YWxsX2F2YWlsYWJsZQ.short_desc": {
-          "source": "When 'true', returns all accessible groups. When 'false', returns only groups…",
-          "message": "When 'true', returns all accessible groups. When 'false', returns only groups…"
+          "source": "When 'true', returns all accessible groups",
+          "message": "When 'true', returns all accessible groups"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.YWxsX2F2YWlsYWJsZQ.desc": {
           "source": "When `true`, returns all accessible groups. When `false`, returns only groups where the user is a member.",
@@ -3568,8 +3568,8 @@
           "message": "Order By"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.b3JkZXJfYnk.short_desc": {
-          "source": "Return issues ordered by 'created_at', 'due_date', 'label_priority…",
-          "message": "Return issues ordered by 'created_at', 'due_date', 'label_priority…"
+          "source": "Return issues ordered by 'created_at', 'due_date', 'label_priority',…",
+          "message": "Return issues ordered by 'created_at', 'due_date', 'label_priority',…"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.b3JkZXJfYnk.desc": {
           "source": "Return issues ordered by `created_at`, `due_date`, `label_priority`, `milestone_due`, `popularity`, `priority`, `relative_position`, `title`, or `updated_at` fields.",
@@ -3640,8 +3640,8 @@
           "message": "Due Date"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.ZHVlX2RhdGU.short_desc": {
-          "source": "Return issues that have no due date ('{{0}}'), or whose due date is this week…",
-          "message": "Return issues that have no due date ('{{0}}'), or whose due date is this week…"
+          "source": "Return issues that have no due date ('{{0}}'), or whose due date is this week,…",
+          "message": "Return issues that have no due date ('{{0}}'), or whose due date is this week,…"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.ZHVlX2RhdGU.desc": {
           "source": "Return issues that have no due date (`0`), or whose due date is this week, this month, between two weeks ago and next month, or which are overdue. Accepts: `overdue`, `week`, `month`, `next_month_and_previous_two_weeks`, `0`",
@@ -3732,8 +3732,8 @@
           "message": "Milestone Id"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bWlsZXN0b25lX2lk.short_desc": {
-          "source": "Return issues assigned to milestones with the specified timebox value (\"Any…",
-          "message": "Return issues assigned to milestones with the specified timebox value (\"Any…"
+          "source": "Return issues assigned to milestones with the specified timebox value…",
+          "message": "Return issues assigned to milestones with the specified timebox value…"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bWlsZXN0b25lX2lk.desc": {
           "source": "Return issues assigned to milestones with the specified timebox value (\"Any\", \"None\", \"Upcoming\" or \"Started\")",
@@ -4204,8 +4204,8 @@
           "message": "Milestone"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bWlsZXN0b25lX2lk.short_desc": {
-          "source": "Return issues assigned to milestones with the specified timebox value (\"Any…",
-          "message": "Return issues assigned to milestones with the specified timebox value (\"Any…"
+          "source": "Return issues assigned to milestones with the specified timebox value…",
+          "message": "Return issues assigned to milestones with the specified timebox value…"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.bWlsZXN0b25lX2lk.desc": {
           "source": "Return issues assigned to milestones with the specified timebox value (\"Any\", \"None\", \"Upcoming\" or \"Started\")",
@@ -4304,8 +4304,8 @@
           "message": "Order By"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.b3JkZXJfYnk.short_desc": {
-          "source": "Return issues ordered by 'created_at', 'due_date', 'label_priority…",
-          "message": "Return issues ordered by 'created_at', 'due_date', 'label_priority…"
+          "source": "Return issues ordered by 'created_at', 'due_date', 'label_priority',…",
+          "message": "Return issues ordered by 'created_at', 'due_date', 'label_priority',…"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.b3JkZXJfYnk.desc": {
           "source": "Return issues ordered by `created_at`, `due_date`, `label_priority`, `milestone_due`, `popularity`, `priority`, `relative_position`, `title`, or `updated_at` fields.",
@@ -4376,8 +4376,8 @@
           "message": "Due Date"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.ZHVlX2RhdGU.short_desc": {
-          "source": "Return issues that have no due date ('{{0}}'), or whose due date is this week…",
-          "message": "Return issues that have no due date ('{{0}}'), or whose due date is this week…"
+          "source": "Return issues that have no due date ('{{0}}'), or whose due date is this week,…",
+          "message": "Return issues that have no due date ('{{0}}'), or whose due date is this week,…"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.ZHVlX2RhdGU.desc": {
           "source": "Return issues that have no due date (`0`), or whose due date is this week, this month, between two weeks ago and next month, or which are overdue. Accepts: `overdue`, `week`, `month`, `next_month_and_previous_two_weeks`, `0`",
@@ -6948,8 +6948,8 @@
           "message": "State"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c3RhdGU.short_desc": {
-          "source": "Returns 'all' merge requests or just those that are 'opened', 'closed…",
-          "message": "Returns 'all' merge requests or just those that are 'opened', 'closed…"
+          "source": "Returns 'all' merge requests or just those that are 'opened', 'closed',…",
+          "message": "Returns 'all' merge requests or just those that are 'opened', 'closed',…"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c3RhdGU.desc": {
           "source": "Returns `all` merge requests or just those that are `opened`, `closed`, `locked`, or `merged`.",
@@ -7148,8 +7148,8 @@
           "message": "Order By"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.b3JkZXJfYnk.short_desc": {
-          "source": "Returns merge requests ordered by 'created_at', 'label_priority…",
-          "message": "Returns merge requests ordered by 'created_at', 'label_priority…"
+          "source": "Returns merge requests ordered by 'created_at', 'label_priority',…",
+          "message": "Returns merge requests ordered by 'created_at', 'label_priority',…"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.b3JkZXJfYnk.desc": {
           "source": "Returns merge requests ordered by `created_at`, `label_priority`, `milestone_due`, `popularity`, `priority`, `title`, `updated_at` or `merged_at` fields. Introduced in GitLab 14.8.",
@@ -7324,8 +7324,8 @@
           "message": "Scope"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c2NvcGU.short_desc": {
-          "source": "Returns merge requests for the given scope: 'created_by_me', 'assigned_to_me…",
-          "message": "Returns merge requests for the given scope: 'created_by_me', 'assigned_to_me…"
+          "source": "Returns merge requests for the given scope: 'created_by_me', 'assigned_to_me',…",
+          "message": "Returns merge requests for the given scope: 'created_by_me', 'assigned_to_me',…"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.c2NvcGU.desc": {
           "source": "Returns merge requests for the given scope: `created_by_me`, `assigned_to_me`, `reviews_for_me` or `all`",
@@ -7404,8 +7404,8 @@
           "message": "Draft"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.ZHJhZnQ.short_desc": {
-          "source": "Filter merge requests against their 'draft' status. 'true' to return only…",
-          "message": "Filter merge requests against their 'draft' status. 'true' to return only…"
+          "source": "Filter merge requests against their 'draft' status",
+          "message": "Filter merge requests against their 'draft' status"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.ZHJhZnQ.desc": {
           "source": "Filter merge requests against their `draft` status. `true` to return only draft merge requests, `false` to return non-draft merge requests.",
@@ -7452,8 +7452,8 @@
           "message": "Not Assigned To"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W2Fzc2lnbmVlX2lkXQ.short_desc": {
-          "source": "'<Negated>' Returns merge requests assigned to the given user 'id'. 'None…",
-          "message": "'<Negated>' Returns merge requests assigned to the given user 'id'. 'None…"
+          "source": "'<Negated>' Returns merge requests assigned to the given user 'id'",
+          "message": "'<Negated>' Returns merge requests assigned to the given user 'id'"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.bm90W2Fzc2lnbmVlX2lkXQ.desc": {
           "source": "`<Negated>` Returns merge requests assigned to the given user `id`. `None` returns unassigned merge requests. `Any` returns merge requests with an assignee.",
@@ -9344,8 +9344,8 @@
           "message": "Package Registry Access Level"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.short_desc": {
-          "source": "Controls visibility of the package registry. One of 'disabled', 'private…",
-          "message": "Controls visibility of the package registry. One of 'disabled', 'private…"
+          "source": "Controls visibility of the package registry",
+          "message": "Controls visibility of the package registry"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.desc": {
           "source": "Controls visibility of the package registry. One of `disabled`, `private`, `enabled` or `public`. `private` will make the package registry accessible only to project members (reporter role and above). `enabled` will make the package registry accessible to everyone who has access to the project. `public` will make the package registry accessible to everyone. `disabled` will disable the package registry",
@@ -9424,8 +9424,8 @@
           "message": "Container Registry Access Level"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2FjY2Vzc19sZXZlbA.short_desc": {
-          "source": "Controls visibility of the container registry. One of 'disabled', 'private' or…",
-          "message": "Controls visibility of the container registry. One of 'disabled', 'private' or…"
+          "source": "Controls visibility of the container registry",
+          "message": "Controls visibility of the container registry"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2FjY2Vzc19sZXZlbA.desc": {
           "source": "Controls visibility of the container registry. One of `disabled`, `private` or `enabled`. `private` will make the container registry accessible only to project members (reporter role and above). `enabled` will make the container registry accessible to everyone who has access to the project. `disabled` will disable the container registry",
@@ -10908,8 +10908,8 @@
           "message": "Package Registry Access Level"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.short_desc": {
-          "source": "Controls visibility of the package registry. One of 'disabled', 'private…",
-          "message": "Controls visibility of the package registry. One of 'disabled', 'private…"
+          "source": "Controls visibility of the package registry",
+          "message": "Controls visibility of the package registry"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.cGFja2FnZV9yZWdpc3RyeV9hY2Nlc3NfbGV2ZWw.desc": {
           "source": "Controls visibility of the package registry. One of `disabled`, `private`, `enabled` or `public`. `private` will make the package registry accessible only to project members (reporter role and above). `enabled` will make the package registry accessible to everyone who has access to the project. `public` will make the package registry accessible to everyone. `disabled` will disable the package registry",
@@ -10988,8 +10988,8 @@
           "message": "Container Registry Access Level"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2FjY2Vzc19sZXZlbA.short_desc": {
-          "source": "Controls visibility of the container registry. One of 'disabled', 'private' or…",
-          "message": "Controls visibility of the container registry. One of 'disabled', 'private' or…"
+          "source": "Controls visibility of the container registry",
+          "message": "Controls visibility of the container registry"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y29udGFpbmVyX3JlZ2lzdHJ5X2FjY2Vzc19sZXZlbA.desc": {
           "source": "Controls visibility of the container registry. One of `disabled`, `private` or `enabled`. `private` will make the container registry accessible only to project members (reporter role and above). `enabled` will make the container registry accessible to everyone who has access to the project. `disabled` will disable the container registry",

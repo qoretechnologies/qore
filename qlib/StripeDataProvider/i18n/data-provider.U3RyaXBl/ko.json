@@ -751,10 +751,6 @@
           "source": "Tax Exempt",
           "message": "면세"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.dGF4X2V4ZW1wdA.short_desc": {
-          "source": "The customer's tax exemption. One of 'none', 'exempt', or 'reverse'",
-          "message": "고객의 면세 유형입니다. 'none', 'exempt' 또는 'reverse' 중 하나입니다"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.dGF4X2lkX2RhdGE.desc": {
           "source": "The customer's tax IDs.",
           "message": "고객의 납세자 번호(Tax ID)입니다."
@@ -4766,10 +4762,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.dGF4X2V4ZW1wdA.display_name": {
           "source": "Tax Exempt",
           "message": "면세"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.dGF4X2V4ZW1wdA.short_desc": {
-          "source": "The customer's tax exemption. One of 'none', 'exempt', or 'reverse'",
-          "message": "고객의 면세 유형입니다. 'none', 'exempt' 또는 'reverse' 중 하나입니다"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Update a customer",

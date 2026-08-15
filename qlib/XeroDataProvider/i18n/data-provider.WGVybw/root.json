@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "The URI path relative to the connection's API base URL"
         },
         "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -392,8 +392,8 @@
           "message": "Search Term"
         },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c2VhcmNoVGVybQ.short_desc": {
-          "source": "Search parameter that performs a case-insensitive text search across the Name…",
-          "message": "Search parameter that performs a case-insensitive text search across the Name…"
+          "source": "Search parameter that performs a case-insensitive text search across the Name,…",
+          "message": "Search parameter that performs a case-insensitive text search across the Name,…"
         },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c2VhcmNoVGVybQ.desc": {
           "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields.",
@@ -580,8 +580,8 @@
           "message": "Search Term"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c2VhcmNoVGVybQ.short_desc": {
-          "source": "Search parameter that performs a case-insensitive text search across the Name…",
-          "message": "Search parameter that performs a case-insensitive text search across the Name…"
+          "source": "Search parameter that performs a case-insensitive text search across the Name,…",
+          "message": "Search parameter that performs a case-insensitive text search across the Name,…"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c2VhcmNoVGVybQ.desc": {
           "source": "Search parameter that performs a case-insensitive text search across the Name, FirstName, LastName, ContactNumber and EmailAddress fields.",
@@ -1088,8 +1088,8 @@
           "message": "Code"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q29kZQ.short_desc": {
-          "source": "Code of account you are using to make the payment e.g. 001 (note- not all…",
-          "message": "Code of account you are using to make the payment e.g. 001 (note- not all…"
+          "source": "Code of account you are using to make the payment e.g. 001…",
+          "message": "Code of account you are using to make the payment e.g. 001…"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q29kZQ.desc": {
           "source": "Code of account you are using to make the payment e.g. 001 (note- not all accounts have a code value)",

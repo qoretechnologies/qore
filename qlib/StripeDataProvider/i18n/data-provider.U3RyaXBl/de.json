@@ -751,10 +751,6 @@
           "source": "Tax Exempt",
           "message": "Steuerbefreit"
         },
-        "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.dGF4X2V4ZW1wdA.short_desc": {
-          "source": "The customer's tax exemption. One of 'none', 'exempt', or 'reverse'",
-          "message": "Die Steuerbefreiung des Kunden. Einer der Werte 'none', 'exempt' oder 'reverse'"
-        },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.dGF4X2lkX2RhdGE.desc": {
           "source": "The customer's tax IDs.",
           "message": "Die Steuer-IDs des Kunden."
@@ -4766,10 +4762,6 @@
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.dGF4X2V4ZW1wdA.display_name": {
           "source": "Tax Exempt",
           "message": "Steuerbefreit"
-        },
-        "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.option.dGF4X2V4ZW1wdA.short_desc": {
-          "source": "The customer's tax exemption. One of 'none', 'exempt', or 'reverse'",
-          "message": "Die Steuerbefreiung des Kunden. Einer der Werte 'none', 'exempt' oder 'reverse'"
         },
         "app.U3RyaXBl.action.dXBkYXRlLWN1c3RvbWVy.short_desc": {
           "source": "Update a customer",

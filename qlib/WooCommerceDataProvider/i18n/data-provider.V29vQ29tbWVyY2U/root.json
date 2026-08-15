@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "The URI path relative to the connection's API base URL"
         },
         "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -6104,8 +6104,8 @@
           "message": "Topic"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.option.dG9waWM.short_desc": {
-          "source": "The webhook topic (e.g. 'order.created', 'product.updated'); pick a known…",
-          "message": "The webhook topic (e.g. 'order.created', 'product.updated'); pick a known…"
+          "source": "The webhook topic (e.g. 'order.created', 'product.updated')",
+          "message": "The webhook topic (e.g. 'order.created', 'product.updated')"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.option.dG9waWM.desc": {
           "source": "The webhook topic (e.g. `order.created`, `product.updated`); pick a known topic or supply a custom `action.<hook>` value",

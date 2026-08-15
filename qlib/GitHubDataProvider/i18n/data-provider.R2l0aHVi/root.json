@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.R2l0aHVi.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "The URI path relative to the connection's API base URL"
         },
         "app.R2l0aHVi.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -452,8 +452,8 @@
           "message": "Private"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHJpdmF0ZQ.short_desc": {
-          "source": "Either 'true' to make the repository private or 'false' to make it public…",
-          "message": "Either 'true' to make the repository private or 'false' to make it public…"
+          "source": "Either 'true' to make the repository private or 'false' to make it public",
+          "message": "Either 'true' to make the repository private or 'false' to make it public"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHJpdmF0ZQ.desc": {
           "source": "Either `true` to make the repository private or `false` to make it public. Default: `false`.  \n**Note**: You will get a `422` error if the organization restricts [changing repository visibility](https://docs.github.com/articles/repository-permission-levels-for-an-organization#changing-the-visibility-of-repositories) to organization owners and a non-owner tries to change the value of private.",
@@ -532,8 +532,8 @@
           "message": "Has Projects"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3Byb2plY3Rz.short_desc": {
-          "source": "Either 'true' to enable projects for this repository or 'false' to disable…",
-          "message": "Either 'true' to enable projects for this repository or 'false' to disable…"
+          "source": "Either 'true' to enable projects for this repository or 'false' to disable them",
+          "message": "Either 'true' to enable projects for this repository or 'false' to disable them"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3Byb2plY3Rz.desc": {
           "source": "Either `true` to enable projects for this repository or `false` to disable them. **Note:** If you're creating a repository in an organization that has disabled repository projects, the default is `false`, and if you pass `true`, the API returns an error.",
@@ -568,8 +568,8 @@
           "message": "Pull Request Creation Policy"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHVsbF9yZXF1ZXN0X2NyZWF0aW9uX3BvbGljeQ.short_desc": {
-          "source": "The policy that controls who can create pull requests for this repository…",
-          "message": "The policy that controls who can create pull requests for this repository…"
+          "source": "The policy that controls who can create pull requests for this repository:…",
+          "message": "The policy that controls who can create pull requests for this repository:…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHVsbF9yZXF1ZXN0X2NyZWF0aW9uX3BvbGljeQ.desc": {
           "source": "The policy that controls who can create pull requests for this repository: `all` or `collaborators_only`.",
@@ -588,8 +588,8 @@
           "message": "Is Template"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aXNfdGVtcGxhdGU.short_desc": {
-          "source": "Either 'true' to make this repo available as a template repository or 'false…",
-          "message": "Either 'true' to make this repo available as a template repository or 'false…"
+          "source": "Either 'true' to make this repo available as a template repository or 'false'…",
+          "message": "Either 'true' to make this repo available as a template repository or 'false'…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aXNfdGVtcGxhdGU.desc": {
           "source": "Either `true` to make this repo available as a template repository or `false` to prevent it.",
@@ -612,8 +612,8 @@
           "message": "Allow Merge Commit"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfbWVyZ2VfY29tbWl0.short_desc": {
-          "source": "Either 'true' to allow merging pull requests with a merge commit, or 'false…",
-          "message": "Either 'true' to allow merging pull requests with a merge commit, or 'false…"
+          "source": "Either 'true' to allow merging pull requests with a merge commit, or 'false'…",
+          "message": "Either 'true' to allow merging pull requests with a merge commit, or 'false'…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfbWVyZ2VfY29tbWl0.desc": {
           "source": "Either `true` to allow merging pull requests with a merge commit, or `false` to prevent merging pull requests with merge commits.",
@@ -1560,8 +1560,8 @@
           "message": "Gitignore Template"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.Z2l0aWdub3JlX3RlbXBsYXRl.short_desc": {
-          "source": "Desired language or platform [.gitignore…",
-          "message": "Desired language or platform [.gitignore…"
+          "source": "Desired language or platform…",
+          "message": "Desired language or platform…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.Z2l0aWdub3JlX3RlbXBsYXRl.desc": {
           "source": "Desired language or platform [.gitignore template](https://github.com/github/gitignore) to apply. Use the name of the template without the extension. For example, \"Haskell\".",
@@ -1596,8 +1596,8 @@
           "message": "Has Projects"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3Byb2plY3Rz.short_desc": {
-          "source": "Either 'true' to enable projects for this repository or 'false' to disable…",
-          "message": "Either 'true' to enable projects for this repository or 'false' to disable…"
+          "source": "Either 'true' to enable projects for this repository or 'false' to disable them",
+          "message": "Either 'true' to enable projects for this repository or 'false' to disable them"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3Byb2plY3Rz.desc": {
           "source": "Either `true` to enable projects for this repository or `false` to disable them. **Note:** If you're creating a repository in an organization that has disabled repository projects, the default is `false`, and if you pass `true`, the API returns an error.",
@@ -1632,8 +1632,8 @@
           "message": "Is Template"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aXNfdGVtcGxhdGU.short_desc": {
-          "source": "Either 'true' to make this repo available as a template repository or 'false…",
-          "message": "Either 'true' to make this repo available as a template repository or 'false…"
+          "source": "Either 'true' to make this repo available as a template repository or 'false'…",
+          "message": "Either 'true' to make this repo available as a template repository or 'false'…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aXNfdGVtcGxhdGU.desc": {
           "source": "Either `true` to make this repo available as a template repository or `false` to prevent it.",
@@ -1668,8 +1668,8 @@
           "message": "Allow Merge Commit"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfbWVyZ2VfY29tbWl0.short_desc": {
-          "source": "Either 'true' to allow merging pull requests with a merge commit, or 'false…",
-          "message": "Either 'true' to allow merging pull requests with a merge commit, or 'false…"
+          "source": "Either 'true' to allow merging pull requests with a merge commit, or 'false'…",
+          "message": "Either 'true' to allow merging pull requests with a merge commit, or 'false'…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfbWVyZ2VfY29tbWl0.desc": {
           "source": "Either `true` to allow merging pull requests with a merge commit, or `false` to prevent merging pull requests with merge commits.",
@@ -2532,8 +2532,8 @@
           "message": "Milestone"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.option.bWlsZXN0b25l.short_desc": {
-          "source": "If an 'integer' is passed, it should refer to a milestone by its 'number…",
-          "message": "If an 'integer' is passed, it should refer to a milestone by its 'number…"
+          "source": "If an 'integer' is passed, it should refer to a milestone by its 'number' field",
+          "message": "If an 'integer' is passed, it should refer to a milestone by its 'number' field"
         },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.option.bWlsZXN0b25l.desc": {
           "source": "If an `integer` is passed, it should refer to a milestone by its `number` field. If the string `*` is passed, issues with any milestone are accepted. If the string `none` is passed, issues without milestones are returned.",
@@ -3680,8 +3680,8 @@
           "message": "Maintainer Can Modify"
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.short_desc": {
-          "source": "Indicates whether [maintainers can…",
-          "message": "Indicates whether [maintainers can…"
+          "source": "Indicates whether…",
+          "message": "Indicates whether…"
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.desc": {
           "source": "Indicates whether [maintainers can modify](https://docs.github.com/articles/allowing-changes-to-a-pull-request-branch-created-from-a-fork/) the pull request.",
@@ -3820,8 +3820,8 @@
           "message": "Maintainer Can Modify"
         },
         "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.short_desc": {
-          "source": "Indicates whether [maintainers can…",
-          "message": "Indicates whether [maintainers can…"
+          "source": "Indicates whether…",
+          "message": "Indicates whether…"
         },
         "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.desc": {
           "source": "Indicates whether [maintainers can modify](https://docs.github.com/articles/allowing-changes-to-a-pull-request-branch-created-from-a-fork/) the pull request.",
@@ -4488,8 +4488,8 @@
           "message": "Prerelease"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.cHJlcmVsZWFzZQ.short_desc": {
-          "source": "'true' to identify the release as a prerelease. 'false' to identify the…",
-          "message": "'true' to identify the release as a prerelease. 'false' to identify the…"
+          "source": "'true' to identify the release as a prerelease",
+          "message": "'true' to identify the release as a prerelease"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.cHJlcmVsZWFzZQ.desc": {
           "source": "`true` to identify the release as a prerelease. `false` to identify the release as a full release.",
@@ -4812,8 +4812,8 @@
           "message": "Sort"
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c29ydA.short_desc": {
-          "source": "Sorts the results of your query by the number of 'comments', 'reactions…",
-          "message": "Sorts the results of your query by the number of 'comments', 'reactions…"
+          "source": "Sorts the results of your query by the number of 'comments', 'reactions',…",
+          "message": "Sorts the results of your query by the number of 'comments', 'reactions',…"
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c29ydA.desc": {
           "source": "Sorts the results of your query by the number of `comments`, `reactions`, `reactions-+1`, `reactions--1`, `reactions-smile`, `reactions-thinking_face`, `reactions-heart`, `reactions-tada`, or `interactions`. You can also sort results by how recently the items were `created` or `updated`, Default: [best match](https://docs.github.com/rest/search/search#ranking-search-results)",

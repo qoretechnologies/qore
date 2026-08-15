@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "The URI path relative to the connection's API base URL"
         },
         "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -396,8 +396,8 @@
           "message": "Include Merge History"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
-          "source": "Pass 'true' to include a 'merge_history' array on each contact in the…",
-          "message": "Pass 'true' to include a 'merge_history' array on each contact in the…"
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "Pass 'true' to include a 'merge_history' array on each contact in the response"
         },
         "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
           "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
@@ -444,8 +444,8 @@
           "message": "Include Merge History"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
-          "source": "Pass 'true' to include a 'merge_history' array on each contact in the…",
-          "message": "Pass 'true' to include a 'merge_history' array on each contact in the…"
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "Pass 'true' to include a 'merge_history' array on each contact in the response"
         },
         "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
           "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
@@ -1520,8 +1520,8 @@
           "message": "Include Merge History"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
-          "source": "Pass 'true' to include a 'merge_history' array on each contact in the…",
-          "message": "Pass 'true' to include a 'merge_history' array on each contact in the…"
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "Pass 'true' to include a 'merge_history' array on each contact in the response"
         },
         "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
           "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
@@ -1652,8 +1652,8 @@
           "message": "Last Seen At"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.short_desc": {
-          "source": "(Unix timestamp in seconds) The time when the contact was last seen (either…",
-          "message": "(Unix timestamp in seconds) The time when the contact was last seen (either…"
+          "source": "(Unix timestamp in seconds) The time when the contact was last seen…",
+          "message": "(Unix timestamp in seconds) The time when the contact was last seen…"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.desc": {
           "source": "(Unix timestamp in seconds) The time when the contact was last seen (either where the Intercom Messenger was installed or when specified manually).\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
@@ -1700,8 +1700,8 @@
           "message": "Include Merge History"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
-          "source": "Pass 'true' to include a 'merge_history' array on each contact in the…",
-          "message": "Pass 'true' to include a 'merge_history' array on each contact in the…"
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "Pass 'true' to include a 'merge_history' array on each contact in the response"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
           "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",

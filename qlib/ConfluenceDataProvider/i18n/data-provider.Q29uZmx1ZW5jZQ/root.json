@@ -140,8 +140,8 @@
           "message": "URI Path"
         },
         "app.Q29uZmx1ZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
-          "source": "The URI path relative to the connection's API base URL. May contain '{name…",
-          "message": "The URI path relative to the connection's API base URL. May contain '{name…"
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "The URI path relative to the connection's API base URL"
         },
         "app.Q29uZmx1ZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
           "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
@@ -436,8 +436,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response…",
-          "message": "The content format types to be returned in the 'body' field of the response…"
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "The content format types to be returned in the 'body' field of the response"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -632,8 +632,8 @@
           "message": "Root Level"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.cm9vdC1sZXZlbA.short_desc": {
-          "source": "The page will be created at the root level of the space (outside the space…",
-          "message": "The page will be created at the root level of the space (outside the space…"
+          "source": "The page will be created at the root level of the space…",
+          "message": "The page will be created at the root level of the space…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.cm9vdC1sZXZlbA.desc": {
           "source": "The page will be created at the root level of the space (outside the space homepage tree). If true, then a \nvalue may not be supplied for the `parentId` body parameter.",
@@ -668,8 +668,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response…",
-          "message": "The content format types to be returned in the 'body' field of the response…"
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "The content format types to be returned in the 'body' field of the response"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -852,8 +852,8 @@
           "message": "Include Direct Children"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1kaXJlY3QtY2hpbGRyZW4.short_desc": {
-          "source": "Includes direct children of the page, as defined in the 'ChildrenResponse…",
-          "message": "Includes direct children of the page, as defined in the 'ChildrenResponse…"
+          "source": "Includes direct children of the page, as defined in the 'ChildrenResponse'…",
+          "message": "Includes direct children of the page, as defined in the 'ChildrenResponse'…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1kaXJlY3QtY2hpbGRyZW4.desc": {
           "source": "Includes direct children of the page, as defined in the `ChildrenResponse` object.",
@@ -1176,8 +1176,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response…",
-          "message": "The content format types to be returned in the 'body' field of the response…"
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "The content format types to be returned in the 'body' field of the response"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -1320,8 +1320,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response…",
-          "message": "The content format types to be returned in the 'body' field of the response…"
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "The content format types to be returned in the 'body' field of the response"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -1448,8 +1448,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response…",
-          "message": "The content format types to be returned in the 'body' field of the response…"
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "The content format types to be returned in the 'body' field of the response"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -1620,8 +1620,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response…",
-          "message": "The content format types to be returned in the 'body' field of the response…"
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "The content format types to be returned in the 'body' field of the response"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -2040,8 +2040,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response…",
-          "message": "The content format types to be returned in the 'body' field of the response…"
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "The content format types to be returned in the 'body' field of the response"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -2156,8 +2156,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response…",
-          "message": "The content format types to be returned in the 'body' field of the response…"
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "The content format types to be returned in the 'body' field of the response"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -2632,8 +2632,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response…",
-          "message": "The content format types to be returned in the 'body' field of the response…"
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "The content format types to be returned in the 'body' field of the response"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -2808,8 +2808,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response…",
-          "message": "The content format types to be returned in the 'body' field of the response…"
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "The content format types to be returned in the 'body' field of the response"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
@@ -3004,8 +3004,8 @@
           "message": "Body Format"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.short_desc": {
-          "source": "The content format types to be returned in the 'body' field of the response…",
-          "message": "The content format types to be returned in the 'body' field of the response…"
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "The content format types to be returned in the 'body' field of the response"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.desc": {
           "source": "The content format types to be returned in the `body` field of the response. If available, the representation will be available under a response field of the same name under the `body` field.: The primary formats a body can be represented as. A subset of BodyRepresentation. These formats are the only allowed formats in certain use cases.",
