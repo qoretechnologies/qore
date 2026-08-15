@@ -37,6 +37,10 @@
 
 #include <qore/AbstractQoreNode.h>
 #include <qore/QoreString.h>
+// QoreStringDataHelper needs a complete QoreValue (it uses QoreValue::SHORTSTR_MAX_BYTES as an
+// array bound and calls QoreValue methods inline), and this header is included by external modules
+// before QoreValue.h; QoreValue.h does not include this header, so there is no cycle
+#include <qore/QoreValue.h>
 
 #include <cstring>
 
