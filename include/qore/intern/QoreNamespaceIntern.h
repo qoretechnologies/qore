@@ -41,7 +41,9 @@
 #include "qore/intern/GlobalVariableList.h"
 #include "qore/intern/typed_hash_decl_private.h"
 #include "qore/vector_map"
+#include "qore/QoreRWLock.h"
 
+#include <atomic>
 #include <map>
 #include <vector>
 #include <list>
@@ -1286,6 +1288,74 @@ class qore_root_ns_private : public qore_ns_private {
     friend class QoreNamespace;
 
 protected:
+    //! Protects committed namespace containers during cold runtime module merges
+    mutable QoreRWLock runtime_namespace_lock;
+    mutable std::atomic<int> runtime_namespace_writer_tid{-1};
+    unsigned runtime_namespace_writer_depth = 0;
+
+    //! Acquires the read lock unless this thread already owns the write lock
+    DLLLOCAL bool runtimeNamespaceReadLock() const {
+        if (runtime_namespace_writer_tid.load(std::memory_order_acquire) == q_gettid()) {
+            return false;
+        }
+        int rc = runtime_namespace_lock.rdlock();
+        assert(!rc);
+        return true;
+    }
+
+    DLLLOCAL void runtimeNamespaceReadUnlock(bool locked) const {
+        if (locked) {
+            int rc = runtime_namespace_lock.unlock();
+            assert(!rc);
+        }
+    }
+
+    //! Recursively acquires the write lock for the current thread
+    DLLLOCAL void runtimeNamespaceWriteLock() {
+        int tid = q_gettid();
+        if (runtime_namespace_writer_tid.load(std::memory_order_acquire) == tid) {
+            ++runtime_namespace_writer_depth;
+            return;
+        }
+        int rc = runtime_namespace_lock.wrlock();
+        assert(!rc);
+        assert(!runtime_namespace_writer_depth);
+        runtime_namespace_writer_depth = 1;
+        runtime_namespace_writer_tid.store(tid, std::memory_order_release);
+    }
+
+    DLLLOCAL void runtimeNamespaceWriteUnlock() {
+        assert(runtime_namespace_writer_tid.load(std::memory_order_acquire) == q_gettid());
+        assert(runtime_namespace_writer_depth);
+        if (!--runtime_namespace_writer_depth) {
+            runtime_namespace_writer_tid.store(-1, std::memory_order_release);
+            int rc = runtime_namespace_lock.unlock();
+            assert(!rc);
+        }
+    }
+
+    //! Exception-safe runtime namespace read lock
+    class RuntimeNamespaceReadLocker {
+    public:
+        DLLLOCAL RuntimeNamespaceReadLocker(const qore_root_ns_private& root)
+                : RuntimeNamespaceReadLocker(&root) {
+        }
+
+        DLLLOCAL RuntimeNamespaceReadLocker(const qore_root_ns_private* root)
+                : root(root), locked(root && root->runtimeNamespaceReadLock()) {
+        }
+
+        DLLLOCAL ~RuntimeNamespaceReadLocker() {
+            if (root) {
+                root->runtimeNamespaceReadUnlock(locked);
+            }
+        }
+
+    private:
+        const qore_root_ns_private* root;
+        bool locked;
+    };
+
     typedef std::vector<deferred_new_check_t> deferred_new_check_vec_t;
     deferred_new_check_vec_t deferred_new_check_vec;
 
@@ -1373,10 +1443,12 @@ protected:
     }
 
     DLLLOCAL bool runtimeExistsFunctionIntern(const char* name) {
+        RuntimeNamespaceReadLocker rnl(*this);
         return fmap.find(name) != fmap.end();
     }
 
     DLLLOCAL const QoreClass* runtimeFindClassIntern(const char* name, const qore_ns_private*& ns) const {
+        RuntimeNamespaceReadLocker rnl(*this);
         if (!useBrokenNamespaceResolutionRuntime()) {
             if (const QoreClass* qc = runtimeFindQoreClassIntern(name, ns)) {
                 return qc;
@@ -1405,6 +1477,7 @@ protected:
     DLLLOCAL const QoreClass* runtimeFindClassIntern(const NamedScope& name, const qore_ns_private*& ns) const;
 
     DLLLOCAL const TypedHashDecl* runtimeFindHashDeclIntern(const char* name, const qore_ns_private*& ns) {
+        RuntimeNamespaceReadLocker rnl(*this);
         if (!useBrokenNamespaceResolutionRuntime()) {
             if (const TypedHashDecl* hd = runtimeFindQoreHashDeclIntern(name, ns)) {
                 return hd;
@@ -1431,6 +1504,7 @@ protected:
     }
 
     DLLLOCAL const QoreEnumDecl* runtimeFindEnumIntern(const char* name, const qore_ns_private*& ns) {
+        RuntimeNamespaceReadLocker rnl(*this);
         if (!useBrokenNamespaceResolutionRuntime()) {
             if (const QoreEnumDecl* ed = runtimeFindQoreEnumIntern(name, ns)) {
                 return ed;
@@ -1455,6 +1529,7 @@ protected:
     }
 
     DLLLOCAL const FunctionEntry* runtimeFindFunctionEntryIntern(const char* name) {
+        RuntimeNamespaceReadLocker rnl(*this);
         if (!useBrokenNamespaceResolutionRuntime()) {
             if (const FunctionEntry* fe = runtimeFindQoreFunctionEntryIntern(name)) {
                 return fe;
@@ -1627,6 +1702,7 @@ protected:
     }
 
     DLLLOCAL ResolvedCallReferenceNode* runtimeGetCallReference(const char* fname, ExceptionSink* xsink) {
+        RuntimeNamespaceReadLocker rnl(*this);
         fmap_t::iterator i = fmap.find(fname);
         if (i == fmap.end()) {
             xsink->raiseException("NO-SUCH-FUNCTION", "callback function '%s()' does not exist", fname);
@@ -1775,6 +1851,7 @@ protected:
     }
 
     DLLLOCAL const QoreClass* runtimeFindClass(const char* name) const {
+        RuntimeNamespaceReadLocker rnl(*this);
         if (!useBrokenNamespaceResolutionRuntime()) {
             if (const QoreClass* qc = runtimeFindQoreClassIntern(name)) {
                 return qc;
@@ -1937,6 +2014,7 @@ protected:
     DLLLOCAL Var* runtimeFindGlobalVar(const NamedScope& nscope, const qore_ns_private*& vns) const;
 
     DLLLOCAL Var* runtimeFindGlobalVar(const char* vname, const qore_ns_private*& vns) const {
+        RuntimeNamespaceReadLocker rnl(*this);
         if (strstr(vname, "::")) {
             NamedScope nscope(vname);
             return runtimeFindGlobalVar(nscope, vns);
@@ -1961,6 +2039,7 @@ protected:
             const qore_ns_private*& cns) const;
 
     DLLLOCAL const ConstantEntry* runtimeFindNamespaceConstant(const char* cname, const qore_ns_private*& cns) const {
+        RuntimeNamespaceReadLocker rnl(*this);
         if (strstr(cname, "::")) {
             NamedScope nscope(cname);
             return runtimeFindNamespaceConstant(nscope, cns);
@@ -2160,6 +2239,7 @@ public:
     }
 
     DLLLOCAL RootQoreNamespace* copy(const QoreParseOptions& po, QoreProgram* pgm) {
+        RuntimeNamespaceReadLocker rnl(*this);
         RootQoreNamespace* rv = new RootQoreNamespace(nullptr);
         qore_root_ns_private* rpriv = new qore_root_ns_private(*this, po, pgm, rv);
         rv->priv = rv->rpriv = rpriv;
@@ -2201,6 +2281,7 @@ public:
     }
 
     DLLLOCAL QoreNamespace* runtimeFindNamespace(const NamedScope& name) {
+        RuntimeNamespaceReadLocker rnl(*this);
         // iterate all namespaces with the initial name and look for the match
         NamespaceMapIterator nmi(nsmap, name[0]);
         while (nmi.next()) {
@@ -2214,6 +2295,7 @@ public:
     }
 
     DLLLOCAL QoreNamespace* runtimeFindNamespace(const QoreString& name) {
+        RuntimeNamespaceReadLocker rnl(*this);
         if (name.bindex("::", 0) != -1) {
             NamedScope scope(name.c_str());
             return runtimeFindNamespace(scope);
@@ -2239,6 +2321,7 @@ public:
     }
 
     DLLLOCAL QoreHashNode* getGlobalVars() const {
+        RuntimeNamespaceReadLocker rnl(*this);
         QoreHashNode* rv = new QoreHashNode(autoTypeInfo);
         qore_ns_private::getGlobalVars(*rv);
         return rv;
@@ -3191,6 +3274,16 @@ public:
 
     DLLLOCAL static const qore_root_ns_private* get(const RootQoreNamespace& rns) {
         return rns.rpriv;
+    }
+
+    //! Acquires the namespace write lock for an atomic runtime parse/module mutation
+    DLLLOCAL static void runtimeNamespaceWriteLock(RootQoreNamespace& rns) {
+        rns.rpriv->runtimeNamespaceWriteLock();
+    }
+
+    //! Releases the namespace write lock after a runtime parse/module mutation
+    DLLLOCAL static void runtimeNamespaceWriteUnlock(RootQoreNamespace& rns) {
+        rns.rpriv->runtimeNamespaceWriteUnlock();
     }
 
     DLLLOCAL static qore_ns_private* getQore(RootQoreNamespace& rns) {

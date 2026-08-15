@@ -340,14 +340,17 @@ QoreProgram* QoreNamespace::getProgram() const {
 }
 
 const char* QoreNamespace::getModuleName() const {
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(priv->getRoot());
     return priv->getModuleName();
 }
 
 bool QoreNamespace::isFromModule(const char* mod) const {
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(priv->getRoot());
     return priv->isFromModule(mod);
 }
 
 size_t QoreNamespace::getModuleCount() const {
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(priv->getRoot());
     return priv->getModuleNames().size();
 }
 
@@ -902,6 +905,7 @@ void QoreNamespace::clear(ExceptionSink* xsink) {
 }
 
 QoreNamespace* QoreNamespace::copy(const QoreParseOptions& po) const {
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(priv->getRoot());
     //printd(5, "QoreNamespace::copy() this: %p po: %lld %s\n", this, po, priv->name.c_str());
     return new QoreNamespace(*this, po);
 }
@@ -1192,6 +1196,7 @@ QoreNamespace* qore_ns_private::findCreateNamespacePath(const nslist_t& nsl, boo
 }
 
 QoreClass* QoreNamespace::findLocalClass(const char* cname) const {
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(priv->getRoot());
     return priv->classList.find(cname);
 }
 
@@ -1200,6 +1205,7 @@ QoreClass* QoreNamespace::findLoadLocalClass(const char* cname) {
 }
 
 QoreNamespace* QoreNamespace::findLocalNamespace(const char* cname) const {
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(priv->getRoot());
     return priv->nsl.find(cname);
 }
 
@@ -1230,15 +1236,18 @@ static void showNSL(QoreNamespaceList* nsl) {
 */
 
 QoreHashNode* QoreNamespace::getConstantInfo() const {
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(priv->getRoot());
     return priv->constant.getInfo();
 }
 
 QoreHashNode* QoreNamespace::getClassInfo() const {
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(priv->getRoot());
     return priv->classList.getInfo();
 }
 
 // returns a hash of namespace information
 QoreHashNode* QoreNamespace::getInfo() const {
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(priv->getRoot());
     QoreHashNode* h = new QoreHashNode(autoTypeInfo);
 
     h->setKeyValue("constants", getConstantInfo(), 0);
@@ -1273,22 +1282,27 @@ void QoreNamespace::addBuiltinVariant(void* ptr, const char* name, q_external_fu
 }
 
 const QoreExternalFunction* QoreNamespace::findLocalFunction(const char* name) const {
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(priv->getRoot());
     return reinterpret_cast<const QoreExternalFunction*>(priv->func_list.find(name, true));
 }
 
 const QoreExternalConstant* QoreNamespace::findLocalConstant(const char* name) const {
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(priv->getRoot());
     return reinterpret_cast<const QoreExternalConstant*>(priv->constant.findEntry(name));
 }
 
 const QoreExternalGlobalVar* QoreNamespace::findLocalGlobalVar(const char* name) const {
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(priv->getRoot());
     return reinterpret_cast<const QoreExternalGlobalVar*>(priv->var_list.runtimeFindVar(name));
 }
 
 const TypedHashDecl* QoreNamespace::findLocalTypedHash(const char* name) const {
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(priv->getRoot());
     return priv->hashDeclList.find(name);
 }
 
 const QoreEnumDecl* QoreNamespace::findLocalEnum(const char* name) const {
+    qore_root_ns_private::RuntimeNamespaceReadLocker rnl(priv->getRoot());
     return priv->enumList.find(name);
 }
 
@@ -2093,6 +2107,7 @@ const QoreEnumDecl* qore_root_ns_private::parseFindEnum(const QoreProgramLocatio
 }
 
 const QoreClass* qore_root_ns_private::runtimeFindScopedClassWithMethod(const NamedScope& scname) const {
+    RuntimeNamespaceReadLocker rnl(*this);
     // must have at least 2 elements
     assert(scname.size() > 1);
 
@@ -2104,6 +2119,7 @@ const QoreClass* qore_root_ns_private::runtimeFindScopedClassWithMethod(const Na
 }
 
 const QoreClass* qore_root_ns_private::runtimeFindScopedClassWithMethodIntern(const NamedScope& nscope) const {
+    RuntimeNamespaceReadLocker rnl(*this);
     assert(nscope.size() > 2);
 
     // iterate all namespaces with the initial name and look for the match
@@ -2120,6 +2136,7 @@ const QoreClass* qore_root_ns_private::runtimeFindScopedClassWithMethodIntern(co
 }
 
 const QoreClass* qore_root_ns_private::runtimeFindScopedClass(const NamedScope& nscope) const {
+    RuntimeNamespaceReadLocker rnl(*this);
     if (nscope.size() == 1)
         return runtimeFindClass(nscope.ostr);
 
@@ -2456,6 +2473,7 @@ qore_ns_private* qore_root_ns_private::parseResolveNamespace(const QoreProgramLo
 }
 
 Var* qore_root_ns_private::runtimeFindGlobalVar(const NamedScope& name, const qore_ns_private*& ns) const {
+    RuntimeNamespaceReadLocker rnl(*this);
     assert(name.size() > 1);
 
     ConstNamespaceMapIterator nmi(nsmap, name.get(0));
@@ -2469,6 +2487,7 @@ Var* qore_root_ns_private::runtimeFindGlobalVar(const NamedScope& name, const qo
 }
 
 const ConstantEntry* qore_root_ns_private::runtimeFindNamespaceConstant(const NamedScope& name, const qore_ns_private*& cns) const {
+    RuntimeNamespaceReadLocker rnl(*this);
     assert(name.size() > 1);
 
     ConstNamespaceMapIterator nmi(nsmap, name.get(0));
@@ -2482,6 +2501,7 @@ const ConstantEntry* qore_root_ns_private::runtimeFindNamespaceConstant(const Na
 }
 
 const QoreClass* qore_root_ns_private::runtimeFindClassIntern(const NamedScope& name, const qore_ns_private*& ns) const {
+    RuntimeNamespaceReadLocker rnl(*this);
     assert(name.size() > 1);
 
     // iterate all namespaces with the initial name and look for the match
@@ -2496,6 +2516,7 @@ const QoreClass* qore_root_ns_private::runtimeFindClassIntern(const NamedScope& 
 }
 
 class_vec_t qore_root_ns_private::runtimeFindAllClassesRegex(const QoreString& pattern, int re_opts, ExceptionSink* xsink) const {
+    RuntimeNamespaceReadLocker rnl(*this);
     class_vec_t class_vec;
 
     QoreRegex re(pattern, re_opts, xsink);
@@ -2514,6 +2535,7 @@ class_vec_t qore_root_ns_private::runtimeFindAllClassesRegex(const QoreString& p
 }
 
 hashdecl_vec_t qore_root_ns_private::runtimeFindAllHashDeclsRegex(const QoreString& pattern, int re_opts, ExceptionSink* xsink) const {
+    RuntimeNamespaceReadLocker rnl(*this);
     hashdecl_vec_t hashdecl_vec;
 
     QoreRegex re(pattern, re_opts, xsink);
@@ -2533,6 +2555,7 @@ hashdecl_vec_t qore_root_ns_private::runtimeFindAllHashDeclsRegex(const QoreStri
 }
 
 func_vec_t qore_root_ns_private::runtimeFindAllFunctionsRegex(const QoreString& pattern, int re_opts, ExceptionSink* xsink) const {
+    RuntimeNamespaceReadLocker rnl(*this);
     func_vec_t func_vec;
 
     QoreRegex re(pattern, re_opts, xsink);
@@ -2552,6 +2575,7 @@ func_vec_t qore_root_ns_private::runtimeFindAllFunctionsRegex(const QoreString& 
 }
 
 ns_vec_t qore_root_ns_private::runtimeFindAllNamespacesRegex(const QoreString& pattern, int re_opts, ExceptionSink* xsink) const {
+    RuntimeNamespaceReadLocker rnl(*this);
     ns_vec_t ns_vec;
 
     QoreRegex re(pattern, re_opts, xsink);
@@ -2571,6 +2595,7 @@ ns_vec_t qore_root_ns_private::runtimeFindAllNamespacesRegex(const QoreString& p
 }
 
 gvar_vec_t qore_root_ns_private::runtimeFindAllGlobalVarsRegex(const QoreString& pattern, int re_opts, ExceptionSink* xsink) const {
+    RuntimeNamespaceReadLocker rnl(*this);
     gvar_vec_t gvar_vec;
 
     QoreRegex re(pattern, re_opts, xsink);
@@ -2590,6 +2615,7 @@ gvar_vec_t qore_root_ns_private::runtimeFindAllGlobalVarsRegex(const QoreString&
 }
 
 const_vec_t qore_root_ns_private::runtimeFindAllNamespaceConstantsRegex(const QoreString& pattern, int re_opts, ExceptionSink* xsink) const {
+    RuntimeNamespaceReadLocker rnl(*this);
     const_vec_t const_vec;
 
     QoreRegex re(pattern, re_opts, xsink);
@@ -2608,6 +2634,7 @@ const_vec_t qore_root_ns_private::runtimeFindAllNamespaceConstantsRegex(const Qo
 }
 
 const TypedHashDecl* qore_root_ns_private::runtimeFindHashDeclIntern(const NamedScope& name, const qore_ns_private*& ns) {
+    RuntimeNamespaceReadLocker rnl(*this);
     if (name.size() == 1)
         return runtimeFindHashDeclIntern(name.ostr, ns);
 
@@ -2623,6 +2650,7 @@ const TypedHashDecl* qore_root_ns_private::runtimeFindHashDeclIntern(const Named
 }
 
 const QoreEnumDecl* qore_root_ns_private::runtimeFindEnumIntern(const NamedScope& name, const qore_ns_private*& ns) {
+    RuntimeNamespaceReadLocker rnl(*this);
     if (name.size() == 1) {
         return runtimeFindEnumIntern(name.ostr, ns);
     }
@@ -2640,6 +2668,7 @@ const QoreEnumDecl* qore_root_ns_private::runtimeFindEnumIntern(const NamedScope
 }
 
 const FunctionEntry* qore_root_ns_private::runtimeFindFunctionEntryIntern(const NamedScope& name) {
+    RuntimeNamespaceReadLocker rnl(*this);
     assert(name.size() > 1);
 
     // iterate all namespaces with the initial name and look for the match
@@ -2793,6 +2822,7 @@ static void get_params(const QoreListNode* params, QoreString& desc) {
 }
 
 const AbstractQoreFunctionVariant* qore_root_ns_private::runtimeFindCall(const char* name, const QoreListNode* params, ExceptionSink* xsink) {
+    RuntimeNamespaceReadLocker rnl(*this);
     // function or method
     const QoreFunction* qf = nullptr;
 
@@ -2887,6 +2917,7 @@ const AbstractQoreFunctionVariant* qore_root_ns_private::runtimeFindCall(const c
 }
 
 QoreListNode* qore_root_ns_private::runtimeFindCallVariants(const char* name, ExceptionSink* xsink) {
+    RuntimeNamespaceReadLocker rnl(*this);
     // function or method
     const QoreFunction* qf = nullptr;
 
