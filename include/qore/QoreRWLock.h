@@ -34,99 +34,63 @@
 #ifndef _QORE_QORERWLOCK_H
 #define _QORE_QORERWLOCK_H
 
-#include <pthread.h>
+class qore_var_rwlock_priv;
 
-// declared here rather than including qore_thread.h to keep this header dependency-free; the
-// declaration must match qore_thread.h exactly, including DLLEXPORT: the inline write-lock methods
-// below call this from consumer modules, and on platforms where DLLEXPORT means dllimport a plain
-// "extern" declaration would not resolve against libqore
-DLLEXPORT int q_gettid() noexcept;
+//! provides a read-write lock that always prefers readers
+/** The lock is not a wrapper for \c pthread_rwlock_t, because reader/writer preference is not
+    portably configurable there: \c pthread_rwlockattr_setkind_np() is a glibc extension, and
+    Darwin's \c pthread_rwlockattr_t supports only \c pshared, so a \c pthread_rwlock_t is
+    writer-preferring on macOS and reader-preferring on Linux with no way to align the two.  The
+    policy is therefore implemented by Qore itself, so that the semantics are identical on all
+    platforms.
 
-//! provides a simple POSIX-threads-based read-write lock
-/** This utility class is just a simple wrapper for pthread_rwlock_t.  It does
-    not provide any special logic for checking for correct usage, etc.
+    Qore code assumes reader preference, which is what makes it safe for a thread already holding
+    the read lock to acquire it again (directly or through a nested call): a reader waits only
+    while a writer actually \a holds the lock, never because a writer is queued behind it.  Under
+    writer preference the second acquisition blocks behind the queued writer while the writer waits
+    for the first acquisition to be released, which deadlocks.
+
+    A thread holding the read lock must not acquire the write lock, and a thread holding the write
+    lock must not acquire either lock again; both are asserted in debug builds.
+
+    This class does not provide any other logic for checking for correct usage, etc.
+
+    @note the implementation is private (see \c qore_var_rwlock_priv), so that the lock's internal
+    layout is not baked into binary modules; the same implementation backs QoreVarRWLock.  When
+    debugging a live process or a core dump, \c priv->write_tid gives the TID of the thread holding
+    the write lock (-1 if none), and \c priv->readers the number of threads holding the read lock
  */
 class QoreRWLock {
 public:
     //! creates and initializes the lock
-    DLLLOCAL QoreRWLock() {
-#ifndef NDEBUG
-        int rc =
-#endif
-        pthread_rwlock_init(&m, 0);
-        assert(!rc);
-    }
+    DLLEXPORT QoreRWLock();
 
     //! destroys the lock
-    DLLLOCAL ~QoreRWLock() {
-#ifndef NDEBUG
-        int rc =
-#endif
-        pthread_rwlock_destroy(&m);
-        assert(!rc);
-    }
+    DLLEXPORT ~QoreRWLock();
 
-    //! grabs the write lock
-    DLLLOCAL int wrlock() {
-        int rc = pthread_rwlock_wrlock(&m);
-        if (!rc) {
-            wr_tid = q_gettid();
-        }
-        return rc;
-    }
+    //! grabs the write lock; returns 0 (the return value exists for API compatibility)
+    DLLEXPORT int wrlock();
 
     //! tries to grab the write lock; does not block if unsuccessful; returns 0 if successful
-    DLLLOCAL int trywrlock() {
-        int rc = pthread_rwlock_trywrlock(&m);
-        if (!rc) {
-            wr_tid = q_gettid();
-        }
-        return rc;
-    }
+    DLLEXPORT int trywrlock();
 
     //! unlocks the lock (assumes the lock is locked)
-    DLLLOCAL int unlock() {
-        // only clear the write TID if a write lock is held; this test keeps the read-unlock path
-        // free of a write to wr_tid, which would otherwise be a data race between concurrent
-        // readers releasing the lock
-        if (wr_tid != -1) {
-            wr_tid = -1;
-        }
-        return pthread_rwlock_unlock(&m);
-    }
+    /** releases the write lock if the current thread holds it, otherwise releases a read lock
+    */
+    DLLEXPORT int unlock();
 
-    //! grabs the read lock
-    DLLLOCAL int rdlock() {
-        return pthread_rwlock_rdlock(&m);
-    }
+    //! grabs the read lock; returns 0 (the return value exists for API compatibility)
+    DLLEXPORT int rdlock();
 
     //! tries to grab the read lock; does not block if unsuccessful; returns 0 if successful
-    DLLLOCAL int tryrdlock() {
-        return pthread_rwlock_tryrdlock(&m);
-    }
+    DLLEXPORT int tryrdlock();
 
 protected:
-    //! the actual locking primitive wrapped in this class
-    pthread_rwlock_t m;
+    //! the private implementation of the lock
+    qore_var_rwlock_priv* priv;
 
-    //! the TID of the thread holding the write lock, or -1 if no write lock is held
-    /** This member and its maintenance are unconditional on purpose.
-
-        It must not depend on \c NDEBUG: this class is header-only (every method is inline), so a
-        binary module compiles its own copy of the layout.  If the member existed only in some
-        builds, a module built with a different \c NDEBUG setting than libqore would disagree with
-        libqore about sizeof(QoreRWLock) and the offsets of anything following it, silently
-        corrupting memory.
-
-        It is also maintained in release builds because it is the only way to identify the thread
-        holding the write lock: unlike \c pthread_mutex_t (which exposes \c __owner), a
-        \c pthread_rwlock_t exposes no portable owner field, so without this there is no way to
-        attribute a held write lock to a thread when debugging a live process or a core dump --
-        exactly the information needed to diagnose a hang in the field.  Only the write-lock paths
-        pay for it; read locks never touch it.
-    */
-    int wr_tid = -1;
-
+private:
+    QoreRWLock(const QoreRWLock&) = delete;
     QoreRWLock& operator=(const QoreRWLock&) = delete;
 };
 
