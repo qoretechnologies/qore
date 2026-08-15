@@ -2073,6 +2073,16 @@ private:
     DLLLOCAL QoreValue resolvePath(ExceptionSink* xsink) const {
         ConstantEntry* ce = getConstantEntry();
         if (!ce->hasValue()) {
+            // Match RuntimeConstantRefNode's first-read recovery for a reference
+            // to the constant itself.  A nested value path can be captured by
+            // another constant's AOT initializer before the base constant's
+            // initializer has run; resolve that dependency lazily as well.
+            int rc = runPendingInit(xsink);
+            if (rc < 0) {
+                return QoreValue();
+            }
+        }
+        if (!ce->hasValue()) {
             if (xsink) {
                 xsink->raiseException("AOT-PENDING-CONSTANT",
                     "cannot evaluate AOT-deserialized constant path '%s' before base constant '%s' "
@@ -2315,7 +2325,9 @@ static bool aot_constant_path_belongs_to_fqns(const std::string& path,
     if (!aot_parse_size_component(path, pos, base_len) || pos + base_len > path.size()) {
         return false;
     }
-    return excluded_fqns.find(path.substr(pos, base_len)) != excluded_fqns.end();
+    std::string base = path.substr(pos, base_len);
+    return (!excluded_direct_fqn.empty() && base == excluded_direct_fqn)
+        || excluded_fqns.find(base) != excluded_fqns.end();
 }
 
 static bool aot_constant_path_belongs_to_fqn(const std::string& path,

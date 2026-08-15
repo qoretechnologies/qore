@@ -1122,6 +1122,8 @@ struct AOTCompiledFunc {
     int num_regex_cases = 0;        //!< number of regex case slots (SwitchRegexMatch)
     int num_lv_path_insts = 0;      //!< number of LValuePath instruction slots
     AOTSlotIdentities slot_ids;     //!< extracted slot identities for source-stripped mode
+    //! Constant FQNs whose nested reverse-map paths must be ignored while serializing this function's slots.
+    std::vector<std::string> const_reverse_map_exclude_fqns;
     uint64_t feature_flags = 0;     //!< QORE_AOT_FEAT_* bitset required by this function
     //! Handler IR functions indexed by stmt slot; owned by debug_ir when present.
     std::vector<const QoreIRFunction*> handler_irs;
@@ -5143,7 +5145,9 @@ static AOTConstantReverseMap filterPendingInitConstantReverseMap(
         }
         if (isAOTEncodedConstantPath(it.second)) {
             std::string base;
-            if (getAOTConstantPathBase(it.second, base) && pending_fqns.find(base) != pending_fqns.end()) {
+            if (getAOTConstantPathBase(it.second, base)
+                    && ((!direct_exclude_fqn.empty() && base == direct_exclude_fqn)
+                        || pending_fqns.find(base) != pending_fqns.end())) {
                 continue;
             }
         }
@@ -5329,6 +5333,11 @@ static void setAOTInitFuncConstantExclusions(AOTCompiledFuncWithSlots& fws,
     fws.const_reverse_map_exclude_direct_fqn = cif.const_reverse_map_exclude_direct_fqn;
     fws.const_reverse_map_exclude_fqns = cif.const_reverse_map_exclude_fqns;
     fws.const_reverse_map_override = cif.const_reverse_map_override;
+}
+
+static void setAOTFuncConstantExclusions(AOTCompiledFuncWithSlots& fws,
+        const AOTCompiledFunc& cf) {
+    fws.const_reverse_map_exclude_fqns = cf.const_reverse_map_exclude_fqns;
 }
 
 static const ConstantEntry* getAOTLoadConstantEntry(const RuntimeConstantRefNode* node,
@@ -17603,6 +17612,8 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
         cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
         cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
         cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
+        cf.const_reverse_map_exclude_fqns =
+            compiled_funcs[owner_index].const_reverse_map_exclude_fqns;
         extractAOTSlotIdentities(*ir_func, slots, variant, cf.slot_ids,
             const_reverse_map, pgm);
         cf.num_exprs = static_cast<int>(cf.slot_ids.exprs.size());
@@ -19509,15 +19520,31 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
         std::sort(pending_init_constant_fqn_list.begin(), pending_init_constant_fqn_list.end());
     }
 
+    // Ordinary functions can return a compile-time value that is also the
+    // evaluated value of a pending constant.  Encoding a nested slot through
+    // that constant makes the function depend on the value it may be called to
+    // construct.  Keep top-level constant references, which recover lazily,
+    // but serialize nested values independently until initialization is done.
+    const bool top_level_namespace = !init_base_const_reverse_map;
+    const AOTConstantReverseMap* full_const_reverse_map = const_reverse_map;
+    std::unique_ptr<AOTConstantReverseMap> pending_safe_const_reverse_map;
+    if (top_level_namespace && const_reverse_map && pending_init_constant_fqns
+            && !pending_init_constant_fqns->empty()) {
+        pending_safe_const_reverse_map = std::make_unique<AOTConstantReverseMap>(
+            filterPendingInitConstantReverseMap(*const_reverse_map,
+                *pending_init_constant_fqns, std::string()));
+        const_reverse_map = pending_safe_const_reverse_map.get();
+    }
+
     std::unique_ptr<AOTConstantReverseMap> local_init_base_crm;
     if (!init_base_const_reverse_map) {
-        if (const_reverse_map) {
+        if (full_const_reverse_map) {
             // The caller builds this map from every namespace tree visible to the
             // compilation unit, including embedded source modules.  Keep that
             // full view for init functions; per-constant filtering below removes
             // unsafe self/nested pending paths without dropping sibling module
             // constants referenced by the init expression.
-            init_base_const_reverse_map = const_reverse_map;
+            init_base_const_reverse_map = full_const_reverse_map;
         } else if (pending_init_constant_fqns && !pending_init_constant_fqns->empty()) {
             local_init_base_crm.reset(new AOTConstantReverseMap(
                 buildPendingSafeConstantReverseMap(ns, *pending_init_constant_fqns)));
@@ -20024,6 +20051,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
                     cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                     cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
+                    cf.const_reverse_map_exclude_fqns = pending_init_constant_fqn_list;
                     // Extract slot identities for source-stripped mode
                     extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids,
                         const_reverse_map, pgm);
@@ -20524,6 +20552,7 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         cf.num_stmts = static_cast<int>(slots.stmt_slots.size());
                         cf.num_regex_cases = static_cast<int>(slots.regex_case_slots.size());
                         cf.num_lv_path_insts = static_cast<int>(slots.lv_path_slots.size());
+                        cf.const_reverse_map_exclude_fqns = pending_init_constant_fqn_list;
                         // Extract slot identities for source-stripped mode
                         extractAOTSlotIdentities(*ir_func, slots, uvb, cf.slot_ids,
                             const_reverse_map, pgm);
@@ -23051,6 +23080,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
             fws.num_regex_cases = cf.num_regex_cases;
             fws.num_lv_path_insts = cf.num_lv_path_insts;
             fws.slot_ids = cf.slot_ids;
+            setAOTFuncConstantExclusions(fws, cf);
             // Transfer handler IR pointers (non-owning: AOTCompiledFunc still owns them)
             for (auto& hir : cf.handler_irs) {
                 fws.handler_irs.push_back(hir);
@@ -25213,6 +25243,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             fws.num_regex_cases = cf.num_regex_cases;
             fws.num_lv_path_insts = cf.num_lv_path_insts;
             fws.slot_ids = cf.slot_ids;
+            setAOTFuncConstantExclusions(fws, cf);
             // Transfer handler IR pointers (non-owning: AOTCompiledFunc still owns them)
             for (auto& hir : cf.handler_irs) {
                 fws.handler_irs.push_back(hir);
@@ -25688,6 +25719,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 fws.num_regex_cases = cf.num_regex_cases;
                 fws.num_lv_path_insts = cf.num_lv_path_insts;
                 fws.slot_ids = cf.slot_ids;
+                setAOTFuncConstantExclusions(fws, cf);
                 // Transfer handler IR pointers (non-owning: AOTCompiledFunc still owns them)
                 for (auto& hir : cf.handler_irs) {
                     fws.handler_irs.push_back(hir);
@@ -26320,6 +26352,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
             fws.num_regex_cases = cf.num_regex_cases;
             fws.num_lv_path_insts = cf.num_lv_path_insts;
             fws.slot_ids = cf.slot_ids;
+            setAOTFuncConstantExclusions(fws, cf);
             for (auto& hir : cf.handler_irs) {
                 fws.handler_irs.push_back(hir);
             }
@@ -27870,6 +27903,7 @@ bool QoreAOT::compileScriptAggregate(
                 fws.num_regex_cases = cf.num_regex_cases;
                 fws.num_lv_path_insts = cf.num_lv_path_insts;
                 fws.slot_ids = cf.slot_ids;
+                setAOTFuncConstantExclusions(fws, cf);
                 for (auto& hir : cf.handler_irs) {
                     fws.handler_irs.push_back(hir);
                 }
@@ -28782,6 +28816,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             fws.num_regex_cases = cf.num_regex_cases;
             fws.num_lv_path_insts = cf.num_lv_path_insts;
             fws.slot_ids = cf.slot_ids;
+            setAOTFuncConstantExclusions(fws, cf);
             for (auto& hir : cf.handler_irs) {
                 fws.handler_irs.push_back(hir);
             }
@@ -29359,6 +29394,7 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 fws.num_regex_cases = cf.num_regex_cases;
                 fws.num_lv_path_insts = cf.num_lv_path_insts;
                 fws.slot_ids = cf.slot_ids;
+                setAOTFuncConstantExclusions(fws, cf);
                 for (auto& hir : cf.handler_irs) {
                     fws.handler_irs.push_back(hir);
                 }
@@ -29825,6 +29861,7 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                 fws.num_regex_cases = cf.num_regex_cases;
                 fws.num_lv_path_insts = cf.num_lv_path_insts;
                 fws.slot_ids = cf.slot_ids;
+                setAOTFuncConstantExclusions(fws, cf);
                 for (auto& hir : cf.handler_irs) {
                     fws.handler_irs.push_back(hir);
                 }
@@ -30302,6 +30339,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 fws.num_regex_cases = cf.num_regex_cases;
                 fws.num_lv_path_insts = cf.num_lv_path_insts;
                 fws.slot_ids = cf.slot_ids;
+                setAOTFuncConstantExclusions(fws, cf);
                 for (auto& hir : cf.handler_irs) {
                     fws.handler_irs.push_back(hir);
                 }

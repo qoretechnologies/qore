@@ -41,6 +41,8 @@ class AOTPendingConstantRecoveryTest inherits QUnit::Test {
 
         addTestCase("uninitialized AOT constants recover on first read",
             \testDeferredConstantsRecoverOnRead());
+        addTestCase("nested paths recover their pending base constant",
+            \testDeferredConstantPathRecoversBase());
         addTestCase("recovery reports the initializer failure",
             \testFailedInitializerIsReported());
 
@@ -110,6 +112,38 @@ public string sub verify() {
     rv += sprintf("class_const_label=%s\n", Reader::lookup("b"));
     rv += sprintf("nested_label=%s\n", Reader::Snapshot.a.getLabel());
     return rv;
+}
+}
+';
+    }
+
+    private string pathModuleCode() {
+        return '%modern
+
+module AOTPendingConstPathMod {
+    version = "1.0";
+    desc = "AOT deferred constant path regression module";
+    author = "Qore";
+    license = "MIT";
+}
+
+public namespace AOTPendingConstPathMod {
+hash<auto> sub makeBase() {
+    return {
+        "driver": {
+            "oracle": {
+                "native_type": "date",
+            },
+        },
+    };
+}
+
+public const Base = makeBase();
+public const Copy = Base + {"comment": "copy"};
+
+public string sub verify() {
+    return sprintf("base=%s copy=%s\n", Base.driver.oracle.native_type,
+        Copy.driver.oracle.native_type);
 }
 }
 ';
@@ -199,6 +233,37 @@ printf(\"script_map_a=%s\\n\", AOTPendingConstMod::ThingMap.a.getLabel());
             "the deferred run initialized constants from the first read");
         assertTrue(trace.find("item=ThingMap") >= 0 && trace.find("item=Alpha") >= 0,
             "recovering a constant also recovers the constants it depends on");
+    }
+
+    #! a deferred nested constant path must initialize its base before resolving the path
+    testDeferredConstantPathRecoversBase() {
+        TmpDir tmp("qore-aot-pending-const-path-");
+        string src_dir = tmp.path + "/src";
+        string qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        string qm_path = src_dir + "/AOTPendingConstPathMod.qm";
+        string qmod_path = qmod_dir + "/AOTPendingConstPathMod.qmod";
+        string script_path = tmp.path + "/run.qr";
+        writeFile(qm_path, pathModuleCode());
+        writeFile(script_path, "%modern
+%requires AOTPendingConstPathMod
+printf(\"%s\", AOTPendingConstPathMod::verify());
+");
+
+        string compile_out = compileModule(qmod_path, qm_path);
+        assertTrue(is_file(qmod_path), "compiled constant-path module: " + compile_out);
+
+        string output = runModule(qmod_dir, script_path,
+            "QORE_AOT_TEST_DEFER_CONSTANT_INIT=1 QORE_AOT_INIT_TRACE=1");
+        assertTrue(output.find("base=date copy=date") >= 0,
+            "nested path resolves after lazily initializing its base: " + output);
+        assertTrue(output.find("[aot-init] lazy constant init") >= 0
+            && output.find("item=Base") >= 0,
+            "nested path first-read recovery initialized the base constant: " + output);
+        assertEq(-1, output.find("AOT-PENDING-CONSTANT"),
+            "nested path recovery does not report its base as unpopulated");
     }
 
     #! an initializer that fails when it is finally run must report its own failure
