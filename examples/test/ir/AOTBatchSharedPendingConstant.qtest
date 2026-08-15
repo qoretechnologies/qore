@@ -1,0 +1,161 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTBatchSharedPendingConstantTest
+
+# Regression test for false AOT constant-init cycles in a multi-source batch.
+#
+# A delayed base constant and delayed derived constants can share evaluated
+# aggregate nodes.  The batch reverse map can therefore project a base
+# initializer's nested value through a shorter derived-constant path.  Each
+# per-file emitter must filter paths through every pending constant in the
+# shared program, not only constants declared by that file; otherwise loading
+# the linked objects raises AOT-PENDING-CONSTANT at batch init time.
+class AOTBatchSharedPendingConstantTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTBatchSharedPendingConstantTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("batch initializers do not depend on sibling pending constants",
+            \testSharedPendingConstantGraph());
+
+        set_return_value(main());
+    }
+
+    private string mapCode() {
+        return "%new-style
+public hashdecl MetaFieldInfo {
+    string display_name;
+    string type;
+    *hash<auto> arg_schema;
+}
+
+public class QorusMapManager {
+    public {
+        const NameDescFields = {
+            \"name\": <MetaFieldInfo>{
+                \"display_name\": \"Name\",
+                \"type\": \"string\",
+            },
+        };
+
+        const CommonMetadata = NameDescFields + {
+            \"tags\": <MetaFieldInfo>{
+                \"display_name\": \"Tags\",
+                \"type\": \"hash\",
+                \"arg_schema\": {
+                    \"key\": {
+                        \"display_name\": \"Tag Key\",
+                        \"type\": \"string\",
+                        \"required\": True,
+                    },
+                    \"value\": {
+                        \"display_name\": \"Tag Value\",
+                        \"type\": \"string\",
+                        \"required\": True,
+                    },
+                },
+            },
+        };
+    }
+}
+";
+    }
+
+    private string fsmCode() {
+        return "%new-style
+public class FsmMetadata {
+    public {
+        const FsmMetadata = QorusMapManager::CommonMetadata + {
+            \"states\": <MetaFieldInfo>{
+                \"display_name\": \"States\",
+                \"type\": \"hash\",
+            },
+        };
+    }
+}
+";
+    }
+
+    private string queueCode() {
+        return "%new-style
+public class AsyncQueueMetadata {
+    public {
+        const AsyncQueueMetadata = QorusMapManager::CommonMetadata + {
+            \"groups\": <MetaFieldInfo>{
+                \"display_name\": \"Groups\",
+                \"type\": \"list\",
+            },
+        };
+    }
+}
+";
+    }
+
+    private string mainCode() {
+        return "%new-style
+int sub main() {
+    printf(\"%s|%s\\n\",
+        QorusMapManager::CommonMetadata.tags.arg_schema.key.display_name,
+        FsmMetadata::FsmMetadata.states.display_name);
+    return 0;
+}
+";
+    }
+
+    private writeSource(string path, string source) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(source);
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    testSharedPendingConstantGraph() {
+        TmpDir tmp("qore-aot-batch-shared-pending-constant-");
+        string root = tmp.path;
+        string map_path = root + "/map.qc";
+        string fsm_path = root + "/fsm.qc";
+        string queue_path = root + "/queue.qc";
+        string main_path = root + "/main.q";
+        string exe = root + "/shared-pending-constant";
+
+        writeSource(map_path, mapCode());
+        writeSource(fsm_path, fsmCode());
+        writeSource(queue_path, queueCode());
+        writeSource(main_path, mainCode());
+
+        string env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_AOT_BATCH_JOBS=1",
+            libqore_dir, libqore_dir);
+        string compile_out = run(sprintf(
+            "%s %s -O3 --parse-option=PO_MODERN -o %s %s %s %s %s",
+            env, qcc_bin, exe, map_path, fsm_path, queue_path, main_path));
+        assertTrue(is_file(exe),
+            "compiled the multi-source shared-constant executable: " + compile_out);
+        assertEq(-1, compile_out.find("AOT-PENDING-CONSTANT"),
+            "compilation did not expose a pending constant: " + compile_out);
+
+        string run_out = run(sprintf("%s %s", env, exe));
+        assertEq("Tag Key|States\n", run_out,
+            "all linked constant initializers resolved in dependency order: " + run_out);
+    }
+}

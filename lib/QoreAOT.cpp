@@ -26156,6 +26156,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         const std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>*
             shared_batch_callees = nullptr,
         const AOTConstantReverseMap* shared_const_reverse_map = nullptr,
+        const std::unordered_set<std::string>* shared_pending_init_constant_fqns = nullptr,
         const AOTStatementLocIndex* shared_statement_locs = nullptr,
         AOTBatchEmitTiming* batch_timing = nullptr) {
     // Global LLVM target init is process-wide and not safe to call
@@ -26211,6 +26212,21 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
     }
     const AOTConstantReverseMap& const_reverse_map = *const_reverse_map_ptr;
 
+    // A per-file object can initialize a constant whose evaluated value graph
+    // is shared with a delayed constant declared in another file.  Filter
+    // reverse-map paths through every pending constant in the shared program,
+    // not only the constants emitted by this object; otherwise the current
+    // initializer can be serialized through a sibling pending constant and
+    // create a false init dependency cycle.
+    std::unordered_set<std::string> local_pending_init_constant_fqns;
+    const std::unordered_set<std::string>* pending_init_constant_fqns
+        = shared_pending_init_constant_fqns;
+    if (!pending_init_constant_fqns) {
+        collectPendingInitConstantFQNs(root_ns, local_pending_init_constant_fqns,
+            /*compile_module=*/nullptr, /*compile_file=*/nullptr);
+        pending_init_constant_fqns = &local_pending_init_constant_fqns;
+    }
+
     auto phase_start = batch_timing
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
@@ -26225,7 +26241,7 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
         compiled_funcs, compiled_init_funcs, total_funcs, compiled_count,
         failed_count, total_ir_insts_all, &const_reverse_map, nullptr,
         /*compile_module=*/nullptr, /*compile_file=*/target_canon.c_str(),
-        /*metadata_only=*/false, nullptr, nullptr, &fatal_lowering_error,
+        /*metadata_only=*/false, pending_init_constant_fqns, nullptr, &fatal_lowering_error,
         nullptr, nullptr, shared_batch_callees);
     if (!fatal_lowering_error.empty()) {
         error = fatal_lowering_error;
@@ -27307,6 +27323,10 @@ bool QoreAOT::compileScriptFilesBatch(
     // to jobs times concurrently) and shrinks each worker's peak footprint.
     AOTConstantReverseMap batch_const_reverse_map =
         buildConstantReverseMap(qore_ns_private::get(*batch_pp->RootNS));
+    std::unordered_set<std::string> batch_pending_init_constant_fqns;
+    collectPendingInitConstantFQNs(qore_ns_private::get(*batch_pp->RootNS),
+        batch_pending_init_constant_fqns,
+        /*compile_module=*/nullptr, /*compile_file=*/nullptr);
     constants_done = std::chrono::steady_clock::now();
 
     // Registered statement locations belong to the shared parsed program.
@@ -27416,6 +27436,7 @@ bool QoreAOT::compileScriptFilesBatch(
                     &per_file_compiled_count, report_artifacts,
                     shared_batch_callees.empty() ? nullptr : &shared_batch_callees,
                     &batch_const_reverse_map,
+                    &batch_pending_init_constant_fqns,
                     &batch_statement_locs,
                     trace_timing ? &emit_timing : nullptr)) {
                 std::lock_guard<std::mutex> l(err_mutex);
