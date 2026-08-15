@@ -138,6 +138,9 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
         external_stub(old.external_stub),
         external_stub_dependent(old.external_stub_dependent),
         rt_in_init(false),
+        // an unpopulated AOT shell keeps its deferred initializer in the copy, so the importing Program can run
+        // it from its own entry
+        aot_pending_init(old.aot_pending_init),
         saved_val(old.saved_val.refSelf()),
         access(old.access), from_module(old.from_module) {
     assert(!old.in_init);

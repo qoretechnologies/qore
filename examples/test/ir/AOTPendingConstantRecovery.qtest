@@ -1,0 +1,221 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTPendingConstantRecoveryTest
+
+#! An AOT constant whose initializer did not run at module load must recover on its first read
+/** Module load runs the generated \c __const_init functions in serialization order with a fix-point retry.  When
+    that order cannot be satisfied, the constant stays an unpopulated shell, and every read of it used to raise
+    \c AOT-PENDING-CONSTANT for the life of the process, with no way to recover and nothing said about what had
+    gone wrong.
+
+    \c QORE_AOT_TEST_DEFER_CONSTANT_INIT leaves every constant of an AOT module uninitialized at load, which is
+    the only deterministic way to reach the first-read path: real module loads satisfy the order nearly always.
+*/
+class AOTPendingConstantRecoveryTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+
+        #! values every run must produce, whether initialized at load or on first read
+        const ExpectedResults = {
+            "map_a": "alpha",
+            "map_b": "beta",
+            "labels": "alpha,beta",
+            "class_const_label": "beta",
+            "nested_label": "alpha",
+            "script_map_a": "alpha",
+        };
+    }
+
+    constructor() : QUnit::Test("AOTPendingConstantRecoveryTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("uninitialized AOT constants recover on first read",
+            \testDeferredConstantsRecoverOnRead());
+        addTestCase("recovery reports the initializer failure",
+            \testFailedInitializerIsReported());
+
+        set_return_value(main());
+    }
+
+    private string moduleCode() {
+        # single-quoted so the module source needs no escaping
+        return '%modern
+
+module AOTPendingConstMod {
+    version = "1.0";
+    desc = "AOT deferred constant initialization regression module";
+    author = "Qore";
+    license = "MIT";
+}
+
+public namespace AOTPendingConstMod {
+public class Thing {
+    public {
+        string label;
+    }
+
+    constructor(string n) {
+        # the initializer is compiled with the variable unset, so it fails only when a test asks it to
+        if (ENV.AOT_TEST_FAIL_CONST_INIT.val()) {
+            throw "THING-CONSTRUCTOR-ERROR", "this constructor fails on demand";
+        }
+        label = n;
+    }
+
+    string getLabel() {
+        return label;
+    }
+}
+
+# object constants cannot be serialized, so each needs an initializer at load
+public const Alpha = new Thing("alpha");
+public const Beta = new Thing("beta");
+
+# depends on two other initialized constants
+public const ThingMap = {
+    "a": Alpha,
+    "b": Beta,
+};
+
+# depends on the map, which depends on the objects: recovering this constant has to recover the whole chain
+public const ThingLabels = (ThingMap.a.getLabel(), ThingMap.b.getLabel());
+
+public class Reader {
+    public {
+        #! a class constant with the same dependency
+        const Snapshot = ThingMap;
+    }
+
+    static string lookup(string key) {
+        return Snapshot{key}.getLabel();
+    }
+}
+
+#! read from AOT-compiled module code rather than from the script
+public string sub verify() {
+    string rv;
+    rv += sprintf("map_a=%s\n", ThingMap.a.getLabel());
+    rv += sprintf("map_b=%s\n", ThingMap.b.getLabel());
+    rv += sprintf("labels=%s\n", ThingLabels.join(","));
+    rv += sprintf("class_const_label=%s\n", Reader::lookup("b"));
+    rv += sprintf("nested_label=%s\n", Reader::Snapshot.a.getLabel());
+    return rv;
+}
+}
+';
+    }
+
+    private writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+    }
+
+    private string compileModule(string qmod_path, string qm_path) {
+        return backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path));
+    }
+
+    private string runModule(string module_dir, string script_path, string env = "") {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %s -b --enable-debug %s 2>&1",
+            libqore_dir, module_dir, env, qore_bin, script_path));
+    }
+
+    #! parses the "key=value" lines emitted by the module's verify() function
+    private hash<string, string> parseResults(string output) {
+        hash<string, string> rv;
+        foreach string line in (output.split("\n")) {
+            if (line.empty() || line.find("=") <= 0) {
+                continue;
+            }
+            int pos = line.find("=");
+            rv{line.substr(0, pos)} = line.substr(pos + 1);
+        }
+        return rv;
+    }
+
+    private hash<auto> setupModule(string tmp_dir, string module_source) {
+        string src_dir = tmp_dir + "/src";
+        string qmod_dir = tmp_dir + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        writeFile(src_dir + "/AOTPendingConstMod.qm", module_source);
+        string script_path = tmp_dir + "/run.qr";
+        # verify() reads the constants from AOT-compiled module code; the script line reads one of them from
+        # interpreted code in another Program, so both readers of a deferred constant are covered
+        writeFile(script_path, "%modern
+%requires AOTPendingConstMod
+printf(\"%s\", AOTPendingConstMod::verify());
+printf(\"script_map_a=%s\\n\", AOTPendingConstMod::ThingMap.a.getLabel());
+");
+
+        return {
+            "src_dir": src_dir,
+            "qmod_dir": qmod_dir,
+            "qmod_path": qmod_dir + "/AOTPendingConstMod.qmod",
+            "script_path": script_path,
+        };
+    }
+
+    testDeferredConstantsRecoverOnRead() {
+        TmpDir tmp("qore-aot-pending-const-");
+        hash<auto> m = setupModule(tmp.path, moduleCode());
+
+        string compile_out = compileModule(m.qmod_path, m.src_dir + "/AOTPendingConstMod.qm");
+        assertTrue(is_file(m.qmod_path), "compiled deferred-constant module: " + compile_out);
+
+        hash<string, string> src = parseResults(runModule(m.src_dir, m.script_path));
+        hash<string, string> aot = parseResults(runModule(m.qmod_dir, m.script_path));
+        string deferred_output = runModule(m.qmod_dir, m.script_path,
+            "QORE_AOT_TEST_DEFER_CONSTANT_INIT=1");
+        hash<string, string> deferred = parseResults(deferred_output);
+
+        foreach hash<auto> i in (ExpectedResults.pairIterator()) {
+            assertEq(i.value, src{i.key}, "source module: " + i.key);
+            assertEq(i.value, aot{i.key}, "AOT qmod: " + i.key);
+            assertEq(i.value, deferred{i.key},
+                "AOT qmod with initialization deferred to first read: " + i.key);
+        }
+        assertEq(-1, deferred_output.find("AOT-PENDING-CONSTANT"),
+            "reading a deferred constant does not report it as unpopulated");
+
+        # the assertions above are only meaningful if initialization really was deferred: without the trace,
+        # a build that ignored the test hook would pass them by initializing everything at load
+        string trace = runModule(m.qmod_dir, m.script_path,
+            "QORE_AOT_TEST_DEFER_CONSTANT_INIT=1 QORE_AOT_INIT_TRACE=1");
+        assertTrue(trace.find("[aot-init] lazy constant init") >= 0,
+            "the deferred run initialized constants from the first read");
+        assertTrue(trace.find("item=ThingMap") >= 0 && trace.find("item=Alpha") >= 0,
+            "recovering a constant also recovers the constants it depends on");
+    }
+
+    #! an initializer that fails when it is finally run must report its own failure
+    /** Before the first-read path existed, the only thing a reader could be told was that the initializer had
+        not populated the value, which says nothing about why.
+    */
+    testFailedInitializerIsReported() {
+        TmpDir tmp("qore-aot-pending-const-fail-");
+        hash<auto> m = setupModule(tmp.path, moduleCode());
+        string compile_out = compileModule(m.qmod_path, m.src_dir + "/AOTPendingConstMod.qm");
+        assertTrue(is_file(m.qmod_path), "compiled deferred-constant module: " + compile_out);
+
+        string output = runModule(m.qmod_dir, m.script_path,
+            "QORE_AOT_TEST_DEFER_CONSTANT_INIT=1 AOT_TEST_FAIL_CONST_INIT=1");
+        assertTrue(output.find("THING-CONSTRUCTOR-ERROR") >= 0,
+            "the failure of the initializer run from the read is reported: " + output);
+        assertEq(-1, output.find("alpha"),
+            "a constant whose initializer failed does not report a value");
+    }
+}

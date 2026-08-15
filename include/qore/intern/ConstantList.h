@@ -101,8 +101,29 @@ struct ClassNs {
 };
 
 class RuntimeConstantRefNode;
+class ConstantEntry;
 
 DLLLOCAL bool qore_is_deferred_runtime_init_exception(ExceptionSink* xsink);
+
+//! An AOT constant initializer that module load could not execute; owned by the AOT runtime
+struct AOTPendingConstantInit;
+
+//! Runs the deferred AOT initializer of an unpopulated constant, if there is one
+/** Module load runs AOT constant initializers in serialization order with a fix-point retry.  When that order
+    cannot be satisfied — typically because an initializer depends on state another module is still building —
+    the constant stays an unpopulated shell.  Running the initializer from the first read makes load order
+    irrelevant: any dependency read from inside it is initialized on demand as well.
+
+    @param ce the constant entry being read
+    @param xsink Qore-language exception sink; the initializer's own exception is raised here
+
+    @return 1 if the constant now has a value, 0 if there is nothing to run (the caller reports the constant as
+        unavailable), -1 if the initializer failed and \a xsink holds the reason
+*/
+DLLLOCAL int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink);
+
+//! Returns "err: desc" for the module-load failure recorded for an unpopulated AOT constant, or an empty string
+DLLLOCAL std::string qore_aot_get_pending_constant_error(ConstantEntry* ce);
 
 class ConstantEntry : public QoreReferenceCounter {
     friend class ConstantEntryInitHelper;
@@ -132,6 +153,12 @@ public:
         external_stub_dependent : 1, // initializer references an external stub constant
         rt_in_init : 1 // runtime value evaluation in progress (parseCommitRuntimeInit); detects genuine cycles
         ;
+
+    //! deferred AOT initializer for an unpopulated shell, or nullptr; owned by the AOT runtime
+    /** Copied with the entry so that every Program importing the same AOT module can run the initializer from
+        its own copy; cleared once the value has been stored.
+    */
+    AOTPendingConstantInit* aot_pending_init = nullptr;
 
     DLLLOCAL ConstantEntry(const QoreProgramLocation* loc, const char* n, QoreValue v,
         const QoreTypeInfo* ti = nullptr, bool n_pub = false, bool n_init = false, bool n_builtin = false,
@@ -580,13 +607,44 @@ protected:
             return QoreValue();
         }
         if (ce->aot_shell_pending || !ce->hasValue()) {
-            xsink->raiseException("AOT-PENDING-CONSTANT",
-                "cannot evaluate AOT-deserialized constant '%s' before its "
-                "__const_init function has populated the value",
-                ce->getName());
+            // The initializer that module load could not run is run here, from the first read; this is what
+            // keeps AOT constant initialization independent of module load order.
+            int rc = runPendingInit(xsink);
+            if (rc < 0) {
+                return QoreValue();
+            }
+            if (rc > 0) {
+                return evalImpl(needs_deref, xsink);
+            }
+            raisePendingError(xsink, "evaluate");
             return QoreValue();
         }
         return ce->val.eval(needs_deref, xsink);
+    }
+
+    //! Runs the deferred AOT initializer for an unpopulated constant
+    /** @return 1 if the constant now has a value, 0 if there was nothing to run, -1 on failure (\a xsink set)
+    */
+    DLLLOCAL int runPendingInit(ExceptionSink* xsink) const {
+        if (!ce->aot_pending_init) {
+            return 0;
+        }
+        return qore_aot_run_pending_constant_init(ce, xsink);
+    }
+
+    //! Reports an unpopulated AOT constant, including the module-load failure that left it unpopulated
+    DLLLOCAL void raisePendingError(ExceptionSink* xsink, const char* action) const {
+        std::string cause = qore_aot_get_pending_constant_error(ce);
+        if (cause.empty()) {
+            xsink->raiseException("AOT-PENDING-CONSTANT",
+                "cannot %s AOT-deserialized constant '%s' before its "
+                "__const_init function has populated the value",
+                action, ce->getName());
+            return;
+        }
+        xsink->raiseException("AOT-PENDING-CONSTANT",
+            "cannot %s AOT-deserialized constant '%s'; its __const_init function failed: %s",
+            action, ce->getName(), cause.c_str());
     }
 
     DLLLOCAL ~RuntimeConstantRefNode() {
@@ -623,10 +681,14 @@ public:
             return -1;
         }
         if (ce->aot_shell_pending || !ce->hasValue()) {
-            xsink->raiseException("AOT-PENDING-CONSTANT",
-                "cannot convert AOT-deserialized constant '%s' to a string before its "
-                "__const_init function has populated the value",
-                ce->getName());
+            int rc = runPendingInit(xsink);
+            if (rc < 0) {
+                return -1;
+            }
+            if (rc > 0) {
+                return getAsString(str, foff, xsink);
+            }
+            raisePendingError(xsink, "convert");
             return -1;
         }
         return ce->val.getAsString(str, foff, xsink);
@@ -645,10 +707,15 @@ public:
             return nullptr;
         }
         if (ce->aot_shell_pending || !ce->hasValue()) {
-            xsink->raiseException("AOT-PENDING-CONSTANT",
-                "cannot convert AOT-deserialized constant '%s' to a string before its "
-                "__const_init function has populated the value",
-                ce->getName());
+            int rc = runPendingInit(xsink);
+            if (rc < 0) {
+                del = false;
+                return nullptr;
+            }
+            if (rc > 0) {
+                return getAsString(del, foff, xsink);
+            }
+            raisePendingError(xsink, "convert");
             del = false;
             return nullptr;
         }

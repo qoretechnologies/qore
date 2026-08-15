@@ -13739,6 +13739,368 @@ static void preInitStaticVarsInProgram(QoreProgram* pgm) {
     local_xs.clear();
 }
 
+//! Looks up the target and shadow ConstantEntry for one constant init descriptor
+static void aotFindInitConstantEntries(const AOTInitFuncDescriptor& desc, QoreProgram* pgm,
+        QoreProgram* shadow_pgm, ConstantEntry*& target_ce, ConstantEntry*& shadow_ce) {
+    target_ce = nullptr;
+    shadow_ce = nullptr;
+    qore_program_private* pp = pgm ? qore_program_private::get(*pgm) : nullptr;
+    qore_program_private* shadow_pp = shadow_pgm ? qore_program_private::get(*shadow_pgm) : nullptr;
+    auto find_class_constant = [&desc](qore_program_private* p) -> ConstantEntry* {
+        if (!p) {
+            return nullptr;
+        }
+        const qore_ns_private* found_ns = nullptr;
+        const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*p->RootNS, desc.ns_path.c_str(), found_ns);
+        if (!qc) {
+            return nullptr;
+        }
+        return qore_class_private::get(*const_cast<QoreClass*>(qc))->constlist.findEntry(desc.item_name.c_str());
+    };
+    auto find_ns_constant = [&desc](qore_program_private* p) -> ConstantEntry* {
+        if (!p) {
+            return nullptr;
+        }
+        qore_ns_private* ns = findNamespaceByPath(qore_ns_private::get(*p->RootNS), desc.ns_path);
+        return ns ? ns->constant.findEntry(desc.item_name.c_str()) : nullptr;
+    };
+
+    if (desc.target_type == AOTCompiledInitFunc::CLASS_CONSTANT) {
+        target_ce = find_class_constant(pp);
+        shadow_ce = find_class_constant(shadow_pp);
+        return;
+    }
+    target_ce = find_ns_constant(pp);
+    shadow_ce = find_ns_constant(shadow_pp);
+}
+
+//! Stores the result of a constant init function in the target and shadow ConstantEntry
+/** Shared by the module-load init loop and by lazy initialization from the first read of a
+    still-pending constant, so both paths apply identical store, shadow, and ownership rules.
+
+    @return 0 if the value was stored, -1 if neither the target nor the shadow constant was found
+*/
+static int aotStoreConstantInitResult(const AOTInitFuncDescriptor& desc, QoreValue result, QoreProgram* pgm,
+        QoreProgram* shadow_pgm, bool write_shadow, const char* mod_name,
+        const std::function<void(ConstantEntry*)>& remember, ExceptionSink& xsink) {
+    ConstantEntry* target_ce = nullptr;
+    ConstantEntry* shadow_ce = nullptr;
+    aotFindInitConstantEntries(desc, pgm, shadow_pgm, target_ce, shadow_ce);
+    if (!target_ce && !shadow_ce) {
+        printd(0, "AOT init: constant '%s::%s' not found in target or shadow\n",
+            desc.ns_path.c_str(), desc.item_name.c_str());
+        return -1;
+    }
+    if (aotInitTraceEnabled()) {
+        fprintf(stderr, "[aot-init] store constant module=%s ns=%s item=%s result=%s "
+            "target_ce=%p shadow_ce=%p\n",
+            mod_name ? mod_name : "<none>", desc.ns_path.c_str(), desc.item_name.c_str(),
+            result.getTypeName(), (void*)target_ce, (void*)shadow_ce);
+    }
+    // Populate saved_val; pending AOT constant shells keep val as a RuntimeConstantRefNode to preserve
+    // source-mode parse semantics.  The shadow module program is shared by all target Programs, so keep its
+    // first initialized value canonical: re-importing the same AOT user module into another Program must not
+    // rewrite the shared ConstantEntry that compiled module code resolves against.
+    // refSelf() each time because setRuntimeValue takes ownership.
+    if (target_ce && (!target_ce->hasValue() || target_ce->aot_shell_pending)) {
+        target_ce->setRuntimeValue(result.refSelf(), &xsink);
+        if (remember) {
+            remember(target_ce);
+        }
+    }
+    if (write_shadow && shadow_ce && shadow_ce != target_ce
+            && (!shadow_ce->hasValue() || shadow_ce->aot_shell_pending)) {
+        shadow_ce->setRuntimeValue(result.refSelf(), &xsink);
+        if (remember) {
+            remember(shadow_ce);
+        }
+    }
+    if (aotInitTraceEnabled() && xsink.isException()) {
+        QoreValue err_val = xsink.getExceptionErr();
+        QoreValue desc_val = xsink.getExceptionDesc();
+        QoreStringValueHelper err_str(err_val);
+        QoreStringValueHelper desc_str(desc_val);
+        fprintf(stderr, "[aot-init] store constant exception module=%s ns=%s item=%s err=%s desc=%s\n",
+            mod_name ? mod_name : "<none>", desc.ns_path.c_str(), desc.item_name.c_str(),
+            err_val.getType() == NT_STRING ? err_str->c_str() : "?",
+            desc_val.getType() == NT_STRING ? desc_str->c_str() : "?");
+    }
+    return 0;
+}
+
+//! What one AOT constant needs to recover when module load left it an unpopulated shell
+/** AOT constant initializers run in serialization order with a fix-point retry, which resolves ordinary
+    declaration-order dependencies.  Two things still leave a shell behind: an initializer no round could run, and
+    a Program entry created from the module's entry before that entry held a value.  Before this record existed,
+    both were permanent — every read of the constant raised @c AOT-PENDING-CONSTANT for the life of the process,
+    and the exception that had actually stopped the initializer was gone.
+
+    The record makes the first read able to recover: adopt the module's value, or run the initializer, whose own
+    dependency reads recover the same way one level deeper.  @ref load_err keeps the load-time failure for the
+    error message when neither is possible.
+*/
+struct AOTPendingConstantInit {
+    AOTInitFuncDescriptor desc;
+    QoreAOTContext* ctx = nullptr;      //!< owned by this record
+    AotFunctionPtr fn_ptr = nullptr;
+    QoreProgram* pgm = nullptr;
+    QoreProgram* shadow_pgm = nullptr;
+    bool write_shadow = false;
+    std::string mod_name;
+    std::string mod_path;
+    //! the exception the last module-load attempt raised, kept for the error message if the lazy run also fails
+    std::string load_err;
+    std::string load_desc;
+    //! set while this initializer is running so a self-referential read reports a cycle instead of recursing
+    bool running = false;
+
+    DLLLOCAL ~AOTPendingConstantInit() {
+        delete ctx;
+    }
+};
+
+static QoreThreadLock& aotPendingConstantInitLock() {
+    static QoreThreadLock lck;
+    return lck;
+}
+
+//! Owns every constant recovery record for the life of the process
+/** A record is reachable from any number of ConstantEntry objects — a module imported into several Programs gets a
+    copy of each entry, and the copy carries the pointer — so records are never freed individually.  One record
+    per initialized constant of a loaded AOT module is kept; only a record whose initializer never ran also holds
+    a compiled execution context.
+*/
+static std::vector<std::unique_ptr<AOTPendingConstantInit>>& aotPendingConstantInitRecords() {
+    static std::vector<std::unique_ptr<AOTPendingConstantInit>> records;
+    return records;
+}
+
+//! Attaches a recovery record to the constant entries one init descriptor targets
+/** The record lets a constant that is still an unpopulated shell recover on its first read, either by adopting
+    the value the module's own program already holds or by running the initializer that has not run yet.
+
+    @param rec the record to attach; a record already attached to the module's own entry is reused instead
+*/
+static void aotRegisterPendingConstantInit(std::unique_ptr<AOTPendingConstantInit> rec) {
+    ConstantEntry* target_ce = nullptr;
+    ConstantEntry* shadow_ce = nullptr;
+    aotFindInitConstantEntries(rec->desc, rec->pgm, rec->shadow_pgm, target_ce, shadow_ce);
+    if (!target_ce && !shadow_ce) {
+        return;
+    }
+    if (aotInitTraceEnabled()) {
+        fprintf(stderr, "[aot-init] recoverable constant module=%s ns=%s item=%s target_ce=%p shadow_ce=%p "
+            "initializer=%d err=%s\n", rec->mod_name.c_str(), rec->desc.ns_path.c_str(),
+            rec->desc.item_name.c_str(), (void*)target_ce, (void*)shadow_ce, rec->fn_ptr ? 1 : 0,
+            rec->load_err.empty() ? "<none>" : rec->load_err.c_str());
+    }
+    AutoLocker al(aotPendingConstantInitLock());
+    // Every Program importing the module registers the same constants; keep one record per constant, held by the
+    // module's own entry, and point each Program's entry at it.
+    AOTPendingConstantInit* existing = shadow_ce ? shadow_ce->aot_pending_init : nullptr;
+    if (existing && !existing->fn_ptr && rec->fn_ptr) {
+        // an earlier registration had nothing to run; keep the initializer this one carries
+        existing->ctx = rec->ctx;
+        existing->fn_ptr = rec->fn_ptr;
+        rec->ctx = nullptr;
+    }
+    AOTPendingConstantInit* raw = existing;
+    if (!raw) {
+        raw = rec.get();
+        aotPendingConstantInitRecords().push_back(std::move(rec));
+    }
+    if (target_ce) {
+        target_ce->aot_pending_init = raw;
+    }
+    if (shadow_ce && shadow_ce != target_ce) {
+        shadow_ce->aot_pending_init = raw;
+    }
+}
+
+//! Test hook: leave every AOT constant uninitialized at module load so the first-read path is always taken
+static bool aotDeferConstantInitTestHook() {
+    static const bool enabled = getenv("QORE_AOT_TEST_DEFER_CONSTANT_INIT") != nullptr;
+    return enabled;
+}
+
+//! Serializes lazy constant initialization; recursive so an initializer can initialize its own dependencies
+static QoreRecursiveThreadLock& aotLazyConstantInitLock() {
+    static QoreRecursiveThreadLock lck;
+    return lck;
+}
+
+int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) {
+    // Serialize lazy initialization process-wide: initializers run compiled code that mutates module state, and
+    // two threads reading the same pending constant must not run it twice.  The lock is recursive, so an
+    // initializer that reads another pending constant initializes it one level deeper on this thread.
+    AutoLocker lazy_al(aotLazyConstantInitLock());
+
+    // another thread may have populated the constant while this thread waited for the lock
+    if (ce->hasValue()) {
+        return 1;
+    }
+
+    AOTPendingConstantInit* rec = ce->aot_pending_init;
+    if (!rec) {
+        return 0;
+    }
+
+    // The commonest recovery needs no code at all: this Program's entry was created from the module's entry
+    // before that entry had a value.  The module's entry is the canonical one, so adopt its value.
+    {
+        ConstantEntry* target_ce = nullptr;
+        ConstantEntry* shadow_ce = nullptr;
+        aotFindInitConstantEntries(rec->desc, rec->pgm, rec->shadow_pgm, target_ce, shadow_ce);
+        ConstantEntry* source_ce = (shadow_ce && shadow_ce != ce && shadow_ce->hasValue()) ? shadow_ce
+            : ((target_ce && target_ce != ce && target_ce->hasValue()) ? target_ce : nullptr);
+        if (source_ce) {
+            ExceptionSink adopt_xsink;
+            ce->setRuntimeValue(source_ce->getReferencedValue(), &adopt_xsink);
+            ce->materializeRuntimeRefs(&adopt_xsink);
+            if (adopt_xsink.isException()) {
+                xsink->assimilate(adopt_xsink);
+                return -1;
+            }
+            {
+                AutoLocker al(aotPendingConstantInitLock());
+                ce->aot_pending_init = nullptr;
+            }
+            if (aotInitTraceEnabled()) {
+                fprintf(stderr, "[aot-init] adopted constant value module=%s ns=%s item=%s\n",
+                    rec->mod_name.c_str(), rec->desc.ns_path.c_str(), rec->desc.item_name.c_str());
+            }
+            return 1;
+        }
+    }
+
+    if (!rec->fn_ptr || !rec->ctx) {
+        return 0;
+    }
+    if (rec->running) {
+        // a genuine cycle: the initializer being run reads the constant it initializes
+        return 0;
+    }
+    rec->running = true;
+    struct RunningGuard {
+        AOTPendingConstantInit* rec;
+        DLLLOCAL ~RunningGuard() {
+            rec->running = false;
+        }
+    } running_guard{rec};
+
+    if (aotInitTraceEnabled()) {
+        fprintf(stderr, "[aot-init] lazy constant init module=%s ns=%s item=%s\n",
+            rec->mod_name.c_str(), rec->desc.ns_path.c_str(), rec->desc.item_name.c_str());
+    }
+
+    ExceptionSink init_xsink;
+    QoreValue result;
+    {
+        ProgramThreadCountContextHelper program_ctx(&init_xsink, rec->pgm, false);
+        if (init_xsink) {
+            xsink->assimilate(init_xsink);
+            return -1;
+        }
+        // Initializers can load further modules; mark this thread as being inside a module load so the
+        // module-lock-ordering debug net sees the same state it sees during module-load initialization.
+        QoreModuleLoadLockHelper aot_init_al;
+
+        std::unique_ptr<ProgramThreadCountContextHelper> shadow_ctx;
+        std::unique_ptr<ProgramCallContextHelper> shadow_call_ctx;
+        if (rec->shadow_pgm && rec->shadow_pgm != rec->pgm) {
+            shadow_ctx.reset(new ProgramThreadCountContextHelper(&init_xsink, rec->shadow_pgm, true));
+            if (init_xsink.isException()) {
+                init_xsink.clear();
+                shadow_ctx.reset();
+            } else {
+                shadow_call_ctx.reset(new ProgramCallContextHelper(rec->shadow_pgm));
+            }
+        }
+        std::unique_ptr<QoreParseClassHelper> parse_ctx;
+        if (rec->desc.target_type == AOTCompiledInitFunc::CLASS_CONSTANT) {
+            QoreProgram* class_pgm = shadow_ctx && rec->shadow_pgm ? rec->shadow_pgm : rec->pgm;
+            const qore_ns_private* found_ns = nullptr;
+            const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                *qore_program_private::get(*class_pgm)->RootNS, rec->desc.ns_path.c_str(), found_ns);
+            if (!qc && class_pgm != rec->pgm) {
+                qc = qore_root_ns_private::runtimeFindClass(
+                    *qore_program_private::get(*rec->pgm)->RootNS, rec->desc.ns_path.c_str(), found_ns);
+            }
+            if (qc) {
+                parse_ctx.reset(new QoreParseClassHelper(const_cast<QoreClass*>(qc)));
+            }
+        } else {
+            QoreProgram* ns_pgm = shadow_ctx && rec->shadow_pgm ? rec->shadow_pgm : rec->pgm;
+            qore_ns_private* ns = findNamespaceByPath(
+                qore_ns_private::get(*qore_program_private::get(*ns_pgm)->RootNS), rec->desc.ns_path);
+            if (!ns && ns_pgm != rec->pgm) {
+                ns = findNamespaceByPath(
+                    qore_ns_private::get(*qore_program_private::get(*rec->pgm)->RootNS), rec->desc.ns_path);
+            }
+            if (ns) {
+                parse_ctx.reset(new QoreParseClassHelper(nullptr, ns));
+            }
+        }
+
+        const char* old_name = set_module_context_name(rec->mod_name.empty() ? nullptr : rec->mod_name.c_str());
+        const char* old_path = set_module_context_path(rec->mod_path.empty() ? nullptr : rec->mod_path.c_str());
+        uint64_t raw_result = 0;
+        try {
+            raw_result = rec->fn_ptr(rec->ctx, &init_xsink);
+        } catch (const QoreJITException&) {
+            raw_result = 0;
+        }
+        set_module_context_path(old_path);
+        set_module_context_name(old_name);
+        memcpy(&result, &raw_result, sizeof(uint64_t));
+    }
+
+    if (init_xsink.isException()) {
+        result.discard(nullptr);
+        // report the original module-load failure as well when this run failed the same way, so the cause is not
+        // replaced by a downstream symptom
+        xsink->assimilate(init_xsink);
+        return -1;
+    }
+
+    std::vector<ConstantEntry*> initialized;
+    ExceptionSink store_xsink;
+    // Store into the entry being read first: the reader can hold a constant of a Program the record does not
+    // name (the same AOT module imported into several Programs each get their own entry).
+    if (!ce->hasValue() || ce->aot_shell_pending) {
+        ce->setRuntimeValue(result.refSelf(), &store_xsink);
+        initialized.push_back(ce);
+    }
+    // then the module's own entry, so compiled module code resolving against the shadow Program sees it too
+    aotStoreConstantInitResult(rec->desc, result, rec->pgm, rec->shadow_pgm, rec->write_shadow,
+        rec->mod_name.c_str(), [&initialized](ConstantEntry* entry) { initialized.push_back(entry); },
+        store_xsink);
+    result.discard(&store_xsink);
+    for (ConstantEntry* entry : initialized) {
+        entry->materializeRuntimeRefs(&store_xsink);
+    }
+    if (store_xsink.isException()) {
+        xsink->assimilate(store_xsink);
+        return -1;
+    }
+    if (initialized.empty()) {
+        return 0;
+    }
+    AutoLocker al(aotPendingConstantInitLock());
+    for (ConstantEntry* entry : initialized) {
+        entry->aot_pending_init = nullptr;
+    }
+    return 1;
+}
+
+std::string qore_aot_get_pending_constant_error(ConstantEntry* ce) {
+    AOTPendingConstantInit* rec = ce->aot_pending_init;
+    if (!rec || rec->load_err.empty()) {
+        return std::string();
+    }
+    return rec->load_err + ": " + rec->load_desc;
+}
+
 //! Execute collected init functions and store results in target constants/static vars
 /** Called after AOT function registration to initialize constants and static vars
     whose values come from lowered init expressions (delayed_eval constants, object
@@ -13946,6 +14308,14 @@ static int executeInitFunctions(
                 mod_name ? mod_name : "<none>", pass, round, desc.name.c_str(),
                 (int)desc.target_type, desc.ns_path.c_str(), desc.item_name.c_str());
         }
+        // Test hook: module load almost always satisfies constant initialization order, which leaves the
+        // first-read path unreachable from a test.  With this set, no constant is initialized at load, so every
+        // read must go through the deferred initializer and produce exactly the same values.
+        if (aotDeferConstantInitTestHook() && !run_module_init
+                && (desc.target_type == AOTCompiledInitFunc::NS_CONSTANT
+                    || desc.target_type == AOTCompiledInitFunc::CLASS_CONSTANT)) {
+            continue;
+        }
         auto it = exec_map.find(desc.name);
         if (it == exec_map.end()) {
             if (aotInitTraceEnabled()) {
@@ -14108,129 +14478,22 @@ static int executeInitFunctions(
 
         // Store the result in the target constant or static var
         switch (desc.target_type) {
-            case AOTCompiledInitFunc::NS_CONSTANT: {
-                // Look up the target ConstantEntry AND the shadow (module)
-                // ConstantEntry. Either or both may be non-null: a constant
-                // declared with an init expression that was merged into the
-                // target program will be findable via root_ns; if only the
-                // module program holds it (some init-expr constants are not
-                // merged into the target namespace tree — only their values
-                // propagate via RuntimeConstantRefNode resolution), we still
-                // need to populate the shadow copy so AOT functions' runtime
-                // constant references can read the value.
-                ConstantEntry* target_ce = nullptr;
-                qore_ns_private* ns = findNamespaceByPath(root_ns, desc.ns_path);
-                if (ns) {
-                    target_ce = ns->constant.findEntry(desc.item_name.c_str());
-                }
-                ConstantEntry* shadow_ce = nullptr;
-                if (shadow_root_ns) {
-                    qore_ns_private* sns = findNamespaceByPath(shadow_root_ns, desc.ns_path);
-                    if (sns) {
-                        shadow_ce = sns->constant.findEntry(desc.item_name.c_str());
-                    }
-                }
-                if (!target_ce && !shadow_ce) {
-                    printd(0, "AOT init: constant '%s::%s' not found in target or shadow\n",
-                        desc.ns_path.c_str(), desc.item_name.c_str());
-                    result.discard(&xsink);
-                    ++failed;
-                    break;
-                }
-                if (aotInitTraceEnabled()) {
-                    fprintf(stderr, "[aot-init] store constant module=%s ns=%s item=%s result=%s "
-                        "target_ce=%p shadow_ce=%p\n",
-                        mod_name ? mod_name : "<none>", desc.ns_path.c_str(), desc.item_name.c_str(),
-                        result.getTypeName(), (void*)target_ce, (void*)shadow_ce);
-                }
-                // Populate saved_val; pending AOT constant shells keep val as a
-                // RuntimeConstantRefNode to preserve source-mode parse semantics.
-                // The shadow module program is shared by all target Programs, so
-                // keep its first initialized value canonical.  Re-importing the
-                // same AOT user module into another Program must not rewrite the
-                // shared ConstantEntry that compiled module code resolves against.
-                // refSelf() each time because setRuntimeValue takes ownership.
-                if (target_ce && (!target_ce->hasValue() || target_ce->aot_shell_pending)) {
-                    target_ce->setRuntimeValue(result.refSelf(), &xsink);
-                    remember_initialized_constant(target_ce);
-                }
-                if (write_shadow && shadow_ce && shadow_ce != target_ce
-                        && (!shadow_ce->hasValue() || shadow_ce->aot_shell_pending)) {
-                    shadow_ce->setRuntimeValue(result.refSelf(), &xsink);
-                    remember_initialized_constant(shadow_ce);
-                }
-                if (aotInitTraceEnabled() && xsink.isException()) {
-                    QoreValue err_val = xsink.getExceptionErr();
-                    QoreValue desc_val = xsink.getExceptionDesc();
-                    QoreStringValueHelper err_str(err_val);
-                    QoreStringValueHelper desc_str(desc_val);
-                    fprintf(stderr, "[aot-init] store constant exception module=%s ns=%s item=%s err=%s desc=%s\n",
-                        mod_name ? mod_name : "<none>", desc.ns_path.c_str(), desc.item_name.c_str(),
-                        err_val.getType() == NT_STRING ? err_str->c_str() : "?",
-                        desc_val.getType() == NT_STRING ? desc_str->c_str() : "?");
-                }
-                result.discard(&xsink);
-                ++executed;
-                printd(2, "AOT init: initialized namespace constant '%s::%s' type=%s\n",
-                    desc.ns_path.c_str(), desc.item_name.c_str(), result.getTypeName());
-                break;
-            }
-
+            case AOTCompiledInitFunc::NS_CONSTANT:
             case AOTCompiledInitFunc::CLASS_CONSTANT: {
-                // ns_path is the class path like "DataProvider::AbstractDataProvider".
-                // Look up the class in BOTH the target and shadow (module) program
-                // root namespaces: non-public classes never make it into the target
-                // via scanMergeCommittedNamespace, so for FileLocationHandler's
-                // non-public FileLocationHandlerFile (and similar) the CE lives only
-                // in the module program. Mirrors the NS_CONSTANT handling above.
-                ConstantEntry* target_ce = nullptr;
-                {
-                    const qore_ns_private* found_ns = nullptr;
-                    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                        *pp->RootNS, desc.ns_path.c_str(), found_ns);
-                    if (qc) {
-                        qore_class_private* qcp = qore_class_private::get(
-                            *const_cast<QoreClass*>(qc));
-                        target_ce = qcp->constlist.findEntry(desc.item_name.c_str());
-                    }
-                }
-                ConstantEntry* shadow_ce = nullptr;
-                if (shadow_pp) {
-                    const qore_ns_private* found_ns = nullptr;
-                    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
-                        *shadow_pp->RootNS, desc.ns_path.c_str(), found_ns);
-                    if (qc) {
-                        qore_class_private* qcp = qore_class_private::get(
-                            *const_cast<QoreClass*>(qc));
-                        shadow_ce = qcp->constlist.findEntry(desc.item_name.c_str());
-                    }
-                }
-                if (!target_ce && !shadow_ce) {
-                    printd(0, "AOT init: class constant '%s::%s' not found in target or shadow\n",
-                        desc.ns_path.c_str(), desc.item_name.c_str());
+                // Store into the target and the shadow (module) ConstantEntry.  Either or both may be non-null:
+                // a constant declared with an init expression that was merged into the target program is
+                // findable there, while a constant only the module program holds (a non-public class constant,
+                // for example) must still be populated in the shadow so compiled module code reading it through
+                // a runtime constant reference sees the value.
+                if (aotStoreConstantInitResult(desc, result, pgm, shadow_pgm, write_shadow, mod_name,
+                        remember_initialized_constant, xsink)) {
                     result.discard(&xsink);
                     ++failed;
                     break;
                 }
-                // Populate saved_val; pending AOT constant shells keep val as a
-                // RuntimeConstantRefNode to preserve source-mode parse semantics.
-                // Keep the shared shadow module ConstantEntry canonical across
-                // imports into multiple target Programs; otherwise a nested import
-                // can rewrite values that earlier module-init side effects stored
-                // by identity.
-                // refSelf() each time because setRuntimeValue takes ownership.
-                if (target_ce && (!target_ce->hasValue() || target_ce->aot_shell_pending)) {
-                    target_ce->setRuntimeValue(result.refSelf(), &xsink);
-                    remember_initialized_constant(target_ce);
-                }
-                if (write_shadow && shadow_ce && shadow_ce != target_ce
-                        && (!shadow_ce->hasValue() || shadow_ce->aot_shell_pending)) {
-                    shadow_ce->setRuntimeValue(result.refSelf(), &xsink);
-                    remember_initialized_constant(shadow_ce);
-                }
                 result.discard(&xsink);
                 ++executed;
-                printd(2, "AOT init: initialized class constant '%s::%s' type=%s\n",
+                printd(2, "AOT init: initialized constant '%s::%s' type=%s\n",
                     desc.ns_path.c_str(), desc.item_name.c_str(), result.getTypeName());
                 break;
             }
@@ -14436,9 +14699,15 @@ static int executeInitFunctions(
     // Any pass-0 descriptors still !desc_done after all rounds remained
     // stuck on pending-constant deps.  Count them as failures so the
     // caller's tally reflects real problems rather than silently passing.
+    std::unordered_set<const QoreAOTContext*> deferred_contexts;
     for (size_t di = 0; di < descriptors.size(); ++di) {
         if (!desc_done[di] && descriptors[di].target_type != AOTCompiledInitFunc::MODULE_INIT) {
-            if (!last_error[di].empty()) {
+            const bool test_deferred = aotDeferConstantInitTestHook()
+                && (descriptors[di].target_type == AOTCompiledInitFunc::NS_CONSTANT
+                    || descriptors[di].target_type == AOTCompiledInitFunc::CLASS_CONSTANT);
+            if (test_deferred) {
+                // deferred on purpose by the test hook, not a failure
+            } else if (!last_error[di].empty()) {
                 printd(0, "AOT init: '%s' remained unresolved after %d rounds; last exception: %s: %s%s\n",
                     descriptors[di].name.c_str(), 32, last_error[di].c_str(), last_desc[di].c_str(),
                     last_error_pending[di] ? " (pending)" : "");
@@ -14458,8 +14727,51 @@ static int executeInitFunctions(
         }
     }
 
+    // Attach a recovery record to every constant this module initializes.  Two things can leave a constant an
+    // unpopulated shell that no later load repairs: an initializer this pass could not run at all, and an entry
+    // this Program created from the module's entry before that entry held a value.  Both used to be permanent —
+    // every read of the constant raised AOT-PENDING-CONSTANT for the life of the process.  With the record, the
+    // first read adopts the module's value or runs the initializer.
+    //
+    // The record outlives this call, so it refers to the module's own Program, which the module owns for the
+    // life of the process; a script Program is not, so script-level AOT registers nothing.
+    //
+    // This is finalization and is deliberately not cancellable: it hands ownership of retained execution
+    // contexts to their records, and the loop below frees exactly the contexts no record took.
+    if (shadow_pgm) {
+        for (size_t di = 0; di < descriptors.size(); ++di) {
+            const AOTInitFuncDescriptor& desc = descriptors[di];
+            if (desc.target_type != AOTCompiledInitFunc::NS_CONSTANT
+                    && desc.target_type != AOTCompiledInitFunc::CLASS_CONSTANT) {
+                continue;
+            }
+            auto it = exec_map.find(desc.name);
+            auto rec = std::make_unique<AOTPendingConstantInit>();
+            rec->desc = desc;
+            rec->pgm = shadow_pgm;
+            rec->shadow_pgm = shadow_pgm;
+            rec->write_shadow = write_shadow;
+            rec->mod_name = mod_name ? mod_name : "";
+            rec->mod_path = mod_path ? mod_path : "";
+            rec->load_err = last_error[di];
+            rec->load_desc = last_desc[di];
+            // Only an initializer that did not run is kept executable; keeping every context alive would retain
+            // the compiled context of every constant of every loaded module for nothing.
+            if (!desc_done[di] && it != exec_map.end() && it->second->fn_ptr && it->second->ctx
+                    && deferred_contexts.find(it->second->ctx) == deferred_contexts.end()) {
+                rec->ctx = it->second->ctx;
+                rec->fn_ptr = it->second->fn_ptr;
+                deferred_contexts.insert(it->second->ctx);
+            }
+            aotRegisterPendingConstantInit(std::move(rec));
+        }
+    }
+
     for (auto& info : exec_infos) {
-        delete info.ctx;
+        // contexts retained for lazy initialization are owned by their AOTPendingConstantInit record
+        if (deferred_contexts.find(info.ctx) == deferred_contexts.end()) {
+            delete info.ctx;
+        }
     }
 
     printd(5, "AOT module '%s': executed %d/%d init functions (%d failed)\n",

@@ -235,6 +235,10 @@ The current implementation relies on explicit registries for extension safety:
   user code during compile-time name/type resolution.
 - Batch AOT registration must keep cross-session barriers: shells, type/base
   resolution, constants, members, functions, then final class fixups.
+- A constant whose `__const_init` did not populate it at load must be
+  recoverable from its first read, and a read that cannot recover must report
+  why the initializer failed rather than only that the value is missing. See
+  [`aot-constant-init-recovery.md`](aot-constant-init-recovery.md).
 
 ## Exception Source Locations
 
