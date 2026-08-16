@@ -13985,7 +13985,7 @@ int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) 
     rec->running = true;
     struct RunningGuard {
         AOTPendingConstantInit* rec;
-        DLLLOCAL ~RunningGuard() {
+        ~RunningGuard() {
             rec->running = false;
         }
     } running_guard{rec};
