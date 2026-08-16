@@ -84,7 +84,9 @@ int QoreImplicitArgumentNode::getAsString(QoreString &str, int foff, ExceptionSi
     if (offset == -1)
         str.concat("list");
     else
-        str.concat("%d", offset);
+        // NOTE: concat() has no printf-style overload; concat("%d", offset) selected
+        // concat(const char*, size_t) and read "offset" bytes from a 3-byte literal
+        str.sprintf("%d", offset);
     return 0;
 }
 
