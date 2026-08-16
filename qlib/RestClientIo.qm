@@ -1170,6 +1170,25 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             }
         }
 
+        #! Closes connections owned by this client before it is destroyed
+        /** A client that creates its own connection manager owns that manager's
+            sockets and event notifier.  Releasing the Qore object without first
+            closing the manager can otherwise retain one descriptor per
+            short-lived client until process shutdown.  This is particularly
+            visible in bounded worker loops that construct one client per task.
+
+            Clients constructed with a shared manager keep the existing
+            ownership contract: @ref close() is a no-op for the manager, so its
+            caller remains responsible for closing it.
+        */
+        destructor() {
+            try {
+                close();
+            } catch () {
+                # Destructors must not propagate cleanup exceptions.
+            }
+        }
+
         #! Copying is not supported
         private copy() {
             throw "COPY-ERROR", "RestClientIo objects cannot be copied";

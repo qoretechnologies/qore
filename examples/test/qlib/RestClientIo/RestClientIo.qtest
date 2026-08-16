@@ -45,6 +45,7 @@
 %requires HttpServerAsyncIo
 %requires HttpServer
 %requires RestClientIo
+%requires process
 
 %requires json
 
@@ -527,6 +528,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("persistent session abort/error discards connection", \testPersistentSessionAbort());
         addTestCase("shared manager", \testSharedManager());
         addTestCase("shared manager close does not close manager", \testSharedManagerCloseNoClose());
+        addTestCase("owned manager closes on destruction", \testOwnedManagerClosesOnDestruction());
         addTestCase("restGetAsync", \testRestGetAsync());
         addTestCase("restPostAsync", \testRestPostAsync());
         addTestCase("async concurrent", \testAsyncConcurrent());
@@ -1265,6 +1267,34 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
         resp = rest2.restGet("/api/test");
         assertEq(200, resp.status_code);
+    }
+
+    #! Short-lived clients release their owned manager's descriptors
+    /** Each request opens a real connection and initializes the manager's event
+        notifier.  Without destructor cleanup, the descriptor count grows by
+        approximately one per iteration even though every client has left
+        scope.  A small fixed allowance covers the process-wide resolver and
+        server resources initialized by the first request.
+    */
+    testOwnedManagerClosesOnDestruction() {
+        int before = Process::getDescriptorCount();
+        for (int i = 0; i < 64; ++i) {
+            {
+                RestClientIo::RestClientIo rest({
+                    "url": sprintf("https://127.0.0.1:%d", port),
+                    "data": "json",
+                    "error_passthru": True,
+                    "accept_all_certs": True,
+                    "protocol": "h2",
+                });
+                assertEq(200, rest.restGet("/api/test").status_code,
+                    sprintf("short-lived client %d completes its request", i));
+            }
+        }
+        int after = Process::getDescriptorCount();
+        assertLe(8, after - before,
+            sprintf("short-lived clients retain at most fixed process resources "
+                "(before %d, after %d)", before, after));
     }
 
     testRestGetAsync() {
