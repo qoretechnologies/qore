@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "tr": {
+      "messages": {
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.display_name": {
+          "source": "Move or Rename File or Folder",
+          "message": "Dosya veya Klasörü Taşı ya da Yeniden Adlandır"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.short_desc": {
+          "source": "Relocate an existing Dropbox file or folder",
+          "message": "Mevcut bir Dropbox dosyasını veya klasörünü başka bir konuma taşı"
+        },
+        "app.RHJvcGJveA.action.bW92ZS1maWxl.desc": {
+          "source": "Relocates an existing Dropbox file or folder from its source path to a destination path without uploading new file content. A destination with a different name in the same folder renames the existing item.",
+          "message": "Mevcut bir Dropbox dosyasını veya klasörünü, yeni dosya içeriği yüklemeden kaynak yolundan hedef yoluna taşır. Aynı klasörde farklı bir ada sahip hedef, mevcut öğeyi yeniden adlandırır."
+        }
+      }
+    }
+  }
+}

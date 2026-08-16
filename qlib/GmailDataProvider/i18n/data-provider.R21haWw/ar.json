@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "ar": {
+      "messages": {
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
+          "source": "Move a Message to the Trash",
+          "message": "نقل رسالة إلى المهملات"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
+          "source": "Place an existing stored Gmail message in the recoverable trash folder",
+          "message": "وضع رسالة Gmail مخزنة موجودة في مجلد المهملات القابل للاسترداد"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.desc": {
+          "source": "Relocates the existing stored Gmail message identified by `message_id` from its current mailbox folder into Gmail's recoverable trash folder. The same stored message remains available for restoration until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
+          "message": "ينقل رسالة Gmail المخزنة الموجودة والمحددة بواسطة `message_id` من مجلد صندوق البريد الحالي إلى مجلد المهملات القابل للاسترداد في Gmail. تظل الرسالة المخزنة نفسها متاحة للاستعادة حتى يفرغ Gmail المهملات، مما يجعل هذه الطريقة آمنة لإزالة رسالة انتهى سير العمل من معالجتها.\n\nاستخدم هذا الإجراء من مستهلك حدث `watch` أو `watch-attachment`، مع قيمة `message_id` التي يحملها الحدث، بعد نجاح المعالجة. يؤدي الحذف من المراقبة نفسها باستخدام `delete_messages` إلى إتلاف الرسالة بمجرد إنشاء الحدث، سواء نجح المستهلك بعد ذلك أم لا"
+        }
+      }
+    }
+  }
+}

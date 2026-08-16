@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "locales": {
+    "he": {
+      "messages": {
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
+          "source": "Move a Message to the Trash",
+          "message": "העברת הודעה לאשפה"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
+          "source": "Place an existing stored Gmail message in the recoverable trash folder",
+          "message": "העברת הודעת Gmail קיימת ושמורה לתיקיית האשפה הניתנת לשחזור"
+        },
+        "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.desc": {
+          "source": "Relocates the existing stored Gmail message identified by `message_id` from its current mailbox folder into Gmail's recoverable trash folder. The same stored message remains available for restoration until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
+          "message": "מעביר את הודעת Gmail הקיימת והשמורה, המזוהה באמצעות `message_id`, מתיקיית הדואר הנוכחית שלה לתיקיית האשפה הניתנת לשחזור של Gmail. אותה הודעה שמורה נשארת זמינה לשחזור עד ש-Gmail מרוקן את האשפה, ולכן זו הדרך הבטוחה לפנות הודעה שזרימת העבודה סיימה לעבד.\n\nיש להשתמש בפעולה זו מתוך הצרכן של אירוע `watch` או `watch-attachment`, עם הערך `message_id` שנושא האירוע, לאחר שהעיבוד הצליח. מחיקה מתוך המעקב עצמו באמצעות `delete_messages` משמידה את ההודעה מיד עם יצירת האירוע, בין אם הצרכן הצליח לאחר מכן ובין אם לא"
+        }
+      }
+    }
+  }
+}
