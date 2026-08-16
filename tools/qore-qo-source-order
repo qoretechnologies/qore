@@ -1974,6 +1974,23 @@ class SourceOrderEngine {
         return digest("sha256", join("\n", normalized) + "\n").toHex();
     }
 
+    #! Names the group's last whole-group publication, or NOTHING when it has none.
+    /** The batch stamp is touched by every shared-parse publication, and a shared
+        parse is the only operation that rewrites every depfile in the group at
+        once.  Its modification time is therefore the marker that says which
+        whole-group edge set a snapshot was frozen from.
+    */
+    private *int batchStampGeneration(*string batch_stamp) {
+        if (!batch_stamp) {
+            return NOTHING;
+        }
+        *hash<StatInfo> info = hstat(batch_stamp);
+        if (!exists info) {
+            return NOTHING;
+        }
+        return get_duration_microseconds(info.mtime - 1970-01-01Z);
+    }
+
     #! Freezes the current depfile-derived edge set as one named generation.
     /** This is the transition point the build schedules against.  Every helper
         invocation that runs while part of a group is compiling reads this file
@@ -1984,18 +2001,35 @@ class SourceOrderEngine {
         Freezing deliberately reads the live depfiles: it is only ever performed
         by the group coordinator, between phases, with no compile in flight.
 
+        The snapshot outlives the build that wrote it -- it is an ordinary file in
+        the script directory -- so it also records which whole-group publication
+        it was frozen from.  Without that, a recipe scheduled ahead of the next
+        build's first freeze applies the previous build's edge set, and the
+        coordinator's freeze then makes its publication a graph transition.
+
         \return the name of the frozen generation.
     */
     string writeGraphSnapshot(string snapshot_path,
-            hash<SourceOrderContext> context_info) {
+            hash<SourceOrderContext> context_info, *string batch_stamp) {
         list<list<int>> edges = collectDepfileContractEdges(context_info.outputs);
         string generation = contractEdgeGeneration(edges, context_info.outputs);
-        atomicWriteIfChanged(snapshot_path, make_json((
-            "format": 1,
+        hash<auto> snapshot = {
+            # Format 2 records the whole-group publication the edge set was read
+            # from.  A format 1 snapshot cannot be checked against one, so it is
+            # not applied: it may predate a shared parse that superseded it.
+            "format": 2,
             "generation": generation,
             "outputs_digest": outputsDigest(context_info.outputs),
-            "edges": edges,
-        )) + "\n");
+        };
+        *int batch_generation = batchStampGeneration(batch_stamp);
+        if (exists batch_generation) {
+            snapshot += {
+                "batch_stamp": absoluteNormalized(batch_stamp),
+                "batch_stamp_generation": batch_generation,
+            };
+        }
+        snapshot.edges = edges;
+        atomicWriteIfChanged(snapshot_path, make_json(snapshot) + "\n");
         return generation;
     }
 
@@ -2008,6 +2042,15 @@ class SourceOrderEngine {
         A snapshot whose \c outputs_digest no longer matches is discarded rather
         than trusted: the context's source list only changes through a CMake
         reconfigure, which starts a new build whose first freeze replaces it.
+
+        A snapshot frozen before the group's current whole-group publication is
+        discarded for the same reason: the shared parse that produced that
+        publication rewrote every depfile in the group, so the frozen edge set
+        describes a graph it superseded.  A build tool is free to schedule an
+        object recipe before this build's first freeze -- any target that depends
+        on the object stamps rather than on the group's order targets does
+        exactly that -- and applying the previous build's edge set there produces
+        a compile the coordinator's freeze then refuses to publish.
     */
     private *list<list<int>> loadGraphSnapshot(list<string> outputs) {
         *string snapshot_path = ENV.QORE_QCC_GRAPH_SNAPSHOT;
@@ -2020,8 +2063,13 @@ class SourceOrderEngine {
                 return NOTHING;
             }
             hash<auto> snapshot = data;
-            if (snapshot.format != 1 || snapshot.edges.typeCode() != NT_LIST
+            if (snapshot.format != 2 || snapshot.edges.typeCode() != NT_LIST
                     || snapshot.outputs_digest != outputsDigest(outputs)) {
+                return NOTHING;
+            }
+            if (exists snapshot.batch_stamp
+                    && snapshot.batch_stamp_generation
+                        != batchStampGeneration(snapshot.batch_stamp)) {
                 return NOTHING;
             }
             list<list<int>> edges = ();
@@ -3079,7 +3127,7 @@ sub usage(*string error = NOTHING, bool success = False) {
         "       %s --scc-publish [--expect TOKEN] [--expect-graph GENERATION]\n"
         "           CONTEXT SCC\n"
         "       %s --scc-graph-generation CONTEXT\n"
-        "       %s --scc-freeze-graph SNAPSHOT CONTEXT\n"
+        "       %s --scc-freeze-graph SNAPSHOT [--batch-stamp STAMP] CONTEXT\n"
         "\n"
         "SCC selects a strongly connected component of the required-edge graph by\n"
         "its index or by its key. Only a key is stable across a build: component\n"
@@ -3101,7 +3149,14 @@ sub usage(*string error = NOTHING, bool success = False) {
         "named generation and prints its name. While QORE_QCC_GRAPH_SNAPSHOT names\n"
         "a readable snapshot for the current context, every command reads the graph\n"
         "from it instead of from the live depfiles, so a compile cannot change the\n"
-        "decomposition another builder resolved against.\n",
+        "decomposition another builder resolved against.\n"
+        "\n"
+        "--batch-stamp given to --scc-freeze-graph records which whole-group\n"
+        "publication the snapshot was frozen from. A later shared parse rewrites\n"
+        "every depfile in the group, so a snapshot naming an older batch stamp is\n"
+        "discarded for a live scan: the file outlives the build that wrote it, and\n"
+        "a recipe the build tool scheduled ahead of the next freeze must not apply\n"
+        "the previous build's edge set.\n",
         name, name, name, name, name, name, name, name, name, name, name, name, name,
         name, name);
     if (success) {
@@ -3436,7 +3491,8 @@ int sub main() {
         # phases, and the whole-group batch -- which holds the group lock and
         # rewrites every depfile -- runs without a snapshot at all.
         printf("%s\n",
-            engine.writeGraphSnapshot(graph_snapshot_output, context_info));
+            engine.writeGraphSnapshot(graph_snapshot_output, context_info,
+                batch_bootstrap_stamp));
         return 0;
     }
     if (exists component_generation_map) {

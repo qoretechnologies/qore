@@ -95,10 +95,10 @@ reported as such.
 
 ## The graph is frozen for the duration of a build step
 
-`qore-qo-source-order --scc-freeze-graph SNAPSHOT CONTEXT` records the current
-contract-edge set as one named generation. While `QORE_QCC_GRAPH_SNAPSHOT` names
-a snapshot addressed to the current context, every command applies its edges
-instead of scanning the live depfiles.
+`qore-qo-source-order --scc-freeze-graph SNAPSHOT [--batch-stamp STAMP] CONTEXT`
+records the current contract-edge set as one named generation. While
+`QORE_QCC_GRAPH_SNAPSHOT` names a snapshot addressed to the current context,
+every command applies its edges instead of scanning the live depfiles.
 
 The rule for who freezes and who reads live is one sentence:
 
@@ -116,6 +116,18 @@ The rule for who freezes and who reads live is one sentence:
 - A snapshot that cannot be applied — missing, unreadable, addressed to a
   different output list, or naming a node outside the context — is discarded for
   a live scan. A partly-applicable snapshot would mis-attribute a dependency.
+- **A snapshot does not outlive the whole-group publication it was frozen from.**
+  The file stays in the script directory between builds, and a build tool is free
+  to run an object recipe before the next build's first freeze: target-level
+  ordering onto the coordinator reaches the group's order targets, but CMake
+  duplicates each object rule into every independent target that depends on the
+  object stamps, and such a target carries no planner barrier. The snapshot
+  therefore records the batch stamp it was read from (`format` 2), and is
+  discarded when that stamp has moved — a shared parse rewrites every depfile in
+  the group, so the frozen edge set describes a graph it superseded. Without
+  this, the recipe resolves its compile plan from the previous build's edge set,
+  the coordinator's freeze makes the publication a graph transition (76), and the
+  component is compiled a second time.
 
 The snapshot is close to performance-neutral: it replaces reading and scanning
 every member depfile (12.3 ms on a synthetic 600-source group) with one JSON read

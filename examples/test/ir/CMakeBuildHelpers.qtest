@@ -1018,6 +1018,10 @@ qore_qcc_compile_objects(QO_OBJECTS
     BOOTSTRAP_AGGREGATE_NATIVE_REGISTERS)
 add_custom_target(qo-objects ALL DEPENDS ${QO_STAMPS})
 
+# The graph-snapshot probes below drive this helper directly, the way the build
+# steps do.
+qore_qcc_helper_path(QO_SOURCE_ORDER_HELPER qore-qo-source-order)
+
 qore_qcc_link_objects(QO_LINK
     OUTPUT \"${CMAKE_BINARY_DIR}/linked.qo\"
     AGGREGATE_SYMBOL QORE_CMAKE_QO_SMOKE
@@ -1109,7 +1113,8 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
     \"script_aggregate_stamp=${QO_SCRIPT_AGG_STAMP}\\n\"
     \"script_aggregate_index=${QO_SCRIPT_AGG_INDEX}\\n\"
     \"generation_map=${QO_GENERATION_MAP}\\n\"
-    \"generation_target=${QO_GENERATION_TARGET}\\n\")
+    \"generation_target=${QO_GENERATION_TARGET}\\n\"
+    \"source_order_helper=${QO_SOURCE_ORDER_HELPER}\\n\")
 file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
 ");
 
@@ -1353,6 +1358,55 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
             occurrences(same_second_rebuild, "qcc: script-context .qo"),
             "a sub-second qcc context transition compiles each source exactly "
                 "once: " + same_second_rebuild);
+
+        # The frozen dependency graph is an ordinary file that outlives the build
+        # that wrote it, so it records the whole-group publication it was frozen
+        # from.  A target that depends on the object stamps rather than on the
+        # group's order targets -- which is what qo-objects above does -- carries
+        # no planner barrier, so the build tool may run an object recipe before
+        # this build's first freeze.  Applying the previous build's edge set
+        # there resolves a compile plan the coordinator's freeze then refuses to
+        # publish, and the component is compiled a second time.
+        string snapshot_path = context_path + ".graph-snapshot.json";
+        string snapshot_text = read(snapshot_path);
+        assertTrue(snapshot_text.find("\"edges\":[[") != -1,
+            "the fixture's frozen graph carries contract edges: " + snapshot_text);
+        *string frozen_batch_generation = (snapshot_text
+            =~ x/"batch_stamp_generation":([0-9]+)/)[0];
+        assertTrue(exists frozen_batch_generation,
+            "the frozen graph names the whole-group publication it was read "
+                "from: " + snapshot_text);
+        assertEq(get_duration_microseconds(mtime(bootstrap_stamp) - 1970-01-01Z),
+            frozen_batch_generation.toInt(),
+            "the frozen graph names the current batch publication");
+        *string source_order_helper = (read(build_dir + "/qo-vars.txt")
+            =~ x/source_order_helper=(.*)/)[0];
+        assertTrue(exists source_order_helper && is_file(source_order_helper),
+            "the fixture exports the source-order helper: "
+                + (source_order_helper ?? "<missing>"));
+        string graph_generation_cmd = sprintf("%s %s --scc-graph-generation %s",
+            shellQuote(qore_bin), shellQuote(source_order_helper),
+            shellQuote(context_path));
+        string live_graph = trim(run(graph_generation_cmd));
+        # Both probes name an edge set the live depfiles do not, so whether the
+        # snapshot was applied is visible in the generation the helper reports.
+        string standing_snapshot = build_dir + "/graph-snapshot-standing.json";
+        write(standing_snapshot,
+            regex_subst(snapshot_text, "\"edges\":\\[", "\"edges\":[[0,1],"));
+        string superseded_snapshot = build_dir + "/graph-snapshot-superseded.json";
+        write(superseded_snapshot, replace(read(standing_snapshot),
+            "\"batch_stamp_generation\":" + frozen_batch_generation,
+            "\"batch_stamp_generation\":"
+                + string(frozen_batch_generation.toInt() - 1000000)));
+        assertNeq(live_graph, trim(run(sprintf("QORE_QCC_GRAPH_SNAPSHOT=%s %s",
+            shellQuote(standing_snapshot), graph_generation_cmd))),
+            "a graph frozen from the standing whole-group publication is applied");
+        assertEq(live_graph, trim(run(sprintf("QORE_QCC_GRAPH_SNAPSHOT=%s %s",
+            shellQuote(superseded_snapshot), graph_generation_cmd))),
+            "a graph frozen from a superseded whole-group publication is "
+                "discarded for a live scan");
+        unlink(standing_snapshot);
+        unlink(superseded_snapshot);
 
         string no_op = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertTrue(no_op.find("qcc -c:") == -1

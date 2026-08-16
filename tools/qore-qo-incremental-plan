@@ -89,10 +89,17 @@ graph_snapshot=${QORE_QCC_GRAPH_SNAPSHOT:-$context.graph-snapshot.json}
 # call, so each of these sets the snapshot inside a subshell instead; only an
 # external command's prefix assignment is reliably scoped to that command.
 freeze_graph() {
+    # The batch stamp names the whole-group publication the frozen edge set was
+    # read from.  The snapshot is a plain file that outlives this build, so
+    # without it a recipe the build tool schedules ahead of the next build's
+    # first freeze -- which any target depending on the object stamps rather
+    # than on the group's order targets is free to do -- applies the previous
+    # build's graph, and its publication is then refused as a graph transition.
     frozen=$(
         QORE_QCC_GRAPH_SNAPSHOT=
         export QORE_QCC_GRAPH_SNAPSHOT
-        run_source_order --scc-freeze-graph "$graph_snapshot" "$context"
+        run_source_order --scc-freeze-graph "$graph_snapshot" \
+            --batch-stamp "$bootstrap_stamp" "$context"
     ) || return 1
     echo "$0: scheduling against dependency graph $frozen"
 }
