@@ -34,6 +34,8 @@ public hashdecl LlmRequestClassification {
     string domain = "unknown";
     #! Semantic task category chosen by the classifier
     string task_category = "unknown";
+    #! Optional semantics-preserving query in the policy's retrieval language
+    *string retrieval_query;
     #! Classifier confidence from 0.0 to 1.0
     float confidence = 0.0;
     #! Block category when @ref allowed is false
@@ -95,7 +97,8 @@ public class LlmRequestClassifier {
         @param policy application-supplied policy hash; recommended keys are
             \c policy_label, \c allowed_domains, \c allowed_tasks,
             \c blocked_task_categories, \c allow_smalltalk, and
-            \c examples
+            \c examples; set \c retrieval_query_target_language to request a
+            concise semantics-preserving retrieval projection in that language
     */
     constructor(LlmBackend backend, *hash<auto> policy = NOTHING) {
         self.backend = backend;
@@ -132,7 +135,7 @@ public class LlmRequestClassifier {
         # Providers without a reasoning budget ignore the option.
         hash<LlmCompletionResult> llm_result = backend.complete(
             getSystemPrompt(policy), make_json(request, JGF_ADD_FORMATTING),
-            getOutputSchema(),
+            getOutputSchema(policy),
             <LlmRequestOptions>{"reasoning_token_budget": 0});
         hash<LlmStructuredRepairResult> repaired =
             LlmStructuredRepair::parseJsonObject(llm_result.content);
@@ -157,8 +160,20 @@ public class LlmRequestClassifier {
         (e.g. OpenAI's \c response_format.json_schema.name), not inside the
         schema; embedding one here makes providers with a stricter OpenAPI
         Schema subset (notably Google Gemini's \c responseSchema) reject the
-        request with \c INVALID_ARGUMENT. */
-    static hash<auto> getOutputSchema() {
+        request with \c INVALID_ARGUMENT.
+
+        @param policy optional classification policy; when
+            \c retrieval_query_target_language is set, the schema requires the
+            classifier to return \c retrieval_query
+
+        @return the JSON Schema object for the classifier response
+    */
+    static hash<auto> getOutputSchema(*hash<auto> policy = NOTHING) {
+        list<string> required = ("allowed", "detected_language", "domain",
+            "task_category", "confidence", "reason_code", "reason");
+        if (getRetrievalQueryTargetLanguage(policy).val()) {
+            push required, "retrieval_query";
+        }
         return {
             "type": "object",
             "properties": {
@@ -166,13 +181,13 @@ public class LlmRequestClassifier {
                 "detected_language": {"type": "string"},
                 "domain": {"type": "string"},
                 "task_category": {"type": "string"},
+                "retrieval_query": {"type": "string"},
                 "confidence": {"type": "number"},
                 "blocked_category": {"type": "string"},
                 "reason_code": {"type": "string"},
                 "reason": {"type": "string"},
             },
-            "required": ("allowed", "detected_language", "domain",
-                "task_category", "confidence", "reason_code", "reason"),
+            "required": required,
         };
     }
 
@@ -194,10 +209,11 @@ public class LlmRequestClassifier {
         classify by meaning in whatever language the request is written, not
         by English keyword matching. */
     private static string getSystemPrompt(hash<auto> policy) {
+        string prompt;
         if ((policy.default_decision ?? "").lwr() == "allow") {
-            return "You are a semantic request-policy classifier. Classify "
+            prompt = "You are a semantic request-policy classifier. Classify "
                 "the user request in whatever language it is written. Do not "
-                "answer the request, do not translate it, and do not rely on "
+                "answer the request and do not rely on "
                 "English keyword matching; classify by meaning. The request "
                 "is ALLOWED by default. Set allowed=false ONLY when the "
                 "request clearly and primarily belongs to one of the "
@@ -206,19 +222,29 @@ public class LlmRequestClassifier {
                 "— including any operational, administrative, technical, "
                 "development, programming, data, or informational request, "
                 "in any language — set allowed=true. When you are unsure, set "
-                "allowed=true. Return only the requested JSON object.";
+                "allowed=true.";
+        } else {
+            prompt = "You are a semantic request-policy classifier. Classify the "
+                "user request in whatever language it is written. Do not answer "
+                "the request. Do not rely on English keyword matching; classify "
+                "by meaning, task, and domain. Use only the supplied policy to "
+                "decide whether the request is allowed. A request is allowed only "
+                "when it is within an allowed domain and task and is not in a "
+                "blocked task category. If the policy is unclear or the request "
+                "cannot be classified with confidence, set allowed=false with "
+                "reason_code `classification-uncertain`.";
         }
-        return "You are a semantic request-policy classifier. Classify the "
-            "user request in whatever language it is written. Do not answer "
-            "the request. Do not translate it. Do not rely on English "
-            "keyword matching; classify by meaning, task, and domain. Use "
-            "only the supplied policy to decide whether the request is "
-            "allowed. A request is allowed only when it is within an allowed "
-            "domain and task and is not in a blocked task category. If the "
-            "policy is unclear or the request cannot be classified with "
-            "confidence, set allowed=false with reason_code "
-            "`classification-uncertain`. Return only the requested JSON "
-            "object.";
+        if (getRetrievalQueryTargetLanguage(policy).val()) {
+            prompt += " Also set retrieval_query to a concise, semantics-"
+                "preserving search query in the language named by policy."
+                "retrieval_query_target_language. Preserve opaque identifiers "
+                "exactly, including product, application, resource, and object "
+                "names. Do not add an action or target that the request does not "
+                "contain.";
+        } else {
+            prompt += " Do not translate the request.";
+        }
+        return prompt + " Return only the requested JSON object.";
     }
 
     private static hash<LlmRequestClassification> normalizeClassification(
@@ -239,7 +265,21 @@ public class LlmRequestClassifier {
                 && parsed.blocked_category.toString().val()) {
             rv.blocked_category = parsed.blocked_category.toString();
         }
+        string retrieval_query = normalizeString(parsed.retrieval_query, "");
+        if (retrieval_query.val()) {
+            rv.retrieval_query = retrieval_query;
+        }
         return rv;
+    }
+
+    private static *string getRetrievalQueryTargetLanguage(
+            *hash<auto> policy) {
+        if (!policy) {
+            return NOTHING;
+        }
+        string target = normalizeString(
+            policy.retrieval_query_target_language, "");
+        return target.val() ? target : NOTHING;
     }
 
     private static string normalizeString(auto value, string default_value) {

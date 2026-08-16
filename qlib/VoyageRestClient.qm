@@ -330,6 +330,13 @@ public namespace QoreRagUtils {
       takes precedence)
     - \c connect_timeout (optional): default connection timeout (per-call
       \c opts override takes precedence)
+
+    @par Query and document roles
+
+    @ref AbstractEmbedder::encodeQuery() forwards Voyage \c input_type
+    \c "query", and @ref AbstractEmbedder::encodeDocuments() forwards
+    \c "document".  Direct @ref encode() or @ref encodeBatch() calls omit the
+    role unless the caller supplies one of those two values explicitly.
 */
 public class VoyageEmbedder inherits AbstractEmbedder {
     public {
@@ -371,6 +378,15 @@ public class VoyageEmbedder inherits AbstractEmbedder {
             "model": model_name,
             "input": texts,
         };
+        *string input_type = opts.input_type;
+        if (input_type.val()) {
+            if (!inlist(input_type, ("query", "document"))) {
+                throw "EMBEDDER-INPUT-TYPE-ERROR", sprintf(
+                    "%s: unsupported input_type %y; expected 'query' or 'document'",
+                    Backend, input_type);
+            }
+            body.input_type = input_type;
+        }
         if (exists cached_dimension) {
             body.output_dimension = cached_dimension;
         }

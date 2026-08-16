@@ -117,7 +117,7 @@
         },
         "app.R21haWw.action.bGlzdA.option.bGFiZWxJZHM.short_desc": {
           "source": "Only return messages with labels that match all of the specified label IDs",
-          "message": "Renvoyer uniquement les messages avec des libellés correspondant à tous les identifiants de libellé spécifiés"
+          "message": "Renvoyer uniquement les messages avec tous les ID de libellé spécifiés"
         },
         "app.R21haWw.action.bGlzdA.option.bWF4UmVzdWx0cw.desc": {
           "source": "The maximum number of results to return",
@@ -201,7 +201,7 @@
         },
         "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+          "message": "Pass-through ; utiliser la sérialisation, laisser le client REST décider"
         },
         "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -225,7 +225,7 @@
         },
         "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
           "source": "Serialize body as application/x-www-form-urlencoded form fields",
-          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+          "message": "Sérialiser le corps en champs application/x-www-form-urlencoded"
         },
         "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
           "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
@@ -451,6 +451,10 @@
           "source": "URI Path",
           "message": "Chemin URI"
         },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Chemin d'URI relatif à l'URL de base de l'API de la connexion"
+        },
         "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hachage des valeurs substituées dans les espaces réservés `{name}` dans le chemin URI. Exemple : avec `path = /users/{id}` et `path_vars = {id: 123}`, le framework envoie `/users/123`. Les valeurs sont encodées en URL."
@@ -480,8 +484,8 @@
           "message": "Effectuer un appel d'API personnalisé vers Gmail"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.desc": {
-          "source": "Send a message",
-          "message": "Envoyer un message"
+          "source": "Creates a new outgoing email from the supplied recipient addresses, subject, body, and attachments, and transmits that new email through Gmail.",
+          "message": "Crée un nouvel e-mail sortant à partir des adresses de destinataires, de l'objet, du corps et des pièces jointes fournis, et transmet ce nouvel e-mail via Gmail."
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
           "source": "Send a Message",
@@ -557,7 +561,7 @@
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
           "source": "'quoted-printable' for string data, 'base64' for binary data",
-          "message": "'quoted-printable' pour les données de type chaîne, 'base64' pour les données binaires"
+          "message": "'quoted-printable' pour le texte, 'base64' pour les données binaires"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.desc": {
           "source": "Ideal for string data",
@@ -668,8 +672,8 @@
           "message": "Adresses des destinataires du message"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {
-          "source": "Send a message",
-          "message": "Envoyer un message"
+          "source": "Create and transmit a new outgoing email through Gmail",
+          "message": "Créer et transmettre un nouvel e-mail sortant via Gmail"
         },
         "app.R21haWw.action.d2F0Y2g.desc": {
           "source": "React to new emails; when a new email arrives, all the message information including the message body is returned as output data",
@@ -689,7 +693,7 @@
         },
         "app.R21haWw.action.d2F0Y2g.option.ZGVsZXRlX21lc3NhZ2Vz.short_desc": {
           "source": "Permanently delete each matched message after raising its event?",
-          "message": "Supprimer définitivement chaque message correspondant après avoir déclenché son événement ?"
+          "message": "Supprimer définitivement chaque message après avoir émis son événement ?"
         },
         "app.R21haWw.action.d2F0Y2g.option.bWF4X21lc3NhZ2VzX3Blcl9jeWNsZQ.desc": {
           "source": "The maximum number of messages delivered in one polling cycle; unset or `0` means no limit.\n\nThe limit is applied from the **oldest** end of the backlog, so the watch cursor still advances contiguously and the remaining messages are delivered by the following cycles rather than skipped. Use it to bound the work a single cycle can do when a large backlog may accumulate",
@@ -861,7 +865,7 @@
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.short_desc": {
           "source": "Permanently delete each matched message after raising its events?",
-          "message": "Supprimer définitivement chaque message correspondant après le déclenchement de ses événements ?"
+          "message": "Supprimer définitivement chaque message après avoir émis ses événements ?"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.desc": {
           "source": "Ignore case in globs; ignored if `attachment_glob` is not set",
@@ -1004,8 +1008,8 @@
           "message": "Réagir aux nouvelles pièces jointes d'e-mails"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.desc": {
-          "source": "Moves a message to the trash. The message leaves the mailbox but is recoverable until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
-          "message": "Déplace un message vers la corbeille. Le message quitte la boîte de réception mais reste récupérable jusqu'à ce que Gmail vide la corbeille, ce qui en fait le moyen sûr de supprimer un message dont le workflow a terminé le traitement.\n\nUtilisez cette action depuis le consommateur d'un événement `watch` ou `watch-attachment`, avec le `message_id` transporté par l'événement, une fois le traitement réussi. La suppression depuis la surveillance elle-même avec `delete_messages` détruit le message dès que l'événement est déclenché, que le consommateur ait réussi ou non"
+          "source": "Relocates the existing stored Gmail message identified by `message_id` from its current mailbox folder into Gmail's recoverable trash folder. The same stored message remains available for restoration until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
+          "message": "Déplace le message Gmail stocké existant identifié par `message_id` depuis son dossier de boîte aux lettres actuel vers la corbeille récupérable de Gmail. Ce même message stocké reste disponible pour une restauration jusqu'à ce que Gmail vide la corbeille, ce qui en fait le moyen le plus sûr de supprimer un message dont un workflow a terminé le traitement.\n\nUtilisez cette action depuis le consommateur d'un événement `watch` ou `watch-attachment`, avec le `message_id` transporté par l'événement, une fois le traitement réussi. Supprimer depuis la surveillance elle-même avec `delete_messages` détruit le message dès que l'événement est déclenché, que le consommateur ait ensuite réussi ou non"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
           "source": "Move a Message to the Trash",
@@ -1024,8 +1028,8 @@
           "message": "L'ID du message à déplacer vers la corbeille"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
-          "source": "Move a message to the trash, where it can still be recovered",
-          "message": "Déplacer un message vers la corbeille, où il peut encore être récupéré"
+          "source": "Place an existing stored Gmail message in the recoverable trash folder",
+          "message": "Placer un message Gmail stocké existant dans la corbeille récupérable"
         },
         "app.R21haWw.desc": {
           "source": "Gmail services",

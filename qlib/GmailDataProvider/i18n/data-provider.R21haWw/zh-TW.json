@@ -451,6 +451,10 @@
           "source": "URI Path",
           "message": "URI 路徑"
         },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "相對於連線 API 基礎 URL 的 URI 路徑"
+        },
         "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "替換至 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}` 時，框架會傳送 `/users/123`。數值均經過 URL 編碼。"
@@ -480,8 +484,8 @@
           "message": "向 Gmail 發出自訂 API 呼叫"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.desc": {
-          "source": "Send a message",
-          "message": "傳送郵件"
+          "source": "Creates a new outgoing email from the supplied recipient addresses, subject, body, and attachments, and transmits that new email through Gmail.",
+          "message": "根據提供的收件者地址、主旨、內文與附件建立新的外寄電子郵件，並透過 Gmail 傳送該電子郵件。"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
           "source": "Send a Message",
@@ -668,8 +672,8 @@
           "message": "郵件收件者位址"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {
-          "source": "Send a message",
-          "message": "傳送郵件"
+          "source": "Create and transmit a new outgoing email through Gmail",
+          "message": "透過 Gmail 建立並傳送新的外寄電子郵件"
         },
         "app.R21haWw.action.d2F0Y2g.desc": {
           "source": "React to new emails; when a new email arrives, all the message information including the message body is returned as output data",
@@ -1004,8 +1008,8 @@
           "message": "對新電子郵件附件做出反應"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.desc": {
-          "source": "Moves a message to the trash. The message leaves the mailbox but is recoverable until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
-          "message": "將郵件移至垃圾桶。郵件會離開信箱，但在 Gmail 清理垃圾桶前仍可復原，因此這是在工作流程處理完成後清除郵件的安全方式。\n\n在處理成功後，從 `watch` 或 `watch-attachment` 事件的取用端使用此動作，並附上事件所攜帶的 `message_id`。使用 `delete_messages` 直接從監看中刪除會在引發事件時立即銷毀郵件，無論取用端後續是否成功"
+          "source": "Relocates the existing stored Gmail message identified by `message_id` from its current mailbox folder into Gmail's recoverable trash folder. The same stored message remains available for restoration until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
+          "message": "將由 `message_id` 識別的現有儲存 Gmail 郵件從其目前信箱資料夾移至 Gmail 的可復原垃圾桶資料夾。在 Gmail 清除垃圾桶之前，同一封已儲存的郵件仍可供復原，因此這是在工作流程處理完畢後清除郵件的安全做法。\n\n在處理成功後，於 `watch` 或 `watch-attachment` 事件的取用端使用此動作，並附帶事件所攜帶的 `message_id`。直接從監控本身使用 `delete_messages` 刪除會在觸發事件時立即銷毀郵件，無論取用端後續是否成功處理"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
           "source": "Move a Message to the Trash",
@@ -1024,8 +1028,8 @@
           "message": "要移至垃圾桶的郵件 ID"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
-          "source": "Move a message to the trash, where it can still be recovered",
-          "message": "將郵件移至垃圾桶（仍可復原）"
+          "source": "Place an existing stored Gmail message in the recoverable trash folder",
+          "message": "將現有已儲存的 Gmail 郵件移入可復原的垃圾桶資料夾"
         },
         "app.R21haWw.desc": {
           "source": "Gmail services",

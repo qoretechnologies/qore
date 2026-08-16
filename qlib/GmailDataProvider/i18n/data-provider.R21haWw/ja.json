@@ -451,6 +451,10 @@
           "source": "URI Path",
           "message": "URIパス"
         },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "接続のAPIベースURLに対する相対URIパス"
+        },
         "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
@@ -480,8 +484,8 @@
           "message": "GmailへのカスタムAPI呼び出しを実行"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.desc": {
-          "source": "Send a message",
-          "message": "メッセージを送信"
+          "source": "Creates a new outgoing email from the supplied recipient addresses, subject, body, and attachments, and transmits that new email through Gmail.",
+          "message": "指定された宛先アドレス、件名、本文、添付ファイルから新しい送信メールを作成し、Gmail経由で送信します。"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
           "source": "Send a Message",
@@ -668,8 +672,8 @@
           "message": "メッセージの受信者アドレス"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {
-          "source": "Send a message",
-          "message": "メッセージを送信"
+          "source": "Create and transmit a new outgoing email through Gmail",
+          "message": "Gmail経由で新しい送信メールを作成して送信"
         },
         "app.R21haWw.action.d2F0Y2g.desc": {
           "source": "React to new emails; when a new email arrives, all the message information including the message body is returned as output data",
@@ -1004,8 +1008,8 @@
           "message": "新しいメールの添付ファイルに応答"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.desc": {
-          "source": "Moves a message to the trash. The message leaves the mailbox but is recoverable until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
-          "message": "メッセージをゴミ箱に移動します。メッセージはメールボックスから移動しますが、Gmailがゴミ箱を完全に削除するまでは復元可能です。これにより、ワークフローが完了したメッセージを安全にクリアできます。\n\n処理が成功した後、`watch` または `watch-attachment` イベントのコンシューマーから、イベントに含まれる `message_id` を指定してこのアクションを使用してください。監視側で `delete_messages` を使用して直接削除すると、コンシューマーの処理が成功したかどうかにかかわらず、イベントが発生するとすぐにメッセージが破棄されます"
+          "source": "Relocates the existing stored Gmail message identified by `message_id` from its current mailbox folder into Gmail's recoverable trash folder. The same stored message remains available for restoration until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
+          "message": "`message_id` で識別される保存済みの既存Gmailメッセージを、現在のメールボックスフォルダーからGmailの復元可能なゴミ箱フォルダーに移動します。Gmailがゴミ箱を完全に消去するまで同じ保存済みメッセージを復元できるため、ワークフローで処理が完了したメッセージを安全にクリアできます。\n\n処理が成功した後に、`watch` または `watch-attachment` イベントのコンシューマーから、イベントに含まれる `message_id` を使用してこのアクションを実行してください。`delete_messages` を使用して監視自体から削除すると、コンシューマーが正常に完了したかどうかに関係なく、イベントが発生した直後にメッセージが破棄されます。"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
           "source": "Move a Message to the Trash",
@@ -1024,8 +1028,8 @@
           "message": "ゴミ箱に移動するメッセージのID"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
-          "source": "Move a message to the trash, where it can still be recovered",
-          "message": "メッセージをゴミ箱に移動します（復元可能）"
+          "source": "Place an existing stored Gmail message in the recoverable trash folder",
+          "message": "保存済みの既存Gmailメッセージを復元可能なゴミ箱フォルダーに移動"
         },
         "app.R21haWw.desc": {
           "source": "Gmail services",

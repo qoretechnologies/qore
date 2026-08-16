@@ -307,10 +307,11 @@ module GmailDataProvider {
             "path": "/messages/trash",
             "action": "trash-message",
             "display_name": "Move a Message to the Trash",
-            "short_desc": "Move a message to the trash, where it can still be recovered",
-            "desc": "Moves a message to the trash. The message leaves the mailbox but is recoverable "
-                "until Gmail purges the trash, which makes this the safe way to clear a message a "
-                "workflow has finished with.\n\n"
+            "short_desc": "Place an existing stored Gmail message in the recoverable trash folder",
+            "desc": "Relocates the existing stored Gmail message identified by `message_id` from its "
+                "current mailbox folder into Gmail's recoverable trash folder. The same stored message "
+                "remains available for restoration until Gmail purges the trash, which makes this the "
+                "safe way to clear a message a workflow has finished with.\n\n"
                 "Use this action from the consumer of a `watch` or `watch-attachment` event, with the "
                 "`message_id` the event carries, once processing has succeeded. Deleting from the watch "
                 "itself with `delete_messages` destroys the message as soon as the event is raised, "
@@ -366,8 +367,9 @@ module GmailDataProvider {
             "path": "/send-message",
             "action": "send-message",
             "display_name": "Send a Message",
-            "short_desc": "Send a message",
-            "desc": "Send a message",
+            "short_desc": "Create and transmit a new outgoing email through Gmail",
+            "desc": "Creates a new outgoing email from the supplied recipient addresses, subject, body, "
+                "and attachments, and transmits that new email through Gmail.",
             "action_code": DPAT_API,
             "options": DataProviderActionCatalog::getActionOptionFromFields(GmailSendMessageRequestDataType::Fields),
             "get_output_type": AbstractDataProviderType sub () {

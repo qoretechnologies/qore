@@ -451,6 +451,10 @@
           "source": "URI Path",
           "message": "Cesta URI"
         },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Cesta URI relatívna k základnej adrese API URL pripojenia"
+        },
         "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
@@ -480,8 +484,8 @@
           "message": "Vykonať vlastné volanie API do služby Gmail"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.desc": {
-          "source": "Send a message",
-          "message": "Odoslať správu"
+          "source": "Creates a new outgoing email from the supplied recipient addresses, subject, body, and attachments, and transmits that new email through Gmail.",
+          "message": "Vytvorí nový odchádzajúci e-mail zo zadaných adries príjemcov, predmetu, tela a príloh a odošle ho cez Gmail."
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
           "source": "Send a Message",
@@ -668,8 +672,8 @@
           "message": "Adresy príjemcov správy"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {
-          "source": "Send a message",
-          "message": "Odoslať správu"
+          "source": "Create and transmit a new outgoing email through Gmail",
+          "message": "Vytvoriť a odoslať nový odchádzajúci e-mail cez Gmail"
         },
         "app.R21haWw.action.d2F0Y2g.desc": {
           "source": "React to new emails; when a new email arrives, all the message information including the message body is returned as output data",
@@ -741,7 +745,7 @@
         },
         "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3RfbW9kZQ.short_desc": {
           "source": "Collapse a backlog to its latest message instead of replaying it?",
-          "message": "Zbaliť nevybavené položky na najnovšiu správu namiesto ich opätovného prehrávania?"
+          "message": "Zredukovať nevybavené správy na najnovšiu namiesto ich prehrávania?"
         },
         "app.R21haWw.action.d2F0Y2g.option.c3RhcnRfZGF0ZQ.desc": {
           "source": "Sets the start date and time for matching messages",
@@ -925,7 +929,7 @@
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3RfbW9kZQ.short_desc": {
           "source": "Collapse a backlog to its latest message instead of replaying it?",
-          "message": "Zbaliť nevybavené položky na najnovšiu správu namiesto ich opätovného prehrávania?"
+          "message": "Zredukovať nevybavené správy na najnovšiu namiesto ich prehrávania?"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3RhcnRfZGF0ZQ.desc": {
           "source": "Sets the start date and time for matching messages",
@@ -1004,8 +1008,8 @@
           "message": "Reagovať na nové prílohy e-mailov"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.desc": {
-          "source": "Moves a message to the trash. The message leaves the mailbox but is recoverable until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
-          "message": "Presunie správu do koša. Správa opustí poštovú schránku, ale je obnoviteľná, kým Gmail kôš nevyprázdni, vďaka čomu je to bezpečný spôsob vyčistenia správy po dokončení pracovného postupu.\n\nTúto akciu použite z prijímača udalosti `watch` alebo `watch-attachment` s hodnotou `message_id`, ktorú udalosť nesie, po úspešnom spracovaní. Odstránenie priamo zo sledovania pomocou `delete_messages` správu zničí hneď po vyvolaní udalosti bez ohľadu na to, či prijímač úspešne dokončil spracovanie"
+          "source": "Relocates the existing stored Gmail message identified by `message_id` from its current mailbox folder into Gmail's recoverable trash folder. The same stored message remains available for restoration until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
+          "message": "Presunie existujúcu uloženú správu Gmail identifikovanú pomocou `message_id` z jej aktuálneho priečinka schránky do priečinka obnoviteľného koša v Gmaili. Tá istá uložená správa zostáva k dispozícii na obnovenie, kým Gmail kôš nevyprázdni, vďaka čomu je toto bezpečný spôsob vyčistenia správy po dokončení workflowu.\n\nTúto akciu použite zo spotrebiteľa udalosti `watch` alebo `watch-attachment` s parametrom `message_id`, ktorý udalosť nesie, po úspešnom spracovaní. Odstránenie zo samotného sledovania pomocou `delete_messages` zničí správu hneď po vyvolaní udalosti bez ohľadu na to, či spotrebiteľ uspel alebo nie"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
           "source": "Move a Message to the Trash",
@@ -1024,8 +1028,8 @@
           "message": "ID správy, ktorá sa má presunúť do koša"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
-          "source": "Move a message to the trash, where it can still be recovered",
-          "message": "Presunúť správu do koša, odkiaľ ju možno ešte obnoviť"
+          "source": "Place an existing stored Gmail message in the recoverable trash folder",
+          "message": "Presunúť existujúcu uloženú správu Gmail do obnoviteľného koša"
         },
         "app.R21haWw.desc": {
           "source": "Gmail services",

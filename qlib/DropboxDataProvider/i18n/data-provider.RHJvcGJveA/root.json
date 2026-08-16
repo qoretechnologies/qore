@@ -608,12 +608,12 @@
           "message": "Upload File"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.short_desc": {
-          "source": "Upload a file to Dropbox",
-          "message": "Upload a file to Dropbox"
+          "source": "Create a Dropbox file from supplied file content",
+          "message": "Create a Dropbox file from supplied file content"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.desc": {
-          "source": "Uploads a file to Dropbox.\n\nIf `path` is not set, the file's own name is used and the file is stored in the account root.  By default an existing file at the path is not replaced; set `mode` to `overwrite` or `autorename` to change that.\n\nLarge files are uploaded in chunks through a Dropbox upload session, so an interrupted transfer does not have to start again from the beginning.",
-          "message": "Uploads a file to Dropbox.\n\nIf `path` is not set, the file's own name is used and the file is stored in the account root.  By default an existing file at the path is not replaced; set `mode` to `overwrite` or `autorename` to change that.\n\nLarge files are uploaded in chunks through a Dropbox upload session, so an interrupted transfer does not have to start again from the beginning."
+          "source": "Transfers supplied file content into Dropbox to create a new file or write a file at the destination path. It does not relocate an existing Dropbox file or folder; use the move action for that.\n\nIf `path` is not set, the file's own name is used and the file is stored in the account root.  By default an existing file at the path is not replaced; set `mode` to `overwrite` or `autorename` to change that.\n\nLarge files are uploaded in chunks through a Dropbox upload session, so an interrupted transfer does not have to start again from the beginning.",
+          "message": "Transfers supplied file content into Dropbox to create a new file or write a file at the destination path. It does not relocate an existing Dropbox file or folder; use the move action for that.\n\nIf `path` is not set, the file's own name is used and the file is stored in the account root.  By default an existing file at the path is not replaced; set `mode` to `overwrite` or `autorename` to change that.\n\nLarge files are uploaded in chunks through a Dropbox upload session, so an interrupted transfer does not have to start again from the beginning."
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.option.ZmlsZQ.display_name": {
           "source": "File",
@@ -932,12 +932,12 @@
           "message": "Move or Rename File or Folder"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.short_desc": {
-          "source": "Move or rename a file or folder",
-          "message": "Move or rename a file or folder"
+          "source": "Relocate an existing Dropbox file or folder",
+          "message": "Relocate an existing Dropbox file or folder"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.desc": {
-          "source": "Moves a file or folder to a new path.\n\nA move to a different name in the same folder renames it.",
-          "message": "Moves a file or folder to a new path.\n\nA move to a different name in the same folder renames it."
+          "source": "Relocates an existing Dropbox file or folder from its source path to a destination path without uploading new file content. A destination with a different name in the same folder renames the existing item.",
+          "message": "Relocates an existing Dropbox file or folder from its source path to a destination path without uploading new file content. A destination with a different name in the same folder renames the existing item."
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.option.ZnJvbV9wYXRo.display_name": {
           "source": "Source Path",

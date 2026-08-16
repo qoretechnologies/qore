@@ -776,6 +776,10 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "classifier output schema declares the 'allowed' verdict field");
         assertTrue(inlist("allowed", output_schema.required),
             "classifier output schema requires the 'allowed' verdict field");
+        assertTrue(output_schema.properties.hasKey("retrieval_query"),
+            "classifier output schema declares the optional retrieval projection");
+        assertFalse(inlist("retrieval_query", output_schema.required),
+            "retrieval projection is optional without an explicit target language");
     }
 
     actionIntentClassifierBudgetTest() {
@@ -850,6 +854,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
                                 "{\"allowed\":true,\"detected_language\":"
                                 "\"en\",\"domain\":\"qorus\",\"task_category\":"
                                 "\"operations\",\"confidence\":0.95,"
+                                "\"retrieval_query\":\"list Qorus qogs\","
                                 "\"reason_code\":\"classified\",\"reason\":"
                                 "\"in scope\"}"},
                             "finish_reason": "stop",
@@ -862,6 +867,7 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "policy_label": "qonsole-qorus-qore-only",
             "default_decision": "allow",
             "blocked_task_categories": ("creative-writing",),
+            "retrieval_query_target_language": "en",
         });
         hash<QoreLlmUtils::LlmRequestClassification> ra =
             allow_classifier.classify("how many qogs are there?");
@@ -871,6 +877,14 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "block-list mode uses a default-allow system prompt");
         assertEq(0, captured_allow.reasoning_token_budget,
             "classifier disables the reasoning/thinking budget");
+        assertEq("list Qorus qogs", ra.retrieval_query,
+            "classifier preserves the provider's retrieval projection");
+        assertTrue(captured_allow.messages[0].content
+                =~ /retrieval_query_target_language/,
+            "projection policy requests the configured target language");
+        assertTrue(inlist("retrieval_query",
+                captured_allow.response_format.json_schema.schema.required),
+            "projection policy requires retrieval_query in structured output");
 
         # The default (allow-list) mode keeps the stricter "allowed only when"
         # semantics for callers that want a positive-match policy.

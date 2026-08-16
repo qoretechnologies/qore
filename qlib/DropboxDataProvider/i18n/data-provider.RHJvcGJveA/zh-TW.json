@@ -1348,8 +1348,8 @@
           "message": "在單次呼叫中移動多個檔案"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.desc": {
-          "source": "Moves a file or folder to a new path.\n\nA move to a different name in the same folder renames it.",
-          "message": "將檔案或資料夾移動到新路徑。\n\n移動至相同資料夾下的不同名稱即為重新命名。"
+          "source": "Relocates an existing Dropbox file or folder from its source path to a destination path without uploading new file content. A destination with a different name in the same folder renames the existing item.",
+          "message": "將現有的 Dropbox 檔案或資料夾從來源路徑移動至目的地路徑，而無需上傳新的檔案內容。若目的地為相同資料夾中的不同名稱，則會重新命名現有項目。"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.display_name": {
           "source": "Move or Rename File or Folder",
@@ -1392,8 +1392,8 @@
           "message": "要移動到的路徑"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.short_desc": {
-          "source": "Move or rename a file or folder",
-          "message": "移動或重新命名檔案或資料夾"
+          "source": "Relocate an existing Dropbox file or folder",
+          "message": "移動現有的 Dropbox 檔案或資料夾"
         },
         "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.desc": {
           "source": "Make a custom HTTP / REST API call to **Dropbox** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
@@ -2112,8 +2112,8 @@
           "message": "將檔案還原至較早的版本"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.desc": {
-          "source": "Uploads a file to Dropbox.\n\nIf `path` is not set, the file's own name is used and the file is stored in the account root.  By default an existing file at the path is not replaced; set `mode` to `overwrite` or `autorename` to change that.\n\nLarge files are uploaded in chunks through a Dropbox upload session, so an interrupted transfer does not have to start again from the beginning.",
-          "message": "上傳檔案至 Dropbox。\n\n若未設定 `path`，則會使用檔案本身的名稱，並將檔案儲存在帳戶根目錄。預設情況下不會取代該路徑上的現有檔案；設定 `mode` 為 `overwrite` 或 `autorename` 可變更此行為。\n\n大檔案會透過 Dropbox 上傳工作階段分塊上傳，因此中斷的傳輸不需要從頭重新開始。"
+          "source": "Transfers supplied file content into Dropbox to create a new file or write a file at the destination path. It does not relocate an existing Dropbox file or folder; use the move action for that.\n\nIf `path` is not set, the file's own name is used and the file is stored in the account root.  By default an existing file at the path is not replaced; set `mode` to `overwrite` or `autorename` to change that.\n\nLarge files are uploaded in chunks through a Dropbox upload session, so an interrupted transfer does not have to start again from the beginning.",
+          "message": "將提供的檔案內容傳輸至 Dropbox，以建立新檔案或在目的地路徑寫入檔案。此動作不會移動現有的 Dropbox 檔案或資料夾；若要移動請使用移動動作。\n\n如果未設定 `path`，將使用檔案本身的名稱，並將檔案儲存在帳戶根目錄中。預設情況下，不會取代該路徑上的現有檔案；將 `mode` 設定為 `overwrite` 或 `autorename` 可變更此設定。\n\n大檔案會透過 Dropbox 上傳工作階段分塊上傳，因此傳輸中斷時不必從頭重新開始。"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.display_name": {
           "source": "Upload File",
@@ -2204,8 +2204,8 @@
           "message": "儲存檔案的路徑"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.short_desc": {
-          "source": "Upload a file to Dropbox",
-          "message": "上傳檔案至 Dropbox"
+          "source": "Create a Dropbox file from supplied file content",
+          "message": "從提供的檔案內容建立 Dropbox 檔案"
         },
         "app.RHJvcGJveA.desc": {
           "source": "Provides access to [Dropbox](https://www.dropbox.com) for cloud file storage and sharing.\n\nFiles are addressed by path from the account root, and paths are case-insensitive; the account root itself is the empty string rather than `/`.\n\n**Common use cases**:\n- **File exchange**: deposit generated documents for colleagues, or collect files they upload\n- **Content distribution**: create shared links, with or without an expiry or a password\n- **Backup and recovery**: list a file's revisions and restore an earlier one\n- **Organization**: create folders, and copy, move, and remove files\n\nDropbox is a trademark of Dropbox, Inc.",

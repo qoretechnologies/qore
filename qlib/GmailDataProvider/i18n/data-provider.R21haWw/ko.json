@@ -451,6 +451,10 @@
           "source": "URI Path",
           "message": "URI 경로"
         },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로"
+        },
         "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
@@ -480,8 +484,8 @@
           "message": "Gmail에 커스텀 API 호출 수행"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.desc": {
-          "source": "Send a message",
-          "message": "메시지 보내기"
+          "source": "Creates a new outgoing email from the supplied recipient addresses, subject, body, and attachments, and transmits that new email through Gmail.",
+          "message": "제공된 수신자 주소, 제목, 본문 및 첨부 파일로 새 발신 이메일을 생성하고 Gmail을 통해 전송합니다."
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
           "source": "Send a Message",
@@ -668,8 +672,8 @@
           "message": "메시지 수신자 주소"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {
-          "source": "Send a message",
-          "message": "메시지 보내기"
+          "source": "Create and transmit a new outgoing email through Gmail",
+          "message": "Gmail을 통해 새 발신 이메일 생성 및 전송"
         },
         "app.R21haWw.action.d2F0Y2g.desc": {
           "source": "React to new emails; when a new email arrives, all the message information including the message body is returned as output data",
@@ -1004,8 +1008,8 @@
           "message": "새 이메일 첨부 파일에 반응"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.desc": {
-          "source": "Moves a message to the trash. The message leaves the mailbox but is recoverable until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
-          "message": "메시지를 휴지통으로 이동합니다. 메시지가 사서함에서 사라지지만 Gmail에서 휴지통을 비우기 전까지는 복구할 수 있으므로, 워크플로 처리가 완료된 메시지를 안전하게 정리할 수 있는 방법입니다.\n\n처리가 성공적으로 완료된 후, 이벤트에 포함된 `message_id`와(과) 함께 `watch` 또는 `watch-attachment` 이벤트의 컨슈머에서 이 작업을 사용하세요. `delete_messages`(으)로 감시 자체에서 삭제하면 컨슈머의 성공 여부와 관계없이 이벤트가 발생하는 즉시 메시지가 영구 삭제됩니다."
+          "source": "Relocates the existing stored Gmail message identified by `message_id` from its current mailbox folder into Gmail's recoverable trash folder. The same stored message remains available for restoration until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
+          "message": "`message_id`(으)로 식별된 기존 저장된 Gmail 메시지를 현재 편지함 폴더에서 Gmail의 복구 가능한 휴지통 폴더로 이동합니다. Gmail에서 휴지통을 비울 때까지 동일한 저장된 메시지를 복원할 수 있으므로, 워크플로 처리가 끝난 메시지를 안전하게 정리할 수 있습니다.\n\n처리가 완료된 후 이벤트에 포함된 `message_id`과(와) 함께 `watch` 또는 `watch-attachment` 이벤트의 컨슈머에서 이 작업을 사용하십시오. `delete_messages`(으)로 감시 자체에서 삭제하면 컨슈머의 성공 여부와 관계없이 이벤트가 발생하는 즉시 메시지가 삭제됩니다."
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
           "source": "Move a Message to the Trash",
@@ -1024,8 +1028,8 @@
           "message": "휴지통으로 이동할 메시지의 ID"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
-          "source": "Move a message to the trash, where it can still be recovered",
-          "message": "메시지를 복구 가능한 휴지통으로 이동"
+          "source": "Place an existing stored Gmail message in the recoverable trash folder",
+          "message": "기존 저장된 Gmail 메시지를 복구 가능한 휴지통 폴더로 이동"
         },
         "app.R21haWw.desc": {
           "source": "Gmail services",

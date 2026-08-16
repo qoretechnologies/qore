@@ -1,0 +1,125 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  VoyageEmbedder.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires RestClient
+%requires RestClientIo
+%requires VoyageRestClient
+%requires QoreRagUtils
+%requires QUnit
+
+%requires json
+
+%exec-class VoyageEmbedderTest
+
+class FakeVoyageEmbeddingHandler inherits AbstractHttpRequestHandler {
+    public {
+        list<hash<auto>> requests = ();
+        Mutex m();
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        m.lock();
+        on_exit m.unlock();
+        push requests, {
+            "path": cx.raw_path,
+            "method": hdr.method,
+            "auth": hdr."authorization",
+            "body": body.val() ? parse_json(body) : {},
+        };
+        return makeResponse(200, make_json({
+            "data": ({"index": 0, "embedding": (1.0, 2.0, 3.0)},),
+        }), {"Content-Type": MimeTypeJson});
+    }
+}
+
+class VoyageEmbedderTest inherits QUnit::Test {
+    private {
+        HttpServer http;
+        int port;
+        FakeVoyageEmbeddingHandler handler;
+    }
+
+    constructor() : Test("VoyageEmbedderTest", "1.0") {
+        addTestCase("encodeQuery forwards query input type",
+            \testQueryInputType());
+        addTestCase("encodeDocuments forwards document input type",
+            \testDocumentInputType());
+        addTestCase("plain encodeBatch omits input type",
+            \testPlainBatchOmitsInputType());
+        addTestCase("unsupported input type fails locally",
+            \testUnsupportedInputType());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelWarn());
+        http = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": False,
+        });
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        handler = new FakeVoyageEmbeddingHandler();
+        http.setHandler("voyage", "/", MimeTypeJson, handler);
+    }
+
+    globalTearDown() {
+        delete http;
+    }
+
+    private VoyageEmbedder makeEmbedder() {
+        return new VoyageEmbedder(<EmbedderConfig>{
+            "backend": "voyage",
+            "url": "http://localhost:" + port,
+            "api_key": "secret-key",
+            "model": "voyage-4-lite",
+        });
+    }
+
+    testQueryInputType() {
+        VoyageEmbedder emb = makeEmbedder();
+        emb.encodeQuery("find a tool");
+        assertEq("/v1/embeddings", handler.requests[-1].path);
+        assertEq("POST", handler.requests[-1].method);
+        assertEq("Bearer secret-key", handler.requests[-1].auth);
+        assertEq("query", handler.requests[-1].body.input_type);
+        assertEq(("find a tool",), handler.requests[-1].body.input);
+    }
+
+    testDocumentInputType() {
+        VoyageEmbedder emb = makeEmbedder();
+        emb.encodeDocuments(("tool description",));
+        assertEq("document", handler.requests[-1].body.input_type);
+        assertEq(("tool description",), handler.requests[-1].body.input);
+    }
+
+    testPlainBatchOmitsInputType() {
+        VoyageEmbedder emb = makeEmbedder();
+        emb.encodeBatch(("symmetric text",));
+        assertFalse(exists handler.requests[-1].body.input_type);
+    }
+
+    testUnsupportedInputType() {
+        VoyageEmbedder emb = makeEmbedder();
+        int request_count = handler.requests.size();
+        try {
+            emb.encodeBatch(("text",), {"input_type": "classification"});
+            fail("expected EMBEDDER-INPUT-TYPE-ERROR");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("EMBEDDER-INPUT-TYPE-ERROR", ex.err);
+            assertRegex("expected 'query' or 'document'", ex.desc);
+        }
+        assertEq(request_count, handler.requests.size(),
+            "invalid input_type must fail before an HTTP request");
+    }
+}

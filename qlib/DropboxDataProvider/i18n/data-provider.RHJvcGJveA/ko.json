@@ -1348,8 +1348,8 @@
           "message": "한 번의 호출로 여러 파일 이동"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.desc": {
-          "source": "Moves a file or folder to a new path.\n\nA move to a different name in the same folder renames it.",
-          "message": "파일 또는 폴더를 새 경로로 이동합니다.\n\n같은 폴더 내에서 다른 이름으로 이동하면 이름이 변경됩니다."
+          "source": "Relocates an existing Dropbox file or folder from its source path to a destination path without uploading new file content. A destination with a different name in the same folder renames the existing item.",
+          "message": "새 파일 콘텐츠를 업로드하지 않고 기존 Dropbox 파일 또는 폴더를 원본 경로에서 대상 경로로 이동합니다. 동일한 폴더 내에서 다른 이름을 대상으로 지정하면 기존 항목의 이름이 변경됩니다."
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.display_name": {
           "source": "Move or Rename File or Folder",
@@ -1392,8 +1392,8 @@
           "message": "이동할 경로"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.short_desc": {
-          "source": "Move or rename a file or folder",
-          "message": "파일 또는 폴더 이동 또는 이름 변경"
+          "source": "Relocate an existing Dropbox file or folder",
+          "message": "기존 Dropbox 파일 또는 폴더 이동"
         },
         "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.desc": {
           "source": "Make a custom HTTP / REST API call to **Dropbox** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
@@ -2112,8 +2112,8 @@
           "message": "파일을 이전 리비전으로 복원"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.desc": {
-          "source": "Uploads a file to Dropbox.\n\nIf `path` is not set, the file's own name is used and the file is stored in the account root.  By default an existing file at the path is not replaced; set `mode` to `overwrite` or `autorename` to change that.\n\nLarge files are uploaded in chunks through a Dropbox upload session, so an interrupted transfer does not have to start again from the beginning.",
-          "message": "Dropbox에 파일을 업로드합니다.\n\n`path`이 설정되지 않은 경우 파일 자체의 이름이 사용되며 파일이 계정 루트에 저장됩니다. 기본적으로 해당 경로의 기존 파일은 교체되지 않습니다. 이를 변경하려면 `mode`을 `overwrite` 또는 `autorename`(으)로 설정하세요.\n\n대용량 파일은 Dropbox 업로드 세션을 통해 청크 단위로 업로드되므로 중단된 전송을 처음부터 다시 시작할 필요가 없습니다."
+          "source": "Transfers supplied file content into Dropbox to create a new file or write a file at the destination path. It does not relocate an existing Dropbox file or folder; use the move action for that.\n\nIf `path` is not set, the file's own name is used and the file is stored in the account root.  By default an existing file at the path is not replaced; set `mode` to `overwrite` or `autorename` to change that.\n\nLarge files are uploaded in chunks through a Dropbox upload session, so an interrupted transfer does not have to start again from the beginning.",
+          "message": "제공된 파일 콘텐츠를 Dropbox로 전송하여 새 파일을 생성하거나 대상 경로에 파일을 작성합니다. 기존 Dropbox 파일이나 폴더의 위치를 이동하지는 않으며, 해당 작업에는 이동 액션을 사용하세요.\n\n`path`가 설정되지 않은 경우 파일 자체 이름이 사용되며 파일이 계정 루트에 저장됩니다. 기본적으로 해당 경로의 기존 파일은 대체되지 않으며, 이를 변경하려면 `mode`를 `overwrite` 또는 `autorename`으로 설정하세요.\n\n대용량 파일은 Dropbox 업로드 세션을 통해 청크 단위로 업로드되므로 전송이 중단되어도 처음부터 다시 시작할 필요가 없습니다."
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.display_name": {
           "source": "Upload File",
@@ -2204,8 +2204,8 @@
           "message": "파일을 저장할 경로"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.short_desc": {
-          "source": "Upload a file to Dropbox",
-          "message": "Dropbox에 파일 업로드"
+          "source": "Create a Dropbox file from supplied file content",
+          "message": "제공된 파일 콘텐츠로 Dropbox 파일 생성"
         },
         "app.RHJvcGJveA.desc": {
           "source": "Provides access to [Dropbox](https://www.dropbox.com) for cloud file storage and sharing.\n\nFiles are addressed by path from the account root, and paths are case-insensitive; the account root itself is the empty string rather than `/`.\n\n**Common use cases**:\n- **File exchange**: deposit generated documents for colleagues, or collect files they upload\n- **Content distribution**: create shared links, with or without an expiry or a password\n- **Backup and recovery**: list a file's revisions and restore an earlier one\n- **Organization**: create folders, and copy, move, and remove files\n\nDropbox is a trademark of Dropbox, Inc.",

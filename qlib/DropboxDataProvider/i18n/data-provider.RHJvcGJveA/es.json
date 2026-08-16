@@ -1348,8 +1348,8 @@
           "message": "Mover varios archivos en una sola llamada"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.desc": {
-          "source": "Moves a file or folder to a new path.\n\nA move to a different name in the same folder renames it.",
-          "message": "Mueve un archivo o carpeta a una nueva ruta.\n\nUn traslado a un nombre diferente en la misma carpeta lo renombra."
+          "source": "Relocates an existing Dropbox file or folder from its source path to a destination path without uploading new file content. A destination with a different name in the same folder renames the existing item.",
+          "message": "Reubica un archivo o carpeta de Dropbox existente desde su ruta de origen a una ruta de destino sin subir nuevo contenido de archivo. Un destino con un nombre diferente en la misma carpeta cambia el nombre del elemento existente."
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.display_name": {
           "source": "Move or Rename File or Folder",
@@ -1392,8 +1392,8 @@
           "message": "La ruta a la que mover"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.short_desc": {
-          "source": "Move or rename a file or folder",
-          "message": "Mover o renombrar un archivo o carpeta"
+          "source": "Relocate an existing Dropbox file or folder",
+          "message": "Reubicar un archivo o carpeta de Dropbox existente"
         },
         "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.desc": {
           "source": "Make a custom HTTP / REST API call to **Dropbox** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
@@ -2112,8 +2112,8 @@
           "message": "Restaurar un archivo a una revisión anterior"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.desc": {
-          "source": "Uploads a file to Dropbox.\n\nIf `path` is not set, the file's own name is used and the file is stored in the account root.  By default an existing file at the path is not replaced; set `mode` to `overwrite` or `autorename` to change that.\n\nLarge files are uploaded in chunks through a Dropbox upload session, so an interrupted transfer does not have to start again from the beginning.",
-          "message": "Sube un archivo a Dropbox.\n\nSi `path` no está configurado, se utiliza el propio nombre del archivo y este se almacena en la raíz de la cuenta.  Por defecto, un archivo existente en la ruta no se reemplaza; configure `mode` en `overwrite` o `autorename` para cambiar eso.\n\nLos archivos grandes se suben en fragmentos a través de una sesión de subida de Dropbox, por lo que una transferencia interrumpida no tiene que empezar de nuevo desde el principio."
+          "source": "Transfers supplied file content into Dropbox to create a new file or write a file at the destination path. It does not relocate an existing Dropbox file or folder; use the move action for that.\n\nIf `path` is not set, the file's own name is used and the file is stored in the account root.  By default an existing file at the path is not replaced; set `mode` to `overwrite` or `autorename` to change that.\n\nLarge files are uploaded in chunks through a Dropbox upload session, so an interrupted transfer does not have to start again from the beginning.",
+          "message": "Transfiere el contenido del archivo proporcionado a Dropbox para crear un archivo nuevo o escribir un archivo en la ruta de destino. No reubica un archivo o carpeta de Dropbox existente; use la acción de mover para eso.\n\nSi no se define `path`, se utiliza el propio nombre del archivo y este se almacena en la raíz de la cuenta. De forma predeterminada, un archivo existente en la ruta no se reemplaza; configure `mode` como `overwrite` o `autorename` para cambiar eso.\n\nLos archivos grandes se suben en fragmentos a través de una sesión de subida de Dropbox, por lo que una transferencia interrumpida no tiene que empezar de nuevo desde el principio."
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.display_name": {
           "source": "Upload File",
@@ -2204,8 +2204,8 @@
           "message": "La ruta donde almacenar el archivo"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.short_desc": {
-          "source": "Upload a file to Dropbox",
-          "message": "Subir un archivo a Dropbox"
+          "source": "Create a Dropbox file from supplied file content",
+          "message": "Crear un archivo de Dropbox a partir del contenido de archivo proporcionado"
         },
         "app.RHJvcGJveA.desc": {
           "source": "Provides access to [Dropbox](https://www.dropbox.com) for cloud file storage and sharing.\n\nFiles are addressed by path from the account root, and paths are case-insensitive; the account root itself is the empty string rather than `/`.\n\n**Common use cases**:\n- **File exchange**: deposit generated documents for colleagues, or collect files they upload\n- **Content distribution**: create shared links, with or without an expiry or a password\n- **Backup and recovery**: list a file's revisions and restore an earlier one\n- **Organization**: create folders, and copy, move, and remove files\n\nDropbox is a trademark of Dropbox, Inc.",

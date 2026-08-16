@@ -201,7 +201,7 @@
         },
         "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+          "message": "Přímé předání; použít serializaci připojení a nechat rozhodnout REST klienta"
         },
         "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -451,6 +451,10 @@
           "source": "URI Path",
           "message": "Cesta URI"
         },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Cesta URI relativní vůči základní URL API připojení"
+        },
         "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Haš hodnot nahrazených za zástupné symboly `{name}` v cestě URI. Příklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhraní odesílá `/users/123`. Hodnoty jsou kódovány v URL."
@@ -480,8 +484,8 @@
           "message": "Provést vlastní volání API do Gmailu"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.desc": {
-          "source": "Send a message",
-          "message": "Odeslat zprávu"
+          "source": "Creates a new outgoing email from the supplied recipient addresses, subject, body, and attachments, and transmits that new email through Gmail.",
+          "message": "Vytvoří nový odchozí e-mail ze zadaných adres příjemců, předmětu, těla a příloh a odešle jej přes Gmail."
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
           "source": "Send a Message",
@@ -668,8 +672,8 @@
           "message": "Adresy příjemců zprávy"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {
-          "source": "Send a message",
-          "message": "Odeslat zprávu"
+          "source": "Create and transmit a new outgoing email through Gmail",
+          "message": "Vytvořit a odeslat nový odchozí e-mail přes Gmail"
         },
         "app.R21haWw.action.d2F0Y2g.desc": {
           "source": "React to new emails; when a new email arrives, all the message information including the message body is returned as output data",
@@ -741,7 +745,7 @@
         },
         "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3RfbW9kZQ.short_desc": {
           "source": "Collapse a backlog to its latest message instead of replaying it?",
-          "message": "Sloučit nevyřízené položky do nejnovější zprávy místo jejich postupného přehrávání?"
+          "message": "Sbalit backlog na nejnovější zprávu namísto jeho přehrání?"
         },
         "app.R21haWw.action.d2F0Y2g.option.c3RhcnRfZGF0ZQ.desc": {
           "source": "Sets the start date and time for matching messages",
@@ -925,7 +929,7 @@
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3RfbW9kZQ.short_desc": {
           "source": "Collapse a backlog to its latest message instead of replaying it?",
-          "message": "Sloučit nevyřízené položky do nejnovější zprávy místo jejich postupného přehrávání?"
+          "message": "Sbalit backlog na nejnovější zprávu namísto jeho přehrání?"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3RhcnRfZGF0ZQ.desc": {
           "source": "Sets the start date and time for matching messages",
@@ -1004,8 +1008,8 @@
           "message": "Reagovat na nové přílohy e-mailů"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.desc": {
-          "source": "Moves a message to the trash. The message leaves the mailbox but is recoverable until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
-          "message": "Přesune zprávu do koše. Zpráva opustí poštovní schránku, ale lze ji obnovit, dokud Gmail koš nevyprázdní, což z této akce činí bezpečný způsob, jak odstranit zprávu po dokončení workflow.\n\nTuto akci použijte ze spotřebitele události `watch` nebo `watch-attachment` s hodnotou `message_id`, kterou událost nese, jakmile zpracování úspěšně proběhne. Smazání přímo ze sledování pomocí `delete_messages` zprávu zničí ihned po vyvolání události bez ohledu na to, zda spotřebitel následně uspěl"
+          "source": "Relocates the existing stored Gmail message identified by `message_id` from its current mailbox folder into Gmail's recoverable trash folder. The same stored message remains available for restoration until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
+          "message": "Přesune existující uloženou zprávu Gmailu identifikovanou pomocí `message_id` z její aktuální poštovní složky do obnovitelného koše Gmailu. Stejná uložená zpráva zůstává k dispozici pro obnovení, dokud Gmail koš nevyprázdní, což z této akce činí bezpečný způsob, jak odstranit zprávu, se kterou workflow dokončilo práci.\n\nTuto akci použijte z příjemce události `watch` nebo `watch-attachment` s parametrem `message_id`, který událost nese, jakmile zpracování úspěšně proběhne. Smazání přímo ze sledování pomocí `delete_messages` zprávu zničí ihned po vyvolání události, bez ohledu na to, zda příjemce následně uspěl."
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
           "source": "Move a Message to the Trash",
@@ -1024,8 +1028,8 @@
           "message": "ID zprávy k přesunutí do koše"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
-          "source": "Move a message to the trash, where it can still be recovered",
-          "message": "Přesunout zprávu do koše, kde ji lze ještě obnovit"
+          "source": "Place an existing stored Gmail message in the recoverable trash folder",
+          "message": "Přesunout existující uloženou zprávu Gmailu do obnovitelného koše"
         },
         "app.R21haWw.desc": {
           "source": "Gmail services",

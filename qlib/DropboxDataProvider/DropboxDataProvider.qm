@@ -174,8 +174,10 @@ module DropboxDataProvider {
             "path": "/upload-file",
             "action": "upload-file",
             "display_name": "Upload File",
-            "short_desc": "Upload a file to Dropbox",
-            "desc": "Uploads a file to Dropbox.\n\n"
+            "short_desc": "Create a Dropbox file from supplied file content",
+            "desc": "Transfers supplied file content into Dropbox to create a new file or write a file "
+                "at the destination path. It does not relocate an existing Dropbox file or folder; use "
+                "the move action for that.\n\n"
                 "If `path` is not set, the file's own name is used and the file is stored in the account "
                 "root.  By default an existing file at the path is not replaced; set `mode` to `overwrite` "
                 "or `autorename` to change that.\n\n"
@@ -304,9 +306,10 @@ module DropboxDataProvider {
             "path": "/move-file",
             "action": "move-file",
             "display_name": "Move or Rename File or Folder",
-            "short_desc": "Move or rename a file or folder",
-            "desc": "Moves a file or folder to a new path.\n\n"
-                "A move to a different name in the same folder renames it.",
+            "short_desc": "Relocate an existing Dropbox file or folder",
+            "desc": "Relocates an existing Dropbox file or folder from its source path to a destination "
+                "path without uploading new file content. A destination with a different name in the "
+                "same folder renames the existing item.",
             "action_code": DPAT_API,
             "groups": ("Organization",),
             "output_type": DropboxFileDataType,

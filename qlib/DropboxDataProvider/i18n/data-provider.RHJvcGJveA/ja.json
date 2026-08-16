@@ -1348,8 +1348,8 @@
           "message": "1回の呼び出しで複数のファイルを移動します"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.desc": {
-          "source": "Moves a file or folder to a new path.\n\nA move to a different name in the same folder renames it.",
-          "message": "ファイルまたはフォルダーを新しいパスに移動します。\n\n同じフォルダー内で別の名前に移動すると名前が変更されます。"
+          "source": "Relocates an existing Dropbox file or folder from its source path to a destination path without uploading new file content. A destination with a different name in the same folder renames the existing item.",
+          "message": "新しいファイルコンテンツをアップロードすることなく、既存のDropboxファイルまたはフォルダーを元のパスから宛先パスへ移動します。同じフォルダー内で異なる名前の宛先を指定すると、既存のアイテムの名前が変更されます。"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.display_name": {
           "source": "Move or Rename File or Folder",
@@ -1392,8 +1392,8 @@
           "message": "移動先のパス"
         },
         "app.RHJvcGJveA.action.bW92ZS1maWxl.short_desc": {
-          "source": "Move or rename a file or folder",
-          "message": "ファイルまたはフォルダーを移動または名前変更します"
+          "source": "Relocate an existing Dropbox file or folder",
+          "message": "既存のDropboxファイルまたはフォルダーを移動します"
         },
         "app.RHJvcGJveA.action.bWFrZS1hcGktY2FsbA.desc": {
           "source": "Make a custom HTTP / REST API call to **Dropbox** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
@@ -2112,8 +2112,8 @@
           "message": "ファイルを以前のリビジョンに復元"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.desc": {
-          "source": "Uploads a file to Dropbox.\n\nIf `path` is not set, the file's own name is used and the file is stored in the account root.  By default an existing file at the path is not replaced; set `mode` to `overwrite` or `autorename` to change that.\n\nLarge files are uploaded in chunks through a Dropbox upload session, so an interrupted transfer does not have to start again from the beginning.",
-          "message": "Dropbox にファイルをアップロードします。\n\n`path` が設定されていない場合、ファイル自体の名前が使用され、ファイルはアカウントのルートに保存されます。デフォルトではパス上の既存のファイルは置換されません。これを変更するには `mode` を `overwrite` または `autorename` に設定してください。\n\n大容量ファイルは Dropbox アップロードセッションを介してチャンク単位でアップロードされるため、転送が中断されても最初からやり直す必要はありません。"
+          "source": "Transfers supplied file content into Dropbox to create a new file or write a file at the destination path. It does not relocate an existing Dropbox file or folder; use the move action for that.\n\nIf `path` is not set, the file's own name is used and the file is stored in the account root.  By default an existing file at the path is not replaced; set `mode` to `overwrite` or `autorename` to change that.\n\nLarge files are uploaded in chunks through a Dropbox upload session, so an interrupted transfer does not have to start again from the beginning.",
+          "message": "指定されたファイルコンテンツをDropboxに転送し、新しいファイルを作成するか宛先パスにファイルを書き込みます。既存のDropboxファイルやフォルダーの移動は行いません。移動には移動アクションを使用してください。\n\n`path` が設定されていない場合、ファイル独自の名前が使用され、ファイルはアカウントのルートに保存されます。デフォルトでは、そのパスに存在する既存のファイルは上書きされません。動作を変更するには `mode` を `overwrite` または `autorename` に設定してください。\n\n大容量ファイルはDropboxアップロードセッションを介してチャンク単位でアップロードされるため、転送が中断された場合でも最初からやり直す必要はありません。"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.display_name": {
           "source": "Upload File",
@@ -2204,8 +2204,8 @@
           "message": "ファイルを保存するパス"
         },
         "app.RHJvcGJveA.action.dXBsb2FkLWZpbGU.short_desc": {
-          "source": "Upload a file to Dropbox",
-          "message": "Dropbox にファイルをアップロード"
+          "source": "Create a Dropbox file from supplied file content",
+          "message": "指定されたファイルコンテンツからDropboxファイルを作成します"
         },
         "app.RHJvcGJveA.desc": {
           "source": "Provides access to [Dropbox](https://www.dropbox.com) for cloud file storage and sharing.\n\nFiles are addressed by path from the account root, and paths are case-insensitive; the account root itself is the empty string rather than `/`.\n\n**Common use cases**:\n- **File exchange**: deposit generated documents for colleagues, or collect files they upload\n- **Content distribution**: create shared links, with or without an expiry or a password\n- **Backup and recovery**: list a file's revisions and restore an earlier one\n- **Organization**: create folders, and copy, move, and remove files\n\nDropbox is a trademark of Dropbox, Inc.",

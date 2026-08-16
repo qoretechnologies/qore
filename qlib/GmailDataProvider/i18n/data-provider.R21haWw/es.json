@@ -117,7 +117,7 @@
         },
         "app.R21haWw.action.bGlzdA.option.bGFiZWxJZHM.short_desc": {
           "source": "Only return messages with labels that match all of the specified label IDs",
-          "message": "Solo devolver mensajes con etiquetas que coincidan con todos los ID de etiqueta especificados"
+          "message": "Solo devolver mensajes que coincidan con todos los ID de etiqueta indicados"
         },
         "app.R21haWw.action.bGlzdA.option.bWF4UmVzdWx0cw.desc": {
           "source": "The maximum number of results to return",
@@ -201,7 +201,7 @@
         },
         "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+          "message": "Paso directo; usa serialización de conexión y deja decidir al cliente REST"
         },
         "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -451,6 +451,10 @@
           "source": "URI Path",
           "message": "Ruta URI"
         },
+        "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión"
+        },
         "app.R21haWw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
@@ -480,8 +484,8 @@
           "message": "Realizar una llamada personalizada a la API de Gmail"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.desc": {
-          "source": "Send a message",
-          "message": "Enviar un mensaje"
+          "source": "Creates a new outgoing email from the supplied recipient addresses, subject, body, and attachments, and transmits that new email through Gmail.",
+          "message": "Crea un nuevo correo electrónico saliente a partir de las direcciones de destinatarios, asunto, cuerpo y archivos adjuntos suministrados, y transmite ese nuevo correo a través de Gmail."
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
           "source": "Send a Message",
@@ -668,8 +672,8 @@
           "message": "Direcciones de destinatarios del mensaje"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {
-          "source": "Send a message",
-          "message": "Enviar un mensaje"
+          "source": "Create and transmit a new outgoing email through Gmail",
+          "message": "Crear y transmitir un nuevo correo electrónico saliente a través de Gmail"
         },
         "app.R21haWw.action.d2F0Y2g.desc": {
           "source": "React to new emails; when a new email arrives, all the message information including the message body is returned as output data",
@@ -741,7 +745,7 @@
         },
         "app.R21haWw.action.d2F0Y2g.option.c25hcHNob3RfbW9kZQ.short_desc": {
           "source": "Collapse a backlog to its latest message instead of replaying it?",
-          "message": "¿Reducir el trabajo acumulado a su mensaje más reciente en lugar de reproducirlo?"
+          "message": "¿Reducir los pendientes a su último mensaje en lugar de reproducirlos?"
         },
         "app.R21haWw.action.d2F0Y2g.option.c3RhcnRfZGF0ZQ.desc": {
           "source": "Sets the start date and time for matching messages",
@@ -801,7 +805,7 @@
         },
         "app.R21haWw.action.d2F0Y2g.option.cG9sbF9pbnRlcnZhbA.short_desc": {
           "source": "How often to check for matching emails in seconds",
-          "message": "Con qué frecuencia comprobar si hay correos electrónicos coincidentes, en segundos"
+          "message": "Frecuencia con la que buscar correos coincidentes en segundos"
         },
         "app.R21haWw.action.d2F0Y2g.option.cQ.desc": {
           "source": "The gmail search criteria for matching messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
@@ -849,7 +853,7 @@
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.YXR0YWNobWVudF9nbG9i.short_desc": {
           "source": "An optional filename pattern (glob) for matching attachments",
-          "message": "Un patrón de nombre de archivo opcional (glob) para coincidir con archivos adjuntos"
+          "message": "Patrón de nombre de archivo opcional (glob) para filtrar adjuntos"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.ZGVsZXRlX21lc3NhZ2Vz.desc": {
           "source": "Permanently delete each matched message after raising its events? Every matched message is deleted, even one whose attachments all failed the attachment criteria and therefore raised no event at all.\n\n**The message is deleted as soon as its events have been raised, whatever the event consumer then does with them.** A consumer that fails, times out, or is restarted mid-processing has already lost the only copy of the attachment, and a Gmail delete cannot be undone.\n\nFor any workload that must not lose the source message, leave this option unset and use the `delete-message` or `trash-message` action from the consumer once processing has succeeded, with the `message_id` each attachment event carries",
@@ -925,7 +929,7 @@
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c25hcHNob3RfbW9kZQ.short_desc": {
           "source": "Collapse a backlog to its latest message instead of replaying it?",
-          "message": "¿Reducir el trabajo acumulado a su mensaje más reciente en lugar de reproducirlo?"
+          "message": "¿Reducir los pendientes a su último mensaje en lugar de reproducirlos?"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.c3RhcnRfZGF0ZQ.desc": {
           "source": "Sets the start date and time for matching messages",
@@ -985,7 +989,7 @@
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cG9sbF9pbnRlcnZhbA.short_desc": {
           "source": "How often to check for matching emails in seconds",
-          "message": "Con qué frecuencia comprobar si hay correos electrónicos coincidentes, en segundos"
+          "message": "Frecuencia con la que buscar correos coincidentes en segundos"
         },
         "app.R21haWw.action.d2F0Y2gtYXR0YWNobWVudA.option.cQ.desc": {
           "source": "The gmail search criteria for matching messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
@@ -1004,8 +1008,8 @@
           "message": "Reaccionar a nuevos archivos adjuntos de correo electrónico"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.desc": {
-          "source": "Moves a message to the trash. The message leaves the mailbox but is recoverable until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
-          "message": "Mueve un mensaje a la papelera. El mensaje sale del buzón pero se puede recuperar hasta que Gmail vacíe la papelera, lo que hace que esta sea la forma segura de borrar un mensaje con el que un flujo de trabajo haya terminado.\n\nUtilice esta acción desde el consumidor de un evento `watch` o `watch-attachment`, con el `message_id` que contiene el evento, una vez que el procesamiento se haya realizado correctamente. Eliminar desde la propia observación con `delete_messages` destruye el mensaje tan pronto como se genera el evento, independientemente de si el consumidor tuvo éxito posteriormente o no"
+          "source": "Relocates the existing stored Gmail message identified by `message_id` from its current mailbox folder into Gmail's recoverable trash folder. The same stored message remains available for restoration until Gmail purges the trash, which makes this the safe way to clear a message a workflow has finished with.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed",
+          "message": "Traslada el mensaje de Gmail almacenado existente identificado por `message_id` desde su carpeta de buzón actual a la papelera recuperable de Gmail. El mismo mensaje almacenado permanece disponible para su restauración hasta que Gmail purgue la papelera, lo que convierte a esta en la forma segura de borrar un mensaje con el que haya finalizado un flujo de trabajo.\n\nUse esta acción desde el consumidor de un evento `watch` o `watch-attachment`, con el `message_id` que incluye el evento, una vez que el procesamiento haya tenido éxito. Eliminar desde la propia observación con `delete_messages` destruye el mensaje tan pronto como se genera el evento, independientemente de si el consumidor tuvo éxito posteriormente"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.display_name": {
           "source": "Move a Message to the Trash",
@@ -1024,8 +1028,8 @@
           "message": "El ID del mensaje a mover a la papelera"
         },
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
-          "source": "Move a message to the trash, where it can still be recovered",
-          "message": "Mover un mensaje a la papelera, donde aún se puede recuperar"
+          "source": "Place an existing stored Gmail message in the recoverable trash folder",
+          "message": "Colocar un mensaje de Gmail almacenado en la papelera recuperable"
         },
         "app.R21haWw.desc": {
           "source": "Gmail services",
