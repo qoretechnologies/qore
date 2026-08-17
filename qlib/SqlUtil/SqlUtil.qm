@@ -152,6 +152,13 @@ module SqlUtil {
     - added a driver hook for canonicalizing typed partition bounds, so a driver whose native column type cannot
       represent everything a Qore value carries (a date column with no time of day, for example) reduces the
       caller's specification and the catalog bound to the same representation
+    - fixed @ref SqlUtil::AbstractTable::getSubtableFromString() "AbstractTable::getSubtableFromString()"
+      resolving a table name afresh on every call; a join or sub-select that names its table (rather than
+      supplying a table object) therefore re-read that table's entire description from the database each time SQL
+      was generated - eleven catalog queries per call for a select with two named sub-selects - which made SQL
+      generation, not database execution, dominate the cost of such queries.  Tables resolved from a name are now
+      cached per table object and discarded by @ref SqlUtil::AbstractTable::clear() "clear()"; tables supplied by
+      a \c "tablecode" callback are never cached
 
     @subsection sqlutilv3_1_0 SqlUtil v3.1.0
     - added a portable temporary-table abstraction: @ref SqlUtil::AbstractDatabase::supportsTempTables()

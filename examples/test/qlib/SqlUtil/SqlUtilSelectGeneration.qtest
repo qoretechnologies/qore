@@ -1,0 +1,406 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires DataProvider
+%requires SqlUtil
+%requires QUnit
+
+%exec-class SqlUtilSelectGenerationTest
+
+#! Datasource wrapper that counts the queries issued against the connection
+/** Used to prove that generating SQL for a select with name-referenced joins and sub-selects does not
+    re-introspect the referenced tables on every call.
+*/
+class CountingDatasource inherits Datasource {
+    public {
+        int queries = 0;
+        list<string> sql = ();
+    }
+
+    constructor(string str) : Datasource(str) {
+    }
+
+    auto select(string sql, ...) {
+        count(sql);
+        return Datasource::vselect(sql, argv);
+    }
+
+    auto vselect(string sql, *softlist<auto> args) {
+        count(sql);
+        return Datasource::vselect(sql, args);
+    }
+
+    auto selectRow(string sql, ...) {
+        count(sql);
+        return Datasource::vselectRow(sql, argv);
+    }
+
+    auto vselectRow(string sql, *softlist<auto> args) {
+        count(sql);
+        return Datasource::vselectRow(sql, args);
+    }
+
+    auto selectRows(string sql, ...) {
+        count(sql);
+        return Datasource::vselectRows(sql, argv);
+    }
+
+    auto vselectRows(string sql, *softlist<auto> args) {
+        count(sql);
+        return Datasource::vselectRows(sql, args);
+    }
+
+    reset() {
+        queries = 0;
+        sql = ();
+    }
+
+    private count(string str) {
+        ++queries;
+        sql += str;
+    }
+}
+
+class SqlUtilSelectGenerationTest inherits QUnit::Test {
+    public {
+        const MyOpts = Opts + {
+            "connstr": "c,conn=s",
+        };
+
+        const ErrTable = "sqlutil_gen_errors";
+        const MemTable = "sqlutil_gen_members";
+
+        #! number of generations measured per timing sample
+        const Iterations = 60;
+
+        #! largest acceptable ratio between generating a name-referenced and an object-referenced sub-select
+        /** Resolving a table name must not re-introspect the table on every call, so both forms must cost
+            about the same (measured ~1.05x); the ratio was 4.5x - and the name-referenced form issued 11
+            catalog queries per call - before resolved tables were cached.  The limit is generous because the
+            name-referenced form is measured against a live database, where catalog queries would dominate.
+        */
+        const MaxNameVsObjectRatio = 2.0;
+    }
+
+    private {
+        *CountingDatasource ds;
+        *AbstractTable errs;
+        *AbstractTable mem;
+        #! the connection string in use; needed to make a plain Datasource for the serialization test
+        string connstr;
+    }
+
+    constructor() : Test("SqlUtilSelectGenerationTest", "1.0", \ARGV, MyOpts) {
+        try {
+            ds = getDatasource();
+        } catch (hash<ExceptionInfo> ex) {
+            if (m_options.verbose) {
+                printf("%s: %s\n", ex.err, ex.desc);
+            }
+        }
+        if (ds) {
+            setupTables();
+        }
+
+        addTestCase("subtable resolution is cached", \testSubtableResolutionCached());
+        addTestCase("generation issues no queries", \testGenerationIssuesNoQueries());
+        addTestCase("generation is stable", \testGenerationIsStable());
+        addTestCase("tablecode is never cached", \testTableCodeNotCached());
+        addTestCase("clear() discards resolved tables", \testClearDiscardsCache());
+        addTestCase("resolved tables are not serialized", \testResolvedTablesNotSerialized());
+        addTestCase("concurrent resolution", \testConcurrentResolution());
+        addTestCase("concurrent generation", \testConcurrentGeneration());
+        addTestCase("name reference costs no more than object", \testNameReferenceCost());
+
+        set_return_value(main());
+    }
+
+    globalTearDown() {
+        if (ds) {
+            map $1.dropCommit(), (mem, errs), exists $1;
+            ds.rollback();
+        }
+    }
+
+    private CountingDatasource getDatasource() {
+        connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR ?? ENV.QORE_DB_CONNSTR_PGSQL
+            ?? ENV.QORE_DB_CONNSTR_ORACLE ?? ENV.QORE_DB_CONNSTR_MYSQL ?? ENV.QORE_DB_CONNSTR_FREETDS ?? "";
+        if (!connstr.val()) {
+            testSkip("no DB connection; set QORE_DB_CONNSTR");
+        }
+        CountingDatasource ds(connstr);
+        ds.open();
+        return ds;
+    }
+
+    private setupTables() {
+        Database db(ds);
+        # drop leftovers from an interrupted run
+        foreach string name in ((MemTable, ErrTable)) {
+            *AbstractTable t = db.getTable(name);
+            if (t) {
+                t.dropCommit();
+            }
+        }
+        errs = db.makeTable(ErrTable, {
+            "columns": {
+                "errid": {"qore_type": Type::Int, "notnull": True},
+                "parent_errid": {"qore_type": Type::Int},
+                "state": {"qore_type": Type::String, "size": 32, "notnull": True},
+            },
+            "primary_key": {"name": "pk_" + ErrTable, "columns": "errid"},
+        });
+        errs.create();
+        mem = db.makeTable(MemTable, {
+            "columns": {
+                "errid": {"qore_type": Type::Int, "notnull": True},
+                "groupid": {"qore_type": Type::Int, "notnull": True},
+            },
+        });
+        mem.create();
+        ds.commit();
+        # make sure both descriptions are cached before any test measures anything
+        map $1.describe(), (errs, mem);
+    }
+
+    #! skips the current test case if no database connection is available
+    private checkDb() {
+        if (!ds) {
+            testSkip("no DB connection; set QORE_DB_CONNSTR");
+        }
+    }
+
+    #! Returns a select hash on the member table joining the error table and testing a sub-select, both by name
+    private hash<auto> nameReferencedSelectHash() {
+        return {
+            "columns": ("groupid",),
+            "join": join_inner(ErrTable, "e", {"errid": "errid"}),
+            "where": {
+                "groupid": op_in(1, 2, 3),
+                "errid": op_in_select(ErrTable, {"columns": "errid", "where": {"state": "open"}}),
+            },
+            "groupby": ("groupid",),
+        };
+    }
+
+    #! Returns the same select hash with the sub-select table supplied as an object instead of a name
+    private hash<auto> objectReferencedSelectHash() {
+        return {
+            "columns": ("groupid",),
+            "join": join_inner(errs, "e", {"errid": "errid"}),
+            "where": {
+                "groupid": op_in(1, 2, 3),
+                "errid": op_in_select(errs, {"columns": "errid", "where": {"state": "open"}}),
+            },
+            "groupby": ("groupid",),
+        };
+    }
+
+    #! resolving the same table name twice returns the same object; different names return different objects
+    testSubtableResolutionCached() {
+        checkDb();
+        assertEq(True, errs.getSubtableFromString(MemTable, NOTHING) === errs.getSubtableFromString(MemTable,
+            NOTHING));
+        assertEq(MemTable, errs.getSubtableFromString(MemTable, NOTHING).getName());
+        assertEq(ErrTable, errs.getSubtableFromString(ErrTable, NOTHING).getName());
+        assertEq(False, errs.getSubtableFromString(MemTable, NOTHING)
+            === errs.getSubtableFromString(ErrTable, NOTHING));
+        # each table object keeps its own resolved tables
+        assertEq(False, errs.getSubtableFromString(MemTable, NOTHING)
+            === mem.getSubtableFromString(MemTable, NOTHING));
+    }
+
+    #! generating SQL for name-referenced joins and sub-selects must not query the DB after the first call
+    testGenerationIssuesNoQueries() {
+        checkDb();
+        hash<auto> sh = nameReferencedSelectHash();
+        list<auto> args;
+        # the first call resolves and introspects the referenced table
+        errs.clear();
+        mem.clear();
+        mem.getSelectSql(sh, \args);
+        ds.reset();
+        for (int i = 0; i < 5; ++i) {
+            list<auto> a;
+            mem.getSelectSql(sh, \a);
+        }
+        if (m_options.verbose && ds.queries) {
+            printf("unexpected queries: %y\n", ds.sql);
+        }
+        assertEq(0, ds.queries);
+    }
+
+    #! repeated generation produces byte-identical SQL and bind arguments
+    testGenerationIsStable() {
+        checkDb();
+        hash<auto> sh = nameReferencedSelectHash();
+        list<auto> first_args;
+        string first = mem.getSelectSql(sh, \first_args);
+        for (int i = 0; i < 3; ++i) {
+            list<auto> args;
+            assertEq(first, mem.getSelectSql(sh, \args));
+            assertEq(first_args, args);
+        }
+        # the generated SQL must still execute
+        assertEq((), mem.selectRows(sh) ?? ());
+        ds.rollback();
+    }
+
+    #! a "tablecode" callback owns the table object's identity, so its result is never cached
+    testTableCodeNotCached() {
+        checkDb();
+        int calls = 0;
+        hash<auto> opt = {
+            "tablecode": AbstractTable sub (AbstractDatasource cb_ds, string name) {
+                ++calls;
+                return AbstractTable::getTable(cb_ds, name);
+            },
+        };
+        AbstractTable t1 = errs.getSubtableFromString(MemTable, opt);
+        AbstractTable t2 = errs.getSubtableFromString(MemTable, opt);
+        assertEq(2, calls);
+        assertEq(False, t1 === t2);
+        assertEq(MemTable, t1.getName());
+    }
+
+    #! clear() discards resolved tables along with the table's own description
+    testClearDiscardsCache() {
+        checkDb();
+        AbstractTable before = errs.getSubtableFromString(MemTable, NOTHING);
+        errs.clear();
+        AbstractTable after = errs.getSubtableFromString(MemTable, NOTHING);
+        assertEq(False, before === after);
+        assertEq(MemTable, after.getName());
+        # a subsequent resolution is cached again
+        assertEq(True, after === errs.getSubtableFromString(MemTable, NOTHING));
+    }
+
+    #! resolved tables are transient: they are not serialized, and are rebuilt and cached again after a round trip
+    testResolvedTablesNotSerialized() {
+        checkDb();
+        # SqlUtil can only deserialize a plain Datasource / DatasourcePool, so this test cannot use the
+        # query-counting wrapper
+        Datasource plain_ds(connstr);
+        plain_ds.open();
+        AbstractTable src = new Table(plain_ds, ErrTable).getTable();
+        AbstractTable original = src.getSubtableFromString(MemTable, NOTHING);
+        AbstractTable copy = Serializable::deserialize(Serializable::serialize(src));
+        assertEq(ErrTable, copy.getName());
+        AbstractTable resolved = copy.getSubtableFromString(MemTable, NOTHING);
+        assertEq(MemTable, resolved.getName());
+        assertEq(False, resolved === original);
+        assertEq(True, resolved === copy.getSubtableFromString(MemTable, NOTHING));
+        plain_ds.rollback();
+    }
+
+    #! concurrent resolution of the same name yields a single shared object
+    testConcurrentResolution() {
+        checkDb();
+        errs.clear();
+        const int Threads = 8;
+        Counter cnt(Threads);
+        Mutex m();
+        list<auto> results = ();
+        list<hash<ExceptionInfo>> errors = ();
+        for (int i = 0; i < Threads; ++i) {
+            background sub () {
+                on_exit cnt.dec();
+                try {
+                    AbstractTable t = errs.getSubtableFromString(MemTable, NOTHING);
+                    m.lock();
+                    on_exit m.unlock();
+                    results += t;
+                } catch (hash<ExceptionInfo> ex) {
+                    m.lock();
+                    on_exit m.unlock();
+                    errors += ex;
+                }
+            }();
+        }
+        cnt.waitForZero();
+        assertEq((), errors);
+        assertEq(Threads, results.size());
+        map assertEq(True, $1 === results[0]), results;
+    }
+
+    #! concurrent generation through the same resolved tables is safe and produces identical SQL
+    /** Caching resolved tables means concurrent SQL generation now shares one table object per name, where
+        each call previously built its own.
+    */
+    testConcurrentGeneration() {
+        checkDb();
+        mem.clear();
+        hash<auto> sh = nameReferencedSelectHash();
+        const int Threads = 8;
+        Counter cnt(Threads);
+        Mutex m();
+        list<string> results = ();
+        list<hash<ExceptionInfo>> errors = ();
+        for (int i = 0; i < Threads; ++i) {
+            background sub () {
+                on_exit cnt.dec();
+                try {
+                    list<auto> args;
+                    string sql = mem.getSelectSql(sh, \args);
+                    m.lock();
+                    on_exit m.unlock();
+                    results += sql;
+                } catch (hash<ExceptionInfo> ex) {
+                    m.lock();
+                    on_exit m.unlock();
+                    errors += ex;
+                }
+            }();
+        }
+        cnt.waitForZero();
+        assertEq((), errors);
+        assertEq(Threads, results.size());
+        map assertEq(results[0], $1), results;
+    }
+
+    #! referencing a sub-select table by name must not cost more than supplying the object
+    testNameReferenceCost() {
+        checkDb();
+        hash<auto> by_name = nameReferencedSelectHash();
+        hash<auto> by_object = objectReferencedSelectHash();
+        # warm up both paths so that no description introspection is included in either measurement
+        list<auto> warm;
+        mem.getSelectSql(by_name, \warm);
+        mem.getSelectSql(by_object, \warm);
+
+        # alternate the two shapes and keep the fastest sample of each so that a scheduling stall cannot
+        # land on only one of them
+        float name_us;
+        float object_us;
+        for (int sample = 0; sample < 3; ++sample) {
+            float n = generationCostUs(by_name);
+            float o = generationCostUs(by_object);
+            if (!exists name_us || n < name_us) {
+                name_us = n;
+            }
+            if (!exists object_us || o < object_us) {
+                object_us = o;
+            }
+        }
+        float ratio = name_us / object_us;
+        if (m_options.verbose) {
+            printf("select generation: by name: %.1f us; by object: %.1f us; ratio: %.2f\n", name_us, object_us,
+                ratio);
+        }
+        assertLt(MaxNameVsObjectRatio, ratio);
+    }
+
+    #! Returns the per-generation cost in microseconds for the given select hash
+    private float generationCostUs(hash<auto> sh) {
+        date start = now_us();
+        for (int i = 0; i < Iterations; ++i) {
+            list<auto> args;
+            mem.getSelectSql(sh, \args);
+        }
+        return (now_us() - start).durationMicroseconds().toFloat() / Iterations;
+    }
+}
