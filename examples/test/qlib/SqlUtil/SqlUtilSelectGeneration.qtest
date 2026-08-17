@@ -12,8 +12,8 @@
 %exec-class SqlUtilSelectGenerationTest
 
 #! Datasource wrapper that counts the queries issued against the connection
-/** Used to prove that generating SQL for a select with name-referenced joins and sub-selects does not
-    re-introspect the referenced tables on every call.
+/** Used to prove how often generating SQL for a select with name-referenced joins and sub-selects reads the
+    description of the referenced tables.
 */
 class CountingDatasource inherits Datasource {
     public {
@@ -78,10 +78,10 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
         const Iterations = 60;
 
         #! largest acceptable ratio between generating a name-referenced and an object-referenced sub-select
-        /** Resolving a table name must not re-introspect the table on every call, so both forms must cost
-            about the same (measured ~1.05x); the ratio was 4.5x - and the name-referenced form issued 11
-            catalog queries per call - before resolved tables were cached.  The limit is generous because the
-            name-referenced form is measured against a live database, where catalog queries would dominate.
+        /** With a table resolver registered, naming the sub-select's table must not cost meaningfully more than
+            supplying the object (measured ~1.05x); it was 4.5x - and read the referenced table's description on
+            every call - when a name was always resolved by building a new table object.  The limit is generous
+            because the measurement runs against a live database, where those reads would dominate.
         */
         const MaxNameVsObjectRatio = 2.0;
     }
@@ -90,8 +90,6 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
         *CountingDatasource ds;
         *AbstractTable errs;
         *AbstractTable mem;
-        #! the connection string in use; needed to make a plain Datasource for the serialization test
-        string connstr;
     }
 
     constructor() : Test("SqlUtilSelectGenerationTest", "1.0", \ARGV, MyOpts) {
@@ -106,12 +104,12 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
             setupTables();
         }
 
-        addTestCase("subtable resolution is cached", \testSubtableResolutionCached());
-        addTestCase("generation issues no queries", \testGenerationIssuesNoQueries());
+        addTestCase("resolution order", \testResolutionOrder());
+        addTestCase("unresolved names are never cached", \testNoStaleDescriptionByDefault());
+        addTestCase("registered resolver is used", \testRegisteredResolverIsUsed());
+        addTestCase("caching resolver issues no queries", \testCachingResolverIssuesNoQueries());
+        addTestCase("caching resolver is invalidatable", \testCachingResolverIsInvalidatable());
         addTestCase("generation is stable", \testGenerationIsStable());
-        addTestCase("tablecode is never cached", \testTableCodeNotCached());
-        addTestCase("clear() discards resolved tables", \testClearDiscardsCache());
-        addTestCase("resolved tables are not serialized", \testResolvedTablesNotSerialized());
         addTestCase("concurrent resolution", \testConcurrentResolution());
         addTestCase("concurrent generation", \testConcurrentGeneration());
         addTestCase("name reference costs no more than object", \testNameReferenceCost());
@@ -120,6 +118,9 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
     }
 
     globalTearDown() {
+        # the resolver and its cache are process-wide; leave neither behind
+        sqlutil_register_table_resolver();
+        sqlutil_clear_table_cache();
         if (ds) {
             map $1.dropCommit(), (mem, errs), exists $1;
             ds.rollback();
@@ -127,7 +128,7 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
     }
 
     private CountingDatasource getDatasource() {
-        connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR ?? ENV.QORE_DB_CONNSTR_PGSQL
+        string connstr = m_options.connstr ?? ENV.QORE_DB_CONNSTR ?? ENV.QORE_DB_CONNSTR_PGSQL
             ?? ENV.QORE_DB_CONNSTR_ORACLE ?? ENV.QORE_DB_CONNSTR_MYSQL ?? ENV.QORE_DB_CONNSTR_FREETDS ?? "";
         if (!connstr.val()) {
             testSkip("no DB connection; set QORE_DB_CONNSTR");
@@ -167,8 +168,10 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
         map $1.describe(), (errs, mem);
     }
 
-    #! skips the current test case if no database connection is available
+    #! skips the current test case if no database connection is available, and clears process-wide state
     private checkDb() {
+        sqlutil_register_table_resolver();
+        sqlutil_clear_table_cache();
         if (!ds) {
             testSkip("no DB connection; set QORE_DB_CONNSTR");
         }
@@ -200,41 +203,164 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
         };
     }
 
-    #! resolving the same table name twice returns the same object; different names return different objects
-    testSubtableResolutionCached() {
+    #! a "tablecode" option wins over a registered resolver, which wins over building a new table object
+    testResolutionOrder() {
         checkDb();
-        assertEq(True, errs.getSubtableFromString(MemTable, NOTHING) === errs.getSubtableFromString(MemTable,
-            NOTHING));
-        assertEq(MemTable, errs.getSubtableFromString(MemTable, NOTHING).getName());
-        assertEq(ErrTable, errs.getSubtableFromString(ErrTable, NOTHING).getName());
-        assertEq(False, errs.getSubtableFromString(MemTable, NOTHING)
-            === errs.getSubtableFromString(ErrTable, NOTHING));
-        # each table object keeps its own resolved tables
-        assertEq(False, errs.getSubtableFromString(MemTable, NOTHING)
-            === mem.getSubtableFromString(MemTable, NOTHING));
+        # no resolver: a new object every time
+        AbstractTable plain = mem.getSubtableFromString(ErrTable, NOTHING);
+        assertEq(ErrTable, plain.getName());
+        assertEq(False, plain === mem.getSubtableFromString(ErrTable, NOTHING));
+
+        # a registered resolver is consulted instead
+        int resolver_calls = 0;
+        sqlutil_register_table_resolver(AbstractTable sub (AbstractDatasource cb_ds, string name) {
+            ++resolver_calls;
+            return errs;
+        });
+        assertEq(True, errs === mem.getSubtableFromString(ErrTable, NOTHING));
+        assertEq(1, resolver_calls);
+
+        # "tablecode" takes precedence over the registered resolver
+        int tablecode_calls = 0;
+        hash<auto> opt = {
+            "tablecode": AbstractTable sub (AbstractDatasource cb_ds, string name) {
+                ++tablecode_calls;
+                return AbstractTable::getTable(cb_ds, name);
+            },
+        };
+        AbstractTable via_tablecode = mem.getSubtableFromString(ErrTable, opt);
+        assertEq(1, tablecode_calls);
+        assertEq(1, resolver_calls);
+        assertEq(False, via_tablecode === errs);
+        assertEq(ErrTable, via_tablecode.getName());
     }
 
-    #! generating SQL for name-referenced joins and sub-selects must not query the DB after the first call
-    testGenerationIssuesNoQueries() {
+    #! with no resolver registered, nothing is retained, so a changed table definition is always picked up
+    /** SqlUtil must not keep a table object that the caller cannot reach and therefore cannot discard: SQL
+        generated for a name-referenced sub-select would then keep using a description that no longer matches
+        the database.
+    */
+    testNoStaleDescriptionByDefault() {
+        checkDb();
+        string tmp_table = ErrTable + "_alt";
+        Database db(ds);
+        {
+            *AbstractTable t = db.getTable(tmp_table);
+            if (t) {
+                t.dropCommit();
+            }
+        }
+        on_exit {
+            *AbstractTable t = db.getTable(tmp_table);
+            if (t) {
+                t.dropCommit();
+            }
+        }
+        db.makeTable(tmp_table, {
+            "columns": {"errid": {"qore_type": Type::Int, "notnull": True}},
+        }).create();
+        ds.commit();
+
+        hash<auto> sh = {"columns": ("groupid",),
+            "where": {"errid": op_in_select(tmp_table, {"columns": "errid"})}};
+        list<auto> args;
+        # resolve the name once
+        assertNeq("", mem.getSelectSql(sh, \args));
+
+        # change the table's definition outside of any SqlUtil table object
+        ds.execRaw("alter table " + tmp_table + " add column extra integer");
+        ds.commit();
+
+        # generation must see the new column without anything being cleared
+        hash<auto> sh2 = {"columns": ("groupid",),
+            "where": {"errid": op_in_select(tmp_table, {"columns": "errid", "where": {"extra": 1}})}};
+        list<auto> args2;
+        string sql = mem.getSelectSql(sh2, \args2);
+        assertEq(True, sql.find("extra") != -1, sql);
+        assertEq((1,), args2);
+    }
+
+    #! a registered resolver receives the query's connection and the table name as given
+    testRegisteredResolverIsUsed() {
+        checkDb();
+        list<string> names = ();
+        list<bool> same_ds = ();
+        sqlutil_register_table_resolver(AbstractTable sub (AbstractDatasource cb_ds, string name) {
+            names += name;
+            same_ds += (cb_ds === ds);
+            return AbstractTable::getTable(cb_ds, name);
+        });
+        assertEq(True, exists sqlutil_get_table_resolver());
+
+        list<auto> args;
+        mem.getSelectSql(nameReferencedSelectHash(), \args);
+        # the join and the sub-select both name the same table
+        assertEq((ErrTable, ErrTable), names);
+        assertEq((True, True), same_ds);
+
+        sqlutil_register_table_resolver();
+        assertEq(True, !exists sqlutil_get_table_resolver());
+    }
+
+    #! the caching resolver reads a referenced table's description only once per connection and name
+    testCachingResolverIssuesNoQueries() {
         checkDb();
         hash<auto> sh = nameReferencedSelectHash();
         list<auto> args;
-        # the first call resolves and introspects the referenced table
-        errs.clear();
-        mem.clear();
+
+        # without a resolver every generation re-reads the referenced table
+        ds.reset();
+        for (int i = 0; i < 3; ++i) {
+            list<auto> a;
+            mem.getSelectSql(sh, \a);
+        }
+        int uncached = ds.queries;
+        assertGt(0, uncached);
+
+        sqlutil_register_table_resolver(\sqlutil_get_cached_table());
+        # the first call fills the cache
         mem.getSelectSql(sh, \args);
         ds.reset();
         for (int i = 0; i < 5; ++i) {
             list<auto> a;
             mem.getSelectSql(sh, \a);
         }
-        if (m_options.verbose && ds.queries) {
-            printf("unexpected queries: %y\n", ds.sql);
+        if (m_options.verbose) {
+            printf("queries for 3 generations without a resolver: %d; for 5 with the caching resolver: %d\n",
+                uncached, ds.queries);
         }
         assertEq(0, ds.queries);
+        # the same object is served for the same connection and name
+        assertEq(True, sqlutil_get_cached_table(ds, ErrTable) === sqlutil_get_cached_table(ds, ErrTable));
     }
 
-    #! repeated generation produces byte-identical SQL and bind arguments
+    #! sqlutil_clear_table_cache() discards cached tables so a changed definition is picked up
+    testCachingResolverIsInvalidatable() {
+        checkDb();
+        sqlutil_register_table_resolver(\sqlutil_get_cached_table());
+        AbstractTable first = sqlutil_get_cached_table(ds, ErrTable);
+        assertEq(True, first === sqlutil_get_cached_table(ds, ErrTable));
+
+        # clearing one table on one connection
+        sqlutil_clear_table_cache(ds, ErrTable);
+        AbstractTable second = sqlutil_get_cached_table(ds, ErrTable);
+        assertEq(False, first === second);
+
+        # clearing every table on one connection
+        sqlutil_clear_table_cache(ds);
+        assertEq(False, second === sqlutil_get_cached_table(ds, ErrTable));
+
+        # clearing every connection
+        AbstractTable third = sqlutil_get_cached_table(ds, ErrTable);
+        sqlutil_clear_table_cache();
+        assertEq(False, third === sqlutil_get_cached_table(ds, ErrTable));
+
+        # clearing a name that was never cached is a no-op
+        sqlutil_clear_table_cache(ds, "no_such_table_" + ErrTable);
+        sqlutil_clear_table_cache(NOTHING, "no_such_table_" + ErrTable);
+    }
+
+    #! repeated generation produces byte-identical SQL and bind arguments, cached or not
     testGenerationIsStable() {
         checkDb();
         hash<auto> sh = nameReferencedSelectHash();
@@ -245,62 +371,23 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
             assertEq(first, mem.getSelectSql(sh, \args));
             assertEq(first_args, args);
         }
+
+        sqlutil_register_table_resolver(\sqlutil_get_cached_table());
+        for (int i = 0; i < 3; ++i) {
+            list<auto> args;
+            assertEq(first, mem.getSelectSql(sh, \args));
+            assertEq(first_args, args);
+        }
+
         # the generated SQL must still execute
         assertEq((), mem.selectRows(sh) ?? ());
         ds.rollback();
     }
 
-    #! a "tablecode" callback owns the table object's identity, so its result is never cached
-    testTableCodeNotCached() {
-        checkDb();
-        int calls = 0;
-        hash<auto> opt = {
-            "tablecode": AbstractTable sub (AbstractDatasource cb_ds, string name) {
-                ++calls;
-                return AbstractTable::getTable(cb_ds, name);
-            },
-        };
-        AbstractTable t1 = errs.getSubtableFromString(MemTable, opt);
-        AbstractTable t2 = errs.getSubtableFromString(MemTable, opt);
-        assertEq(2, calls);
-        assertEq(False, t1 === t2);
-        assertEq(MemTable, t1.getName());
-    }
-
-    #! clear() discards resolved tables along with the table's own description
-    testClearDiscardsCache() {
-        checkDb();
-        AbstractTable before = errs.getSubtableFromString(MemTable, NOTHING);
-        errs.clear();
-        AbstractTable after = errs.getSubtableFromString(MemTable, NOTHING);
-        assertEq(False, before === after);
-        assertEq(MemTable, after.getName());
-        # a subsequent resolution is cached again
-        assertEq(True, after === errs.getSubtableFromString(MemTable, NOTHING));
-    }
-
-    #! resolved tables are transient: they are not serialized, and are rebuilt and cached again after a round trip
-    testResolvedTablesNotSerialized() {
-        checkDb();
-        # SqlUtil can only deserialize a plain Datasource / DatasourcePool, so this test cannot use the
-        # query-counting wrapper
-        Datasource plain_ds(connstr);
-        plain_ds.open();
-        AbstractTable src = new Table(plain_ds, ErrTable).getTable();
-        AbstractTable original = src.getSubtableFromString(MemTable, NOTHING);
-        AbstractTable copy = Serializable::deserialize(Serializable::serialize(src));
-        assertEq(ErrTable, copy.getName());
-        AbstractTable resolved = copy.getSubtableFromString(MemTable, NOTHING);
-        assertEq(MemTable, resolved.getName());
-        assertEq(False, resolved === original);
-        assertEq(True, resolved === copy.getSubtableFromString(MemTable, NOTHING));
-        plain_ds.rollback();
-    }
-
-    #! concurrent resolution of the same name yields a single shared object
+    #! concurrent resolution through the caching resolver yields a single shared object
     testConcurrentResolution() {
         checkDb();
-        errs.clear();
+        sqlutil_register_table_resolver(\sqlutil_get_cached_table());
         const int Threads = 8;
         Counter cnt(Threads);
         Mutex m();
@@ -310,7 +397,7 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
             background sub () {
                 on_exit cnt.dec();
                 try {
-                    AbstractTable t = errs.getSubtableFromString(MemTable, NOTHING);
+                    AbstractTable t = mem.getSubtableFromString(ErrTable, NOTHING);
                     m.lock();
                     on_exit m.unlock();
                     results += t;
@@ -327,13 +414,10 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
         map assertEq(True, $1 === results[0]), results;
     }
 
-    #! concurrent generation through the same resolved tables is safe and produces identical SQL
-    /** Caching resolved tables means concurrent SQL generation now shares one table object per name, where
-        each call previously built its own.
-    */
+    #! concurrent generation through shared resolved tables is safe and produces identical SQL
     testConcurrentGeneration() {
         checkDb();
-        mem.clear();
+        sqlutil_register_table_resolver(\sqlutil_get_cached_table());
         hash<auto> sh = nameReferencedSelectHash();
         const int Threads = 8;
         Counter cnt(Threads);
@@ -362,12 +446,13 @@ class SqlUtilSelectGenerationTest inherits QUnit::Test {
         map assertEq(results[0], $1), results;
     }
 
-    #! referencing a sub-select table by name must not cost more than supplying the object
+    #! with a resolver registered, naming a sub-select's table must not cost more than supplying the object
     testNameReferenceCost() {
         checkDb();
+        sqlutil_register_table_resolver(\sqlutil_get_cached_table());
         hash<auto> by_name = nameReferencedSelectHash();
         hash<auto> by_object = objectReferencedSelectHash();
-        # warm up both paths so that no description introspection is included in either measurement
+        # warm up both paths so that no description read is included in either measurement
         list<auto> warm;
         mem.getSelectSql(by_name, \warm);
         mem.getSelectSql(by_object, \warm);

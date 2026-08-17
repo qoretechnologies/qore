@@ -568,15 +568,6 @@ public class AbstractTable inherits AbstractSqlUtilBase {
         bool temp_precreated = False;
 
         hash m_customCopMap = {};
-
-        #! tables resolved by name for join and sub-select references, keyed by the name as given
-        /** Resolving a table name produces an AbstractTable that introspects its own description from
-            the DB on first use, so without this cache every SQL-generation call for a query with a
-            name-referenced join or sub-select re-runs the full catalog introspection for that table.
-
-            Not serialized; rebuilt on demand.
-        */
-        transient hash<string, AbstractTable> subtable_cache;
     }
 
     #! creates the object; private constructor
@@ -5704,49 +5695,38 @@ string sql = table.getSelectSql(sh, \args);
         return sql;
     }
 
-    #! Returns the given table from the argument, using any \c "tablecode" option if present
-    /** Tables resolved from a name are cached in this object.  A resolved table introspects its description
-        from the DB the first time SQL is generated for it, so resolving the name afresh on every call meant
-        that every SQL-generation call for a query with a name-referenced join or sub-select re-read the
-        entire description of the referenced table from the database.
+    #! Returns the given table from the argument, resolving a table name to a table object
+    /** Resolution order:
+        - the \c "tablecode" callback option, if present (see
+          @ref SqlUtil::AbstractTable::SqlDataCallbackOptions "SqlDataCallbackOptions"; note that plain select
+          calls take no such option)
+        - the resolver registered with @ref SqlUtil::sqlutil_register_table_resolver()
+          "sqlutil_register_table_resolver()", if any
+        - otherwise a new table object is created for the name
 
-        Tables supplied by a \c "tablecode" callback are never cached; the callback owns the object's
-        identity and lifecycle.
+        A resolved table reads its entire description from the database the first time SQL is generated for it,
+        so an application that already holds resolved table objects should register a resolver returning them;
+        otherwise every SQL-generation call for a query with a name-referenced join or sub-select re-reads the
+        description of every referenced table.  Register @ref SqlUtil::sqlutil_get_cached_table()
+        "sqlutil_get_cached_table()" to use the cache provided by this module instead.
 
         @param table the table name to resolve
-        @param opt optional select options; the \c "tablecode" option is used to resolve the name if present
+        @param opt optional call options; the \c "tablecode" option is used to resolve the name if present
 
-        @return the table for the given name; the same object is returned for repeated calls with the same
-        name unless a \c "tablecode" option is present
+        @return the table for the given name
 
-        @note call clear() to discard cached table references along with this table's own description
+        @note No table object is retained by this object; whoever resolves the name owns the object's lifecycle,
+        so a table whose definition changes is discarded by the same code that cached it
+
+        @see
+        - @ref SqlUtil::sqlutil_register_table_resolver() "sqlutil_register_table_resolver()"
+        - @ref SqlUtil::sqlutil_get_cached_table() "sqlutil_get_cached_table()"
     */
     AbstractTable getSubtableFromString(string table, *hash<auto> opt) {
         if (opt.tablecode) {
             return opt.tablecode(ds, table);
         }
-
-        {
-            l.lock();
-            on_exit l.unlock();
-            *AbstractTable cached = subtable_cache{table};
-            if (cached) {
-                return cached;
-            }
-        }
-
-        # resolve outside the lock; this loads the driver-specific module and creates the table object,
-        # and the lock is not recursive
-        AbstractTable t = new Table(ds, table).getTable();
-
-        l.lock();
-        on_exit l.unlock();
-        # another thread may have resolved the same name in the meantime; keep a single object per name
-        *AbstractTable cached = subtable_cache{table};
-        if (cached) {
-            return cached;
-        }
-        return subtable_cache{table} = t;
+        return sqlutil_resolve_table(ds, table);
     }
 
     private ensureColumnsForDpql() {
@@ -7455,9 +7435,6 @@ table.cache();
         @code{.py}
 table.clear();
         @endcode
-
-        @note also discards any tables cached for name-referenced joins and sub-selects; see
-        getSubtableFromString()
     */
     clear() {
         l.lock();
@@ -7473,7 +7450,6 @@ table.clear();
         delete partitions;
         partitionStrategyLoaded = False;
         partitionsLoaded = False;
-        subtable_cache = {};
 
         clearImpl();
     }

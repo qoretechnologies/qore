@@ -152,13 +152,21 @@ module SqlUtil {
     - added a driver hook for canonicalizing typed partition bounds, so a driver whose native column type cannot
       represent everything a Qore value carries (a date column with no time of day, for example) reduces the
       caller's specification and the catalog bound to the same representation
-    - fixed @ref SqlUtil::AbstractTable::getSubtableFromString() "AbstractTable::getSubtableFromString()"
-      resolving a table name afresh on every call; a join or sub-select that names its table (rather than
-      supplying a table object) therefore re-read that table's entire description from the database each time SQL
-      was generated - eleven catalog queries per call for a select with two named sub-selects - which made SQL
-      generation, not database execution, dominate the cost of such queries.  Tables resolved from a name are now
-      cached per table object and discarded by @ref SqlUtil::AbstractTable::clear() "clear()"; tables supplied by
-      a \c "tablecode" callback are never cached
+    - added @ref SqlUtil::sqlutil_register_table_resolver() "sqlutil_register_table_resolver()" so that an
+      application can supply the table objects it has already resolved.  A join or a sub-select can name its
+      table instead of supplying a table object, and the @ref DataProviderExpression "advanced expression" form
+      of \c "in_select" can only name it, since an expression must stay serializable; resolving that name built
+      a new table object, which reads the table's entire description from the database on first use, so every
+      SQL-generation call for such a query re-read the description of every referenced table - eleven catalog
+      queries per call for a select with two named sub-selects, making SQL generation rather than database
+      execution dominate the cost of the query.  The \c "tablecode" callback could not be used to avoid this: it
+      is a @ref SqlUtil::AbstractTable::SqlDataCallbackOptions "SQL data callback option" and cannot be given to
+      an ordinary select call at all.  Applications with their own table registry should register a resolver
+      returning it, so that the registry's own invalidation governs sub-select resolution as well; applications
+      without one can register @ref SqlUtil::sqlutil_get_cached_table() "sqlutil_get_cached_table()" and
+      invalidate it with @ref SqlUtil::sqlutil_clear_table_cache() "sqlutil_clear_table_cache()".  Nothing is
+      cached unless a resolver is registered, so a table whose definition changes is never described by a stale
+      object that the caller cannot reach
 
     @subsection sqlutilv3_1_0 SqlUtil v3.1.0
     - added a portable temporary-table abstraction: @ref SqlUtil::AbstractDatabase::supportsTempTables()
@@ -7413,6 +7421,189 @@ table.insert(("id": id, "ref": iop_seq("xid"), "ref2": iop_seq_currval("xid")));
             "ds_type": ds.className(),
             "ds": ds.getConfigString(),
         };
+    }
+
+    # private variable to store the closure used to resolve table names (if any)
+    our *code table_resolve;
+
+    #! Holds the tables cached by @ref SqlUtil::sqlutil_get_cached_table() "sqlutil_get_cached_table()"
+    /** The cache is owned by this class so that it has a single, addressable home; use
+        @ref SqlUtil::sqlutil_get_cached_table() "sqlutil_get_cached_table()" and
+        @ref SqlUtil::sqlutil_clear_table_cache() "sqlutil_clear_table_cache()" rather than this class directly.
+
+        @since %SqlUtil 3.2.0
+    */
+    public class TableCache {
+        private {
+            #! resolved tables keyed by connection description, then by table name
+            static hash<string, hash<string, AbstractTable>> cache;
+
+            #! the lock protecting the cache
+            static Mutex lck();
+        }
+
+        #! Returns the cached table for the given connection description and table name, if any
+        static *AbstractTable get(string dsdesc, string name) {
+            TableCache::lck.lock();
+            on_exit TableCache::lck.unlock();
+            return TableCache::cache{dsdesc}{name};
+        }
+
+        #! Caches the given table unless another thread cached one first; returns the table in the cache
+        static AbstractTable put(string dsdesc, string name, AbstractTable t) {
+            TableCache::lck.lock();
+            on_exit TableCache::lck.unlock();
+            *AbstractTable cached = TableCache::cache{dsdesc}{name};
+            if (cached) {
+                return cached;
+            }
+            return TableCache::cache{dsdesc}{name} = t;
+        }
+
+        #! Discards cached tables; see @ref SqlUtil::sqlutil_clear_table_cache() "sqlutil_clear_table_cache()"
+        static clear(*string dsdesc, *string name) {
+            TableCache::lck.lock();
+            on_exit TableCache::lck.unlock();
+
+            if (!exists dsdesc) {
+                if (!name) {
+                    TableCache::cache = {};
+                } else {
+                    foreach string key in (keys TableCache::cache) {
+                        remove TableCache::cache{key}{name};
+                    }
+                }
+                return;
+            }
+            if (name) {
+                remove TableCache::cache{dsdesc}{name};
+            } else {
+                remove TableCache::cache{dsdesc};
+            }
+        }
+    }
+
+    #! Registers a closure or call reference used to resolve a table name to an AbstractTable object
+    /** @par Example:
+        @code{.py}
+# use the application's own table registry, which is invalidated when the schema changes
+sqlutil_register_table_resolver(\MyTableRegistry::getTable());
+        @endcode
+
+        A join or a sub-select can name its table instead of supplying a table object; the
+        @ref DataProviderExpression "advanced expression" form of \c "in_select" can only name it, since an
+        expression must stay serializable.  Resolving that name produces an AbstractTable that reads its entire
+        description from the database on first use, so an application that already holds resolved table objects
+        should register them here; otherwise every SQL-generation call for such a query re-reads the description
+        of every referenced table.
+
+        The resolver takes the AbstractDatasource for the query and the table name as given, and returns the
+        AbstractTable for that name.  It is used for every table name that SqlUtil has to resolve, unless a
+        \c "tablecode" callback option was passed to the call, which always takes precedence; note that
+        \c "tablecode" is a @ref SqlUtil::AbstractTable::SqlDataCallbackOptions "SQL data callback option", so
+        it cannot be given to plain select calls at all - which is why a registered resolver is the only way to
+        supply table objects for the sub-selects of an ordinary query.
+
+        @param new_table_resolve the resolver to register, or @ref nothing to remove any resolver already
+        registered
+
+        @note
+        - An application registering a resolver owns the lifecycle of the objects it returns, including
+          discarding them when the schema changes.  Register \c sqlutil_get_cached_table() to use the cache
+          provided by this module instead
+        - the resolver is process-wide; register it during initialization, before any thread generates SQL
+        - resolved tables are shared between threads, so a resolver must be thread-safe
+
+        @see
+        - sqlutil_get_table_resolver()
+        - sqlutil_get_cached_table()
+        - @ref SqlUtil::AbstractTable::getSubtableFromString() "AbstractTable::getSubtableFromString()"
+
+        @since %SqlUtil 3.2.0
+    */
+    public sub sqlutil_register_table_resolver(*code new_table_resolve) {
+        table_resolve = new_table_resolve;
+    }
+
+    #! Returns the table resolver registered with sqlutil_register_table_resolver(), if any
+    /** @return the registered resolver or @ref nothing if none has been registered
+
+        @see sqlutil_register_table_resolver()
+
+        @since %SqlUtil 3.2.0
+    */
+    public *code sub sqlutil_get_table_resolver() {
+        return table_resolve;
+    }
+
+    #! A table resolver that caches the tables it resolves, keyed by connection and table name
+    /** @par Example:
+        @code{.py}
+# resolve each table name in a join or sub-select only once per connection
+sqlutil_register_table_resolver(\sqlutil_get_cached_table());
+        @endcode
+
+        Register this with sqlutil_register_table_resolver() to avoid re-reading a referenced table's
+        description on every SQL-generation call.  Nothing is cached unless it is registered: a cache that no
+        caller can reach cannot be invalidated when the schema changes.
+
+        @param ds the connection to resolve the table on
+        @param name the table name as given
+
+        @return the table for the given name, resolved once per connection and name
+
+        @note
+        - cached tables keep the description they were created with, exactly as any other table object does;
+          call sqlutil_clear_table_cache() after changing a table's definition outside of the cached object - a
+          plain \c "alter table" statement, for example - or SQL generated for a query referencing that table by
+          name will use the old description
+        - the cache is keyed by the connection's description (driver, user, database, host, and port), so
+          separate connection objects with identical configuration share resolved tables
+
+        @see
+        - sqlutil_clear_table_cache()
+        - sqlutil_register_table_resolver()
+
+        @since %SqlUtil 3.2.0
+    */
+    public AbstractTable sub sqlutil_get_cached_table(AbstractDatasource ds, string name) {
+        string dsdesc = AbstractSqlUtilBase::makeDatasourceDesc(ds);
+        *AbstractTable cached = TableCache::get(dsdesc, name);
+        if (cached) {
+            return cached;
+        }
+
+        # resolve outside the lock; this loads the driver-specific module and can contact the server, and
+        # another thread resolving the same name at the same time is resolved by put()
+        return TableCache::put(dsdesc, name, new Table(ds, name).getTable());
+    }
+
+    #! Discards tables cached by sqlutil_get_cached_table()
+    /** @par Example:
+        @code{.py}
+# the table's definition was changed outside SqlUtil
+sqlutil_clear_table_cache(ds, "my_table");
+        @endcode
+
+        @param ds the connection to discard cached tables for; if @ref nothing, tables are discarded for every
+        connection
+        @param name the table name to discard; if @ref nothing, every cached table for the given connection(s)
+        is discarded
+
+        @see sqlutil_get_cached_table()
+
+        @since %SqlUtil 3.2.0
+    */
+    public sub sqlutil_clear_table_cache(*AbstractDatasource ds, *string name) {
+        TableCache::clear(ds ? AbstractSqlUtilBase::makeDatasourceDesc(ds) : NOTHING, name);
+    }
+
+    # private function used to resolve a table name to a table object
+    AbstractTable sub sqlutil_resolve_table(AbstractDatasource ds, string name) {
+        if (table_resolve) {
+            return table_resolve(ds, name);
+        }
+        return new Table(ds, name).getTable();
     }
 
     #! abstract container class that throws an exception if an unknown key is accessed
