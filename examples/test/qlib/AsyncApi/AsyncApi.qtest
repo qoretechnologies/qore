@@ -81,6 +81,20 @@ public class AsyncApiTest inherits QUnit::Test {
         return False;
     }
 
+    #! Returns True for an exception raised by a transient condition at the external public schema host
+    /** The HTTP client throws on a non-2xx status rather than returning it, so a rate-limited or unavailable
+        host arrives here as an exception carrying the status code in \c ex.arg.status_code, not through the
+        status-code return path.  Without this the whole test case fails when the host throttles the request,
+        which happens whenever several CI jobs fetch these schemas at once from one address.
+    */
+    static bool isExternalDependencyError(hash<ExceptionInfo> ex) {
+        if (AsyncApiTest::isNetworkError(ex)) {
+            return True;
+        }
+        return exists ex.arg.status_code
+            && AsyncApiTest::isExternalDependencyStatus(ex.arg.status_code.toInt());
+    }
+
     #! Returns the external public schema host used by publicSchemasTest().
     static string getPublicSchemaBaseUrl() {
         return ENV.ASYNCAPI_PUBLIC_SCHEMA_BASE_URL ?? "https://raw.githubusercontent.com";
@@ -443,7 +457,7 @@ public class AsyncApiTest inherits QUnit::Test {
         try {
             client.connect();
         } catch (hash<ExceptionInfo> ex) {
-            if (AsyncApiTest::isNetworkError(ex)) {
+            if (AsyncApiTest::isExternalDependencyError(ex)) {
                 testSkip("External public AsyncAPI schema dependency unavailable: %s: %s",
                     ex.err, ex.desc);
             }
@@ -496,7 +510,7 @@ public class AsyncApiTest inherits QUnit::Test {
 
                 anyPassed = True;
             } catch (hash<ExceptionInfo> ex) {
-                if (AsyncApiTest::isNetworkError(ex)) {
+                if (AsyncApiTest::isExternalDependencyError(ex)) {
                     testSkip("External public AsyncAPI schema dependency unavailable while fetching %s: %s: %s",
                         schemaInfo.name, ex.err, ex.desc);
                 }
