@@ -1,0 +1,234 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ReferenceArgBindingTest
+
+#! Class used to observe deterministic destruction of reference cycles
+class Cyc {
+    public {
+        any a;
+        any b;
+        static int dc = 0;
+    }
+
+    destructor() {
+        ++Cyc::dc;
+    }
+
+    static reset() {
+        Cyc::dc = 0;
+    }
+}
+
+#! Deep object graph used to verify that reference argument binding does not scale with graph size
+class Node {
+    public {
+        list<object> kids = ();
+        string label = "n";
+    }
+
+    #! Returns the total number of nodes in the tree rooted at this node
+    int size() {
+        int rv = 1;
+        map rv += cast<Node>($1).size(), kids;
+        return rv;
+    }
+
+    static Node make(int depth, int width) {
+        Node n();
+        if (depth > 0) {
+            for (int i = 0; i < width; ++i) {
+                n.kids += Node::make(depth - 1, width);
+            }
+        }
+        return n;
+    }
+}
+
+class ReferenceArgBindingTest inherits QUnit::Test {
+    public {
+        #! number of reference bindings measured per timing sample
+        const Iterations = 4000;
+
+        #! tree shapes used for the scaling test: (depth, width) -> node count grows ~780x
+        const SmallShape = (0, 0);
+        const LargeShape = (4, 5);
+
+        #! the largest acceptable ratio between binding cost with a large graph and with a small one
+        /** binding a reference must not walk the object graph reachable from the referenced value, so the
+            two costs must be within measurement noise of each other; the ratio was ~35-40x before
+            reference argument binding stopped rescanning an unchanged object graph
+        */
+        const MaxScalingRatio = 4.0;
+    }
+
+    constructor() : Test("ReferenceArgBindingTest", "1.0") {
+        addTestCase("complex type restriction", \testComplexTypeRestriction());
+        addTestCase("no narrowing side effect", \testNoNarrowingSideEffect());
+        addTestCase("cycle created through reference", \testCycleThroughReference());
+        addTestCase("cycle reachable from reference", \testCycleReachableFromReference());
+        addTestCase("cycle broken through reference", \testCycleBrokenThroughReference());
+        addTestCase("binding does not scale with graph", \testBindingDoesNotScaleWithGraph());
+        set_return_value(main());
+    }
+
+    #! binds a reference argument without writing anything through it
+    private static bindOnly(reference<hash<auto>> h) {
+    }
+
+    #! writes an int through a value-type-restricted hash reference
+    private static addInt(reference<hash<string, int>> h, string key, int val) {
+        h{key} = val;
+    }
+
+    #! appends through a value-type-restricted list reference
+    private static addListInt(reference<list<int>> l, int val) {
+        l += val;
+    }
+
+    #! creates a reference cycle between two objects held in the referenced hash
+    private static crossLink(reference<hash<auto>> h) {
+        h.x.a = h.y;
+        h.y.a = h.x;
+    }
+
+    #! removes the cycle created by crossLink() without destroying either object
+    private static unLink(reference<hash<auto>> h) {
+        remove h.x.a;
+        remove h.y.a;
+    }
+
+    #! the reference's complex type restriction is still applied to the referenced lvalue
+    testComplexTypeRestriction() {
+        {
+            hash<auto> h = {"a": 1};
+            ReferenceArgBindingTest::addInt(\h, "b", 2);
+            assertEq({"a": 1, "b": 2}, h);
+            # binding folded the untyped hash's value type into the reference's restriction
+            assertEq("hash<string, int>", h.fullType());
+        }
+        {
+            hash<auto> h = {"a": "str"};
+            assertThrows("RUNTIME-TYPE-ERROR", \ReferenceArgBindingTest::addInt(), (\h, "b", 2));
+        }
+        {
+            list<auto> l = (1, 2);
+            ReferenceArgBindingTest::addListInt(\l, 3);
+            assertEq((1, 2, 3), l);
+            assertEq("list<int>", l.fullType());
+        }
+    }
+
+    #! binding an lvalue whose type already matches the reference target leaves the lvalue untouched
+    testNoNarrowingSideEffect() {
+        hash<auto!> h = {"a": 1};
+        assertEq("hash<auto>", h.fullType());
+        ReferenceArgBindingTest::bindOnly(\h);
+        assertEq("hash<auto>", h.fullType());
+        # writing a differently-typed value must still be possible after binding
+        h.b = "str";
+        assertEq({"a": 1, "b": "str"}, h);
+    }
+
+    #! a cycle created by writing through a reference argument is still collected
+    testCycleThroughReference() {
+        if (!HAVE_DETERMINISTIC_GC) {
+            testSkip("HAVE_DETERMINISTIC_GC is not defined");
+        }
+        Cyc::reset();
+        {
+            hash<auto> h = {"x": new Cyc(), "y": new Cyc()};
+            ReferenceArgBindingTest::crossLink(\h);
+            # bind again with the cycle in place; binding must not disturb it
+            ReferenceArgBindingTest::bindOnly(\h);
+            assertEq(0, Cyc::dc);
+        }
+        assertEq(2, Cyc::dc);
+    }
+
+    #! a cycle reachable from a bound reference value is still collected
+    testCycleReachableFromReference() {
+        if (!HAVE_DETERMINISTIC_GC) {
+            testSkip("HAVE_DETERMINISTIC_GC is not defined");
+        }
+        Cyc::reset();
+        {
+            Cyc a();
+            Cyc b();
+            hash<auto> h = {};
+            ReferenceArgBindingTest::bindOnly(\h);
+            h.o = a;
+            a.a = b;
+            b.a = a;
+            ReferenceArgBindingTest::bindOnly(\h);
+            assertEq(0, Cyc::dc);
+        }
+        assertEq(2, Cyc::dc);
+    }
+
+    #! objects are destroyed at scope exit after a cycle is removed through a reference argument
+    testCycleBrokenThroughReference() {
+        if (!HAVE_DETERMINISTIC_GC) {
+            testSkip("HAVE_DETERMINISTIC_GC is not defined");
+        }
+        Cyc::reset();
+        {
+            hash<auto> h = {"x": new Cyc(), "y": new Cyc()};
+            ReferenceArgBindingTest::crossLink(\h);
+            ReferenceArgBindingTest::unLink(\h);
+            assertEq(0, Cyc::dc);
+        }
+        assertEq(2, Cyc::dc);
+    }
+
+    #! binding a reference argument must not walk the object graph reachable from the referenced value
+    /** Binding resolves the lvalue and assigns the value back to itself to apply the reference's type
+        restriction; when that leaves the identical value in place, the set of objects reachable from the
+        lvalue cannot have changed, so no recursive-reference (cycle) scan is required.  Without that,
+        every call taking a reference to an object-bearing lvalue costs O(reachable object graph).
+    */
+    testBindingDoesNotScaleWithGraph() {
+        hash<auto> small = {"root": Node::make(SmallShape[0], SmallShape[1]), "label": "x"};
+        hash<auto> large = {"root": Node::make(LargeShape[0], LargeShape[1]), "label": "x"};
+        int small_nodes = cast<Node>(small.root).size();
+        int large_nodes = cast<Node>(large.root).size();
+        assertGt(100, large_nodes);
+        assertEq(1, small_nodes);
+
+        # alternate the two shapes and keep the fastest sample of each, so that a scheduling stall or CPU
+        # quota stall cannot land on only one of them and fake a scaling difference
+        float small_us;
+        float large_us;
+        for (int sample = 0; sample < 3; ++sample) {
+            float s = bindingCostUs(\small);
+            float l = bindingCostUs(\large);
+            if (!exists small_us || s < small_us) {
+                small_us = s;
+            }
+            if (!exists large_us || l < large_us) {
+                large_us = l;
+            }
+        }
+
+        float ratio = large_us / small_us;
+        if (m_options.verbose) {
+            printf("reference binding: %d node(s): %.4f us; %d nodes: %.4f us; ratio: %.2f\n", small_nodes,
+                small_us, large_nodes, large_us, ratio);
+        }
+        assertLt(MaxScalingRatio, ratio);
+    }
+
+    #! Returns the per-binding cost in microseconds for the given referenced value
+    private float bindingCostUs(reference<hash<auto>> h) {
+        date start = now_us();
+        for (int i = 0; i < Iterations; ++i) {
+            ReferenceArgBindingTest::bindOnly(\h);
+        }
+        return (now_us() - start).durationMicroseconds().toFloat() / Iterations;
+    }
+}

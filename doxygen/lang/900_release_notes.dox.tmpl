@@ -39,6 +39,10 @@
       @ref <string>::substr() "<string>::substr()" and
       @ref string_slicing "[] slice operations" allocation-free for read-only consumers
     - regex matching skips per-call UTF-8 re-validation in PCRE2 inner loops
+    - passing a @ref lvalue_references "reference" to a variable holding objects no longer costs time
+      proportional to the size of the object graph reachable from that variable; binding the argument applies
+      the reference's type restriction to the variable, and when that leaves the value untouched no
+      recursive-reference scan is made, since the set of reachable objects cannot have changed
     - calls to builtin functions declared deterministic and free of side effects are evaluated once at
       compile time when every argument is a literal; @ref exec_mode_aot "AOT" additionally requires the
       result to be host-portable, so a value that depends on the build host is never baked into a

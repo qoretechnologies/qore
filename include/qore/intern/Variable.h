@@ -477,6 +477,11 @@ private:
     // flag if the changed value was a container before the assignment
     bool before = false;
 
+    // flag to suppress the recursive-reference scan of the target RObject in the destructor; set only when the
+    // caller can guarantee that the set of objects reachable from the lvalue is unchanged (see
+    // suppressObjectScan())
+    bool no_object_scan = false;
+
     // recursive delta: change to recursive reference count
     int rdt = 0;
 
@@ -508,6 +513,19 @@ public:
 
     DLLLOCAL void setClosure(RObject* c) {
         robj = c;
+    }
+
+    //! Suppresses the recursive-reference scan that the destructor would otherwise make
+    /** The scan recalculates the recursive-reference (cycle) set for the RObject holding the lvalue, and its cost
+        is proportional to the size of the object graph reachable from the lvalue.  It is required whenever the set
+        of objects reachable from the lvalue may have changed.
+
+        Call this only when that set is provably unchanged - for example when the value read from the lvalue was
+        assigned back to the same lvalue and the resulting value is the identical node.  Suppressing the scan when
+        the graph did change can leave a reference cycle undetected (i.e. leaked).
+    */
+    DLLLOCAL void suppressObjectScan() {
+        no_object_scan = true;
     }
 
     DLLLOCAL void saveTemp(QoreValue n);

@@ -3191,9 +3191,22 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                     if (lvh) {
                         QoreValue val = lvh.getReferencedValue();
                         if (!val.isNothing()) {
+                            // the value read from the lvalue is assigned back to the same lvalue in order to apply
+                            // the reference's type restriction (which can fold container value types); remember the
+                            // node so that the recursive-reference scan can be skipped when nothing changed.  Every
+                            // path that replaces the value hands the old one to LValueHelper::saveTemp(), which
+                            // defers the dereference to the helper's destructor, so this pointer is still backed by
+                            // a live reference at the comparison below and its address cannot have been reused
+                            const AbstractQoreNode* orig = val.getInternalNode();
                             lvh.setTypeInfo(u.ti);
                             //printd(5, "ref assign '%s' to '%s'\n", QoreTypeInfo::getName(val.getTypeInfo()), QoreTypeInfo::getName(u.ti));
-                            lvh.assign(val, "<reference>");
+                            if (!lvh.assign(val, "<reference>") && orig
+                                && lvh.getValue().getInternalNode() == orig) {
+                                // the identical node is still in place, so the set of objects reachable from the
+                                // lvalue cannot have changed; skip the cycle scan, which would otherwise walk the
+                                // entire reachable object graph on every reference argument binding
+                                lvh.suppressObjectScan();
+                            }
                         }
                         // we set ok unconditionally here, because any exception thrown above is enough if there is an error
                         ok = true;

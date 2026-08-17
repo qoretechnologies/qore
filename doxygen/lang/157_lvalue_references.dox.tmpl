@@ -45,6 +45,23 @@ lastorder.numberofitems = lastorder.items.size();
     Once assigned, a reference is permanently assigned to the lvalue; there is currently no way to "unreference"
     a reference.
 
+    When a reference's type restriction is a complex type (for example a
+    @ref hash_complex_type "complex hash", a @ref list_complex_type "complex list", or a
+    @ref hashdecl "hashdecl" type), the restriction is applied to the referenced lvalue when the reference is
+    bound, which can fold an untyped container's value type into the restriction:
+    @code{.py}
+sub add_int(reference<hash<string, int>> h, string key, int val) {
+    h{key} = val;
+}
+
+hash<auto> h = {"a": 1};
+add_int(\h, "b", 2);
+printf("%y\n", h.fullType()); # "hash<string, int>"
+    @endcode
+
+    When the referenced value already satisfies the restriction, binding the reference leaves the lvalue
+    untouched.
+
     The @ref reference_or_nothing_type "*reference" has special behavior when used as an argument type
     restriction.  In this case, if no value is assigned to the reference in the call, the local variable
     can be assigned to any value in the code block, even if the called did not pass a value to the reference.

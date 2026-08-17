@@ -657,7 +657,7 @@ LValueHelper::~LValueHelper() {
 
     if (robj) {
         // recalculate recursive references for objects if necessary
-        if (obj_chg) {
+        if (obj_chg && !no_object_scan) {
             RSetHelper rsh(*robj);
         }
         if (obj_ref) {

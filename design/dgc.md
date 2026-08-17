@@ -24,7 +24,7 @@ Every `QoreObject` (via `RObject` in `include/qore/intern/RSet.h`) carries these
 | `rset` | Pointer to the `RSet` the object belongs to (a group of objects in one detected cycle). |
 | `rml` | Read/write lock with a special "r-section" mode used during scans. |
 
-The cycle detector (`RSetHelper`, `lib/RSetHelper.cpp`) traverses the graph from a candidate object, assigns every object it visits to an `RSet`, and computes each member's `rcount`. Detection runs opportunistically during `customDeref` (`lib/QoreObject.cpp`) when the normal path cannot prove the object is alive.
+The cycle detector (`RSetHelper`, `lib/RSet.cpp`) traverses the graph from a candidate object, assigns every object it visits to an `RSet`, and computes each member's `rcount`. Detection runs opportunistically during `customDeref` (`lib/QoreObject.cpp`) when the normal path cannot prove the object is alive.
 
 ## The decision rule (`RSet::canDelete`)
 
@@ -64,6 +64,29 @@ if (rrefs) {
 ```
 
 Scans are retried after the last `realDeref()` drops `rrefs` to 0. If a `realRef()` is leaked (never dereferenced), cycle collection for that object never runs.
+
+## When a scan is triggered — and when it may be skipped
+
+`LValueHelper::~LValueHelper` (`lib/Variable.cpp`) runs a scan whenever it holds an lvalue inside an `RObject`
+(`robj`, set by `qore_object_private::getLValue` for object members and by `ClosureVarValue::getLValue` for
+closure-bound and thread-safe local variables) **and** the lvalue's value needs scanning either before or after
+the operation. Note that `obj_chg` is seeded from `before`, so *acquiring* an lvalue whose value already contains
+objects triggers a scan even when nothing is assigned — the conservative choice, because objects may have been
+removed.
+
+Cost is proportional to the size of the object graph reachable from the lvalue, so a scan on a hot path is
+expensive: `RSetHelper::checkIntern` walks every reachable hash, list, object, closure, and reference.
+
+`LValueHelper::suppressObjectScan()` skips that scan. It is only correct when the set of objects reachable from
+the lvalue is provably unchanged. The one caller today is complex-reference argument binding in
+`QoreTypeSpec::acceptInput` (`lib/QoreTypeInfo.cpp`, `QTS_COMPLEXREF` / `QTS_COMPLEXHARDREF`): binding a
+`reference<`*complex-type*`>` argument reads the referenced value and assigns it back to the same lvalue so that
+the reference's type restriction is applied (which can fold a container's value type, producing a new node). The
+scan is suppressed only when the assignment succeeded *and* the identical node is still in place afterwards —
+i.e. nothing was folded, replaced, or removed — so no object can have entered or left the graph.
+
+Do not suppress a scan on the strength of "the value looks the same". Compare node identity, and only after a
+successful assignment; suppressing a scan when the graph did change leaves a cycle undetected, i.e. leaked.
 
 ## Rules for C++ module authors
 
@@ -176,11 +199,16 @@ Do not use `realRef()` for references stored in C++ state that outlives a single
 
 - `include/qore/intern/RSet.h` — `RObject`, `RSet`, field declarations.
 - `include/qore/intern/RSection.h` — r-section lock semantics.
-- `lib/RSet.cpp` — `canDelete`, `deref`, `checkDeferScan`, invalidation.
-- `lib/RSetHelper.cpp` — the scanner proper (cycle traversal + `rcount` assignment).
+- `lib/RSet.cpp` — `canDelete`, `deref`, `checkDeferScan`, invalidation, and the scanner proper
+  (`RSetHelper::checkIntern`: cycle traversal + `rcount` assignment).
 - `lib/QoreObject.cpp` — `scanMembers`, `scanMembersIntern`, `customDeref`, the dispatcher that calls private-data scanners.
 - `lib/QoreQueue.cpp` — `qore_queue_private::scanMembers` (Pattern B reference implementation).
 - `lib/QC_TreeMap.qpp` — TreeMap custom scanner (Pattern B).
 - `lib/QC_StreamReader.qpp` — `internal_members` + `setValueIntern` (Pattern A reference implementation).
 - `include/qore/QoreObject.h` — `realRef`/`realDeref`, `QoreObjectRealRefHelper`.
 - `lib/Variable.cpp`, `lib/thread.cpp`, `lib/FunctionCallNode.cpp` — `realRef` call sites showing legitimate uses.
+- `lib/Variable.cpp` — `LValueHelper::~LValueHelper` (scan trigger), `ClosureVarValue::getLValue` (`robj` for
+  closure-bound and thread-safe locals).
+- `lib/QoreTypeInfo.cpp` — `QoreTypeSpec::acceptInput`, the only `suppressObjectScan()` caller.
+- `examples/test/qore/misc/reference-arg-binding.qtest` — cycle-collection and scan-cost regression tests for
+  reference argument binding.
