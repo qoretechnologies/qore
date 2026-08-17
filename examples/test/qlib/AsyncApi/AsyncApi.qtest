@@ -33,6 +33,7 @@ public class AsyncApiTest inherits QUnit::Test {
         addTestCase("channel operations test", \channelOperationsTest());
         addTestCase("validation constraints test", \validationConstraintsTest());
         addTestCase("example parsing test", \exampleParsingTest());
+        addTestCase("external dependency classification", \externalDependencyClassificationTest());
         addTestCase("public schemas test", \publicSchemasTest());
         set_return_value(main());
     }
@@ -82,13 +83,23 @@ public class AsyncApiTest inherits QUnit::Test {
     }
 
     #! Returns True for an exception raised by a transient condition at the external public schema host
-    /** The HTTP client throws on a non-2xx status rather than returning it, so a rate-limited or unavailable
-        host arrives here as an exception carrying the status code in \c ex.arg.status_code, not through the
-        status-code return path.  Without this the whole test case fails when the host throttles the request,
-        which happens whenever several CI jobs fetch these schemas at once from one address.
+    /** Two conditions reach the caller as exceptions rather than through the status-code return path, and
+        neither is covered by isNetworkError():
+
+        - the HTTP client throws on a non-2xx status instead of returning it, so a rate-limited or unavailable
+          host arrives with the status code in \c ex.arg.status_code
+        - the client's request timeout expires as \c FUTURE-TIMEOUT, not as the \c HTTPCLIENT-TIMEOUT that
+          @ref QUnit::Test::isConnectionError() "isConnectionError()" matches
+
+        Without both, the whole test case fails when the host throttles or stalls the request, which happens
+        whenever several CI jobs fetch these schemas at once from one address.  Only the external fetch is
+        wrapped by these predicates, so a genuine parse failure is still reported.
     */
     static bool isExternalDependencyError(hash<ExceptionInfo> ex) {
         if (AsyncApiTest::isNetworkError(ex)) {
+            return True;
+        }
+        if (exists ex.err && ex.err =~ /-TIMEOUT$/) {
             return True;
         }
         return exists ex.arg.status_code
@@ -98,6 +109,32 @@ public class AsyncApiTest inherits QUnit::Test {
     #! Returns the external public schema host used by publicSchemasTest().
     static string getPublicSchemaBaseUrl() {
         return ENV.ASYNCAPI_PUBLIC_SCHEMA_BASE_URL ?? "https://raw.githubusercontent.com";
+    }
+
+    #! publicSchemasTest() must skip, not fail, for every way the external host can be unavailable
+    externalDependencyClassificationTest() {
+        # transport failures
+        assertTrue(AsyncApiTest::isExternalDependencyError(<ExceptionInfo>{"err": "SOCKET-CONNECT-ERROR"}));
+        assertTrue(AsyncApiTest::isExternalDependencyError(<ExceptionInfo>{"err": "HTTPCLIENT-TIMEOUT"}));
+        # the client's request timeout expires as FUTURE-TIMEOUT, which isConnectionError() does not match
+        assertTrue(AsyncApiTest::isExternalDependencyError(<ExceptionInfo>{"err": "FUTURE-TIMEOUT"}));
+        # a transient status thrown by the client rather than returned
+        assertTrue(AsyncApiTest::isExternalDependencyError(<ExceptionInfo>{
+            "err": "HTTP-CLIENT-RECEIVE-ERROR",
+            "arg": {"status_code": 429},
+        }));
+        assertTrue(AsyncApiTest::isExternalDependencyError(<ExceptionInfo>{
+            "err": "HTTP-CLIENT-RECEIVE-ERROR",
+            "arg": {"status_code": 503},
+        }));
+        # a permanent status is a real failure: the schema path is wrong
+        assertFalse(AsyncApiTest::isExternalDependencyError(<ExceptionInfo>{
+            "err": "HTTP-CLIENT-RECEIVE-ERROR",
+            "arg": {"status_code": 404},
+        }));
+        # a fault in the module under test must never be classified as an external dependency
+        assertFalse(AsyncApiTest::isExternalDependencyError(<ExceptionInfo>{"err": "RUNTIME-TYPE-ERROR"}));
+        assertFalse(AsyncApiTest::isExternalDependencyError(<ExceptionInfo>{"err": "ASYNCAPI-PARSE-ERROR"}));
     }
 
     schemaParsingTest() {
