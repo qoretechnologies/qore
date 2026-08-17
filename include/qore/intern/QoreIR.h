@@ -1544,6 +1544,16 @@ struct LVPathStep {
     const void* ref_ptr = nullptr;  //!< LocalVar*/Var*/QoreVarInfo* (JIT mode, null for AOT)
     uint32_t slot_id = UINT32_MAX;  //!< AOT slot index for this variable
 
+    //! StaticVar steps: the class static resolved when an AOT image was loaded
+    /** An AOT image cannot carry \a ref_ptr, so a StaticVar step is normally resolved by name in the program
+        running the code.  That cannot find a class which is private to its module, because such a class never
+        appears in the namespace of the program that loaded the module, so the static is also resolved when the
+        image is loaded - in the program that owns the code - and kept here.  It is used only when the by-name
+        lookup fails, so that a public module class merged into an importing program still resolves to that
+        program's static.
+    */
+    QoreVarInfo* aot_static_var_info = nullptr;
+
     // Name for named steps (SelfMember, HashKeyConst, ClosureVar name, GlobalVar name, etc.)
     std::string name;
 

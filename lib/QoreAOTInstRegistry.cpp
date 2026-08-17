@@ -3347,6 +3347,12 @@ static std::unique_ptr<QoreIRInstruction> readLValuePath(
                 // AOT static lvalue roots resolve at runtime in the active program.
                 // This keeps module writes aligned with LoadStaticVar-by-path reads
                 // after the module namespace is merged into an importing program.
+                //
+                // Resolve the static here as well: a class private to its module never appears in the
+                // namespace of the program that loaded the module, so the runtime path cannot find it.
+                // navigatePath() prefers the symbolic path, so the alignment above is preserved.
+                std::string sv_name;
+                step.aot_static_var_info = qore_find_static_var_by_path(*ctx.pgm, step.name, sv_name);
                 scv->deref(nullptr);
             }
         } else if ((step.kind == LVPathStepKind::GlobalVar

@@ -6679,6 +6679,16 @@ static QoreAOTContext* buildContextFromSlotMap(
                     // built. LValueHelper::navigatePath() resolves the path when
                     // the assignment actually runs.
                     step.ref_ptr = nullptr;
+                    // Also resolve the static in the program that owns this code, if it can be resolved
+                    // there now.  navigatePath() prefers the symbolic path, so a public module class
+                    // merged into an importing program still resolves to that program's static; this is
+                    // the only way to reach a class that is private to its module, which never appears in
+                    // the namespace of the program that loaded the module.
+                    if (QoreProgram* owner_pgm = local_owner_pgm ? local_owner_pgm : pgm) {
+                        std::string sv_name;
+                        step.aot_static_var_info = qore_find_static_var_by_path(*owner_pgm, step.name,
+                            sv_name);
+                    }
                 }
                 pi->path.push_back(std::move(step));
             }
@@ -7941,6 +7951,19 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                 step.ref_ptr = var;
                 return true;
             };
+            // Resolve a class static in the program that owns this code, so that a class private to its module
+            // can be reached; such a class never appears in the namespace of the program that loads the module,
+            // where the symbolic path below is resolved when the assignment runs.  Best-effort: the class may
+            // legitimately not be registered yet (a sibling .qo file, for example), in which case the symbolic
+            // path remains the only resolution mechanism.
+            auto resolve_static_lvalue_fallback = [&](LVPathStep& step, const std::string& name) {
+                QoreProgram* owner_pgm = local_owner_pgm ? local_owner_pgm : pgm;
+                if (!owner_pgm) {
+                    return;
+                }
+                std::string var_name;
+                step.aot_static_var_info = qore_find_static_var_by_path(*owner_pgm, name, var_name);
+            };
             for (uint8_t i = 0; i < num_steps; ++i) {
                 LVPathStep step;
                 step.kind = static_cast<LVPathStepKind>(QoreAOTBinaryReader::readU8(ptr));
@@ -7981,6 +8004,7 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
                         }
                     } else {
                         step.ref_ptr = nullptr;
+                        resolve_static_lvalue_fallback(step, step.name);
                     }
                 }
                 pi->path.push_back(std::move(step));

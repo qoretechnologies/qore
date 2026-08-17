@@ -101,8 +101,20 @@ DLLLOCAL void get_thread_local_lvalue(void* ptr, QoreLValue<qore_gvar_ref_u>*& l
 class LValueHelper;
 class LValueRemoveHelper;
 class RSetHelper;
+class QoreVarInfo;
 struct LVPathStep;
 enum class LVPathStepKind : uint8_t;
+
+//! Returns the class static variable named by a \c "ClassPath::varName" lvalue path in the given program
+/** @param pgm the program whose namespace is searched
+    @param full_name the lvalue path root name, in the runtime class-path form used by LVPathStep::name
+    @param var_name set to the static variable's name if the path could be split
+
+    @return the static variable, or nullptr if the path is invalid, the class is not in \a pgm, or the class
+    hierarchy has no such static variable
+*/
+DLLLOCAL QoreVarInfo* qore_find_static_var_by_path(QoreProgram& pgm, const std::string& full_name,
+        std::string& var_name);
 
 // structure for global variables
 class Var : protected QoreReferenceCounter {

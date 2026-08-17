@@ -51,6 +51,28 @@ Batch registration uses the multi-deserializer:
 The cross-session barriers are required because one `.qo` can reference classes,
 constants, or members declared in another `.qo`.
 
+### Class-Static LValue Roots Resolve By Name, With A Load-Time Fallback
+
+An AOT image cannot carry the parse-time `StaticClassVarRefNode` that a `ClassName::var` lvalue root normally
+holds in `LVPathStep::ref_ptr`, so the step keeps only its symbolic `"ClassPath::varName"` name and
+`LValueHelper::navigatePath()` resolves that name **in the program running the code** when the assignment
+executes. That is deliberate: it keeps a module's writes aligned with `LoadStaticVar`-by-path reads after the
+module's namespace is merged into an importing program, and it lets a standalone fragment reference a static
+provided by a sibling `.qo` that is not registered yet when its context is built.
+
+By-name resolution cannot see a class that is **private to its module**, because such a class never appears in
+the namespace of the program that loaded the module. The static is therefore *also* resolved when the image is
+loaded — in the program that owns the code (`local_owner_pgm`, else `pgm`) — and kept in
+`LVPathStep::aot_static_var_info`, which `navigatePath()` uses only when the by-name lookup fails. Resolution at
+load time is best-effort: a class that is not registered yet simply leaves the field null and the symbolic path
+remains the only mechanism.
+
+The three restore sites that must populate the field are `buildContextFromSlotMap()` and
+`deserializeIRInstruction()` in `lib/QoreAOTRuntime.cpp` and the `LValuePath` case in
+`lib/QoreAOTInstRegistry.cpp`. Only a *dynamic* lvalue path reaches this code — a constant hash key such as
+`Holder::smap{"k"}` is lowered differently — so a regression test must use a variable key; see
+`examples/test/ir/AOTModulePrivateClassStatic.qtest`.
+
 ### Restored Expression Trees Are Already Parse-Initialized
 
 Expression trees restored from an AOT image (class member initializers, static

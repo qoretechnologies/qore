@@ -84,7 +84,36 @@ static bool split_static_lvalue_path(const std::string& full_name, std::string& 
     return !class_path.empty() && !var_name.empty();
 }
 
-static int resolve_runtime_static_lvalue_path(LValueHelper& lvh, const std::string& full_name) {
+QoreVarInfo* qore_find_static_var_by_path(QoreProgram& pgm, const std::string& full_name,
+        std::string& var_name) {
+    std::string class_path;
+    if (!split_static_lvalue_path(full_name, class_path, var_name)) {
+        return nullptr;
+    }
+
+    qore_program_private* pp = qore_program_private::get(pgm);
+    const qore_ns_private* found_ns = nullptr;
+    const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path.c_str(), found_ns);
+    if (!qc) {
+        return nullptr;
+    }
+
+    QoreVarInfo* vi = qore_class_private::get(*qc)->vars.find(var_name.c_str());
+    if (vi) {
+        return vi;
+    }
+    QoreClassHierarchyIterator hi(*qc);
+    while (hi.next()) {
+        vi = qore_class_private::get(hi.get())->vars.find(var_name.c_str());
+        if (vi) {
+            return vi;
+        }
+    }
+    return nullptr;
+}
+
+static int resolve_runtime_static_lvalue_path(LValueHelper& lvh, const std::string& full_name,
+        QoreVarInfo* aot_static_var_info = nullptr) {
     std::string class_path;
     std::string var_name;
     if (!split_static_lvalue_path(full_name, class_path, var_name)) {
@@ -118,6 +147,17 @@ static int resolve_runtime_static_lvalue_path(LValueHelper& lvh, const std::stri
 
     const QoreClass* qc = qore_root_ns_private::runtimeFindClass(*pp->RootNS, class_path.c_str(), found_ns);
     if (!qc) {
+        // a class that is private to its module is not present in the namespace of the program running the
+        // module's code, so it can only be reached through the static resolved when the module's AOT image was
+        // loaded; the by-name lookup above is tried first so that a public module class merged into the
+        // importing program still resolves to that program's static
+        if (aot_static_var_info) {
+            if (aot_static_var_info->getLValue(lvh, var_name.c_str())) {
+                lvh.clearPtr();
+                return -1;
+            }
+            return 0;
+        }
         lvh.vl.xsink->raiseException("LVALUE-ERROR",
             "cannot resolve class '%s' for static variable lvalue path root '%s'",
             class_path.c_str(), full_name.c_str());
@@ -1528,7 +1568,7 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                 break;
             }
 
-            if (resolve_runtime_static_lvalue_path(*this, root.name)) {
+            if (resolve_runtime_static_lvalue_path(*this, root.name, root.aot_static_var_info)) {
                 return -1;
             }
             break;

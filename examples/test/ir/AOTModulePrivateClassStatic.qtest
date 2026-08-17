@@ -1,0 +1,149 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+%requires Util
+
+%exec-class AOTModulePrivateClassStaticTest
+
+#! Verifies that AOT-compiled module code can write to the static variables of its own classes
+/** A StaticVar lvalue root cannot carry its parse-time reference in an AOT image, so it is resolved by name in
+    the program running the code.  A class that is private to its module never appears in the namespace of the
+    program that loaded the module, so that lookup cannot find it and the assignment failed with
+    LVALUE-ERROR - but only for an AOT-compiled module, and only for a module-private class; the same code
+    worked when the module was loaded from source, and worked in AOT if the class was public.  The static is now
+    also resolved when the image is loaded, in the program that owns the code, and used when the by-name lookup
+    fails.
+*/
+class AOTModulePrivateClassStaticTest inherits QUnit::Test {
+    public {
+        const ModuleName = "AotPrivStatic";
+
+        #! written by the module under test; one line per probe
+        const Probes = (
+            "private class static write",
+            "public class static write",
+            "module global write",
+            "private class static read",
+        );
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTModulePrivateClassStaticTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("module loaded from source", \testSourceModule());
+        addTestCase("module loaded from an AOT image", \testAotModule());
+        set_return_value(main());
+    }
+
+    #! The module under test: a module-private class and a public one, each with a static written by module code
+    private string moduleSource() {
+        return "%modern\n"
+            "\n"
+            "module " + ModuleName + " {\n"
+            "    version = \"1.0\";\n"
+            "    desc = \"module-private class static lvalue probe\";\n"
+            "    author = \"Qore Technologies, s.r.o.\";\n"
+            "    license = \"MIT\";\n"
+            "}\n"
+            "\n"
+            "public namespace " + ModuleName + " {\n"
+            "    our hash<string, string> aps_global;\n"
+            "\n"
+            "    # not public: absent from the namespace of the program that loads this module\n"
+            "    class PrivateHolder {\n"
+            "        public {\n"
+            "            static hash<string, string> smap;\n"
+            "        }\n"
+            "    }\n"
+            "\n"
+            "    public class PublicHolder {\n"
+            "        public {\n"
+            "            static hash<string, string> smap;\n"
+            "        }\n"
+            "    }\n"
+            "\n"
+            "    # the key and value arrive as arguments so that the assignment is lowered as a dynamic\n"
+            "    # lvalue path, which is how a class static is reached from AOT-compiled code\n"
+            "    public sub aps_run(string k, string v) {\n"
+            "        PrivateHolder::smap{k} = v;\n"
+            "        printf(\"private class static write: %y\\n\", PrivateHolder::smap{k});\n"
+            "        PublicHolder::smap{k} = v;\n"
+            "        printf(\"public class static write: %y\\n\", PublicHolder::smap{k});\n"
+            "        aps_global{k} = v;\n"
+            "        printf(\"module global write: %y\\n\", aps_global{k});\n"
+            "        printf(\"private class static read: %y\\n\", PrivateHolder::smap{k});\n"
+            "    }\n"
+            "}\n";
+    }
+
+    #! A script that loads the module and runs the probe
+    private string scriptSource() {
+        return "%modern\n%requires " + ModuleName + "\naps_run(\"k\", \"v\");\n";
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! Runs the probe script with the given module directory and returns its output
+    private string runProbe(string module_dir) {
+        string mdir = module_dir;
+        if (ENV.QORE_MODULE_DIR) {
+            mdir += ":" + ENV.QORE_MODULE_DIR;
+        }
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s %s 2>&1",
+            libqore_dir, libqore_dir, mdir, qore_bin, module_dir + "/probe.qr"));
+    }
+
+    #! Asserts that every probe wrote and read back its value
+    private checkProbes(string out) {
+        map assertEq(True, out.find($1 + ": \"v\"") != -1, sprintf("%s: %s", $1, out)), Probes;
+        assertEq(-1, out.find("LVALUE-ERROR"), out);
+    }
+
+    #! baseline: the same code loaded from module source
+    testSourceModule() {
+        TmpDir tmp("qore-aot-priv-static-src-");
+        write(tmp.path + "/" + ModuleName + ".qm", moduleSource());
+        write(tmp.path + "/probe.qr", scriptSource());
+        checkProbes(runProbe(tmp.path));
+    }
+
+    #! the AOT-compiled module must behave identically
+    testAotModule() {
+        TmpDir tmp("qore-aot-priv-static-aot-");
+        string src = tmp.path + "/" + ModuleName + ".qm";
+        string qmod = tmp.path + "/" + ModuleName + ".qmod";
+        write(src, moduleSource());
+        write(tmp.path + "/probe.qr", scriptSource());
+
+        string mdir = ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s%s "
+            "%s --module -o %s %s 2>&1", libqore_dir, libqore_dir, tmp.path, mdir, qcc_bin, qmod, src));
+        if (!is_file(qmod)) {
+            testSkip("qcc could not compile the probe module: " + compile_out);
+        }
+        # remove the source so that only the AOT image can satisfy the module requirement
+        unlink(src);
+        assertEq(False, is_file(src));
+
+        checkProbes(runProbe(tmp.path));
+    }
+}
