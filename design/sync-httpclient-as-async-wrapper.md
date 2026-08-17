@@ -223,6 +223,35 @@ LOC estimate: ~300 LOC across the three poll-op priv classes +
 
 ---
 
+## 4a. Error-code contracts at the sync boundary
+
+Wrapping the async machinery must not change the errors the sync class documents. `HTTPClient`'s methods
+document `SOCKET-TIMEOUT` for a request that exceeds the client's `timeout` option, while the layers it now
+delegates to raise their own codes:
+
+| layer | timeout error | contract |
+|---|---|---|
+| `QoreFuture::get()` | `FUTURE-TIMEOUT` | implementation detail |
+| `HttpClientConnectionManagerBase::request()` | `FUTURE-TIMEOUT` | **documented** for its own callers |
+| `QoreHttpClientObject` (`HTTPClient`) | `SOCKET-TIMEOUT` | **documented** in `QC_HTTPClient.qpp` |
+
+So the conn-mgr's error is correct where it is raised and wrong where it emerges. `QoreHttpClientObject`
+translates it at its own boundary with `q_future_rename_timeout()` (`lib/QC_FutureImpl.qpp`), which renames
+only a pending `FUTURE-TIMEOUT` and leaves anything else untouched. The two places that need it are the
+`mgr.request()` return in the non-streaming path and the `q_future_get_blocking()` return in the
+streaming-send / non-streaming-receive path.
+
+Leaking `FUTURE-TIMEOUT` is not a cosmetic issue: `QUnit::Test::isConnectionError()` — the shared predicate
+~33 tests use to skip when an external service is unavailable — matches `SOCKET-*` and `HTTPCLIENT-*` but not
+`FUTURE-*`, so every one of those tests fails instead of skipping when a request to a live service times out.
+That is how it was found: `examples/test/qlib/AsyncApi/AsyncApi.qtest` failed across all platforms and
+execution modes in CI. `examples/test/qore/classes/HTTPClient/HTTPClient.qtest` (`timeouts`) now pins the
+documented code with a peer that accepts and never answers.
+
+**Rule for any further conversion:** when a sync method starts delegating to a future-backed layer, check the
+`@throw` documentation of the method being converted and translate at the boundary. A converted method that
+raises a new error code has changed its API, whatever the docs still say.
+
 ## 5. Phases
 
 ### Phase 1 — `q_future_get_blocking` (DONE)

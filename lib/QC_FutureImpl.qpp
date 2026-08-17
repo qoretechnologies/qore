@@ -69,6 +69,19 @@ QoreValue q_future_get_blocking(QoreObject* future_obj, int64 timeout_ms,
     return future_obj->evalMethod("get", *args, xsink);
 }
 
+void q_future_rename_timeout(ExceptionSink* xsink, const char* err, const char* desc_prefix) {
+    assert(xsink);
+    assert(err);
+    if (!*xsink) {
+        return;
+    }
+    const QoreValue e = xsink->getExceptionErr();
+    if (e.getType() != NT_STRING || strcmp(e.get<const QoreStringNode>()->c_str(), "FUTURE-TIMEOUT")) {
+        return;
+    }
+    xsink->renamePrependLastException(err, "%s: ", desc_prefix ? desc_prefix : "");
+}
+
 QoreObject* qore_new_future_impl_object(QoreProgram* pgm, QoreFuture* future, const QoreTypeInfo* type_arg) {
     type_vec_t type_args;
     type_args.push_back(type_arg ? type_arg : autoTypeInfo);

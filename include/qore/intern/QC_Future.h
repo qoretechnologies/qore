@@ -69,4 +69,20 @@ DLLLOCAL QoreClass* initFutureClass(QoreNamespace& ns);
 DLLLOCAL QoreValue q_future_get_blocking(QoreObject* future_obj,
         int64 timeout_ms, ExceptionSink* xsink);
 
+//! Renames a @c FUTURE-TIMEOUT exception raised by q_future_get_blocking() to the caller's own error code
+/** A caller that blocks on a future to implement a timeout of its own must report the error code that its
+    API documents, not the future's implementation-level code; otherwise code catching the documented error -
+    and predicates that classify transport failures, such as \c QUnit::Test::isConnectionError() - will not
+    recognize the timeout.
+
+    Does nothing unless the top exception is @c FUTURE-TIMEOUT, so an unrelated exception is never renamed.
+
+    @param xsink the sink holding the exception
+    @param err the error code to use instead of @c FUTURE-TIMEOUT
+    @param desc_prefix text prepended to the exception description
+
+    @since %Qore 3.0
+*/
+DLLLOCAL void q_future_rename_timeout(ExceptionSink* xsink, const char* err, const char* desc_prefix);
+
 #endif // _QORE_CLASS_FUTURE_H

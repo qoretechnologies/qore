@@ -88,8 +88,9 @@ public class AsyncApiTest inherits QUnit::Test {
 
         - the HTTP client throws on a non-2xx status instead of returning it, so a rate-limited or unavailable
           host arrives with the status code in \c ex.arg.status_code
-        - the client's request timeout expires as \c FUTURE-TIMEOUT, not as the \c HTTPCLIENT-TIMEOUT that
-          @ref QUnit::Test::isConnectionError() "isConnectionError()" matches
+        - a timeout may arrive as a bare \c *-TIMEOUT code; the client's own request timeout now reports the
+          documented \c SOCKET-TIMEOUT that @ref QUnit::Test::isConnectionError() "isConnectionError()"
+          matches, but the underlying \c FUTURE-TIMEOUT is still what other future-backed waits raise
 
         Without both, the whole test case fails when the host throttles or stalls the request, which happens
         whenever several CI jobs fetch these schemas at once from one address.  Only the external fetch is
@@ -116,7 +117,9 @@ public class AsyncApiTest inherits QUnit::Test {
         # transport failures
         assertTrue(AsyncApiTest::isExternalDependencyError(<ExceptionInfo>{"err": "SOCKET-CONNECT-ERROR"}));
         assertTrue(AsyncApiTest::isExternalDependencyError(<ExceptionInfo>{"err": "HTTPCLIENT-TIMEOUT"}));
-        # the client's request timeout expires as FUTURE-TIMEOUT, which isConnectionError() does not match
+        # the client's own request timeout reports SOCKET-TIMEOUT, which isConnectionError() matches
+        assertTrue(AsyncApiTest::isExternalDependencyError(<ExceptionInfo>{"err": "SOCKET-TIMEOUT"}));
+        # any other future-backed wait still raises FUTURE-TIMEOUT, which it does not
         assertTrue(AsyncApiTest::isExternalDependencyError(<ExceptionInfo>{"err": "FUTURE-TIMEOUT"}));
         # a transient status thrown by the client rather than returned
         assertTrue(AsyncApiTest::isExternalDependencyError(<ExceptionInfo>{

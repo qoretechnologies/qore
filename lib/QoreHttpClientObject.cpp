@@ -4992,6 +4992,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 future_obj->deref(xsink);
 
                 if (*xsink) {
+                    // the request future's timeout is this client's own "timeout" option expiring; report
+                    // the SOCKET-TIMEOUT that the HTTPClient methods document rather than the future's
+                    // implementation-level error code
+                    q_future_rename_timeout(xsink, "SOCKET-TIMEOUT", "HTTP request timed out");
                     result.discard(xsink);
                     close_and_evict_if_unusable();
                     return nullptr;
@@ -5525,6 +5529,10 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 mgr.request(meth, scheme, this_connection.host.c_str(), this_connection.port,
                     msgpath, *nh, body_ptr, body_len, timeout_ms, xsink),
                 xsink);
+            // HttpClientConnectionManagerBase::request() documents FUTURE-TIMEOUT for its own callers, but
+            // this class documents SOCKET-TIMEOUT for a request that exceeds its "timeout" option; translate
+            // at this boundary so the documented error reaches the caller
+            q_future_rename_timeout(xsink, "SOCKET-TIMEOUT", "HTTP request timed out");
             if (!raw_resp || *xsink) {
                 // If this was an Alt-Svc-driven H3 upgrade attempt,
                 // mark the Alt-Svc entry with a backoff and retry

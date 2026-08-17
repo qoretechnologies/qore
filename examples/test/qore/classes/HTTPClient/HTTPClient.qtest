@@ -440,6 +440,42 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         HTTPClient hc({"url": "http://localhost"});
         assertEq(300000, hc.getTimeout());
         assertEq(60000, hc.getConnectTimeout());
+
+        # A request that exceeds the "timeout" option must raise the SOCKET-TIMEOUT documented by the
+        # HTTPClient methods.  The request is carried by a future internally and the connection manager
+        # documents FUTURE-TIMEOUT for its own callers, but that error must not reach this class's callers:
+        # code catching the documented error - including QUnit::Test::isConnectionError(), which tests use to
+        # skip when an external service is unavailable - would not recognize the timeout.
+        Socket listener();
+        listener.bind("localhost:0");
+        listener.listen();
+        int port = listener.getSocketInfo().port;
+
+        # the peer accepts the connection and never answers, so the client's own timeout is what fires
+        Counter release(1);
+        Counter done(1);
+        background sub () {
+            on_exit done.dec();
+            *Socket conn;
+            try {
+                conn = listener.accept(30s);
+            } catch (hash<ExceptionInfo> ex) {
+                # the client may give up before the accept completes
+            }
+            # hold the connection open until the client has timed out
+            release.waitForZero();
+        }();
+        on_exit {
+            release.dec();
+            done.waitForZero();
+        }
+
+        HTTPClient slow({
+            "url": "http://localhost:" + port,
+            "timeout": 250ms,
+            "connect_timeout": 30s,
+        });
+        assertThrows("SOCKET-TIMEOUT", \slow.get(), "/");
     }
 
     preEncodedUrlsTest() {
