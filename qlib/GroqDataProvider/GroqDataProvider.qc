@@ -45,6 +45,8 @@ public class GroqDataProvider inherits GroqDataProviderCommon {
         const DefaultChildMap = {
             "chat-completion":
                 Class::forName("GroqDataProvider::GroqChatCompletionDataProvider"),
+            "list-models":
+                Class::forName("GroqDataProvider::GroqListModelsDataProvider"),
         };
     }
 

@@ -3,10 +3,6 @@
   "locales": {
     "de": {
       "messages": {
-        "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.desc": {
-          "source": "Sends a list of chat messages to a Groq-hosted model using the OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated response.\n\n**Example use cases**:\n- Low-latency chat with `llama-3.3-70b-versatile`\n- Fast tool-calling agents (pass `tools` and `tool_choice` in the request)\n- Structured extraction (pass `response_format` with a JSON schema)",
-          "message": "Sendet eine Liste von Chat-Nachrichten an ein von Groq gehostetes Modell über den OpenAI-kompatiblen Endpunkt `/v1/chat/completions` und gibt die generierte Antwort zurück.\n\n**Beispiel-Anwendungsfälle**:\n- Chat mit geringer Latenz mit `llama-3.3-70b-versatile`\n- Schnelle Tool-aufrufende Agenten (`tools` und `tool_choice` in der Anforderung übergeben)\n- Strukturierte Extraktion (`response_format` mit einem JSON-Schema übergeben)"
-        },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
           "source": "Chat Completion",
           "message": "Chat-Vervollständigung"
@@ -22,10 +18,6 @@
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
           "source": "Penalize repeated tokens proportional to their frequency",
           "message": "Wiederholte Token proportional zu ihrer Häufigkeit bestrafen"
-        },
-        "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.desc": {
-          "source": "Name of the Groq-hosted model.  Common values include:\n\n- `llama-3.3-70b-versatile` — Meta Llama 3.3 70B Instruct\n- `llama-3.1-8b-instant` — fast, small Llama 3.1\n- `mixtral-8x7b-32768` — Mixtral 8x7B with 32K context\n- `gemma2-9b-it` — Google Gemma 2 9B Instruct\n\nConsult Groq's [models list](https://console.groq.com/docs/models) for the currently-served set.",
-          "message": "Name des von Groq gehosteten Modells. Häufige Werte sind:\n\n- `llama-3.3-70b-versatile` — Meta Llama 3.3 70B Instruct\n- `llama-3.1-8b-instant` — schnelles, kleines Llama 3.1\n- `mixtral-8x7b-32768` — Mixtral 8x7B mit 32K-Kontext\n- `gemma2-9b-it` — Google Gemma 2 9B Instruct\n\nKonsultieren Sie Groqs [Modellliste](https://console.groq.com/docs/models) für das aktuell bereitgestellte Set."
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.display_name": {
           "source": "Model",
@@ -514,10 +506,6 @@
         "app.R3JvcQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
           "source": "Make a custom API call to Groq",
           "message": "Einen benutzerdefinierten API-Aufruf an Groq ausführen"
-        },
-        "app.R3JvcQ.desc": {
-          "source": "Provides access to [Groq](https://groq.com) — LPU-accelerated inference for open-weight LLMs (Llama, Mixtral, Gemma, Qwen) at exceptionally high token-per-second throughput.\n\nGroq exposes an OpenAI-compatible chat-completions API, so existing OpenAI-shape consumers (chat, tools, structured output, streaming) work unchanged.\n\n**Common use cases**:\n- **Low-latency chat** — Groq's LPU delivers sub-second time-to-first-token on 70B-class models\n- **High-throughput tool-calling agents** where total response time matters\n- **Open-weight model deployments** without owning GPU infrastructure",
-          "message": "Bietet Zugriff auf [Groq](https://groq.com) – LPU-beschleunigte Inferenz für Open-Weight-LLMs (Llama, Mixtral, Gemma, Qwen) bei außergewöhnlich hohem Token-pro-Sekunde-Durchsatz.\n\nGroq stellt eine OpenAI-kompatible Chat-Completions-API bereit, sodass bestehende OpenAI-förmige Consumer (Chat, Tools, strukturierte Ausgabe, Streaming) unverändert funktionieren.\n\n**Häufige Anwendungsfälle**:\n- **Chat mit geringer Latenz** – Groqs LPU liefert Time-to-First-Token im Subsekundenbereich bei Modellen der 70B-Klasse\n- **Tool-aufrufende Agenten mit hohem Durchsatz**, bei denen die Gesamtreaktionszeit eine Rolle spielt\n- **Bereitstellungen von Open-Weight-Modellen** ohne eigene GPU-Infrastruktur"
         },
         "app.R3JvcQ.display_name": {
           "source": "Groq",

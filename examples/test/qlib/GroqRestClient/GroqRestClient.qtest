@@ -51,7 +51,7 @@ public class GroqRestClientTest inherits QUnit::Test {
     private defaultUrlTest() {
         GroqRestClient::GroqLlmProvider p(
             <QoreLlmUtils::LlmBackendConfig>{
-                "model": "llama-3.3-70b-versatile",
+                "model": "test-model",
                 "api_key": "test-key",
             });
         assertEq("groq", p.getMode());
@@ -62,7 +62,7 @@ public class GroqRestClientTest inherits QUnit::Test {
         GroqRestClient::GroqLlmProvider p(
             <QoreLlmUtils::LlmBackendConfig>{
                 "url": "https://custom.example.com",
-                "model": "llama-3.3-70b-versatile",
+                "model": "test-model",
                 "api_key": "k",
             });
         assertEq("https://custom.example.com", p.getConfig().url);
@@ -81,7 +81,7 @@ public class GroqRestClientTest inherits QUnit::Test {
     private chatPathTest() {
         GroqRestClient::GroqLlmProvider p(
             <QoreLlmUtils::LlmBackendConfig>{
-                "model": "llama-3.3-70b-versatile",
+                "model": "test-model",
                 "api_key": "k",
             });
         # OpenAI-compatible default — Groq does NOT override the path
@@ -109,6 +109,14 @@ public class GroqRestClientTest inherits QUnit::Test {
             "api": "v2",
         });
         assertEq("/openai/v2", opts2.default_path);
+
+        # legacy api values that already include the "openai/" path prefix
+        # must not double it in default_path
+        hash<auto> opts3 = GroqRestClient::GroqRestClientBase::getOptions({
+            "apikey": "k",
+            "api": "openai/v1",
+        });
+        assertEq("/openai/v1", opts3.default_path);
     }
 
     private syncConnectionPathTest() {
