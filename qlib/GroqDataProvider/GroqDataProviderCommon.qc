@@ -120,6 +120,40 @@ public class GroqDataProviderCommon inherits DataProvider::AbstractDataProvider 
         }
     }
 
+    #! Returns information on supported reference data
+    *hash<string, bool> getSupportedReferenceData() {
+        return {
+            "models": True,
+        };
+    }
+
+    #! Returns reference data of the given kind if available
+    private *list<hash<AllowedValueInfo>> getReferenceDataImpl(string type, *hash<auto> action_opts) {
+        switch (type) {
+            case "models": return getReferenceModels();
+        }
+    }
+
+    #! Returns the currently-available models as allowed values
+    private *list<hash<AllowedValueInfo>> getReferenceModels() {
+        list<hash<AllowedValueInfo>> rv;
+        foreach hash<auto> model in (doRestCommand("GET", "models").body."data") {
+            # skip models flagged as inactive
+            if (exists model.active && !model.active) {
+                continue;
+            }
+            string id = string(model.id);
+            string desc = sprintf("Groq model: %s", id);
+            rv += <AllowedValueInfo>{
+                "display_name": id,
+                "short_desc": desc,
+                "desc": desc,
+                "value": id,
+            };
+        }
+        return rv;
+    }
+
     #! Makes a REST call and returns the response; handles rate limit and I/O errors
     private hash<auto> doRestCommand(string method, string path, auto body, *hash<auto> hdr) {
         int retries = 0;

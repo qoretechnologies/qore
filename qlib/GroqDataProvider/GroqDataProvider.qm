@@ -44,14 +44,14 @@ module GroqDataProvider {
             "display_name": "Groq",
             "short_desc": "Groq LPU inference for open-weight models at very high throughput",
             "desc": "Provides access to [Groq](https://groq.com) — LPU-accelerated inference for "
-                "open-weight LLMs (Llama, Mixtral, Gemma, Qwen) at exceptionally high "
-                "token-per-second throughput.\n\n"
+                "open-weight LLMs at exceptionally high token-per-second throughput.\n\n"
                 "Groq exposes an OpenAI-compatible chat-completions API, so existing "
                 "OpenAI-shape consumers (chat, tools, structured output, streaming) work "
-                "unchanged.\n\n"
+                "unchanged.  See the "
+                "[Groq models documentation](https://console.groq.com/docs/models) for the "
+                "currently-available models.\n\n"
                 "**Common use cases**:\n"
-                "- **Low-latency chat** — Groq's LPU delivers sub-second time-to-first-token "
-                "on 70B-class models\n"
+                "- **Low-latency chat** — Groq's LPU delivers sub-second time-to-first-token\n"
                 "- **High-throughput tool-calling agents** where total response time matters\n"
                 "- **Open-weight model deployments** without owning GPU infrastructure",
             "scheme": "groq",
@@ -69,9 +69,11 @@ module GroqDataProvider {
             "short_desc": "Generate a chat completion from a Groq-hosted open-weight model",
             "desc": "Sends a list of chat messages to a Groq-hosted model using the "
                 "OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated "
-                "response.\n\n"
+                "response.  See the "
+                "[Groq models documentation](https://console.groq.com/docs/models) for the "
+                "currently-available models.\n\n"
                 "**Example use cases**:\n"
-                "- Low-latency chat with `llama-3.3-70b-versatile`\n"
+                "- Low-latency chat and conversational agents\n"
                 "- Fast tool-calling agents (pass `tools` and `tool_choice` in the request)\n"
                 "- Structured extraction (pass `response_format` with a JSON schema)",
             "action_code": DPAT_API,
@@ -92,6 +94,23 @@ module GroqDataProvider {
             ),
             "output_type": GroqChatCompletionDataProvider::ResponseType,
         });
+
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GroqDataProvider::AppName,
+            "path": "/list-models",
+            "action": "list-models",
+            "display_name": "List Models",
+            "short_desc": "List the models currently available on the Groq API",
+            "desc": "Returns the list of models currently served by the Groq API using the "
+                "`/v1/models` endpoint, including context window sizes and active flags.  See "
+                "the [Groq models documentation](https://console.groq.com/docs/models) for "
+                "details on each model.",
+            "action_code": DPAT_API,
+            "mutates_state": False,
+            "groups": ("Models",),
+            "options": {},
+            "output_type": GroqListModelsDataProvider::ResponseType,
+        });
     };
 }
 
@@ -108,6 +127,11 @@ module GroqDataProvider {
     - @ref GroqDataProvider::GroqDataProvider "GroqDataProvider" — the root provider
     - @ref GroqDataProvider::GroqChatCompletionDataProvider
       "GroqChatCompletionDataProvider" — OpenAI-compatible chat
+    - @ref GroqDataProvider::GroqListModelsDataProvider
+      "GroqListModelsDataProvider" — lists the currently-available models
+
+    See the [Groq models documentation](https://console.groq.com/docs/models)
+    for the currently-available models.
 
     @par Example:
     @code{.py}
@@ -116,9 +140,12 @@ module GroqDataProvider {
 GroqRestConnection rc = get_connection("groq");
 GroqDataProvider::GroqDataProvider prov(rc.getAsync());
 
+# list the models currently served by the API
+hash<auto> models = prov.getChildProvider("list-models").doRequest();
+
 AbstractDataProvider chat = prov.getChildProvider("chat-completion");
 hash<auto> result = chat.doRequest({
-    "model": "llama-3.3-70b-versatile",
+    "model": models."data"[0].id,
     "messages": (
         {"role": "user", "content": "Hello!"},
     ),

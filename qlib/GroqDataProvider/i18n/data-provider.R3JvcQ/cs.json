@@ -3,10 +3,6 @@
   "locales": {
     "cs": {
       "messages": {
-        "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.desc": {
-          "source": "Sends a list of chat messages to a Groq-hosted model using the OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated response.\n\n**Example use cases**:\n- Low-latency chat with `llama-3.3-70b-versatile`\n- Fast tool-calling agents (pass `tools` and `tool_choice` in the request)\n- Structured extraction (pass `response_format` with a JSON schema)",
-          "message": "Odešle seznam chatových zpráv modelu hostovanému na Groqu pomocí koncového bodu `/v1/chat/completions` kompatibilního s OpenAI a vrátí vygenerovanou odpověď.\n\n**Příklady použití**:\n- Chat s nízkou latencí pomocí `llama-3.3-70b-versatile`\n- Rychlí agenti s voláním nástrojů (předejte v požadavku `tools` a `tool_choice`)\n- Strukturovaná extrakce (předejte `response_format` se schématem JSON)"
-        },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
           "source": "Chat Completion",
           "message": "Doplnění chatu"
@@ -22,10 +18,6 @@
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
           "source": "Penalize repeated tokens proportional to their frequency",
           "message": "Penalizovat opakované tokeny úměrně jejich frekvenci"
-        },
-        "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.desc": {
-          "source": "Name of the Groq-hosted model.  Common values include:\n\n- `llama-3.3-70b-versatile` — Meta Llama 3.3 70B Instruct\n- `llama-3.1-8b-instant` — fast, small Llama 3.1\n- `mixtral-8x7b-32768` — Mixtral 8x7B with 32K context\n- `gemma2-9b-it` — Google Gemma 2 9B Instruct\n\nConsult Groq's [models list](https://console.groq.com/docs/models) for the currently-served set.",
-          "message": "Název modelu hostovaného na Groqu. Běžné hodnoty zahrnují:\n\n- `llama-3.3-70b-versatile` — Meta Llama 3.3 70B Instruct\n- `llama-3.1-8b-instant` — rychlý, malý Llama 3.1\n- `mixtral-8x7b-32768` — Mixtral 8x7B s kontextem 32K\n- `gemma2-9b-it` — Google Gemma 2 9B Instruct\n\nAktuálně poskytovanou sadu naleznete v [seznamu modelů](https://console.groq.com/docs/models) Groq."
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.display_name": {
           "source": "Model",
@@ -514,10 +506,6 @@
         "app.R3JvcQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
           "source": "Make a custom API call to Groq",
           "message": "Provést vlastní volání API do Groq"
-        },
-        "app.R3JvcQ.desc": {
-          "source": "Provides access to [Groq](https://groq.com) — LPU-accelerated inference for open-weight LLMs (Llama, Mixtral, Gemma, Qwen) at exceptionally high token-per-second throughput.\n\nGroq exposes an OpenAI-compatible chat-completions API, so existing OpenAI-shape consumers (chat, tools, structured output, streaming) work unchanged.\n\n**Common use cases**:\n- **Low-latency chat** — Groq's LPU delivers sub-second time-to-first-token on 70B-class models\n- **High-throughput tool-calling agents** where total response time matters\n- **Open-weight model deployments** without owning GPU infrastructure",
-          "message": "Poskytuje přístup k platformě [Groq](https://groq.com) — inferenci akcelerované LPU pro LLM s otevřenými vahami (Llama, Mixtral, Gemma, Qwen) s výjimečně vysokou propustností tokenů za sekundu.\n\nGroq nabízí rozhraní chat-completions API kompatibilní s OpenAI, takže existující integrace formátu OpenAI (chat, nástroje, strukturovaný výstup, streamování) fungují beze změny.\n\n**Běžné případy použití**:\n- **Chat s nízkou latencí** — LPU od Groqu poskytuje čas do prvního tokenu pod jednu sekundu u modelů třídy 70B\n- **Agenti s voláním nástrojů s vysokou propustností**, kde záleží na celkové době odezvy\n- **Nasazení modelů s otevřenými vahami** bez nutnosti vlastnit infrastrukturu GPU"
         },
         "app.R3JvcQ.display_name": {
           "source": "Groq",

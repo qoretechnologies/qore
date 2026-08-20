@@ -55,9 +55,10 @@ module GroqRestClient {
     The %GroqRestClient module provides an API for calling
     [Groq](https://groq.com) REST API services.
 
-    Groq runs Llama, Mixtral, Gemma, Qwen, and other open-weight models on
-    its custom LPU inference engine at exceptionally high token-per-second
-    throughput.  The API is OpenAI-compatible, so
+    Groq runs open-weight models on its custom LPU inference engine at
+    exceptionally high token-per-second throughput; see the
+    [Groq models documentation](https://console.groq.com/docs/models) for
+    the currently-available models.  The API is OpenAI-compatible, so
     @ref GroqRestClient::GroqLlmProvider "GroqLlmProvider" subclasses
     @ref OpenAiRestClient::OpenAiLlmProvider with the Groq default URL and
     mode string.
@@ -86,8 +87,11 @@ module GroqRestClient {
 %requires GroqRestClient
 
 GroqRestClient rest({"apikey": api_key});
-hash<auto> ans = rest.post("/v1/chat/completions", {
-    "model": "llama-3.3-70b-versatile",
+# list the currently-available models; relative paths resolve under
+# /openai/v1 on the connection
+hash<auto> models = rest.get("models").body;
+hash<auto> ans = rest.post("chat/completions", {
+    "model": models."data"[0].id,
     "messages": (
         {"role": "user", "content": "Hello!"},
     ),
@@ -139,7 +143,10 @@ public class GroqRestClientBase {
     static hash<auto> getOptions(hash<auto> opts) {
         hash<auto> rv = DefaultOptions + opts;
         if (opts.api) {
-            rv.default_path = "/openai/" + opts.api;
+            # tolerate legacy api values that already include the "openai/"
+            # path prefix (e.g. "openai/v1"), which would otherwise double
+            # the prefix in default_path
+            rv.default_path = "/openai/" + regex_subst(opts.api, "^/?openai/", "");
         }
         if (rv.apikey) {
             rv.token = rv.apikey;
@@ -213,9 +220,10 @@ public class GroqRestConnection inherits RestClient::RestConnection {
             "display_name": "Groq REST Connection",
             "short_desc": "A connection to the Groq LPU inference REST API",
             "desc": "A connection to the [Groq](https://groq.com) LPU inference REST API.\n\n"
-                "Groq serves OSS models (Llama, Mixtral, Gemma, Qwen, Whisper, etc.) at "
-                "exceptionally high throughput on its custom LPU hardware via an "
-                "OpenAI-compatible API surface.\n\n"
+                "Groq serves open-weight models at exceptionally high throughput on its custom "
+                "LPU hardware via an OpenAI-compatible API surface; see the "
+                "[Groq models documentation](https://console.groq.com/docs/models) for the "
+                "currently-available models.\n\n"
                 "Requires an API key for Bearer authentication.  Get your API key from the "
                 "[Groq Console](https://console.groq.com/keys).",
             "cls": Class::forName("GroqRestConnection"),
@@ -352,7 +360,9 @@ public class GroqRestConnection inherits RestClient::RestConnection {
 
     - \c url (optional): override the default \c https://api.groq.com/openai
     - \c api_key (required): Groq API key
-    - \c model (required): Groq model name, e.g. \c "llama-3.3-70b-versatile"
+    - \c model (required): Groq model name; see the
+      [Groq models documentation](https://console.groq.com/docs/models) for
+      the currently-available models
 */
 public class GroqLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
     public {
