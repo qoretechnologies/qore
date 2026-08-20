@@ -97,6 +97,9 @@ module GeminiBodyShape {
       between them
     - provides @ref requestErrorDetail() to surface the upstream provider error
       message and status from a failed request
+    - unconstrained array parameters in function tools receive a
+      provider-safe item schema so Gemini and Vertex AI accept MCP and data
+      provider tools with soft-list inputs
 */
 
 #! Contains all public definitions in the GeminiBodyShape module
@@ -191,6 +194,18 @@ auto sub sanitizeSchemaValue(auto value, bool compact, int depth,
                     cast<list>(input{key}), key == "allOf",
                     compact, depth + 1, field_name);
             }
+        }
+        # An unconstrained array is legal JSON Schema and is commonly
+        # produced for Qore softlist<auto> data-provider fields as
+        # {"type":"array","items":{}}.  Gemini's protobuf-backed Schema
+        # treats that empty child message like an absent field and rejects
+        # the complete function catalog with INVALID_ARGUMENT.  Keep the
+        # provider-neutral schema permissive and apply the same conservative
+        # string-item fallback used by QoreLlmUtils at this provider boundary.
+        if (rv.type == "array"
+                && (rv.items.typeCode() != NT_HASH
+                    || !cast<hash>(rv.items))) {
+            rv.items = {"type": "string"};
         }
         if (compact && rv.properties.typeCode() == NT_HASH
                 && GeminiBodyShape::shouldFlattenCompactSchemaProperties(
