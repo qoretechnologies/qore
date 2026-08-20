@@ -12,6 +12,7 @@
 class CharTypeTest inherits QUnit::Test {
     constructor() : QUnit::Test("Char type test", "1.0") {
         addTestCase("Char literals and pseudo-methods", \testCharLiterals());
+        addTestCase("Char case mapping", \testCharCase());
         addTestCase("Char conversions and operators", \testCharConversions());
         addTestCase("String index char behavior", \testStringIndex());
         addTestCase("String char iteration", \testStringIteration());
@@ -47,8 +48,76 @@ class CharTypeTest inherits QUnit::Test {
         assertEq(1, a.length(), "length");
         assertEq(2, e.size(), "UTF-8 size");
         assertEq(4, smile.utf8ByteLen(), "supplementary UTF-8 size");
-        assertEq("a", a.lwr(), "lower-case string view");
-        assertEq("A", c'a'.upr(), "upper-case string view");
+        assertEq(c'a', a.lwr(), "lower-case char");
+        assertEq(c'A', c'a'.upr(), "upper-case char");
+    }
+
+    testCharCase() {
+        # <char>::lwr() and <char>::upr() return chars, not strings
+        assertEq(NT_CHAR, c'A'.lwr().typeCode(), "<char>::lwr() returns a char");
+        assertEq(NT_CHAR, c'a'.upr().typeCode(), "<char>::upr() returns a char");
+        assertEq("char", c'A'.lwr().type(), "<char>::lwr() type name");
+        assertEq("char", c'a'.upr().type(), "<char>::upr() type name");
+
+        # ASCII
+        assertEq(c'z', c'Z'.lwr(), "ASCII lwr");
+        assertEq(c'Z', c'z'.upr(), "ASCII upr");
+        assertEq(c'0', c'0'.lwr(), "ASCII digit lwr is unchanged");
+        assertEq(c'0', c'0'.upr(), "ASCII digit upr is unchanged");
+
+        # Latin-1 and Latin Extended-A
+        assertEq(c'\u{E9}', c'\u{C9}'.lwr(), "É -> é");
+        assertEq(c'\u{C9}', c'\u{E9}'.upr(), "é -> É");
+        assertEq(c'\u{159}', c'\u{158}'.lwr(), "Ř -> ř");
+        assertEq(c'\u{158}', c'\u{159}'.upr(), "ř -> Ř");
+
+        # U+0130 LATIN CAPITAL LETTER I WITH DOT ABOVE has the simple lower-case mapping "i";
+        # the full mapping used by <string>::lwr() is 2 codepoints and cannot be held in a char
+        assertEq(c'i', c'\u{130}'.lwr(), "İ -> i (simple mapping)");
+        assertEq("i\u{307}", "\u{130}".lwr(), "İ -> i + combining dot above (full mapping)");
+
+        # U+00DF LATIN SMALL LETTER SHARP S has no simple upper-case mapping; the full mapping
+        # used by <string>::upr() expands to two characters
+        assertEq(c'\u{DF}', c'\u{DF}'.upr(), "ß has no simple upper-case mapping");
+        assertEq("SS", "\u{DF}".upr(), "ß -> SS (full mapping)");
+
+        # title-case characters map in both directions
+        assertEq(c'\u{1C4}', c'\u{1C5}'.upr(), "ǅ -> Ǆ");
+        assertEq(c'\u{1C6}', c'\u{1C5}'.lwr(), "ǅ -> ǆ");
+
+        # Greek: <char>::lwr() always uses the simple mapping, so the Final_Sigma condition
+        # (which needs surrounding context) never applies
+        assertEq(c'\u{3C3}', c'\u{3A3}'.lwr(), "Σ -> σ");
+        assertEq(c'\u{3A3}', c'\u{3C2}'.upr(), "ς -> Σ");
+
+        # Cyrillic, Armenian, Georgian
+        assertEq(c'\u{456}', c'\u{406}'.lwr(), "І -> і");
+        assertEq(c'\u{531}', c'\u{561}'.upr(), "ա -> Ա");
+        assertEq(c'\u{10D0}', c'\u{1C90}'.lwr(), "Ა -> ა");
+
+        # scripts that were missing from the old hand-maintained table
+        assertEq(c'\u{13A0}', c'\u{AB70}'.upr(), "Cherokee ꭰ -> Ꭰ");
+        assertEq(c'\u{2D00}', c'\u{10A0}'.lwr(), "Georgian Ⴀ -> ⴀ");
+        assertEq(c'\u{A65F}', c'\u{A65E}'.lwr(), "Cyrillic Extended-B Ꙟ -> ꙟ");
+        assertEq(c'\u{2177}', c'\u{2167}'.lwr(), "Roman numeral Ⅷ -> ⅷ");
+
+        # supplementary-plane case mappings
+        assertEq(c'\u{10400}', c'\u{10428}'.upr(), "Deseret 𐐨 -> 𐐀");
+        assertEq(c'\u{10428}', c'\u{10400}'.lwr(), "Deseret 𐐀 -> 𐐨");
+        assertEq(c'\u{104D8}', c'\u{104B0}'.lwr(), "Osage 𐒰 -> 𐓘");
+        assertEq(c'\u{1E900}', c'\u{1E922}'.upr(), "Adlam 𞤢 -> 𞤀");
+
+        # characters with no case mapping at all are returned unchanged
+        assertEq(c'\u{1F600}', c'\u{1F600}'.lwr(), "emoji lwr is unchanged");
+        assertEq(c'\u{1F600}', c'\u{1F600}'.upr(), "emoji upr is unchanged");
+        assertEq(c'\u{4E00}', c'\u{4E00}'.upr(), "Han character upr is unchanged");
+        assertEq(c'\u{5D0}', c'\u{5D0}'.lwr(), "Hebrew א has no case");
+
+        # chars produced by indexing a string case-map the same way
+        string s = "\u{C9}\u{DF}\u{1F600}";
+        assertEq(c'\u{E9}', s[0].lwr(), "indexed char lwr");
+        assertEq(c'\u{DF}', s[1].upr(), "indexed char upr");
+        assertEq(c'\u{1F600}', s[2].upr(), "indexed supplementary char upr");
     }
 
     testCharConversions() {

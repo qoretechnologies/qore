@@ -27,6 +27,7 @@ class StringTest inherits QUnit::Test {
         addTestCase("Scanner class", \testScanner());
         addTestCase("non scalar test", \nonScalarTest());
         addTestCase("width test", \testWidth());
+        addTestCase("Unicode case mapping test", \testUnicodeCase());
         addTestCase("Basic functions test", \testBasics());
         addTestCase("Comparison test", \testComparison());
         addTestCase("Encoding test", \testEncoding());
@@ -587,6 +588,136 @@ class StringTest inherits QUnit::Test {
         assertEq(str + " ", vsprintf("%-13w", str));
         assertEq("ステ.", f_sprintf("%-5w", str));
         assertEq("ステ.", f_vsprintf("%-5w", str));
+    }
+
+    testUnicodeCase() {
+        # -- full (1-to-many) upper-case mappings from the Unicode SpecialCasing data --
+        assertEq("STRASSE", "stra\u{DF}e".upr(), "\u{DF} -> SS");
+        assertEq("FIND", "\u{FB01}nd".upr(), "ligature \u{FB01} -> FI");
+        assertEq("FFLOOD", "\u{FB04}ood".upr(), "ligature \u{FB04} -> FFL");
+        assertEq("\u{2BC}N", "\u{149}".upr(), "\u{149} -> \u{2BC}N");
+        assertEq("J\u{30C}", "\u{1F0}".upr(), "\u{1F0} -> J + combining caron");
+        assertEq("\u{399}\u{308}\u{301}", "\u{390}".upr(), "\u{390} -> 3 codepoints");
+        assertEq("\u{3A5}\u{308}\u{301}", "\u{3B0}".upr(), "\u{3B0} -> 3 codepoints");
+        assertEq("\u{544}\u{535}", "\u{FB14}".upr(), "Armenian ligature \u{FB14} -> \u{544}\u{535}");
+        assertEq("\u{1F08}\u{399}", "\u{1F80}".upr(), "Greek iota subscript \u{1F80} -> \u{1F08}\u{399}");
+        assertEq("\u{3A9}\u{399}", "\u{1FFC}".upr(), "Greek iota subscript \u{1FFC} -> \u{3A9}\u{399}");
+
+        # -- full (1-to-many) lower-case mapping --
+        # U+0130 LATIN CAPITAL LETTER I WITH DOT ABOVE was returned unchanged before the
+        # complete Unicode case mapping tables were used
+        assertEq("i\u{307}", "\u{130}".lwr(), "\u{130} -> i + combining dot above");
+        assertEq("i\u{307}stanbul", "\u{130}stanbul".lwr(), "\u{130} in a word");
+        assertEq(9, "\u{130}stanbul".lwr().length(), "\u{130} full lower-case length");
+        assertEq(10, "\u{130}stanbul".lwr().size(), "\u{130} full lower-case size");
+
+        # -- the language-independent Final_Sigma condition --
+        assertEq("\u{3BF}\u{3B4}\u{3BF}\u{3C2}", "\u{39F}\u{394}\u{39F}\u{3A3}".lwr(),
+            "word-final \u{3A3} -> \u{3C2}");
+        assertEq("\u{3C3}\u{3C2}", "\u{3A3}\u{3A3}".lwr(), "only the final \u{3A3} maps to \u{3C2}");
+        assertEq("\u{3C3}", "\u{3A3}".lwr(), "an isolated \u{3A3} is not word-final");
+        assertEq("\u{3B1}\u{3C3}\u{3B2}", "\u{391}\u{3A3}\u{392}".lwr(),
+            "\u{3A3} followed by a cased character stays \u{3C3}");
+        assertEq("\u{3B1}\u{3C2}'", "\u{391}\u{3A3}'".lwr(),
+            "a case-ignorable character after \u{3A3} does not break Final_Sigma");
+        assertEq("\u{3B1}\u{3C3}'\u{3B2}", "\u{391}\u{3A3}'\u{392}".lwr(),
+            "a cased character after a case-ignorable one breaks Final_Sigma");
+        assertEq("\u{3C3}\u{3B2}", "\u{3A3}\u{392}".lwr(),
+            "\u{3A3} with no preceding cased character stays \u{3C3}");
+        assertEq("\u{3A3}\u{3A3}", "\u{3C3}\u{3C2}".upr(), "both sigmas upper-case to \u{3A3}");
+
+        # -- title-case characters map in both directions --
+        assertEq("\u{1C4}UNGLA", "\u{1C5}ungla".upr(), "\u{1C5} -> \u{1C4}");
+        assertEq("\u{1C6}ungla", "\u{1C5}ungla".lwr(), "\u{1C5} -> \u{1C6}");
+
+        # -- scripts and blocks that the old hand-maintained table did not cover --
+        assertEq("\u{10428}", "\u{10400}".lwr(), "Deseret \u{10400} -> \u{10428}");
+        assertEq("\u{10400}", "\u{10428}".upr(), "Deseret \u{10428} -> \u{10400}");
+        assertEq("\u{104D8}", "\u{104B0}".lwr(), "Osage \u{104B0} -> \u{104D8}");
+        assertEq("\u{1E900}", "\u{1E922}".upr(), "Adlam \u{1E922} -> \u{1E900}");
+        assertEq("\u{118C0}", "\u{118A0}".lwr(), "Warang Citi \u{118A0} -> \u{118C0}");
+        assertEq("\u{10CC0}", "\u{10C80}".lwr(), "Old Hungarian \u{10C80} -> \u{10CC0}");
+        assertEq("\u{16E60}", "\u{16E40}".lwr(), "Medefaidrin \u{16E40} -> \u{16E60}");
+        assertEq("\u{10597}", "\u{10570}".lwr(), "Vithkuqi \u{10570} -> \u{10597}");
+        assertEq("\u{13A0}", "\u{AB70}".upr(), "Cherokee \u{AB70} -> \u{13A0}");
+        assertEq("\u{AB80}", "\u{13B0}".lwr(), "Cherokee \u{13B0} -> \u{AB80}");
+        assertEq("\u{2C30}", "\u{2C00}".lwr(), "Glagolitic \u{2C00} -> \u{2C30}");
+        assertEq("\u{2C81}", "\u{2C80}".lwr(), "Coptic \u{2C80} -> \u{2C81}");
+        assertEq("\u{2C61}", "\u{2C60}".lwr(), "Latin Extended-C \u{2C60} -> \u{2C61}");
+        assertEq("\u{A722}", "\u{A723}".upr(), "Latin Extended-D \u{A723} -> \u{A722}");
+        assertEq("\u{A790}", "\u{A791}".upr(), "Latin Extended-E \u{A791} -> \u{A790}");
+        assertEq("\u{A65F}", "\u{A65E}".lwr(), "Cyrillic Extended-B \u{A65E} -> \u{A65F}");
+        assertEq("\u{2D00}", "\u{10A0}".lwr(), "Georgian Asomtavruli \u{10A0} -> \u{2D00}");
+        assertEq("\u{10D0}", "\u{1C90}".lwr(), "Georgian Mtavruli \u{1C90} -> \u{10D0}");
+        assertEq("\u{2177}", "\u{2167}".lwr(), "Roman numeral \u{2167} -> \u{2177}");
+        assertEq("\u{24D0}", "\u{24B6}".lwr(), "circled \u{24B6} -> \u{24D0}");
+        assertEq("\u{FF41}", "\u{FF21}".lwr(), "fullwidth \u{FF21} -> \u{FF41}");
+
+        # -- singleton mappings into unrelated blocks --
+        assertEq("\u{39C}", "\u{B5}".upr(), "micro sign -> Greek capital mu");
+        assertEq("S", "\u{17F}".upr(), "long s -> S");
+        assertEq("I", "\u{131}".upr(), "dotless i -> I");
+
+        # -- characters with no case mapping are returned unchanged --
+        assertEq("\u{5D0}\u{5D1}", "\u{5D0}\u{5D1}".upr(), "Hebrew has no case");
+        assertEq("\u{6C49}\u{5B57}", "\u{6C49}\u{5B57}".lwr(), "Han characters have no case");
+        assertEq("\u{1F600}", "\u{1F600}".upr(), "emoji have no case");
+        assertEq("0123!@#", "0123!@#".upr(), "digits and punctuation are unchanged");
+        assertEq("\u{10330}", "\u{10330}".upr(), "Old Italic has no case");
+
+        # -- mixed strings and round trips --
+        string mixed = "\u{6C49}\u{5B57} abc \u{3B1}\u{3B2} \u{4F0}\u{4F1} \u{1F600}";
+        assertEq("\u{6C49}\u{5B57} ABC \u{391}\u{392} \u{4F0}\u{4F0} \u{1F600}", mixed.upr(),
+            "mixed-script upr()");
+        assertEq("\u{6C49}\u{5B57} abc \u{3B1}\u{3B2} \u{4F1}\u{4F1} \u{1F600}", mixed.lwr(),
+            "mixed-script lwr()");
+        assertEq(mixed.lwr(), mixed.upr().lwr(), "upr()/lwr() round trip");
+        assertEq(mixed.upr(), mixed.lwr().upr(), "lwr()/upr() round trip");
+        assertEq(mixed.upr(), mixed.upr().upr(), "upr() is idempotent");
+        assertEq(mixed.lwr(), mixed.lwr().lwr(), "lwr() is idempotent");
+
+        # -- the tolower()/toupper() functions use the same mappings --
+        assertEq("\u{130}stanbul".lwr(), tolower("\u{130}stanbul"), "tolower() matches <string>::lwr()");
+        assertEq("stra\u{DF}e".upr(), toupper("stra\u{DF}e"), "toupper() matches <string>::upr()");
+
+        # -- length() and size() of the transformed string --
+        assertEq(7, "stra\u{DF}e".upr().length(), "1-to-many upr() length");
+        assertEq(7, "stra\u{DF}e".upr().size(), "1-to-many upr() size");
+        assertEq(6, "\u{1F80}\u{1F81}\u{1FFC}".upr().length(), "Greek iota subscript upr() length");
+        assertEq(14, "\u{1F80}\u{1F81}\u{1FFC}".upr().size(), "Greek iota subscript upr() size");
+        assertEq(3, "\u{10428}\u{10429}\u{1042A}".upr().length(), "supplementary upr() length");
+        assertEq(12, "\u{10428}\u{10429}\u{1042A}".upr().size(), "supplementary upr() size");
+        assertEq(0, "".upr().length(), "empty string upr() length");
+        assertEq("", "".lwr(), "empty string lwr()");
+
+        # -- non-UTF-8 encodings --
+        string l1 = convert_encoding("h\u{E9}llo caf\u{E9}", "ISO-8859-1");
+        assertEq("ISO-8859-1", l1.upr().encoding(), "ISO-8859-1 upr() keeps the encoding");
+        assertEq("H\u{C9}LLO CAF\u{C9}", convert_encoding(l1.upr(), "UTF-8"), "ISO-8859-1 upr()");
+        assertEq("h\u{E9}llo caf\u{E9}", convert_encoding(l1.upr().lwr(), "UTF-8"), "ISO-8859-1 lwr()");
+        string l1_ss = convert_encoding("stra\u{DF}e", "ISO-8859-1");
+        assertEq("STRASSE", convert_encoding(l1_ss.upr(), "UTF-8"), "ISO-8859-1 1-to-many upr()");
+        string el = convert_encoding("\u{39F}\u{394}\u{39F}\u{3A3}", "ISO-8859-7");
+        assertEq("\u{3BF}\u{3B4}\u{3BF}\u{3C2}", convert_encoding(el.lwr(), "UTF-8"),
+            "ISO-8859-7 Final_Sigma");
+        assertEq(4, el.lwr().length(), "ISO-8859-7 lwr() length");
+
+        # a mapping that the string's encoding cannot represent leaves the character unchanged
+        # instead of raising an ENCODING-CONVERSION-ERROR; \u{FF} maps to \u{178} and \u{B5} maps
+        # to \u{39C}, neither of which exists in ISO-8859-1
+        string l1_y = convert_encoding("\u{FF}", "ISO-8859-1");
+        assertEq("\u{FF}", convert_encoding(l1_y.upr(), "UTF-8"), "unrepresentable upr() mapping");
+        assertEq("ISO-8859-1", l1_y.upr().encoding(), "unrepresentable upr() keeps the encoding");
+        string l1_mu = convert_encoding("\u{B5}", "ISO-8859-1");
+        assertEq("\u{B5}", convert_encoding(l1_mu.upr(), "UTF-8"), "unrepresentable micro sign upr()");
+        # the same characters do get mapped in an encoding that can represent the result
+        assertEq("\u{178}", "\u{FF}".upr(), "UTF-8 \u{FF} -> \u{178}");
+        assertEq("\u{39C}", "\u{B5}".upr(), "UTF-8 \u{B5} -> \u{39C}");
+        # characters in the middle of a string are not disturbed by the fallback
+        string l1_mix = convert_encoding("a\u{FF}b\u{E9}c", "ISO-8859-1");
+        assertEq("A\u{FF}B\u{C9}C", convert_encoding(l1_mix.upr(), "UTF-8"),
+            "unrepresentable mapping in the middle of a string");
+        assertEq(5, l1_mix.upr().length(), "unrepresentable mapping keeps the length");
     }
 
     testBasics() {

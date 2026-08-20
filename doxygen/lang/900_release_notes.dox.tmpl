@@ -1190,7 +1190,32 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       the U+0080-U+07FF range (Cyrillic, Armenian, Hebrew, Arabic, etc.) during case conversion
     - @ref QoreString::toupr() "QoreString::toupr()" and @ref QoreString::tolwr() "QoreString::tolwr()"
       are now Unicode-aware (previously ASCII-only)
-    - Added 1-to-many uppercase mappings: ß→SS, ﬁ→FI, ﬂ→FL, ﬃ→FFI, ﬄ→FFL, ﬅ→ST, ﬆ→ST
+    - Case conversion now uses the complete Unicode case mapping data (generated from the Unicode
+      Character Database) instead of a partial hand-maintained table; @ref <string>::lwr()
+      "<string>::lwr()", @ref <string>::upr() "<string>::upr()", @ref Qore::tolower() "tolower()",
+      @ref Qore::toupper() "toupper()", @ref QoreString::tolwr() "QoreString::tolwr()" and
+      @ref QoreString::toupr() "QoreString::toupr()" now map every cased character in the Unicode
+      range.  Previously the table covered fewer than half of the cased characters in Unicode, and
+      the lower-case direction was derived by inverting the upper-case table, so characters whose
+      lower-case mapping is ASCII were silently left unchanged (for example lower-casing
+      <tt>U+0130</tt> returned <tt>U+0130</tt>).  Scripts that were not covered at all
+      include Deseret, Osage, Adlam, Warang Citi, Medefaidrin, Vithkuqi, Old Hungarian, Cherokee
+      lower case, Latin Extended-C/D/E, Cyrillic Extended-B, and Glagolitic
+    - The complete set of unconditional 1-to-many mappings from the Unicode <tt>SpecialCasing</tt>
+      data is now applied, not just the seven ligature mappings previously supported; for example
+      <tt>U+0130</tt> now lower-cases to <tt>U+0069 U+0307</tt>, <tt>U+0149</tt> now upper-cases to
+      <tt>U+02BC U+004E</tt>, and <tt>U+1F80</tt> now upper-cases to <tt>U+1F08 U+0399</tt>
+    - The language-independent <tt>Final_Sigma</tt> condition is now applied when lower-casing, so a
+      Greek capital sigma (<tt>U+03A3</tt>) at the end of a word maps to <tt>U+03C2</tt> instead of
+      <tt>U+03C3</tt>; for example lower-casing <tt>U+039F U+0394 U+039F U+03A3</tt> now returns
+      <tt>U+03BF U+03B4 U+03BF U+03C2</tt>
+    - Fixed a bug where case conversion could raise an <tt>ENCODING-CONVERSION-ERROR</tt> on a
+      perfectly valid string when the mapping of a character could not be represented in the
+      string's @ref character_encoding "character encoding" (for example upper-casing
+      <tt>U+00FF</tt> in an <tt>ISO-8859-1</tt> string, since its mapping <tt>U+0178</tt> does not
+      exist in <tt>ISO-8859-1</tt>); such characters are now returned unchanged
+    - Case mapping lookups now use sorted static tables with binary search instead of runtime-built
+      \c std::map objects, removing the map construction from library initialization
     @endparblock
 
     @par Brace-Delimited Regular Expressions

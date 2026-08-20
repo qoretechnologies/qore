@@ -3125,6 +3125,12 @@ void QoreString::tolwr() {
     QoreString tmp(getEncoding());
     if (!do_tolower(tmp, *this, &xsink)) {
         *this = tmp;
+    } else {
+        // this API has no way to report an error, so the string is left unchanged; the exception
+        // must be discarded rather than handled, otherwise it would be printed by ~ExceptionSink().
+        // Thread cancellation and program interrupts leave their flag set, so the thread is still
+        // cancelled at the next cancellation point
+        xsink.clear();
     }
 }
 
@@ -3134,6 +3140,9 @@ void QoreString::toupr() {
     QoreString tmp(getEncoding());
     if (!do_toupper(tmp, *this, &xsink)) {
         *this = tmp;
+    } else {
+        // see the comment in tolwr()
+        xsink.clear();
     }
 }
 

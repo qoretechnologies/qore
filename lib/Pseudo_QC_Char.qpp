@@ -194,51 +194,51 @@ int <char>::utf8ByteLen() [const;flags=CONSTANT] {
     return *xsink ? 0 : str->size();
 }
 
-//! Returns the character string in lower case
-/** This method applies the same Unicode case mapping as @ref Qore::zzz8stringzzz9::lwr()
-    to the single-codepoint string representation of the char.
+//! Returns the char in lower case
+/** The Unicode <i>simple</i> (1-to-1) lower-case mapping is applied, so that the result is
+    always a single char; chars with no lower-case mapping are returned unchanged.
 
-    @return a string containing the lower-case mapping of the char
+    @return the lower-case mapping of the char
 
     @par Example:
     @code{.py}
-assertEq("a", c'A'.lwr());
+assertEq(c'a', c'A'.lwr());
     @endcode
- */
-string <char>::lwr() [const;flags=RET_VALUE_ONLY] {
-    SimpleRefHolder<QoreStringNode> str(QoreValue::makeCharString(c, QCS_UTF8, xsink));
-    if (*xsink) {
-        return QoreValue();
-    }
 
-    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(QCS_UTF8));
-    if (do_tolower(*(*rv), *(*str), xsink)) {
-        return QoreValue();
-    }
-    return rv.release();
+    @note @ref Qore::zzz8stringzzz9::lwr() "<string>::lwr()" applies the Unicode <i>full</i>
+    case mapping instead, which is context-sensitive and can map a single character to more
+    than one character; for example the lower-case mapping of <tt>U+0130</tt> as a char is
+    <tt>U+0069</tt> (@c i), while as a string it is the two-character sequence
+    <tt>U+0069 U+0307</tt>
+
+    @see
+    - @ref Qore::zzz8charzzz9::upr() "<char>::upr()"
+    - @ref Qore::zzz8stringzzz9::lwr() "<string>::lwr()"
+ */
+char <char>::lwr() [const;flags=CONSTANT] {
+    return QoreValue::makeChar(q_unicode_tolower(c));
 }
 
-//! Returns the character string in upper case
-/** This method applies the same Unicode case mapping as @ref Qore::zzz8stringzzz9::upr()
-    to the single-codepoint string representation of the char.  The result is a
-    string because some Unicode mappings can expand to multiple codepoints.
+//! Returns the char in upper case
+/** The Unicode <i>simple</i> (1-to-1) upper-case mapping is applied, so that the result is
+    always a single char; chars with no upper-case mapping are returned unchanged.
 
-    @return a string containing the upper-case mapping of the char
+    @return the upper-case mapping of the char
 
     @par Example:
     @code{.py}
-assertEq("A", c'a'.upr());
+assertEq(c'A', c'a'.upr());
     @endcode
- */
-string <char>::upr() [const;flags=RET_VALUE_ONLY] {
-    SimpleRefHolder<QoreStringNode> str(QoreValue::makeCharString(c, QCS_UTF8, xsink));
-    if (*xsink) {
-        return QoreValue();
-    }
 
-    SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(QCS_UTF8));
-    if (do_toupper(*(*rv), *(*str), xsink)) {
-        return QoreValue();
-    }
-    return rv.release();
+    @note @ref Qore::zzz8stringzzz9::upr() "<string>::upr()" applies the Unicode <i>full</i>
+    case mapping instead, which can map a single character to more than one character; for
+    example <tt>U+00DF</tt> (@c ß) has no simple upper-case mapping, so as a char it is
+    returned unchanged, while as a string it maps to the two-character string @c "SS"
+
+    @see
+    - @ref Qore::zzz8charzzz9::lwr() "<char>::lwr()"
+    - @ref Qore::zzz8stringzzz9::upr() "<string>::upr()"
+ */
+char <char>::upr() [const;flags=CONSTANT] {
+    return QoreValue::makeChar(q_unicode_toupper(c));
 }

@@ -848,7 +848,16 @@ int char_width(softstring str) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 string lwr = tolower(str);
     @endcode
 
-    This function operates on a very wide range of non-ASCII characters using a Unicode lookup table for mapping Latin, Cyrillic, Greek, Armenian, Georgian, etc characters.
+    This function applies the Unicode default <i>full</i> lower-case mapping to every
+    character in the string.  The mapping covers the entire Unicode range and can map a single
+    character to more than one character (for example <tt>U+0130</tt> maps to
+    <tt>U+0069 U+0307</tt>); characters with no lower-case mapping are returned unchanged.  The
+    language-independent @c Final_Sigma condition is applied, so a Greek capital sigma
+    (<tt>U+03A3</tt>) at the end of a word maps to <tt>U+03C2</tt> rather than <tt>U+03C3</tt>;
+    language-specific mappings (Turkish, Azeri, and Lithuanian) are not applied.
+    A character whose mapping cannot be represented in the string's
+    @ref character_encoding "character encoding" is returned unchanged; case conversion never
+    raises an encoding conversion error.
 
     @param str a string to process
 
@@ -884,7 +893,14 @@ nothing tolower() [flags=RUNTIME_NOOP] {
 string upr = toupper(str);
     @endcode
 
-    This function operates on a very wide range of non-ASCII characters using a Unicode lookup table for mapping Latin, Cyrillic, Greek, Armenian, Georgian, etc characters.
+    This function applies the Unicode default <i>full</i> upper-case mapping to every
+    character in the string.  The mapping covers the entire Unicode range and can map a single
+    character to more than one character (for example <tt>U+00DF</tt> maps to @c "SS");
+    characters with no upper-case mapping are returned unchanged.  Language-specific mappings
+    (Turkish, Azeri, and Lithuanian) are not applied.
+    A character whose mapping cannot be represented in the string's
+    @ref character_encoding "character encoding" is returned unchanged; case conversion never
+    raises an encoding conversion error.
 
     @param str a string to process
 
