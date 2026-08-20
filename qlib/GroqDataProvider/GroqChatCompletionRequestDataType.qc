@@ -131,16 +131,16 @@ public class GroqChatCompletionRequestDataType inherits HashDataType {
             "model": {
                 "display_name": "Model",
                 "short_desc": "The Groq-hosted model to use",
-                "desc": "Name of the Groq-hosted model.  Common values include:\n\n"
-                    "- `llama-3.3-70b-versatile` — Meta Llama 3.3 70B Instruct\n"
-                    "- `llama-3.1-8b-instant` — fast, small Llama 3.1\n"
-                    "- `mixtral-8x7b-32768` — Mixtral 8x7B with 32K context\n"
-                    "- `gemma2-9b-it` — Google Gemma 2 9B Instruct\n\n"
-                    "Consult Groq's [models list](https://console.groq.com/docs/models) for "
-                    "the currently-served set.",
+                "desc": "ID of the Groq-hosted model to use.  See the "
+                    "[Groq models documentation](https://console.groq.com/docs/models) for the "
+                    "currently-available models; the `list-models` action returns the live list "
+                    "served by the API.",
                 "type": AbstractDataProviderTypeMap."string",
                 "required": True,
-                "example_value": "llama-3.3-70b-versatile",
+                "allowed_values_creatable": True,
+                "attr": {
+                    "ref_data": "models",
+                },
             },
             "messages": {
                 "display_name": "Messages",

@@ -3,10 +3,6 @@
   "locales": {
     "pl": {
       "messages": {
-        "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.desc": {
-          "source": "Sends a list of chat messages to a Groq-hosted model using the OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated response.\n\n**Example use cases**:\n- Low-latency chat with `llama-3.3-70b-versatile`\n- Fast tool-calling agents (pass `tools` and `tool_choice` in the request)\n- Structured extraction (pass `response_format` with a JSON schema)",
-          "message": "Wysyła listę wiadomości czatu do modelu hostowanego przez Groq za pomocą punktu końcowego `/v1/chat/completions` zgodnego z OpenAI i zwraca wygenerowaną odpowiedź.\n\n**Przykładowe przypadki użycia**:\n- Czat o niskim opóźnieniu z użyciem `llama-3.3-70b-versatile`\n- Szybcy agenci wywołujący narzędzia (przekaż `tools` oraz `tool_choice` w żądaniu)\n- Ustrukturyzowana ekstrakcja danych (przekaż `response_format` ze schematem JSON)"
-        },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
           "source": "Chat Completion",
           "message": "Uzupełnianie czatu"
@@ -22,10 +18,6 @@
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
           "source": "Penalize repeated tokens proportional to their frequency",
           "message": "Nakładaj karę na powtarzające się tokeny proporcjonalnie do ich częstotliwości"
-        },
-        "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.desc": {
-          "source": "Name of the Groq-hosted model.  Common values include:\n\n- `llama-3.3-70b-versatile` — Meta Llama 3.3 70B Instruct\n- `llama-3.1-8b-instant` — fast, small Llama 3.1\n- `mixtral-8x7b-32768` — Mixtral 8x7B with 32K context\n- `gemma2-9b-it` — Google Gemma 2 9B Instruct\n\nConsult Groq's [models list](https://console.groq.com/docs/models) for the currently-served set.",
-          "message": "Nazwa modelu hostowanego przez Groq. Typowe wartości to m.in.:\n\n- `llama-3.3-70b-versatile` — Meta Llama 3.3 70B Instruct\n- `llama-3.1-8b-instant` — szybki, mały model Llama 3.1\n- `mixtral-8x7b-32768` — Mixtral 8x7B z kontekstem 32K\n- `gemma2-9b-it` — Google Gemma 2 9B Instruct\n\nSprawdź [listę modeli](https://console.groq.com/docs/models) platformy Groq, aby zobaczyć aktualnie obsługiwany zestaw."
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.display_name": {
           "source": "Model",
@@ -514,10 +506,6 @@
         "app.R3JvcQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
           "source": "Make a custom API call to Groq",
           "message": "Wykonaj niestandardowe wywołanie API do Groq"
-        },
-        "app.R3JvcQ.desc": {
-          "source": "Provides access to [Groq](https://groq.com) — LPU-accelerated inference for open-weight LLMs (Llama, Mixtral, Gemma, Qwen) at exceptionally high token-per-second throughput.\n\nGroq exposes an OpenAI-compatible chat-completions API, so existing OpenAI-shape consumers (chat, tools, structured output, streaming) work unchanged.\n\n**Common use cases**:\n- **Low-latency chat** — Groq's LPU delivers sub-second time-to-first-token on 70B-class models\n- **High-throughput tool-calling agents** where total response time matters\n- **Open-weight model deployments** without owning GPU infrastructure",
-          "message": "Zapewnia dostęp do [Groq](https://groq.com) — wnioskowania przyspieszanego przez LPU dla modeli LLM open-weight (Llama, Mixtral, Gemma, Qwen) przy wyjątkowo wysokiej przepustowości tokenów na sekundę.\n\nGroq udostępnia interfejs API chat-completions zgodny z OpenAI, więc dotychczasowi konsumenci formatu OpenAI (czat, narzędzia, ustrukturyzowane dane wyjściowe, strumieniowanie) działają bez zmian.\n\n**Typowe przypadki użycia**:\n- **Czat o niskim opóźnieniu** — procesory LPU firmy Groq zapewniają czas do pierwszego tokena poniżej sekundy w modelach klasy 70B\n- **Agenci wywołujący narzędzia o wysokiej przepustowości**, gdzie kluczowy jest całkowity czas odpowiedzi\n- **Wdrażanie modeli open-weight** bez konieczności posiadania własnej infrastruktury GPU"
         },
         "app.R3JvcQ.display_name": {
           "source": "Groq",

@@ -3,10 +3,6 @@
   "locales": {
     "ko": {
       "messages": {
-        "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.desc": {
-          "source": "Sends a list of chat messages to a Groq-hosted model using the OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated response.\n\n**Example use cases**:\n- Low-latency chat with `llama-3.3-70b-versatile`\n- Fast tool-calling agents (pass `tools` and `tool_choice` in the request)\n- Structured extraction (pass `response_format` with a JSON schema)",
-          "message": "OpenAI 호환 `/v1/chat/completions` 엔드포인트를 사용하여 Groq 호스팅 모델에 채팅 메시지 목록을 보내고 생성된 응답을 반환합니다.\n\n**사용 사례 예시**:\n- `llama-3.3-70b-versatile`(으)로 지연 시간이 짧은 채팅\n- 빠른 도구 호출 에이전트 (요청에 `tools` 및 `tool_choice` 전달)\n- 구조화된 추출 (JSON 스키마와 함께 `response_format` 전달)"
-        },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
           "source": "Chat Completion",
           "message": "채팅 완성"
@@ -22,10 +18,6 @@
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
           "source": "Penalize repeated tokens proportional to their frequency",
           "message": "반복되는 토큰의 빈도에 비례하여 페널티 부여"
-        },
-        "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.desc": {
-          "source": "Name of the Groq-hosted model.  Common values include:\n\n- `llama-3.3-70b-versatile` — Meta Llama 3.3 70B Instruct\n- `llama-3.1-8b-instant` — fast, small Llama 3.1\n- `mixtral-8x7b-32768` — Mixtral 8x7B with 32K context\n- `gemma2-9b-it` — Google Gemma 2 9B Instruct\n\nConsult Groq's [models list](https://console.groq.com/docs/models) for the currently-served set.",
-          "message": "Groq 호스팅 모델의 이름입니다. 일반적인 값은 다음과 같습니다:\n\n- `llama-3.3-70b-versatile` — Meta Llama 3.3 70B Instruct\n- `llama-3.1-8b-instant` — 빠르고 작은 Llama 3.1\n- `mixtral-8x7b-32768` — 32K 컨텍스트를 갖춘 Mixtral 8x7B\n- `gemma2-9b-it` — Google Gemma 2 9B Instruct\n\n현재 서비스 중인 세트는 Groq의 [모델 목록](https://console.groq.com/docs/models)을 참조하세요."
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.display_name": {
           "source": "Model",
@@ -514,10 +506,6 @@
         "app.R3JvcQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
           "source": "Make a custom API call to Groq",
           "message": "Groq에 커스텀 API 호출 수행"
-        },
-        "app.R3JvcQ.desc": {
-          "source": "Provides access to [Groq](https://groq.com) — LPU-accelerated inference for open-weight LLMs (Llama, Mixtral, Gemma, Qwen) at exceptionally high token-per-second throughput.\n\nGroq exposes an OpenAI-compatible chat-completions API, so existing OpenAI-shape consumers (chat, tools, structured output, streaming) work unchanged.\n\n**Common use cases**:\n- **Low-latency chat** — Groq's LPU delivers sub-second time-to-first-token on 70B-class models\n- **High-throughput tool-calling agents** where total response time matters\n- **Open-weight model deployments** without owning GPU infrastructure",
-          "message": "오픈 가중치 LLM(Llama, Mixtral, Gemma, Qwen)에 대해 매우 높은 초당 토큰 처리량으로 LPU 가속 추론을 제공하는 [Groq](https://groq.com)에 대한 액세스를 제공합니다.\n\nGroq는 OpenAI 호환 채팅 완성 API를 노출하므로 기존 OpenAI 형태의 소비자(채팅, 도구, 구조화된 출력, 스트리밍)가 변경 없이 작동합니다.\n\n**일반적인 사용 사례**:\n- **낮은 지연 시간 채팅** — Groq의 LPU는 70B급 모델에서 1초 미만의 최초 토큰 생성 시간을 제공합니다\n- 전체 응답 시간이 중요한 **고처리량 도구 호출 에이전트**\n- GPU 인프라를 소유하지 않고 **오픈 가중치 모델 배포**"
         },
         "app.R3JvcQ.display_name": {
           "source": "Groq",

@@ -3,10 +3,6 @@
   "locales": {
     "ja": {
       "messages": {
-        "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.desc": {
-          "source": "Sends a list of chat messages to a Groq-hosted model using the OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated response.\n\n**Example use cases**:\n- Low-latency chat with `llama-3.3-70b-versatile`\n- Fast tool-calling agents (pass `tools` and `tool_choice` in the request)\n- Structured extraction (pass `response_format` with a JSON schema)",
-          "message": "OpenAI互換の`/v1/chat/completions`エンドポイントを使用してGroqホストモデルにチャットメッセージのリストを送信し、生成されたレスポンスを返します。\n\n**主な使用例**:\n- `llama-3.3-70b-versatile`を使用した低レイテンシチャット\n- 高速なツール呼び出しエージェント（リクエスト内で`tools`および`tool_choice`を渡します）\n- 構造化抽出（JSONスキーマとともに`response_format`を渡します）"
-        },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
           "source": "Chat Completion",
           "message": "チャット補完"
@@ -22,10 +18,6 @@
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
           "source": "Penalize repeated tokens proportional to their frequency",
           "message": "出現頻度に比例して重複トークンにペナルティを適用"
-        },
-        "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.desc": {
-          "source": "Name of the Groq-hosted model.  Common values include:\n\n- `llama-3.3-70b-versatile` — Meta Llama 3.3 70B Instruct\n- `llama-3.1-8b-instant` — fast, small Llama 3.1\n- `mixtral-8x7b-32768` — Mixtral 8x7B with 32K context\n- `gemma2-9b-it` — Google Gemma 2 9B Instruct\n\nConsult Groq's [models list](https://console.groq.com/docs/models) for the currently-served set.",
-          "message": "Groqホストモデルの名前。一般的な値は以下の通りです:\n\n- `llama-3.3-70b-versatile` — Meta Llama 3.3 70B Instruct\n- `llama-3.1-8b-instant` — 高速で小型のLlama 3.1\n- `mixtral-8x7b-32768` — 32KコンテキストのMixtral 8x7B\n- `gemma2-9b-it` — Google Gemma 2 9B Instruct\n\n現在提供されているモデル一覧については、Groqの[モデル一覧](https://console.groq.com/docs/models)を参照してください。"
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.display_name": {
           "source": "Model",
@@ -514,10 +506,6 @@
         "app.R3JvcQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
           "source": "Make a custom API call to Groq",
           "message": "GroqへのカスタムAPI呼び出しの実行"
-        },
-        "app.R3JvcQ.desc": {
-          "source": "Provides access to [Groq](https://groq.com) — LPU-accelerated inference for open-weight LLMs (Llama, Mixtral, Gemma, Qwen) at exceptionally high token-per-second throughput.\n\nGroq exposes an OpenAI-compatible chat-completions API, so existing OpenAI-shape consumers (chat, tools, structured output, streaming) work unchanged.\n\n**Common use cases**:\n- **Low-latency chat** — Groq's LPU delivers sub-second time-to-first-token on 70B-class models\n- **High-throughput tool-calling agents** where total response time matters\n- **Open-weight model deployments** without owning GPU infrastructure",
-          "message": "非常に高いトークン/秒のスループットでオープンウェイトLLM（Llama、Mixtral、Gemma、Qwen）のLPU高速化推論を提供する[Groq](https://groq.com)へのアクセスを提供します。\n\nGroqはOpenAI互換のチャット補完APIを公開しているため、既存のOpenAI形式のコンシューマー（チャット、ツール、構造化出力、ストリーミング）をそのまま利用できます。\n\n**一般的な使用例**:\n- **低レイテンシチャット** — GroqのLPUは70Bクラスのモデルで1秒未満の最初のトークン生成時間（TTFT）を実現\n- **高スループットのツール呼び出しエージェント** — 応答全体の時間が重視される場合\n- **オープンウェイトモデルのデプロイ** — GPUインフラストラクチャを所有する必要がありません"
         },
         "app.R3JvcQ.display_name": {
           "source": "Groq",
