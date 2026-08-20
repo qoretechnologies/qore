@@ -173,6 +173,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         addTestCase("LlmBackend Gemini schema sanitizer strips dialect "
             "metadata and preserves property names",
             \geminiSchemaMetadataKeywordSanitizerTest());
+        addTestCase("LlmBackend Gemini schema sanitizer supplies array "
+            "item schemas", \geminiSchemaArrayItemsSanitizerTest());
         addTestCase("LlmBackend Gemini response_format metadata is "
             "stripped from responseSchema",
             \geminiResponseSchemaMetadataIntegrationTest());
@@ -1874,6 +1876,52 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             {"type": "object", "properties": {}}, True);
         assertEq({}, noargs_compact.properties,
             "empty properties sanitizes to an empty map in compact mode");
+    }
+
+    geminiSchemaArrayItemsSanitizerTest() {
+        hash<auto> schema = {
+            "type": "object",
+            "properties": {
+                "missing_items": {"type": "array"},
+                "empty_items": {"type": "array", "items": {}},
+                "typed_items": {
+                    "type": "array",
+                    "items": {"type": "integer"},
+                },
+            },
+        };
+        foreach bool compact in (False, True) {
+            hash<auto> rv = GeminiBodyShape::sanitizeSchema(schema, compact);
+            assertEq({"type": "string"},
+                rv.properties.missing_items.items,
+                sprintf("missing items gets provider-safe fallback "
+                    "(compact=%y)", compact));
+            assertEq({"type": "string"},
+                rv.properties.empty_items.items,
+                sprintf("empty items gets provider-safe fallback "
+                    "(compact=%y)", compact));
+            assertEq({"type": "integer"},
+                rv.properties.typed_items.items,
+                sprintf("typed items remains exact (compact=%y)", compact));
+        }
+
+        hash<auto> body = GeminiBodyShape::shapeChatBody((
+            <ChatMessage>{"role": "user", "content": "run"},
+        ), (<ToolDefinition>{
+            "name": "list_tool",
+            "description": "list tool",
+            "parameters": schema,
+        },), NOTHING, {
+            "max_output_tokens": 64,
+            "temperature": 0.0,
+        });
+        hash<auto> params = body.tools[0].functionDeclarations[0].parameters;
+        assertEq({"type": "string"},
+            params.properties.missing_items.items,
+            "Gemini function declaration contains fallback items schema");
+        assertEq({"type": "string"},
+            params.properties.empty_items.items,
+            "Gemini function declaration replaces empty items schema");
     }
 
     geminiResponseSchemaMetadataIntegrationTest() {
