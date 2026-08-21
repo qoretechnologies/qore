@@ -80,6 +80,28 @@ module BgeM3RestClient {
       provides a REST connection object to BGE-M3 FastAPI services (based on
       the @ref connectionproviderintro "ConnectionProvider" module)
 
+    @section bgem3restclientping Pings Do Not Verify Authentication
+
+    A \c bge-m3 connection pings with \c "GET /health".  That verifies that the sidecar is
+    reachable and that the model is loaded - it does **not** verify the \c apikey option, and no
+    change of ping target could make it do so.
+
+    Every route the sidecar serves - \c "/embed", \c "/health" and \c "/metrics" - is served
+    without authentication, so none of them answers 401 for a missing or wrong credential.  Moving
+    the ping to \c "/embed" would not help: it is unauthenticated too, and would run the embedding
+    model on every ping.  \c "/health" additionally has to stay open because it is the Kubernetes
+    liveness and readiness probe path, and kubelet cannot present a bearer token - so it remains
+    unauthenticated even where a gateway enforces authentication in front of the sidecar.
+
+    The operational consequence: a green ping on a \c bge-m3 connection is not evidence that the
+    credential is usable.  Where a gateway does enforce authentication, a missing or wrong
+    \c apikey surfaces on the first real \c "/embed" call rather than on the ping, so treat an
+    authentication failure from embedding traffic as a credential problem even when connection
+    monitoring reports the connection as up.
+
+    Contrast this with the \c qdrant, \c voyage, \c openai and \c gemini schemes, whose pings
+    target an endpoint that requires authentication and therefore do fail on a bad credential.
+
     @par Example:
     @code{.py}
 #!/usr/bin/env qore
@@ -124,6 +146,27 @@ public class BgeM3RestClientBase {
         const DefaultPingMethod = "GET";
 
         #! Default ping path — sidecar liveness endpoint
+        /** @note This ping verifies **reachability and liveness only; it does not verify the
+            credential**.  Unlike the qdrant, voyage, openai and gemini schemes - whose pings
+            target an endpoint that answers 401 when the credential is missing or wrong - there is
+            no endpoint on a BGE-M3 sidecar that can exercise authentication:
+
+            - the reference sidecar (\c bge-m3-fallback/server.py) implements no authentication at
+              all; \c "/health", \c "/metrics" and \c "/embed" are all served unauthenticated, so
+              none of them can return 401;
+            - \c "/embed" - the only endpoint that does real work - is therefore no better as a
+              ping target: it would run the embedding model on every ping and still verify nothing;
+            - \c "/health" is the Kubernetes liveness **and** readiness probe path, so it has to
+              remain unauthenticated even in a deployment that fronts the sidecar with an
+              auth-enforcing gateway, because kubelet cannot present a bearer token.
+
+            The consequence for operators: a green ping on a \c bge-m3 connection means the sidecar
+            is reachable and the model is loaded.  It does **not** mean the \c apikey option is
+            correct.  Where the sidecar is fronted by a gateway that enforces authentication, a
+            missing or wrong \c apikey surfaces on the first real \c "/embed" call, not on the ping.
+
+            @see @ref bgem3restclientping
+        */
         const DefaultPingPath = "/health";
 
         #! Default ping headers
@@ -267,7 +310,17 @@ public class BgeM3RestConnection inherits RestClient::RestConnection {
                     "type": "string",
                     "desc": "Optional API key for sidecar deployments that enable "
                         "authentication; sent as the `Authorization: Bearer` header.  "
-                        "Local deployments typically do not require a key.",
+                        "Local deployments typically do not require a key.\n\n"
+                        "**Note that this connection's ping cannot verify this option.**  The "
+                        "BGE-M3 sidecar serves `/health`, `/metrics` and `/embed` without "
+                        "authentication, and `/health` - the ping target - is also the Kubernetes "
+                        "liveness and readiness probe path, so it must stay unauthenticated even "
+                        "where a gateway enforces authentication in front of the sidecar.  There "
+                        "is therefore no endpoint that answers 401 for a missing or wrong key.  A "
+                        "successful ping means the sidecar is reachable and the model is loaded; "
+                        "it does not mean this key is correct.  Where a gateway does enforce "
+                        "authentication, a wrong or missing key surfaces on the first `/embed` "
+                        "call instead.",
                     "sensitive": True,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
