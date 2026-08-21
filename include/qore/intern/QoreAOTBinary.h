@@ -1949,6 +1949,18 @@ struct AOTCompiledFuncWithSlots {
     //! Built post-emission from the object's DWARF line table (column carries the exact
     //! loc-index). Drives lazy on-throw source-location recovery (replaces the eager updater).
     std::vector<std::pair<uint32_t, uint32_t>> pc_loc_map;
+    //! Literal locations referenced by pc_loc_map indices at or above aot_locs.size().
+    /** LLVM inlines one AOT function into another at -O3, and the inliner copies the callee's
+        DILocation (line AND column) into the caller's line table.  Since the DWARF column carries a
+        loc-index that is local to the function that emitted it, an inlined row's index means nothing
+        in the enclosing function's table — resolving it there yields an unrelated line.  The enclosing
+        function's serialized loc table cannot be extended at this point (the metadata blob is baked
+        into the module before object emission, while the PC map is derived from the emitted object),
+        so such locations are carried literally in the PC map itself: index `aot_locs.size() + k`
+        selects `pc_extra_locs[k]`.  Readers that predate this field simply drop those entries (their
+        index is >= ctx->num_locs), losing the inlined location but never reporting a wrong one.
+    */
+    std::vector<AOTLocEntry> pc_extra_locs;
     //! Source-stripped metadata-only statement locations for ProgramControl::findStatementId().
     struct AOTStmtLocEntry {
         int32_t start_line = 0;
@@ -1982,7 +1994,17 @@ static constexpr size_t QORE_AOT_PCMAP_FOOTER_SIZE = 16;
 struct AOTPcLocFuncEntry {
     std::string symbol;                                  //!< native/LLVM symbol name
     std::vector<std::pair<uint32_t, uint32_t>> entries;  //!< sorted (offset -> loc-index)
+    //! Literal locations for entries whose loc-index is at or above the function's loc-table size
+    //! (see AOTCompiledFuncWithSlots::pc_extra_locs): index `num_locs + k` selects `extra_locs[k]`.
+    std::vector<AOTCompiledFuncWithSlots::AOTLocEntry> extra_locs;
 };
+
+//! Marks the optional extra-location block appended after the PC->loc payload's function records
+/** The block is appended to the END of the payload, after every function record.  Readers that
+    predate it stop after the function-record count and ignore the trailing bytes, so the payload
+    stays parseable by older libqore builds with no version bump and no second section.
+*/
+constexpr uint32_t QORE_AOT_PCMAP_EXTRA_MAGIC = 0x4c435051u;   //!< 'QPCL' little-endian
 
 //! Serialize the per-function PC->loc maps from func_slots into a trailer payload.
 //! Returns the number of functions written (functions with an empty map or symbol

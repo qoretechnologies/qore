@@ -1086,6 +1086,10 @@ QoreAOTContext::~QoreAOTContext() {
     for (int i = 0; i < num_locs; ++i) {
         delete locs[i];
     }
+    // Locations materialized for inlined code by the lazy PC->loc map (aotAttachPcLocMap)
+    for (const QoreProgramLocation* loc : pc_extra_locs) {
+        delete loc;
+    }
     // Deref owned StaticClassVarRefNode objects (created during LValuePath deserialization)
     for (auto* node : owned_static_var_refs) {
         node->deref(nullptr);
@@ -21197,8 +21201,23 @@ static void buildAOTPcLocMaps(const std::string& path,
         func_slots[i].pc_loc_map.clear();
     }
 
+    // Module-wide index of every function's serialized locations, keyed by start line.  Used to
+    // recover the exact location of a row whose DWARF column addresses another function's loc table
+    // (LLVM inlined that function's body here) — the callee's own table holds the entry, so the file
+    // and end line are recovered exactly instead of being approximated from the line table alone.
+    std::unordered_map<int32_t, std::vector<const AOTCompiledFuncWithSlots::AOTLocEntry*>> locs_by_line;
+    for (const auto& fws : func_slots) {
+        for (const auto& loc : fws.aot_locs) {
+            if (loc.start_line > 0) {
+                locs_by_line[loc.start_line].push_back(&loc);
+            }
+        }
+    }
+    // Per-function dedup of synthesized extra locations: key -> index into fws.pc_extra_locs.
+    std::unordered_map<size_t, std::unordered_map<std::string, uint32_t>> extra_index;
+
     std::unique_ptr<llvm::DWARFContext> dctx = llvm::DWARFContext::create(**obj_or);
-    size_t rows = 0, mapped = 0;
+    size_t rows = 0, mapped = 0, inlined = 0;
     for (const auto& unit : dctx->compile_units()) {
         const llvm::DWARFDebugLine::LineTable* lt = dctx->getLineTableForUnit(unit.get());
         if (!lt) {
@@ -21224,14 +21243,76 @@ static void buildAOTPcLocMaps(const std::string& path,
             AOTCompiledFuncWithSlots& fws = func_slots[it->second];
             uint32_t offset = static_cast<uint32_t>(row.Address.Address - funcs[fi].first);
             uint32_t loc_index = static_cast<uint32_t>(row.Column - 1);
-            if (loc_index >= fws.aot_locs.size()) {
-                // Column carried a loc-index outside this function's loc table —
-                // should not happen; skip rather than serialize a bad entry.
-                if (dbg) {
-                    fprintf(stderr, "AOT-LOC: WARN %s off=0x%x col-loc=%u >= aot_locs=%zu\n",
-                        funcs[fi].second.c_str(), offset, loc_index, fws.aot_locs.size());
+            // The column carries a loc-index that is local to the lowerer that emitted the
+            // instruction.  At -O3 LLVM inlines AOT functions into one another and the inliner copies
+            // the callee's DILocation — line AND column — into the caller's line table, so an inlined
+            // row's index addresses the CALLEE's table while the row itself sits inside the caller's
+            // symbol.  Resolving it against the caller's table yields an unrelated line (or is dropped
+            // when the caller's table is shorter).  The row's LINE is correct either way, so use it to
+            // detect the mismatch and carry the real location literally in the PC map.
+            if (loc_index >= fws.aot_locs.size()
+                    || fws.aot_locs[loc_index].start_line != static_cast<int32_t>(row.Line)) {
+                if (!row.Line) {
+                    continue;   // no source line to recover
                 }
-                continue;
+                std::string row_file;
+                lt->getFileNameByIndex(row.File, unit->getCompilationDir(),
+                    llvm::DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath, row_file);
+                // Prefer the callee's own serialized entry: it carries the canonical Qore file name
+                // and the exact end line, neither of which the line table can supply.  The DWARF path
+                // is rebuilt from the DIFile's (dir, name) split against the CU's compilation dir, so
+                // it does not string-compare equal to a relative source path — fall back to the base
+                // name, then to the only candidate, and only then give up and use the line table.
+                auto baseName = [](const std::string& f) -> std::string {
+                    size_t sl = f.rfind('/');
+                    return sl == std::string::npos ? f : f.substr(sl + 1);
+                };
+                const AOTCompiledFuncWithSlots::AOTLocEntry* match = nullptr;
+                auto li = locs_by_line.find(static_cast<int32_t>(row.Line));
+                if (li != locs_by_line.end() && !li->second.empty()) {
+                    if (!row_file.empty()) {
+                        for (const auto* cand : li->second) {
+                            if (cand->file == row_file) {
+                                match = cand;
+                                break;
+                            }
+                        }
+                        if (!match) {
+                            const std::string row_base = baseName(row_file);
+                            for (const auto* cand : li->second) {
+                                if (baseName(cand->file) == row_base) {
+                                    match = cand;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (!match && li->second.size() == 1) {
+                        match = li->second.front();
+                    }
+                }
+                AOTCompiledFuncWithSlots::AOTLocEntry extra;
+                extra.start_line = static_cast<int32_t>(row.Line);
+                extra.end_line = match ? match->end_line : static_cast<int32_t>(row.Line);
+                extra.file = match ? match->file : row_file;
+                std::string key = extra.file + ":" + std::to_string(extra.start_line)
+                    + ":" + std::to_string(extra.end_line);
+                auto& per_func = extra_index[it->second];
+                auto ei = per_func.find(key);
+                if (ei == per_func.end()) {
+                    uint32_t idx = static_cast<uint32_t>(fws.aot_locs.size()
+                        + fws.pc_extra_locs.size());
+                    fws.pc_extra_locs.push_back(std::move(extra));
+                    ei = per_func.emplace(std::move(key), idx).first;
+                }
+                loc_index = ei->second;
+                ++inlined;
+                if (dbg) {
+                    fprintf(stderr, "AOT-LOC: inlined row %s off=0x%x col-loc=%u line=%llu -> extra %u\n",
+                        funcs[fi].second.c_str(), offset,
+                        static_cast<uint32_t>(row.Column - 1),
+                        static_cast<unsigned long long>(row.Line), loc_index);
+                }
             }
             fws.pc_loc_map.emplace_back(offset, loc_index);
             ++mapped;
@@ -21263,15 +21344,22 @@ static void buildAOTPcLocMaps(const std::string& path,
             fprintf(stderr, "AOT-LOC: func=%s entries=%zu (locs=%zu)\n",
                 fws.name.c_str(), m.size(), fws.aot_locs.size());
             for (size_t k = 0; k < m.size() && k < 12; ++k) {
-                int16_t ln = fws.aot_locs[m[k].second].start_line;
-                fprintf(stderr, "AOT-LOC:   off=0x%x -> loc=%u line=%d\n",
-                    m[k].first, m[k].second, (int)ln);
+                const uint32_t li = m[k].second;
+                const bool is_extra = li >= fws.aot_locs.size();
+                const size_t xi = is_extra ? li - fws.aot_locs.size() : 0;
+                if (is_extra && xi >= fws.pc_extra_locs.size()) {
+                    continue;
+                }
+                int32_t ln = is_extra ? fws.pc_extra_locs[xi].start_line
+                    : fws.aot_locs[li].start_line;
+                fprintf(stderr, "AOT-LOC:   off=0x%x -> loc=%u%s line=%d\n",
+                    m[k].first, li, is_extra ? " (inlined)" : "", (int)ln);
             }
         }
     }
     if (dbg) {
-        fprintf(stderr, "AOT-LOC: %s: %zu rows, %zu mapped, %zu compacted entries, %zu funcs\n",
-            path.c_str(), rows, mapped, total_entries, func_slots.size());
+        fprintf(stderr, "AOT-LOC: %s: %zu rows, %zu mapped (%zu inlined), %zu compacted entries, "
+            "%zu funcs\n", path.c_str(), rows, mapped, inlined, total_entries, func_slots.size());
     }
 }
 
@@ -21297,10 +21385,10 @@ static bool writeAndVerifyPcLocTrailer(const std::string& path,
         } else {
             // Build expected symbol->entries from func_slots and compare.
             size_t mismatches = 0, checked = 0;
-            std::unordered_map<std::string, const std::vector<std::pair<uint32_t, uint32_t>>*> want;
+            std::unordered_map<std::string, const AOTCompiledFuncWithSlots*> want;
             for (const auto& fws : func_slots) {
                 if (!fws.pc_loc_map.empty() && !fws.llvm_symbol.empty()) {
-                    want[fws.llvm_symbol] = &fws.pc_loc_map;
+                    want[fws.llvm_symbol] = &fws;
                 }
             }
             if (rt.size() != want.size()) {
@@ -21316,9 +21404,22 @@ static bool writeAndVerifyPcLocTrailer(const std::string& path,
                     continue;
                 }
                 ++checked;
-                if (fe.entries != *it->second) {
+                if (fe.entries != it->second->pc_loc_map) {
                     fprintf(stderr, "AOT-LOC: ROUND-TRIP FAIL: %s entries differ (%zu vs %zu)\n",
-                        fe.symbol.c_str(), fe.entries.size(), it->second->size());
+                        fe.symbol.c_str(), fe.entries.size(), it->second->pc_loc_map.size());
+                    ++mismatches;
+                }
+                const auto& want_extra = it->second->pc_extra_locs;
+                bool extra_ok = fe.extra_locs.size() == want_extra.size();
+                for (size_t k = 0; extra_ok && k < want_extra.size(); ++k) {
+                    extra_ok = fe.extra_locs[k].start_line == want_extra[k].start_line
+                        && fe.extra_locs[k].end_line == want_extra[k].end_line
+                        && fe.extra_locs[k].file == want_extra[k].file;
+                }
+                if (!extra_ok) {
+                    fprintf(stderr, "AOT-LOC: ROUND-TRIP FAIL: %s inlined locations differ "
+                        "(%zu vs %zu)\n", fe.symbol.c_str(), fe.extra_locs.size(),
+                        want_extra.size());
                     ++mismatches;
                 }
             }
@@ -22936,6 +23037,22 @@ bool QoreAOT::compile(QoreProgram* pgm,
                     cf.num_globals = static_cast<int>(cf.slot_ids.globals.size());
                     // Scan IR function for required features
                     cf.feature_flags = scanIRFeatureFlags(*ir_func);
+                    // Copy the location table built during LLVM codegen, exactly as the
+                    // function/method/closure paths do.  Without it the top-level function
+                    // has no runtime location table at all: ctx->locs stays empty at load,
+                    // so the eager per-line updater no-ops, no PC->loc range is registered
+                    // for lazy on-throw recovery, and every DWARF row for _toplevel is
+                    // dropped post-emission ("col-loc=N >= aot_locs=0").  The visible
+                    // symptom is line -1 for any exception raised in top-level code — and,
+                    // because callees are inlined into _toplevel at -O3, for exceptions
+                    // raised in those callees too.
+                    for (const auto& loc : llvm_lowerer.getAOTLocTable()) {
+                        AOTCompiledFuncWithSlots::AOTLocEntry entry;
+                        entry.start_line = loc.start_line;
+                        entry.end_line = loc.end_line;
+                        entry.file = loc.file;
+                        cf.aot_locs.push_back(std::move(entry));
+                    }
                     const size_t owner_index = compiled_funcs.size();
                     compiled_funcs.push_back(std::move(cf));
                     ++compiled_count;
