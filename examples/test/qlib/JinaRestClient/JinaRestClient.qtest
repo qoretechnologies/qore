@@ -6,6 +6,8 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ConnectionProvider
+%requires DataProvider
 %requires QoreRagTypes
 %requires QoreRagUtils
 %requires JinaRestClient
@@ -13,7 +15,23 @@
 %exec-class JinaRestClientTest
 
 public class JinaRestClientTest inherits QUnit::Test {
-    constructor() : Test("JinaRestClient Test", "1.0") {
+    public {
+        #! command-line options; use -c/--connection to run the live tests
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        #! name of a live Jina AI connection, if given
+        *string conn_name;
+    }
+
+    constructor() : Test("JinaRestClient Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.JINA_CONNECTION;
+
         addTestCase("connection scheme registered",     \connectionSchemeTest());
         addTestCase("embedder factory registered",      \embedderFactoryTest());
         addTestCase("reranker factory registered",      \rerankerFactoryTest());
@@ -23,7 +41,17 @@ public class JinaRestClientTest inherits QUnit::Test {
             \restOptionsTest());
         addTestCase("connection accepts both model options and rejects unknown ones",
             \connectionOptionsTest());
+        addTestCase("live: ping + embed + rerank with the connection's models",
+            \liveConnectionTest());
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Jina AI connection name; without it (and without the "
+            "JINA_CONNECTION env var) the live test is skipped",
+            OptionColumn);
     }
 
     private connectionSchemeTest() {
@@ -32,6 +60,10 @@ public class JinaRestClientTest inherits QUnit::Test {
         assertEq("Jina AI REST Connection", info.display_name);
         assertTrue(info.schemes.jina);
         assertEq("apikey", info.required_options);
+        # GET /v1/models is the only usable unauthenticated-shape probe; the
+        # rate-limit endpoint this used to ping does not exist (404)
+        assertEq("models", info.options.ping_path.default_value);
+        assertEq("GET", info.options.ping_method.default_value);
 
         # the connection serves both /embeddings and /rerank; the two model
         # families are distinct and are configured independently
@@ -132,5 +164,53 @@ public class JinaRestClientTest inherits QUnit::Test {
                     "reranking_model": "jina-colbert-v2",
                 });
         });
+    }
+
+    #! exercises a real Jina AI connection end to end: ping, embed, rerank
+    /** the embedding and reranking models come from the connection's
+        \c embedding-model and \c rerank-model options, falling back to the
+        scheme defaults when the connection does not set them
+    */
+    private liveConnectionTest() {
+        if (!conn_name) {
+            testSkip("no Jina AI connection given; use -c/--connection or set "
+                "JINA_CONNECTION");
+        }
+        AbstractConnection conn = get_connection(conn_name);
+        hash<PingInfo> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("connection %y ping failed: %s", conn_name,
+            ping.info ?? "no info"));
+
+        *hash<auto> copts = conn.getRealOptions();
+        string emb_model = copts{"embedding-model"}
+            ?? JinaRestClient::JinaRestClientBase::DefaultEmbeddingModel;
+        string rr_model = copts{"rerank-model"}
+            ?? JinaRestClient::JinaRestClientBase::DefaultRerankModel;
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider emb = prov.getChildProvider("create-embeddings");
+        hash<auto> eresp = emb.doRequest({
+            "model": emb_model,
+            "input": ("What is machine learning?",),
+        });
+        assertEq(1, eresp.data.lsize(), "one embedding per input text");
+        assertEq(0, eresp.data[0]."index");
+        assertTrue(eresp.data[0].embedding.lsize() > 0, "embedding vector is non-empty");
+
+        AbstractDataProvider rrk = prov.getChildProvider("rerank");
+        hash<auto> rresp = rrk.doRequest({
+            "model": rr_model,
+            "query": "What is machine learning?",
+            "documents": (
+                "Machine learning is a branch of AI focused on data-driven learning.",
+                "The stock market closed higher today.",
+            ),
+            "top_n": 2,
+        });
+        assertEq(2, rresp.results.lsize());
+        assertTrue(rresp.results[0].relevance_score >= rresp.results[1].relevance_score,
+            "results sorted by relevance descending");
+        assertEq(0, rresp.results[0]."index",
+            "the machine-learning document ranks above the unrelated one");
     }
 }

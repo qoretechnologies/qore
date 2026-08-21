@@ -6,6 +6,8 @@
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
 %requires QUnit
+%requires ConnectionProvider
+%requires DataProvider
 %requires QoreLlmTypes
 %requires QoreLlmUtils
 %requires QoreRagTypes
@@ -15,7 +17,23 @@
 %exec-class CohereRestClientTest
 
 public class CohereRestClientTest inherits QUnit::Test {
-    constructor() : Test("CohereRestClient Test", "1.0") {
+    public {
+        #! command-line options; use -c/--connection to run the live tests
+        const MyOpts = Opts + {
+            "conn": "c,connection=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        #! name of a live Cohere connection, if given
+        *string conn_name;
+    }
+
+    constructor() : Test("CohereRestClient Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.COHERE_CONNECTION;
+
         addTestCase("connection scheme registered",       \connectionSchemeTest());
         addTestCase("LLM factory registered + advertises capabilities",
             \llmFactoryTest());
@@ -28,7 +46,17 @@ public class CohereRestClientTest inherits QUnit::Test {
         addTestCase("reranker requires api_key",          \rerankerConfigTest());
         addTestCase("connection accepts both model options and rejects unknown ones",
             \connectionOptionsTest());
+        addTestCase("live: ping + embed + rerank with the connection's models",
+            \liveConnectionTest());
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Cohere connection name; without it (and without the "
+            "COHERE_CONNECTION env var) the live test is skipped",
+            OptionColumn);
     }
 
     private connectionSchemeTest() {
@@ -157,5 +185,58 @@ public class CohereRestClientTest inherits QUnit::Test {
             "api_key": "k",
         });
         assertEq("rerank-v3.5", r.getModel());
+    }
+
+    #! exercises a real Cohere connection end to end: ping, embed, rerank
+    /** the embedding and reranking models come from the connection's
+        \c embedding-model and \c rerank-model options, falling back to the
+        scheme defaults when the connection does not set them
+    */
+    private liveConnectionTest() {
+        if (!conn_name) {
+            testSkip("no Cohere connection given; use -c/--connection or set "
+                "COHERE_CONNECTION");
+        }
+        AbstractConnection conn = get_connection(conn_name);
+        hash<PingInfo> ping = conn.ping(True);
+        assertTrue(ping.ok, sprintf("connection %y ping failed: %s", conn_name,
+            ping.info ?? "no info"));
+
+        *hash<auto> copts = conn.getRealOptions();
+        string emb_model = copts{"embedding-model"}
+            ?? CohereRestClient::CohereRestClientBase::DefaultEmbeddingModel;
+        string rr_model = copts{"rerank-model"}
+            ?? CohereRestClient::CohereRestClientBase::DefaultRerankModel;
+
+        AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider emb = prov.getChildProvider("embed");
+        hash<auto> eresp = emb.doRequest({
+            "model": emb_model,
+            "texts": ("What is machine learning?",),
+            "input_type": "search_query",
+        });
+        # Cohere v2 returns embeddings keyed by embedding type, not as a bare
+        # list of vectors as v1 did
+        assertEq(NT_HASH, eresp.embeddings.typeCode(),
+            "v2 embeddings envelope is keyed by embedding type");
+        *list<auto> vectors = eresp.embeddings."float";
+        assertEq(1, vectors.lsize(), "one embedding per input text");
+        assertTrue(vectors[0].lsize() > 0, "embedding vector is non-empty");
+
+        AbstractDataProvider rrk = prov.getChildProvider("rerank");
+        hash<auto> rresp = rrk.doRequest({
+            "model": rr_model,
+            "query": "What is machine learning?",
+            "documents": (
+                "Machine learning is a branch of AI focused on data-driven learning.",
+                "The stock market closed higher today.",
+            ),
+            "top_n": 2,
+        });
+        assertEq(2, rresp.results.lsize());
+        assertTrue(rresp.results[0].relevance_score >= rresp.results[1].relevance_score,
+            "results sorted by relevance descending");
+        assertEq(0, rresp.results[0]."index",
+            "the machine-learning document ranks above the unrelated one");
     }
 }

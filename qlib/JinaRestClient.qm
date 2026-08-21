@@ -222,8 +222,8 @@ public class JinaRestConnection inherits RestClient::RestConnection {
 
         const DefaultPingMethod = "GET";
         const DefaultPingHeaders = {"Accept": MimeTypeJson};
-        # Jina has no public /models list; ping the rate-limit endpoint
-        const DefaultPingPath = "rate_limit";
+        # GET /v1/models returns the public model list; /v1/rate_limit does not exist (404)
+        const DefaultPingPath = "models";
     }
 
     constructor(string name, string description, string url = DefaultUrl,
