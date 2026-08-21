@@ -68,8 +68,9 @@ then rebuild and run `examples/test/qore/vars/string.qtest` and
 `lib/unicode-charmaps.cpp` holds the engine:
 
 - `apply_case_map()` walks the source string; bytes below 0x80 take an
-  ASCII-only fast path with no decoding, and every other character is decoded
-  with `QoreString::getUnicodePointFromBytePos()`
+  ASCII-only fast path with no decoding only in ASCII-compatible encodings,
+  and every character in other encodings (including UTF-16) is decoded with
+  `QoreString::getUnicodePointFromBytePos()`
 - a full mapping is applied if there is one, otherwise the `Final_Sigma`
   condition is checked when lowercasing, otherwise the simple mapping is
   applied; a character with no mapping is copied back verbatim as source bytes,
@@ -91,17 +92,17 @@ then rebuild and run `examples/test/qore/vars/string.qtest` and
   encodings. `Final_Sigma` does not need to be evaluated there because U+03C2
   and U+03C3 have the same encoded size
 
-## Known limitation
+## UTF-16 behavior
 
-Case conversion still takes its ASCII fast path on raw bytes, so it does not work
-with non-ASCII-compatible encodings such as UTF-16: an ASCII byte of a UTF-16 code
-unit is mapped in place and the mapped bytes are written back one byte at a time,
-which can produce an odd-length (invalid) UTF-16 byte stream. This is pre-existing
-and is shared with `<string>::unaccent()`, which has the same byte-oriented
-structure — both carry the `FIXME` in `lib/QoreString.cpp`.
+Case conversion supports `UTF-16`, `UTF-16BE`, and `UTF-16LE`. These encodings
+are not ASCII-compatible, so the mapping engine decodes every character and
+encodes each mapped codepoint in the source encoding. This also handles
+supplementary-plane characters and one-to-many mappings without splitting code
+units or producing odd-length strings.
 
-Note that `QoreString::getUnicodePointFromBytePos()` itself decodes `UTF-16BE` and
-`UTF-16LE` correctly; the separate `UTF-16` (unsuffixed) encoding is the one that
-mis-decodes, because `QCS_UTF16` is registered with the big-endian handler set while
-iconv emits a BOM followed by native-endian code units. See
-`/tmp/qore-utf16-getunicodepoint.md` for the full analysis.
+Qore's canonical representation for a string tagged with the unsuffixed
+`UTF-16` encoding is big-endian with no byte order mark. `IconvHelper` requests
+`UTF-16BE` explicitly when converting to or from that encoding so that iconv
+does not emit a BOM and native-endian code units. For external UTF-16 data that
+does contain a BOM, the input paths strip it and retag the string as `UTF-16BE`
+or `UTF-16LE` before normal string processing.
