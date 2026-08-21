@@ -1090,6 +1090,14 @@ static bool q_final_sigma_after(const QoreString& src, size_t pos, ExceptionSink
     copied verbatim instead, so that case conversion never fails on a valid string and never
     loses a character.
 
+    Whether the target encoding can represent a character is established from a round trip and
+    not from the conversion's error reporting, because iconv implementations do not agree on how
+    an unrepresentable character is signalled.  glibc reports a non-reversible conversion, which
+    convert_encoding_intern() turns into an error, but Apple's libiconv with \c "//TRANSLIT"
+    silently substitutes an approximation - U+0178 becomes \c "\"Y" - and reports nothing at all,
+    so the mapped character would be replaced by that approximation instead of the source
+    character being kept.
+
     @param str the target string
     @param src the source string
     @param pos the byte position of the source character in \a src
@@ -1116,7 +1124,18 @@ static int concat_case_mapped(QoreString& str, const QoreString& src, size_t pos
     // encoding errors are handled here and must not reach the caller
     ExceptionSink enc_xsink;
     for (unsigned i = 0; i < mapped_len; ++i) {
+        size_t before = str.size();
         if (str.concatUnicode(mapped[i], &enc_xsink)) {
+            enc_xsink.clear();
+            str.terminate(rollback);
+            str.concat(src.getBuffer() + pos, len);
+            return 0;
+        }
+        // the conversion reported success; verify that it round trips, since a transliterating
+        // iconv can substitute an approximation without signalling anything
+        unsigned clen = 0;
+        unsigned back = str.getUnicodePointFromBytePos(before, clen, &enc_xsink);
+        if (enc_xsink || back != mapped[i] || before + clen != str.size()) {
             enc_xsink.clear();
             str.terminate(rollback);
             str.concat(src.getBuffer() + pos, len);
