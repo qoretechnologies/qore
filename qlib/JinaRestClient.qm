@@ -96,6 +96,12 @@ public class JinaRestClientBase {
 
         const DefaultApiVersion = "v1";
 
+        #! Default Jina AI embedding model
+        const DefaultEmbeddingModel = "jina-embeddings-v3";
+
+        #! Default Jina AI reranking model
+        const DefaultRerankModel = "jina-reranker-v2-base-multilingual";
+
         const DefaultOptions = {
             "url": DefaultUrl,
             "api": DefaultApiVersion,
@@ -112,6 +118,9 @@ public class JinaRestClientBase {
             rv.token = rv.apikey;
             delete rv.apikey;
         }
+        # these are connection-level options for downstream consumers (RAG embedder / reranker
+        # configuration); they are not REST client options
+        remove rv{"embedding-model", "rerank-model"};
         return rv;
     }
 }
@@ -148,7 +157,10 @@ public class JinaRestConnection inherits RestClient::RestConnection {
             "desc": "A connection to the [Jina AI](https://jina.ai) REST API for embeddings "
                 "and reranking.\n\n"
                 "Requires an API key for Bearer authentication.  Get your API key from the "
-                "[Jina AI dashboard](https://jina.ai/?sui=apikey).",
+                "[Jina AI dashboard](https://jina.ai/?sui=apikey).\n\n"
+                "The models used when this connection is selected for embeddings and for "
+                "reranking are set independently with the `embedding-model` and "
+                "`rerank-model` options.",
             "cls": Class::forName("JinaRestConnection"),
             "auto_url": True,
             "schemes": {"jina": True},
@@ -168,6 +180,32 @@ public class JinaRestConnection inherits RestClient::RestConnection {
                     "desc": "The API version to use.",
                     "type": "string",
                     "default_value": JinaRestClientBase::DefaultApiVersion,
+                },
+                "embedding-model": <ConnectionOptionInfo>{
+                    "display_name": "Embedding Model",
+                    "short_desc": "Jina AI embedding model name",
+                    "desc": "The Jina AI embedding model used by embedding clients when "
+                        "this connection is selected for embeddings; sent as the `model` "
+                        "parameter to the `/embeddings` endpoint.\n\n"
+                        "Example values: `jina-embeddings-v3` (multilingual, task-aware; the "
+                        "default), `jina-embeddings-v2-base-en` (English-only v2), "
+                        "`jina-embeddings-v2-base-code` (code-specialized)",
+                    "type": "string",
+                    "default_value": JinaRestClientBase::DefaultEmbeddingModel,
+                },
+                "rerank-model": <ConnectionOptionInfo>{
+                    "display_name": "Reranking Model",
+                    "short_desc": "Jina AI reranking model name",
+                    "desc": "The Jina AI reranking model used by reranking clients when "
+                        "this connection is selected for reranking; sent as the `model` "
+                        "parameter to the `/rerank` endpoint.\n\n"
+                        "Reranking models are a separate family from embedding models and "
+                        "cannot be used interchangeably.\n\n"
+                        "Example values: `jina-reranker-v2-base-multilingual` (multilingual "
+                        "cross-encoder; the default), `jina-colbert-v2` (late-interaction, "
+                        "multi-vector)",
+                    "type": "string",
+                    "default_value": JinaRestClientBase::DefaultRerankModel,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
                     "default_value": DefaultPingHeaders,
@@ -237,7 +275,7 @@ public namespace QoreRagUtils {
 #! Jina AI-backed embedder — calls the Jina `/embeddings` endpoint
 public class JinaEmbedder inherits AbstractEmbedder {
     public {
-        const DefaultModel = "jina-embeddings-v3";
+        const DefaultModel = JinaRestClient::JinaRestClientBase::DefaultEmbeddingModel;
         const Backend = "jina";
     }
 
@@ -403,7 +441,7 @@ public class JinaEmbedderFactory inherits AbstractEmbedderFactory {
 #! Jina AI-backed reranker — calls the Jina `/rerank` endpoint
 public class JinaReranker inherits AbstractReranker {
     public {
-        const DefaultModel = "jina-reranker-v2-base-multilingual";
+        const DefaultModel = JinaRestClient::JinaRestClientBase::DefaultRerankModel;
     }
 
     private {

@@ -26,6 +26,8 @@ public class CohereRestClientTest inherits QUnit::Test {
             \restOptionsTest());
         addTestCase("embedder requires api_key",          \embedderConfigTest());
         addTestCase("reranker requires api_key",          \rerankerConfigTest());
+        addTestCase("connection accepts both model options and rejects unknown ones",
+            \connectionOptionsTest());
         set_return_value(main());
     }
 
@@ -35,6 +37,23 @@ public class CohereRestClientTest inherits QUnit::Test {
         assertEq("Cohere REST Connection", info.display_name);
         assertTrue(info.schemes.cohere);
         assertEq("apikey", info.required_options);
+
+        # the connection serves both /embed and /rerank; the two model families
+        # are distinct and are configured independently
+        hash<ConnectionOptionInfo> emb = info.options."embedding-model";
+        assertEq("Embedding Model", emb.display_name);
+        assertEq("string", emb.type);
+        assertEq("embed-multilingual-v3.0", emb.default_value);
+        assertEq(CohereRestClient::CohereRestClientBase::DefaultEmbeddingModel,
+            emb.default_value);
+
+        hash<ConnectionOptionInfo> rr = info.options."rerank-model";
+        assertEq("Reranking Model", rr.display_name);
+        assertEq("string", rr.type);
+        assertEq("rerank-v3.5", rr.default_value);
+        assertEq(CohereRestClient::CohereRestClientBase::DefaultRerankModel,
+            rr.default_value);
+        assertNeq(emb.default_value, rr.default_value);
     }
 
     private llmFactoryTest() {
@@ -76,6 +95,8 @@ public class CohereRestClientTest inherits QUnit::Test {
     private restOptionsTest() {
         hash<auto> opts = CohereRestClient::CohereRestClientBase::getOptions({
             "apikey": "my-key",
+            "embedding-model": "embed-english-v3.0",
+            "rerank-model": "rerank-multilingual-v3.0",
         });
         assertEq("my-key", opts.token);
         assertEq(NOTHING, opts.apikey);
@@ -83,6 +104,33 @@ public class CohereRestClientTest inherits QUnit::Test {
         assertEq("https://api.cohere.com", opts.url);
         assertEq("v2", opts.api);
         assertEq("/v2", opts.default_path);
+        # connection-level metadata must not leak into REST client options
+        assertEq(NOTHING, opts{"embedding-model"});
+        assertEq(NOTHING, opts{"rerank-model"});
+    }
+
+    private connectionOptionsTest() {
+        CohereRestClient::CohereRestConnection conn("cohere-test", "test connection",
+            CohereRestClient::CohereRestConnection::DefaultUrl, {}, {
+                "apikey": "my-key",
+                "embedding-model": "embed-english-v3.0",
+                "rerank-model": "rerank-multilingual-v3.0",
+            });
+        assertEq("cohere", conn.getType());
+        # getRealOptions() reports the configured connection option values
+        assertEq("embed-english-v3.0", conn.getRealOptions(){"embedding-model"});
+        assertEq("rerank-multilingual-v3.0", conn.getRealOptions(){"rerank-model"});
+        # a client must still be constructible with the connection-only options present
+        object client = conn.get(False);
+        assertTrue(client instanceof CohereRestClient::CohereRestClient);
+
+        assertThrows("CONNECTION-OPTION-ERROR", sub () {
+            new CohereRestClient::CohereRestConnection("cohere-bad", "test",
+                CohereRestClient::CohereRestConnection::DefaultUrl, {}, {
+                    "apikey": "my-key",
+                    "reranking_model": "rerank-v3.5",
+                });
+        });
     }
 
     private embedderConfigTest() {

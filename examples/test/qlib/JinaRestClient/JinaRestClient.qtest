@@ -21,6 +21,8 @@ public class JinaRestClientTest inherits QUnit::Test {
         addTestCase("reranker requires api_key",        \rerankerConfigTest());
         addTestCase("REST client options apply Bearer mapping",
             \restOptionsTest());
+        addTestCase("connection accepts both model options and rejects unknown ones",
+            \connectionOptionsTest());
         set_return_value(main());
     }
 
@@ -30,6 +32,23 @@ public class JinaRestClientTest inherits QUnit::Test {
         assertEq("Jina AI REST Connection", info.display_name);
         assertTrue(info.schemes.jina);
         assertEq("apikey", info.required_options);
+
+        # the connection serves both /embeddings and /rerank; the two model
+        # families are distinct and are configured independently
+        hash<ConnectionOptionInfo> emb = info.options."embedding-model";
+        assertEq("Embedding Model", emb.display_name);
+        assertEq("string", emb.type);
+        assertEq("jina-embeddings-v3", emb.default_value);
+        assertEq(JinaRestClient::JinaRestClientBase::DefaultEmbeddingModel,
+            emb.default_value);
+
+        hash<ConnectionOptionInfo> rr = info.options."rerank-model";
+        assertEq("Reranking Model", rr.display_name);
+        assertEq("string", rr.type);
+        assertEq("jina-reranker-v2-base-multilingual", rr.default_value);
+        assertEq(JinaRestClient::JinaRestClientBase::DefaultRerankModel,
+            rr.default_value);
+        assertNeq(emb.default_value, rr.default_value);
     }
 
     private embedderFactoryTest() {
@@ -77,11 +96,41 @@ public class JinaRestClientTest inherits QUnit::Test {
     private restOptionsTest() {
         hash<auto> opts = JinaRestClient::JinaRestClientBase::getOptions({
             "apikey": "my-key",
+            "embedding-model": "jina-embeddings-v2-base-en",
+            "rerank-model": "jina-colbert-v2",
         });
         assertEq("my-key", opts.token);
         assertEq(NOTHING, opts.apikey);
         assertEq("https://api.jina.ai", opts.url);
         assertEq("v1", opts.api);
         assertEq("/v1", opts.default_path);
+        # connection-level metadata must not leak into REST client options
+        assertEq(NOTHING, opts{"embedding-model"});
+        assertEq(NOTHING, opts{"rerank-model"});
+    }
+
+    private connectionOptionsTest() {
+        JinaRestClient::JinaRestConnection conn("jina-test", "test connection",
+            JinaRestClient::JinaRestConnection::DefaultUrl, {}, {
+                "apikey": "my-key",
+                "embedding-model": "jina-embeddings-v2-base-en",
+                "rerank-model": "jina-colbert-v2",
+            });
+        assertEq("jina", conn.getType());
+        # getRealOptions() reports the configured connection option values
+        assertEq("jina-embeddings-v2-base-en",
+            conn.getRealOptions(){"embedding-model"});
+        assertEq("jina-colbert-v2", conn.getRealOptions(){"rerank-model"});
+        # a client must still be constructible with the connection-only options present
+        object client = conn.get(False);
+        assertTrue(client instanceof JinaRestClient::JinaRestClient);
+
+        assertThrows("CONNECTION-OPTION-ERROR", sub () {
+            new JinaRestClient::JinaRestConnection("jina-bad", "test",
+                JinaRestClient::JinaRestConnection::DefaultUrl, {}, {
+                    "apikey": "my-key",
+                    "reranking_model": "jina-colbert-v2",
+                });
+        });
     }
 }
