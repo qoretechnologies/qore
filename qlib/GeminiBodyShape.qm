@@ -1224,7 +1224,8 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         *hash<auto> hdr = getRequestHeaders(opts);
         try {
             return withRetry(hash<auto> sub () {
-                return rest_client.restPost(path, body, hdr);
+                return rest_client.restPostWithTimeout(path, body, hdr,
+                    getRequestTimeoutMs(opts));
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR",

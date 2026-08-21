@@ -61,6 +61,9 @@ class FakeGeminiLlmHandler inherits AbstractHttpRequestHandler {
                 resp = cast<hash>(seq[idx]);
             }
         }
+        if (resp.delay_ms > 0) {
+            usleep(resp.delay_ms * 1000);
+        }
         int code = resp.code ?? 200;
         string out = resp.body.typeCode() == NT_STRING
             ? resp.body : make_json(resp.body);
@@ -168,6 +171,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             \geminiOpenAiChatCompletionsFacadeTest());
         addTestCase("LlmBackend OpenAI facade honors per-call retry budget",
             \providerPerCallRetryBudgetTest());
+        addTestCase("LlmBackend OpenAI facade honors per-call request timeout",
+            \providerPerCallRequestTimeoutTest());
         addTestCase("LlmBackend Gemini schema sanitizer flattens "
             "composition", \geminiSchemaCompositionSanitizerTest());
         addTestCase("LlmBackend Gemini schema sanitizer strips dialect "
@@ -1162,6 +1167,60 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         configured_default.chatCompletions(request);
         assertEq(2, gemini_handler.requests.size(),
             "omitting the override retains the backend retry default");
+    }
+
+    providerPerCallRequestTimeoutTest() {
+        checkGeminiModule();
+        installGeminiHandler({
+            "/v1beta/models/gemini-2.5-flash:generateContent": {
+                "code": 200,
+                "delay_ms": 200,
+                "body": {
+                    "candidates": ({
+                        "finishReason": "STOP",
+                        "content": {"parts": ({"text": "too late"},)},
+                    },),
+                    "usageMetadata": {"totalTokenCount": 3},
+                },
+            },
+        });
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "gemini",
+            "url": "http://localhost:" + port,
+            "model": "gemini-2.5-flash",
+            "api_key": "gemini-test-key",
+            "timeout_ms": 1000,
+            "max_retries": 0,
+        });
+        date started = now_us();
+        *hash<ExceptionInfo> timeout_ex;
+        try {
+            llm.chatCompletions({
+                "messages": ({"role": "user", "content": "test timeout"},),
+                "timeout_ms": 50,
+                "max_retries": 0,
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            timeout_ex = ex;
+        }
+        int elapsed_ms = (now_us() - started).durationMilliseconds();
+        assertNeq(NOTHING, timeout_ex,
+            "the call-local deadline aborts the delayed provider request");
+        if (!timeout_ex) {
+            return;
+        }
+        assertEq("LLM-ERROR", timeout_ex.err,
+            "the facade preserves its stable error identity");
+        assertEq("HTTPCLIENT-TIMEOUT", timeout_ex.arg.err,
+            "the structured cause preserves the transport timeout identity");
+        assertLt(500, elapsed_ms,
+            "the per-call timeout overrides the longer backend timeout");
+        assertEq(1, gemini_handler.requests.size(),
+            "the timed-out call sends only one provider request");
+        assertFalse(gemini_handler.requests[0].body.hasKey("timeout_ms"),
+            "the facade timeout extension is not sent in the native body");
+        # Let the loopback handler finish before the following test replaces it.
+        usleep(200000);
     }
 
     geminiToolCallResponseTest() {

@@ -1567,6 +1567,35 @@ printf("server negotiated HTTP/%s\n", ver ?? "unknown");
             return restDoRequest("POST", path, body, hdr);
         }
 
+        #! Sends an HTTP \c POST request with a call-local timeout
+        /** Unlike @ref setTimeout(), this method does not mutate shared client
+            state, so concurrent callers can apply independent deadlines.
+
+            @param path request path
+            @param body request body
+            @param hdr optional request headers
+            @param timeout_ms timeout for this request only in milliseconds
+
+            @return the REST response
+
+            @throw RESTCLIENTIO-OPTION-ERROR when @a timeout_ms is not
+                positive
+            @throw HTTPCLIENT-TIMEOUT when the request exceeds @a timeout_ms
+            @throw any request, transport, validation, or authentication
+                exception raised by @ref restPost()
+
+            @par Example
+            @code{.py}
+            hash<RestClient::RestResponseInfo> response =
+                client.restPostWithTimeout("/jobs", request, NOTHING, 5000);
+            @endcode
+        */
+        hash<RestClient::RestResponseInfo> restPostWithTimeout(string path,
+                auto body, *hash<auto> hdr, int timeout_ms) {
+            return restDoRequestWithTimeout("POST", path, body, hdr,
+                timeout_ms);
+        }
+
         #! Sends an HTTP \c PUT request and returns a @ref RestClient::RestResponseInfo hash
         hash<RestClient::RestResponseInfo> restPut(string path, auto body, *hash<auto> hdr) {
             return restDoRequest("PUT", path, body, hdr);
@@ -1737,7 +1766,47 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         #! Sends a generic REST request and returns a @ref RestClient::RestResponseInfo hash
         hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body,
                 *hash<auto> hdr) {
-            return restDoRequestIntern(method, path, body, hdr, False);
+            return restDoRequestIntern(method, path, body, hdr, False,
+                NOTHING);
+        }
+
+        #! Sends a generic REST request with a call-local timeout
+        /** This is the method-neutral counterpart to
+            @ref restPostWithTimeout().  The timeout is converted from
+            milliseconds and passed directly to the multiplexed connection
+            manager without modifying the client-wide timeout used by other
+            threads.
+
+            @param method HTTP method
+            @param path request path
+            @param body request body
+            @param hdr optional request headers
+            @param timeout_ms timeout for this request only in milliseconds
+
+            @return the REST response
+
+            @throw RESTCLIENTIO-OPTION-ERROR when @a timeout_ms is not
+                positive
+            @throw HTTPCLIENT-TIMEOUT when the request exceeds @a timeout_ms
+            @throw any request, transport, validation, or authentication
+                exception raised by @ref restDoRequest()
+
+            @par Example
+            @code{.py}
+            hash<RestClient::RestResponseInfo> response =
+                client.restDoRequestWithTimeout("PATCH", "/orders/42",
+                    update, NOTHING, 2500);
+            @endcode
+        */
+        hash<RestClient::RestResponseInfo> restDoRequestWithTimeout(
+                string method, string path, auto body, *hash<auto> hdr,
+                int timeout_ms) {
+            if (timeout_ms <= 0) {
+                throw "RESTCLIENTIO-OPTION-ERROR",
+                    "timeout_ms must be greater than zero";
+            }
+            return restDoRequestIntern(method, path, body, hdr, False,
+                milliseconds(timeout_ms));
         }
 
         #! Sends a REST request with a pre-serialized body; skips validator \c processRequest
@@ -1760,12 +1829,14 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         */
         hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
                 *hash<auto> hdr) {
-            return restDoRequestIntern(method, path, body, hdr, True);
+            return restDoRequestIntern(method, path, body, hdr, True,
+                NOTHING);
         }
 
         #! Internal: shared request path for @ref restDoRequest() and @ref restDoRawRequest()
         private hash<RestClient::RestResponseInfo> restDoRequestIntern(string method, string path,
-                auto body, *hash<auto> hdr, bool raw) {
+                auto body, *hash<auto> hdr, bool raw,
+                *timeout request_timeout_ms) {
             ensureToken();
 
             # 1. Snapshot config state and serialize body (or skip serialization for raw)
@@ -1780,8 +1851,8 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
 
             # Snapshot the per-instance request-timeout override — passed to every
             # mgr.request() call below so setTimeout() state is honored
-            *timeout req_to;
-            {
+            *timeout req_to = request_timeout_ms;
+            if (!exists request_timeout_ms) {
                 AutoReadLock al(config_lock);
                 if (request_timeout_override > 0) {
                     req_to = request_timeout_override;

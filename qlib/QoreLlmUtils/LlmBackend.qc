@@ -1100,6 +1100,9 @@ llm.chatStream(
         if (exists body.temperature) {
             options_h.temperature = body.temperature;
         }
+        if (exists body.timeout_ms) {
+            options_h.timeout_ms = body.timeout_ms;
+        }
         if (exists body.max_retries) {
             options_h.max_retries = body.max_retries;
         }
