@@ -3599,7 +3599,15 @@ bool QoreString::startsWith(const std::string& str) const {
 }
 
 bool QoreString::startsWith(const QoreString& str) const {
-    assert(str.getEncoding() == getEncoding());
+    // an empty string is a prefix of every string, even with a different character encoding
+    if (!str.priv->len) {
+        return true;
+    }
+    // the comparison is byte-wise, so it is only meaningful in the same character encoding;
+    // matches the behavior of equal() and equalPartial() rather than asserting on a public API
+    if (priv->getEncoding() != str.priv->getEncoding()) {
+        return false;
+    }
     return priv->startsWith(str.c_str(), str.size());
 }
 
@@ -3612,7 +3620,15 @@ bool QoreString::endsWith(const std::string& str) const {
 }
 
 bool QoreString::endsWith(const QoreString& str) const {
-    assert(str.getEncoding() == getEncoding());
+    // an empty string is a suffix of every string, even with a different character encoding
+    if (!str.priv->len) {
+        return true;
+    }
+    // the comparison is byte-wise, so it is only meaningful in the same character encoding;
+    // matches the behavior of equal() and equalPartial() rather than asserting on a public API
+    if (priv->getEncoding() != str.priv->getEncoding()) {
+        return false;
+    }
     return priv->endsWith(str.c_str(), str.size());
 }
 

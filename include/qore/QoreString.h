@@ -519,10 +519,13 @@ public:
     /** the argument's byte length is used, so this overload is safe with encodings that have embedded
         nulls (such as UTF-16*), unlike the \c "const char*" overload
 
-        @param str the string to look for at the beginning of the current string; must already have the
-        same character encoding as the current string
+        @param str the string to look for at the beginning of the current string
 
-        @return true if the current string starts with the argument string
+        @return true if the current string starts with the argument string; false if the argument has a
+        different character encoding than the current string, since the comparison is byte-wise
+
+        @note an empty argument is a prefix of every string, whatever its character encoding; convert the
+        argument with TempEncodingHelper first if a match across character encodings is required
 
         @since %Qore 3.0
      */
@@ -545,10 +548,13 @@ public:
     /** the argument's byte length is used, so this overload is safe with encodings that have embedded
         nulls (such as UTF-16*), unlike the \c "const char*" overload
 
-        @param str the string to look for at the end of the current string; must already have the same
-        character encoding as the current string
+        @param str the string to look for at the end of the current string
 
-        @return true if the current string ends with the argument string
+        @return true if the current string ends with the argument string; false if the argument has a
+        different character encoding than the current string, since the comparison is byte-wise
+
+        @note an empty argument is a suffix of every string, whatever its character encoding; convert the
+        argument with TempEncodingHelper first if a match across character encodings is required
 
         @since %Qore 3.0
      */
