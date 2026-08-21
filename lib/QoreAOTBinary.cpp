@@ -17372,14 +17372,14 @@ static bool readAndSetupVariantSignature(
     int sig_first_line = 0;
     int sig_last_line  = 0;
     if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_SIG_LINES) != 0) {
-        sig_first_line = qore_aot_read_line(reader, ptr);
-        sig_last_line  = qore_aot_read_line(reader, ptr);
+        sig_first_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+        sig_last_line  = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
     }
     entry_first_line = 0;
     entry_last_line = 0;
     if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_ENTRY_STMT_LINES) != 0) {
-        entry_first_line = qore_aot_read_line(reader, ptr);
-        entry_last_line  = qore_aot_read_line(reader, ptr);
+        entry_first_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+        entry_last_line  = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
     }
     if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_VARIANT_PARSE_OPTIONS) != 0) {
         int64_t po_lo = QoreAOTBinaryReader::readI64(ptr);
@@ -18059,8 +18059,8 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                             const char* base_path = reader.readStringRef(ptr);
                             entry.base_path = base_path ? base_path : "";
                             if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_BCA_LINES) != 0) {
-                                entry.start_line = qore_aot_read_line(reader, ptr);
-                                entry.end_line = qore_aot_read_line(reader, ptr);
+                                entry.start_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+                                entry.end_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
                             }
                             if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_BCA_NAMED_ARG_MAP) != 0) {
                                 entry.eval_result_size = QoreAOTBinaryReader::readU16(ptr);

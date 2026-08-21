@@ -1447,8 +1447,8 @@ static bool buildAOTProgramStatementLocIndex(QoreProgram* pgm,
         }
 
         AOTCompiledFuncWithSlots::AOTStmtLocEntry entry;
-        entry.start_line = static_cast<int16_t>(loc->start_line);
-        entry.end_line = static_cast<int16_t>(loc->end_line);
+        entry.start_line = loc->start_line;
+        entry.end_line = loc->end_line;
         entry.offset = loc->offset;
         entry.file = file;
         entry.source = source;
@@ -1513,8 +1513,8 @@ static bool attachAOTProgramStatementLocs(QoreProgram* pgm,
         }
 
         AOTCompiledFuncWithSlots::AOTStmtLocEntry entry;
-        entry.start_line = static_cast<int16_t>(loc->start_line);
-        entry.end_line = static_cast<int16_t>(loc->end_line);
+        entry.start_line = loc->start_line;
+        entry.end_line = loc->end_line;
         entry.offset = loc->offset;
         entry.file = file;
         entry.source = source;
@@ -4633,8 +4633,8 @@ static bool aotLowerOutlinedFnHelpers(std::vector<AOTOutlinedHelper>& helpers,
         }
         for (const auto& loc : lowerer.getAOTLocTable()) {
             AOTCompiledFuncWithSlots::AOTLocEntry entry;
-            entry.start_line = static_cast<int16_t>(loc.start_line);
-            entry.end_line = static_cast<int16_t>(loc.end_line);
+            entry.start_line = loc.start_line;
+            entry.end_line = loc.end_line;
             entry.file = loc.file;
             aot_locs.push_back(std::move(entry));
         }
@@ -17587,8 +17587,8 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                     }
                     const auto& loc = loc_table[loc_index];
                     AOTCompiledFuncWithSlots::AOTLocEntry entry;
-                    entry.start_line = static_cast<int16_t>(loc.start_line);
-                    entry.end_line = static_cast<int16_t>(loc.end_line);
+                    entry.start_line = loc.start_line;
+                    entry.end_line = loc.end_line;
                     entry.file = loc.file;
                     aot_locs.push_back(std::move(entry));
                 }
@@ -19937,8 +19937,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         if (std_entry_ok) {
                             for (const auto& loc : retry_lowerer.getAOTLocTable()) {
                                 AOTCompiledFuncWithSlots::AOTLocEntry entry;
-                                entry.start_line = static_cast<int16_t>(loc.start_line);
-                                entry.end_line = static_cast<int16_t>(loc.end_line);
+                                entry.start_line = loc.start_line;
+                                entry.end_line = loc.end_line;
                                 entry.file = loc.file;
                                 aot_locs_local.push_back(std::move(entry));
                             }
@@ -20032,8 +20032,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                     if (std_entry_ok && !used_retry_lowering) {
                         for (const auto& loc : lowerer.getAOTLocTable()) {
                             AOTCompiledFuncWithSlots::AOTLocEntry entry;
-                            entry.start_line = static_cast<int16_t>(loc.start_line);
-                            entry.end_line = static_cast<int16_t>(loc.end_line);
+                            entry.start_line = loc.start_line;
+                            entry.end_line = loc.end_line;
                             entry.file = loc.file;
                             aot_locs_local.push_back(std::move(entry));
                         }
@@ -20449,8 +20449,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             if (method_ok) {
                                 for (const auto& loc : retry_lowerer.getAOTLocTable()) {
                                     AOTCompiledFuncWithSlots::AOTLocEntry entry;
-                                    entry.start_line = static_cast<int16_t>(loc.start_line);
-                                    entry.end_line = static_cast<int16_t>(loc.end_line);
+                                    entry.start_line = loc.start_line;
+                                    entry.end_line = loc.end_line;
                                     entry.file = loc.file;
                                     aot_locs_local.push_back(std::move(entry));
                                 }
@@ -20533,8 +20533,8 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         if (method_ok && !used_retry_lowering) {
                             for (const auto& loc : lowerer.getAOTLocTable()) {
                                 AOTCompiledFuncWithSlots::AOTLocEntry entry;
-                                entry.start_line = static_cast<int16_t>(loc.start_line);
-                                entry.end_line = static_cast<int16_t>(loc.end_line);
+                                entry.start_line = loc.start_line;
+                                entry.end_line = loc.end_line;
                                 entry.file = loc.file;
                                 aot_locs_local.push_back(std::move(entry));
                             }
