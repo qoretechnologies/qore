@@ -107,6 +107,9 @@ public class TogetherRestClientBase {
         #! Default Together API version
         const DefaultApiVersion = "v1";
 
+        #! Default Together chat model
+        const DefaultChatModel = "meta-llama/Llama-3.3-70B-Instruct-Turbo";
+
         #! Default constructor options
         const DefaultOptions = {
             "url": DefaultUrl,
@@ -125,6 +128,8 @@ public class TogetherRestClientBase {
             rv.token = rv.apikey;
             delete rv.apikey;
         }
+        # connection-level option for downstream LLM clients; not a REST client option
+        remove rv{"chat-model"};
         return rv;
     }
 }
@@ -186,6 +191,17 @@ public class TogetherRestConnection inherits RestClient::RestConnection {
                     "desc": "The API version to use.",
                     "type": "string",
                     "default_value": TogetherRestClientBase::DefaultApiVersion,
+                },
+                "chat-model": <ConnectionOptionInfo>{
+                    "display_name": "Chat Model",
+                    "short_desc": "Together chat model name",
+                    "desc": "The Together chat model used by LLM clients when this connection is "
+                        "selected for chat.\n\n"
+                        "Chat models are a separate family from embedding models and cannot "
+                        "be used interchangeably."
+                        "\n\nExample values: `meta-llama/Llama-3.3-70B-Instruct-Turbo` (the default)",
+                    "type": "string",
+                    "default_value": TogetherRestClientBase::DefaultChatModel,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
                     "default_value": DefaultPingHeaders,
@@ -282,6 +298,11 @@ public class TogetherRestConnection inherits RestClient::RestConnection {
 public class TogetherLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
     public {
         const DefaultUrl = "https://api.together.xyz";
+    }
+
+    #! Returns the default Together chat model
+    *string getDefaultModel() {
+        return TogetherRestClientBase::DefaultChatModel;
     }
 
     constructor(hash<QoreLlmUtils::LlmBackendConfig> config)

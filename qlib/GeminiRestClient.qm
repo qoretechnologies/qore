@@ -118,6 +118,9 @@ public class GeminiRestClientBase {
         #! Default Gemini API version
         const DefaultApiVersion = "v1beta";
 
+        #! Default Gemini chat model
+        const DefaultChatModel = "gemini-2.5-flash";
+
         #! Default data serialization
         const DefaultData = "json";
 
@@ -523,6 +526,17 @@ public class GeminiRestConnection inherits RestClient::RestConnection {
                     "sensitive": True,
                     "preselected": True,
                 },
+                "chat-model": <ConnectionOptionInfo>{
+                    "display_name": "Chat Model",
+                    "short_desc": "Google Gemini chat model name",
+                    "desc": "The Google Gemini chat model used by LLM clients when this connection is "
+                        "selected for chat.\n\n"
+                        "Chat models are a separate family from embedding models and cannot "
+                        "be used interchangeably."
+                        "\n\nExample values: `gemini-2.5-flash` (the default), `gemini-2.5-pro`",
+                    "type": "string",
+                    "default_value": GeminiRestClientBase::DefaultChatModel,
+                },
                 "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
                     "default_value": GeminiRestClientBase::DefaultPingHeaders,
                 },
@@ -694,7 +708,7 @@ public class GeminiLlmProvider inherits GeminiBodyShape::AbstractGeminiModelProv
     }
 
     string getDefaultModel() {
-        return "gemini-2.5-flash";
+        return GeminiRestClientBase::DefaultChatModel;
     }
 
     #! Returns the Gemini \c generateContent REST path (relative to the API-key client)

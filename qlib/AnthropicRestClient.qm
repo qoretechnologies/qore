@@ -89,7 +89,7 @@ printf("%Y\n", ans.body);
     @code{.py}
 AnthropicRestClient rest = get_connection("my-anthropic-connection");
 AnthropicSseStream stream = rest.openMessagesStream({
-    "model": "claude-sonnet-4-6-20250514",
+    "model": "claude-opus-5",
     "max_tokens": 1024,
     "messages": (
         {
@@ -122,6 +122,9 @@ public class AnthropicRestClientBase {
 
         #! Default Anthropic API version
         const DefaultApiVersion = "v1";
+
+        #! Default Anthropic chat model
+        const DefaultChatModel = "claude-opus-5";
 
         #! Default anthropic-version header value
         const DefaultAnthropicVersion = "2023-06-01";
@@ -165,6 +168,8 @@ public class AnthropicRestClientBase {
             rv.headers."x-api-key" = rv.apikey;
             remove rv.apikey;
         }
+        # connection-level option for downstream LLM clients; not a REST client option
+        remove rv{"chat-model"};
         return rv;
     }
 }
@@ -405,6 +410,17 @@ public class AnthropicRestConnection inherits RestClient::RestConnection {
                     "type": "string",
                     "default_value": AnthropicRestClientBase::DefaultApiVersion,
                 },
+                "chat-model": <ConnectionOptionInfo>{
+                    "display_name": "Chat Model",
+                    "short_desc": "Anthropic chat model name",
+                    "desc": "The Anthropic chat model used by LLM clients when this connection is "
+                        "selected for chat.\n\n"
+                        "Chat models are a separate family from embedding models and cannot "
+                        "be used interchangeably."
+                        "\n\nExample values: `claude-opus-5` (the default), `claude-sonnet-5`, `claude-haiku-4-5`",
+                    "type": "string",
+                    "default_value": AnthropicRestClientBase::DefaultChatModel,
+                },
                 "anthropic_version": <ConnectionOptionInfo>{
                     "display_name": "Anthropic Version",
                     "short_desc": "The anthropic-version header value",
@@ -542,7 +558,7 @@ public class AnthropicRestClientIo inherits RestClientIo::RestClientIo, Anthropi
         @code{.py}
 AnthropicRestClientIo rest({"apikey": api_key});
 AnthropicSseStreamIo stream = rest.openMessagesStream({
-    "model": "claude-sonnet-4-6-20250514",
+    "model": "claude-opus-5",
     "max_tokens": 1024,
     "messages": ({"role": "user", "content": "Hello!"},),
 });
@@ -679,6 +695,11 @@ public class AnthropicSseStreamIo {
     Thread-safe: the REST client is lazy-initialized behind a mutex.
 */
 public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
+    #! Returns the default Anthropic chat model
+    *string getDefaultModel() {
+        return AnthropicRestClientBase::DefaultChatModel;
+    }
+
     private {
         #! Lazy-initialized REST client
         *RestClientIo::RestClientIo rest_client;
@@ -711,7 +732,7 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         ensureRestClient();
 
         hash<auto> body = addReasoningControls({
-            "model": getRequestModel(opts) ?? "claude-sonnet-4-20250514",
+            "model": getRequestModel(opts),
             "max_tokens": getRequestMaxOutputTokens(opts),
             "system": system_prompt,
             "messages": (
@@ -1053,7 +1074,7 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         }
 
         hash<auto> body = {
-            "model": getRequestModel(opts) ?? "claude-sonnet-4-20250514",
+            "model": getRequestModel(opts),
             "max_tokens": getRequestMaxOutputTokens(opts),
             "messages": api_messages,
         };

@@ -90,6 +90,9 @@ public class PerplexityRestClientBase {
         #! Default Perplexity REST API URL
         const DefaultUrl = "https://api.perplexity.ai";
 
+        #! Default Perplexity chat model
+        const DefaultChatModel = "sonar";
+
         #! Default constructor options
         const DefaultOptions = {
             "url": DefaultUrl,
@@ -117,6 +120,8 @@ public class PerplexityRestClientBase {
             rv.headers."Authorization" = "Bearer " + rv.apikey;
             remove rv.apikey;
         }
+        # connection-level option for downstream LLM clients; not a REST client option
+        remove rv{"chat-model"};
         return rv;
     }
 }
@@ -481,6 +486,17 @@ public class PerplexityRestConnection inherits RestClient::RestConnection {
                     "sensitive": True,
                     "preselected": True,
                 },
+                "chat-model": <ConnectionOptionInfo>{
+                    "display_name": "Chat Model",
+                    "short_desc": "Perplexity chat model name",
+                    "desc": "The Perplexity chat model used by LLM clients when this connection is "
+                        "selected for chat.\n\n"
+                        "Chat models are a separate family from embedding models and cannot "
+                        "be used interchangeably."
+                        "\n\nExample values: `sonar` (the default)",
+                    "type": "string",
+                    "default_value": PerplexityRestClientBase::DefaultChatModel,
+                },
                 "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
                     "default_value": PerplexityRestClientBase::DefaultPingHeaders,
                 },
@@ -615,6 +631,11 @@ public class PerplexityLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider 
     public {
         #! Default Perplexity REST API URL
         const DefaultUrl = "https://api.perplexity.ai";
+    }
+
+    #! Returns the default Perplexity chat model
+    *string getDefaultModel() {
+        return PerplexityRestClientBase::DefaultChatModel;
     }
 
     constructor(hash<QoreLlmUtils::LlmBackendConfig> config)

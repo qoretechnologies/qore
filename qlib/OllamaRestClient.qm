@@ -113,6 +113,8 @@ public class OllamaRestClientBase {
             rv.token = rv.apikey;
             delete rv.apikey;
         }
+        # connection-level option for downstream LLM clients; not a REST client option
+        remove rv{"chat-model"};
         return rv;
     }
 }
@@ -157,6 +159,18 @@ public class OllamaRestConnection inherits RestClient::RestConnection {
                         "authentication; supply only for hosted Ollama Cloud or "
                         "reverse-proxied deployments.",
                     "sensitive": True,
+                },
+                "chat-model": <ConnectionOptionInfo>{
+                    "display_name": "Chat Model",
+                    "short_desc": "Ollama chat model name",
+                    "desc": "The Ollama chat model used by LLM clients when this connection is "
+                        "selected for chat.\n\n"
+                        "Chat models are a separate family from embedding models and cannot "
+                        "be used interchangeably."
+                        "\n\nOllama serves whichever models have been pulled on the "
+                        "target host, so this option has no default; set it to a model "
+                        "that host provides",
+                    "type": "string",
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
                     "default_value": DefaultPingHeaders,
@@ -241,6 +255,14 @@ public class OllamaRestConnection inherits RestClient::RestConnection {
 public class OllamaLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
     public {
         const DefaultUrl = "http://localhost:11434";
+    }
+
+    #! Ollama has no vendor-stable default chat model
+    /** the model must be configured explicitly; this override keeps the
+        inherited OpenAI default from leaking into Ollama requests
+    */
+    *string getDefaultModel() {
+        return NOTHING;
     }
 
     constructor(hash<QoreLlmUtils::LlmBackendConfig> config)

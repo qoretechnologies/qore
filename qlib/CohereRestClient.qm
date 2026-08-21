@@ -302,6 +302,11 @@ public class CohereLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         Mutex rest_mutex();
     }
 
+    #! Returns the default Cohere chat model
+    *string getDefaultModel() {
+        return CohereRestClientBase::DefaultChatModel;
+    }
+
     constructor(hash<QoreLlmUtils::LlmBackendConfig> config)
             : QoreLlmUtils::AbstractLlmProvider(config) {
         if (!config.api_key.val()) {
@@ -351,7 +356,7 @@ public class CohereLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         # messages, int max_tokens, hash response_format); a narrowing literal would
         # make the conditional additions below fail with RUNTIME-TYPE-ERROR
         hash<auto!> body = {
-            "model": getRequestModel(opts) ?? CohereRestClientBase::DefaultChatModel,
+            "model": getRequestModel(opts),
             "messages": buildCohereMessages(messages),
         };
         if (exists opts.temperature) {

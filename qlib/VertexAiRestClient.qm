@@ -225,6 +225,17 @@ public class VertexAiRestConnection inherits RestClient::RestConnection {
                     "type": "string",
                     "desc": "GCP project ID (required)",
                 },
+                "chat-model": <ConnectionOptionInfo>{
+                    "display_name": "Chat Model",
+                    "short_desc": "Vertex AI chat model name",
+                    "desc": "The Vertex AI chat model used by LLM clients when this connection is "
+                        "selected for chat.\n\n"
+                        "Chat models are a separate family from embedding models and cannot "
+                        "be used interchangeably."
+                        "\n\nExample values: `gemini-2.0-flash` (the default), `gemini-2.5-pro`",
+                    "type": "string",
+                    "default_value": "gemini-2.0-flash",
+                },
                 "gcp_region": <ConnectionOptionInfo>{
                     "display_name": "GCP Region",
                     "short_desc": "Vertex AI region",

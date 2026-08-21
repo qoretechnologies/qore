@@ -141,6 +141,9 @@ public class OpenAiRestClientBase {
         #! Default OpenAi API version
         const DefaultApiVersion = "v1";
 
+        #! Default OpenAI chat model
+        const DefaultChatModel = "gpt-4o-mini";
+
         #! Default embedding model
         const DefaultEmbeddingModel = "text-embedding-3-small";
 
@@ -161,7 +164,7 @@ public class OpenAiRestClientBase {
                 opts.swagger = path;
             }
         }
-        remove opts{"embedding-model"};
+        remove opts{"chat-model", "embedding-model"};
         return DefaultOptions + opts;
     }
 }
@@ -392,6 +395,17 @@ public class OpenAiRestConnection inherits RestClient::RestConnection {
                     "desc": "The API version to use",
                     "type": "string",
                     "default_value": OpenAiRestClientBase::DefaultApiVersion,
+                },
+                "chat-model": <ConnectionOptionInfo>{
+                    "display_name": "Chat Model",
+                    "short_desc": "OpenAI chat model name",
+                    "desc": "The OpenAI chat model used by LLM clients when this connection is "
+                        "selected for chat.\n\n"
+                        "Chat models are a separate family from embedding models and cannot "
+                        "be used interchangeably."
+                        "\n\nExample values: `gpt-4o-mini` (the default), `gpt-4o`, `o3-mini`",
+                    "type": "string",
+                    "default_value": OpenAiRestClientBase::DefaultChatModel,
                 },
                 "use_schema": <ConnectionOptionInfo>{
                     "display_name": "Use OpenAPI Schema",
@@ -723,6 +737,11 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         *RestClientIo::RestClientIo rest_client;
         #! Serializes lazy initialization
         Mutex rest_mutex();
+    }
+
+    #! Returns the default OpenAI chat model
+    *string getDefaultModel() {
+        return OpenAiRestClientBase::DefaultChatModel;
     }
 
     #! Constructs the provider from an @ref QoreLlmUtils::LlmBackendConfig

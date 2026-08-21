@@ -1,0 +1,225 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  LlmChatModelOption.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+
+    Verifies the connection-level chat-model option across every chat-capable
+    REST client connection, and the AbstractLlmProvider::getDefaultModel() hook
+    that makes a chat request always carry a model.
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires ConnectionProvider
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires OpenAiRestClient
+%requires AnthropicRestClient
+%requires GeminiRestClient
+%requires GrokRestClient
+%requires PerplexityRestClient
+%requires DeepSeekRestClient
+%requires MistralRestClient
+%requires TogetherRestClient
+%requires FireworksRestClient
+%requires GroqRestClient
+%requires OllamaRestClient
+%requires CohereRestClient
+%requires BedrockRestClient
+%requires VertexAiRestClient
+%requires AzureOpenAiRestClient
+
+%exec-class LlmChatModelOptionTest
+
+public class LlmChatModelOptionTest inherits QUnit::Test {
+    public {
+        #! connection scheme -> expected chat-model default value
+        /** NOTHING means the option is declared but asserts no default, because
+            the provider has no vendor-stable default model
+        */
+        const ExpectedDefaults = {
+            "openai": "gpt-4o-mini",
+            "anthropic": "claude-opus-5",
+            "gemini": "gemini-2.5-flash",
+            "vertex-ai": "gemini-2.0-flash",
+            "grok": "grok-3",
+            "perplexity": "sonar",
+            "deepseek": "deepseek-chat",
+            "mistral": "mistral-large-latest",
+            "together": "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+            "fireworks": "accounts/fireworks/models/llama-v3p1-405b-instruct",
+            "cohere": "command-a-03-2025",
+            "groq": NOTHING,
+            "ollama": NOTHING,
+        };
+
+        #! provider class -> expected getRequestModel() with nothing configured
+        const ExpectedProviderDefaults = {
+            "OpenAiRestClient::OpenAiLlmProvider": "gpt-4o-mini",
+            "AnthropicRestClient::AnthropicLlmProvider": "claude-opus-5",
+            "GrokRestClient::GrokLlmProvider": "grok-3",
+            "PerplexityRestClient::PerplexityLlmProvider": "sonar",
+            "DeepSeekRestClient::DeepSeekLlmProvider": "deepseek-chat",
+            "MistralRestClient::MistralLlmProvider": "mistral-large-latest",
+            "TogetherRestClient::TogetherLlmProvider":
+                "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+            "FireworksRestClient::FireworksLlmProvider":
+                "accounts/fireworks/models/llama-v3p1-405b-instruct",
+            "CohereRestClient::CohereLlmProvider": "command-a-03-2025",
+            # these two must NOT inherit the OpenAI default
+            "GroqRestClient::GroqLlmProvider": NOTHING,
+            "OllamaRestClient::OllamaLlmProvider": NOTHING,
+        };
+    }
+
+    constructor() : Test("LlmChatModelOption Test", "1.0") {
+        addTestCase("every chat-capable connection declares chat-model",
+            \chatModelOptionTest());
+        addTestCase("providers resolve their own default model",
+            \providerDefaultModelTest());
+        addTestCase("explicit configuration always wins over the default",
+            \explicitModelWinsTest());
+        addTestCase("chat-model is stripped from REST client options",
+            \optionStrippedTest());
+        addTestCase("Azure routes by deployment, not by model name",
+            \azureDeploymentTest());
+        addTestCase("a provider with no default returns nothing",
+            \baseHookDefaultTest());
+        set_return_value(main());
+    }
+
+    private chatModelOptionTest() {
+        foreach string scheme in (sort(keys ExpectedDefaults)) {
+            hash<ConnectionSchemeInfo> info =
+                ConnectionProvider::ConnectionSchemeCache::getScheme(scheme);
+            *hash<ConnectionOptionInfo> o = info.options."chat-model";
+            assertTrue(exists o, sprintf("%y declares a chat-model option", scheme));
+            assertEq("string", o.type, sprintf("%y chat-model type", scheme));
+            assertEq("Chat Model", o.display_name,
+                sprintf("%y chat-model display name", scheme));
+            assertEq(ExpectedDefaults{scheme}, o.default_value,
+                sprintf("%y chat-model default", scheme));
+        }
+    }
+
+    private providerDefaultModelTest() {
+        foreach string cname in (sort(keys ExpectedProviderDefaults)) {
+            object p = Class::forName(cname).newObject(
+                <QoreLlmUtils::LlmBackendConfig>{
+                    "mode": "test",
+                    "api_key": "k",
+                    "url": "https://example.com",
+                });
+            assertEq(ExpectedProviderDefaults{cname}, p.getRequestModel(),
+                sprintf("%s resolves its own default model", cname));
+        }
+    }
+
+    private explicitModelWinsTest() {
+        # a configured model must beat the provider default
+        OpenAiRestClient::OpenAiLlmProvider p(<QoreLlmUtils::LlmBackendConfig>{
+            "mode": "http",
+            "api_key": "k",
+            "url": "https://example.com",
+            "model": "o3-mini",
+        });
+        assertEq("o3-mini", p.getRequestModel());
+        # and a per-call override must beat the configured model
+        assertEq("gpt-4o", p.getRequestModel(<QoreLlmUtils::LlmRequestOptions>{
+            "model": "gpt-4o",
+        }));
+    }
+
+    private optionStrippedTest() {
+        # chat-model is connection metadata for LLM clients, never a REST client option
+        hash<auto> oo = OpenAiRestClient::OpenAiRestClientBase::getOptions({
+            "chat-model": "gpt-4o",
+            "embedding-model": "text-embedding-3-small",
+        });
+        assertEq(NOTHING, oo{"chat-model"});
+        assertEq(NOTHING, oo{"embedding-model"});
+
+        hash<auto> go = GrokRestClient::GrokRestClientBase::getOptions({
+            "apikey": "k",
+            "chat-model": "grok-3",
+        });
+        assertEq("k", go.token);
+        assertEq(NOTHING, go{"chat-model"});
+
+        hash<auto> co = CohereRestClient::CohereRestClientBase::getOptions({
+            "apikey": "k",
+            "chat-model": "command-a-03-2025",
+        });
+        assertEq(NOTHING, co{"chat-model"});
+    }
+
+    private azureDeploymentTest() {
+        # Azure encodes the model in the URL as a deployment name, so it declares
+        # no chat-model option and must not inherit the OpenAI default
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("azure-openai");
+        assertFalse(exists info.options."chat-model");
+        assertTrue(exists info.options.azure_deployment);
+
+        AzureOpenAiRestClient::AzureOpenAiLlmProvider p(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "mode": "azure-openai",
+                "api_key": "k",
+                "url": "https://example.openai.azure.com",
+                "provider_options": {
+                    "azure_deployment": "my-deployment",
+                    "azure_api_version": "2024-10-21",
+                },
+            });
+        assertEq(NOTHING, p.getRequestModel(),
+            "Azure must not send an inherited OpenAI model name");
+    }
+
+    private baseHookDefaultTest() {
+        # Bedrock keeps its own default model through the shared hook
+        BedrockRestClient::BedrockLlmProvider b(<QoreLlmUtils::LlmBackendConfig>{
+            "mode": "bedrock",
+            "api_key": "k",
+            "url": "https://bedrock-runtime.us-east-1.amazonaws.com",
+        });
+        assertEq("amazon.nova-lite-v1:0", b.getRequestModel(),
+            "Bedrock keeps its own default model");
+
+        # regression: a URL that carries no region must fall through to the
+        # documented region fallbacks, not raise RUNTIME-TYPE-ERROR from the
+        # best-effort URL parse
+        BedrockRestClient::BedrockLlmProvider b2(<QoreLlmUtils::LlmBackendConfig>{
+            "mode": "bedrock",
+            "api_key": "k",
+            "url": "https://example.com",
+            "provider_options": {"aws_region": "eu-central-1"},
+        });
+        assertEq("amazon.nova-lite-v1:0", b2.getRequestModel());
+
+        # with no region anywhere the failure must be the documented config error
+        *string saved_region = ENV.AWS_REGION;
+        *string saved_default = ENV.AWS_DEFAULT_REGION;
+        on_exit {
+            if (saved_region.val()) {
+                ENV.AWS_REGION = saved_region;
+            }
+            if (saved_default.val()) {
+                ENV.AWS_DEFAULT_REGION = saved_default;
+            }
+        }
+        remove ENV.AWS_REGION;
+        remove ENV.AWS_DEFAULT_REGION;
+        assertThrows("LLM-CONFIG-ERROR", "requires an AWS region", sub () {
+            new BedrockRestClient::BedrockLlmProvider(
+                <QoreLlmUtils::LlmBackendConfig>{
+                    "mode": "bedrock",
+                    "api_key": "k",
+                    "url": "https://example.com",
+                });
+        });
+    }
+}

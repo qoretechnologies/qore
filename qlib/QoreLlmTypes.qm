@@ -816,9 +816,22 @@ public class AbstractLlmProvider {
                 "chat() instead", getMode());
     }
 
-    #! Resolves the model name for a single call (per-call override > config default)
+    #! Returns the provider's default chat model, or @ref nothing if it has none
+    /** Providers that have a sensible default model override this; the value is
+        used by @ref getRequestModel() when neither the per-call options nor the
+        backend config supply one, so a chat request always carries a model.
+
+        Subclasses may narrow the return type to \c string when the provider
+        always has a default.
+    */
+    *string getDefaultModel() {
+        return NOTHING;
+    }
+
+    #! Resolves the model name for a single call
+    /** per-call override > config default > @ref getDefaultModel() */
     *string getRequestModel(*hash<LlmRequestOptions> opts) {
-        return opts.model ?? config_h.model;
+        return opts.model ?? config_h.model ?? getDefaultModel();
     }
 
     #! Resolves the provider-neutral output/completion budget for a single call

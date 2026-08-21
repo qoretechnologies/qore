@@ -1493,6 +1493,8 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - registers @ref QoreLlmUtils::LlmProviderRegistry "LlmProviderRegistry" mode
         \c grok via @ref GrokRestClient::GrokLlmProvider "GrokLlmProvider" — thin
         subclass of \c OpenAiLlmProvider with the xAI default URL applied
+      - new \c chat-model connection option, so the model used when the connection is
+        selected for chat can be configured on the connection; defaults to \c "grok-3"
 
     - @ref httpclientstreamingiointro "HttpClientStreamingIo" module
       - added optional AsyncAPI 3.0 validation for deserialized
@@ -1527,12 +1529,24 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - new virtual \c getChatCompletionsPath() subclass hook so derived providers can
         override the URL path (e.g. Perplexity uses \c /chat/completions instead of
         \c /v1/chat/completions, Azure routes through deployment-name URLs)
+      - new \c chat-model connection option, so the model used when the connection is
+        selected for chat can be configured on the connection; defaults to
+        \c "gpt-4o-mini"
+      - @ref QoreLlmUtils::AbstractLlmProvider::getRequestModel() "getRequestModel()"
+        now falls back to the new
+        @ref QoreLlmUtils::AbstractLlmProvider::getDefaultModel() "getDefaultModel()"
+        hook, so a chat request always carries a model; every OpenAI-compatible
+        subclass overrides the hook, and subclasses whose model is not an OpenAI model
+        name (Azure, which routes by deployment) return @ref nothing rather than
+        inheriting the OpenAI default
 
     - @ref perplexityrestclientintro "PerplexityRestClient" module
       - registers @ref QoreLlmUtils::LlmProviderRegistry "LlmProviderRegistry" mode
         \c perplexity via @ref PerplexityRestClient::PerplexityLlmProvider
         "PerplexityLlmProvider" — overrides \c getChatCompletionsPath() to
         \c /chat/completions
+      - new \c chat-model connection option, so the model used when the connection is
+        selected for chat can be configured on the connection; defaults to \c "sonar"
 
     - @ref qdxintro "Qdx" module
       - added @ref Qdx::QoreTokenizer "QoreTokenizer" class for proper Qore lexical analysis
