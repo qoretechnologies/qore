@@ -104,7 +104,10 @@ public class VoyageRestClientBase {
         const DefaultApiVersion = "v1";
 
         #! Default Voyage AI embedding model
-        const DefaultEmbeddingModel = "voyage-3";
+        const DefaultEmbeddingModel = "voyage-4-lite";
+
+        #! Default Voyage AI reranking model
+        const DefaultRerankModel = "rerank-2.5-lite";
 
         #! Default constructor options
         const DefaultOptions = {
@@ -126,7 +129,7 @@ public class VoyageRestClientBase {
 
         #! Default ping body (minimal valid request for connectivity check)
         const DefaultPingBody = {
-            "model": "voyage-3",
+            "model": DefaultEmbeddingModel,
             "input": ("ping",),
         };
     }
@@ -158,7 +161,9 @@ public class VoyageRestClientBase {
             remove rv.apikey;
         }
         rv.headers = headers;
-        remove rv{"embedding-model"};
+        # these are connection-level options for downstream consumers (RAG embedder / reranker
+        # configuration); they are not REST client options
+        remove rv{"embedding-model", "rerank-model"};
         return rv;
     }
 }
@@ -203,7 +208,10 @@ public class VoyageRestConnection inherits RestClient::RestConnection {
             "desc": "A connection to the Voyage AI REST API for text embeddings and reranking.\n\n"
                 "Requires an API key (set as `apikey`) from the "
                 "[Voyage AI Dashboard](https://dash.voyageai.com/). "
-                "The connection uses the `voyage://` URL scheme",
+                "The connection uses the `voyage://` URL scheme.\n\n"
+                "The models used when this connection is selected for embeddings and for "
+                "reranking are set independently with the `embedding-model` and "
+                "`rerank-model` options",
             "cls": Class::forName("VoyageRestConnection"),
             "auto_url": True,
             "schemes": {
@@ -234,9 +242,26 @@ public class VoyageRestConnection inherits RestClient::RestConnection {
                     "display_name": "Embedding Model",
                     "short_desc": "Voyage AI embedding model name",
                     "desc": "The Voyage AI embedding model used by embedding clients when "
-                        "this connection is selected for embeddings",
+                        "this connection is selected for embeddings; sent as the `model` "
+                        "parameter to the `/embeddings` endpoint.\n\n"
+                        "Example values: `voyage-4-large` (highest quality), `voyage-4` "
+                        "(balanced), `voyage-4-lite` (fastest; the default), `voyage-code-3` "
+                        "(source code)",
                     "type": "string",
                     "default_value": VoyageRestClientBase::DefaultEmbeddingModel,
+                },
+                "rerank-model": <ConnectionOptionInfo>{
+                    "display_name": "Reranking Model",
+                    "short_desc": "Voyage AI reranking model name",
+                    "desc": "The Voyage AI reranking model used by reranking clients when "
+                        "this connection is selected for reranking; sent as the `model` "
+                        "parameter to the `/rerank` endpoint.\n\n"
+                        "Reranking models are a separate family from embedding models and "
+                        "cannot be used interchangeably.\n\n"
+                        "Example values: `rerank-2.5` (highest quality), `rerank-2.5-lite` "
+                        "(fastest; the default), `rerank-2` (previous generation)",
+                    "type": "string",
+                    "default_value": VoyageRestClientBase::DefaultRerankModel,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
                     "default_value": VoyageRestClientBase::DefaultPingHeaders,
@@ -323,7 +348,8 @@ public namespace QoreRagUtils {
 
     - \c api_key (required): Voyage API key; passed via the \c apikey option
     - \c url (optional): override the default Voyage URL
-    - \c model (optional): model name, default \c "voyage-3"
+    - \c model (optional): model name, default
+      @ref VoyageRestClient::VoyageRestClientBase::DefaultEmbeddingModel "DefaultEmbeddingModel"
     - \c dimension (optional): forwarded as the \c output_dimension request
       parameter; when unset the dimension is auto-detected on first call
     - \c timeout (optional): default request timeout (per-call \c opts override
@@ -340,7 +366,7 @@ public namespace QoreRagUtils {
 */
 public class VoyageEmbedder inherits AbstractEmbedder {
     public {
-        const DefaultModel = "voyage-3";
+        const DefaultModel = VoyageRestClient::VoyageRestClientBase::DefaultEmbeddingModel;
         const Backend = "voyage";
     }
 
@@ -551,11 +577,12 @@ public class VoyageEmbedderFactory inherits AbstractEmbedderFactory {
 
     - \c api_key (required): Voyage API key; passed via the \c apikey option
     - \c url (optional): override the default Voyage URL
-    - \c model (optional): model name, default \c "rerank-2"
+    - \c model (optional): model name, default
+      @ref VoyageRestClient::VoyageRestClientBase::DefaultRerankModel "DefaultRerankModel"
 */
 public class VoyageReranker inherits AbstractReranker {
     public {
-        const DefaultModel = "rerank-2";
+        const DefaultModel = VoyageRestClient::VoyageRestClientBase::DefaultRerankModel;
     }
 
     private {

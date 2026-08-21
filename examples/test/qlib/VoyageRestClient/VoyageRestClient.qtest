@@ -1,0 +1,229 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  VoyageRestClient.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires ConnectionProvider
+%requires RestClient
+%requires RestClientIo
+%requires QoreRagTypes
+%requires VoyageRestClient
+%requires QUnit
+
+%requires json
+
+%exec-class VoyageRestClientTest
+
+#! Records the last request per path and returns a minimal valid Voyage response
+class FakeVoyageHandler inherits AbstractHttpRequestHandler {
+    public {
+        hash<auto> requests;
+        Mutex m();
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        hash<auto> req = {
+            "path": cx.raw_path,
+            "method": hdr.method,
+            "auth": hdr."authorization",
+            "body": body.val() ? parse_json(body) : {},
+        };
+        {
+            m.lock();
+            on_exit m.unlock();
+            requests{cx.raw_path} = req;
+        }
+        if (cx.raw_path =~ /rerank/) {
+            return makeResponse(200, make_json({
+                "data": ({
+                    "index": 0,
+                    "relevance_score": 0.5,
+                    "document": req.body.documents[0],
+                },),
+                "usage": {"total_tokens": 7},
+            }), {"Content-Type": MimeTypeJson});
+        }
+        return makeResponse(200, make_json({
+            "data": ({"index": 0, "embedding": (1.0, 2.0, 3.0)},),
+        }), {"Content-Type": MimeTypeJson});
+    }
+
+    hash<auto> getRequest(string path) {
+        m.lock();
+        on_exit m.unlock();
+        return requests{path};
+    }
+}
+
+public class VoyageRestClientTest inherits QUnit::Test {
+    private {
+        HttpServer http;
+        int port;
+        FakeVoyageHandler handler;
+    }
+
+    constructor() : Test("VoyageRestClient Test", "1.0") {
+        addTestCase("connection scheme declares embedding + rerank model options",
+            \connectionSchemeTest());
+        addTestCase("model options are stripped from REST client options",
+            \restOptionsTest());
+        addTestCase("connection accepts both model options and rejects unknown ones",
+            \connectionOptionsTest());
+        addTestCase("ping defaults use the default embedding model",
+            \pingDefaultsTest());
+        addTestCase("embedder defaults to the connection default embedding model",
+            \embedderDefaultModelTest());
+        addTestCase("reranker defaults to the connection default rerank model",
+            \rerankerDefaultModelTest());
+        addTestCase("embedder and reranker require an API key",
+            \providerConfigTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelWarn());
+        http = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": False,
+        });
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        handler = new FakeVoyageHandler();
+        http.setHandler("voyage", "/", MimeTypeJson, handler);
+    }
+
+    globalTearDown() {
+        delete http;
+    }
+
+    private connectionSchemeTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("voyage");
+        assertEq("Voyage AI REST Connection", info.display_name);
+        assertTrue(info.schemes.voyage);
+        assertEq("apikey", info.required_options);
+
+        # embeddings and reranking are configured independently; the two model
+        # families are not interchangeable on the Voyage API
+        hash<ConnectionOptionInfo> emb = info.options."embedding-model";
+        assertEq("string", emb.type);
+        assertEq("voyage-4-lite", emb.default_value);
+        assertEq(VoyageRestClient::VoyageRestClientBase::DefaultEmbeddingModel,
+            emb.default_value);
+
+        hash<ConnectionOptionInfo> rr = info.options."rerank-model";
+        assertEq("Reranking Model", rr.display_name);
+        assertEq("string", rr.type);
+        assertEq("rerank-2.5-lite", rr.default_value);
+        assertEq(VoyageRestClient::VoyageRestClientBase::DefaultRerankModel,
+            rr.default_value);
+        assertNeq(emb.default_value, rr.default_value);
+    }
+
+    private restOptionsTest() {
+        hash<auto> opts = VoyageRestClient::VoyageRestClientBase::getOptions({
+            "apikey": "my-key",
+            "embedding-model": "voyage-4-large",
+            "rerank-model": "rerank-2.5",
+        });
+        assertEq("Bearer my-key", opts.headers."Authorization");
+        assertEq(MimeTypeJson, opts.headers."Accept");
+        assertEq(NOTHING, opts.apikey);
+        assertEq("https://api.voyageai.com", opts.url);
+        assertEq("v1", opts.api);
+        assertEq("/v1", opts.default_path);
+        # connection-level metadata must not leak into REST client options
+        assertEq(NOTHING, opts{"embedding-model"});
+        assertEq(NOTHING, opts{"rerank-model"});
+    }
+
+    private connectionOptionsTest() {
+        VoyageRestClient::VoyageRestConnection conn("voyage-test",
+            "test connection", VoyageRestClient::VoyageRestConnection::DefaultUrl, {}, {
+                "apikey": "my-key",
+                "embedding-model": "voyage-4-large",
+                "rerank-model": "rerank-2.5",
+            });
+        assertEq("voyage", conn.getType());
+        # getRealOptions() reports the configured connection option values
+        # (RestConnection::getOptions() only reports HTTP client init options)
+        assertEq("voyage-4-large", conn.getRealOptions(){"embedding-model"});
+        assertEq("rerank-2.5", conn.getRealOptions(){"rerank-model"});
+        # a client built from the connection must still be constructible with the
+        # connection-only options present
+        object client = conn.get(False);
+        assertTrue(client instanceof VoyageRestClient::VoyageRestClient);
+
+        assertThrows("CONNECTION-OPTION-ERROR", sub () {
+            new VoyageRestClient::VoyageRestConnection("voyage-bad", "test",
+                VoyageRestClient::VoyageRestConnection::DefaultUrl, {}, {
+                    "apikey": "my-key",
+                    "reranking_model": "rerank-2.5",
+                });
+        });
+    }
+
+    private pingDefaultsTest() {
+        hash<ConnectionSchemeInfo> info =
+            ConnectionProvider::ConnectionSchemeCache::getScheme("voyage");
+        assertEq("POST", info.options.ping_method.default_value);
+        assertEq("embeddings", info.options.ping_path.default_value);
+        # the ping must use a current, non-retired model
+        assertEq(VoyageRestClient::VoyageRestClientBase::DefaultEmbeddingModel,
+            info.options.ping_body.default_value.model);
+        assertEq(("ping",), info.options.ping_body.default_value.input);
+    }
+
+    private embedderDefaultModelTest() {
+        QoreRagUtils::VoyageEmbedder emb(<QoreRagUtils::EmbedderConfig>{
+            "backend": "voyage",
+            "url": "http://localhost:" + port,
+            "api_key": "secret-key",
+        });
+        assertEq("voyage-4-lite", emb.getModel());
+        emb.encodeQuery("find a tool");
+        hash<auto> req = handler.getRequest("/v1/embeddings");
+        assertEq("Bearer secret-key", req.auth);
+        assertEq("voyage-4-lite", req.body.model);
+    }
+
+    private rerankerDefaultModelTest() {
+        QoreRagUtils::VoyageReranker rr(<QoreRagUtils::RerankerConfig>{
+            "backend": "voyage",
+            "url": "http://localhost:" + port,
+            "api_key": "secret-key",
+        });
+        assertEq("rerank-2.5-lite", rr.getModel());
+        list<hash<QoreRagUtils::RerankResult>> res =
+            rr.rerank("query", ("doc one",), 1);
+        assertEq(1, res.size());
+        hash<auto> req = handler.getRequest("/v1/rerank");
+        assertEq("Bearer secret-key", req.auth);
+        assertEq("rerank-2.5-lite", req.body.model);
+        # the rerank model family is distinct from the embedding model family
+        assertNeq(VoyageRestClient::VoyageRestClientBase::DefaultEmbeddingModel,
+            req.body.model);
+    }
+
+    private providerConfigTest() {
+        assertThrows("EMBEDDER-CONFIG-ERROR", sub () {
+            new QoreRagUtils::VoyageEmbedder(<QoreRagUtils::EmbedderConfig>{
+                "backend": "voyage",
+            });
+        });
+        assertThrows("RERANKER-CONFIG-ERROR", sub () {
+            new QoreRagUtils::VoyageReranker(<QoreRagUtils::RerankerConfig>{
+                "backend": "voyage",
+            });
+        });
+    }
+}
