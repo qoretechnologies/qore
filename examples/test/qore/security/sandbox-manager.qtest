@@ -68,6 +68,13 @@ class SandboxManagerTest inherits QUnit::Test {
         addTestCase("DataProvider logo initialization in sandbox", \testDataProviderLogoInitialization());
         addTestCase("Module-context with no sandbox is unrestricted", \testModuleContextNoSandbox());
         addTestCase("Nested sandboxes resolve innermost-enclosing", \testNestedSandboxResolution());
+        addTestCase("Missing filesystem paths resolve to a miss", \testFilesystemMissingPathResolution());
+        addTestCase("Filesystem configuration paths need not exist",
+            \testFilesystemMissingConfigurationPaths());
+        addTestCase("Filesystem \"..\" traversal is denied", \testFilesystemTraversalDenied());
+        addTestCase("Dangling symlink escape is denied", \testFilesystemDanglingSymlinkDenied());
+        addTestCase("Unresolvable paths raise a resolution error",
+            \testFilesystemUnresolvablePathError());
         set_return_value(main());
     }
 
@@ -2089,5 +2096,268 @@ string sub outerGo(Program pInner, string path) {
                 "outer sandbox denies the file when it is the nearest sandbox: " + ex.err);
         }
         assertTrue(caught, "outer sandbox would deny the file directly");
+    }
+
+    #! Creates a sandboxed Program exposing filesystem probes for path-resolution tests
+    private Program makeFsProbeProgram(SandboxManager sm) {
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.parse("
+%modern
+auto sub probeStat(string path) {
+    return hstat(path);
+}
+bool sub probeIsFile(string path) {
+    return is_file(path);
+}
+bool sub probeIsDir(string path) {
+    return is_dir(path);
+}
+nothing sub probeWrite(string path, string data) {
+    File f();
+    f.open2(path, O_CREAT | O_WRONLY | O_TRUNC);
+    f.write(data);
+}
+string sub probeRead(string path) {
+    return File::readTextFile(path);
+}
+nothing sub probeMkdirTree(string path) {
+    Dir d();
+    d.chdir(path);
+    d.create();
+}
+nothing sub probeSymlink(string target, string link_path) {
+    symlink(target, link_path);
+}
+", "fs-probe");
+        return p;
+    }
+
+    #! A missing path must be a miss, not an error, however many components are missing
+    /** Reproduces the FileHandler 500-instead-of-404 defect: realpath() needs every component of
+        a path to exist, so canonicalization used to give up when more than one was missing.
+    */
+    testFilesystemMissingPathResolution() {
+        TmpDir td();
+        string root = realpath(td.path);
+        mkdir(root + DirSep + "exists");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(root);
+        Program p = makeFsProbeProgram(sm);
+
+        assertTrue(p.callFunction("probeIsDir", root + "/exists"), "existing directory is visible");
+
+        # the number of missing components must not change the outcome
+        assertNothing(p.callFunction("probeStat", root + "/exists/missing.txt"),
+            "one missing component is a miss");
+        assertNothing(p.callFunction("probeStat", root + "/missing/missing.txt"),
+            "two missing components are a miss");
+        assertNothing(p.callFunction("probeStat", root + "/a/b/c/d/e"),
+            "five missing components are a miss");
+        assertFalse(p.callFunction("probeIsFile", root + "/a/b/c"), "is_file() on a missing path");
+        assertFalse(p.callFunction("probeIsDir", root + "/a/b/c"), "is_dir() on a missing path");
+
+        # redundant separators and "." components resolve to the same path
+        assertNothing(p.callFunction("probeStat", root + "//a///b/./c"),
+            "redundant separators and \".\" components are folded");
+
+        # a missing path below an existing *file* (ENOTDIR) is also a miss
+        p.callFunction("probeWrite", root + "/exists/file.txt", "content");
+        assertNothing(p.callFunction("probeStat", root + "/exists/file.txt/below"),
+            "a path below a plain file is a miss");
+
+        # creating below a missing directory is permitted by the sandbox; it fails with a
+        # filesystem error rather than an access error
+        assertThrows("FILE-OPEN2-ERROR", sub () {
+            p.callFunction("probeWrite", root + "/missing/new.txt", "x");
+        }, NOTHING, "creating below a missing directory is not an access denial");
+
+        # a missing path outside the sandbox root is still denied, and as a policy decision
+        {
+            bool caught = False;
+            try {
+                p.callFunction("probeStat", "/no-such-root-" + getpid() + "/a/b/c");
+            } catch (hash<ExceptionInfo> ex) {
+                caught = True;
+                assertEq("FILESYSTEM-ACCESS-DENIED", ex.err,
+                    "a missing path outside the sandbox root is denied by policy");
+                assertRegex("outside sandbox root", ex.desc, "the denial names the sandbox root");
+            }
+            assertTrue(caught, "a missing path outside the sandbox root is denied");
+        }
+
+        # relative paths are resolved against the current directory
+        {
+            SandboxManager smrel();
+            smrel.setFilesystemSandboxRoot(realpath(getcwd()));
+            Program prel = makeFsProbeProgram(smrel);
+            assertNothing(prel.callFunction("probeStat", "no/such/relative/path"),
+                "a relative path with missing components is resolved against the cwd");
+        }
+    }
+
+    #! Configuration paths do not have to exist
+    testFilesystemMissingConfigurationPaths() {
+        TmpDir td();
+        string root = realpath(td.path);
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(root + "/not/created/yet");
+        assertEq(root + "/not/created/yet", sm.getFilesystemSandboxRoot(),
+            "a sandbox root that does not exist yet is canonicalized lexically");
+
+        sm.addFilesystemAllowedPath(root + "/not/created/yet/data", QSEC_READ);
+        sm.addFilesystemDeniedPath(root + "/not/created/yet/data/secrets");
+
+        hash<FilesystemSecurityConfigInfo> config = sm.getFilesystemConfiguration();
+        assertEq(root + "/not/created/yet/data", config.allowed_paths[1].path,
+            "an allowed path that does not exist yet is stored canonically");
+        assertEq(root + "/not/created/yet/data/secrets", config.denied_paths[0],
+            "a denied path that does not exist yet is stored canonically");
+    }
+
+    #! ".." must be folded, so that it cannot be used to leave the sandbox root or a denied path
+    testFilesystemTraversalDenied() {
+        TmpDir td();
+        string root = realpath(td.path);
+        string inside = root + DirSep + "root";
+        string outside = root + DirSep + "outside";
+        mkdir(inside);
+        mkdir(outside);
+        mkdir(inside + DirSep + "secrets");
+        mkdir(inside + DirSep + "public");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(inside);
+        sm.addFilesystemDeniedPath(inside + DirSep + "secrets");
+        Program p = makeFsProbeProgram(sm);
+
+        # ".." through components that do not exist must not escape the root
+        list<string> escapes = (
+            inside + "/missing/../../outside/x",
+            inside + "/m1/m2/../../../outside/x",
+            inside + "/a/b/c/../../../../outside/x",
+            inside + "/missing/../..",
+        );
+        foreach string path in (escapes) {
+            bool caught = False;
+            try {
+                p.callFunction("probeStat", path);
+            } catch (hash<ExceptionInfo> ex) {
+                caught = True;
+                assertEq("FILESYSTEM-ACCESS-DENIED", ex.err, "traversal denied: " + path);
+            }
+            assertTrue(caught, "\"..\" through missing components cannot leave the root: " + path);
+        }
+
+        # creating a directory tree through ".." must not escape the root either
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
+            p.callFunction("probeMkdirTree", inside + "/missing/../../outside/newdir");
+        }, NOTHING, "a directory tree cannot be created outside the root through \"..\"");
+        assertFalse(is_dir(outside + DirSep + "newdir"), "nothing was created outside the root");
+
+        # ".." must not be usable to sidestep a denied path either
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
+            p.callFunction("probeStat", inside + "/missing/../secrets/key.txt");
+        }, NOTHING, "\"..\" cannot sidestep a denied path");
+
+        # ".." that stays inside the root is allowed
+        assertNothing(p.callFunction("probeStat", inside + "/public/../public/missing.txt"),
+            "\"..\" that stays inside the root is allowed");
+        assertNothing(p.callFunction("probeStat", inside + "/a/b/../../public/missing.txt"),
+            "\"..\" through missing components that stays inside the root is allowed");
+    }
+
+    #! A symlink whose target does not exist must be resolved before the containment checks
+    /** Otherwise the link path rather than the link target is checked, and sandboxed code can
+        create files outside its own sandbox root through a link it creates itself.
+    */
+    testFilesystemDanglingSymlinkDenied() {
+        if (!Qore::Option::HAVE_UNIX_FILEMGT) {
+            testSkip("symbolic links are not supported on this platform");
+            return;
+        }
+
+        TmpDir td();
+        string root = realpath(td.path);
+        string inside = root + DirSep + "root";
+        string outside = root + DirSep + "outside";
+        mkdir(inside);
+        mkdir(outside);
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(inside);
+        Program p = makeFsProbeProgram(sm);
+
+        # a link created by the sandboxed code itself, pointing at a file outside the root that
+        # does not exist yet
+        p.callFunction("probeSymlink", outside + "/created.txt", inside + "/escape");
+        assertTrue(is_link(inside + "/escape"), "the sandboxed program created the link");
+
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
+            p.callFunction("probeWrite", inside + "/escape", "PWNED");
+        }, NOTHING, "writing through a dangling link to outside the root is denied");
+        assertFalse(is_file(outside + "/created.txt"), "nothing was created outside the root");
+
+        # the same through a chain of dangling links
+        p.callFunction("probeSymlink", inside + "/escape", inside + "/escape2");
+        p.callFunction("probeSymlink", inside + "/escape2", inside + "/escape3");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
+            p.callFunction("probeWrite", inside + "/escape3", "PWNED");
+        }, NOTHING, "writing through a chain of dangling links to outside the root is denied");
+        assertFalse(is_file(outside + "/created.txt"), "nothing was created outside the root");
+
+        # a relative link target is resolved against the directory holding the link
+        symlink("../outside/relative.txt", inside + "/relescape");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
+            p.callFunction("probeWrite", inside + "/relescape", "PWNED");
+        }, NOTHING, "a relative dangling link target is resolved before the check");
+        assertFalse(is_file(outside + "/relative.txt"), "nothing was created outside the root");
+
+        # a dangling link below a dangling directory link is resolved too
+        symlink(outside + "/nodir", inside + "/dirlink");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", sub () {
+            p.callFunction("probeStat", inside + "/dirlink/a/b");
+        }, NOTHING, "a path below a dangling directory link is resolved before the check");
+
+        # a dangling link pointing *inside* the root still works
+        p.callFunction("probeSymlink", inside + "/data.txt", inside + "/local");
+        p.callFunction("probeWrite", inside + "/local", "local content");
+        assertEq("local content", File::readTextFile(inside + "/data.txt"),
+            "a dangling link inside the root is usable");
+
+        # a symlink loop is a resolution failure, not an access denial
+        symlink(inside + "/loop2", inside + "/loop1");
+        symlink(inside + "/loop1", inside + "/loop2");
+        assertThrows("SANDBOX-PATH-ERROR", sub () {
+            p.callFunction("probeStat", inside + "/loop1");
+        }, NOTHING, "a symbolic link loop raises a resolution error");
+    }
+
+    #! A path that cannot be resolved is a resolution failure, not a policy denial
+    testFilesystemUnresolvablePathError() {
+        if (!getuid()) {
+            testSkip("the test requires a non-privileged user; root can search any directory");
+            return;
+        }
+
+        TmpDir td();
+        string root = realpath(td.path);
+        string blocked = root + DirSep + "blocked";
+        mkdir(blocked);
+        mkdir(blocked + DirSep + "sub");
+        on_exit chmod(blocked, 0700);
+        chmod(blocked, 0000);
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(root);
+        Program p = makeFsProbeProgram(sm);
+
+        # the sandbox refuses to guess at the canonical form of a path it cannot resolve, and says
+        # so instead of reporting a policy decision that was never made
+        assertThrows("SANDBOX-PATH-ERROR", sub () {
+            p.callFunction("probeStat", blocked + "/sub/missing.txt");
+        }, NOTHING, "an unsearchable ancestor is a resolution failure, not an access denial");
     }
 }

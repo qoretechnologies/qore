@@ -184,9 +184,33 @@ sm.setFilesystemSandboxRoot("/home/sandbox/userdata");
     @endcode
 
     The sandbox root:
-    - Automatically resolves symlinks to prevent escapes
+    - Automatically resolves symlinks to prevent escapes, including symbolic links whose target
+      does not exist yet
     - Blocks path traversal attacks (../)
     - Uses realpath() for canonical path resolution
+
+    @subsection sandbox_fs_path_resolution Path Resolution
+
+    Every path is resolved to an absolute, symlink-free canonical path before the sandbox rules
+    are applied.  Paths that do not exist yet are resolved as well - creating a file, making a
+    directory, or checking whether a path exists are all legitimate operations on a path that is
+    not there - so the deepest existing ancestor of the path is resolved with realpath() and the
+    remaining components are appended, with \c "." and \c ".." folded.
+
+    This means that:
+    - the number of missing components in a path does not change the outcome: with a sandbox root
+      of \c "/sandbox", a check against \c "/sandbox/missing" and a check against
+      \c "/sandbox/a/b/c/d" behave the same way
+    - filesystem operations on a path that does not exist report "not found" as they do outside
+      a sandbox, instead of raising an access error
+    - \c ".." cannot be used to escape the sandbox root through components that do not exist yet
+    - a symbolic link pointing outside the sandbox root is denied even when its target does not
+      exist, so a dangling link cannot be used to create files outside the root
+
+    A path that cannot be resolved for any other reason - for example because a directory in the
+    path cannot be searched - raises \c SANDBOX-PATH-ERROR.  This is a resolution failure, not a
+    policy decision, and is deliberately distinct from the \c FILESYSTEM-ACCESS-DENIED raised
+    when the sandbox rules deny an access.
 
     @subsection sandbox_fs_allow_deny Allow and Deny Lists
 

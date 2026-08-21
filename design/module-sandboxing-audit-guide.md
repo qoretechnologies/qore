@@ -170,9 +170,44 @@ When `QoreSandboxManagerHelper` evaluates to false, no sandboxing is active. Mod
 - **Access Modes**: `QSEC_READ`, `QSEC_WRITE`, `QSEC_EXECUTE`, `QSEC_DELETE`, `QSEC_CREATE`
 - **Sandbox Root**: Optional chroot-like restriction to a directory tree
 - **Default Policy**: Deny-by-default (configurable)
-- **Path Canonicalization**: All paths resolved via `realpath()` to prevent traversal attacks
+- **Path Canonicalization**: All paths are resolved to an absolute, symlink-free canonical path
+  before any rule is applied (see 1.2)
 
-### 1.2 Audit Checklist - Filesystem Operations
+### 1.2 Path Canonicalization
+
+`qore_fs_security_private::canonicalize()` (`lib/QoreSandboxManager.cpp`) produces the canonical
+path that every containment check operates on. `realpath(3)` alone is not enough: it requires
+every component of the path to exist, while creating a file, making a directory, or asking
+whether a path exists are all legitimate operations on a path that is not there.
+
+The resolution rules are:
+
+- the **deepest existing ancestor** is resolved with `realpath()`, and the components below it are
+  appended; the number of missing components does not change the outcome;
+- those components do not exist, so they cannot be symbolic links, and `.` / `..` in them are
+  folded lexically - which is exactly what the OS would do. A `..` that pops past the resolved
+  ancestor is applied to the ancestor with `realpath()` instead, so symbolic links in the existing
+  prefix are always resolved by the OS. Without this folding, `<root>/missing/../../outside` would
+  pass the `pathStartsWith()` containment check;
+- a **dangling symbolic link** - one whose target does not exist - is resolved manually with
+  `readlink()` (relative targets against the link's own directory, capped at 40 links), because
+  `realpath()` fails with `ENOENT` on it. Without this, the *link path* rather than the *link
+  target* would be containment-checked, and a link inside the sandbox root pointing outside it
+  could be used to create files outside the root;
+- only `ENOENT` and `ENOTDIR` are resolved this way. Any other `realpath()` error raises
+  `SANDBOX-PATH-ERROR` rather than guessing at a canonical form that the containment checks would
+  then trust.
+
+`SANDBOX-PATH-ERROR` is deliberately distinct from `FILESYSTEM-ACCESS-DENIED`: the first means the
+path could not be resolved, the second means the sandbox rules denied the access. `checkAccess()`
+must never report one as the other - a caller that treats a denial as "this path is off limits"
+would otherwise be told that by a path it simply could not resolve.
+
+Note that a path-based check-then-use interface is inherently racy: an attacker who can replace a
+component between the check and the syscall defeats any canonicalization. Closing that requires
+`openat()`/`O_NOFOLLOW`-style handle-based enforcement and is out of scope for the path checks.
+
+### 1.3 Audit Checklist - Filesystem Operations
 
 Search for these patterns that require filesystem security checks:
 
@@ -211,7 +246,7 @@ Search for these patterns that require filesystem security checks:
 | `glob()` | Verify sandbox check |
 | `system()`, `backquote` | Verify sandbox check on executable |
 
-### 1.3 Implementation Pattern - Filesystem Check
+### 1.4 Implementation Pattern - Filesystem Check
 
 ```cpp
 #include <qore/QoreSandboxManager.h>
@@ -236,7 +271,7 @@ int myFileOperation(const char* path, ExceptionSink* xsink) {
 }
 ```
 
-### 1.4 Common Filesystem Audit Findings
+### 1.5 Common Filesystem Audit Findings
 
 1. **Missing checks on helper functions**: Internal helpers that open files may bypass checks
 2. **Temporary files**: `/tmp` operations may not be checked
