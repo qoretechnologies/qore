@@ -152,6 +152,8 @@ public class GroqRestClientBase {
             rv.token = rv.apikey;
             delete rv.apikey;
         }
+        # connection-level option for downstream LLM clients; not a REST client option
+        remove rv{"chat-model"};
         return rv;
     }
 }
@@ -251,6 +253,18 @@ public class GroqRestConnection inherits RestClient::RestConnection {
                     "desc": "The API version to use.",
                     "type": "string",
                     "default_value": GroqRestClientBase::DefaultApiVersion,
+                },
+                "chat-model": <ConnectionOptionInfo>{
+                    "display_name": "Chat Model",
+                    "short_desc": "Groq chat model name",
+                    "desc": "The Groq chat model used by LLM clients when this connection is "
+                        "selected for chat.\n\n"
+                        "Chat models are a separate family from embedding models and cannot "
+                        "be used interchangeably."
+                        "\n\nGroq's hosted model catalog changes frequently, so this "
+                        "option has no default; set it to the model your account has "
+                        "access to",
+                    "type": "string",
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
                     "default_value": DefaultPingHeaders,
@@ -368,6 +382,14 @@ public class GroqLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
     public {
         #! Default Groq REST API URL
         const DefaultUrl = "https://api.groq.com/openai";
+    }
+
+    #! Groq has no vendor-stable default chat model
+    /** the model must be configured explicitly; this override keeps the
+        inherited OpenAI default from leaking into Groq requests
+    */
+    *string getDefaultModel() {
+        return NOTHING;
     }
 
     constructor(hash<QoreLlmUtils::LlmBackendConfig> config)

@@ -1395,6 +1395,10 @@ DLLLOCAL int do_tolower_measure(const QoreString& src, bool characters,
     int64_t& result, ExceptionSink* xsink);
 DLLLOCAL int do_toupper_measure(const QoreString& src, bool characters,
     int64_t& result, ExceptionSink* xsink);
+//! returns the Unicode simple (1-to-1) lower-case mapping of the codepoint or the codepoint itself
+DLLLOCAL unsigned q_unicode_tolower(unsigned cp);
+//! returns the Unicode simple (1-to-1) upper-case mapping of the codepoint or the codepoint itself
+DLLLOCAL unsigned q_unicode_toupper(unsigned cp);
 
 DLLLOCAL int64 q_clock_getmillis();
 DLLLOCAL int64 q_clock_getmicros();

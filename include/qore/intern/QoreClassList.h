@@ -110,6 +110,12 @@ public:
     DLLLOCAL void parseCommit();
     DLLLOCAL void parseCommitRuntimeInit(ExceptionSink* xsink);
     DLLLOCAL void reset();
+
+    //! Invalidates the parent-namespace back-pointer of every class declared by the given namespace
+    /** Called from qore_ns_private::purge() before the list drops its class references, so that a
+        class which outlives the namespace does not keep a dangling pointer to it.
+    */
+    DLLLOCAL void namespaceDeleted(const qore_ns_private* ns);
     DLLLOCAL void assimilate(QoreClassList& n, qore_ns_private& ns,
         std::vector<std::string>* pending_names = nullptr);
     DLLLOCAL QoreHashNode* getInfo();

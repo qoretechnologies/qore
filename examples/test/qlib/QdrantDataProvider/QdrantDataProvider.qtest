@@ -22,6 +22,12 @@ public class QdrantDataProviderTest inherits QUnit::Test {
     private {
         RestClientIo::RestClientIo rest;
 
+        #! The Qdrant connection under test, if resolved by name
+        *QdrantRestConnection qconn;
+
+        #! The URL of the Qdrant server under test
+        *string server_url;
+
         # command-line options
         const MyOpts = Opts + {
             "conn": "c,connection=s",
@@ -47,6 +53,8 @@ public class QdrantDataProviderTest inherits QUnit::Test {
         addTestCase("tablesCrudTest", \tablesCrudTest());
         addTestCase("tablesExpressionTest", \tablesExpressionTest());
         addTestCase("connectionTest", \connectionTest());
+        addTestCase("pingSchemeTest", \pingSchemeTest());
+        addTestCase("pingAuthTest", \pingAuthTest());
         addTestCase("factoryTest", \factoryTest());
         addTestCase("providerHierarchyTest", \providerHierarchyTest());
         addTestCase("negativeTests", \negativeTests());
@@ -1980,15 +1988,117 @@ public class QdrantDataProviderTest inherits QUnit::Test {
         AbstractDataProvider prov = conn.getDataProvider();
         assertEq("qdrant", prov.getName());
 
-        # Test connection scheme info has ping defaults
-        hash<auto> scheme = QdrantRestConnection::ConnectionScheme;
-        assertEq("GET", scheme.options.ping_method.default_value);
-        assertEq("/", scheme.options.ping_path.default_value);
-
         # Test connection with API key option
         QdrantRestConnection conn_api("test_api", "test api key connection", url, {},
             {"api_key": "test_key_12345"});
         assertEq("qdrantrest", conn_api.getType());
+    }
+
+    #! Test that the connection scheme's ping defaults exercise authentication
+    /** A ping is meant to verify that the connection can actually be used, which means it must
+        exercise authentication.  qdrant serves \c "/" (a title/version banner) outside its
+        authentication layer, so a ping against \c "/" returns 200 even for a connection carrying
+        no credential at all - reporting a vector store that cannot perform a single real operation
+        as healthy.  \c "GET /collections" requires authentication, so it verifies the credential
+        as well as reachability.
+
+        This test needs no server; it locks the defaults in place.
+    */
+    private pingSchemeTest() {
+        checkModule(self);
+
+        hash<auto> scheme = QdrantRestConnection::ConnectionScheme;
+        assertEq("GET", scheme.options.ping_method.default_value);
+        # "/" is served without authentication and must never be the default again
+        assertEq("/collections", scheme.options.ping_path.default_value);
+
+        # the ping default must match the documented constant
+        assertEq(QdrantRestConnection::DefaultPingPath, scheme.options.ping_path.default_value);
+        assertEq(QdrantRestConnection::DefaultPingMethod, scheme.options.ping_method.default_value);
+
+        # "Connection: close" avoids qdrant's actix-web keep-alive timeouts
+        assertEq({"Connection": "close"}, scheme.options.ping_headers.default_value);
+
+        # a connection that sets no ping options explicitly must pick up the auth-exercising default
+        QdrantRestConnection conn("test-ping-defaults", "test", "qdrantrest://localhost:6333");
+        assertEq("/collections", conn.opts.ping_path);
+        assertEq("GET", conn.opts.ping_method);
+
+        # an explicitly set ping_path must still win: a default change must not silently retarget
+        # connections that chose their own ping endpoint
+        QdrantRestConnection conn_explicit("test-ping-explicit", "test", "qdrantrest://localhost:6333",
+            {}, {"ping_path": "/healthz"});
+        assertEq("/healthz", conn_explicit.opts.ping_path);
+    }
+
+    #! Test that a ping against a live server actually fails when the credential is missing or wrong
+    /** Verifies the behaviour the scheme default exists to produce.  The server under test may or
+        may not enforce authentication, so this first probes it unauthenticated and then asserts the
+        matching expectation.
+    */
+    private pingAuthTest() {
+        checkModule(self);
+        if (!rest) {
+            testSkip("no connection to server");
+        }
+
+        *string url = server_url ?? m_options.url ?? ENV.QDRANT_URL ?? rest.getUrl();
+        if (!url) {
+            testSkip("no connection URL");
+        }
+
+        # probe the server without any credential to find out whether it enforces authentication;
+        # error_passthru gives us the status code instead of an exception
+        int unauth_status;
+        {
+            RestClientIo::RestClientIo probe({"url": url, "error_passthru": True});
+            on_exit delete probe;
+            hash<RestResponseInfo> resp = probe.restDoRequest("GET", "/collections", NOTHING,
+                {"Connection": "close"});
+            unauth_status = resp.status_code;
+        }
+        assertTrue(unauth_status == 200 || unauth_status == 401,
+            sprintf("unauthenticated GET /collections returned unexpected status %d", unauth_status));
+
+        bool server_requires_auth = unauth_status == 401;
+
+        # a connection with no credential at all, using the scheme's default ping
+        QdrantRestConnection nocred("test-nocred", "no credential", url);
+        assertEq("/collections", nocred.opts.ping_path);
+        hash<PingInfo> ping_nocred = nocred.ping(False);
+
+        if (server_requires_auth) {
+            # the whole point of the fix: a credential-less connection must NOT report healthy
+            assertFalse(ping_nocred.ok, sprintf("credential-less ping unexpectedly succeeded: %y",
+                ping_nocred.info));
+
+            # ... whereas the old "/" default could not fail, which is the defect being fixed
+            QdrantRestConnection rootping("test-rootping", "old default", url, {}, {"ping_path": "/"});
+            hash<PingInfo> ping_root = rootping.ping(False);
+            assertTrue(ping_root.ok, "qdrant is expected to serve \"/\" without authentication; if "
+                "this assertion fails the server no longer exempts the root path and the premise of "
+                "the ping_path default change has changed");
+
+            # a wrong credential must fail too - the server sees it and rejects it
+            QdrantRestConnection badcred("test-badcred", "wrong credential", url, {},
+                {"api_key": "definitely-not-a-valid-qdrant-api-key"});
+            hash<PingInfo> ping_bad = badcred.ping(False);
+            assertFalse(ping_bad.ok, sprintf("ping with a wrong API key unexpectedly succeeded: %y",
+                ping_bad.info));
+        } else {
+            # an unauthenticated qdrant server answers GET /collections with 200, so the new default
+            # is correct for these servers as well
+            assertTrue(ping_nocred.ok, sprintf("ping against an unauthenticated server failed: %y",
+                ping_nocred.info));
+        }
+
+        # a correctly configured connection must ping successfully
+        if (qconn) {
+            hash<PingInfo> ping_ok = qconn.ping(False);
+            assertTrue(ping_ok.ok, sprintf("ping with the configured credential failed: %y",
+                ping_ok.info));
+            assertEq("OK", ping_ok.info);
+        }
     }
 
     #! Test factory
@@ -2270,7 +2380,12 @@ public class QdrantDataProviderTest inherits QUnit::Test {
                 throw "OPTION-ERROR", sprintf("connection %y is type %y; expecting "
                     "\"QdrantRestConnection\"", conn_name, conn.className());
             }
+            qconn = cast<QdrantRestConnection>(conn);
             rest = cast<RestClientIo::RestClientIo>(conn.getAsync());
+            # the ping tests need a URL a bare RestClientIo can parse: the connection's own URL
+            # carries the abstract "qdrantrest://" scheme, while real_url is the technical
+            # http(s):// form set by the constructor
+            server_url = conn.real_url ?? conn.getUrl();
             return;
         }
 
@@ -2279,6 +2394,7 @@ public class QdrantDataProviderTest inherits QUnit::Test {
             return;
         }
 
+        server_url = url;
         rest = new RestClientIo::RestClientIo({"url": url});
     }
 }

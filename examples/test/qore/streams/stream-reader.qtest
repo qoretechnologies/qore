@@ -386,5 +386,35 @@ class StreamReaderTest inherits QUnit::Test {
         sr = new StreamReader(is, "utf-16le");
         assertEq(s1, sr.readLine());
         assertEq(NOTHING, sr.readLine());
+
+        # a byte order mark must be resolved the same way whether the whole stream is read at once or
+        # a character count is given; the read-everything path used to keep the mark, so readString(-1)
+        # returned an extra U+FEFF character and decoded little-endian data with the big-endian handlers
+        binary bom_le = <fffe6800e900>;
+        StreamReader all(new BinaryInputStream(bom_le), "UTF-16");
+        string sall = all.readString(-1);
+        assertEq("UTF-16LE", sall.encoding());
+        assertEq(2, sall.length());
+        assertEq("hé", convert_encoding(sall, "UTF-8"));
+
+        StreamReader sized(new BinaryInputStream(bom_le), "UTF-16");
+        string ssized = sized.readString(2);
+        assertEq("UTF-16LE", ssized.encoding());
+        assertEq(2, ssized.length());
+        assertEq("hé", convert_encoding(ssized, "UTF-8"));
+
+        binary bom_be = <feff006800e9>;
+        StreamReader allbe(new BinaryInputStream(bom_be), "UTF-16");
+        string sallbe = allbe.readString(-1);
+        assertEq("UTF-16BE", sallbe.encoding());
+        assertEq(2, sallbe.length());
+        assertEq("hé", convert_encoding(sallbe, "UTF-8"));
+
+        # data with no byte order mark keeps the byte-order-neutral tag and is big-endian
+        StreamReader nobom(new BinaryInputStream(<006800e9>), "UTF-16");
+        string snobom = nobom.readString(-1);
+        assertEq("UTF-16", snobom.encoding());
+        assertEq(2, snobom.length());
+        assertEq("hé", convert_encoding(snobom, "UTF-8"));
     }
 }

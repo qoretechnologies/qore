@@ -1205,9 +1205,16 @@ static inline void qore_aot_write_line(QoreAOTBinaryWriter& writer, int line) {
 }
 
 //! Deserializes a source line number written by qore_aot_write_line()
-/** @param signed_legacy if true, the legacy u16 encoding is sign-extended (matching the call sites that stored the
-    value in an int16_t); if false, it is zero-extended (matching the call sites that stored it in a uint16_t).  The
-    distinction only affects legacy blobs; the wide encoding is always sign-preserving.
+/** @param signed_legacy if true, the legacy u16 encoding reserves 0xffff for -1 (unknown), matching the call sites
+    that stored the value in an int16_t; if false, 0xffff is a line number like any other, matching the call sites
+    that stored it in a uint16_t.  The distinction only affects legacy blobs; the wide encoding is always
+    sign-preserving.
+
+    Legacy blobs were written from int16_t-narrowed line numbers, so a line in 32768 - 65535 was stored with its
+    high bit set.  Zero-extending recovers the original line exactly (the narrowing was mod 65536); sign-extending
+    would instead yield a negative line, which is not a legal QoreProgramLineLocation value and asserts (or produces
+    negative lines in stack traces) as soon as a location is built from it.  Only the 0xffff sentinel is read back
+    as -1, and only for the signed call sites.
 */
 static inline int qore_aot_read_line(const QoreAOTBinaryReader& reader, const uint8_t*& ptr,
         bool signed_legacy = true) {
@@ -1215,7 +1222,18 @@ static inline int qore_aot_read_line(const QoreAOTBinaryReader& reader, const ui
         return static_cast<int32_t>(QoreAOTBinaryReader::readU32(ptr));
     }
     uint16_t v = QoreAOTBinaryReader::readU16(ptr);
-    return signed_legacy ? static_cast<int>(static_cast<int16_t>(v)) : static_cast<int>(v);
+    if (signed_legacy && v == 0xffff) {
+        return -1;
+    }
+    return static_cast<int>(v);
+}
+
+//! Clamps a deserialized source line number to a value that is legal for QoreProgramLineLocation
+/** Any line below -1 is impossible in a well-formed blob; a corrupt or hand-edited artifact must not be able to
+    abort the process on the QoreProgramLineLocation assertions, so such values are reported as "unknown" (0).
+*/
+static inline int qore_aot_valid_line(int line) {
+    return line >= -1 ? line : 0;
 }
 
 //! Returns the serialized size in bytes of a single source line number in the given blob
@@ -1949,6 +1967,18 @@ struct AOTCompiledFuncWithSlots {
     //! Built post-emission from the object's DWARF line table (column carries the exact
     //! loc-index). Drives lazy on-throw source-location recovery (replaces the eager updater).
     std::vector<std::pair<uint32_t, uint32_t>> pc_loc_map;
+    //! Literal locations referenced by pc_loc_map indices at or above aot_locs.size().
+    /** LLVM inlines one AOT function into another at -O3, and the inliner copies the callee's
+        DILocation (line AND column) into the caller's line table.  Since the DWARF column carries a
+        loc-index that is local to the function that emitted it, an inlined row's index means nothing
+        in the enclosing function's table — resolving it there yields an unrelated line.  The enclosing
+        function's serialized loc table cannot be extended at this point (the metadata blob is baked
+        into the module before object emission, while the PC map is derived from the emitted object),
+        so such locations are carried literally in the PC map itself: index `aot_locs.size() + k`
+        selects `pc_extra_locs[k]`.  Readers that predate this field simply drop those entries (their
+        index is >= ctx->num_locs), losing the inlined location but never reporting a wrong one.
+    */
+    std::vector<AOTLocEntry> pc_extra_locs;
     //! Source-stripped metadata-only statement locations for ProgramControl::findStatementId().
     struct AOTStmtLocEntry {
         int32_t start_line = 0;
@@ -1982,7 +2012,17 @@ static constexpr size_t QORE_AOT_PCMAP_FOOTER_SIZE = 16;
 struct AOTPcLocFuncEntry {
     std::string symbol;                                  //!< native/LLVM symbol name
     std::vector<std::pair<uint32_t, uint32_t>> entries;  //!< sorted (offset -> loc-index)
+    //! Literal locations for entries whose loc-index is at or above the function's loc-table size
+    //! (see AOTCompiledFuncWithSlots::pc_extra_locs): index `num_locs + k` selects `extra_locs[k]`.
+    std::vector<AOTCompiledFuncWithSlots::AOTLocEntry> extra_locs;
 };
+
+//! Marks the optional extra-location block appended after the PC->loc payload's function records
+/** The block is appended to the END of the payload, after every function record.  Readers that
+    predate it stop after the function-record count and ignore the trailing bytes, so the payload
+    stays parseable by older libqore builds with no version bump and no second section.
+*/
+constexpr uint32_t QORE_AOT_PCMAP_EXTRA_MAGIC = 0x4c435051u;   //!< 'QPCL' little-endian
 
 //! Serialize the per-function PC->loc maps from func_slots into a trailer payload.
 //! Returns the number of functions written (functions with an empty map or symbol

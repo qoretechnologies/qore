@@ -1,0 +1,175 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTLargeSourceLineLocationsTest
+
+#! Regression test for AOT source locations in files with more than 32767 lines (issue #5399)
+/** The AOT location tables used to be filled through static_cast<int16_t>, so a source line above 32767 was stored
+    with its high bit set and read back as a negative line (33794 -> -31742).  Negative lines silently disabled the
+    runtime location (exceptions reported line -1), and the source-stripped statement-location table fed them
+    straight into QoreProgramLineLocation, which asserts `sline >= -1` and aborted the process in a debug build.
+
+    Qorus generates single source files well over 32767 lines, so every executable location in such a file was
+    affected.  The cases below pin the reported line for AST, JIT, plain AOT and source-stripped AOT with debugger
+    support; the last is the configuration that used to abort.
+*/
+class AOTLargeSourceLineLocationsTest inherits QUnit::Test {
+    public {
+        #! line of the `throw` statement in the generated source; safely above the old int16_t limit
+        const ThrowLine = 33794;
+
+        #! throw lines straddling the int16_t and uint16_t boundaries that the old encoding wrapped at
+        const BoundaryLines = (
+            32767,  # last line the old int16_t field could hold
+            32768,  # first line that wrapped to a negative value
+            65535,  # last line the legacy u16 wire field could hold
+            65536,  # first line past the legacy u16 wire field
+        );
+
+        #! AOT resolves exception locations two different ways: through the eager per-line updater
+        #! when DWARF is stripped, and through the post-emission PC->loc map when it is kept.  Both
+        #! encode the line separately, so every AOT case runs in both modes.
+        const AotModes = ("", "--strip-debug-info");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTLargeSourceLineLocationsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("interpreted and JIT lines above 32767", \testSourceModes());
+        addTestCase("AOT lines above 32767", \testAot());
+        addTestCase("source-stripped AOT lines above 32767 with debugger support",
+            \testStrippedAotWithDebugger());
+        addTestCase("AOT lines at the 32767 and 65535 boundaries", \testLineBoundaries());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    #! builds a source file whose throwing statement sits on line \a throw_line
+    /** The padding is sized so that the throw lands exactly on \a throw_line; generateSource() verifies the
+        placement before the file is used, so a change here cannot silently move the assertions off the boundary
+        being tested.
+    */
+    private string makeSourceCode(int throw_line) {
+        # the function body occupies the 4 lines ending with the throw
+        list<string> lines = ("%modern", "");
+        while (lines.size() < throw_line - 4) {
+            push lines, sprintf("# filler line %d", lines.size() + 1);
+        }
+        push lines, "int sub deepLine() {";
+        push lines, "    int value = 1;";
+        push lines, "    ++value;";
+        push lines, "    throw \"BIG-LINE-TEST\", string(value);";
+        push lines, "}";
+        push lines, "";
+        push lines, "try {";
+        push lines, "    deepLine();";
+        push lines, "} catch (hash<ExceptionInfo> ex) {";
+        push lines, "    printf(\"%s:%d:%s\\n\", ex.err, ex.line, ex.desc);";
+        push lines, "}";
+        return join("\n", lines) + "\n";
+    }
+
+    #! writes the generated source to \a dir and verifies the line number the assertions depend on
+    private string generateSource(string dir, int throw_line) {
+        string body = makeSourceCode(throw_line);
+        assertEq("    throw \"BIG-LINE-TEST\", string(value);", body.split("\n")[throw_line - 1],
+            sprintf("generated source places the throw on line %d", throw_line));
+
+        string path = sprintf("%s/big-line-%d.qr", dir, throw_line);
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        f.write(body);
+        return path;
+    }
+
+    #! compiles the generated source with qcc and returns the executable path
+    private string compile(string source, string dir, string extra_opts) {
+        string exe = source.substr(0, source.size() - 3);
+        string out = run(sprintf("%s %s -O3 %s -o %s %s", env, qcc_bin, extra_opts, exe, source));
+        assertTrue(is_file(exe), "AOT compile produced an executable: " + out);
+        return exe;
+    }
+
+    testSourceModes() {
+        TmpDir tmp("qore-aot-large-source-line-");
+        string source = generateSource(tmp.path, ThrowLine);
+        string expected = sprintf("BIG-LINE-TEST:%d:2\n", ThrowLine);
+        assertEq(expected, run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, source)),
+            "AST baseline reports the real line");
+        assertEq(expected, run(sprintf("%s %s --exec-mode=jit %s", env, qore_bin, source)),
+            "JIT baseline reports the real line");
+    }
+
+    testAot() {
+        TmpDir tmp("qore-aot-large-source-line-");
+        string source = generateSource(tmp.path, ThrowLine);
+        string expected = sprintf("BIG-LINE-TEST:%d:2\n", ThrowLine);
+        foreach string mode in (AotModes) {
+            string exe = compile(source, tmp.path, mode);
+            assertEq(expected, run(sprintf("%s %s", env, exe)),
+                sprintf("AOT reports the real line (%s)", mode.val() ? mode : "with debug info"));
+            unlink(exe);
+        }
+    }
+
+    testStrippedAotWithDebugger() {
+        TmpDir tmp("qore-aot-large-source-line-");
+        string source = generateSource(tmp.path, ThrowLine);
+        string exe = compile(source, tmp.path,
+            "--strip-source --strip-debug-info --parse-option=PO_ALLOW_DEBUGGER");
+        string expected = sprintf("BIG-LINE-TEST:%d:2\n", ThrowLine);
+        assertEq(expected, run(sprintf("%s %s", env, exe)),
+            "source-stripped AOT reports the real line");
+        # QORE_DISABLE_AOT_LAZY_STMT_LOCS forces the statement-location table to be materialized at load time;
+        # that path built a QoreProgramLocation from the truncated negative line and aborted on its assertion
+        assertEq(expected, run(sprintf("%s QORE_DISABLE_AOT_LAZY_STMT_LOCS=1 %s", env, exe)),
+            "eagerly materialized AOT statement locations report the real line");
+    }
+
+    testLineBoundaries() {
+        TmpDir tmp("qore-aot-large-source-line-");
+        foreach int throw_line in (BoundaryLines) {
+            string source = generateSource(tmp.path, throw_line);
+            string expected = sprintf("BIG-LINE-TEST:%d:2\n", throw_line);
+            assertEq(expected, run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, source)),
+                sprintf("AST reports line %d", throw_line));
+            foreach string mode in (AotModes) {
+                string exe = compile(source, tmp.path, mode);
+                assertEq(expected, run(sprintf("%s %s", env, exe)),
+                    sprintf("AOT reports line %d (%s)", throw_line,
+                        mode.val() ? mode : "with debug info"));
+                unlink(exe);
+            }
+            # the source-stripped statement-location table encodes the same line separately, and is the
+            # table that used to abort on a negative value
+            string stripped = compile(source, tmp.path,
+                "--strip-source --strip-debug-info --parse-option=PO_ALLOW_DEBUGGER");
+            assertEq(expected, run(sprintf("%s QORE_DISABLE_AOT_LAZY_STMT_LOCS=1 %s", env, stripped)),
+                sprintf("source-stripped AOT reports line %d", throw_line));
+            unlink(stripped);
+            unlink(source);
+        }
+    }
+}

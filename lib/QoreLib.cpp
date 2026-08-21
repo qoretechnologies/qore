@@ -3269,6 +3269,10 @@ QoreStringNode* q_read_string_all(ExceptionSink* xsink, const QoreEncoding* enc,
     if (!size)
         return 0;
     str->terminate(size);
+    // resolve any UTF-16 byte order mark, as in q_read_string() and q_read_string_short(); without
+    // this the mark would be decoded as a character and, with the byte-order-neutral "UTF-16"
+    // encoding, little-endian data would be decoded as big-endian
+    q_remove_bom_utf16(*str, enc);
     return str.release();
 }
 

@@ -417,6 +417,19 @@ public:
         return ns;
     }
 
+    //! Invalidates the parent-namespace back-pointer when that namespace is destroyed
+    /** A hashdecl can outlive its namespace exactly as a class can (a hash<T> value keeps the
+        hashdecl alive while the declaring Program's namespace tree is destroyed), so the
+        back-pointer must be cleared rather than left dangling.
+
+        @param n the namespace being destroyed; only cleared if the back-pointer points at it
+    */
+    DLLLOCAL void namespaceDeleted(const qore_ns_private* n) {
+        if (ns == n) {
+            ns = nullptr;
+        }
+    }
+
     DLLLOCAL const char* getModuleName() const {
         return from_module.empty() ? nullptr : from_module.c_str();
     }

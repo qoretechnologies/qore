@@ -222,6 +222,12 @@ void QoreClassList::reset() {
     deleteAll();
 }
 
+void QoreClassList::namespaceDeleted(const qore_ns_private* ns) {
+    for (auto& i : hm) {
+        qore_class_private::get(*i.second.cls)->namespaceDeleted(ns);
+    }
+}
+
 void QoreClassList::assimilate(QoreClassList& n, qore_ns_private& ns,
         std::vector<std::string>* pending_names) {
     for (auto& i : n.hm) {

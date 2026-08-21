@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -221,7 +221,16 @@ printf("%y", "PŘÍLIŠ ŽLUŤOUČKÝ KŮŇ ÚPĚL ĎÁBELSKÉ ÓDY".lwr());
 # outputs: "příliš žluťoučký kůň úpěl ďábelské ódy"
     @endcode
 
-    This pseudo-method operates on a very wide range of non-ASCII characters using a Unicode lookup table for mapping Latin, Cyrillic, Greek, Armenian, Georgian, etc characters.
+    This pseudo-method applies the Unicode default <i>full</i> lower-case mapping to every
+    character in the string.  The mapping covers the entire Unicode range and can map a single
+    character to more than one character (for example <tt>U+0130</tt> maps to
+    <tt>U+0069 U+0307</tt>); characters with no lower-case mapping are returned unchanged.  The
+    language-independent @c Final_Sigma condition is applied, so a Greek capital sigma
+    (<tt>U+03A3</tt>) at the end of a word maps to <tt>U+03C2</tt> rather than <tt>U+03C3</tt>;
+    language-specific mappings (Turkish, Azeri, and Lithuanian) are not applied.
+    A character whose mapping cannot be represented in the string's
+    @ref character_encoding "character encoding" is returned unchanged; case conversion never
+    raises an encoding conversion error.
 
     @return the string in lower case
 
@@ -230,6 +239,7 @@ printf("%y", "PŘÍLIŠ ŽLUŤOUČKÝ KŮŇ ÚPĚL ĎÁBELSKÉ ÓDY".lwr());
 
     @see
     - <string>::upr()
+    - @ref Qore::zzz8charzzz9::lwr() "<char>::lwr()"
     - tolower()
     - toupper()
 
@@ -250,7 +260,14 @@ printf("%y", "příliš žluťoučký kůň úpěl ďábelské ódy".upr());
 # outputs: "PŘÍLIŠ ŽLUŤOUČKÝ KŮŇ ÚPĚL ĎÁBELSKÉ ÓDY"
     @endcode
 
-    This pseudo-method operates on a very wide range of non-ASCII characters using a Unicode lookup table for mapping Latin, Cyrillic, Greek, Armenian, Georgian, etc characters.
+    This pseudo-method applies the Unicode default <i>full</i> upper-case mapping to every
+    character in the string.  The mapping covers the entire Unicode range and can map a single
+    character to more than one character (for example <tt>U+00DF</tt> maps to @c "SS");
+    characters with no upper-case mapping are returned unchanged.  Language-specific mappings
+    (Turkish, Azeri, and Lithuanian) are not applied.
+    A character whose mapping cannot be represented in the string's
+    @ref character_encoding "character encoding" is returned unchanged; case conversion never
+    raises an encoding conversion error.
 
     @return the string in upper case
 
@@ -259,6 +276,7 @@ printf("%y", "příliš žluťoučký kůň úpěl ďábelské ódy".upr());
 
     @see
     - <string>::lwr()
+    - @ref Qore::zzz8charzzz9::upr() "<char>::upr()"
     - tolower()
     - toupper()
 
@@ -1320,7 +1338,15 @@ int <string>::comparePartial(string other_string) [const;flags=RET_VALUE_ONLY,NA
     if (*xsink)
         return QoreValue();
 
-    int rc = strncmp(str->c_str(), temp->c_str(), temp->size());
+    // memcmp() and not strncmp(): strings can contain embedded nulls, either because the encoding uses
+    // them (UTF-16*) or because the string data itself contains them
+    size_t tsize = temp->size();
+    size_t ssize = str->size();
+    int rc = memcmp(str->c_str(), temp->c_str(), QORE_MIN(tsize, ssize));
+    if (!rc && tsize > ssize) {
+        // the argument matches the entire current string but is longer than it
+        rc = -1;
+    }
     return !rc ? 0 : (rc < 0 ? -1 : 1);
 }
 
@@ -1454,7 +1480,7 @@ bool <string>::startsWith(string prefix) [const;flags=RET_VALUE_ONLY,NAMED_ARGS]
     if (*xsink) {
         return QoreValue();
     }
-    return str->startsWith(temp->c_str());
+    return str->startsWith(**temp);
 }
 
 //! Returns @ref True if the given string ends with the argument
@@ -1470,7 +1496,7 @@ bool <string>::endsWith(string suffix) [const;flags=RET_VALUE_ONLY,NAMED_ARGS] {
     if (*xsink) {
         return QoreValue();
     }
-    return str->endsWith(temp->c_str());
+    return str->endsWith(**temp);
 }
 
 //! Returns @ref True if the given string contains the argument
@@ -1486,7 +1512,9 @@ bool <string>::contains(string substring) [const;flags=RET_VALUE_ONLY,NAMED_ARGS
     if (*xsink) {
         return QoreValue();
     }
-    return str->find(temp->c_str()) >= 0;
+    // note: bindex() and not find(const char*), which determines the argument's length with strlen()
+    // and therefore cannot handle encodings with embedded nulls such as UTF-16*
+    return str->bindex(**temp, 0) >= 0;
 }
 
 //! returns a string for the next line in the string buffer starting at the given offset (or at the beginning if no offset is given)
@@ -1533,52 +1561,78 @@ bool <string>::contains(string substring) [const;flags=RET_VALUE_ONLY,NAMED_ARGS
             return QoreValue();
     }
 
+    // the scan below is a single bounded pass, but it can be over an arbitrarily large string, so
+    // check for cancellation before starting it (see design/cooperative-cancellation.md, pattern 1)
+    if (qore_check_cancel(xsink, "getting line from string")) {
+        return QoreValue();
+    }
+
     int64 strsize = 0;
 
     const char* start = str->c_str() + offset;
+    // the byte length has to be used throughout: strings can contain embedded nulls, either because
+    // the encoding uses them (UTF-16*) or because the string data itself contains them
+    size_t avail = str->size() - offset;
+    // in encodings that are not self-synchronizing (UTF-16*) a byte-oriented match can start in the
+    // middle of a character; those matches must be skipped
+    const unsigned align = qore_string_private::get_char_alignment(str->getEncoding());
     SimpleRefHolder<QoreStringNode> rv(new QoreStringNode(str->getEncoding()));
+
+    // the end of line sequence found, if any, and its length in bytes
+    const char* p = nullptr;
+    size_t eol_len = 0;
+
     if (eolstr) {
-        const char* p = strstr(start, eolstr->c_str());
-        if (p) {
-            strsize = p - start + eolstr->size();
-            if (trim_line) {
-                if (p != start)
+        // an empty separator matches at the start of the string, as with strstr()
+        p = eolstr->size()
+            ? qore_string_private::memmem_aligned(start, avail, eolstr->c_str(), eolstr->size(), align,
+                offset)
+            : start;
+        eol_len = eolstr->size();
+    } else {
+        // detect the end of line sequence automatically; the characters have to be encoded in the
+        // string's encoding, since they are not single bytes in encodings that are not
+        // ASCII-compatible (UTF-16*)
+        QoreString cr(str->getEncoding());
+        QoreString lf(str->getEncoding());
+        if (str->getEncoding()->isAsciiCompat()) {
+            cr.concat('\r');
+            lf.concat('\n');
+        } else if (cr.concatUnicode('\r') || lf.concatUnicode('\n')) {
+            xsink->raiseException("UNSUPPORTED-ENCODING", "cannot detect end of line characters in "
+                "encoding \"%s\"", str->getEncoding()->getCode());
+            return QoreValue();
+        }
+
+        const char* crp = qore_string_private::memmem_aligned(start, avail, cr.c_str(), cr.size(),
+            align, offset);
+        const char* lfp = qore_string_private::memmem_aligned(start, avail, lf.c_str(), lf.size(),
+            align, offset);
+        if (crp && (!lfp || crp < lfp)) {
+            p = crp;
+            eol_len = cr.size();
+            // "\r\n" is a single end of line sequence
+            if (lfp == crp + cr.size()) {
+                eol_len += lf.size();
+            }
+        } else if (lfp) {
+            p = lfp;
+            eol_len = lf.size();
+        }
+    }
+
+    if (p) {
+        strsize = p - start + eol_len;
+        if (trim_line) {
+            if (p != start) {
                 rv->concat(start, p - start);
-            } else
-                rv->concat(start, strsize);
+            }
         } else {
-            strsize = rv->size();
-            rv->concat(start);
-            strsize = rv->size() - strsize;
+            rv->concat(start, strsize);
         }
     } else {
-        size_t i = 0;
-        while (*start) {
-            if (i && !(i % 100) && qore_check_cancel(xsink, "getting line from string")) {
-                return QoreValue();
-            }
-            ++i;
-            if (*start == '\r') {
-                ++strsize;
-                if (!trim_line)
-                rv->concat(*start);
-                if (*(start + 1) == '\n') {
-                ++strsize;
-                if (!trim_line)
-                    rv->concat(*start);
-                }
-                break;
-            }
-            if (*start == '\n') {
-                ++strsize;
-                if (!trim_line)
-                rv->concat(*start);
-                break;
-            }
-            rv->concat(*start);
-            ++strsize;
-            ++start;
-        }
+        rv->concat(start, avail);
+        strsize = avail;
     }
 
     if (byte_count) {

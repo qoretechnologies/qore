@@ -1,0 +1,148 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTTopLevelSourceLocationsTest
+
+#! Regression test for AOT source locations in top-level code and in inlined callees
+/** Two defects made AOT lose or corrupt exception locations independently of line width:
+
+    - The top-level function's location table was never copied out of the LLVM lowerer, so
+      `_toplevel` was serialized with an empty table.  Nothing could resolve a location for
+      top-level code: the eager per-line updater no-oped, no PC->loc range was registered, and every
+      DWARF row for `_toplevel` was dropped post-emission.  Exceptions raised in top-level code
+      reported line -1 in every AOT mode.
+
+    - The DWARF column that carries the loc-index is local to the function whose lowerer emitted the
+      instruction, but at -O3 LLVM inlines AOT functions into one another and the inliner copies the
+      callee's DILocation — line and column — into the caller's line table.  The post-emission pass
+      resolved those indices against the CALLER's table, so an exception raised in inlined code
+      reported an unrelated line from the caller.
+
+    Both paths are checked against the AST baseline, in both AOT debug-info modes, since the two
+    modes resolve locations through completely different machinery.
+*/
+class AOTTopLevelSourceLocationsTest inherits QUnit::Test {
+    public {
+        #! AOT resolves exception locations through the eager per-line updater when DWARF is
+        #! stripped and through the post-emission PC->loc map when it is kept
+        const AotModes = ("", "--strip-debug-info");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTTopLevelSourceLocationsTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("top-level exception location", \testTopLevelLocation());
+        addTestCase("inlined callee exception location", \testInlinedCalleeLocation());
+        addTestCase("top-level location in a source-stripped build", \testStrippedTopLevel());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private string write(string dir, string name, string body) {
+        string path = dir + "/" + name;
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        f.write(body);
+        return path;
+    }
+
+    private string compile(string source, string dir, string extra_opts) {
+        string exe = dir + "/aot-out";
+        string out = run(sprintf("%s %s -O3 %s -o %s %s", env, qcc_bin, extra_opts, exe, source));
+        assertTrue(is_file(exe), "AOT compile produced an executable: " + out);
+        return exe;
+    }
+
+    #! asserts that every AOT mode reproduces the AST baseline for \a source
+    private checkAllModes(string source, string dir, string what) {
+        string expected = run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, source));
+        assertTrue(expected.find(":-1") == -1, what + ": AST baseline has a real line: " + expected);
+        foreach string mode in (AotModes) {
+            string exe = compile(source, dir, mode);
+            assertEq(expected, run(sprintf("%s %s", env, exe)),
+                sprintf("%s matches the AST baseline (%s)", what,
+                    mode.val() ? mode : "with debug info"));
+            unlink(exe);
+        }
+    }
+
+    testTopLevelLocation() {
+        TmpDir tmp("qore-aot-toplevel-loc-");
+        # the throw is top-level code, so its location can only come from _toplevel's location table
+        string source = write(tmp.path, "toplevel.qr", "%modern
+
+try {
+    throw \"TOPLEVEL-LOC\", \"raised at top level\";
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s:%d\\n\", ex.err, ex.line);
+}
+");
+        checkAllModes(source, tmp.path, "top-level throw");
+    }
+
+    testInlinedCalleeLocation() {
+        TmpDir tmp("qore-aot-toplevel-loc-");
+        # a single-call-site leaf function: LLVM inlines it into _toplevel at -O3, so the throw's
+        # location must survive being attributed to the caller's line table
+        string source = write(tmp.path, "inlined.qr", "%modern
+
+int sub leaf() {
+    int value = 1;
+    ++value;
+    throw \"INLINED-LOC\", string(value);
+}
+
+try {
+    leaf();
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s:%d:%s:%s\\n\", ex.err, ex.line, ex.desc, basename(ex.file));
+}
+");
+        # the throw is on line 6; a caller-table misresolution reported a line from the try/catch
+        # below, and a wrong file would show up here as well
+        assertEq("INLINED-LOC:6:2:inlined.qr\n",
+            run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, source)),
+            "AST baseline reports the throw line and file");
+        checkAllModes(source, tmp.path, "inlined callee throw");
+    }
+
+    testStrippedTopLevel() {
+        TmpDir tmp("qore-aot-toplevel-loc-");
+        string source = write(tmp.path, "stripped.qr", "%modern
+
+try {
+    throw \"STRIPPED-LOC\", \"raised at top level\";
+} catch (hash<ExceptionInfo> ex) {
+    printf(\"%s:%d\\n\", ex.err, ex.line);
+}
+");
+        string expected = "STRIPPED-LOC:4\n";
+        assertEq(expected, run(sprintf("%s %s --exec-mode=ast %s", env, qore_bin, source)),
+            "AST baseline reports the throw line");
+        string exe = compile(source, tmp.path, "--strip-source --strip-debug-info");
+        assertEq(expected, run(sprintf("%s %s", env, exe)),
+            "source-stripped AOT reports the top-level throw line");
+    }
+}

@@ -281,6 +281,18 @@ struct QoreAOTContext {
     const QoreProgramLocation** locs = nullptr;
     int num_locs = 0;
 
+    //! Locations referenced only by the lazy PC->loc map, for code inlined into this function
+    /** LLVM inlines AOT functions into one another, and an inlined body's locations belong to the
+        callee's table, not this function's.  The PC map carries such locations literally and
+        addresses them with indices at or above num_locs; they are materialized here at attach time
+        so the map can hand out stable QoreProgramLocation pointers.  Owned by this context (the
+        destructor deletes them) together with the interned file strings they point at.
+    */
+    std::vector<const QoreProgramLocation*> pc_extra_locs;
+    //! Backing store for pc_extra_locs file names; QoreProgramLocation::file is a raw pointer that
+    //! must outlive the location, and std::list never invalidates the strings it holds.
+    std::list<std::string> pc_extra_files;
+
     //! Deserialized handler IR functions for on_exit/on_success/on_error handlers.
     //! Indexed by statement slot index. Non-null entries can be executed by the IR interpreter.
     //! Used in strip-source mode where AST-based stmts[] are not available.

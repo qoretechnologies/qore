@@ -27,11 +27,14 @@ class StringTest inherits QUnit::Test {
         addTestCase("Scanner class", \testScanner());
         addTestCase("non scalar test", \nonScalarTest());
         addTestCase("width test", \testWidth());
+        addTestCase("Unicode case mapping test", \testUnicodeCase());
         addTestCase("Basic functions test", \testBasics());
         addTestCase("Comparison test", \testComparison());
         addTestCase("Encoding test", \testEncoding());
         addTestCase("NUL string constants", \testNulStringConstants());
         addTestCase("UTF-16 test", \testUtf16());
+        addTestCase("UTF-16 transform test", \testUtf16Transforms());
+        addTestCase("getLine test", \testGetLine());
         addTestCase("ASCII x UTF-8 string equality tests", \testASCIIUTF8Equality());
         addTestCase("Base64 and hex test", \testBase64Hex());
         addTestCase("Splice test", \testSplice());
@@ -589,6 +592,136 @@ class StringTest inherits QUnit::Test {
         assertEq("ステ.", f_vsprintf("%-5w", str));
     }
 
+    testUnicodeCase() {
+        # -- full (1-to-many) upper-case mappings from the Unicode SpecialCasing data --
+        assertEq("STRASSE", "stra\u{DF}e".upr(), "\u{DF} -> SS");
+        assertEq("FIND", "\u{FB01}nd".upr(), "ligature \u{FB01} -> FI");
+        assertEq("FFLOOD", "\u{FB04}ood".upr(), "ligature \u{FB04} -> FFL");
+        assertEq("\u{2BC}N", "\u{149}".upr(), "\u{149} -> \u{2BC}N");
+        assertEq("J\u{30C}", "\u{1F0}".upr(), "\u{1F0} -> J + combining caron");
+        assertEq("\u{399}\u{308}\u{301}", "\u{390}".upr(), "\u{390} -> 3 codepoints");
+        assertEq("\u{3A5}\u{308}\u{301}", "\u{3B0}".upr(), "\u{3B0} -> 3 codepoints");
+        assertEq("\u{544}\u{535}", "\u{FB14}".upr(), "Armenian ligature \u{FB14} -> \u{544}\u{535}");
+        assertEq("\u{1F08}\u{399}", "\u{1F80}".upr(), "Greek iota subscript \u{1F80} -> \u{1F08}\u{399}");
+        assertEq("\u{3A9}\u{399}", "\u{1FFC}".upr(), "Greek iota subscript \u{1FFC} -> \u{3A9}\u{399}");
+
+        # -- full (1-to-many) lower-case mapping --
+        # U+0130 LATIN CAPITAL LETTER I WITH DOT ABOVE was returned unchanged before the
+        # complete Unicode case mapping tables were used
+        assertEq("i\u{307}", "\u{130}".lwr(), "\u{130} -> i + combining dot above");
+        assertEq("i\u{307}stanbul", "\u{130}stanbul".lwr(), "\u{130} in a word");
+        assertEq(9, "\u{130}stanbul".lwr().length(), "\u{130} full lower-case length");
+        assertEq(10, "\u{130}stanbul".lwr().size(), "\u{130} full lower-case size");
+
+        # -- the language-independent Final_Sigma condition --
+        assertEq("\u{3BF}\u{3B4}\u{3BF}\u{3C2}", "\u{39F}\u{394}\u{39F}\u{3A3}".lwr(),
+            "word-final \u{3A3} -> \u{3C2}");
+        assertEq("\u{3C3}\u{3C2}", "\u{3A3}\u{3A3}".lwr(), "only the final \u{3A3} maps to \u{3C2}");
+        assertEq("\u{3C3}", "\u{3A3}".lwr(), "an isolated \u{3A3} is not word-final");
+        assertEq("\u{3B1}\u{3C3}\u{3B2}", "\u{391}\u{3A3}\u{392}".lwr(),
+            "\u{3A3} followed by a cased character stays \u{3C3}");
+        assertEq("\u{3B1}\u{3C2}'", "\u{391}\u{3A3}'".lwr(),
+            "a case-ignorable character after \u{3A3} does not break Final_Sigma");
+        assertEq("\u{3B1}\u{3C3}'\u{3B2}", "\u{391}\u{3A3}'\u{392}".lwr(),
+            "a cased character after a case-ignorable one breaks Final_Sigma");
+        assertEq("\u{3C3}\u{3B2}", "\u{3A3}\u{392}".lwr(),
+            "\u{3A3} with no preceding cased character stays \u{3C3}");
+        assertEq("\u{3A3}\u{3A3}", "\u{3C3}\u{3C2}".upr(), "both sigmas upper-case to \u{3A3}");
+
+        # -- title-case characters map in both directions --
+        assertEq("\u{1C4}UNGLA", "\u{1C5}ungla".upr(), "\u{1C5} -> \u{1C4}");
+        assertEq("\u{1C6}ungla", "\u{1C5}ungla".lwr(), "\u{1C5} -> \u{1C6}");
+
+        # -- scripts and blocks that the old hand-maintained table did not cover --
+        assertEq("\u{10428}", "\u{10400}".lwr(), "Deseret \u{10400} -> \u{10428}");
+        assertEq("\u{10400}", "\u{10428}".upr(), "Deseret \u{10428} -> \u{10400}");
+        assertEq("\u{104D8}", "\u{104B0}".lwr(), "Osage \u{104B0} -> \u{104D8}");
+        assertEq("\u{1E900}", "\u{1E922}".upr(), "Adlam \u{1E922} -> \u{1E900}");
+        assertEq("\u{118C0}", "\u{118A0}".lwr(), "Warang Citi \u{118A0} -> \u{118C0}");
+        assertEq("\u{10CC0}", "\u{10C80}".lwr(), "Old Hungarian \u{10C80} -> \u{10CC0}");
+        assertEq("\u{16E60}", "\u{16E40}".lwr(), "Medefaidrin \u{16E40} -> \u{16E60}");
+        assertEq("\u{10597}", "\u{10570}".lwr(), "Vithkuqi \u{10570} -> \u{10597}");
+        assertEq("\u{13A0}", "\u{AB70}".upr(), "Cherokee \u{AB70} -> \u{13A0}");
+        assertEq("\u{AB80}", "\u{13B0}".lwr(), "Cherokee \u{13B0} -> \u{AB80}");
+        assertEq("\u{2C30}", "\u{2C00}".lwr(), "Glagolitic \u{2C00} -> \u{2C30}");
+        assertEq("\u{2C81}", "\u{2C80}".lwr(), "Coptic \u{2C80} -> \u{2C81}");
+        assertEq("\u{2C61}", "\u{2C60}".lwr(), "Latin Extended-C \u{2C60} -> \u{2C61}");
+        assertEq("\u{A722}", "\u{A723}".upr(), "Latin Extended-D \u{A723} -> \u{A722}");
+        assertEq("\u{A790}", "\u{A791}".upr(), "Latin Extended-E \u{A791} -> \u{A790}");
+        assertEq("\u{A65F}", "\u{A65E}".lwr(), "Cyrillic Extended-B \u{A65E} -> \u{A65F}");
+        assertEq("\u{2D00}", "\u{10A0}".lwr(), "Georgian Asomtavruli \u{10A0} -> \u{2D00}");
+        assertEq("\u{10D0}", "\u{1C90}".lwr(), "Georgian Mtavruli \u{1C90} -> \u{10D0}");
+        assertEq("\u{2177}", "\u{2167}".lwr(), "Roman numeral \u{2167} -> \u{2177}");
+        assertEq("\u{24D0}", "\u{24B6}".lwr(), "circled \u{24B6} -> \u{24D0}");
+        assertEq("\u{FF41}", "\u{FF21}".lwr(), "fullwidth \u{FF21} -> \u{FF41}");
+
+        # -- singleton mappings into unrelated blocks --
+        assertEq("\u{39C}", "\u{B5}".upr(), "micro sign -> Greek capital mu");
+        assertEq("S", "\u{17F}".upr(), "long s -> S");
+        assertEq("I", "\u{131}".upr(), "dotless i -> I");
+
+        # -- characters with no case mapping are returned unchanged --
+        assertEq("\u{5D0}\u{5D1}", "\u{5D0}\u{5D1}".upr(), "Hebrew has no case");
+        assertEq("\u{6C49}\u{5B57}", "\u{6C49}\u{5B57}".lwr(), "Han characters have no case");
+        assertEq("\u{1F600}", "\u{1F600}".upr(), "emoji have no case");
+        assertEq("0123!@#", "0123!@#".upr(), "digits and punctuation are unchanged");
+        assertEq("\u{10330}", "\u{10330}".upr(), "Old Italic has no case");
+
+        # -- mixed strings and round trips --
+        string mixed = "\u{6C49}\u{5B57} abc \u{3B1}\u{3B2} \u{4F0}\u{4F1} \u{1F600}";
+        assertEq("\u{6C49}\u{5B57} ABC \u{391}\u{392} \u{4F0}\u{4F0} \u{1F600}", mixed.upr(),
+            "mixed-script upr()");
+        assertEq("\u{6C49}\u{5B57} abc \u{3B1}\u{3B2} \u{4F1}\u{4F1} \u{1F600}", mixed.lwr(),
+            "mixed-script lwr()");
+        assertEq(mixed.lwr(), mixed.upr().lwr(), "upr()/lwr() round trip");
+        assertEq(mixed.upr(), mixed.lwr().upr(), "lwr()/upr() round trip");
+        assertEq(mixed.upr(), mixed.upr().upr(), "upr() is idempotent");
+        assertEq(mixed.lwr(), mixed.lwr().lwr(), "lwr() is idempotent");
+
+        # -- the tolower()/toupper() functions use the same mappings --
+        assertEq("\u{130}stanbul".lwr(), tolower("\u{130}stanbul"), "tolower() matches <string>::lwr()");
+        assertEq("stra\u{DF}e".upr(), toupper("stra\u{DF}e"), "toupper() matches <string>::upr()");
+
+        # -- length() and size() of the transformed string --
+        assertEq(7, "stra\u{DF}e".upr().length(), "1-to-many upr() length");
+        assertEq(7, "stra\u{DF}e".upr().size(), "1-to-many upr() size");
+        assertEq(6, "\u{1F80}\u{1F81}\u{1FFC}".upr().length(), "Greek iota subscript upr() length");
+        assertEq(14, "\u{1F80}\u{1F81}\u{1FFC}".upr().size(), "Greek iota subscript upr() size");
+        assertEq(3, "\u{10428}\u{10429}\u{1042A}".upr().length(), "supplementary upr() length");
+        assertEq(12, "\u{10428}\u{10429}\u{1042A}".upr().size(), "supplementary upr() size");
+        assertEq(0, "".upr().length(), "empty string upr() length");
+        assertEq("", "".lwr(), "empty string lwr()");
+
+        # -- non-UTF-8 encodings --
+        string l1 = convert_encoding("h\u{E9}llo caf\u{E9}", "ISO-8859-1");
+        assertEq("ISO-8859-1", l1.upr().encoding(), "ISO-8859-1 upr() keeps the encoding");
+        assertEq("H\u{C9}LLO CAF\u{C9}", convert_encoding(l1.upr(), "UTF-8"), "ISO-8859-1 upr()");
+        assertEq("h\u{E9}llo caf\u{E9}", convert_encoding(l1.upr().lwr(), "UTF-8"), "ISO-8859-1 lwr()");
+        string l1_ss = convert_encoding("stra\u{DF}e", "ISO-8859-1");
+        assertEq("STRASSE", convert_encoding(l1_ss.upr(), "UTF-8"), "ISO-8859-1 1-to-many upr()");
+        string el = convert_encoding("\u{39F}\u{394}\u{39F}\u{3A3}", "ISO-8859-7");
+        assertEq("\u{3BF}\u{3B4}\u{3BF}\u{3C2}", convert_encoding(el.lwr(), "UTF-8"),
+            "ISO-8859-7 Final_Sigma");
+        assertEq(4, el.lwr().length(), "ISO-8859-7 lwr() length");
+
+        # a mapping that the string's encoding cannot represent leaves the character unchanged
+        # instead of raising an ENCODING-CONVERSION-ERROR; \u{FF} maps to \u{178} and \u{B5} maps
+        # to \u{39C}, neither of which exists in ISO-8859-1
+        string l1_y = convert_encoding("\u{FF}", "ISO-8859-1");
+        assertEq("\u{FF}", convert_encoding(l1_y.upr(), "UTF-8"), "unrepresentable upr() mapping");
+        assertEq("ISO-8859-1", l1_y.upr().encoding(), "unrepresentable upr() keeps the encoding");
+        string l1_mu = convert_encoding("\u{B5}", "ISO-8859-1");
+        assertEq("\u{B5}", convert_encoding(l1_mu.upr(), "UTF-8"), "unrepresentable micro sign upr()");
+        # the same characters do get mapped in an encoding that can represent the result
+        assertEq("\u{178}", "\u{FF}".upr(), "UTF-8 \u{FF} -> \u{178}");
+        assertEq("\u{39C}", "\u{B5}".upr(), "UTF-8 \u{B5} -> \u{39C}");
+        # characters in the middle of a string are not disturbed by the fallback
+        string l1_mix = convert_encoding("a\u{FF}b\u{E9}c", "ISO-8859-1");
+        assertEq("A\u{FF}B\u{C9}C", convert_encoding(l1_mix.upr(), "UTF-8"),
+            "unrepresentable mapping in the middle of a string");
+        assertEq(5, l1_mix.upr().length(), "unrepresentable mapping keeps the length");
+    }
+
     testBasics() {
         string str = "Hi there, you there, pal";
         string big = "GEE WHIZ";
@@ -742,6 +875,235 @@ class StringTest inherits QUnit::Test {
 
         assertEq("\0end", str);
         assertEq(4, str.size());
+    }
+
+    testGetLine() {
+        int bc;
+        string s = "alpha\nbeta\r\ngamma\rdelta";
+        assertEq("alpha", s.getLine(0, NOTHING, True, \bc));
+        assertEq(6, bc);
+        assertEq("alpha\n", s.getLine(0, NOTHING, False, \bc));
+        assertEq(6, bc);
+        assertEq("beta", s.getLine(6, NOTHING, True, \bc));
+        assertEq(6, bc);
+        # "\r\n" is a single end of line sequence and must be returned intact when not trimmed; the
+        # byte-oriented scan returned "\r\r" here
+        assertEq("beta\r\n", s.getLine(6, NOTHING, False, \bc));
+        assertEq(6, bc);
+        assertEq("gamma", s.getLine(12, NOTHING, True, \bc));
+        assertEq(6, bc);
+        assertEq("gamma\r", s.getLine(12, NOTHING, False, \bc));
+        assertEq(6, bc);
+        # the last line has no end of line sequence
+        assertEq("delta", s.getLine(18, NOTHING, True, \bc));
+        assertEq(5, bc);
+        assertEq(NOTHING, s.getLine(s.size()));
+        assertEq(NOTHING, "".getLine());
+
+        # an explicit line separator
+        assertEq("a", "a::b::c".getLine(0, "::", True, \bc));
+        assertEq(3, bc);
+        assertEq("a::", "a::b::c".getLine(0, "::", False, \bc));
+        assertEq(3, bc);
+        assertEq("c", "a::b::c".getLine(6, "::", True, \bc));
+        assertEq(1, bc);
+
+        # embedded nulls must not terminate the line early
+        string nul = "a\0b\nc";
+        assertEq(5, nul.size());
+        assertEq("a\0b", nul.getLine(0, NOTHING, True, \bc));
+        assertEq(4, bc);
+        assertEq("c", nul.getLine(4, NOTHING, True, \bc));
+        assertEq(1, bc);
+
+        # in UTF-16 the end of line characters are not single bytes; the byte-oriented scan stopped at
+        # the null half of the first code unit and returned an empty or invalid string
+        foreach string enc in (("UTF-16", "UTF-16BE", "UTF-16LE")) {
+            string u = convert_encoding("alpha\nbeta\r\ngamma", enc);
+            assertEq(34, u.size(), enc);
+            assertEq("alpha", convert_encoding(u.getLine(0, NOTHING, True, \bc), "UTF-8"), enc);
+            assertEq(12, bc, enc);
+            assertEq("alpha\n", convert_encoding(u.getLine(0, NOTHING, False, \bc), "UTF-8"), enc);
+            assertEq(12, bc, enc);
+            assertEq("beta", convert_encoding(u.getLine(12, NOTHING, True, \bc), "UTF-8"), enc);
+            assertEq(12, bc, enc);
+            assertEq("beta\r\n", convert_encoding(u.getLine(12, NOTHING, False, \bc), "UTF-8"), enc);
+            assertEq(12, bc, enc);
+            assertEq("gamma", convert_encoding(u.getLine(24, NOTHING, True, \bc), "UTF-8"), enc);
+            assertEq(10, bc, enc);
+            # the returned lines must be valid strings in the source encoding
+            assertEq(enc, u.getLine(0).encoding(), enc);
+            assertEq(5, u.getLine(0).length(), enc);
+            # an explicit line separator in the string's encoding
+            assertEq("alpha", convert_encoding(u.getLine(0, convert_encoding("\n", enc), True, \bc),
+                "UTF-8"), enc);
+            assertEq(12, bc, enc);
+        }
+    }
+
+    testUtf16Transforms() {
+        # a string tagged with the byte-order-neutral "UTF-16" encoding holds big-endian code units
+        # with no byte order mark; this matches the decoding handlers registered for the encoding and
+        # the Unicode default for a UTF-16 stream with no BOM.  iconv's own "UTF-16" output is a BOM
+        # followed by native-endian code units, which decoded as U+FFFE plus byte-swapped characters
+        hash<string, string> exp_hex = {
+            "UTF-16": "006800e9",
+            "UTF-16BE": "006800e9",
+            "UTF-16LE": "6800e900",
+        };
+
+        string utf8 = "Příliš žluťoučký kůň úpěl ďábelské ódy. \u{10400}";
+
+        foreach string enc in (keys exp_hex) {
+            string s = convert_encoding("hé", enc);
+            assertEq(enc, s.encoding(), enc);
+            assertEq(exp_hex{enc}, s.toHex(), enc);
+            assertEq(4, s.size(), enc);
+            assertEq(2, s.length(), enc);
+            assertEq(104, s[0].ord(), enc);
+            assertEq(233, s[1].ord(), enc);
+            assertEq("hé", convert_encoding(s, "UTF-8"), enc);
+            assertEq(("h", "é"), (map convert_encoding($1, "UTF-8"), s.splitChars()), enc);
+
+            # case conversion must decode the string instead of taking the byte-oriented ASCII fast
+            # path, which matched the 0x00 half of a code unit and wrote single bytes
+            assertEq("HÉ", convert_encoding(s.upr(), "UTF-8"), enc);
+            assertEq("hé", convert_encoding(s.upr().lwr(), "UTF-8"), enc);
+            assertEq(enc, s.upr().encoding(), enc);
+            assertEq(4, s.upr().size(), enc);
+            assertEq(2, s.upr().length(), enc);
+
+            # unaccent() must encode its replacement strings instead of concatenating raw ASCII bytes
+            string un = s.unaccent();
+            assertEq("he", convert_encoding(un, "UTF-8"), enc);
+            assertEq(enc, un.encoding(), enc);
+            assertEq(4, un.size(), enc);
+            assertEq(2, un.length(), enc);
+
+            # a replacement of more than one character
+            string multi = convert_encoding("stra\u{df}e", enc).unaccent();
+            assertEq("strasse", convert_encoding(multi, "UTF-8"), enc);
+            assertEq(7, multi.length(), enc);
+            assertEq(14, multi.size(), enc);
+
+            # supplementary-plane characters exercise the surrogate path
+            string sp = convert_encoding("a\u{10400}z", enc);
+            assertEq(3, sp.length(), enc);
+            assertEq(8, sp.size(), enc);
+            assertEq(0x10400, sp[1].ord(), enc);
+            assertEq("a\u{10428}z", convert_encoding(sp.lwr(), "UTF-8"), enc);
+            assertEq("A\u{10400}Z", convert_encoding(sp.upr(), "UTF-8"), enc);
+            assertEq(3, sp.lwr().length(), enc);
+            assertEq(("a", "\u{10400}", "z"), (map convert_encoding($1, "UTF-8"), sp.splitChars()), enc);
+
+            # the language-independent Final_Sigma condition also needs decoded characters
+            assertEq("\u{3BF}\u{3B4}\u{3BF}\u{3C2}",
+                convert_encoding(convert_encoding("\u{39F}\u{394}\u{39F}\u{3A3}", enc).lwr(), "UTF-8"), enc);
+
+            # reverse() copied characters with strncpy(), which stopped at the null byte in a code unit
+            assertEq("éh", convert_encoding(reverse(s), "UTF-8"), enc);
+
+            # chomp() compared raw bytes against "\n" and "\r"
+            assertEq("x", convert_encoding(chomp(convert_encoding("x\n", enc)), "UTF-8"), enc);
+            assertEq("x", convert_encoding(chomp(convert_encoding("x\r\n", enc)), "UTF-8"), enc);
+            assertEq("x", convert_encoding(chomp(convert_encoding("x", enc)), "UTF-8"), enc);
+            assertEq("x\ry", convert_encoding(chomp(convert_encoding("x\ry", enc)), "UTF-8"), enc);
+
+            # replace() appended the tail after the last match as a null-terminated string
+            assertEq("héLLO wörld", convert_encoding(replace(convert_encoding("héllo wörld", enc),
+                convert_encoding("llo", enc), convert_encoding("LLO", enc)), "UTF-8"), enc);
+
+            # these predicates determined the argument's byte length with strlen(), which is 0 for
+            # big-endian UTF-16 data starting with an ASCII character, so every argument matched
+            assertTrue(s.startsWith(convert_encoding("h", enc)), enc);
+            assertFalse(s.startsWith(convert_encoding("zz", enc)), enc);
+            assertTrue(s.endsWith(convert_encoding("é", enc)), enc);
+            assertFalse(s.endsWith(convert_encoding("zz", enc)), enc);
+            assertTrue(s.contains(convert_encoding("é", enc)), enc);
+            assertFalse(s.contains(convert_encoding("zz", enc)), enc);
+            assertEq(0, s.comparePartial(convert_encoding("h", enc)), enc);
+            assertEq(-1, s.comparePartial(convert_encoding("zz", enc)), enc);
+
+            # a full round trip through the encoding must not change the string
+            assertEq(utf8, convert_encoding(convert_encoding(utf8, enc), "UTF-8"), enc);
+        }
+
+        # a byte order mark selects the byte order for the byte-order-neutral "UTF-16" encoding and is
+        # removed from the string
+        string be = binary_to_string(<feff006800e9>, "UTF-16");
+        assertEq("UTF-16BE", be.encoding());
+        assertEq(2, be.length());
+        assertEq("hé", convert_encoding(be, "UTF-8"));
+
+        string le = binary_to_string(<fffe6800e900>, "UTF-16");
+        assertEq("UTF-16LE", le.encoding());
+        assertEq(2, le.length());
+        assertEq("hé", convert_encoding(le, "UTF-8"));
+
+        # UTF-16 data with no byte order mark is big-endian
+        string none = binary_to_string(<006800e9>, "UTF-16");
+        assertEq("UTF-16", none.encoding());
+        assertEq(2, none.length());
+        assertEq("hé", convert_encoding(none, "UTF-8"));
+
+        # an explicit byte order is not changed by a byte order mark, but the mark is still removed
+        string ebe = binary_to_string(<feff006800e9>, "UTF-16BE");
+        assertEq("UTF-16BE", ebe.encoding());
+        assertEq(2, ebe.length());
+        assertEq("hé", convert_encoding(ebe, "UTF-8"));
+
+        string ele = binary_to_string(<fffe6800e900>, "UTF-16LE");
+        assertEq("UTF-16LE", ele.encoding());
+        assertEq(2, ele.length());
+        assertEq("hé", convert_encoding(ele, "UTF-8"));
+
+        # UTF-16 is not self-synchronizing: the low byte of one code unit and the high byte of the
+        # next can form the byte sequence of a different character, so a byte-oriented substring
+        # search could match at a position that is not a character boundary.  Here U+0100 followed by
+        # U+0A41 produces the byte pair that encodes "\n" straddling the character boundary
+        string benl = convert_encoding("\n", "UTF-16BE");
+        string be_split = convert_encoding("x\u{100}\u{A41}y", "UTF-16BE");
+        assertEq("007801000a410079", be_split.toHex());
+        assertEq(4, be_split.length());
+        assertEq(-1, index(be_split, benl));
+        assertEq(-1, rindex(be_split, benl));
+        assertFalse(be_split.contains(benl));
+        assertEq(1, be_split.split(benl).size());
+        assertEq(1, (map $1, be_split.splitString(benl)).size());
+        assertEq(be_split.toHex(), replace(be_split, benl, convert_encoding("Z", "UTF-16BE")).toHex());
+        assertEq(be_split.toHex(), be_split.getLine().toHex());
+
+        # the same with the characters reversed in UTF-16LE
+        string lenl = convert_encoding("\n", "UTF-16LE");
+        string le_split = convert_encoding("x\u{A41}\u{100}y", "UTF-16LE");
+        assertEq("7800410a00017900", le_split.toHex());
+        assertEq(4, le_split.length());
+        assertEq(-1, index(le_split, lenl));
+        assertEq(-1, rindex(le_split, lenl));
+        assertFalse(le_split.contains(lenl));
+        assertEq(1, le_split.split(lenl).size());
+        assertEq(1, (map $1, le_split.splitString(lenl)).size());
+        assertEq(le_split.toHex(), replace(le_split, lenl, convert_encoding("Z", "UTF-16LE")).toHex());
+        assertEq(le_split.toHex(), le_split.getLine().toHex());
+
+        # a separator that really is at a character boundary is still found
+        string real = convert_encoding("x\u{100}\n\u{A41}y", "UTF-16BE");
+        assertEq(2, index(real, benl));
+        assertEq(2, rindex(real, benl));
+        assertTrue(real.contains(benl));
+        assertEq(2, real.split(benl).size());
+        assertEq(2, (map $1, real.splitString(benl)).size());
+        assertEq("x\u{100}", convert_encoding(real.getLine(), "UTF-8"));
+        assertEq("x\u{100}Z\u{A41}y", convert_encoding(replace(real, benl,
+            convert_encoding("Z", "UTF-16BE")), "UTF-8"));
+
+        # concatUnicode() concatenated a 0x01 byte instead of the character with any encoding other
+        # than UTF-8, because the temporary string holder was converted to bool and then to char
+        assertEq(<61e962>, binary(html_decode(convert_encoding("a&eacute;b", "ISO-8859-1"))));
+
+        # entity encoding and decoding are still not supported with non-ASCII-compatible encodings
+        assertThrows("UNSUPPORTED-ENCODING", \html_decode(), convert_encoding("a&eacute;b", "UTF-16BE"));
+        assertThrows("UNSUPPORTED-ENCODING", \html_encode(), convert_encoding("a<b", "UTF-16BE"));
     }
 
     testUtf16() {

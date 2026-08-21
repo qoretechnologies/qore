@@ -277,6 +277,15 @@ public class AzureOpenAiLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider
         string entra_scope;
     }
 
+    #! Azure routes by deployment name, so there is no default chat model
+    /** the model is selected by the \c azure_deployment connection option and
+        encoded in the request URL; this override keeps the inherited OpenAI
+        default from being sent as a model name
+    */
+    *string getDefaultModel() {
+        return NOTHING;
+    }
+
     constructor(hash<QoreLlmUtils::LlmBackendConfig> config)
             : OpenAiRestClient::OpenAiLlmProvider(config) {
         *string dep = config.provider_options.azure_deployment;

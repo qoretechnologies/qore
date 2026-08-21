@@ -136,6 +136,9 @@ public class GrokRestClientBase {
         #! Default Grok API version
         const DefaultApiVersion = "v1";
 
+        #! Default xAI Grok chat model
+        const DefaultChatModel = "grok-3";
+
         #! Default constructor options
         const DefaultOptions = {
             "url": DefaultUrl,
@@ -158,6 +161,8 @@ public class GrokRestClientBase {
             rv.token = rv.apikey;
             delete rv.apikey;
         }
+        # connection-level option for downstream LLM clients; not a REST client option
+        remove rv{"chat-model"};
         return rv;
     }
 }
@@ -393,6 +398,17 @@ public class GrokRestConnection inherits RestClient::RestConnection {
                     "desc": "The API version to use",
                     "type": "string",
                     "default_value": GrokRestClientBase::DefaultApiVersion,
+                },
+                "chat-model": <ConnectionOptionInfo>{
+                    "display_name": "Chat Model",
+                    "short_desc": "xAI Grok chat model name",
+                    "desc": "The xAI Grok chat model used by LLM clients when this connection is "
+                        "selected for chat.\n\n"
+                        "Chat models are a separate family from embedding models and cannot "
+                        "be used interchangeably."
+                        "\n\nExample values: `grok-3` (the default)",
+                    "type": "string",
+                    "default_value": GrokRestClientBase::DefaultChatModel,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
                     "default_value": DefaultPingHeaders,
@@ -675,6 +691,11 @@ public class GrokLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
     public {
         #! Default xAI Grok REST API URL
         const DefaultUrl = "https://api.x.ai";
+    }
+
+    #! Returns the default xAI Grok chat model
+    *string getDefaultModel() {
+        return GrokRestClientBase::DefaultChatModel;
     }
 
     constructor(hash<QoreLlmUtils::LlmBackendConfig> config)

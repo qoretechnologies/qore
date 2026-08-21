@@ -125,8 +125,12 @@ The `<char>` pseudo-class exposes codepoint and string-view methods, including:
 - `ord()` / `typeCode()` for numeric and type metadata
 - `toString()` for explicit string materialization
 - `size()`, `length()`, and `utf8ByteLen()` for string-view size queries
-- `lwr()` and `upr()`, returning strings because Unicode case mapping can
-  expand one codepoint into multiple codepoints
+- `lwr()` and `upr()`, returning chars; these apply the Unicode *simple* (1-to-1)
+  case mappings, which are always single codepoints.  `<string>::lwr()` and
+  `<string>::upr()` apply the Unicode *full* case mappings instead, which are
+  context-sensitive and can expand one codepoint into up to three codepoints
+  (for example `"\u{DF}".upr()` is `"SS"` while `c'\u{DF}'.upr()` is `c'\u{DF}'`,
+  since `\u{DF}` has no simple upper-case mapping)
 - `charp()`, `intp()`, `strp()`, and `val()`
 
 ## Parser and Tooling

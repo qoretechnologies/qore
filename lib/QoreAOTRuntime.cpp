@@ -3266,7 +3266,13 @@ struct AotPcRange {
 };
 
 QoreThreadLock g_aot_pcmap_lock;  // guards all registry state below
-using AotSymMap = std::unordered_map<std::string, std::vector<std::pair<uint32_t, uint32_t>>>;
+//! One symbol's lazy PC->loc data: the (offset -> loc-index) rows plus the literal locations that
+//! indices at or above the function's loc-table size address (code inlined from another function).
+struct AotSymEntry {
+    std::vector<std::pair<uint32_t, uint32_t>> entries;
+    std::vector<AOTCompiledFuncWithSlots::AOTLocEntry> extra_locs;
+};
+using AotSymMap = std::unordered_map<std::string, AotSymEntry>;
 std::unordered_map<std::string, std::shared_ptr<const AotSymMap>> g_aot_trailer_cache;
 std::vector<AotPcRange> g_aot_pc_ranges;  //!< kept sorted by base once finalized
 bool g_aot_pc_ranges_sorted = true;
@@ -3308,7 +3314,10 @@ std::shared_ptr<const AotSymMap> getOrLoadPcLocTrailer(const char* path) {
             || (qoreAOTReadPcLocTrailer(key, entries) && !entries.empty())) {
         symmap = std::make_shared<AotSymMap>();
         for (auto& e : entries) {
-            (*symmap)[e.symbol] = std::move(e.entries);
+            AotSymEntry se;
+            se.entries = std::move(e.entries);
+            se.extra_locs = std::move(e.extra_locs);
+            (*symmap)[e.symbol] = std::move(se);
         }
     }
     AutoLocker al(g_aot_pcmap_lock);
@@ -3403,7 +3412,7 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
     // Resolve the function's name (-> map key), runtime start, and size. Prefer the
     // dladdr/.dynsym result; fall back to .symtab when the symbol is absent there or
     // its name isn't in the map (covers executable-resident AOT functions).
-    const std::vector<std::pair<uint32_t, uint32_t>>* sym_entries = nullptr;
+    const AotSymEntry* sym_entries = nullptr;
     uintptr_t fn_start = 0;
     uintptr_t fn_size = 0;
     if (info.dli_sname && info.dli_saddr) {
@@ -3478,10 +3487,37 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
     if (fn_size) {
         range.end = range.base + fn_size;
     }
-    range.offmap.reserve(sym_entries->size());
-    for (const auto& e : *sym_entries) {
-        if (e.second < static_cast<uint32_t>(ctx->num_locs) && ctx->locs[e.second]) {
-            range.offmap.emplace_back(e.first, ctx->locs[e.second]);
+    range.offmap.reserve(sym_entries->entries.size());
+    // Locations for inlined code are carried literally by the map and addressed with indices at or
+    // above num_locs; materialize each one once, owned by the context (see QoreAOTContext::
+    // pc_extra_locs).  A blob written before that block existed simply has none, and an index past
+    // the end is dropped rather than resolved to something unrelated.
+    QoreAOTContext* mctx = const_cast<QoreAOTContext*>(ctx);
+    std::vector<const QoreProgramLocation*> materialized(sym_entries->extra_locs.size(), nullptr);
+    for (const auto& e : sym_entries->entries) {
+        const QoreProgramLocation* loc = nullptr;
+        if (e.second < static_cast<uint32_t>(ctx->num_locs)) {
+            loc = ctx->locs[e.second];
+        } else {
+            const size_t xi = e.second - static_cast<uint32_t>(ctx->num_locs);
+            if (xi >= sym_entries->extra_locs.size()) {
+                continue;
+            }
+            if (!materialized[xi]) {
+                const auto& x = sym_entries->extra_locs[xi];
+                if (x.start_line <= 0) {
+                    continue;
+                }
+                mctx->pc_extra_files.push_back(x.file);
+                auto* nl = new QoreProgramLocation(mctx->pc_extra_files.back().c_str(),
+                    x.start_line, x.end_line);
+                mctx->pc_extra_locs.push_back(nl);
+                materialized[xi] = nl;
+            }
+            loc = materialized[xi];
+        }
+        if (loc) {
+            range.offmap.emplace_back(e.first, loc);
             if (e.first > range.max_off) {
                 range.max_off = e.first;
             }
@@ -6897,8 +6933,8 @@ static QoreAOTContext* buildContextFromSlotMap(
             ctx->locs = static_cast<const QoreProgramLocation**>(
                 calloc(num_loc_entries, sizeof(const QoreProgramLocation*)));
             for (uint32_t i = 0; i < num_loc_entries && ptr < loc_boundary; ++i) {
-                int start_line = qore_aot_read_line(reader, ptr);
-                int end_line = qore_aot_read_line(reader, ptr);
+                int start_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+                int end_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
                 const char* loc_file = reader.readStringRef(ptr);
                 if (start_line > 0) {
                     // Intern the file name in the program's string pool —
@@ -6939,12 +6975,13 @@ static QoreAOTContext* buildContextFromSlotMap(
             qore_program_private* pp = qore_program_private::get(*pgm);
             AutoLocker al(&pp->plock);
             for (uint32_t i = 0; i < num_stmt_locs && ptr < loc_boundary; ++i) {
-                int start_line = qore_aot_read_line(reader, ptr);
-                int end_line = qore_aot_read_line(reader, ptr);
+                int start_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+                int end_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
                 int64_t offset = QoreAOTBinaryReader::readI64(ptr);
                 const char* loc_file = reader.readStringRef(ptr);
                 const char* loc_source = reader.readStringRef(ptr);
-                if (!start_line || !loc_file) {
+                // a non-positive start line carries no usable statement location
+                if (start_line <= 0 || !loc_file) {
                     continue;
                 }
 
@@ -8217,8 +8254,8 @@ static std::unique_ptr<QoreIRInstruction> deserializeIRInstruction(
     // Intern via qore_program_private::addString() so the string lives in the
     // program's str_vec pool for the program's lifetime, matching how the
     // parser's addFile() already stores filenames for JIT/source-parsed code.
-    int start_line = qore_aot_read_line(reader, ptr);
-    int end_line = qore_aot_read_line(reader, ptr);
+    int start_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+    int end_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
     const char* loc_file = reader.readStringRef(ptr);
     if (start_line > 0 && owner_func) {
         const char* interned_file = (loc_file && pgm)

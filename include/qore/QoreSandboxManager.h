@@ -184,16 +184,25 @@ public:
 
         @param path The path to check (will be canonicalized)
         @param mode The access mode requested (bitmask of QSEC_* flags)
-        @param xsink Exception sink - raises FILESYSTEM-ACCESS-DENIED if denied
+        @param xsink Exception sink - raises FILESYSTEM-ACCESS-DENIED if denied by policy, or
+        SANDBOX-PATH-ERROR if the path cannot be resolved
 
         @return true if access is allowed, false if denied (exception raised)
 
         @note This method:
-        - Canonicalizes the path using realpath()
+        - Canonicalizes the path (see below)
         - Checks denied paths first (they take precedence)
         - Checks sandbox root containment
         - Checks allowed paths
         - Falls back to default policy
+
+        @note The path does not have to exist; the deepest existing ancestor is resolved with
+        realpath() and the remaining components are appended, with \c "." and \c ".." folded, so
+        that paths naming files that have not been created yet can be checked.  Symbolic links
+        are always resolved before the containment checks, including links whose target does not
+        exist.  A path that cannot be resolved for any other reason (for example a component that
+        cannot be searched) raises SANDBOX-PATH-ERROR; this is a resolution failure and not an
+        access denial.
     */
     DLLEXPORT bool checkAccess(const char* path, int mode, ExceptionSink* xsink);
 

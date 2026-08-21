@@ -109,6 +109,9 @@ public class FireworksRestClientBase {
         #! Default Fireworks API version
         const DefaultApiVersion = "v1";
 
+        #! Default Fireworks chat model
+        const DefaultChatModel = "accounts/fireworks/models/llama-v3p1-405b-instruct";
+
         const DefaultOptions = {
             "url": DefaultUrl,
             "api": DefaultApiVersion,
@@ -125,6 +128,8 @@ public class FireworksRestClientBase {
             rv.token = rv.apikey;
             delete rv.apikey;
         }
+        # connection-level option for downstream LLM clients; not a REST client option
+        remove rv{"chat-model"};
         return rv;
     }
 }
@@ -184,6 +189,17 @@ public class FireworksRestConnection inherits RestClient::RestConnection {
                     "desc": "The API version to use.",
                     "type": "string",
                     "default_value": FireworksRestClientBase::DefaultApiVersion,
+                },
+                "chat-model": <ConnectionOptionInfo>{
+                    "display_name": "Chat Model",
+                    "short_desc": "Fireworks chat model name",
+                    "desc": "The Fireworks chat model used by LLM clients when this connection is "
+                        "selected for chat.\n\n"
+                        "Chat models are a separate family from embedding models and cannot "
+                        "be used interchangeably."
+                        "\n\nExample values: `accounts/fireworks/models/llama-v3p1-405b-instruct` (the default)",
+                    "type": "string",
+                    "default_value": FireworksRestClientBase::DefaultChatModel,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
                     "default_value": DefaultPingHeaders,
@@ -267,6 +283,11 @@ public class FireworksRestConnection inherits RestClient::RestConnection {
 public class FireworksLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
     public {
         const DefaultUrl = "https://api.fireworks.ai/inference";
+    }
+
+    #! Returns the default Fireworks chat model
+    *string getDefaultModel() {
+        return FireworksRestClientBase::DefaultChatModel;
     }
 
     constructor(hash<QoreLlmUtils::LlmBackendConfig> config)

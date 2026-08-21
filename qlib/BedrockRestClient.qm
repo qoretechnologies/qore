@@ -208,6 +208,11 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         const DefaultModel = "amazon.nova-lite-v1:0";
     }
 
+    #! Returns the default Bedrock chat model
+    *string getDefaultModel() {
+        return DefaultModel;
+    }
+
     private {
         *AwsRestClient::AwsRestClientIo rest_client;
         Mutex rest_mutex();
@@ -269,7 +274,7 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
 
     #! Returns the configured (or default) Bedrock model ID
     string getBedrockModelId(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        return getRequestModel(opts) ?? DefaultModel;
+        return getRequestModel(opts);
     }
 
     #! Builds a Bedrock Converse request body from the provider-neutral inputs
@@ -541,8 +546,14 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     }
 
     #! Extracts a region segment from a Bedrock runtime URL (best-effort)
+    /** the extraction operator yields @ref nothing when the URL does not match,
+        so the target must be nullable; a non-nullable \c list<string> made a
+        non-matching URL raise \c RUNTIME-TYPE-ERROR instead of returning
+        @ref nothing, which defeated the region fallbacks in
+        @ref resolveRegion()
+    */
     private:internal static *string regionFromUrl(string url) {
-        list<string> m = (url =~ x/bedrock-runtime\.([^\.]+)\.amazonaws\.com/);
+        *list<string> m = (url =~ x/bedrock-runtime\.([^\.]+)\.amazonaws\.com/);
         return m ? m[0] : NOTHING;
     }
 

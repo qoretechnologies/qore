@@ -113,11 +113,25 @@ static QoreStringNode* qore_regex_escape_string(const QoreStringNode* str, Excep
     return result.release();
 }
 
-static const char* memstr(const char* str, const char* pattern, size_t pl, size_t len) {
+// finds the first occurrence of "pattern" (length "pl") in "str" (length "len") that starts at a
+// character boundary; "align" is the byte alignment of character boundaries in the string's encoding
+// (see qore_string_private::get_char_alignment()) and "base" is the byte offset of "str" within the
+// string, used for the alignment check; returns nullptr if there is no such match
+static const char* memstr(const char* str, const char* pattern, size_t pl, size_t len,
+        unsigned align = 1, size_t base = 0) {
+    const char* ostr = str;
     while (true) {
         const char* p = (const char*)memchr(str, pattern[0], len);
         if (!p)
             return nullptr;
+
+        // in encodings that are not self-synchronizing (UTF-16*) a byte-oriented match can start in
+        // the middle of a character; skip those matches
+        if (align > 1 && ((base + (p - ostr)) % align)) {
+            len -= (p - str + 1);
+            str = p + 1;
+            continue;
+        }
 
         //printd(5, "memstr() pattern: %s str: %p p: %p len: %d pl: %d remaining: %d (%c %c %c)\n", pattern, str, p,
         //  len, pl, len-(p-str), p[1], p[2], p[3]);
@@ -159,7 +173,8 @@ QoreListNode* split_intern(const char* pattern, size_t pl, const char* str, size
         bool with_separator, bool keep_trailing_empty) {
     QoreListNode* l = new QoreListNode(enc ? stringTypeInfo : binaryTypeInfo);
     const char* ostr = str;
-    while (const char* p = memstr(str, pattern, pl, sl - (str - ostr))) {
+    const unsigned align = qore_string_private::get_char_alignment(enc);
+    while (const char* p = memstr(str, pattern, pl, sl - (str - ostr), align, str - ostr)) {
         split_add_element(l, str, p - str + (with_separator ? pl : 0), enc);
         str = p + pl;
     }
@@ -293,7 +308,8 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
                 // make sure len is always calculated correctly
                 assert(len == (str->size() - (ststr - ostr)));
 
-                p = memstr(ststr, quote, quotelen, len);
+                p = memstr(ststr, quote, quotelen, len, qore_string_private::get_char_alignment(
+                    str->getEncoding()), ststr - ostr);
                 if (!p) {
                     // retrieve another line and add it to the current one if possible
                     if (h) {
@@ -439,7 +455,8 @@ QoreListNode* split_with_quote(ExceptionSink* xsink, const char* pat, size_t pat
         // create the field string
         QoreStringNodeHolder field(new QoreStringNode(str->getEncoding()));
 
-        const char* p = memstr(ststr, tpattern, pl, len);
+        const char* p = memstr(ststr, tpattern, pl, len, qore_string_private::get_char_alignment(
+            str->getEncoding()), ststr - ostr);
         if (!p) {
             field->concat(ststr, len);
             QoreString fstr(ststr, len);
@@ -848,7 +865,16 @@ int char_width(softstring str) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
 string lwr = tolower(str);
     @endcode
 
-    This function operates on a very wide range of non-ASCII characters using a Unicode lookup table for mapping Latin, Cyrillic, Greek, Armenian, Georgian, etc characters.
+    This function applies the Unicode default <i>full</i> lower-case mapping to every
+    character in the string.  The mapping covers the entire Unicode range and can map a single
+    character to more than one character (for example <tt>U+0130</tt> maps to
+    <tt>U+0069 U+0307</tt>); characters with no lower-case mapping are returned unchanged.  The
+    language-independent @c Final_Sigma condition is applied, so a Greek capital sigma
+    (<tt>U+03A3</tt>) at the end of a word maps to <tt>U+03C2</tt> rather than <tt>U+03C3</tt>;
+    language-specific mappings (Turkish, Azeri, and Lithuanian) are not applied.
+    A character whose mapping cannot be represented in the string's
+    @ref character_encoding "character encoding" is returned unchanged; case conversion never
+    raises an encoding conversion error.
 
     @param str a string to process
 
@@ -884,7 +910,14 @@ nothing tolower() [flags=RUNTIME_NOOP] {
 string upr = toupper(str);
     @endcode
 
-    This function operates on a very wide range of non-ASCII characters using a Unicode lookup table for mapping Latin, Cyrillic, Greek, Armenian, Georgian, etc characters.
+    This function applies the Unicode default <i>full</i> upper-case mapping to every
+    character in the string.  The mapping covers the entire Unicode range and can map a single
+    character to more than one character (for example <tt>U+00DF</tt> maps to @c "SS");
+    characters with no upper-case mapping are returned unchanged.  Language-specific mappings
+    (Turkish, Azeri, and Lithuanian) are not applied.
+    A character whose mapping cannot be represented in the string's
+    @ref character_encoding "character encoding" is returned unchanged; case conversion never
+    raises an encoding conversion error.
 
     @param str a string to process
 
@@ -1819,7 +1852,9 @@ string replace(string str, string source, string target, int start = 0, int end 
 
         //printd(5, "cstr: %p str: %p size: %d cstr - str: %d\n", cstr, str->c_str(), (int)size, (int)(cstr - str->c_str()));
         assert(static_cast<size_t>(cstr - str->c_str()) < size);
-        while (const char* p = (const char*)q_memmem(cstr, size - (cstr - str->c_str()), pattern, plen)) {
+        const unsigned align = qore_string_private::get_char_alignment(ccs);
+        while (const char* p = qore_string_private::memmem_aligned(cstr, size - (cstr - str->c_str()),
+            pattern, plen, align, cstr - str->c_str())) {
             //printd(5, "str: %p p: %p '%s' '%s'->'%s'\n", cstr, p, cstr, pattern, t2->c_str());
             if (p != cstr) {
                 nstr->concat(cstr, p - cstr);
@@ -1829,9 +1864,12 @@ string replace(string str, string source, string target, int start = 0, int end 
         }
     }
 
-    // add last field
-    if (*cstr) {
-        nstr->concat(cstr);
+    // add last field; the byte length has to be used here and not a NUL-terminated concatenation,
+    // since strings can contain embedded nulls, either because the encoding uses them (UTF-16*) or
+    // because the string data itself contains them
+    size_t tail = str->size() - (cstr - str->c_str());
+    if (tail) {
+        nstr->concat(cstr, tail);
     }
 
     return nstr.release();

@@ -224,6 +224,34 @@ size_t qoreAOTSerializePcLocPayload(const std::vector<AOTCompiledFuncWithSlots>&
     out[count_pos + 1] = static_cast<uint8_t>((n >> 8) & 0xff);
     out[count_pos + 2] = static_cast<uint8_t>((n >> 16) & 0xff);
     out[count_pos + 3] = static_cast<uint8_t>((n >> 24) & 0xff);
+
+    // Optional trailing block: literal locations for entries whose loc-index addresses inlined code
+    // (see AOTCompiledFuncWithSlots::pc_extra_locs).  Appended AFTER every function record so that
+    // readers predating it parse the records above and ignore these bytes.
+    uint32_t num_extra_funcs = 0;
+    for (const auto& fws : func_slots) {
+        if (!fws.pc_loc_map.empty() && !fws.llvm_symbol.empty() && !fws.pc_extra_locs.empty()) {
+            ++num_extra_funcs;
+        }
+    }
+    if (num_extra_funcs) {
+        pcmapPut32(out, QORE_AOT_PCMAP_EXTRA_MAGIC);
+        pcmapPut32(out, num_extra_funcs);
+        for (const auto& fws : func_slots) {
+            if (fws.pc_loc_map.empty() || fws.llvm_symbol.empty() || fws.pc_extra_locs.empty()) {
+                continue;
+            }
+            pcmapPut32(out, static_cast<uint32_t>(fws.llvm_symbol.size()));
+            out.insert(out.end(), fws.llvm_symbol.begin(), fws.llvm_symbol.end());
+            pcmapPut32(out, static_cast<uint32_t>(fws.pc_extra_locs.size()));
+            for (const auto& loc : fws.pc_extra_locs) {
+                pcmapPut32(out, static_cast<uint32_t>(loc.start_line));
+                pcmapPut32(out, static_cast<uint32_t>(loc.end_line));
+                pcmapPut32(out, static_cast<uint32_t>(loc.file.size()));
+                out.insert(out.end(), loc.file.begin(), loc.file.end());
+            }
+        }
+    }
     return n;
 }
 
@@ -257,6 +285,52 @@ bool qoreAOTParsePcLocPayload(const uint8_t* data, size_t len,
             m.entries.emplace_back(off, loc);
         }
         out.push_back(std::move(m));
+    }
+
+    // Optional trailing extra-location block; absent in payloads written before it existed, in which
+    // case every entry resolves through the function's own loc table exactly as before.
+    uint32_t extra_magic = 0;
+    size_t probe = p;
+    if (pcmapGet32(data, len, probe, extra_magic) && extra_magic == QORE_AOT_PCMAP_EXTRA_MAGIC) {
+        p = probe;
+        uint32_t nf = 0;
+        if (!pcmapGet32(data, len, p, nf)) {
+            return true;  // truncated tail: keep the function records already parsed
+        }
+        for (uint32_t i = 0; i < nf; ++i) {
+            uint32_t slen = 0;
+            if (!pcmapGet32(data, len, p, slen) || p + slen > len) {
+                return true;
+            }
+            std::string sym(reinterpret_cast<const char*>(data + p), slen);
+            p += slen;
+            uint32_t ne = 0;
+            if (!pcmapGet32(data, len, p, ne)) {
+                return true;
+            }
+            AOTPcLocFuncEntry* target = nullptr;
+            for (auto& m : out) {
+                if (m.symbol == sym) {
+                    target = &m;
+                    break;
+                }
+            }
+            for (uint32_t j = 0; j < ne; ++j) {
+                uint32_t sline = 0, eline = 0, flen = 0;
+                if (!pcmapGet32(data, len, p, sline) || !pcmapGet32(data, len, p, eline)
+                        || !pcmapGet32(data, len, p, flen) || p + flen > len) {
+                    return true;
+                }
+                if (target) {
+                    AOTCompiledFuncWithSlots::AOTLocEntry loc;
+                    loc.start_line = static_cast<int32_t>(sline);
+                    loc.end_line = static_cast<int32_t>(eline);
+                    loc.file.assign(reinterpret_cast<const char*>(data + p), flen);
+                    target->extra_locs.push_back(std::move(loc));
+                }
+                p += flen;
+            }
+        }
     }
     return true;
 }
@@ -17298,14 +17372,14 @@ static bool readAndSetupVariantSignature(
     int sig_first_line = 0;
     int sig_last_line  = 0;
     if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_SIG_LINES) != 0) {
-        sig_first_line = qore_aot_read_line(reader, ptr);
-        sig_last_line  = qore_aot_read_line(reader, ptr);
+        sig_first_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+        sig_last_line  = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
     }
     entry_first_line = 0;
     entry_last_line = 0;
     if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_ENTRY_STMT_LINES) != 0) {
-        entry_first_line = qore_aot_read_line(reader, ptr);
-        entry_last_line  = qore_aot_read_line(reader, ptr);
+        entry_first_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+        entry_last_line  = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
     }
     if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_VARIANT_PARSE_OPTIONS) != 0) {
         int64_t po_lo = QoreAOTBinaryReader::readI64(ptr);
@@ -17985,8 +18059,8 @@ bool QoreAOTBinaryDeserializer::deserializeMethods(std::string& error) {
                             const char* base_path = reader.readStringRef(ptr);
                             entry.base_path = base_path ? base_path : "";
                             if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_BCA_LINES) != 0) {
-                                entry.start_line = qore_aot_read_line(reader, ptr);
-                                entry.end_line = qore_aot_read_line(reader, ptr);
+                                entry.start_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
+                                entry.end_line = qore_aot_valid_line(qore_aot_read_line(reader, ptr));
                             }
                             if ((reader.getHeader().feature_flags & QORE_AOT_FEAT_BCA_NAMED_ARG_MAP) != 0) {
                                 entry.eval_result_size = QoreAOTBinaryReader::readU16(ptr);

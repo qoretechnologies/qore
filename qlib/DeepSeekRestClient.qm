@@ -121,6 +121,9 @@ public class DeepSeekRestClientBase {
         #! Default DeepSeek API version
         const DefaultApiVersion = "v1";
 
+        #! Default DeepSeek chat model
+        const DefaultChatModel = "deepseek-chat";
+
         #! Default constructor options
         const DefaultOptions = {
             "url": DefaultUrl,
@@ -141,6 +144,8 @@ public class DeepSeekRestClientBase {
             rv.token = rv.apikey;
             delete rv.apikey;
         }
+        # connection-level option for downstream LLM clients; not a REST client option
+        remove rv{"chat-model"};
         return rv;
     }
 }
@@ -235,6 +240,17 @@ public class DeepSeekRestConnection inherits RestClient::RestConnection {
                     "desc": "The API version to use.",
                     "type": "string",
                     "default_value": DeepSeekRestClientBase::DefaultApiVersion,
+                },
+                "chat-model": <ConnectionOptionInfo>{
+                    "display_name": "Chat Model",
+                    "short_desc": "DeepSeek chat model name",
+                    "desc": "The DeepSeek chat model used by LLM clients when this connection is "
+                        "selected for chat.\n\n"
+                        "Chat models are a separate family from embedding models and cannot "
+                        "be used interchangeably."
+                        "\n\nExample values: `deepseek-chat` (the default), `deepseek-reasoner`",
+                    "type": "string",
+                    "default_value": DeepSeekRestClientBase::DefaultChatModel,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
                     "default_value": DefaultPingHeaders,
@@ -372,6 +388,11 @@ public class DeepSeekLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
     public {
         #! Default DeepSeek REST API URL
         const DefaultUrl = "https://api.deepseek.com";
+    }
+
+    #! Returns the default DeepSeek chat model
+    *string getDefaultModel() {
+        return DeepSeekRestClientBase::DefaultChatModel;
     }
 
     constructor(hash<QoreLlmUtils::LlmBackendConfig> config)

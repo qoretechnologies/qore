@@ -2967,7 +2967,9 @@ int BCAList::execBaseClassConstructorArgs(BCEAList* bceal, ExceptionSink* xsink)
 }
 
 QoreProgram* QoreClass::getProgram() const {
-    return priv->ns->getProgram();
+    // ns is null when the declaring namespace has been destroyed while this class was still
+    // referenced, and for classes that were never assigned to a namespace
+    return priv->ns ? priv->ns->getProgram() : nullptr;
 }
 
 QoreProgram* QoreClass::getSourceProgram() const {
@@ -4210,6 +4212,17 @@ const QoreMethod* qore_class_private::getMethodForEval(const char* nme, QoreProg
     //printd(5, "qore_class_private::getMethodForEval() %s::%s() class_ctx: %p %s\n", name.c_str(), nme, class_ctx, class_ctx ? class_ctx->name.c_str() : "n/a");
 
     {
+        // The namespace that declared this class is destroyed with the owning Program's namespace
+        // tree, while the class itself survives as long as anything still references it (an object
+        // holds only a dependency reference to the Program).  There is then no Program to switch
+        // into and the class data has already been cleared, so fail deterministically here rather
+        // than running the method against a stale context.
+        if (!spgm && !ns && ns_deleted) {
+            xsink->raiseException("PROGRAM-ERROR", "cannot call method '%s::%s()'; the Program object "
+                "that owns class '%s' has already been deleted and therefore cannot be accessed at "
+                "runtime", name.c_str(), nme, name.c_str());
+            return nullptr;
+        }
         QoreProgram* lookup_pgm = spgm ? spgm : (ns ? ns->getProgram() : pgm);
         ProgramRuntimeParseContextHelper pch(xsink, lookup_pgm);
         if (*xsink) {
@@ -5867,7 +5880,8 @@ const QoreExternalConstant* QoreClass::findConstant(const char* name) const {
 }
 
 const QoreNamespace* QoreClass::getNamespace() const {
-    return priv->ns->ns;
+    // see the note in QoreClass::getProgram()
+    return priv->ns ? priv->ns->ns : nullptr;
 }
 
 QoreValue QoreClass::setKeyValue(const std::string& key, QoreValue val) {

@@ -36,6 +36,8 @@
 #include "qore/intern/QoreThreadList.h"
 #include "qore/intern/qore_thread_intern.h"
 
+#include <cassert>
+#include <cerrno>
 #include <climits>
 #include <cstdlib>
 #include <cstring>
@@ -47,6 +49,7 @@
 #include <netinet/in.h>
 #include <sys/stat.h>
 #include <sys/un.h>
+#include <unistd.h>
 
 //------------------------------------------------------------------------------
 // Filesystem Security Manager - Private Implementation
@@ -59,59 +62,176 @@ struct PathRule {
     PathRule(const std::string& p, int m) : path(p), mode(m) {}
 };
 
+//! the maximum number of symbolic links resolved when canonicalizing a path that does not exist
+/** matches the traditional kernel limit (SYMLOOP_MAX / MAXSYMLINKS)
+*/
+static constexpr unsigned qore_sandbox_max_symlinks = 40;
+
 struct qore_fs_security_private {
     std::vector<PathRule> allowed_paths;
     std::vector<std::string> denied_paths;
     std::string sandbox_root;
     bool default_allow = false;
 
-    // Canonicalize a path using realpath, handling non-existent paths
+    //! Splits an absolute path into its parent directory and its final component
+    /** The parent of a path directly below the root is the root itself; a trailing separator
+        yields an empty final component.
+    */
+    static void splitPath(const std::string& path, std::string& parent, std::string& leaf) {
+        size_t pos = path.rfind('/');
+        assert(pos != std::string::npos);
+        leaf = path.substr(pos + 1);
+        parent = pos ? path.substr(0, pos) : "/";
+    }
+
+    //! Resolves a path to an absolute, symlink-free canonical path for security checks
+    /** realpath() requires every component of the path to exist, but a path naming a file that
+        has not been created yet is a legitimate target for stat(), open(O_CREAT), mkdir(), etc,
+        so the deepest existing ancestor is resolved with realpath() and the remaining components
+        are appended.
+
+        Components below the deepest existing ancestor do not exist, so they cannot be symbolic
+        links; "." and ".." in that unresolved tail are therefore folded lexically, which is
+        exactly what the OS would do with them.  A ".." that pops past the resolved ancestor is
+        applied to the ancestor with realpath() instead, so symbolic links in the existing prefix
+        are always resolved by the OS.
+
+        A dangling symbolic link - one that exists but whose target does not - makes realpath()
+        fail with ENOENT, so it is resolved here with readlink(); otherwise the link path rather
+        than the link target would be subjected to the containment checks, and a link inside the
+        sandbox root pointing outside it could be used to create files outside the root.
+
+        Only a missing component (ENOENT, ENOTDIR) is resolved this way; any other realpath()
+        error means that the path cannot be resolved safely, and guessing at a canonical form
+        that the containment checks would then trust could place a path outside the sandbox
+        inside it.
+    */
     std::string canonicalize(const char* path, ExceptionSink* xsink) {
-        // First try realpath directly
-        char* real = realpath(path, nullptr);
-        if (real) {
-            std::string result(real);
-            free(real);
-            return result;
+        if (!path || !*path) {
+            xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize an empty path");
+            return "";
         }
 
-        // If path doesn't exist, canonicalize the parent directory
-        // and append the filename
-        std::string spath(path);
-
-        // Find last separator
-        size_t pos = spath.rfind('/');
-        if (pos == std::string::npos) {
-            // No separator, use current directory
-            char* cwd = realpath(".", nullptr);
-            if (cwd) {
-                std::string result = std::string(cwd) + "/" + spath;
-                free(cwd);
-                return result;
+        // make the path absolute the same way realpath() would
+        std::string probe;
+        if (*path == '/') {
+            probe = path;
+        } else {
+            std::unique_ptr<char, decltype(&free)> cwd(realpath(".", nullptr), &free);
+            if (!cwd) {
+                xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize relative path "
+                    "'%s': the current directory cannot be resolved: %s", path, strerror(errno));
+                return "";
             }
-            xsink->raiseException("SANDBOX-PATH-ERROR",
-                "Cannot canonicalize path '%s': %s", path, strerror(errno));
-            return "";
+            probe = cwd.get();
+            if (probe != "/") {
+                probe += '/';
+            }
+            probe += path;
         }
 
-        // Get parent directory
-        std::string parent = spath.substr(0, pos);
-        std::string filename = spath.substr(pos + 1);
+        // the components below the deepest existing ancestor, in path order
+        std::vector<std::string> tail;
+        // the deepest existing ancestor of the path
+        std::string base;
+        // the number of symbolic links resolved manually, to break symbolic link loops
+        unsigned links = 0;
 
-        if (parent.empty()) {
-            parent = "/";
+        while (true) {
+            std::unique_ptr<char, decltype(&free)> real(realpath(probe.c_str(), nullptr), &free);
+            if (real) {
+                base = real.get();
+                break;
+            }
+            // save errno before any other system call can overwrite it
+            int err = errno;
+            if (err != ENOENT && err != ENOTDIR) {
+                xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': "
+                    "'%s': %s", path, probe.c_str(), strerror(err));
+                return "";
+            }
+
+#if defined(HAVE_LSTAT) && defined(HAVE_READLINK)
+            // a dangling symbolic link exists but cannot be resolved by realpath(); resolve it
+            // here so that its target is subject to the containment checks
+            struct stat sb;
+            if (!lstat(probe.c_str(), &sb) && S_ISLNK(sb.st_mode)) {
+                if (++links > qore_sandbox_max_symlinks) {
+                    xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': "
+                        "'%s': %s", path, probe.c_str(), strerror(ELOOP));
+                    return "";
+                }
+                char buf[QORE_PATH_MAX + 1];
+                ssize_t len = readlink(probe.c_str(), buf, QORE_PATH_MAX);
+                if (len < 0) {
+                    xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': "
+                        "readlink('%s') failed: %s", path, probe.c_str(), strerror(errno));
+                    return "";
+                }
+                assert(len <= QORE_PATH_MAX);
+                buf[len] = '\0';
+                if (*buf == '/') {
+                    probe = buf;
+                } else {
+                    // a relative link target is resolved against the directory holding the link
+                    std::string parent, leaf;
+                    splitPath(probe, parent, leaf);
+                    probe = parent == "/" ? parent + buf : parent + "/" + buf;
+                }
+                continue;
+            }
+#endif
+
+            // realpath() cannot fail on the root, so the loop always terminates before the root
+            // is consumed; this is defensive only
+            if (probe == "/") {
+                xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': %s",
+                    path, strerror(err));
+                return "";
+            }
+
+            std::string parent, leaf;
+            splitPath(probe, parent, leaf);
+            // empty components (from "//" or a trailing separator) and "." are dropped
+            if (!leaf.empty() && leaf != ".") {
+                tail.insert(tail.begin(), leaf);
+            }
+            probe = parent;
         }
 
-        real = realpath(parent.c_str(), nullptr);
-        if (!real) {
-            xsink->raiseException("SANDBOX-PATH-ERROR",
-                "Cannot canonicalize path '%s': parent directory does not exist", path);
-            return "";
+        // fold the unresolved components onto the resolved ancestor
+        std::vector<std::string> comps;
+        for (const std::string& c : tail) {
+            if (c != "..") {
+                comps.push_back(c);
+                continue;
+            }
+            if (!comps.empty()) {
+                comps.pop_back();
+                continue;
+            }
+            // ".." at the root is the root
+            if (base == "/") {
+                continue;
+            }
+            // the tail has popped back into the existing prefix; let the OS resolve the parent so
+            // that symbolic links in the prefix are followed
+            std::string up = base + "/..";
+            std::unique_ptr<char, decltype(&free)> real(realpath(up.c_str(), nullptr), &free);
+            if (!real) {
+                xsink->raiseException("SANDBOX-PATH-ERROR", "cannot canonicalize path '%s': the "
+                    "parent of '%s' cannot be resolved: %s", path, base.c_str(), strerror(errno));
+                return "";
+            }
+            base = real.get();
         }
 
-        std::string result = std::string(real) + "/" + filename;
-        free(real);
-        return result;
+        std::string result = base == "/" ? std::string() : base;
+        for (const std::string& c : comps) {
+            result += '/';
+            result += c;
+        }
+        return result.empty() ? "/" : result;
     }
 
     // Check if path starts with prefix (for directory containment)
@@ -218,13 +338,10 @@ bool QoreFilesystemSecurityManager::getDefaultPolicy() const {
 }
 
 bool QoreFilesystemSecurityManager::checkAccess(const char* path, int mode, ExceptionSink* xsink) {
-    // Canonicalize the path
+    // Canonicalize the path; a path that cannot be resolved is a resolution failure and not a
+    // policy decision, so SANDBOX-PATH-ERROR is propagated rather than reported as a denial
     std::string canon = priv->canonicalize(path, xsink);
     if (*xsink) {
-        // Clear the exception and raise access denied instead
-        xsink->clear();
-        xsink->raiseException("FILESYSTEM-ACCESS-DENIED",
-            "Access to '%s' denied: path cannot be resolved", path);
         return false;
     }
 

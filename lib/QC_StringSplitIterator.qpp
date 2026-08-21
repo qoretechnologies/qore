@@ -135,8 +135,10 @@ bool StringSplitIterator::next(ExceptionSink* xsink) {
         // q_memmem() is libqore's portable wrapper around memmem(3); it falls
         // back to a hand-rolled scan on platforms where HAVE_MEMMEM is unset.
         // Calling memmem() directly here would break those builds.
-        hit = static_cast<const char*>(
-            q_memmem(src_buf + cursor, src_size - cursor, sep.data(), sep.size()));
+        // memmem_aligned() and not q_memmem(): in encodings that are not self-synchronizing
+        // (UTF-16*) a byte-oriented match can start in the middle of a character
+        hit = qore_string_private::memmem_aligned(src_buf + cursor, src_size - cursor, sep.data(),
+            sep.size(), qore_string_private::get_char_alignment(src->getEncoding()), cursor);
     }
     if (hit) {
         piece_off = cursor;

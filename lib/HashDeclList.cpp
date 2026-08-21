@@ -178,6 +178,12 @@ void HashDeclList::reset() {
     deleteAll();
 }
 
+void HashDeclList::namespaceDeleted(const qore_ns_private* ns) {
+    for (auto& i : hm) {
+        typed_hash_decl_private::get(*i.second)->namespaceDeleted(ns);
+    }
+}
+
 void HashDeclList::assimilate(HashDeclList& n, qore_ns_private& ns,
         std::vector<std::string>* pending_names) {
     hm_qth_t::iterator i = n.hm.begin();

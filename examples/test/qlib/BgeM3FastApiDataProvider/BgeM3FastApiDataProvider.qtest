@@ -84,6 +84,8 @@ public class BgeM3FastApiDataProviderTest inherits QUnit::Test {
             \testActionCatalogShape());
         addTestCase("connection scheme registered + getDataProvider works",
             \testConnectionScheme());
+        addTestCase("ping cannot verify the credential (documented limitation)",
+            \testPingDoesNotVerifyAuth());
         set_return_value(main());
     }
 
@@ -286,6 +288,65 @@ public class BgeM3FastApiDataProviderTest inherits QUnit::Test {
         # output_type is the response data type
         assertTrue(ce.output_type
             instanceof BgeM3FastApiDataProvider::BgeM3FastApiEmbeddingsResponseDataType);
+    }
+
+    #! Test that the connection's ping cannot detect an unusable credential
+    /** This pins a deliberate, documented limitation, not a bug.  The BGE-M3 sidecar serves every
+        route it has - \c "/embed", \c "/health" and \c "/metrics" - without authentication, so
+        none of them can answer 401 for a missing or wrong key.  \c "/health", the ping target, is
+        additionally the Kubernetes liveness and readiness probe path, so it has to stay open even
+        in a deployment that fronts the sidecar with an auth-enforcing gateway, because kubelet
+        cannot present a bearer token.  A green ping is therefore not evidence that the credential
+        works.
+
+        The fake sidecar installed here models exactly that deployment: \c "/health" open, and the
+        gateway rejecting the bad credential on \c "/embed".
+
+        If a future change moves the ping to an endpoint that does exercise authentication, this
+        test is expected to fail - update @ref bgem3restclientping in BgeM3RestClient.qm with it.
+    */
+    testPingDoesNotVerifyAuth() {
+        checkModule();
+        installHandler({
+            # the k8s probe path: open even behind an auth-enforcing gateway
+            "/health": {
+                "code": 200,
+                "body": {"status": "ok"},
+            },
+            # real work: the gateway rejects the bad credential here
+            "/embed": {
+                "code": 401,
+                "body": {"detail": "Unauthorized"},
+            },
+        });
+
+        string bad_key = "definitely-not-a-valid-bge-m3-key";
+
+        BgeM3RestClient::BgeM3RestConnection conn("test-badkey", "wrong credential",
+            "bge-m3://localhost:" + port, {}, {"apikey": bad_key});
+
+        # the ping targets the unauthenticated probe path ...
+        assertEq("/health", conn.opts.ping_path);
+        assertEq("GET", conn.opts.ping_method);
+
+        # ... so the connection is reported healthy despite carrying an unusable credential
+        hash<PingInfo> p = conn.ping(False);
+        assertTrue(p.ok, sprintf("ping unexpectedly failed: %y", p.info));
+        assertEq("OK", p.info);
+
+        # the ping really did go to /health, and really did carry the credential that the probe
+        # path ignores - the key is sent, it is simply never checked
+        *hash<auto> ping_req = handler.requests.last();
+        assertEq("/health", ping_req.path);
+        assertEq("GET", ping_req.method);
+        assertEq("Bearer " + bad_key, ping_req.auth);
+
+        # meanwhile the credential is genuinely unusable: embedding traffic fails 401, which is
+        # where the problem actually surfaces for an operator
+        BgeM3RestClient::BgeM3RestClientIo rest({"url": testUrl(), "apikey": bad_key});
+        on_exit delete rest;
+        assertThrows("REST-RESPONSE-ERROR", \rest.restDoRequest(),
+            ("POST", "/embed", {"texts": ("ping",)}));
     }
 
     testConnectionScheme() {

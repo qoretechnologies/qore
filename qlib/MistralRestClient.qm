@@ -99,6 +99,9 @@ public class MistralRestClientBase {
 
         const DefaultApiVersion = "v1";
 
+        #! Default Mistral chat model
+        const DefaultChatModel = "mistral-large-latest";
+
         const DefaultOptions = {
             "url": DefaultUrl,
             "api": DefaultApiVersion,
@@ -115,6 +118,8 @@ public class MistralRestClientBase {
             rv.token = rv.apikey;
             delete rv.apikey;
         }
+        # connection-level option for downstream LLM clients; not a REST client option
+        remove rv{"chat-model"};
         return rv;
     }
 }
@@ -172,6 +177,17 @@ public class MistralRestConnection inherits RestClient::RestConnection {
                     "desc": "The API version to use.",
                     "type": "string",
                     "default_value": MistralRestClientBase::DefaultApiVersion,
+                },
+                "chat-model": <ConnectionOptionInfo>{
+                    "display_name": "Chat Model",
+                    "short_desc": "Mistral chat model name",
+                    "desc": "The Mistral chat model used by LLM clients when this connection is "
+                        "selected for chat.\n\n"
+                        "Chat models are a separate family from embedding models and cannot "
+                        "be used interchangeably."
+                        "\n\nExample values: `mistral-large-latest` (the default)",
+                    "type": "string",
+                    "default_value": MistralRestClientBase::DefaultChatModel,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
                     "default_value": DefaultPingHeaders,
@@ -244,6 +260,11 @@ public class MistralRestConnection inherits RestClient::RestConnection {
 public class MistralLlmProvider inherits OpenAiRestClient::OpenAiLlmProvider {
     public {
         const DefaultUrl = "https://api.mistral.ai";
+    }
+
+    #! Returns the default Mistral chat model
+    *string getDefaultModel() {
+        return MistralRestClientBase::DefaultChatModel;
     }
 
     constructor(hash<QoreLlmUtils::LlmBackendConfig> config)

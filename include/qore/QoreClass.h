@@ -400,7 +400,12 @@ public:
     DLLEXPORT virtual QoreClass* copy();
 
     //! Returns the owning QoreProgram object (if not the static system namespace)
-    /** @since Qore 0.9.5
+    /** @return the owning %Program, or @c nullptr if the class has no owning namespace; that is the
+        case for a class not assigned to a namespace and for one that outlived the namespace which
+        declared it (the declaring %Program's namespace tree is destroyed while the class itself can
+        still be referenced)
+
+        @since Qore 0.9.5
     */
     DLLEXPORT QoreProgram* getProgram() const;
 
@@ -1308,7 +1313,10 @@ public:
     DLLEXPORT const QoreExternalConstant* findConstant(const char* name) const;
 
     //! Returns the namespace that owns this class
-    /** @since %Qore 0.9
+    /** @return the owning namespace, or @c nullptr if there is none; see @ref getProgram() for when
+        that happens
+
+        @since %Qore 0.9
     */
     DLLEXPORT const QoreNamespace* getNamespace() const;
 
