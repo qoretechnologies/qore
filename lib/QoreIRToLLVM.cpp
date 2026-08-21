@@ -29752,6 +29752,18 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     LocalCacheClearMode::DuplicateRefsOnly);
                 clearLocalReloadTracker(local_key, module, llvm_func);
             }
+            // Clearing the root's own cache is not enough when the root is a reference.
+            // Reading a local that holds a reference yields the *referenced* value, so the
+            // reload cache for that local owns the container this mutation is about to
+            // change.  Left in place it makes the container non-unique, and ensureUnique()
+            // copies the whole container on every iteration of a loop that mutates through
+            // the reference.  Release the cached references and mark every cached local
+            // stale so the next read reloads instead of using a value we no longer own.
+            if (!direct_self_mutation && local_key
+                    && QoreTypeInfo::isReference(
+                        reinterpret_cast<const LocalVar*>(local_key)->getTypeInfo())) {
+                flushLocalReloadStateAtTempBoundary(module);
+            }
 
             // Pre-decref old result if result is used
             if (inst->result.isValid()) {

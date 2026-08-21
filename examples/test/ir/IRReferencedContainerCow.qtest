@@ -101,28 +101,21 @@ string sub semanticCases() {
 # The container is mutated through a live reference for the whole loop, which is
 # the shape that copies the entire container on every iteration when the lvalue
 # path regresses; a reference taken only after the loop measures the plain local
-# path instead and proves nothing.  The reference is passed as a parameter
-# because a reference created in the same function as the loop is still
-# quadratic under source-free AOT (see the note in the driver below).
+# path instead and proves nothing.  The reference is created in this function and
+# clock_get_monotonic_us() is called between creating it and the loop on purpose:
+# reading a local that holds a reference yields the referenced value, so the AOT
+# reload cache used to own the container and every mutation through the reference
+# copied it (16x for 4x the input under source-free AOT).
 #
-# clock_get_monotonic_us() is required here: now_us() is a wall clock, so an NTP
-# step during a measured loop corrupts the elapsed time.
-nothing sub fillHash(reference<hash<string, int>> values, int n) {
-    for (int i = 0; i < n; ++i) {
-        values{sprintf(\"k%d\", i)} = i;
-    }
-}
-
-nothing sub fillList(reference<list<int>> values, int n) {
-    for (int i = 0; i < n; ++i) {
-        push values, i;
-    }
-}
-
+# clock_get_monotonic_us() is also required for the timing itself: now_us() is a
+# wall clock, so an NTP step during a measured loop corrupts the elapsed time.
 hash<auto> sub measureHash(int n) {
     hash<string, int> values = {};
+    reference<hash<string, int>> values_ref = \\values;
     int started = clock_get_monotonic_us();
-    fillHash(\\values, n);
+    for (int i = 0; i < n; ++i) {
+        values_ref{sprintf(\"k%d\", i)} = i;
+    }
     int elapsed = clock_get_monotonic_us() - started;
     touchHash(\\values);
     return {\"elapsed\": elapsed, \"size\": values.size()};
@@ -130,8 +123,11 @@ hash<auto> sub measureHash(int n) {
 
 hash<auto> sub measureList(int n) {
     list<int> values = ();
+    reference<list<int>> values_ref = \\values;
     int started = clock_get_monotonic_us();
-    fillList(\\values, n);
+    for (int i = 0; i < n; ++i) {
+        push values_ref, i;
+    }
     int elapsed = clock_get_monotonic_us() - started;
     touchList(\\values);
     return {\"elapsed\": elapsed, \"size\": values.size()};
@@ -199,25 +195,9 @@ foreach string mode in ("ast", "ir", "tiered", "jit") {
     }
 }
 
-# NOTE: the scaling probes above deliberately mutate through a reference
-# *parameter* rather than through a reference created in the measured function.
-# Under source-free AOT a reference created in the same function as the loop is
-# quadratic — the container is not unique at the mutation, so ensureUnique()
-# copies it on every iteration — but only when a pure builtin returning 'int' is
-# called between the reference creation and the loop:
-#
-#   list<int> values = ();
-#   reference<list<int>> r = \values;
-#   int t = clock_get_monotonic_us();   # <- pure int-returning builtin
-#   for (int i = 0; i < n; ++i) { push r, i; }   # 15x for 4x the input
-#
-# Substituting now_us() (returns date), sprintf() (string) or a user function,
-# moving the call before the reference or after the loop, or dropping it, all
-# stay linear, as do IR, tiered and JIT in every case.  Timing a loop from
-# inside the measured function is exactly that shape, which is why the probes
-# here take the reference as a parameter.  That is a separate open defect in the
-# AOT backend; the semantic coverage in semanticCases() still exercises the
-# local-reference shape in every mode.
+# NOTE: the source-free AOT stage below is the one that matters most for the
+# scaling probes: the reference-read caching defect they guard was specific to
+# AOT and needed a call between the reference creation and the loop to show up.
 string compile_out = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s --strip-source --strip-debug-info -O3 -o %s %s 2>&1",
     libqore_dir, qcc_bin, exe_path, script_path));
