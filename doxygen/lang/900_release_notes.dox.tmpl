@@ -1216,6 +1216,14 @@ dsp.setMutationObserver(*hash<SqlMutationDecisionInfo> sub (hash<SqlMutationEven
       exist in <tt>ISO-8859-1</tt>); such characters are now returned unchanged
     - Case mapping lookups now use sorted static tables with binary search instead of runtime-built
       \c std::map objects, removing the map construction from library initialization
+    - Fixed a bug where converting a string to a @ref character_encoding "character encoding" that
+      cannot represent one of its characters silently returned an approximation instead of raising
+      an <tt>ENCODING-CONVERSION-ERROR</tt>, on platforms whose \c iconv transliterates without
+      reporting the loss (notably the system \c libiconv on macOS, which converts <tt>U+0178</tt>
+      to the two ASCII characters <tt>"Y</tt> in <tt>ISO-8859-1</tt> and still reports success).
+      Conversions are now verified by converting the result back and requiring it to reproduce the
+      source exactly; the check is skipped on platforms whose \c iconv does report the loss, and
+      for conversions that cannot lose data (Unicode targets and pure-ASCII input)
     @endparblock
 
     @par Brace-Delimited Regular Expressions

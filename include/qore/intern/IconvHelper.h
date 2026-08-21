@@ -78,6 +78,24 @@ public:
       return c != (iconv_t)-1;
    }
 
+   //! Returns true if the platform's iconv reports non-reversible conversions
+   /** glibc and GNU libiconv either fail with \c EILSEQ or return the number of characters
+       converted non-reversibly, so a zero return really does mean that nothing was lost.
+       Apple's system libiconv transliterates a character the target cannot represent - with
+       and without the \c "//TRANSLIT" suffix - and still returns 0, so on that platform a
+       successful conversion proves nothing and the result has to be verified by converting
+       it back (see qore_string_private::convert_encoding_intern()).
+
+       The answer is a property of the library %Qore is linked against, so it is probed once
+       with a conversion known to be lossy: U+0178 (LATIN CAPITAL LETTER Y WITH DIAERESIS)
+       has no representation in ISO-8859-1.  A platform that reports the loss keeps the
+       cheaper path with no round trip at all.
+    */
+   DLLLOCAL static bool reportsNonReversibleConversions() {
+      static bool rv = probeNonReversibleReporting();
+      return rv;
+   }
+
    void reportIllegalSequence(size_t offset, ExceptionSink *xsink) {
       if (xsink) {
          xsink->raiseException("ENCODING-CONVERSION-ERROR",
@@ -94,6 +112,30 @@ public:
    }
 
 private:
+   //! Performs the one-time probe described by reportsNonReversibleConversions()
+   DLLLOCAL static bool probeNonReversibleReporting() {
+#ifdef NEED_ICONV_TRANSLIT
+      iconv_t cd = iconv_open("ISO-8859-1//TRANSLIT", "UTF-8");
+#else
+      iconv_t cd = iconv_open("ISO-8859-1", "UTF-8");
+#endif
+      if (cd == (iconv_t)-1) {
+         // the probe cannot run; assume the worst and verify conversions by round trip
+         return false;
+      }
+      char in[] = "\xc5\xb8";      // U+0178 in UTF-8
+      char out[8];
+      char* ib = in;
+      char* ob = out;
+      size_t il = 2;
+      size_t ol = sizeof(out);
+      errno = 0;
+      size_t rc = iconv_adapter(::iconv, cd, &ib, &il, &ob, &ol);
+      iconv_close(cd);
+      // a failure (EILSEQ) or a non-zero count both mean the loss was reported
+      return rc == (size_t)-1 || rc > 0;
+   }
+
    //! Returns the encoding name to pass to iconv_open() for the given %Qore encoding
    /** %Qore's canonical form for a string tagged with the unsuffixed \c "UTF-16" encoding is
        big-endian with no byte order mark; this is what the decoding handlers registered for

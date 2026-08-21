@@ -28,6 +28,7 @@ class StringTest inherits QUnit::Test {
         addTestCase("non scalar test", \nonScalarTest());
         addTestCase("width test", \testWidth());
         addTestCase("Unicode case mapping test", \testUnicodeCase());
+        addTestCase("unrepresentable conversion", \testUnrepresentableConversion());
         addTestCase("Basic functions test", \testBasics());
         addTestCase("Comparison test", \testComparison());
         addTestCase("Encoding test", \testEncoding());
@@ -720,6 +721,40 @@ class StringTest inherits QUnit::Test {
         assertEq("A\u{FF}B\u{C9}C", convert_encoding(l1_mix.upr(), "UTF-8"),
             "unrepresentable mapping in the middle of a string");
         assertEq(5, l1_mix.upr().length(), "unrepresentable mapping keeps the length");
+    }
+
+    testUnrepresentableConversion() {
+        # convert_encoding() must raise when the target encoding cannot represent a character
+        # instead of silently returning an approximation.  A transliterating iconv (Apple's
+        # system libiconv) answers "\u{178}" -> ISO-8859-1 with the two ASCII bytes '"Y' and
+        # reports no error at all, so the conversion is verified by converting the result back.
+        assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), ("\u{178}", "ISO-8859-1"),
+            "unrepresentable character raises");
+        assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), ("\u{39C}", "ISO-8859-1"),
+            "unrepresentable Greek capital mu raises");
+        # a multi-character approximation ("OE" for the ligature) must be rejected too
+        assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), ("\u{152}", "ISO-8859-1"),
+            "unrepresentable ligature raises");
+        # an unrepresentable character anywhere in the string is caught
+        assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), ("caf\u{E9} \u{178} x", "ISO-8859-1"),
+            "unrepresentable character mid-string raises");
+        # characters the target can represent still convert, and round trip exactly
+        string l1 = convert_encoding("h\u{E9}llo caf\u{E9}", "ISO-8859-1");
+        assertEq("ISO-8859-1", l1.encoding(), "representable conversion keeps the target encoding");
+        assertEq(10, l1.size(), "representable conversion is single byte per character");
+        assertEq("h\u{E9}llo caf\u{E9}", convert_encoding(l1, "UTF-8"), "representable conversion round trips");
+        # ASCII-only input converts without the reverse conversion ever running
+        assertEq("plain ascii", convert_encoding(convert_encoding("plain ascii", "ISO-8859-1"), "UTF-8"),
+            "ASCII input converts");
+        # conversions to Unicode encodings can never lose data
+        assertEq("\u{178}", convert_encoding(convert_encoding("\u{178}", "UTF-16"), "UTF-8"),
+            "UTF-16 target represents everything");
+        # a Greek string converts to ISO-8859-7 and back
+        string el = convert_encoding("\u{39F}\u{394}\u{39F}\u{3A3}", "ISO-8859-7");
+        assertEq("\u{39F}\u{394}\u{39F}\u{3A3}", convert_encoding(el, "UTF-8"), "ISO-8859-7 round trip");
+        # ... but a Greek character has no ISO-8859-1 representation
+        assertThrows("ENCODING-CONVERSION-ERROR", \convert_encoding(), ("\u{394}", "ISO-8859-1"),
+            "Greek capital delta is unrepresentable in ISO-8859-1");
     }
 
     testBasics() {

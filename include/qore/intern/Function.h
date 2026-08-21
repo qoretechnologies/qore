@@ -884,6 +884,13 @@ protected:
     mutable std::atomic<uint64_t> exec_count{0};
     mutable std::atomic<ExecutionTier> current_tier{TIER_AST};
     mutable QoreIRFunction* cached_ir = nullptr;
+    //! Private IR lowerings used for batch JIT compilation.  JIT-compiled code
+    //! embeds raw pointers into these instructions (LValuePath step vectors and
+    //! friends), so the IR has to outlive the machine code that reads it.  Every
+    //! generation is kept: code compiled from an earlier lowering can still be
+    //! executing on another thread when a newer one is installed.  Appended by
+    //! the background compile thread under QoreJIT::compile_mutex.
+    mutable std::vector<std::shared_ptr<QoreIRFunction>> jit_owned_ir;
     mutable std::atomic<JitFunctionPtr> cached_jit_fn{nullptr};
     mutable AotFunctionPtr cached_aot_fn = nullptr;
     mutable QoreAOTContext* cached_aot_ctx = nullptr;

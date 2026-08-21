@@ -9702,8 +9702,27 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
     // natural reference count.
     if (left_expr.hasNode()) {
         auto* var = dynamic_cast<const VarRefNode*>(left_expr.getInternalNode());
-        if (var && var->ref.id
-                && var->getType() == VT_LOCAL && !var->ref.id->closureUse()) {
+        // A local that may hold a reference must not use the native
+        // Load + ListPush + Store sequence: the load yields the referenced
+        // value (or the reference itself for untyped locals) and the store
+        // overwrites the local instead of writing through the reference.  The
+        // sequence is also unconditionally quadratic for such locals, since
+        // the loaded value is never unique and neither the in-place nor the
+        // borrowed-load marking in qore_ir_mark_local_list_pushes can fire, so
+        // every push copies the whole list.  Those lvalues go through the
+        // structured path below, which navigates the real storage (following
+        // references) and pushes in place.
+        // VarRefNode::ref is a union: ref.id is only a LocalVar* for VT_LOCAL, so the
+        // variable type has to be established before the declared type is read.
+        const bool local_var = var && var->getType() == VT_LOCAL && var->ref.id;
+        const QoreTypeInfo* local_type = local_var ? var->ref.id->getTypeInfo() : nullptr;
+        // A declared reference always holds one; an untyped ("auto") local may
+        // hold one at runtime.  Every other declared type (list<int>,
+        // *list<int>, softlist, list<auto>, ...) never can, and keeps the
+        // native sequence.
+        const bool local_may_be_reference = !QoreTypeInfo::hasType(local_type)
+            || QoreTypeInfo::isReference(local_type);
+        if (local_var && !local_may_be_reference && !var->ref.id->closureUse()) {
 
             // Lower the value to push first
             QoreIRValue push_val = lowerExpression(op->getRight(), error);
@@ -9711,7 +9730,7 @@ QoreIRValue QoreIRLowering::lowerPush(const QoreValue& expr, std::string& error)
                 return QoreIRValue();
             }
 
-            const QoreTypeInfo* var_type = var->ref.id->getTypeInfo();
+            const QoreTypeInfo* var_type = local_type;
             const QoreTypeInfo* element_type =
                 QoreTypeInfo::getUniqueReturnComplexList(var_type);
             if (!element_type) {

@@ -995,8 +995,21 @@ public:
         return -1;
     }
 
+    //! Converts \a src from encoding \a from to encoding \a nccs, storing the result in \a targ
+    /** @param verify verify the result by converting it back and comparing it with the source,
+        when the platform's iconv does not report non-reversible conversions; passed as \c false
+        for the reverse conversion itself so that the check cannot recurse
+    */
     DLLLOCAL static int convert_encoding_intern(const char* src, size_t src_len, const QoreEncoding* from,
-            QoreString& targ, const QoreEncoding* nccs, ExceptionSink* xsink);
+            QoreString& targ, const QoreEncoding* nccs, ExceptionSink* xsink, bool verify = true);
+
+    //! Returns true if a conversion from \a from to \a to can lose data and must be verified
+    /** Conversions to a Unicode encoding can represent every source character, and an all-ASCII
+        source moving between ASCII-compatible encodings cannot lose anything either, so those
+        skip the reverse conversion entirely.
+    */
+    DLLLOCAL static bool conversion_needs_roundtrip_check(const QoreEncoding* from, const QoreEncoding* to,
+            const char* src, size_t src_len);
 };
 
 template <typename T>

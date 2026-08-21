@@ -64,21 +64,23 @@ string sub errorCases() {
         invalid_empty_evaluations, empty.size(), empty[0]);
 }
 
+# clock_get_monotonic_us() is required here: now_us() is a wall clock and an
+# NTP step during the measured loop corrupts the elapsed time.
 hash<auto> sub measurePinnedDirect(int n) {
     list<hash<auto>> values = ();
-    date started = now_us();
+    int started = clock_get_monotonic_us();
     for (int i = 0; i < n; ++i) {
         hash<auto!> value = {\"i\": i};
         push values, value;
     }
-    number elapsed = (now_us() - started).durationMicroseconds().toNumber();
+    int elapsed = clock_get_monotonic_us() - started;
     values[0].touched = True;
     return {\"elapsed\": elapsed, \"size\": values.size()};
 }
 
 hash<auto> sub measurePinnedGuarded(int n) {
     list<hash<auto>> values = ();
-    date started = now_us();
+    int started = clock_get_monotonic_us();
     for (int i = 0; i < n; ++i) {
         try {
             hash<auto!> value = {\"i\": i};
@@ -87,7 +89,7 @@ hash<auto> sub measurePinnedGuarded(int n) {
             return {\"elapsed\": 0, \"size\": -1, \"error\": ex.err};
         }
     }
-    number elapsed = (now_us() - started).durationMicroseconds().toNumber();
+    int elapsed = clock_get_monotonic_us() - started;
     values[0].touched = True;
     return {\"elapsed\": elapsed, \"size\": values.size()};
 }
@@ -95,14 +97,21 @@ hash<auto> sub measurePinnedGuarded(int n) {
 bool direct_linear = True;
 bool guarded_linear = True;
 if (ENV.QORE_TEST_LIST_PUSH_SCALING == \"1\") {
-    hash<auto> ds = measurePinnedDirect(500);
-    hash<auto> dl = measurePinnedDirect(2000);
-    hash<auto> gs = measurePinnedGuarded(500);
-    hash<auto> gl = measurePinnedGuarded(2000);
-    direct_linear = ds.size == 500 && dl.size == 2000
-        && dl.elapsed / ds.elapsed < 9.0n;
-    guarded_linear = gs.size == 500 && gl.size == 2000
-        && gl.elapsed / gs.elapsed < 9.0n;
+    # warm up (JIT promotion, allocator growth) before the measured runs
+    measurePinnedDirect(1000);
+    measurePinnedGuarded(1000);
+    hash<auto> ds = measurePinnedDirect(4000);
+    hash<auto> dl = measurePinnedDirect(16000);
+    hash<auto> gs = measurePinnedGuarded(4000);
+    hash<auto> gl = measurePinnedGuarded(16000);
+    # 4x the input must not cost more than ~8x the time: linear is ~4x, a copy
+    # of the pinned list per push is ~16x and takes hundreds of milliseconds.
+    # The absolute bound keeps timer noise on loaded CI hosts from failing runs
+    # that are already an order of magnitude below the quadratic floor.
+    direct_linear = ds.size == 4000 && dl.size == 16000
+        && (dl.elapsed < 8 * ds.elapsed || dl.elapsed < 250000);
+    guarded_linear = gs.size == 4000 && gl.size == 16000
+        && (gl.elapsed < 8 * gs.elapsed || gl.elapsed < 250000);
 }
 printf(\"%s|%s|%y|%y\\n\", aliasCases(), errorCases(),
     direct_linear, guarded_linear);

@@ -1733,6 +1733,16 @@ void QoreJIT::bgCompileThreadLoop() {
         // Register the compiled function for the root uvb
         // Cast away const to set cached_jit_fn and tier
         UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(root_uvb);
+        // Hand the private batch-compilation IR to the variant before the code is
+        // published.  The compiled function embeds raw pointers into these
+        // instructions (LValuePath step vectors, for example), so dropping the IR
+        // with the work item would leave the installed code dereferencing freed
+        // memory.  Earlier generations are kept too: code compiled from them may
+        // still be running on another thread.  compile_mutex is held here, so the
+        // append is serialised against any other background compile.
+        if (work.owned_ir_func) {
+            mutable_uvb->jit_owned_ir.push_back(std::move(work.owned_ir_func));
+        }
         // Atomic store with release ordering ensures visibility before tier update
         mutable_uvb->cached_jit_fn.store(fn, std::memory_order_release);
         mutable_uvb->jit_compile_state.store(2, std::memory_order_relaxed);

@@ -773,8 +773,30 @@ int qore_string_private::concatEncodeUriRequest(ExceptionSink* xsink, const qore
 }
 
 // static function
+bool qore_string_private::conversion_needs_roundtrip_check(const QoreEncoding* from, const QoreEncoding* to,
+        const char* src, size_t src_len) {
+    if (from == to) {
+        return false;
+    }
+    // every character has a representation in Unicode, so these conversions cannot lose data
+    if (to == QCS_UTF8 || to == QCS_UTF16 || to == QCS_UTF16BE || to == QCS_UTF16LE) {
+        return false;
+    }
+    // an all-ASCII source moving between ASCII-compatible encodings cannot lose data either;
+    // this keeps the common case free of a second conversion
+    if (from->isAsciiCompat() && to->isAsciiCompat()) {
+        for (size_t i = 0; i < src_len; ++i) {
+            if (static_cast<unsigned char>(src[i]) & 0x80) {
+                return true;
+            }
+        }
+        return false;
+    }
+    return true;
+}
+
 int qore_string_private::convert_encoding_intern(const char* src, size_t src_len, const QoreEncoding* from,
-        QoreString& targ, const QoreEncoding* nccs, ExceptionSink* xsink) {
+        QoreString& targ, const QoreEncoding* nccs, ExceptionSink* xsink, bool verify) {
     assert(targ.priv->getEncoding() == nccs);
     assert(targ.empty());
 
@@ -825,6 +847,31 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
             break;
         }
     }
+
+    // Apple's system libiconv transliterates a character the target encoding cannot represent
+    // and still returns 0, so on that platform neither the EILSEQ branch nor the issue #2500
+    // "rc > 0" branch above ever fires and the approximation would be returned as if it were
+    // the real conversion.  Establish representability the same way concat_case_mapped() does:
+    // convert the result back and require it to reproduce the source exactly.  Platforms whose
+    // iconv reports the loss keep the original path and never pay for a second conversion.
+    if (verify && !IconvHelper::reportsNonReversibleConversions()
+            && conversion_needs_roundtrip_check(from, nccs, src, src_len)) {
+        QoreString check(from);
+        if (convert_encoding_intern(targ.priv->buf, targ.priv->len, nccs, check, from, nullptr, false)
+                || check.priv->len != src_len
+                || memcmp(check.priv->buf, src, src_len)) {
+            // report the first byte that did not survive the round trip
+            size_t offset = 0;
+            while (offset < src_len && offset < check.priv->len
+                    && check.priv->buf[offset] == src[offset]) {
+                ++offset;
+            }
+            c.reportIllegalSequence(offset, xsink);
+            targ.clear();
+            return -1;
+        }
+    }
+
     // note: no byte order mark handling is needed here; IconvHelper requests "UTF-16BE" explicitly
     // for QCS_UTF16, so iconv never emits a BOM and never emits native-endian code units
     return 0;
