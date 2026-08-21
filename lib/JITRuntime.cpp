@@ -8280,12 +8280,15 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_search(
         return 0;
     }
     switch (operation) {
+        // note: the QoreString overloads are used here and not the const char* ones, which determine
+        // the pattern's length with strlen() and therefore cannot handle encodings with embedded nulls
+        // such as UTF-16*
         case 0:
-            return string->startsWith(pattern->c_str()) ? 1 : 0;
+            return string->startsWith(**pattern) ? 1 : 0;
         case 1:
-            return string->endsWith(pattern->c_str()) ? 1 : 0;
+            return string->endsWith(**pattern) ? 1 : 0;
         case 2:
-            return string->find(pattern->c_str()) >= 0 ? 1 : 0;
+            return string->bindex(**pattern, 0) >= 0 ? 1 : 0;
         case 3:
             return static_cast<int64_t>(
                 string->index(**pattern, offset, xsink));
@@ -8397,12 +8400,13 @@ extern "C" DLLEXPORT int64_t qore_rt_string_concat_multi_pipeline_search(
         return 0;
     }
     switch (operation) {
+        // see the note on the QoreString overloads in qore_rt_string_concat_multi_search()
         case 0:
-            return source->startsWith(pattern->c_str()) ? 1 : 0;
+            return source->startsWith(**pattern) ? 1 : 0;
         case 1:
-            return source->endsWith(pattern->c_str()) ? 1 : 0;
+            return source->endsWith(**pattern) ? 1 : 0;
         case 2:
-            return source->find(pattern->c_str()) >= 0 ? 1 : 0;
+            return source->bindex(**pattern, 0) >= 0 ? 1 : 0;
         case 3: {
             qore_offset_t result =
                 source->index(**pattern, offset, xsink);
@@ -17802,17 +17806,20 @@ static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_predicate_native_impl(ui
     QoreStringValueHelper str(v);
     QoreValue arg = fromBits(arg_bits);
 
-    auto eval_predicate = [&](const char* pattern_ptr) -> int64_t {
+    // note: the pattern's byte length is passed explicitly; determining it with strlen() would break
+    // encodings with embedded nulls such as UTF-16*
+    auto eval_predicate = [&](const char* pattern_ptr, size_t pattern_size) -> int64_t {
         bool result = false;
+        const qore_string_private* strp = qore_string_private::get(**str);
         switch (predicate) {
             case 0:
-                result = str->startsWith(pattern_ptr);
+                result = strp->startsWith(pattern_ptr, pattern_size);
                 break;
             case 1:
-                result = str->endsWith(pattern_ptr);
+                result = strp->endsWith(pattern_ptr, pattern_size);
                 break;
             case 2:
-                result = str->find(pattern_ptr) >= 0;
+                result = strp->bindex(pattern_ptr, 0, pattern_size) >= 0;
                 break;
             default:
                 if (xsink) {
@@ -17827,14 +17834,14 @@ static QORE_ALWAYS_INLINE int64_t qore_rt_pseudo_string_predicate_native_impl(ui
     if (arg.isShortString() && str->getEncoding() == QCS_UTF8) {
         char short_pattern[7];
         arg.getShortString(short_pattern);
-        return eval_predicate(short_pattern);
+        return eval_predicate(short_pattern, ::strlen(short_pattern));
     }
 
     QoreStringValueHelper pattern(arg, str->getEncoding(), xsink);
     if (xsink && *xsink) {
         return 0;
     }
-    return eval_predicate(pattern->c_str());
+    return eval_predicate(pattern->c_str(), pattern->size());
 }
 
 //! Native scalar pseudo-methods: <string>::startsWith()/endsWith()/contains().
@@ -17984,12 +17991,13 @@ extern "C" DLLEXPORT int64_t qore_rt_pseudo_string_case_consume_native_noguard(
         return 0;
     }
     switch (consumer) {
+        // see the note on the QoreString overloads in qore_rt_string_concat_multi_search()
         case QoreStringCaseConsumer::StartsWith:
-            return transformed.startsWith(pattern->c_str()) ? 1 : 0;
+            return transformed.startsWith(**pattern) ? 1 : 0;
         case QoreStringCaseConsumer::EndsWith:
-            return transformed.endsWith(pattern->c_str()) ? 1 : 0;
+            return transformed.endsWith(**pattern) ? 1 : 0;
         case QoreStringCaseConsumer::Contains:
-            return transformed.find(pattern->c_str()) >= 0 ? 1 : 0;
+            return transformed.bindex(**pattern, 0) >= 0 ? 1 : 0;
         case QoreStringCaseConsumer::Find: {
             qore_offset_t result =
                 transformed.index(**pattern, offset, xsink);

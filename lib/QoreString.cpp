@@ -825,11 +825,8 @@ int qore_string_private::convert_encoding_intern(const char* src, size_t src_len
             break;
         }
     }
-    /*
-    // remove byte order markers at the beginning of UTF16 strings
-    if (nccs == QCS_UTF16 && targ.priv->len >= 2 && (signed char)targ.priv->buf[0] == -2 && (signed char)targ.priv->buf[1] == -1)
-        targ.priv->splice_simple(0, 2);
-    */
+    // note: no byte order mark handling is needed here; IconvHelper requests "UTF-16BE" explicitly
+    // for QCS_UTF16, so iconv never emits a BOM and never emits native-endian code units
     return 0;
 }
 
@@ -1066,7 +1063,9 @@ int qore_string_private::concatUnicode(unsigned code) {
         return -1;
     }
 
-    concat(ns);
+    // note: "*ns" and not "ns"; TempString has an implicit operator bool(), so passing the holder
+    // itself here selects concat(char) and appends a 0x01 byte instead of the character
+    concat(*ns);
     return 0;
 }
 
@@ -2365,6 +2364,28 @@ int QoreString::regexSubstInPlace(QoreString& match, QoreString& subst, int opts
     return 0;
 }
 
+//! removes the given trailing character from the string if present
+/** @param str the string to check
+    @param cp the code point of the character to remove
+    @param removed the number of bytes removed is returned here
+
+    @return true if the character was found and removed
+ */
+static bool qore_chomp_char(QoreString& str, unsigned cp, size_t& removed) {
+    QoreString eol(str.getEncoding());
+    if (eol.concatUnicode(cp)) {
+        // the character cannot be represented in the string's encoding, so it cannot be present
+        return false;
+    }
+    removed = eol.size();
+    if (!removed || str.size() < removed
+        || memcmp(str.c_str() + str.size() - removed, eol.c_str(), removed)) {
+        return false;
+    }
+    str.terminate(str.size() - removed);
+    return true;
+}
+
 // removes a single trailing newline
 size_t QoreString::chomp() {
     QORE_ASSERT_MUTABLE(this);
@@ -2373,6 +2394,15 @@ size_t QoreString::chomp() {
     }
     if (priv->view_parent) {
         priv->materialize();
+    }
+    // encodings that are not backwards-compatible with ASCII (UTF-16*) do not represent "\n" and
+    // "\r" as single bytes, so the end-of-line characters have to be encoded before comparing
+    if (!priv->getEncoding()->isAsciiCompat()) {
+        size_t removed;
+        if (!qore_chomp_char(*this, '\n', removed)) {
+            return 0;
+        }
+        return qore_chomp_char(*this, '\r', removed) ? 2 : 1;
     }
     if (priv->buf[priv->len - 1] == '\n') {
         terminate(priv->len - 1);
@@ -3118,7 +3148,6 @@ QoreString* QoreString::copy() const {
     return new QoreString(*this);
 }
 
-// FIXME: does not work with non-ASCII-compatible encodings such as UTF-16*
 void QoreString::tolwr() {
     QORE_ASSERT_MUTABLE(this);
     ExceptionSink xsink;
@@ -3569,11 +3598,21 @@ bool QoreString::startsWith(const std::string& str) const {
     return priv->startsWith(str.c_str(), str.size());
 }
 
+bool QoreString::startsWith(const QoreString& str) const {
+    assert(str.getEncoding() == getEncoding());
+    return priv->startsWith(str.c_str(), str.size());
+}
+
 bool QoreString::endsWith(const char* str) const {
     return priv->endsWith(str, ::strlen(str));
 }
 
 bool QoreString::endsWith(const std::string& str) const {
+    return priv->endsWith(str.c_str(), str.size());
+}
+
+bool QoreString::endsWith(const QoreString& str) const {
+    assert(str.getEncoding() == getEncoding());
     return priv->endsWith(str.c_str(), str.size());
 }
 

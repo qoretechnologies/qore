@@ -885,19 +885,49 @@ void init_charmaps() {
    accent_map[0xff5a] = "z";   // "ｚ" -> "z"
 }
 
+//! concatenates an ASCII replacement string to the target string in the target's encoding
+/** @param str the target string
+    @param repl the NUL-terminated ASCII replacement string
+    @param xsink Qore-language exceptions are raised here
+
+    @return 0 for OK, -1 if a Qore-language exception was raised
+ */
+static int concat_charmap_replacement(QoreString& str, const char* repl, ExceptionSink* xsink) {
+   // in ASCII-compatible encodings the replacement bytes can be copied verbatim
+   if (str.getEncoding()->isAsciiCompat()) {
+      str.concat(repl);
+      return 0;
+   }
+   // otherwise the replacement has to be encoded in the target encoding
+   QoreString tmp(repl, QCS_USASCII);
+   str.concat(&tmp, xsink);
+   return *xsink ? -1 : 0;
+}
+
 static int apply_unicode_charmap(const unicodecharmap_t& umap, QoreString& str, const QoreString& src, ExceptionSink* xsink) {
    assert(str.empty());
    assert(str.getEncoding() == src.getEncoding());
 
    //printd(5, "apply_unicode_map() source: '%s' (%s)\n", src.getBuffer(), src.getEncoding()->getCode());
 
+   // the single-byte fast path below assumes that a byte with the high bit clear is a whole ASCII
+   // character; that only holds for ASCII-compatible encodings.  In UTF-16* the 0x00 half of a
+   // Latin-1 code unit would otherwise be copied as a standalone byte, producing an odd-length -
+   // therefore invalid - byte stream
+   const bool ascii_compat = src.getEncoding()->isAsciiCompat();
+
    for (const char* p = src.getBuffer(), *e = p + src.size(); p < e; ++p) {
       // if we discover a non-ASCII character, then we have to start worrying about conversions
-      if ((*p) & 0x80) {
+      if (!ascii_compat || ((*p) & 0x80)) {
          unsigned len;
          unsigned uc = src.getUnicodePointFromBytePos(p - src.getBuffer(), len, xsink);
          if (*xsink)
             return -1;
+         assert(len);
+         if (!len) {
+            // cannot happen; guarantees loop progress in release builds
+            len = 1;
+         }
          // see if there is a mapping
          unicodecharmap_t::const_iterator i = umap.find(uc);
          // if the character was not found, then just add the original character
@@ -909,7 +939,9 @@ static int apply_unicode_charmap(const unicodecharmap_t& umap, QoreString& str, 
          }
          else {
             // otherwise concatenate the new character
-            str.concat(i->second);
+            if (concat_charmap_replacement(str, i->second, xsink)) {
+               return -1;
+            }
          }
          p += (len - 1);
          continue;
@@ -1112,13 +1144,17 @@ static int apply_case_map(bool upper, QoreString& str, const QoreString& src, Ex
     // "before C" half of the Final_Sigma condition without having to scan backwards
     bool prev_cased = false;
     size_t scan_count = 0;
+    // the single-byte fast path below is only valid where a byte with the high bit clear is a
+    // whole ASCII character; in UTF-16* it would match the 0x00 half of a code unit and write a
+    // single byte into a two-byte-per-unit encoding, corrupting the string
+    const bool ascii_compat = src.getEncoding()->isAsciiCompat();
 
     for (size_t pos = 0; pos < size; ) {
         if (++scan_count % 100 == 0 && qore_check_cancel(xsink, "string case conversion")) {
             return -1;
         }
         // ASCII characters need no decoding in ASCII-compatible encodings
-        if (!(buf[pos] & 0x80)) {
+        if (ascii_compat && !(buf[pos] & 0x80)) {
             unsigned char c = static_cast<unsigned char>(buf[pos]);
             str.concat(static_cast<char>(upper ? q_ascii_toupper(c) : q_ascii_tolower(c)));
             q_update_cased_state(c, prev_cased);
@@ -1190,18 +1226,24 @@ static int apply_case_map_measure(bool upper, const QoreString& src, bool charac
     const char* buf = src.getBuffer();
     size_t size = src.size();
     size_t scan_count = 0;
+    // as in apply_case_map(): a byte with the high bit clear is only a whole ASCII character in
+    // ASCII-compatible encodings.  It is also only in those encodings that a character count and
+    // a byte count agree for ASCII input
+    const bool ascii_compat = src.getEncoding()->isAsciiCompat();
 
     // ASCII case mapping never changes the size, so a pure ASCII string can be answered immediately
     size_t pos = 0;
-    while (pos < size && !(buf[pos] & 0x80)) {
-        if (++scan_count % 100 == 0 && qore_check_cancel(xsink, "string case measurement")) {
-            return -1;
+    if (ascii_compat) {
+        while (pos < size && !(buf[pos] & 0x80)) {
+            if (++scan_count % 100 == 0 && qore_check_cancel(xsink, "string case measurement")) {
+                return -1;
+            }
+            ++pos;
         }
-        ++pos;
-    }
-    if (pos == size) {
-        result = static_cast<int64_t>(size);
-        return 0;
+        if (pos == size) {
+            result = static_cast<int64_t>(size);
+            return 0;
+        }
     }
 
     // the sizes below assume UTF-8 output; with any other encoding the only reliable way to get

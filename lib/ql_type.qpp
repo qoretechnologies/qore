@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -35,6 +35,7 @@
 #include "qore/intern/QoreObjectIntern.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/StringReaderHelper.h"
 
 #include <memory>
 
@@ -549,13 +550,23 @@ string typename(auto value) [flags=CONSTANT,NAMED_ARGS] {
     @code{.py}
 string str = binary_to_string(b, "iso-8859-1");
     @endcode
+
+    @note If \a encoding gives a UTF-16 encoding and the data starts with a byte order mark, then the byte order
+    mark is removed from the string; if \a encoding is the byte-order-neutral \c "UTF-16", then the string is
+    tagged with the encoding given by the byte order mark (\c "UTF-16BE" or \c "UTF-16LE").  This matches the
+    handling of byte order marks when reading UTF-16 data from files and streams.  \c "UTF-16" data with no byte
+    order mark is big-endian, as required by the Unicode standard.
 */
 string binary_to_string(binary value, *string encoding) [flags=CONSTANT,NAMED_ARGS] {
     const QoreEncoding* qe = encoding ? QEM.findCreate(encoding) : QCS_DEFAULT;
     if (!value->size()) {
         return new QoreStringNode(qe);
     }
-    return new QoreStringNode((const char*)value->getPtr(), value->size(), qe);
+    QoreStringNodeHolder str(new QoreStringNode(static_cast<const char*>(value->getPtr()), value->size(), qe));
+    // resolve any UTF-16 byte order mark; this both removes the mark from the string and, for the
+    // byte-order-neutral "UTF-16" encoding, selects the byte order for decoding the string
+    q_remove_bom_utf16(*str, qe);
+    return str.release();
 }
 
 //! Returns complex types converted to the most specific types possible using internal type folding

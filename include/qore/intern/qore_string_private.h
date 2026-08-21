@@ -251,14 +251,100 @@ public:
         return -1;
     }
 
+    //! returns the byte alignment of character boundaries in the given encoding
+    /** UTF-16 is not self-synchronizing: the low byte of one code unit and the high byte of the next
+        can form the byte sequence of a different character, so a byte-oriented substring search can
+        match at a position that is not a character boundary.  UTF-8 and single-byte encodings cannot
+        produce such a match, so 1 (no constraint) is returned for them.
+
+        @param enc the encoding to check; may be nullptr for binary data
+
+        @return the alignment in bytes; 1 means that any byte offset is a valid character boundary
+     */
+    DLLLOCAL static unsigned get_char_alignment(const QoreEncoding* enc) {
+        if (!enc) {
+            return 1;
+        }
+        unsigned w = enc->getMinCharWidth();
+        return w > 1 ? w : 1;
+    }
+
+    //! returns the byte alignment of character boundaries in this string's encoding
+    DLLLOCAL unsigned getCharAlignment() const {
+        return get_char_alignment(getEncoding());
+    }
+
+    //! finds the first occurrence of the needle in the haystack at a character boundary
+    /** @param haystack the data to search
+        @param hlen the length of \a haystack in bytes
+        @param needle the data to find
+        @param nlen the length of \a needle in bytes
+        @param align the byte alignment of character boundaries; see get_char_alignment()
+        @param base the byte offset of \a haystack within the string, used for the alignment check
+
+        @return a pointer to the first match starting at a character boundary or nullptr if there is
+        none
+     */
+    DLLLOCAL static const char* memmem_aligned(const char* haystack, size_t hlen, const char* needle,
+            size_t nlen, unsigned align = 1, size_t base = 0) {
+        if (align < 2 || !nlen) {
+            return static_cast<const char*>(q_memmem(haystack, hlen, needle, nlen));
+        }
+        const char* p = haystack;
+        size_t left = hlen;
+        while (left >= nlen) {
+            const char* m = static_cast<const char*>(q_memmem(p, left, needle, nlen));
+            if (!m) {
+                return nullptr;
+            }
+            if (!((base + (m - haystack)) % align)) {
+                return m;
+            }
+            // the match does not start at a character boundary; resume at the next byte
+            left -= (m - p) + 1;
+            p = m + 1;
+        }
+        return nullptr;
+    }
+
+    //! finds the last occurrence of the needle in the haystack at a character boundary
+    /** @param haystack the data to search
+        @param hlen the length of \a haystack in bytes
+        @param needle the data to find
+        @param nlen the length of \a needle in bytes
+        @param align the byte alignment of character boundaries; see get_char_alignment()
+
+        @return a pointer to the last match starting at a character boundary or nullptr if there is
+        none
+     */
+    DLLLOCAL static const char* memrmem_aligned(const char* haystack, size_t hlen, const char* needle,
+            size_t nlen, unsigned align = 1) {
+        if (align < 2 || !nlen) {
+            return static_cast<const char*>(q_memrmem(haystack, hlen, needle, nlen));
+        }
+        size_t left = hlen;
+        while (left >= nlen) {
+            const char* m = static_cast<const char*>(q_memrmem(haystack, left, needle, nlen));
+            if (!m) {
+                return nullptr;
+            }
+            if (!((m - haystack) % align)) {
+                return m;
+            }
+            // the match does not start at a character boundary; search again ending before it
+            left = (m - haystack) + nlen - 1;
+        }
+        return nullptr;
+    }
+
     DLLLOCAL static qore_offset_t index_simple(const char* haystack, size_t hlen, const char* needle, size_t nlen,
-        qore_offset_t pos = 0) {
+        qore_offset_t pos = 0, unsigned align = 1, size_t base = 0) {
         const char* start = haystack + pos;
-        void* ptr = q_memmem(start, hlen - pos, needle, nlen);
+        const char* ptr = memmem_aligned(start, hlen - pos, needle, nlen, align, base + pos);
         if (!ptr) {
             return -1;
         }
-        return reinterpret_cast<const char*>(ptr) - start + pos;
+        return ptr - start + pos;
     }
 
     DLLLOCAL qore_offset_t index(const QoreString &orig_needle, qore_offset_t pos, ExceptionSink *xsink) const {
@@ -279,7 +365,7 @@ public:
                 return -1;
             }
 
-            return index_simple(b, len, needle->c_str(), needle->size(), pos);
+            return index_simple(b, len, needle->c_str(), needle->size(), pos, getCharAlignment());
         }
 
         // do multibyte index()
@@ -290,7 +376,8 @@ public:
         else if (pos >= (qore_offset_t)len)
             return -1;
 
-        qore_offset_t ind = index_simple(b + pos, len - pos, needle->c_str(), needle->size());
+        qore_offset_t ind = index_simple(b + pos, len - pos, needle->c_str(), needle->size(), 0,
+            getCharAlignment(), pos);
         if (ind != -1) {
             ind = getEncoding()->getCharPos(b, b + pos + ind, xsink);
             if (*xsink)
@@ -327,13 +414,13 @@ public:
         if (!nsize) {
             nsize = strlen(needle);
         }
-        return index_simple(effective_buf(), len, needle, nsize, pos);
+        return index_simple(effective_buf(), len, needle, nsize, pos, getCharAlignment());
     }
 
     // finds the last occurrence of needle in haystack at or before position pos
     // pos must be a non-negative valid byte offset in haystack
     DLLLOCAL static qore_offset_t rindex_simple(const char* haystack, size_t hlen, const char* needle,
-            size_t nlen, qore_offset_t pos = -1) {
+            size_t nlen, qore_offset_t pos = -1, unsigned align = 1) {
         if (pos < 0) {
             pos = hlen + pos;
             if (pos < 0) {
@@ -344,12 +431,11 @@ public:
         }
 
         assert(pos < (qore_offset_t)hlen);
-        void* ptr = q_memrmem(haystack, pos + 1, needle, nlen);
+        const char* ptr = memrmem_aligned(haystack, pos + 1, needle, nlen, align);
         if (!ptr) {
             return -1;
         }
-        return static_cast<qore_offset_t>(reinterpret_cast<const char*>(ptr) -
-            reinterpret_cast<const char*>(haystack));
+        return static_cast<qore_offset_t>(ptr - haystack);
     }
 
     // start is a byte offset that has to point to the start of a valid character
@@ -386,7 +472,7 @@ public:
                 return -1;
             }
 
-            return rindex_simple(b, len, needle->c_str(), needle->size(), pos);
+            return rindex_simple(b, len, needle->c_str(), needle->size(), pos, getCharAlignment());
         }
 
         // do multi-byte rindex
@@ -396,7 +482,7 @@ public:
             return -1;
 
         // get byte rindex position
-        qore_offset_t ind = rindex_simple(b, len, needle->c_str(), needle->size(), pos);
+        qore_offset_t ind = rindex_simple(b, len, needle->c_str(), needle->size(), pos, getCharAlignment());
 
         // calculate character position from byte position
         if (ind && ind != -1) {
@@ -436,21 +522,23 @@ public:
             return -1;
         }
 
-        return rindex_simple(effective_buf(), len, needle, needle_len, pos);
+        return rindex_simple(effective_buf(), len, needle, needle_len, pos, getCharAlignment());
     }
 
+    // memcmp() and not strncmp(): strings can contain embedded nulls, either because the encoding
+    // uses them (UTF-16*) or because the string data itself contains them
     DLLLOCAL bool startsWith(const char* str, size_t ssize) const {
         if (ssize > len) {
             return false;
         }
-        return !strncmp(str, effective_buf(), ssize);
+        return !memcmp(str, effective_buf(), ssize);
     }
 
     DLLLOCAL bool endsWith(const char* str, size_t ssize) const {
         if (ssize > len) {
             return false;
         }
-        return !strncmp(str, effective_buf() + len - ssize, ssize);
+        return !memcmp(str, effective_buf() + len - ssize, ssize);
     }
 
     DLLLOCAL bool isDataPrintableAscii() const {
@@ -761,7 +849,10 @@ public:
                 if (targ_end < targ.buf) {
                     break;
                 }
-                strncpy(targ_end, p, bl);
+                // memcpy() and not strncpy(): multi-byte encodings such as UTF-16* have characters
+                // with embedded nulls, and strncpy() would stop at the first null and null-pad the
+                // rest of the character
+                memcpy(targ_end, p, bl);
                 p += bl;
             }
         } else {
@@ -879,6 +970,14 @@ public:
     }
 
     DLLLOCAL static qore_string_private* get(QoreString* str) {
+        return str ? str->priv : nullptr;
+    }
+
+    DLLLOCAL static const qore_string_private* get(const QoreString& str) {
+        return str.priv;
+    }
+
+    DLLLOCAL static const qore_string_private* get(const QoreString* str) {
         return str ? str->priv : nullptr;
     }
 

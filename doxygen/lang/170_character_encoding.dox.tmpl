@@ -10,7 +10,12 @@
 
     %Qore supports character encodings that are backwards compatible with 7-bit \c ASCII. This includes all \c ISO-8859-* character encodings, \c UTF-8, \c KOIR-8, \c KOIU-8, and \c KOI7, among others (see the table below: @ref known_encodings "Known Character Encodings").
 
-    However, mutibyte character encodings are currently only properly supported for \c UTF-8. For \c UTF-8 strings, the length(), index(), rindex(), substr(), reverse(), the @ref splice "splice operator", @ref string_formatting "print formatting" (regarding field lengths) functions and methods taking format strings, and regular expression operators and functions, all work with character offsets, which may be different than byte offsets. For all character encodings other than \c UTF-8, a 1 byte=1 character relationship is assumed.
+    Multi-byte character encodings are supported for \c UTF-8 and for the \c UTF-16 encodings (see
+    @ref utf16_in_qore).  With these encodings, length(), index(), rindex(), substr(), reverse(), the
+    @ref splice "splice operator", and regular expression operators and functions all work with character
+    offsets, which may be different than byte offsets. For all other character encodings, a 1 byte=1 character
+    relationship is assumed.  Field lengths in @ref string_formatting "print formatting" are given in bytes with
+    the \c "%s" conversion and in display positions with the \c "%w" conversion.
 
     %Qore will accept any encoding name given to it, even if it is not a known encoding name or alias. In this case, %Qore will tag the strings with this encoding, and pass this user-defined encoding name to the \c iconv library when encodings must be converted. This allows programmers to use encodings known by the system's \c iconv library, but unknown to %Qore. In this case, %Qore will assume that the strings are backwards compatible with \c ASCII, meaning that that one character is represented by one byte and that the strings are null-terminated.
 
@@ -68,9 +73,23 @@
 
     @subsection utf16_in_qore UTF-16 Support in Qore
 
-    UTF-16 is currently not well supported in %Qore, because %Qore's string support is based on the assumption that all strings are backwards-compatible with ASCII, and UTF-16 is not due to the minimum 2-byte character width and the possibility of embedded null bytes.
+    UTF-16 is not backwards-compatible with ASCII, due to the minimum 2-byte character width and the resulting
+    embedded null bytes, so operations that are defined in terms of ASCII bytes are not supported with UTF-16
+    strings (see @ref utf16_unsupported "below").  For all other operations, %Qore decodes UTF-16 strings
+    character by character; it's still recommended to convert UTF-16 data to \c UTF-8 for processing in %Qore,
+    and %Qore's @ref default_encoding "default character encoding" must not be set to a UTF-16 encoding.
 
-    It's possible to generate string data in UTF-16 encoding (using @ref Qore::convert_encoding()), however note that all strings so generated will be tagged with a BOM (byte order marker) at the beginning of the string data (this is performed by libiconv).
+    @subsubsection utf16_byte_order UTF-16 Byte Order and Byte Order Marks
+
+    A string tagged with the byte-order-neutral \c "UTF-16" encoding holds big-endian code units with no byte
+    order mark (BOM); this is the byte order required by the Unicode standard for a UTF-16 stream that carries
+    no BOM.  @ref Qore::convert_encoding() therefore produces big-endian data with no BOM for the \c "UTF-16"
+    encoding; use \c "UTF-16LE" explicitly for little-endian data.
+
+    When UTF-16 data is read from an external source, a leading BOM is removed from the string, and, if the
+    encoding requested was the byte-order-neutral \c "UTF-16", the string is tagged with the byte order given by
+    the BOM (\c "UTF-16BE" or \c "UTF-16LE") instead.  This is performed by @ref Qore::binary_to_string() and by
+    the classes listed below.
 
     The following classes support parsing UTF-16 data by converting it to UTF-8 and processing the UTF-8 data:
     - @ref Qore::DataLineIterator
@@ -81,9 +100,31 @@
     - @ref Qore::InputStreamLineIterator
     - @ref Qore::StreamReader
 
-    Many string operations on UTF-16 data will provide invalid results due to the embedded nulls.
+    @subsubsection utf16_unsupported Operations Not Supported with UTF-16
 
-    @bug With the exception of the classes above that explicitly support UTF-16 data, BOMs are ignored and all UTF-16 data is assumed to be big-endian; little-endian UTF-16-encoded data, even with a correct BOM, will not be processed correctly in %Qore (in this case use the \c UTF-16LE encoding specifically)
+    Operations that are defined in terms of ASCII bytes throw an \c UNSUPPORTED-ENCODING exception with UTF-16
+    strings; these include entity encoding and decoding (@ref Qore::html_encode() "html_encode()" and
+    @ref Qore::html_decode() "html_decode()"), URI encoding and decoding
+    (@ref Qore::encode_uri_request() "encode_uri_request()" and
+    @ref Qore::decode_uri_request() "decode_uri_request()"), and path matching with
+    @ref <string>::equalPartialPath() "<string>::equalPartialPath()".
+
+    Field widths in @ref string_formatting "print formatting" are given in bytes with the \c "%s" conversion,
+    so a UTF-16 argument occupies twice as many positions in the field as it has characters; use the \c "%w"
+    conversion instead, which uses the display width of the argument.
+
+    @ref qore_regex "Regular expression" operators and functions convert UTF-16 strings to \c UTF-8 before
+    matching, so any strings they return are tagged with \c UTF-8 and not with the source encoding.
+
+    @note Unlike \c UTF-8, UTF-16 is not self-synchronizing: the low byte of one code unit and the high byte of
+    the next can form the byte sequence of a different character.  Substring searches
+    (index(), rindex(), @ref <string>::contains() "<string>::contains()",
+    @ref Qore::replace() "replace()", @ref <string>::split() "<string>::split()",
+    @ref <string>::getLine() "<string>::getLine()", and related functions) only match at character boundaries,
+    so a byte sequence that spans two characters is never reported as a match.
+
+    @note @ref <string>::getLine() "<string>::getLine()" and any other API documented as taking byte offsets
+    operates on bytes and does not decode characters.
 
     @section default_encoding Default Character Encoding
 

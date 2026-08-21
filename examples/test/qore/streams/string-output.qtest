@@ -34,8 +34,9 @@ public class StringOutputStreamTest inherits QUnit::Test {
         w.write("hello");
         assertEq("hello", sos.getData());
         string utf16str = convert_encoding("hello", "utf16");
-        # with the BOM the byte length will be 12
-        assertEq(True, utf16str.size() >= 10);
+        # "UTF-16" data is big-endian with no byte order mark, so the byte length is exactly 2x
+        assertEq(10, utf16str.size());
+        assertEq(5, utf16str.length());
         w.write(utf16str);
         assertEq("hello", sos.getData());
 

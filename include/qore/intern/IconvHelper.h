@@ -2,7 +2,7 @@
 //
 //  Qore Programming Language
 //
-//  Copyright (C) 2016 - 2024 Qore Technologies, s.r.o.
+//  Copyright (C) 2016 - 2026 Qore Technologies, s.r.o.
 //
 //  Permission is hereby granted, free of charge, to any person obtaining a
 //  copy of this software and associated documentation files (the "Software"),
@@ -41,11 +41,11 @@ class IconvHelper {
 public:
    DLLLOCAL IconvHelper(const QoreEncoding *to, const QoreEncoding *from, ExceptionSink *xsink) : to(to), from(from) {
 #ifdef NEED_ICONV_TRANSLIT
-      QoreString to_code(const_cast<char *>(to->getCode()));
+      QoreString to_code(getIconvCode(to));
       to_code.concat("//TRANSLIT");
-      c = iconv_open(to_code.getBuffer(), from->getCode());
+      c = iconv_open(to_code.getBuffer(), getIconvCode(from));
 #else
-      c = iconv_open(to->getCode(), from->getCode());
+      c = iconv_open(getIconvCode(to), getIconvCode(from));
 #endif
       if (c == (iconv_t) -1) {
          if (xsink) {
@@ -94,6 +94,26 @@ public:
    }
 
 private:
+   //! Returns the encoding name to pass to iconv_open() for the given %Qore encoding
+   /** %Qore's canonical form for a string tagged with the unsuffixed \c "UTF-16" encoding is
+       big-endian with no byte order mark; this is what the decoding handlers registered for
+       \c QCS_UTF16 in lib/charset.cpp expect, and it matches the Unicode default for a UTF-16
+       stream that carries no BOM.
+
+       iconv's \c "UTF-16" conversion does not produce that form: it emits a BOM followed by
+       native-endian code units, so on a little-endian host every character would come back
+       byte-swapped and the BOM would be decoded as U+FFFE.  \c "UTF-16BE" is therefore requested
+       explicitly, in both directions, so that the bytes always agree with the encoding tag on
+       the string.
+
+       Byte order marks in externally-supplied data are resolved separately by
+       q_remove_bom_utf16(), which strips the BOM and retags the string as \c QCS_UTF16BE or
+       \c QCS_UTF16LE according to the BOM found.
+    */
+   DLLLOCAL static const char* getIconvCode(const QoreEncoding* enc) {
+      return enc == QCS_UTF16 ? "UTF-16BE" : enc->getCode();
+   }
+
    // needed for platforms where the input buffer is defined as "const char"
    template<typename T>
    static size_t iconv_adapter(size_t (*iconv_f)(iconv_t, T, size_t *, char **, size_t *), iconv_t handle,
