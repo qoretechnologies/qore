@@ -231,6 +231,11 @@ public hashdecl LlmRequestOptions {
     *bool disable_reasoning;
     #! Sampling temperature for this call; overrides @ref LlmBackendConfig::temperature
     *float temperature;
+    #! Positive HTTP request timeout in milliseconds for this call
+    /** Overrides @ref LlmBackendConfig::timeout_ms without mutating the
+        backend or its shared connection pool.  HTTP-backed providers apply
+        the value only to the current transport request. */
+    *int timeout_ms;
     #! Maximum retry attempts for transient errors on this call
     /** Overrides @ref LlmBackendConfig::max_retries. A value of zero disables
         transport retries while preserving the initial request. */
@@ -871,6 +876,16 @@ public class AbstractLlmProvider {
     #! Resolves the sampling temperature for a single call
     float getRequestTemperature(*hash<LlmRequestOptions> opts) {
         return opts.temperature ?? config_h.temperature;
+    }
+
+    #! Resolves the HTTP request timeout for a single call
+    /** @param opts optional per-call request overrides
+
+        @return per-call timeout in milliseconds when supplied, otherwise the
+            backend configuration default
+    */
+    int getRequestTimeoutMs(*hash<LlmRequestOptions> opts) {
+        return opts.timeout_ms ?? config_h.timeout_ms;
     }
 
     #! Resolves the transient-error retry budget for a single call
