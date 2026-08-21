@@ -200,13 +200,24 @@ foreach string mode in ("ast", "ir", "tiered", "jit") {
 }
 
 # NOTE: the scaling probes above deliberately mutate through a reference
-# *parameter*.  A reference created in the same function as the loop
-# ("reference<list<int>> r = \\values; ... push r, i;") is still quadratic under
-# source-free AOT — the aliased container is not unique at the mutation, so
-# ensureUnique() copies it on every iteration — while IR, tiered and JIT are
-# linear.  That is a separate open defect in the AOT backend; the semantic
-# coverage in semanticCases() still exercises the local-reference shape in every
-# mode.
+# *parameter* rather than through a reference created in the measured function.
+# Under source-free AOT a reference created in the same function as the loop is
+# quadratic — the container is not unique at the mutation, so ensureUnique()
+# copies it on every iteration — but only when a pure builtin returning 'int' is
+# called between the reference creation and the loop:
+#
+#   list<int> values = ();
+#   reference<list<int>> r = \values;
+#   int t = clock_get_monotonic_us();   # <- pure int-returning builtin
+#   for (int i = 0; i < n; ++i) { push r, i; }   # 15x for 4x the input
+#
+# Substituting now_us() (returns date), sprintf() (string) or a user function,
+# moving the call before the reference or after the loop, or dropping it, all
+# stay linear, as do IR, tiered and JIT in every case.  Timing a loop from
+# inside the measured function is exactly that shape, which is why the probes
+# here take the reference as a parameter.  That is a separate open defect in the
+# AOT backend; the semantic coverage in semanticCases() still exercises the
+# local-reference shape in every mode.
 string compile_out = backquote(sprintf(
     "LD_LIBRARY_PATH=%s %s --strip-source --strip-debug-info -O3 -o %s %s 2>&1",
     libqore_dir, qcc_bin, exe_path, script_path));
