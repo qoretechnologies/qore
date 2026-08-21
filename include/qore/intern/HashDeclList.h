@@ -87,6 +87,12 @@ public:
     DLLLOCAL int parseInit();
 
     DLLLOCAL void reset();
+
+    //! Invalidates the parent-namespace back-pointer of every hashdecl declared by the namespace
+    /** Called from qore_ns_private::purge() before the list drops its references; see
+        QoreClassList::namespaceDeleted().
+    */
+    DLLLOCAL void namespaceDeleted(const qore_ns_private* ns);
     //! Removes a specific hashdecl by name (for selective rollback support)
     DLLLOCAL void parseRemove(const char* name);
 

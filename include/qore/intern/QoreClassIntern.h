@@ -2013,7 +2013,13 @@ public:
     std::string name;               // the name of the class
     std::string path;               // the full namespace path for the class
     QoreClass* cls;                 // parent class
-    qore_ns_private* ns = nullptr;  // parent namespace
+    //! parent namespace; cleared by namespaceDeleted() when that namespace is destroyed
+    /** A class can outlive its namespace: the namespace tree is destroyed with the owning
+        Program's data (qore_program_private::del()), while an object of the class keeps only a
+        dependency reference to the Program, so the class itself stays alive afterwards.  This
+        pointer must therefore never be dereferenced without a null check.
+    */
+    qore_ns_private* ns = nullptr;
     BCList* scl = nullptr;          // base class list
     qc_ref_map_t qcrefs;            // QoreClass pointers associated with this private object (besides cls)
 
@@ -2083,7 +2089,13 @@ public:
         // host never opted to expose to %requires children.
         reexport : 1,
         raw_accepts_parameterized : 1,
-        raw_construction_defaults_to_auto : 1
+        raw_construction_defaults_to_auto : 1,
+        //! set when the parent namespace was destroyed while this class was still referenced
+        /** Distinguishes "the owning Program's namespace tree is gone" from "this class was
+            never assigned a namespace": both leave ns null, but only the former means the
+            class must no longer be executed.
+        */
+        ns_deleted : 1 = false
         ;
 
     std::vector<QoreGenericTypeParam> type_params;
@@ -2350,6 +2362,27 @@ public:
         assert(ns);
         assert(ns != n);
         ns = n;
+    }
+
+    //! Invalidates the parent-namespace back-pointer when that namespace is destroyed
+    /** Called from qore_ns_private::purge() for every class in the namespace's class list before the
+        list drops its references.  Classes that survive the namespace (still referenced by a live
+        object, type info, etc.) would otherwise keep a dangling pointer that later dereferences
+        freed memory; see QoreClass::getProgram() and qore_class_private::getMethodForEval().
+
+        @param n the namespace being destroyed; the back-pointer is only cleared if it points at it,
+        since a class copied into another namespace keeps pointing at the namespace that declared it
+    */
+    DLLLOCAL void namespaceDeleted(const qore_ns_private* n) {
+        if (ns == n) {
+            ns = nullptr;
+            ns_deleted = true;
+        }
+    }
+
+    //! Returns true if the namespace that declared this class has been destroyed
+    DLLLOCAL bool namespaceIsDeleted() const {
+        return ns_deleted;
     }
 
     DLLLOCAL void resolveCopy();

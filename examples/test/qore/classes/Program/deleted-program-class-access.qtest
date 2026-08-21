@@ -1,0 +1,104 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+
+%exec-class DeletedProgramClassAccessTest
+
+#! Tests access to classes and hashdecls that outlive the Program that declared them
+/** A QoreObject holds only a dependency reference to its Program, so deleting the Program destroys
+    its namespace tree while the object - and therefore its class - stays alive.  The class's parent
+    namespace back-pointer used to be left dangling, so the next method call on such an object read
+    freed memory: harmless with glibc (the block was still intact enough to yield the right answer),
+    a SIGSEGV with musl.
+
+    Everything here must therefore raise a normal Qore exception; nothing may crash.
+*/
+class DeletedProgramClassAccessTest inherits QUnit::Test {
+    public {
+        const ChildSrc = "
+hashdecl MyDecl {
+    int i = 1;
+    string s = \"str\";
+}
+
+class MyClass {
+    public {
+        int m = 7;
+    }
+
+    int f() {
+        return 99;
+    }
+}
+
+MyClass sub get() { return new MyClass(); }
+hash<MyDecl> sub geth() { return new hash<MyDecl>(); }
+";
+    }
+
+    constructor() : QUnit::Test("DeletedProgramClassAccess", "1.0") {
+        addTestCase("live Program", \liveProgramTest());
+        addTestCase("method call after Program deletion", \methodCallAfterDeleteTest());
+        addTestCase("data access after Program deletion", \dataAccessAfterDeleteTest());
+        addTestCase("hashdecl after Program deletion", \hashDeclAfterDeleteTest());
+        set_return_value(main());
+    }
+
+    #! Returns an object and a hashdecl value created in a child Program that is then deleted
+    private hash<auto> getOrphans() {
+        Program p(PO_NEW_STYLE);
+        p.parse(ChildSrc, "child");
+        hash<auto> rv = {
+            "obj": p.callFunction("get"),
+            "h": p.callFunction("geth"),
+        };
+        delete p;
+        return rv;
+    }
+
+    #! Baseline: while the Program is alive everything works normally
+    liveProgramTest() {
+        Program p(PO_NEW_STYLE);
+        p.parse(ChildSrc, "child");
+        object obj = p.callFunction("get");
+        assertEq("MyClass", obj.className());
+        assertEq(99, obj.f());
+        assertEq(7, obj.m);
+        assertEq(1, p.callFunction("geth").i);
+    }
+
+    #! A method call on an object whose Program is gone must raise PROGRAM-ERROR, not crash
+    methodCallAfterDeleteTest() {
+        hash<auto> o = getOrphans();
+
+        # the exception must name the class and the method so the failure is diagnosable
+        assertThrows("PROGRAM-ERROR", "MyClass::f\\(\\)", \call_object_method(), (o.obj, "f"));
+        # the same applies to a pseudo-method call, which resolves against the class first
+        assertThrows("PROGRAM-ERROR", "already been deleted", auto sub () { return o.obj.className(); });
+        # ...and to a dynamic call by name
+        assertThrows("PROGRAM-ERROR", "already been deleted", auto sub () { return o.obj.callMethod("f"); });
+    }
+
+    #! Object member data is owned by the object, so it survives the Program that declared the class
+    dataAccessAfterDeleteTest() {
+        hash<auto> o = getOrphans();
+        assertEq(7, o.obj.m);
+        # NOTE: every method call resolves against the class before any pseudo-method fallback, so
+        # even a pseudo-method that needs nothing from the Program fails here.  That is pre-existing
+        # behavior, asserted so a future change to it is a deliberate one: it is what turns a
+        # generic <value>.typeCode() probe over an orphaned object into a PROGRAM-ERROR.
+        assertThrows("PROGRAM-ERROR", "already been deleted", auto sub () { return o.obj.typeCode(); });
+    }
+
+    #! A hashdecl value keeps its declaration alive the same way; reading it must not crash
+    hashDeclAfterDeleteTest() {
+        hash<auto> o = getOrphans();
+        assertEq(1, o.h.i);
+        assertEq("str", o.h.s);
+        assertEq("hash<MyDecl>", o.h.fullType());
+    }
+}
