@@ -27,6 +27,29 @@ public namespace QdrantDataProvider {
 #! Qdrant REST connection
 public class QdrantRestConnection inherits RestClient::RestConnection {
     public {
+        #! Default ping method
+        const DefaultPingMethod = "GET";
+
+        #! Default ping path
+        /** \c "/collections" and not \c "/": qdrant serves the root path (a title/version banner)
+            outside its authentication layer, so a ping against \c "/" returns 200 even when the
+            connection carries no credential at all - reporting a connection that cannot perform a
+            single real operation as healthy.  \c "GET /collections" is cheap, read-only, always
+            present, and answers 401 when the credential is missing or wrong, so it verifies
+            authentication as well as reachability.
+
+            Servers with no API key configured answer \c "GET /collections" with 200, so this
+            default is correct for unauthenticated qdrant servers as well.
+        */
+        const DefaultPingPath = "/collections";
+
+        #! Default ping headers
+        /** \c "Connection: close" forces a fresh TCP connection on each ping, preventing stale
+            keep-alive connection failures against qdrant's actix-web server, which closes idle
+            keep-alive connections after a short timeout.
+        */
+        const DefaultPingHeaders = {"Connection": "close"};
+
         #! Connection entry info
         const ConnectionScheme = <ConnectionSchemeInfo>{
             "display_name": "Qdrant REST Connection",
@@ -51,15 +74,20 @@ public class QdrantRestConnection inherits RestClient::RestConnection {
                 },
                 "ping_method": RestConnection::ConnectionScheme.options."ping_method"
                     + <ConnectionOptionInfo>{
-                    "default_value": "GET",
+                    "default_value": DefaultPingMethod,
                 },
                 "ping_path": RestConnection::ConnectionScheme.options."ping_path"
                     + <ConnectionOptionInfo>{
-                    "default_value": "/",
+                    "default_value": DefaultPingPath,
+                    "desc": "The URI path to use for pings; defaults to `/collections`, which requires "
+                        "authentication and therefore verifies the credential as well as reachability.  "
+                        "Do not use `/`: qdrant serves the root path outside its authentication layer, so "
+                        "a ping against it succeeds even when the connection carries no credential at all "
+                        "and no real operation can be performed",
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options."ping_headers"
                     + <ConnectionOptionInfo>{
-                    "default_value": {"Connection": "close"},
+                    "default_value": DefaultPingHeaders,
                     "desc": "HTTP headers to send with ping requests; defaults to "
                         "`{\"Connection\": \"close\"}` to force a fresh TCP connection on "
                         "each ping, preventing stale keep-alive connection failures against "
