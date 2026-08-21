@@ -8,6 +8,8 @@
 %requires QUnit
 %requires Logger
 %requires DataProvider
+%requires ConnectionProvider
+%requires VoyageRestClient
 %requires VoyageDataProvider
 
 %requires json
@@ -57,13 +59,25 @@ public class VoyageDataProviderTest inherits QUnit::Test {
     public {
         Logger logger;
 
-        # command-line options
+        # command-line options; use -c/--connection to run the live tests
         const MyOpts = Opts + {
             "conn": "c,connection=s",
         };
+
+        const OptionColumn = 22;
+    }
+
+    private {
+        #! name of a live Voyage connection, if given
+        *string conn_name;
+
+        #! the resolved live connection, if the tests run against one
+        *AbstractConnection live_conn;
     }
 
     constructor() : Test("VoyageDataProvider Test", "1.0", \ARGV, MyOpts) {
+        conn_name = m_options.conn ?? ENV.VOYAGE_CONNECTION;
+
         addTestCase("sanity test", \sanityTest());
         addTestCase("action catalog", \actionCatalogTest());
         addTestCase("create embeddings", \createEmbeddingsTest());
@@ -76,6 +90,43 @@ public class VoyageDataProviderTest inherits QUnit::Test {
         addTestCase("live rerank", \liveRerankTest());
 
         set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--connection=ARG",
+            "set the Voyage connection name; without it (and without the "
+            "VOYAGE_CONNECTION or VOYAGE_API_KEY env vars) the live tests are "
+            "skipped",
+            OptionColumn);
+    }
+
+    #! returns the live Voyage data provider, skipping the test if none is configured
+    /** prefers a real connection (-c/--connection or VOYAGE_CONNECTION), which also
+        verifies that the connection itself pings; falls back to a bare API key in
+        VOYAGE_API_KEY
+    */
+    private AbstractDataProvider getLiveProvider() {
+        if (conn_name) {
+            if (!live_conn) {
+                live_conn = get_connection(conn_name);
+            }
+            hash<PingInfo> ping = live_conn.ping(True);
+            assertTrue(ping.ok, sprintf("connection %y ping failed: %s", conn_name,
+                ping.info ?? "no info"));
+            return live_conn.getDataProvider();
+        }
+        *string api_key = ENV.VOYAGE_API_KEY;
+        if (!api_key) {
+            testSkip("no Voyage connection given; use -c/--connection, or set "
+                "VOYAGE_CONNECTION or VOYAGE_API_KEY");
+        }
+        return new VoyageDataProvider::VoyageDataProvider({"apikey": api_key});
+    }
+
+    #! returns the model configured on the live connection, or the given default
+    private string liveModel(string opt, string dflt) {
+        return live_conn ? (live_conn.getRealOptions(){opt} ?? dflt) : dflt;
     }
 
     checkModule() {
@@ -309,15 +360,13 @@ public class VoyageDataProviderTest inherits QUnit::Test {
     }
 
     liveCreateEmbeddingsTest() {
-        *string api_key = ENV.VOYAGE_API_KEY;
-        if (!api_key) {
-            testSkip("VOYAGE_API_KEY not set");
-        }
-        VoyageDataProvider::VoyageDataProvider prov({"apikey": api_key});
+        AbstractDataProvider prov = getLiveProvider();
         AbstractDataProvider emb = prov.getChildProvider("create-embeddings");
+        string model = liveModel("embedding-model",
+            VoyageRestClient::VoyageRestClientBase::DefaultEmbeddingModel);
 
         hash<auto> resp = emb.doRequest({
-            "model": "voyage-3",
+            "model": model,
             "input": ("Hello, world!",),
             "input_type": "document",
         });
@@ -327,20 +376,17 @@ public class VoyageDataProviderTest inherits QUnit::Test {
         assertEq("embedding", resp.data[0].object);
         assertEq(0, resp.data[0].index);
         assertTrue(resp.data[0].embedding.lsize() > 0, "embedding vector is non-empty");
-        assertEq("voyage-3", resp.model);
+        assertEq(model, resp.model);
         assertGt(0, resp.usage.total_tokens);
     }
 
     liveRerankTest() {
-        *string api_key = ENV.VOYAGE_API_KEY;
-        if (!api_key) {
-            testSkip("VOYAGE_API_KEY not set");
-        }
-        VoyageDataProvider::VoyageDataProvider prov({"apikey": api_key});
+        AbstractDataProvider prov = getLiveProvider();
         AbstractDataProvider rrk = prov.getChildProvider("rerank");
 
         hash<auto> resp = rrk.doRequest({
-            "model": "rerank-2.5-lite",
+            "model": liveModel("rerank-model",
+                VoyageRestClient::VoyageRestClientBase::DefaultRerankModel),
             "query": "What is artificial intelligence?",
             "documents": (
                 "AI is the simulation of human intelligence by machines.",

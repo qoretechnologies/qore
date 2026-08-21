@@ -8,6 +8,12 @@
 %requires QUnit
 %requires ConnectionProvider
 %requires DataProvider
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires HttpServerAsyncIo
+%requires HttpServer
+%requires json
 %requires QoreLlmTypes
 %requires QoreLlmUtils
 %requires QoreRagTypes
@@ -15,6 +21,37 @@
 %requires CohereRestClient
 
 %exec-class CohereRestClientTest
+
+#! records the chat request body and returns a minimal valid Cohere v2 chat response
+class FakeCohereChatHandler inherits AbstractHttpRequestHandler {
+    public {
+        *hash<auto> last_body;
+        Mutex m();
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        {
+            m.lock();
+            on_exit m.unlock();
+            last_body = body.val() ? parse_json(body) : {};
+        }
+        return makeResponse(200, make_json({
+            "id": "fake-1",
+            "finish_reason": "COMPLETE",
+            "message": {
+                "role": "assistant",
+                "content": ({"type": "text", "text": "OK"},),
+            },
+            "usage": {"tokens": {"input_tokens": 1, "output_tokens": 1}},
+        }), {"Content-Type": MimeTypeJson});
+    }
+
+    *hash<auto> getLastBody() {
+        m.lock();
+        on_exit m.unlock();
+        return last_body;
+    }
+}
 
 public class CohereRestClientTest inherits QUnit::Test {
     public {
@@ -29,6 +66,10 @@ public class CohereRestClientTest inherits QUnit::Test {
     private {
         #! name of a live Cohere connection, if given
         *string conn_name;
+
+        HttpServer http;
+        int port;
+        FakeCohereChatHandler chat_handler;
     }
 
     constructor() : Test("CohereRestClient Test", "1.0", \ARGV, MyOpts) {
@@ -46,9 +87,26 @@ public class CohereRestClientTest inherits QUnit::Test {
         addTestCase("reranker requires api_key",          \rerankerConfigTest());
         addTestCase("connection accepts both model options and rejects unknown ones",
             \connectionOptionsTest());
-        addTestCase("live: ping + embed + rerank with the connection's models",
+        addTestCase("chat uses the default model when none is configured",
+            \chatDefaultModelTest());
+        addTestCase("live: ping + chat + embed + rerank with the connection's models",
             \liveConnectionTest());
         set_return_value(main());
+    }
+
+    globalSetUp() {
+        Logger logger("test", LoggerLevel::getLevelWarn());
+        http = new HttpServer(<HttpServerOptionInfo>{
+            "logger": logger,
+            "debug": False,
+        });
+        port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        chat_handler = new FakeCohereChatHandler();
+        http.setHandler("cohere", "/", MimeTypeJson, chat_handler);
+    }
+
+    globalTearDown() {
+        delete http;
     }
 
     private usageIntern() {
@@ -66,8 +124,15 @@ public class CohereRestClientTest inherits QUnit::Test {
         assertTrue(info.schemes.cohere);
         assertEq("apikey", info.required_options);
 
-        # the connection serves both /embed and /rerank; the two model families
-        # are distinct and are configured independently
+        # the connection serves /chat, /embed and /rerank; the three model
+        # families are distinct and are configured independently
+        hash<ConnectionOptionInfo> chat = info.options."chat-model";
+        assertEq("Chat Model", chat.display_name);
+        assertEq("string", chat.type);
+        assertEq("command-a-03-2025", chat.default_value);
+        assertEq(CohereRestClient::CohereRestClientBase::DefaultChatModel,
+            chat.default_value);
+
         hash<ConnectionOptionInfo> emb = info.options."embedding-model";
         assertEq("Embedding Model", emb.display_name);
         assertEq("string", emb.type);
@@ -82,6 +147,8 @@ public class CohereRestClientTest inherits QUnit::Test {
         assertEq(CohereRestClient::CohereRestClientBase::DefaultRerankModel,
             rr.default_value);
         assertNeq(emb.default_value, rr.default_value);
+        assertNeq(chat.default_value, emb.default_value);
+        assertNeq(chat.default_value, rr.default_value);
     }
 
     private llmFactoryTest() {
@@ -123,6 +190,7 @@ public class CohereRestClientTest inherits QUnit::Test {
     private restOptionsTest() {
         hash<auto> opts = CohereRestClient::CohereRestClientBase::getOptions({
             "apikey": "my-key",
+            "chat-model": "command-r-plus-08-2024",
             "embedding-model": "embed-english-v3.0",
             "rerank-model": "rerank-multilingual-v3.0",
         });
@@ -133,6 +201,7 @@ public class CohereRestClientTest inherits QUnit::Test {
         assertEq("v2", opts.api);
         assertEq("/v2", opts.default_path);
         # connection-level metadata must not leak into REST client options
+        assertEq(NOTHING, opts{"chat-model"});
         assertEq(NOTHING, opts{"embedding-model"});
         assertEq(NOTHING, opts{"rerank-model"});
     }
@@ -141,10 +210,12 @@ public class CohereRestClientTest inherits QUnit::Test {
         CohereRestClient::CohereRestConnection conn("cohere-test", "test connection",
             CohereRestClient::CohereRestConnection::DefaultUrl, {}, {
                 "apikey": "my-key",
+                "chat-model": "command-r-plus-08-2024",
                 "embedding-model": "embed-english-v3.0",
                 "rerank-model": "rerank-multilingual-v3.0",
             });
         assertEq("cohere", conn.getType());
+        assertEq("command-r-plus-08-2024", conn.getRealOptions(){"chat-model"});
         # getRealOptions() reports the configured connection option values
         assertEq("embed-english-v3.0", conn.getRealOptions(){"embedding-model"});
         assertEq("rerank-multilingual-v3.0", conn.getRealOptions(){"rerank-model"});
@@ -187,7 +258,41 @@ public class CohereRestClientTest inherits QUnit::Test {
         assertEq("rerank-v3.5", r.getModel());
     }
 
-    #! exercises a real Cohere connection end to end: ping, embed, rerank
+    #! a chat request must always carry a model
+    /** regression test: with no model configured the request body used to be
+        built from a literal whose only non-NOTHING value was the message list,
+        which narrowed the body's value type and made the conditional
+        \c max_tokens addition fail with \c RUNTIME-TYPE-ERROR before the
+        request was ever sent
+    */
+    private chatDefaultModelTest() {
+        string url = "http://localhost:" + port;
+
+        CohereRestClient::CohereLlmProvider p(<QoreLlmUtils::LlmBackendConfig>{
+            "mode": "cohere",
+            "url": url,
+            "api_key": "secret-key",
+        });
+        hash<QoreLlmUtils::ChatResponse> resp = p.chat((
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "hi"},
+        ));
+        assertEq("OK", resp.content);
+        assertEq(CohereRestClient::CohereRestClientBase::DefaultChatModel,
+            chat_handler.getLastBody().model,
+            "the default chat model is sent when none is configured");
+
+        # an explicitly configured model still wins
+        CohereRestClient::CohereLlmProvider p2(<QoreLlmUtils::LlmBackendConfig>{
+            "mode": "cohere",
+            "url": url,
+            "api_key": "secret-key",
+            "model": "command-r7b-12-2024",
+        });
+        p2.chat((<QoreLlmUtils::ChatMessage>{"role": "user", "content": "hi"},));
+        assertEq("command-r7b-12-2024", chat_handler.getLastBody().model);
+    }
+
+    #! exercises a real Cohere connection end to end: ping, chat, embed, rerank
     /** the embedding and reranking models come from the connection's
         \c embedding-model and \c rerank-model options, falling back to the
         scheme defaults when the connection does not set them
@@ -208,7 +313,21 @@ public class CohereRestClientTest inherits QUnit::Test {
         string rr_model = copts{"rerank-model"}
             ?? CohereRestClient::CohereRestClientBase::DefaultRerankModel;
 
+        string chat_model = copts{"chat-model"}
+            ?? CohereRestClient::CohereRestClientBase::DefaultChatModel;
+
         AbstractDataProvider prov = conn.getDataProvider();
+        AbstractDataProvider cprov = prov.getChildProvider("chat");
+        hash<auto> cresp = cprov.doRequest({
+            "model": chat_model,
+            "messages": (
+                {"role": "user", "content": "Reply with exactly: OK"},
+            ),
+            "max_tokens": 16,
+        });
+        assertTrue(cresp.message.content.lsize() > 0, "chat returned content");
+        assertRegex("OK", cresp.message.content[0].text);
+
         AbstractDataProvider emb = prov.getChildProvider("embed");
         hash<auto> eresp = emb.doRequest({
             "model": emb_model,

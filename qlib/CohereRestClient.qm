@@ -86,6 +86,12 @@ public class CohereRestClientBase {
         #! Default Cohere API version
         const DefaultApiVersion = "v2";
 
+        #! Default Cohere chat model
+        /** Cohere's own model list marks this model as the default for the
+            \c chat and \c generate endpoints
+        */
+        const DefaultChatModel = "command-a-03-2025";
+
         #! Default Cohere embedding model
         const DefaultEmbeddingModel = "embed-multilingual-v3.0";
 
@@ -108,9 +114,9 @@ public class CohereRestClientBase {
             rv.token = rv.apikey;
             delete rv.apikey;
         }
-        # these are connection-level options for downstream consumers (RAG embedder / reranker
-        # configuration); they are not REST client options
-        remove rv{"embedding-model", "rerank-model"};
+        # these are connection-level options for downstream consumers (LLM / RAG embedder /
+        # reranker configuration); they are not REST client options
+        remove rv{"chat-model", "embedding-model", "rerank-model"};
         return rv;
     }
 }
@@ -148,9 +154,9 @@ public class CohereRestConnection inherits RestClient::RestConnection {
                 "embeddings, reranking, and classification.\n\n"
                 "Requires an API key for Bearer authentication.  Get your API key from the "
                 "[Cohere dashboard](https://dashboard.cohere.com/api-keys).\n\n"
-                "The models used when this connection is selected for embeddings and for "
-                "reranking are set independently with the `embedding-model` and "
-                "`rerank-model` options.",
+                "The models used when this connection is selected for chat, embeddings, and "
+                "reranking are set independently with the `chat-model`, `embedding-model`, "
+                "and `rerank-model` options.",
             "cls": Class::forName("CohereRestConnection"),
             "auto_url": True,
             "schemes": {"cohere": True},
@@ -170,6 +176,21 @@ public class CohereRestConnection inherits RestClient::RestConnection {
                     "desc": "The API version to use.  Defaults to v2.",
                     "type": "string",
                     "default_value": CohereRestClientBase::DefaultApiVersion,
+                },
+                "chat-model": <ConnectionOptionInfo>{
+                    "display_name": "Chat Model",
+                    "short_desc": "Cohere chat model name",
+                    "desc": "The Cohere chat model used by LLM clients when this connection "
+                        "is selected for chat; sent as the `model` parameter to the `/chat` "
+                        "endpoint.\n\n"
+                        "Chat models are a separate family from embedding and reranking "
+                        "models and cannot be used interchangeably.\n\n"
+                        "Example values: `command-a-03-2025` (Cohere's default chat model; "
+                        "the default here), `command-a-plus-05-2026` (largest context), "
+                        "`command-r-plus-08-2024` and `command-r-08-2024` (previous "
+                        "generation), `command-r7b-12-2024` (smallest, lowest cost)",
+                    "type": "string",
+                    "default_value": CohereRestClientBase::DefaultChatModel,
                 },
                 "embedding-model": <ConnectionOptionInfo>{
                     "display_name": "Embedding Model",
@@ -269,8 +290,8 @@ public class CohereRestConnection inherits RestClient::RestConnection {
 
     - \c url (optional): override the default \c https://api.cohere.com
     - \c api_key (required): Cohere API key
-    - \c model (required): Cohere model name, e.g. \c "command-r-plus",
-      \c "command-r"
+    - \c model (optional): Cohere model name; defaults to
+      @ref CohereRestClient::CohereRestClientBase::DefaultChatModel "DefaultChatModel"
 
     @note Streaming is not implemented in v1.  Use the synchronous
     @ref chat() method.
@@ -326,8 +347,11 @@ public class CohereLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
         ensureRestClient();
 
-        hash<auto> body = {
-            "model": getRequestModel(opts),
+        # auto! because a chat request body is heterogeneous (string model, list of
+        # messages, int max_tokens, hash response_format); a narrowing literal would
+        # make the conditional additions below fail with RUNTIME-TYPE-ERROR
+        hash<auto!> body = {
+            "model": getRequestModel(opts) ?? CohereRestClientBase::DefaultChatModel,
             "messages": buildCohereMessages(messages),
         };
         if (exists opts.temperature) {
@@ -561,7 +585,7 @@ public class CohereEmbedder inherits AbstractEmbedder {
             return ();
         }
 
-        hash<auto> body = {
+        hash<auto!> body = {
             "model": model_name,
             "texts": texts,
             "input_type": opts.input_type ?? "search_document",
@@ -712,7 +736,7 @@ public class CohereReranker inherits AbstractReranker {
         }
         ensureRestClient();
 
-        hash<auto> body = {
+        hash<auto!> body = {
             "model": model_name,
             "query": query,
             "documents": documents,
