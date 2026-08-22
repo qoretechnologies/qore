@@ -768,6 +768,18 @@ public:
     //! own container node appears in the program reverse map.
     std::string current_const_path;
 
+    //! Position of the value writeValue() is currently serializing relative to
+    //! the top-level value it was called with, rendered as a subscript chain
+    //! (e.g. `["java-max-heap"]["desc"]`).  Maintained by the list and hash
+    //! cases so a nested failure can name the member that could not be written.
+    std::string current_value_path;
+
+    //! Describes the innermost value writeValue() could not serialize: its
+    //! position within the top-level value and its type name.  Set on the first
+    //! failure and left alone by outer frames, so the reported location is the
+    //! offending leaf rather than the container that propagated the failure.
+    std::string value_failure_detail;
+
     //! Constants serialized by the current AOT blob.  If set, writeValue()
     //! must not emit references to same-blob constants unless they are already
     //! available at the current section's deserialization point.

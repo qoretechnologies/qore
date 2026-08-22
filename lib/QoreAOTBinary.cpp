@@ -2028,6 +2028,47 @@ static bool aot_is_encoded_constant_path(const char* path) {
     return path && !strncmp(path, AOT_CONST_PATH_PREFIX, strlen(AOT_CONST_PATH_PREFIX));
 }
 
+static bool aot_parse_size_component(const std::string& path, size_t& pos, size_t& value);
+
+//! Count the subscript components of an encoded constant path.
+/** An unencoded path names a whole constant and has depth 0.  Returns false
+    only for a malformed encoded path, which the caller treats as maximally
+    deep so a well-formed alternative always wins.
+*/
+static bool aot_constant_path_depth(const std::string& path, size_t& depth) {
+    depth = 0;
+    if (!aot_is_encoded_constant_path(path.c_str())) {
+        return true;
+    }
+
+    size_t pos = strlen(AOT_CONST_PATH_PREFIX);
+    size_t base_len = 0;
+    if (!aot_parse_size_component(path, pos, base_len) || pos + base_len > path.size()) {
+        return false;
+    }
+    pos += base_len;
+
+    // Mirrors the component grammar consumed by aot_resolve_constant_path_tail():
+    // 'H' <key-length> ':' <key> for a hash key, 'L' <index> ':' for a list index.
+    while (pos < path.size()) {
+        const char seg = path[pos++];
+        size_t len_or_index = 0;
+        if (!aot_parse_size_component(path, pos, len_or_index)) {
+            return false;
+        }
+        if (seg == 'H') {
+            if (pos + len_or_index > path.size()) {
+                return false;
+            }
+            pos += len_or_index;
+        } else if (seg != 'L') {
+            return false;
+        }
+        ++depth;
+    }
+    return true;
+}
+
 static bool aot_constant_reverse_path_is_better(const std::string& current,
         const std::string& candidate) {
     bool current_encoded = aot_is_encoded_constant_path(current.c_str());
@@ -2035,6 +2076,30 @@ static bool aot_constant_reverse_path_is_better(const std::string& current,
 
     if (current_encoded != candidate_encoded) {
         return !candidate_encoded;
+    }
+    // Prefer the shallowest path, which is the one rooted at the constant that
+    // most directly owns the node.  A container constant that merely holds
+    // another constant's value reaches that value's interior nodes only
+    // *through* the owning constant, so its path is always deeper; picking it
+    // makes the owner's own serialized value reference the container, and the
+    // container's value reference the owner back.  Nothing breaks that mutual
+    // reference at load time: reached while the other constant is still a
+    // pending shell it deserializes to a deferred constant-path reference that
+    // is not a value, so any later compile that folds it into a new constant
+    // has nothing serializable to write, and reached while the other constant
+    // already holds a value it recurses between getReferencedValue() and
+    // RuntimeConstantPathRefNode::evalImpl() until the stack overflows.  Depth
+    // must therefore outrank the string length heuristic below, which a shorter
+    // container-constant name can otherwise win despite the extra subscript.
+    size_t current_depth = 0;
+    size_t candidate_depth = 0;
+    const bool current_ok = aot_constant_path_depth(current, current_depth);
+    const bool candidate_ok = aot_constant_path_depth(candidate, candidate_depth);
+    if (current_ok != candidate_ok) {
+        return candidate_ok;
+    }
+    if (current_ok && candidate_depth != current_depth) {
+        return candidate_depth < current_depth;
     }
     if (candidate.size() != current.size()) {
         return candidate.size() < current.size();
@@ -3386,10 +3451,40 @@ static bool qoreAOTApplyContainerValueType(QoreValue& v,
 
 // ---- QoreAOTBinaryWriter ----
 
+//! Restores the writer's value path when a nested writeValue() returns or throws.
+class AOTValuePathScope {
+public:
+    DLLLOCAL AOTValuePathScope(std::string& n_path) : path(n_path), len(n_path.size()) {
+    }
+
+    DLLLOCAL ~AOTValuePathScope() {
+        path.resize(len);
+    }
+
+    DLLLOCAL AOTValuePathScope(const AOTValuePathScope&) = delete;
+    DLLLOCAL AOTValuePathScope& operator=(const AOTValuePathScope&) = delete;
+
+private:
+    std::string& path;
+    const size_t len;
+};
+
 bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
     const uint32_t start_pos = position();
-    auto fail = [this, start_pos]() -> bool {
+    auto fail = [this, start_pos, &v]() -> bool {
         truncate(start_pos);
+        // Record the innermost failure only; outer container frames propagate
+        // the failure but must not overwrite the location of the leaf that
+        // caused it.
+        if (value_failure_detail.empty()) {
+            value_failure_detail = "at ";
+            value_failure_detail += current_value_path.empty()
+                ? std::string("the value itself")
+                : current_value_path;
+            value_failure_detail += ", value type '";
+            value_failure_detail += v.getTypeName();
+            value_failure_detail += "'";
+        }
         return false;
     };
 
@@ -3569,7 +3664,15 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                             && qore_check_cancel(nullptr, "AOT list value serialization")) {
                         return fail();
                     }
-                    if (!writeValue(list->retrieveEntry(i))) {
+                    bool entry_ok;
+                    {
+                        AOTValuePathScope path_scope(current_value_path);
+                        current_value_path += '[';
+                        current_value_path += std::to_string(i);
+                        current_value_path += ']';
+                        entry_ok = writeValue(list->retrieveEntry(i));
+                    }
+                    if (!entry_ok) {
                         return fail();
                     }
                 }
@@ -3594,7 +3697,15 @@ bool QoreAOTBinaryWriter::writeValue(const QoreValue& v) {
                     }
                     const char* key = hi.getKey();
                     writeStringRef(key);
-                    if (!writeValue(hi.get())) {
+                    bool entry_ok;
+                    {
+                        AOTValuePathScope path_scope(current_value_path);
+                        current_value_path += "[\"";
+                        current_value_path += key;
+                        current_value_path += "\"]";
+                        entry_ok = writeValue(hi.get());
+                    }
+                    if (!entry_ok) {
                         return fail();
                     }
                     ++i;
@@ -10158,12 +10269,19 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                         ValueHolder actual_val(ce->getReferencedValue(), nullptr);
                         std::string old_const_path = std::move(writer.current_const_path);
                         writer.current_const_path = getClassConstantPath(priv, ce->getName());
+                        writer.current_value_path.clear();
+                        writer.value_failure_detail.clear();
                         bool value_ok = writer.writeValue(*actual_val);
                         writer.current_const_path = std::move(old_const_path);
                         if (!value_ok) {
                             error = "AOT cannot serialize class constant '";
                             error += getClassConstantPath(priv, ce->getName());
                             error += "' without data loss";
+                            if (!writer.value_failure_detail.empty()) {
+                                error += " (";
+                                error += writer.value_failure_detail;
+                                error += ")";
+                            }
                             return false;
                         }
                     }
@@ -10427,11 +10545,18 @@ static bool writeConstantsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
             // ce->val may hold a RuntimeConstantRefNode (NT_RTCONSTREF) which is
             // just a reference to the constant's evaluated saved_val.
             ValueHolder actual_val(ce->getReferencedValue(), nullptr);
+            writer.current_value_path.clear();
+            writer.value_failure_detail.clear();
             bool value_ok = writer.writeValue(*actual_val);
             if (!value_ok) {
                 error = "AOT cannot serialize namespace constant '";
                 error += const_path;
                 error += "' without data loss";
+                if (!writer.value_failure_detail.empty()) {
+                    error += " (";
+                    error += writer.value_failure_detail;
+                    error += ")";
+                }
                 writer.current_const_path = std::move(old_const_path);
                 return false;
             }
