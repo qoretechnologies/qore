@@ -148,9 +148,10 @@ class IRContainerStoreScalingTest inherits QUnit::Test {
 
     private static int timeDedup(int n) {
         list<int> vals = map $1 % (n / 2), xrange(n);
-        date t0 = now_us();
+        # monotonic: a wall-clock step on a CI VM otherwise shows up as a scaling failure
+        int t0 = clock_get_monotonic_us();
         list<int> rv = IRContainerStoreScalingTest::uniqueInts(vals);
-        int us = (now_us() - t0).durationMicroseconds();
+        int us = clock_get_monotonic_us() - t0;
         if (rv.size() != n / 2) {
             throw "SCALING-TEST-ERROR", sprintf("dedup returned %d elements, expected %d", rv.size(), n / 2);
         }

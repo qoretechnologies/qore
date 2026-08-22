@@ -10402,6 +10402,17 @@ load_local_done:
                 // this, but flushing on every untyped store would be far too expensive.
                 if (local_inst->local && local_inst->local->isRef()) {
                     cleanupLocalCaches();
+                } else if (local_inst->is_ref && local_inst->slot_id != UINT32_MAX
+                        && local_inst->slot_id < locals_slot_cache.size()) {
+                    // is_ref suppressed the write-through cache update above, so the cached
+                    // value is now stale even though this store landed in the local's own
+                    // slot (a reference-capable local need not actually hold a reference).
+                    // Drop just this entry; the next load re-reads the runtime stack.
+                    locals_slot_cache[local_inst->slot_id].discard(xsink);
+                    locals_slot_cache[local_inst->slot_id] = QoreValue();
+                    if (local_inst->slot_id < locals_lvar_cache.size()) {
+                        locals_lvar_cache[local_inst->slot_id] = nullptr;
+                    }
                 }
                 // Track the operand slot for cleanup when this local is uninstantiated
                 if (operand.isValid() && local_inst->slot_id != UINT32_MAX

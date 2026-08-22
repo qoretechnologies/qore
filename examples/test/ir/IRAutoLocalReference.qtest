@@ -76,6 +76,30 @@ string sub paramWrites() {
     return sprintf("%y,%y,%y,%y,%y,%y,%y,%y,%y", a, b, c, d, e, f, g, h, i);
 }
 
+# an untyped parameter that is written must read back the value it was just given: the
+# reference-capable store path must not leave a stale cached value behind, whether or not the
+# parameter actually holds a reference
+int    sub wrAssign(auto p)   { p = 99; return p; }
+int    sub wrPlus(auto p)     { p += 1; return p; }
+int    sub wrIncr(auto p)     { ++p; return p; }
+int    sub wrTwice(auto p)    { p += 1; p += 1; return p; }
+int    sub wrSum(auto p, int n) { int acc = 0; for (int i = 0; i < n; ++i) { p += 1; acc += p; } return acc; }
+list<int> sub wrIndex(auto p) { p[0] = 5; return p; }
+hash<string, int> sub wrKey(auto p) { p{"b"} = 2; return p; }
+string sub paramReadAfterWrite() {
+    return sprintf("%y,%y,%y,%y,%y,%y,%y", wrAssign(1), wrPlus(1), wrIncr(1), wrTwice(1),
+        wrSum(0, 3), wrIndex((1, 2)), wrKey({"a": 1}));
+}
+
+# the same read-after-write through a reference actually passed by the caller
+string sub paramReadAfterWriteRef() {
+    int i = 1;
+    int direct = wrPlus(\i);
+    list<int> v = (1, 2);
+    list<int> vr = wrIndex(\v);
+    return sprintf("%y,%y,%y,%y", direct, i, vr, v);
+}
+
 # read-only untyped parameters keep their private slot; a read must still see the
 # dereferenced value rather than the reference itself
 string sub qFormat(auto p) { return sprintf("%y", p); }
@@ -121,7 +145,8 @@ printf("%s|%s|%s|%s|%s|%s|%s|%s|%s|%s|", autoAssign(), autoPlusAssign(), autoInd
     autoHashKey(), autoPush(), autoUnshift(), autoSplice(), autoIncrement(),
     autoDelete(), autoIntAssign());
 printf("%s|%s|%s|%s|%s|", refAssign(), refPlusAssign(), refIndex(), refHashKey(), refIntAssign());
-printf("%s|%s|%s|%s|%d|%y,%y\n", autoParam(), paramWrites(), paramReads(), autoFromCall(),
+printf("%s|%s|%s|%s|%s|%s|%d|%y,%y\n", autoParam(), paramWrites(), paramReadAfterWrite(),
+    paramReadAfterWriteRef(), paramReads(), autoFromCall(),
     autoNoReference(1000), top_target, top_list);
 ';
 
@@ -142,6 +167,8 @@ string expected = "[9]/[9]|[1, 2]/[1, 2]|[1, 5]/[1, 5]|{a: 1, b: 2}/{a: 1, b: 2}
     + "[9]/[9]|[1, 2]/[1, 2]|[1, 5]/[1, 5]|{a: 1, b: 2}/{a: 1, b: 2}|7/7|"
     + "99|"
     + "99,2,2,[5, 2],[1, 9],{a: 1, b: 2},{b: 2},[2],77|"
+    + "99,2,2,3,6,[5, 2],{a: 1, b: 2}|"
+    + "2,2,[5, 2],[5, 2]|"
     + "41,integer,42,41,2,7|"
     + "1/5|999000|7,[1, 2]\n";
 
