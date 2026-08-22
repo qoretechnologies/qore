@@ -2894,6 +2894,16 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         - added template variable substitution in \c oauth2_auth_args (e.g., \c key: \c "{{oauth2_client_id}}")
           for providers that use non-standard parameter names
 
+    - @ref restschemavalidatorintro "RestSchemaValidator", @ref openapi3intro "OpenApi3", and
+      @ref swaggerintro "Swagger" modules
+      - fixed validating a request or response value holding @ref NULL "NULL", which failed to dispatch at
+        all and raised \c RUNTIME-OVERLOAD-ERROR instead of giving any verdict on the value.  A record-based
+        data provider returns \c NULL for every unset column, so serving a value read from a database was
+        enough to trigger it.  \c NULL is now validated as a value the schema has none of, so a property
+        declared \c nullable accepts it and one that is not gives a normal \c SCHEMA-VALIDATION-ERROR; the
+        value itself is left as it is.  The no-value validation variant also took a \c reference<nothing>,
+        which binds no ordinary lvalue, and now takes an untyped reference
+
     - @ref resthandlerintro "RestHandler" module
       - fixed handling \c OPTIONS requests with an \c action parameter
         (<a href="https://github.com/qoretechnologies/qore/issues/4988">issue 4988</a>)

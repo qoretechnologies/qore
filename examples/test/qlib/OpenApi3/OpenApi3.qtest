@@ -425,6 +425,7 @@ public class OpenApi3Test inherits QUnit::Test {
         addTestCase("Test constraint-only compositions", \testConstraintOnlyComposition());
         addTestCase("Test reference siblings", \testReferenceSiblings());
         addTestCase("Test allOf object property composition", \testAllOfObjectProperties());
+        addTestCase("Test SQL NULL in a response body", \testNullValueInResponse());
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -4432,6 +4433,65 @@ public class OpenApi3Test inherits QUnit::Test {
         assertEq(("subscriptions",),
             sort(keys cast<SchemaObject>(so.components.schemas.Extra.properties.attributes).properties),
             "and neither is the other one");
+    }
+
+    #! A response body property holding SQL NULL is validated as if it had no value
+    /** A record-based data provider returns @ref NULL for every unset column, so any API serving a
+        response built from a database row hands the validator NULL values.  \c NULL is a distinct
+        Qore type with no \c checkIntern() variant of its own, so before this was handled such a
+        response failed to dispatch at all, with an overload error rather than any verdict on the
+        value.
+    */
+    testNullValueInResponse() {
+        checkModules();
+
+        hash<auto> soh = ValidOpenApi3Schema + {
+            "paths": {
+                "/row": {
+                    "get": {
+                        "responses": {
+                            "200": {
+                                "description": "a record read from a database",
+                                "content": {
+                                    MimeTypeJson: {
+                                        "schema": {"$ref": "#/components/schemas/Row"},
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+            "components": {
+                "schemas": {
+                    "Row": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "string"},
+                            "note": {"type": "string", "nullable": True},
+                            "code": {"type": "string"},
+                        },
+                    },
+                },
+            },
+        };
+
+        OpenApi3Schema so("", soh);
+
+        # a nullable property holding NULL is accepted and reaches the caller as null; validating a
+        # value must give a verdict on it, not rewrite it
+        hash<HttpResponseInfo> res = so.processResponse("get", "/row", 200, {
+            "id": "1",
+            "note": NULL,
+            "code": "X",
+        }, NOTHING, MimeTypeJson);
+        assertEq(200, res.code);
+        assertEq({"id": "1", "note": NOTHING, "code": "X"}, parse_json(res.body),
+            "a nullable property holding SQL NULL is serialized as null");
+
+        # and a property that is not nullable gives a verdict on the value rather than an overload error
+        assertThrows("SCHEMA-VALIDATION-ERROR", "is null",
+            \so.processResponse(), ("get", "/row", 200, {"id": "1", "code": NULL}, NOTHING, MimeTypeJson));
     }
 
     testOpenApi3AllOfScalar() {

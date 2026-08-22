@@ -510,6 +510,15 @@ public namespace RestSchemaValidator {
                 checkArrayParam(serialize, request, items, path, method, name, \value);
             } else {
                 on_error rethrow $1.err, sprintf("%s (while checking parameter %y)", $1.desc, name);
+                # SQL NULL and "no value" are the same thing to a REST schema, and a record-based data
+                # provider returns NULL for every unset column, so any API serving a value read from a
+                # database presents them.  NULL is a type of its own with no checkIntern() variant, so
+                # it is dispatched on the no-value variant to get a verdict from the schema; the value
+                # itself is left alone, as validating it must not rewrite it
+                if (value === NULL) {
+                    checkIntern(serialize, request, type, format, path, method, name, NOTHING, \value);
+                    return;
+                }
                 checkIntern(serialize, request, type, format, path, method, name, value, \value);
             }
         }
@@ -833,8 +842,11 @@ public namespace RestSchemaValidator {
                 throwInvalidType(name, "boolean", type, v);
         }
 
+        # NOTE: the reference is deliberately untyped: the value being checked can be a hash member or
+        #       any other "auto" lvalue, and a "reference<nothing>" parameter binds neither, which made
+        #       this variant unreachable for every value that is not already declared to hold nothing
         private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
-                string name, nothing v, reference<nothing> value) {
+                string name, nothing v, reference value) {
             if (type != "null" && type != "any")
                 throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for %s %y and %s %y is null, but the "
                     "expected type is %y", name, getPathLabel(), path, getMethodLabel(), method, type);

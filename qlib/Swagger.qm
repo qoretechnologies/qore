@@ -4198,7 +4198,7 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
     }
 
     private checkIntern(bool serialize, bool request, string type, *string format, string path, string method,
-            string name, nothing v, reference<nothing> value) {
+            string name, nothing v, reference value) {
         if (type != "null" && type != "any" && !nullable) {
             throw "SCHEMA-VALIDATION-ERROR", sprintf("Parameter %y for path %y and method %y is null, but the "
                 "expected type is %y", name, path, method, type);
