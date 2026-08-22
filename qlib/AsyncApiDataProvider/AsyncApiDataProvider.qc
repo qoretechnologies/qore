@@ -192,6 +192,50 @@ public class AsyncApiDataProvider inherits AsyncApiDataProviderCommon {
         }
     }
 
+    #! Returns the API management endpoints declared by the AsyncAPI schema
+    /** API management binds a handler to each endpoint an API document declares.  For AsyncAPI that unit is the
+        \c operations entry, identified by its operation ID - which is unique across the whole document - rather
+        than by a path through the data provider tree: an operation is reached at the provider path
+        \c channel_name/operation_id, but two channels may declare operations with the same ID, and an API
+        management configuration that named endpoints by path would silently rebind if a channel were renamed.
+
+        Both inbound (\c receive) and outbound (\c send) operations are returned.  Walking the provider tree and
+        collecting request-capable providers instead - the default for request/response APIs - yields only the
+        \c send operations, because an inbound operation is observable rather than request-capable
+        (@ref AsyncApiDataProvider::AsyncApiOperationDataProvider "AsyncApiOperationDataProvider" reports
+        \c supports_request only for \c send).  Inbound operations are exactly the ones an API management
+        implementation binds handlers to, so omitting them would present a schema's API as empty, or as consisting
+        only of the messages the server emits.
+
+        @return a list of hashes with the following keys:
+        - \c endpoint: the operation ID, which is the stable endpoint key
+        - \c endpoint_id: the same value, for callers that key on the explicit ID
+        - \c action: the AsyncAPI operation action (\c receive for inbound, \c send for outbound)
+        - \c channel_name: the name of the channel the operation acts on
+        - \c channel_address: the channel's address, defaulting to the channel name
+        - \c desc: a markdown description of the operation
+    */
+    list<hash<auto>> getApiManagementEndpoints() {
+        list<hash<auto>> rv = ();
+        foreach string operation_id in (keys schema.operations) {
+            *AsyncApi::OperationObject op = schema.getOperation(operation_id);
+            if (!op) {
+                continue;
+            }
+            string channel_name = op.channelName ?? "";
+            *AsyncApi::ChannelObject channel = channel_name.val() ? schema.getChannel(channel_name) : NOTHING;
+            rv += {
+                "endpoint": operation_id,
+                "endpoint_id": operation_id,
+                "action": op.action,
+                "channel_name": channel_name,
+                "channel_address": channel.address ?? channel_name,
+                "desc": AsyncApiOperationDataProvider::getOperationDesc(operation_id, op, channel_name),
+            };
+        }
+        return rv;
+    }
+
     #! Returns data provider static info
     private hash<DataProviderInfo> getStaticInfoImpl() {
         return ProviderInfo;

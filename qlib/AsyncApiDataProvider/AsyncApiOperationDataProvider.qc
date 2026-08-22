@@ -132,6 +132,22 @@ public class AsyncApiOperationDataProvider inherits AsyncApiDataProviderBase, Da
 
     #! Returns the data provider description
     *string getDesc() {
+        return getOperationDesc(operation_id, op, channel_name);
+    }
+
+    #! Returns the markdown description for an AsyncAPI operation
+    /** Static so that a caller listing a schema's operations - such as
+        @ref AsyncApiDataProvider::AsyncApiDataProvider::getApiManagementEndpoints() "getApiManagementEndpoints()" -
+        describes each one exactly as the operation's own data provider does, without having to instantiate a
+        provider (and therefore a transport) for every operation in the document.
+
+        @param operation_id the AsyncAPI operation ID
+        @param op the operation object
+        @param channel_name the name of the channel the operation acts on
+
+        @return a markdown description of the operation
+    */
+    static string getOperationDesc(string operation_id, AsyncApi::OperationObject op, string channel_name) {
         string desc = sprintf("AsyncAPI operation %y (%s) on channel %y", operation_id, op.action, channel_name);
         if (op.summary) {
             desc += sprintf("\n\n## Summary\n\n%s", op.summary);

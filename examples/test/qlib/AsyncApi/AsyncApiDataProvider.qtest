@@ -121,6 +121,7 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
         addTestCase("multi-message union type test", \multiMessageUnionTypeTest());
         addTestCase("message send transport test", \messageSendTransportTest());
         addTestCase("receive operation observable transport test", \receiveObservableTransportTest());
+        addTestCase("api management endpoint test", \apiManagementEndpointTest());
         set_return_value(main());
     }
 
@@ -186,6 +187,60 @@ public class AsyncApiDataProviderTest inherits QUnit::Test {
         *string channelDesc = channelProvider.getDesc();
         assertTrue(exists channelDesc);
         assertTrue(channelDesc.find("/chat/user") >= 0);
+    }
+
+    apiManagementEndpointTest() {
+        checkModules();
+
+        AsyncApiDataProvider::AsyncApiDataProvider provider({
+            "schema": testDir + "/ChatApi.asyncapi.yaml",
+        });
+
+        list<hash<auto>> endpoints = provider.getApiManagementEndpoints();
+        hash<string, hash<auto>> emap = map {$1.endpoint: $1}, endpoints;
+
+        # every declared operation is an endpoint, keyed by operation ID
+        assertEq(("sendChatMessage", "receiveChatMessage", "sendTypingIndicator", "receiveSystemNotification",
+            "sendSystemNotification"), keys emap);
+        assertEq(5, endpoints.size());
+
+        # inbound operations are the ones an API management implementation binds handlers to, and they are
+        # observable rather than request-capable; walking the provider tree for request-capable providers - the
+        # request/response default - returns only the outbound half, so they must come from here
+        assertEq("receive", emap.receiveChatMessage.action);
+        assertEq("receive", emap.receiveSystemNotification.action);
+        assertEq("send", emap.sendChatMessage.action);
+        assertEq("send", emap.sendTypingIndicator.action);
+        assertEq("send", emap.sendSystemNotification.action);
+
+        list<string> observable = map $1.endpoint, endpoints, $1.action == "receive";
+        assertEq(("receiveChatMessage", "receiveSystemNotification"), observable);
+        foreach string opid in (observable) {
+            AbstractDataProvider op = provider.getChildProviderPath(emap{opid}.channel_name + "/" + opid);
+            assertFalse(op.getInfo().supports_request, opid);
+            assertTrue(op.getInfo().supports_observable, opid);
+        }
+
+        # the endpoint key is the operation ID and not a path through the provider tree: two channels may declare
+        # operations with the same ID, and a path key would rebind if a channel were renamed
+        map assertEq($1.endpoint, $1.endpoint_id, $1.endpoint), endpoints;
+        map assertFalse($1.endpoint =~ /\//, $1.endpoint), endpoints;
+
+        # each endpoint carries its channel, and the address when the channel declares one
+        assertEq("userChat", emap.sendChatMessage.channel_name);
+        assertEq("/chat/user", emap.sendChatMessage.channel_address);
+        assertEq("systemNotifications", emap.receiveSystemNotification.channel_name);
+        assertEq("/chat/system", emap.receiveSystemNotification.channel_address);
+
+        # the description is the operation provider's own, so a listing describes an operation exactly as the
+        # provider for that operation does
+        foreach hash<auto> ep in (endpoints) {
+            AbstractDataProvider op = provider.getChildProviderPath(ep.channel_name + "/" + ep.endpoint);
+            assertEq(op.getDesc(), ep.desc, ep.endpoint);
+        }
+        assertTrue(emap.receiveChatMessage.desc.find("Receive a chat message") >= 0);
+        assertTrue(emap.receiveChatMessage.desc.find("Receives a chat message from the channel") >= 0);
+        assertTrue(emap.sendChatMessage.desc.find("(send)") >= 0);
     }
 
     operationNavigationTest() {
