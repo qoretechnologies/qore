@@ -738,7 +738,8 @@ static bool isLValueOp(QoreIROpcode op) {
 //! ALL locals as AST-visible.  This ensures correctness even if new AST node
 //! types are added to Qore.
 static void collectLocalsFromExpr(const QoreValue& expr,
-        std::unordered_set<const void*>& ast_locals, bool& unknown_node_found) {
+        std::unordered_set<const void*>& ast_locals, bool& unknown_node_found,
+        bool* ref_created = nullptr) {
     if (!expr.hasNode()) {
         return;
     }
@@ -761,13 +762,13 @@ static void collectLocalsFromExpr(const QoreValue& expr,
         if (auto* vrn = dynamic_cast<const VarRefNewObjectNode*>(node)) {
             if (const QoreParseListNode* pargs = vrn->getParseArgs()) {
                 for (size_t i = 0; i < pargs->size(); ++i) {
-                    collectLocalsFromExpr(pargs->get(i), ast_locals, unknown_node_found);
+                    collectLocalsFromExpr(pargs->get(i), ast_locals, unknown_node_found, ref_created);
                 }
             }
             if (const QoreListNode* eargs = vrn->getArgs()) {
                 ConstListIterator li(eargs);
                 while (li.next()) {
-                    collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found);
+                    collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found, ref_created);
                 }
             }
         }
@@ -789,45 +790,45 @@ static void collectLocalsFromExpr(const QoreValue& expr,
 
     // Binary operators: recurse left and right
     if (auto* binop = dynamic_cast<const QoreBinaryOperatorNode<>*>(node)) {
-        collectLocalsFromExpr(binop->getLeft(), ast_locals, unknown_node_found);
-        collectLocalsFromExpr(binop->getRight(), ast_locals, unknown_node_found);
+        collectLocalsFromExpr(binop->getLeft(), ast_locals, unknown_node_found, ref_created);
+        collectLocalsFromExpr(binop->getRight(), ast_locals, unknown_node_found, ref_created);
         return;
     }
 
     // Binary int-specific operators (inherit separately from QoreBinaryOperatorNode<>)
     if (auto* binop = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)) {
-        collectLocalsFromExpr(binop->getLeft(), ast_locals, unknown_node_found);
-        collectLocalsFromExpr(binop->getRight(), ast_locals, unknown_node_found);
+        collectLocalsFromExpr(binop->getLeft(), ast_locals, unknown_node_found, ref_created);
+        collectLocalsFromExpr(binop->getRight(), ast_locals, unknown_node_found, ref_created);
         return;
     }
 
     // Unary/single expression operators: recurse expression
     if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<>*>(node)) {
-        collectLocalsFromExpr(unop->getExp(), ast_locals, unknown_node_found);
+        collectLocalsFromExpr(unop->getExp(), ast_locals, unknown_node_found, ref_created);
         return;
     }
 
     // LValue single expression operators
     if (auto* unop = dynamic_cast<const QoreSingleExpressionOperatorNode<LValueOperatorNode>*>(node)) {
-        collectLocalsFromExpr(unop->getExp(), ast_locals, unknown_node_found);
+        collectLocalsFromExpr(unop->getExp(), ast_locals, unknown_node_found, ref_created);
         return;
     }
 
     // Single-value expression operators (e.g., exists, which inherits from
     // QoreSingleValueExpressionOperatorNode<QoreOperatorNode>)
     if (auto* unop = dynamic_cast<const QoreSingleValueExpressionOperatorNode<>*>(node)) {
-        collectLocalsFromExpr(unop->getExp(), ast_locals, unknown_node_found);
+        collectLocalsFromExpr(unop->getExp(), ast_locals, unknown_node_found, ref_created);
         return;
     }
 
     // Dot eval operator (method call on object): left.method()
     if (auto* dot = dynamic_cast<const QoreDotEvalOperatorNode*>(node)) {
-        collectLocalsFromExpr(dot->getExpression(), ast_locals, unknown_node_found);
+        collectLocalsFromExpr(dot->getExpression(), ast_locals, unknown_node_found, ref_created);
         // Method call node has args that might reference locals
         if (const MethodCallNode* m = dot->getMethodCall()) {
             if (const QoreParseListNode* pargs = m->getParseArgs()) {
                 for (size_t i = 0; i < pargs->size(); ++i) {
-                    collectLocalsFromExpr(pargs->get(i), ast_locals, unknown_node_found);
+                    collectLocalsFromExpr(pargs->get(i), ast_locals, unknown_node_found, ref_created);
                 }
             }
             // Also check resolved args — after parse resolution, locals may only
@@ -835,7 +836,7 @@ static void collectLocalsFromExpr(const QoreValue& expr,
             if (const QoreListNode* rargs = m->getArgs()) {
                 ConstListIterator li(rargs);
                 while (li.next()) {
-                    collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found);
+                    collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found, ref_created);
                 }
             }
         }
@@ -847,13 +848,13 @@ static void collectLocalsFromExpr(const QoreValue& expr,
     if (auto* call = dynamic_cast<const FunctionCallBase*>(node)) {
         if (const QoreParseListNode* args = call->getParseArgs()) {
             for (size_t i = 0; i < args->size(); ++i) {
-                collectLocalsFromExpr(args->get(i), ast_locals, unknown_node_found);
+                collectLocalsFromExpr(args->get(i), ast_locals, unknown_node_found, ref_created);
             }
         }
         if (const QoreListNode* args = call->getArgs()) {
             ConstListIterator li(args);
             while (li.next()) {
-                collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found);
+                collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found, ref_created);
             }
         }
         return;
@@ -861,16 +862,16 @@ static void collectLocalsFromExpr(const QoreValue& expr,
 
     // Call reference calls: adder(32)
     if (auto* crc = dynamic_cast<const CallReferenceCallNode*>(node)) {
-        collectLocalsFromExpr(crc->getExp(), ast_locals, unknown_node_found);
+        collectLocalsFromExpr(crc->getExp(), ast_locals, unknown_node_found, ref_created);
         if (const QoreParseListNode* args = crc->getParseArgs()) {
             for (size_t i = 0; i < args->size(); ++i) {
-                collectLocalsFromExpr(args->get(i), ast_locals, unknown_node_found);
+                collectLocalsFromExpr(args->get(i), ast_locals, unknown_node_found, ref_created);
             }
         }
         if (const QoreListNode* args = crc->getArgs()) {
             ConstListIterator li(args);
             while (li.next()) {
-                collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found);
+                collectLocalsFromExpr(li.getValue(), ast_locals, unknown_node_found, ref_created);
             }
         }
         return;
@@ -899,7 +900,7 @@ static void collectLocalsFromExpr(const QoreValue& expr,
     // Object method reference: \obj.method() — recurse into the object expression
     if (ntype == NT_OBJMETHREF) {
         if (auto* omr = dynamic_cast<const ParseObjectMethodReferenceNode*>(node)) {
-            collectLocalsFromExpr(omr->getExp(), ast_locals, unknown_node_found);
+            collectLocalsFromExpr(omr->getExp(), ast_locals, unknown_node_found, ref_created);
         }
         // ParseSelfMethodReferenceNode, ParseScopedSelfMethodReferenceNode,
         // StaticMethodReferenceNode have no local variable references (self-based)
@@ -909,7 +910,10 @@ static void collectLocalsFromExpr(const QoreValue& expr,
     // Parse reference: \var — recurse into the lvalue expression
     if (ntype == NT_PARSEREFERENCE) {
         auto* pref = reinterpret_cast<const ParseReferenceNode*>(node);
-        collectLocalsFromExpr(pref->getLVExp(), ast_locals, unknown_node_found);
+        if (ref_created) {
+            *ref_created = true;
+        }
+        collectLocalsFromExpr(pref->getLVExp(), ast_locals, unknown_node_found, ref_created);
         return;
     }
 
@@ -927,7 +931,7 @@ static void collectLocalsFromExpr(const QoreValue& expr,
     if (ntype == NT_PARSE_LIST) {
         auto* plist = expr.get<const QoreParseListNode>();
         for (size_t i = 0; i < plist->size(); ++i) {
-            collectLocalsFromExpr(plist->get(i), ast_locals, unknown_node_found);
+            collectLocalsFromExpr(plist->get(i), ast_locals, unknown_node_found, ref_created);
         }
         return;
     }
@@ -1558,11 +1562,101 @@ bool QoreIRFunction::isDirectParamsRuntimeSafe() const {
     return true;
 }
 
+// documented in QoreIR.h
+bool qore_ir_local_may_hold_reference(const LocalVar* lv) {
+    if (!lv) {
+        return false;
+    }
+    const QoreTypeInfo* ti = lv->getTypeInfo();
+    return !QoreTypeInfo::hasType(ti) || QoreTypeInfo::isReference(ti);
+}
+
+// documented in QoreIR.h
+bool qore_ir_local_is_written(const QoreIRFunction& ir_func, const LocalVar* lv) {
+    if (!lv) {
+        return false;
+    }
+    const void* key = reinterpret_cast<const void*>(lv);
+    return ir_func.stored_locals.count(key) || ir_func.weak_store_locals.count(key)
+        || ir_func.lvalue_path_locals.count(key) || ir_func.cow_container_locals.count(key);
+}
+
+// documented in QoreIR.h
+bool QoreIRFunction::detectCreatesReference() const {
+    std::unordered_set<const void*> ignored_locals;
+    bool unknown_node_found = false;
+    bool ref_created = false;
+    for (const auto& block : blocks) {
+        for (const auto& inst : block->instructions) {
+            if (ref_created || unknown_node_found) {
+                return true;
+            }
+            // reference-creating opcodes, plus opcodes whose AST bodies are walked by helpers
+            // that cannot report reference creation
+            if (inst->opcode == QoreIROpcode::CreateParseRef
+                    || inst->opcode == QoreIROpcode::RefForeachInit
+                    || inst->opcode == QoreIROpcode::Find
+                    || inst->opcode == QoreIROpcode::OnBlockExit
+                    || isDelegateToASTStatement(inst->opcode)) {
+                return true;
+            }
+            if (isLValueOp(inst->opcode)) {
+                auto* lvinst = static_cast<const QoreIRLValueInstruction*>(inst.get());
+                collectLocalsFromExpr(lvinst->lvalue, ignored_locals, unknown_node_found,
+                        &ref_created);
+            }
+            if (const QoreValue* expr = getInstructionExpr(inst.get())) {
+                collectLocalsFromExpr(*expr, ignored_locals, unknown_node_found, &ref_created);
+            }
+            if (inst->opcode == QoreIROpcode::Context) {
+                auto* ctx_inst = static_cast<const QoreIRContextInstruction*>(inst.get());
+                collectLocalsFromExpr(ctx_inst->exp, ignored_locals, unknown_node_found,
+                        &ref_created);
+                collectLocalsFromExpr(ctx_inst->where_exp, ignored_locals, unknown_node_found,
+                        &ref_created);
+                collectLocalsFromExpr(ctx_inst->sort_exp, ignored_locals, unknown_node_found,
+                        &ref_created);
+            }
+        }
+    }
+    return ref_created || unknown_node_found;
+}
+
+// documented in QoreIR.h
+std::unordered_set<const void*> QoreIRFunction::buildBodyLocalKeys() const {
+    std::unordered_set<const void*> keys;
+    keys.reserve(all_body_locals.size());
+    for (const LocalVar* lv : all_body_locals) {
+        keys.insert(reinterpret_cast<const void*>(lv));
+    }
+    return keys;
+}
+
+// documented in QoreIR.h
+bool QoreIRFunction::localMayHoldReference(const LocalVar* lv, bool creates_reference,
+        const std::unordered_set<const void*>& body_local_keys) const {
+    if (!qore_ir_local_may_hold_reference(lv)) {
+        return false;
+    }
+    if (QoreTypeInfo::isReference(lv->getTypeInfo()) || creates_reference) {
+        return true;
+    }
+    // An untyped local can still receive a reference from outside this function if it is a
+    // parameter, because the caller decides what it is given.  A top-level (program-wide)
+    // local is never a parameter, and neither is a body local; both can only ever hold a
+    // reference created in this function, which is already ruled out above.
+    if (lv->isTopLevel()) {
+        return false;
+    }
+    return !body_local_keys.count(reinterpret_cast<const void*>(lv));
+}
+
 void QoreIRFunction::computeIROnlyLocals() {
     ir_only_locals.clear();
     cow_container_locals.clear();
     lvalue_path_locals.clear();
     weak_store_locals.clear();
+    stored_locals.clear();
     ast_referenced_locals.clear();
     non_structured_ast_referenced_locals.clear();
     has_opaque_ast_local_access = false;
@@ -1580,10 +1674,20 @@ void QoreIRFunction::computeIROnlyLocals() {
     // If the AST walker encounters an unknown node type, we conservatively
     // mark ALL locals as AST-visible.
     bool unknown_node_found = false;
+
+    // Set if the function can create a reference (\var) anywhere.  Untyped ("auto") locals can
+    // only ever hold a reference if one is created in the same function: reading any variable
+    // that holds a reference dereferences it, and references arriving in untyped parameters
+    // land in parameter locals, which are not body locals.  When no reference is created here,
+    // untyped body locals cannot alias anything and stay eligible for IR-only classification.
+    bool reference_created = false;
     auto collect_context_exprs = [&](const QoreIRContextInstruction* ctx_inst) {
-        collectLocalsFromExpr(ctx_inst->exp, ast_referenced_locals, unknown_node_found);
-        collectLocalsFromExpr(ctx_inst->where_exp, ast_referenced_locals, unknown_node_found);
-        collectLocalsFromExpr(ctx_inst->sort_exp, ast_referenced_locals, unknown_node_found);
+        collectLocalsFromExpr(ctx_inst->exp, ast_referenced_locals, unknown_node_found,
+                &reference_created);
+        collectLocalsFromExpr(ctx_inst->where_exp, ast_referenced_locals, unknown_node_found,
+                &reference_created);
+        collectLocalsFromExpr(ctx_inst->sort_exp, ast_referenced_locals, unknown_node_found,
+                &reference_created);
     };
 
     for (const auto& block : blocks) {
@@ -1595,6 +1699,9 @@ void QoreIRFunction::computeIROnlyLocals() {
                 auto* linst = static_cast<const QoreIRLocalInstruction*>(inst.get());
                 if (linst->local) {
                     all_locals.insert(reinterpret_cast<const void*>(linst->local));
+                    if (inst->opcode == QoreIROpcode::StoreLocal) {
+                        stored_locals.insert(reinterpret_cast<const void*>(linst->local));
+                    }
                     // A weak (":=") store assigns through LValueHelper, which
                     // requires the variable on the runtime local stack
                     if (inst->opcode == QoreIROpcode::StoreLocal && linst->weak) {
@@ -1683,13 +1790,23 @@ void QoreIRFunction::computeIROnlyLocals() {
             if (isLValueOp(inst->opcode)) {
                 auto* lvinst = static_cast<const QoreIRLValueInstruction*>(inst.get());
                 collectLocalsFromExpr(lvinst->lvalue, ast_referenced_locals,
-                        unknown_node_found);
+                        unknown_node_found, &reference_created);
             }
 
             // Walk the expr AST tree for any instruction type that stores one
             if (const QoreValue* expr = getInstructionExpr(inst.get())) {
                 collectLocalsFromExpr(*expr, ast_referenced_locals,
-                        unknown_node_found);
+                        unknown_node_found, &reference_created);
+            }
+
+            // Reference-creating instructions, plus instructions whose AST bodies are walked by
+            // helpers that do not report reference creation: all of these are treated as
+            // creating a reference so untyped locals in the function stay AST-visible.
+            if (inst->opcode == QoreIROpcode::CreateParseRef
+                    || inst->opcode == QoreIROpcode::RefForeachInit
+                    || inst->opcode == QoreIROpcode::Find
+                    || inst->opcode == QoreIROpcode::OnBlockExit) {
+                reference_created = true;
             }
 
             if (inst->opcode == QoreIROpcode::Find) {
@@ -1708,6 +1825,7 @@ void QoreIRFunction::computeIROnlyLocals() {
 
             if (isDelegateToASTStatement(inst->opcode)) {
                 has_delegate_to_ast = true;
+                reference_created = true;
             }
 
             // OnBlockExit: walk handler body AST to find referenced locals.
@@ -1756,10 +1874,18 @@ void QoreIRFunction::computeIROnlyLocals() {
     printd(5, "computeIROnlyLocals '%s': all_locals=%d ast_referenced=%d\n",
         name.c_str(), (int)all_locals.size(), (int)ast_referenced_locals.size());
 
+    // Body locals are the only locals eligible for the untyped-local narrowing below;
+    // parameters (and self/argv) receive their value from the caller and stay conservative.
+    std::unordered_set<const void*> body_local_keys;
+    body_local_keys.reserve(all_body_locals.size());
+    for (const LocalVar* body_lv : all_body_locals) {
+        body_local_keys.insert(reinterpret_cast<const void*>(body_lv));
+    }
+
     // A local is IR-only if:
     // 1. It appears in LoadLocal/StoreLocal/UninstantiateLocal (the IR access path)
     // 2. It is NOT referenced by any AST expression tree (Call/Invoke/Lvalue exprs)
-    // 3. It is NOT a reference type (which can alias other variables)
+    // 3. It cannot hold a reference (which can alias other variables)
     for (const void* key : all_locals) {
         const LocalVar* lv = reinterpret_cast<const LocalVar*>(key);
         if (lv && lv->isSelf()) {
@@ -1800,9 +1926,18 @@ void QoreIRFunction::computeIROnlyLocals() {
             printd(5, "  local '%s' (%p): top-level (non-IR-only)\n", lv->getName(), key);
             continue;
         }
-        // Reference-type locals can alias other variables — must stay AST-visible
-        if (QoreTypeInfo::isReference(lv->getTypeInfo())) {
-            printd(5, "  local '%s' (%p): reference type (non-IR-only)\n", lv->getName(), key);
+        // Locals that can hold a reference alias other variables, so a write to one has to go
+        // through the runtime local stack to reach the aliased variable — that requires the
+        // local to stay AST-visible.  A declared reference always needs this.  An untyped
+        // ("auto") local needs it only when a reference can actually reach it AND it is
+        // written: a body local can only receive a reference from a \var created in this same
+        // function (reading a variable that holds one dereferences it), a parameter receives
+        // whatever the caller passes, and a read of either yields the dereferenced value even
+        // on the private path.
+        if (QoreTypeInfo::isReference(lv->getTypeInfo())
+                || (localMayHoldReference(lv, reference_created, body_local_keys)
+                    && qore_ir_local_is_written(*this, lv))) {
+            printd(5, "  local '%s' (%p): may hold a reference (non-IR-only)\n", lv->getName(), key);
             continue;
         }
         // Block-scoped object-typed locals need runtime stack sync for timely
@@ -1825,6 +1960,21 @@ void QoreIRFunction::computeIROnlyLocals() {
     for (LocalVar* lv : all_body_locals) {
         if (!ir_only_locals.count(reinterpret_cast<const void*>(lv))) {
             ast_visible_body_locals.push_back(lv);
+        }
+    }
+
+    // Re-embed is_ref now that the body-local inventory is known.  computeSlotIdsAndEmbed()
+    // can run before all_body_locals is populated, and an untyped body local is then
+    // indistinguishable from a parameter, so it has to be marked reference-capable there —
+    // which would disable every optimization keyed off is_ref for ordinary "auto" locals.
+    for (const auto& block : blocks) {
+        for (const auto& inst : block->instructions) {
+            if (auto* local_inst = dynamic_cast<QoreIRLocalInstruction*>(inst.get())) {
+                if (local_inst->local) {
+                    local_inst->is_ref = localMayHoldReference(local_inst->local,
+                        reference_created, body_local_keys);
+                }
+            }
         }
     }
 
@@ -2121,8 +2271,13 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
         }
     }
 
-    // Pass 2: embed pre-computed slot_id and is_closure in instructions
-    // to eliminate hash map lookups on the hot path in the interpreter
+    // Pass 2: embed pre-computed slot_id, is_closure and is_ref in instructions
+    // to eliminate hash map lookups on the hot path in the interpreter.
+    // is_ref marks a local that can actually hold a reference, so that loads and stores use
+    // the reference-aware paths; it is deliberately narrow, because marking every untyped
+    // local reference-capable would disable the optimizations that key off it.
+    const bool creates_reference = detectCreatesReference();
+    const std::unordered_set<const void*> body_local_keys = buildBodyLocalKeys();
     for (const auto& block : blocks) {
         for (const auto& inst : block->instructions) {
             if (auto* local_inst = dynamic_cast<QoreIRLocalInstruction*>(inst.get())) {
@@ -2132,7 +2287,8 @@ void QoreIRFunction::computeSlotIdsAndEmbed() {
                         local_inst->slot_id = it->second;
                     }
                     local_inst->is_closure = local_inst->local->closureUse();
-                    local_inst->is_ref = QoreTypeInfo::isReference(local_inst->local->getTypeInfo());
+                    local_inst->is_ref = localMayHoldReference(local_inst->local,
+                        creates_reference, body_local_keys);
                 }
             } else if (inst->opcode == QoreIROpcode::HashKeyStore) {
                 auto* hks = static_cast<QoreIRHashKeyStoreInstruction*>(inst.get());

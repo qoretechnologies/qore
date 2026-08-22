@@ -4596,9 +4596,12 @@ static bool isConstKeyHashSubscript(const QoreValue& expr,
     if (vtype != VT_LOCAL || (lv && lv->closureUse())) {
         return false;
     }
-    // Reference-type variables must use the lvalue path to write through the reference
-    // binding to the original variable.  The HashKeyStore optimization bypasses references.
-    if (lv && QoreTypeInfo::isReference(lv->getTypeInfo())) {
+    // Variables that can hold a reference must use the lvalue path so the store writes
+    // through the reference binding to the original variable.  The HashKeyStore optimization
+    // bypasses references, and its copy-on-write branch assumes the container local's own
+    // slot owns the container, which is not true when the local holds a reference.  An
+    // untyped ("auto") local can hold one just as a declared reference<> can.
+    if (qore_ir_local_may_hold_reference(lv)) {
         return false;
     }
     // Object-typed containers (e.g., `self`) require the lvalue path for correct
@@ -4639,7 +4642,8 @@ static bool isDynamicKeyHashSubscript(const QoreValue& expr,
     if (vtype != VT_LOCAL || (lv && lv->closureUse())) {
         return false;
     }
-    if (lv && QoreTypeInfo::isReference(lv->getTypeInfo())) {
+    // see isConstKeyHashSubscript(): an untyped local can hold a reference too
+    if (qore_ir_local_may_hold_reference(lv)) {
         return false;
     }
     if (lv && QoreTypeInfo::getUniqueReturnClass(lv->getTypeInfo()) != nullptr) {
@@ -4912,10 +4916,13 @@ static bool isConstIndexListSubscript(const QoreValue& expr,
     // Verify it's a local, local_ts, or closure variable
     qore_var_t vtype = vr->getType();
     if (vtype != VT_LOCAL && vtype != VT_LOCAL_TS && vtype != VT_CLOSURE) return false;
-    // Reference-type variables must use the lvalue path to write through the reference
-    // binding to the original variable.  The ListIndexStore optimization bypasses references.
-    if (vr->ref.id && QoreTypeInfo::isReference(
-            reinterpret_cast<const LocalVar*>(vr->ref.id)->getTypeInfo())) {
+    // Variables that can hold a reference must use the lvalue path to write through the
+    // reference binding to the original variable; the ListIndexStore optimization bypasses
+    // references.  An untyped ("auto") local can hold one just as a declared reference<> can.
+    // vtype is one of VT_LOCAL/VT_LOCAL_TS/VT_CLOSURE here, all of which use ref.id
+    if (vr->ref.id
+            && qore_ir_local_may_hold_reference(
+                reinterpret_cast<const LocalVar*>(vr->ref.id))) {
         return false;
     }
     if (vr->ref.id) {

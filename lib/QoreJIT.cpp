@@ -651,6 +651,14 @@ bool qore_ir_fast_entry_param_is_private(
             || QoreTypeInfo::isReference(local->getTypeInfo())) {
         return false;
     }
+    // An untyped ("auto") parameter can hold a reference too — the caller decides what it
+    // receives — and a fast entry keeps the value off the runtime local stack, so a write to
+    // it would land on the private copy instead of the caller's variable.  Reads are safe
+    // either way (the private slot holds the dereferenced value), so only a written one has
+    // to give up its private slot.
+    if (qore_ir_local_may_hold_reference(local) && qore_ir_local_is_written(ir_func, local)) {
+        return false;
+    }
     const void* key = reinterpret_cast<const void*>(local);
     if (ir_func.ir_only_locals.count(key)) {
         return true;

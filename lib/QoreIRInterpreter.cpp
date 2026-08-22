@@ -10295,8 +10295,10 @@ load_local_done:
                             && local_inst->slot_id < local_init_slots.size()) {
                         local_init_slots[local_inst->slot_id] = UINT32_MAX;
                     }
-                    if (local_inst->local
-                            && QoreTypeInfo::isReference(local_inst->local->getTypeInfo())) {
+                    // Only flush when the local really did hold a reference, so the write
+                    // landed on another variable: isRef() is a runtime check, unlike the
+                    // declared type, and untyped locals must not pay for a flush per store.
+                    if (local_inst->local && local_inst->local->isRef()) {
                         cleanupLocalCaches();
                     }
                     if (xsink && *xsink) {
@@ -10393,11 +10395,12 @@ load_local_done:
                     assignLocalVarValue(local_inst->local, val, xsink);
                 }
 
-                // If the variable holds a reference, assignLocalVarValue wrote through
-                // the reference to another variable.  Clear all caches to prevent
-                // stale reads from that target variable and the slot cache.
-                if (local_inst->local
-                        && QoreTypeInfo::isReference(local_inst->local->getTypeInfo())) {
+                // If the variable holds a reference, assignLocalVarValue wrote through the
+                // reference to another variable.  Clear all caches to prevent stale reads
+                // from that target variable and the slot cache.  isRef() is a runtime check:
+                // an untyped local can hold a reference, so the declared type cannot decide
+                // this, but flushing on every untyped store would be far too expensive.
+                if (local_inst->local && local_inst->local->isRef()) {
                     cleanupLocalCaches();
                 }
                 // Track the operand slot for cleanup when this local is uninstantiated

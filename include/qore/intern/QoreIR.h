@@ -80,6 +80,28 @@ class QoreEnumMember;
 class TypedHashDecl;
 class AbstractQoreNode;
 
+//! Returns true if \a lv can hold a reference at runtime
+/** A declared reference obviously can, but so can an untyped ("auto") local:
+    \c "auto r = \\v" stores a reference in it, and a reference passed to an \c "auto"
+    parameter arrives the same way, so the declared type rules out neither.  A *write* to such
+    a local has to go through LocalVar::getLValue() so that it follows the reference to the
+    aliased variable, which means the local cannot live only in a private,
+    runtime-stack-free slot, and the value caches must be invalidated afterwards because the
+    write landed on another variable.  Reads need no such care: a reference bound to a
+    non-reference local is dereferenced when the private slot is loaded.
+
+    Untyped locals are common, so this is deliberately the widest test; callers narrow it with
+    qore_ir_local_is_written() and, for body locals, with the reference-creation check in
+    QoreIRFunction::computeIROnlyLocals().
+*/
+DLLLOCAL bool qore_ir_local_may_hold_reference(const LocalVar* lv);
+
+//! Returns true if \a lv is written anywhere in \a ir_func
+/** Combines the StoreLocal inventory with the lvalue-path, COW-container and weak-store
+    inventories, which together cover every way IR can assign a local.
+*/
+DLLLOCAL bool qore_ir_local_is_written(const QoreIRFunction& ir_func, const LocalVar* lv);
+
 DLLLOCAL bool qore_plugin_get_value_profile_info(const AbstractQoreNode* node, std::string& module_name,
     uint16_t& local_type_id, const QoreTypeInfo*& type_info);
 
@@ -3143,6 +3165,13 @@ public:
     // there, so an IR-only weak store target would abort execution.
     std::unordered_set<const void*> weak_store_locals;
 
+    // Locals assigned by a StoreLocal instruction anywhere in the IR.  Together with the
+    // lvalue/COW/weak inventories above this is the complete write set: every other mutation
+    // form reaches a local through the runtime local stack, which already keeps it
+    // AST-visible.  Needed because only a *write* to a reference-capable local is unsafe on
+    // the private (runtime-stack-free) path — a read yields the dereferenced value either way.
+    std::unordered_set<const void*> stored_locals;
+
     // Locals referenced by AST expression subtrees retained in otherwise
     // lowered IR. This metadata lets native fast-entry eligibility distinguish
     // an unused synthetic method self local from one that still requires TLS.
@@ -3196,6 +3225,28 @@ public:
     //! Analyze all instructions to classify locals as IR-only vs AST-visible.
     //! Must be called after IR lowering completes but before LLVM lowering/execution.
     void computeIROnlyLocals();
+
+    //! Returns true if this function can create a reference (\c "\\var") anywhere
+    /** Conservative: also true when the IR contains a construct whose AST body this analysis
+        cannot see through.  An untyped local of a function that creates no reference can never
+        hold one, because reading a variable that holds a reference dereferences it.  Recomputed
+        rather than cached so that it does not depend on the order in which
+        computeSlotIdsAndEmbed() and computeIROnlyLocals() run.
+    */
+    bool detectCreatesReference() const;
+
+    //! Returns the keys of all_body_locals as a set for O(1) membership tests
+    std::unordered_set<const void*> buildBodyLocalKeys() const;
+
+    //! Returns true if \a lv can actually hold a reference in this function
+    /** Narrows qore_ir_local_may_hold_reference() with detectCreatesReference(): a *body*
+        local only ever receives a reference created in the same function, while a parameter
+        receives whatever the caller passes.  \a creates_reference and \a body_local_keys are
+        the cached results of detectCreatesReference() and buildBodyLocalKeys() so that a
+        caller in a loop computes each only once.
+    */
+    bool localMayHoldReference(const LocalVar* lv, bool creates_reference,
+            const std::unordered_set<const void*>& body_local_keys) const;
 
     //! Return the implicit argv/self contexts required by this function.
     //! Opaque AST callbacks and closure captures are handled conservatively.
