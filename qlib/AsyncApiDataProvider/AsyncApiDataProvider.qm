@@ -40,7 +40,7 @@
 %requires json
 
 module AsyncApiDataProvider {
-    version = "1.0";
+    version = "1.1";
     desc = "user module providing a data provider API for AsyncAPI schemas";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -139,6 +139,13 @@ AsyncApiDataProvider provider({
     - @ref AsyncApiDataProvider::AsyncApiOperationDataProvider "AsyncApiOperationDataProvider" - Operation provider
 
     @section asyncapidataprovider_relnotes Release Notes
+
+    @subsection asyncapidataprovider_v1_1 AsyncApiDataProvider v1.1
+    - every API-management endpoint now reports a \c display_name naming the action and the channel address
+      ("send rma"), which is the event-API counterpart of an HTTP method and path; an operation ID names the
+      operation but not the address it acts on, and that address is the topic on the MQTT and Kafka transports.
+      Operations that would share a label carry their operation ID as well, so a label always identifies exactly
+      one endpoint
 
     @subsection asyncapidataprovider_v1_0 AsyncApiDataProvider v1.0
     - initial release of the module

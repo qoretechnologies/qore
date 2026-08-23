@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AsyncApiDataProvider module definition
 
-/** AsyncApiDataProvider.qc Copyright 2025 Qore Technologies, s.r.o.
+/** AsyncApiDataProvider.qc Copyright 2025 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -233,7 +233,54 @@ public class AsyncApiDataProvider inherits AsyncApiDataProviderCommon {
                 "desc": AsyncApiOperationDataProvider::getOperationDesc(operation_id, op, channel_name),
             };
         }
+        return addApiEndpointDisplayNames(rv);
+    }
+
+    #! Labels each endpoint with what it does and where, keeping every label unique
+    /** An operation ID names the operation but not the address it acts on, and for an event API the address is
+        the first thing a person looks for - it is the topic on the MQTT and Kafka transports.  The label is
+        therefore the action and the channel address ("send rma"), which is the event-API counterpart of an HTTP
+        method and path.
+
+        A document may declare several operations with the same action on the same channel, and a label that
+        cannot tell two endpoints apart is worse than the ID it replaced, so a shared label falls back to
+        carrying the operation ID as well.  Uniqueness is decided over the whole list rather than per operation,
+        which is why this runs as a second pass.
+
+        @param endpoints the endpoints to label
+
+        @return the endpoints, each with a \c display_name
+    */
+    private static list<hash<auto>> addApiEndpointDisplayNames(list<hash<auto>> endpoints) {
+        hash<string, int> label_counts();
+        foreach hash<auto> endpoint in (endpoints) {
+            if (*string label = AsyncApiDataProvider::getApiEndpointLabel(endpoint)) {
+                ++label_counts{label};
+            }
+        }
+
+        list<hash<auto>> rv = ();
+        foreach hash<auto> endpoint in (endpoints) {
+            *string label = AsyncApiDataProvider::getApiEndpointLabel(endpoint);
+            if (label && label_counts{label} > 1) {
+                label = sprintf("%s (%s)", label, endpoint.endpoint_id);
+            }
+            rv += endpoint + {"display_name": label ?? endpoint.endpoint_id};
+        }
         return rv;
+    }
+
+    #! Returns the action-and-address label for one endpoint, or nothing when it has no address
+    /** @param endpoint the endpoint to label
+
+        @return the label, or @ref nothing "NOTHING" when the endpoint declares no action or no channel address,
+        in which case the caller falls back to the operation ID
+    */
+    private static *string getApiEndpointLabel(hash<auto> endpoint) {
+        if (!endpoint.action.val() || !endpoint.channel_address.val()) {
+            return;
+        }
+        return sprintf("%s %s", endpoint.action, endpoint.channel_address);
     }
 
     #! Returns data provider static info
