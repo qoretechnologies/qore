@@ -26,6 +26,8 @@ class AOTCollectionNothingTest inherits QUnit::Test {
             \testAOTQmodDirectIndexCollectionNothing());
         addTestCase("AOT qmod constants can be NOTHING or NULL",
             \testAOTQmodFalseyConstants());
+        addTestCase("AOT qmod preinit leaves pending source statics untouched",
+            \testAOTQmodPendingSourceStaticIsolation());
 
         set_return_value(main());
     }
@@ -370,5 +372,43 @@ printf(\"%s\", AOTCollectionNothingMod::verifyConstants());
             "source module falsey constants");
         assertEq(expected, runModule(qmod_dir, script_path),
             "AOT qmod falsey constants");
+    }
+
+    testAOTQmodPendingSourceStaticIsolation() {
+        TmpDir tmp("qore-aot-pending-source-static-");
+        string tmp_dir = tmp.path;
+        string src_dir = tmp_dir + "/src";
+        string qmod_dir = tmp_dir + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        string qm_path = src_dir + "/AOTCollectionNothingMod.qm";
+        File qm();
+        qm.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+        qm.write(moduleCode());
+        qm.close();
+
+        string qmod_path = qmod_dir + "/AOTCollectionNothingMod.qmod";
+        string compile_out = backquote(sprintf(
+            "QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), "compiled pending source static module: " + compile_out);
+
+        string script_path = tmp_dir + "/run.qr";
+        File script();
+        script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        script.write("%modern
+class AOTPendingSourceStatic {
+    public {
+        static hash Values;
+    }
+}
+%requires AOTCollectionNothingMod
+printf(\"%d\\n\", AOTPendingSourceStatic::Values.size());
+");
+        script.close();
+
+        assertEq("0\n", runModule(qmod_dir, script_path),
+            "AOT module initialization does not preinitialize pending source static variables");
     }
 }

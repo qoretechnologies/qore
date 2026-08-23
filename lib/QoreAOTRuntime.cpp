@@ -13732,12 +13732,15 @@ static qore_ns_private* findNamespaceByPath(qore_ns_private* root, const std::st
     return current;
 }
 
-//! Walk every class in the namespace tree and force evalInit() on every static var.
+//! Walk every class in the namespace tree and force evalInit() on eligible AOT static vars.
 /** Mirrors what source-mode parseCommitRuntimeInit does. AOT-deserialized
     QoreVarInfo entries never carry an `exp` (the init expression is compiled
     separately as a STATIC_VAR init function). For vars that have a STATIC_VAR
     init function, the init function already ran (pass 0) and set eval_init=true.
     For vars with no init expression at all, eval_init is still false here.
+
+    Source entries can coexist in the target Program while an AOT dependency is
+    loaded. They are ignored until their normal parse initialization completes.
 
     If we leave eval_init=false, the FIRST user-script read of the static var
     triggers `getReferencedValue` → `evalInit` → `init()` → `val.set(typeInfo)`
@@ -13764,7 +13767,7 @@ static void preInitStaticVarsInNamespace(qore_ns_private* ns, ExceptionSink* xsi
             continue;
         }
         for (auto& vi : qcp->vars.member_list) {
-            if (!vi.second || vi.second->eval_init) {
+            if (!vi.second || !vi.second->isParseInitDone() || vi.second->eval_init) {
                 continue;
             }
             if (vi.second->exp) {

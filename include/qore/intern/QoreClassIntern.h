@@ -1031,6 +1031,11 @@ public:
         init = true;
     }
 
+    //! returns true if the member has completed parse initialization
+    DLLLOCAL bool isParseInitDone() const {
+        return init;
+    }
+
 protected:
     DLLLOCAL QoreMemberInfoBaseAccess(const QoreMemberInfoBaseAccess& old, ClassAccess n_access)
             : QoreMemberInfoBase(old), access(old.access >= n_access ? old.access : n_access), init(old.init) {
