@@ -1,0 +1,540 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file ParseOptions.qm Qore user module describing %Qore's parse options
+
+/*  ParseOptions.qm Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+# minimum Qore version
+%requires qore >= 3.0
+
+%modern
+
+%requires i18n
+
+module ParseOptions {
+    version = "1.0";
+    desc    = "user module describing Qore's parse options for user interfaces";
+    author  = "David Nichols <david@qore.org>";
+    url     = "http://qore.org";
+    license = "MIT";
+}
+
+/** @mainpage ParseOptions Module
+
+    @tableofcontents
+
+    @section parseoptionsintro ParseOptions Module Introduction
+
+    The %ParseOptions module describes %Qore's parse options: for each one, a display name and a
+    description suitable for presenting to a person choosing parse options in a user interface.
+
+    Applications that let a user configure parse options -- an IDE, a deployment tool, a
+    configuration front end -- otherwise each carry their own copy of the list and their own
+    wording for it, and every copy drifts from %Qore as options are added. This module is the one
+    place that description lives, next to the implementation it describes.
+
+    The list itself is never restated here: the option names and codes come from
+    @ref Qore::ParseOptionStringMap, the parse directive names from
+    @ref Qore::ParseOptionCmdCodeMap, and the functional domains from @ref Qore::DomainCodeMap, all
+    of which the %Qore library generates from its own tables. Only the human-facing text is added,
+    and the module's test asserts that every parse option the library declares has exactly one
+    entry, so an option cannot be added to %Qore without being described here.
+
+    @section parseoptionsusage Usage
+
+    @code{.py}
+%requires ParseOptions
+
+# every parse option, sorted by constant name
+list<hash<ParseOptionInfo>> l = get_parse_option_info();
+
+# one option
+hash<ParseOptionInfo> info = get_parse_option_info_map(){"PO_REQUIRE_TYPES"};
+printf("%s: %s\n", info.display_name, info.desc);
+    @endcode
+
+    @section parseoptionsi18n Localization
+
+    Both @ref ParseOptions::ParseOptionInfo::display_name and
+    @ref ParseOptions::ParseOptionInfo::desc are localized when a
+    locale is given:
+
+    @code{.py}
+list<hash<ParseOptionInfo>> l = get_parse_option_info("de-DE");
+    @endcode
+
+    Translations are looked up in the @ref ParseOptions::CatalogDomain catalog domain, under the
+    message ids @c parse-option.PO_NAME.display_name and @c parse-option.PO_NAME.desc, where
+    @c PO_NAME is the parse-option constant name, against the English source text as it appears in
+    this module. A locale with no catalog, or a message with no translation, falls back to the
+    English source, so a caller always receives usable text.
+
+    Everything else in @ref ParseOptionInfo is an identity, not presentation: the constant name, the
+    numeric code, the parse directive and the functional domain are protocol and are never
+    translated.
+
+    @section parseoptionsrelnotes Release Notes
+
+    @subsection parseoptions_1_0 ParseOptions v1.0
+    - initial release
+*/
+
+#! the ParseOptions namespace contains all the definitions in the ParseOptions module
+public namespace ParseOptions {
+#! Describes one %Qore parse option
+public hashdecl ParseOptionInfo {
+    #! The parse option constant name (ex: @c "PO_REQUIRE_TYPES")
+    /** This is the name used by @ref Qore::ParseOptionStringMap and is the stable identity of the
+        option; it is never localized.
+    */
+    string name;
+
+    #! The parse option's bitfield code
+    int code;
+
+    #! The parse directive and command-line name (ex: @c "require-types"), if the option has one
+    /** @ref nothing for options that can only be set programmatically, and for composite options
+        that the parse-directive table does not name.
+    */
+    *string directive;
+
+    #! A short display name for the option (ex: @c "Require Types")
+    /** Localized when a locale is given; English otherwise.
+    */
+    string display_name;
+
+    #! A description of what the option does
+    /** Localized when a locale is given; English otherwise.
+    */
+    string desc;
+
+    #! The functional domain the option restricts (ex: @c "NETWORK"), if any
+    /** @ref nothing for options that do not restrict a functional domain. Never localized: this is
+        the domain's protocol name, as used by @ref Qore::DomainStringMap.
+    */
+    *string domain;
+}
+
+#! English presentation text for one parse option
+hashdecl ParseOptionSourceText {
+    string display_name;
+    string desc;
+}
+
+#! The i18n catalog domain holding translations of the text in this module
+public const CatalogDomain = "qore.parse-options";
+
+#! English source text for every parse option, keyed by parse option constant name
+/** The list itself is never restated here -- it comes from @ref Qore::ParseOptionStringMap -- so a
+    parse option added to %Qore without an entry in this table is a test failure rather than a
+    silently undescribed option.
+
+    This is the source text every translation is made from, and the text served when a locale has
+    no catalog.
+*/
+const hash<string, hash<ParseOptionSourceText>> SourceText = {
+    "PO_ALLOW_BARE_REFS": <ParseOptionSourceText>{
+        "display_name": "Bare References",
+        "desc": "Requires bare references: the \"$\" character may not be used in variable names, method calls, or object member references. Set implicitly by %new-style.",
+    },
+    "PO_ALLOW_DEBUGGER": <ParseOptionSourceText>{
+        "display_name": "Allow Debugger",
+        "desc": "Allows debugging actions that could be insecure, such as reading the thread-local variable stack; required by the Breakpoint, DebugProgram, and ProgramControl classes.",
+    },
+    "PO_ALLOW_INJECTION": <ParseOptionSourceText>{
+        "display_name": "Allow Injection",
+        "desc": "Allows code and dependency injection into the Program container.",
+    },
+    "PO_ALLOW_REPARSE": <ParseOptionSourceText>{
+        "display_name": "Allow Reparse",
+        "desc": "Allows the Program container to be parsed more than once.",
+    },
+    "PO_ALLOW_RETURNS": <ParseOptionSourceText>{
+        "display_name": "Allow returns Keyword",
+        "desc": "Allows the deprecated \"returns\" keyword to be used in declarations.",
+    },
+    "PO_ALLOW_STATEMENT_NO_EFFECT": <ParseOptionSourceText>{
+        "display_name": "Allow Statements With No Effect",
+        "desc": "Accepts expression statements that can have no effect, which are otherwise a parse error.",
+    },
+    "PO_ALLOW_WEAK_REFERENCES": <ParseOptionSourceText>{
+        "display_name": "Allow Weak References",
+        "desc": "Allows the weak assignment operator (:=) to be used.",
+    },
+    "PO_ASSUME_LOCAL": <ParseOptionSourceText>{
+        "display_name": "Assume Local Variable Scope",
+        "desc": "Gives a variable local scope when it is first referenced without \"my\" or \"our\". Set implicitly by %new-style.",
+    },
+    "PO_BROKEN_CAST": <ParseOptionSourceText>{
+        "display_name": "Legacy Cast Handling",
+        "desc": "Restores the pre-0.9.4 cast<> behavior, where NOTHING was accepted without an error.",
+    },
+    "PO_BROKEN_ELLIPSES": <ParseOptionSourceText>{
+        "display_name": "Legacy Varargs Handling",
+        "desc": "Restores the pre-1.17 behavior of assuming varargs for every abstract method.",
+    },
+    "PO_BROKEN_LIST_PARSING": <ParseOptionSourceText>{
+        "display_name": "Legacy List Parsing",
+        "desc": "Restores the pre-0.8.12 list parsing, where certain lists without parentheses were rewritten to make top-level statements such as \"list l = 1, 2, 3;\" valid.",
+    },
+    "PO_BROKEN_LIST_RANGE": <ParseOptionSourceText>{
+        "display_name": "Legacy List Range",
+        "desc": "Restores the pre-2.0 behavior of the list range operator.",
+    },
+    "PO_BROKEN_LOGIC_PRECEDENCE": <ParseOptionSourceText>{
+        "display_name": "Legacy Logic Precedence",
+        "desc": "Restores the pre-0.8.12 precedence of the logical and bitwise operators.",
+    },
+    "PO_BROKEN_LOOP_STATEMENT": <ParseOptionSourceText>{
+        "display_name": "Legacy Loop Statement Handling",
+        "desc": "Accepts \"break\" and \"continue\" outside a loop, as before 0.8.13.",
+    },
+    "PO_BROKEN_NAMESPACE_RESOLUTION": <ParseOptionSourceText>{
+        "display_name": "Legacy Namespace Resolution",
+        "desc": "Restores the legacy namespace resolution behavior.",
+    },
+    "PO_BROKEN_RANGE": <ParseOptionSourceText>{
+        "display_name": "Legacy Range Handling",
+        "desc": "Includes the upper limit in range() and xrange(), as before 0.9.5.",
+    },
+    "PO_BROKEN_REFERENCES": <ParseOptionSourceText>{
+        "display_name": "Legacy Reference Handling",
+        "desc": "Does not enforce \"reference\" and \"*reference\" type restrictions, as before 0.8.13.",
+    },
+    "PO_BROKEN_SPRINTF": <ParseOptionSourceText>{
+        "display_name": "Legacy sprintf Handling",
+        "desc": "Restores the pre-0.9 sprintf() format handling, where a missing argument was treated differently from NOTHING.",
+    },
+    "PO_DEFAULT": <ParseOptionSourceText>{
+        "display_name": "Default",
+        "desc": "No parse options; the value a Program container starts with when none are given.",
+    },
+    "PO_IN_MODULE": <ParseOptionSourceText>{
+        "display_name": "In Module",
+        "desc": "Marks the Program container as the body of a module; set by the module loader rather than by user code.",
+    },
+    "PO_LOCKDOWN": <ParseOptionSourceText>{
+        "display_name": "Lockdown",
+        "desc": "The most restrictive sandbox: denies external access, I/O, process and thread control, and every other functional domain in a single option.",
+    },
+    "PO_LOCK_WARNINGS": <ParseOptionSourceText>{
+        "display_name": "Lock Warnings",
+        "desc": "Prevents the Program container's warning mask from being changed once it has been set.",
+    },
+    "PO_NEW_STYLE": <ParseOptionSourceText>{
+        "display_name": "New Style",
+        "desc": "The recommended pre-3.0 dialect: bare references plus local variable scope. Superseded by %modern, which adds type and argument strictness on top.",
+    },
+    "PO_NO_CHILD_PO_RESTRICTIONS": <ParseOptionSourceText>{
+        "display_name": "No Child Restrictions",
+        "desc": "Allows child Program containers to be created with fewer restrictions than the parent, which otherwise can never be relaxed.",
+    },
+    "PO_NO_DATABASE": <ParseOptionSourceText>{
+        "display_name": "No Database Access",
+        "desc": "Denies access to database drivers and connections.",
+    },
+    "PO_NO_DEBUGGING": <ParseOptionSourceText>{
+        "display_name": "No Debugging",
+        "desc": "Denies access to functionality that would expose the internals of the Program container.",
+    },
+    "PO_NO_EMBEDDED_LOGIC": <ParseOptionSourceText>{
+        "display_name": "No Embedded Logic",
+        "desc": "Denies the creation of new Program containers and the evaluation of embedded code.",
+    },
+    "PO_NO_ENUM": <ParseOptionSourceText>{
+        "display_name": "No Enum Definitions",
+        "desc": "Denies the definition of new enum types.",
+    },
+    "PO_NO_EXTERNAL_ACCESS": <ParseOptionSourceText>{
+        "display_name": "No External Access",
+        "desc": "Denies every form of access to resources outside the Program container: the filesystem, the network, databases, external processes, and more.",
+    },
+    "PO_NO_EXTERNAL_INFO": <ParseOptionSourceText>{
+        "display_name": "No External Information",
+        "desc": "Denies access to information about the host system and its environment.",
+    },
+    "PO_NO_EXTERNAL_PROCESS": <ParseOptionSourceText>{
+        "display_name": "No External Processes",
+        "desc": "Denies starting external processes and communicating with them.",
+    },
+    "PO_NO_FILESYSTEM": <ParseOptionSourceText>{
+        "display_name": "No Filesystem Access",
+        "desc": "Denies access to the filesystem.",
+    },
+    "PO_NO_GLOBAL_VARS": <ParseOptionSourceText>{
+        "display_name": "No Global Variables",
+        "desc": "Denies the definition of new global variables.",
+    },
+    "PO_NO_GUI": <ParseOptionSourceText>{
+        "display_name": "No GUI Access",
+        "desc": "Denies access to the graphical user interface of the host system.",
+    },
+    "PO_NO_INHERIT_GLOBAL_VARS": <ParseOptionSourceText>{
+        "display_name": "Do Not Inherit Global Variables",
+        "desc": "Creates the Program container without the parent's global variables.",
+    },
+    "PO_NO_INHERIT_PROGRAM_DATA": <ParseOptionSourceText>{
+        "display_name": "Do Not Inherit Program Data",
+        "desc": "Creates the Program container without any of the parent's program data.",
+    },
+    "PO_NO_INHERIT_SYSTEM_CLASSES": <ParseOptionSourceText>{
+        "display_name": "Do Not Inherit System Classes",
+        "desc": "Creates the Program container without Qore's builtin classes.",
+    },
+    "PO_NO_INHERIT_SYSTEM_CONSTANTS": <ParseOptionSourceText>{
+        "display_name": "Do Not Inherit System Constants",
+        "desc": "Creates the Program container without Qore's builtin constants.",
+    },
+    "PO_NO_INHERIT_SYSTEM_FUNC_VARIANTS": <ParseOptionSourceText>{
+        "display_name": "Do Not Inherit System Functions",
+        "desc": "Creates the Program container without Qore's builtin functions.",
+    },
+    "PO_NO_INHERIT_SYSTEM_HASHDECLS": <ParseOptionSourceText>{
+        "display_name": "Do Not Inherit System Hashdecls",
+        "desc": "Creates the Program container without Qore's builtin hashdecls.",
+    },
+    "PO_NO_INHERIT_USER_CLASSES": <ParseOptionSourceText>{
+        "display_name": "Do Not Inherit User Classes",
+        "desc": "Creates the Program container without the parent's user-defined classes.",
+    },
+    "PO_NO_INHERIT_USER_CONSTANTS": <ParseOptionSourceText>{
+        "display_name": "Do Not Inherit User Constants",
+        "desc": "Creates the Program container without the parent's user-defined constants.",
+    },
+    "PO_NO_INHERIT_USER_FUNC_VARIANTS": <ParseOptionSourceText>{
+        "display_name": "Do Not Inherit User Functions",
+        "desc": "Creates the Program container without the parent's user-defined functions.",
+    },
+    "PO_NO_INHERIT_USER_HASHDECLS": <ParseOptionSourceText>{
+        "display_name": "Do Not Inherit User Hashdecls",
+        "desc": "Creates the Program container without the parent's user-defined hashdecls.",
+    },
+    "PO_NO_IO": <ParseOptionSourceText>{
+        "display_name": "No I/O",
+        "desc": "Denies every form of I/O: the filesystem, the network, terminal I/O, and the GUI.",
+    },
+    "PO_NO_LOCALE_CONTROL": <ParseOptionSourceText>{
+        "display_name": "No Locale Control",
+        "desc": "Denies changing the locale, the default character encoding, and the default time zone.",
+    },
+    "PO_NO_MODULES": <ParseOptionSourceText>{
+        "display_name": "No Module Loading",
+        "desc": "Denies loading modules.",
+    },
+    "PO_NO_NETWORK": <ParseOptionSourceText>{
+        "display_name": "No Network Access",
+        "desc": "Denies access to the network.",
+    },
+    "PO_NO_PROCESS_CONTROL": <ParseOptionSourceText>{
+        "display_name": "No Process Control",
+        "desc": "Denies actions that affect the process as a whole, such as exiting or changing the working directory.",
+    },
+    "PO_NO_REFLECTION": <ParseOptionSourceText>{
+        "display_name": "No Reflection",
+        "desc": "Denies access to reflection, which would otherwise expose the definitions in the Program container.",
+    },
+    "PO_NO_SUBROUTINE_DEFS": <ParseOptionSourceText>{
+        "display_name": "No Function Definitions",
+        "desc": "Denies the definition of new functions.",
+    },
+    "PO_NO_TERMINAL_IO": <ParseOptionSourceText>{
+        "display_name": "No Terminal I/O",
+        "desc": "Denies reading from and writing to the terminal.",
+    },
+    "PO_NO_THREADS": <ParseOptionSourceText>{
+        "display_name": "No Threads",
+        "desc": "Denies every thread-related capability at once: starting threads, thread control, the threading classes, and thread information.",
+    },
+    "PO_NO_THREAD_CLASSES": <ParseOptionSourceText>{
+        "display_name": "No Threading Classes",
+        "desc": "Denies access to the threading classes, such as Mutex, Queue, and Condition.",
+    },
+    "PO_NO_THREAD_CONTROL": <ParseOptionSourceText>{
+        "display_name": "No Thread Control",
+        "desc": "Denies starting threads and other thread control operations.",
+    },
+    "PO_NO_THREAD_INFO": <ParseOptionSourceText>{
+        "display_name": "No Thread Information",
+        "desc": "Denies access to information about the threads running in the process.",
+    },
+    "PO_NO_TOP_LEVEL_STATEMENTS": <ParseOptionSourceText>{
+        "display_name": "No Top-Level Statements",
+        "desc": "Denies statements outside a function, method, or class.",
+    },
+    "PO_NO_TRANSIENT": <ParseOptionSourceText>{
+        "display_name": "No Transient Members",
+        "desc": "Denies the \"transient\" keyword in class member declarations.",
+    },
+    "PO_NO_UNCONTROLLED_APIS": <ParseOptionSourceText>{
+        "display_name": "No Uncontrolled APIs",
+        "desc": "Denies APIs that the sandboxing options cannot control, such as loading external C code.",
+    },
+    "PO_REQUIRE_OUR": <ParseOptionSourceText>{
+        "display_name": "Require our",
+        "desc": "Requires every global variable to be declared with \"our\" before it is used.",
+    },
+    "PO_REQUIRE_PROTOTYPES": <ParseOptionSourceText>{
+        "display_name": "Require Prototypes",
+        "desc": "Requires types to be declared for every function and method parameter and return value.",
+    },
+    "PO_REQUIRE_TYPES": <ParseOptionSourceText>{
+        "display_name": "Require Types",
+        "desc": "Requires types to be declared everywhere they can be: parameters, return values, variables, and members. Part of %modern.",
+    },
+    "PO_STRICT_ARGS": <ParseOptionSourceText>{
+        "display_name": "Strict Arguments",
+        "desc": "Rejects excess arguments in calls and turns argument type errors into exceptions instead of accepting them silently. Part of %modern.",
+    },
+    "PO_STRICT_BOOLEAN_EVAL": <ParseOptionSourceText>{
+        "display_name": "Strict Boolean Evaluation",
+        "desc": "Uses strict (pre-0.8.6) boolean evaluation, where only a true boolean value is true.",
+    },
+};
+
+#! Verifies that the source-text table has exactly one entry per parse option
+sub check_source_text() {
+    if (SourceText.size() != Qore::ParseOptionStringMap.size()) {
+        throw "PARSE-OPTION-ERROR", sprintf("ParseOptions::SourceText has %d entries, but Qore declares "
+            "%d parse options; every declared option must have exactly one source-text entry",
+            SourceText.size(), Qore::ParseOptionStringMap.size());
+    }
+}
+
+#! Loads the translation catalog for a locale, or nothing when there is none to load
+/** Discovery and catalog loading both touch the filesystem, and neither is worth failing a caller
+    over: a description is presentation, and English is always a usable answer. Catalog failures
+    therefore degrade to the English source; cancellation and program interruption still propagate.
+
+    @param locale the requested BCP-47 locale, or @ref nothing for English
+
+    @return the catalog for @a locale, or @ref nothing when the locale is English-or-unset, no
+    catalog is installed for it, or the catalog could not be read
+*/
+*I18n::MessageCatalog sub get_catalog(*string locale) {
+    if (!locale.val()) {
+        return;
+    }
+    try {
+        list<string> files = I18n::discover_catalog_files(CatalogDomain, locale);
+        if (!files) {
+            return;
+        }
+        # literal_messages: these are prose, not format strings; a brace in a description must stay
+        # a brace instead of being read as a placeholder
+        return new I18n::MessageCatalog(files, {"literal_messages": True});
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
+            rethrow;
+        }
+        return;
+    }
+}
+
+#! Returns the translation of one message, or the English source when there is none
+string sub localize(*I18n::MessageCatalog catalog, *string locale, string id, string source) {
+    if (!catalog || !locale.val()) {
+        return source;
+    }
+    try {
+        return catalog.tc(id, source, locale);
+    } catch (hash<ExceptionInfo> ex) {
+        if (ex.err == "THREAD-CANCELLED" || ex.err == "PROGRAM-INTERRUPTED") {
+            rethrow;
+        }
+        return source;
+    }
+}
+
+#! Assembles the description of one parse option
+/** The identities -- the code, the parse directive, the functional domain -- are read from the
+    %Qore library's own maps rather than restated, so they cannot disagree with the implementation.
+*/
+hash<ParseOptionInfo> sub make_info(string name, *I18n::MessageCatalog catalog, *string locale) {
+    int code = Qore::ParseOptionStringMap{name};
+    string key = code.toString();
+    *hash<ParseOptionSourceText> text = SourceText{name};
+    if (!text) {
+        throw "PARSE-OPTION-ERROR", sprintf("parse option %y has no description in the "
+            "ParseOptions module; every parse option Qore declares must have exactly one entry "
+            "in ParseOptions::SourceText", name);
+    }
+    return <ParseOptionInfo>{
+        "name": name,
+        "code": code,
+        "directive": Qore::ParseOptionCmdCodeMap{key},
+        "display_name": localize(catalog, locale,
+            sprintf("parse-option.%s.display_name", name), text.display_name),
+        "desc": localize(catalog, locale, sprintf("parse-option.%s.desc", name), text.desc),
+        "domain": Qore::DomainCodeMap{key},
+    };
+}
+
+#! Returns information about every parse option, sorted by constant name
+/** @param locale an optional BCP-47 locale; when present, @ref ParseOptionInfo::display_name and
+    @ref ParseOptionInfo::desc are localized against the @ref ParseOptions::CatalogDomain catalog,
+    falling back to English for any message with no translation
+
+    @return information about every parse option %Qore declares, sorted by constant name
+
+    @throw PARSE-OPTION-ERROR a parse option was added to %Qore without being described here; the
+    module's test fails on the same condition, so this cannot reach a released build
+
+    @throw THREAD-CANCELLED the calling thread was cancelled while loading or using a catalog
+
+    @throw PROGRAM-INTERRUPTED the calling program was interrupted while loading or using a catalog
+
+    @note the option list comes from the %Qore library itself, so it cannot fall out of step with
+    the implementation
+
+    @note a missing, unreadable, or incomplete catalog is not an error: the English source text is
+    served instead, so a caller always receives usable text
+*/
+public list<hash<ParseOptionInfo>> sub get_parse_option_info(*string locale) {
+    check_source_text();
+    *I18n::MessageCatalog catalog = get_catalog(locale);
+    list<hash<ParseOptionInfo>> rv = ();
+    foreach string name in (sort(keys Qore::ParseOptionStringMap)) {
+        rv += make_info(name, catalog, locale);
+    }
+    return rv;
+}
+
+#! Returns information about every parse option, keyed by constant name
+/** @param locale an optional BCP-47 locale; see @ref get_parse_option_info()
+
+    @return information about every parse option %Qore declares, keyed by constant name
+
+    @throw PARSE-OPTION-ERROR a parse option was added to %Qore without being described here
+
+    @throw THREAD-CANCELLED the calling thread was cancelled while loading or using a catalog
+
+    @throw PROGRAM-INTERRUPTED the calling program was interrupted while loading or using a catalog
+*/
+public hash<string, hash<ParseOptionInfo>> sub get_parse_option_info_map(*string locale) {
+    check_source_text();
+    *I18n::MessageCatalog catalog = get_catalog(locale);
+    hash<string, hash<ParseOptionInfo>> rv = {};
+    foreach string name in (sort(keys Qore::ParseOptionStringMap)) {
+        rv{name} = make_info(name, catalog, locale);
+    }
+    return rv;
+}
+}

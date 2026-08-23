@@ -2432,6 +2432,12 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - new module providing a REST client for the <a href="https://www.paddle.com">Paddle</a> API,
         authenticating with an API key against the production or sandbox environment
 
+    - @ref parseoptionsintro "ParseOptions" module
+      - new module describing %Qore's @ref parse_directives "parse options" for user interfaces that let a
+        person choose them: a display name and a description for each, localizable through the
+        @ref i18nintro "i18n" module.  The option list itself is read from the %Qore library's own tables
+        rather than restated, so a tool that presents parse options cannot drift from the implementation
+
     - @ref pdfcodataproviderintro "PdfCoDataProvider" module
       - new module providing a data provider API for <a href="https://pdf.co/">PDF.co</a> document processing
 

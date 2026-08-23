@@ -1,0 +1,250 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  ParseOptions.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/ParseOptions.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/QUnit.qm
+%requires i18n
+%requires json
+
+%exec-class ParseOptionsTest
+
+#! tests the ParseOptions module's description of Qore's parse options
+class ParseOptionsTest inherits QUnit::Test {
+    public {
+        #! the five options Qorus lets a user set on a service or a mapper
+        /** Not the module's contract -- it is a spot check that the options a real caller offers a
+            user are all described, in the exact form that caller stores them.
+        */
+        const UserFacingOptions = (
+            "PO_ALLOW_BARE_REFS",
+            "PO_ASSUME_LOCAL",
+            "PO_REQUIRE_PROTOTYPES",
+            "PO_REQUIRE_TYPES",
+            "PO_STRICT_ARGS",
+        );
+    }
+
+    private {
+        #! the QORE_CATALOG_DIR value in effect before a test case redirected discovery
+        static *string saved_catalog_dir;
+    }
+
+    constructor() : Test("ParseOptionsTest", "1.0") {
+        addTestCase("describes every parse option Qore declares", \testCoverage());
+        addTestCase("identities come from the library, not from a restated copy", \testIdentities());
+        addTestCase("the list and the map agree", \testListAndMapAgree());
+        addTestCase("descriptions are usable text", \testTextQuality());
+        addTestCase("a locale with a catalog is translated", \testLocalized());
+        addTestCase("a locale without a catalog falls back to English", \testLocaleFallback());
+        addTestCase("an unreadable catalog still serves English", \testBrokenCatalog());
+        addTestCase("sandboxed catalog access falls back and interruption propagates", \testSandbox());
+        set_return_value(main());
+    }
+
+    #! Coverage is the whole point: an option Qore adds must not arrive undescribed
+    private testCoverage() {
+        hash<string, hash<ParseOptionInfo>> info = get_parse_option_info_map();
+        list<string> declared = sort(keys Qore::ParseOptionStringMap);
+
+        assertEq(declared, sort(keys info), "every declared parse option is described");
+        # and nothing else: an entry for an option that no longer exists would be dead text that
+        # a UI would happily offer a user
+        assertEq(declared.size(), info.size());
+
+        foreach string name in (UserFacingOptions) {
+            assertTrue(exists info{name}, sprintf("%s is described", name));
+        }
+    }
+
+    #! Every identity is read from the library's own maps, so none of them can disagree with it
+    private testIdentities() {
+        foreach hash<ParseOptionInfo> i in (get_parse_option_info()) {
+            assertEq(Qore::ParseOptionStringMap{i.name}, i.code, i.name + ": code");
+            string key = i.code.toString();
+            assertEq(Qore::ParseOptionCmdCodeMap{key}, i.directive, i.name + ": directive");
+            assertEq(Qore::DomainCodeMap{key}, i.domain, i.name + ": domain");
+        }
+
+        # spot checks against known values, so a change that broke every lookup the same way
+        # cannot pass by agreeing with itself
+        hash<string, hash<ParseOptionInfo>> info = get_parse_option_info_map();
+        assertEq("require-types", info."PO_REQUIRE_TYPES".directive);
+        assertEq("NETWORK", info."PO_NO_NETWORK".domain);
+        # not every option has a parse directive or restricts a functional domain
+        assertNothing(info."PO_ASSUME_LOCAL".directive);
+        assertNothing(info."PO_REQUIRE_TYPES".domain);
+    }
+
+    private testListAndMapAgree() {
+        list<hash<ParseOptionInfo>> l = get_parse_option_info();
+        hash<string, hash<ParseOptionInfo>> m = get_parse_option_info_map();
+
+        assertEq(m.size(), l.size());
+        assertEq(sort(keys Qore::ParseOptionStringMap), (map $1.name, l),
+            "the list is sorted by constant name");
+        foreach hash<ParseOptionInfo> i in (l) {
+            assertEq(i, m{i.name});
+        }
+    }
+
+    #! Text a person is going to read in a picker, not a restatement of the constant name
+    private testTextQuality() {
+        foreach hash<ParseOptionInfo> i in (get_parse_option_info()) {
+            assertTrue(i.display_name.val(), i.name + ": has a display name");
+            assertTrue(i.desc.val(), i.name + ": has a description");
+            # "PO_REQUIRE_TYPES" as a display name would pass a mere non-empty check while
+            # telling the user nothing they did not already have
+            assertNeq(i.name, i.display_name, i.name + ": display name is not the constant");
+            assertNeq(i.name, i.desc, i.name + ": description is not the constant");
+            assertGt(20, i.desc.size(), i.name + ": description is a sentence");
+        }
+    }
+
+    #! The localization path, end to end, against a catalog this test installs
+    private testLocalized() {
+        TmpDir tmp("parse-options-catalog-");
+        ParseOptionsTest::writeCatalog(tmp.path, "de", {
+            "parse-option.PO_REQUIRE_TYPES.display_name": {
+                "source": "Require Types",
+                "message": "Typen erforderlich",
+                "state": "translated",
+            },
+            "parse-option.PO_REQUIRE_TYPES.desc": {
+                "source": get_parse_option_info_map(){"PO_REQUIRE_TYPES"}.desc,
+                "message": "Verlangt Typdeklarationen überall dort, wo sie möglich sind.",
+                "state": "translated",
+            },
+        });
+
+        # QORE_CATALOG_DIR replaces the configured system catalog directory, and discovery reads it
+        # from the process environment on every call, so this needs no installed catalog and leaves
+        # none behind. setenv() rather than assigning to ENV: ENV is a snapshot taken at startup
+        # and writing to it does not reach the process environment the library reads.
+        ParseOptionsTest::useCatalogDir(tmp.path);
+        on_exit ParseOptionsTest::restoreCatalogDir();
+
+        hash<string, hash<ParseOptionInfo>> de = get_parse_option_info_map("de-DE");
+        assertEq("Typen erforderlich", de."PO_REQUIRE_TYPES".display_name);
+        assertEq("Verlangt Typdeklarationen überall dort, wo sie möglich sind.",
+            de."PO_REQUIRE_TYPES".desc);
+
+        # a message the catalog does not carry still has to come back as usable text
+        assertEq("Strict Arguments", de."PO_STRICT_ARGS".display_name);
+
+        # identities are protocol and are never translated, whatever the catalog says
+        assertEq("PO_REQUIRE_TYPES", de."PO_REQUIRE_TYPES".name);
+        assertEq("require-types", de."PO_REQUIRE_TYPES".directive);
+
+        # the same call with no locale is unaffected by the catalog being present
+        assertEq("Require Types", get_parse_option_info_map(){"PO_REQUIRE_TYPES"}.display_name);
+    }
+
+    private testLocaleFallback() {
+        TmpDir tmp("parse-options-empty-catalog-");
+        ParseOptionsTest::useCatalogDir(tmp.path);
+        on_exit ParseOptionsTest::restoreCatalogDir();
+
+        # a locale nobody has translated must still produce a complete answer
+        hash<string, hash<ParseOptionInfo>> ja = get_parse_option_info_map("ja-JP");
+        assertEq(Qore::ParseOptionStringMap.size(), ja.size());
+        assertEq("Require Types", ja."PO_REQUIRE_TYPES".display_name);
+    }
+
+    #! A description is presentation: a catalog that cannot be read must not fail the caller
+    private testBrokenCatalog() {
+        TmpDir tmp("parse-options-broken-catalog-");
+        Dir d();
+        d.chdir(tmp.path + DirSep + "qore.parse-options");
+        d.create();
+        File f();
+        f.open2(tmp.path + DirSep + "qore.parse-options" + DirSep + "de.json", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("{ this is not json");
+
+        ParseOptionsTest::useCatalogDir(tmp.path);
+        on_exit ParseOptionsTest::restoreCatalogDir();
+
+        hash<string, hash<ParseOptionInfo>> de = get_parse_option_info_map("de-DE");
+        assertEq("Require Types", de."PO_REQUIRE_TYPES".display_name);
+        assertEq(Qore::ParseOptionStringMap.size(), de.size());
+    }
+
+    #! Filesystem denial is a catalog miss, but program interruption must remain observable
+    private testSandbox() {
+        Program p();
+        p.loadModule(get_script_dir() + "../../../../qlib/ParseOptions.qm");
+        p.parse("%modern\nhash sub get_info() {\n"
+            "    return ParseOptions::get_parse_option_info_map(\"de-DE\");\n}\n",
+            "parse-options-sandbox");
+
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        p.setSandboxManager(sm);
+
+        hash<auto> info = p.callFunction("get_info");
+        assertEq(Qore::ParseOptionStringMap.size(), info.size());
+        assertEq("Require Types", info."PO_REQUIRE_TYPES".display_name,
+            "denied catalog discovery falls back to English");
+
+        sm.requestInterrupt();
+        assertThrows("PROGRAM-INTERRUPTED", \p.callFunction(), ("get_info",),
+            "catalog fallback must not swallow program interruption");
+        sm.clearInterrupt();
+    }
+
+    #! Points catalog discovery at a directory this test owns
+    static useCatalogDir(string path) {
+        saved_catalog_dir = getenv("QORE_CATALOG_DIR");
+        setenv("QORE_CATALOG_DIR", path);
+    }
+
+    #! Puts the environment back the way the test found it
+    static restoreCatalogDir() {
+        if (saved_catalog_dir.val()) {
+            setenv("QORE_CATALOG_DIR", saved_catalog_dir);
+        } else {
+            unsetenv("QORE_CATALOG_DIR");
+        }
+        remove saved_catalog_dir;
+    }
+
+    static writeCatalog(string root, string locale, hash<auto> messages) {
+        string dir = root + DirSep + "qore.parse-options";
+        Dir d();
+        d.chdir(dir);
+        d.create();
+        File f();
+        f.open2(dir + DirSep + locale + ".json", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(make_json({
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {
+                locale: {"messages": messages},
+            },
+        }));
+    }
+}
