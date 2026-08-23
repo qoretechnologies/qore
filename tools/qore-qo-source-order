@@ -2583,6 +2583,59 @@ class SourceOrderEngine {
         return order;
     }
 
+    #! Every component a rebuild of \a seeds would leave stale, seeds included.
+    /** A compile rewrites its member's compile contract, and every component
+        that consumes it is published against that contract, so rebuilding one
+        component invalidates its whole transitive consumer closure.  The stale
+        set alone therefore understates the work a rebuild entails -- by a factor
+        of the group size when the seed is a widely required source -- which is
+        why it cannot be the quantity a batch-versus-standalone decision is made
+        from.
+
+        The condensation is acyclic, so the closure is a plain reachability over
+        the reversed edge set and needs no cycle guard beyond the visited index.
+    */
+    list<int> componentRebuildClosure(hash<SourceOrderComponents> components,
+            list<int> seeds) {
+        list<list<int>> consumers = ();
+        for (int component = 0; component < components.members.size(); ++component) {
+            push consumers, ();
+        }
+        for (int consumer = 0; consumer < components.predecessors.size(); ++consumer) {
+            foreach int predecessor in (components.predecessors[consumer]) {
+                push consumers[predecessor], consumer;
+            }
+        }
+        hash<string, bool> reached = {};
+        list<int> stack = ();
+        foreach int seed in (seeds) {
+            string seed_key = string(seed);
+            if (exists reached{seed_key}) {
+                continue;
+            }
+            reached{seed_key} = True;
+            push stack, seed;
+        }
+        while (stack) {
+            int current = pop stack;
+            foreach int consumer in (consumers[current]) {
+                string consumer_key = string(consumer);
+                if (exists reached{consumer_key}) {
+                    continue;
+                }
+                reached{consumer_key} = True;
+                push stack, consumer;
+            }
+        }
+        list<int> order = ();
+        foreach int candidate in (components.topological_order) {
+            if (exists reached{string(candidate)}) {
+                push order, candidate;
+            }
+        }
+        return order;
+    }
+
     #! The build's content identity for one member source.
     /** The configure-time digest sidecar is authoritative when present: it is
         what the build itself treats as the source content, and it records the
@@ -3116,7 +3169,7 @@ sub usage(*string error = NOTHING, bool success = False) {
         "       %s --scc-generation-map FILE CONTEXT\n"
         "       %s [--scc-map|--scc-publish-all|--scc-generation-dir\n"
         "           |--scc-current-all|--scc-stale|--scc-source-stale]\n"
-        "           [--batch-stamp STAMP] CONTEXT\n"
+        "           [--batch-stamp STAMP] [--rebuild-closure] CONTEXT\n"
         "       %s --scc-for CONTEXT TARGET_OUTPUT\n"
         "       %s [--scc-members|--scc-prerequisites|--scc-preload\n"
         "           |--scc-generation|--scc-generation-token|--scc-source-token\n"
@@ -3144,6 +3197,13 @@ sub usage(*string error = NOTHING, bool success = False) {
         "build tool, which is what a recipe running behind the group coordinator\n"
         "wants: the coordinator already took those files as dependencies, and a\n"
         "second, stricter answer is what makes recipes compile behind its back.\n"
+        "\n"
+        "--rebuild-closure prefixes a stale listing with a rebuild-closure row\n"
+        "naming how many components a rebuild of the stale set would leave stale.\n"
+        "Compiling a component rewrites its compile contract, so its consumers go\n"
+        "stale too: the stale set is what must be rebuilt first, the closure is\n"
+        "what will be rebuilt in total, and only the closure can decide whether a\n"
+        "shared parse is cheaper than standalone compiles.\n"
         "\n"
         "--scc-freeze-graph records the current depfile-derived edge set as one\n"
         "named generation and prints its name. While QORE_QCC_GRAPH_SNAPSHOT names\n"
@@ -3336,6 +3396,7 @@ int sub main() {
     *string source_symbol_manifest;
     *string batch_bootstrap_stamp;
     bool source_deps_only = False;
+    bool rebuild_closure = False;
     list<string> positional = ();
     for (int index = 0; index < ARGV.size(); ++index) {
         string arg = ARGV[index];
@@ -3351,6 +3412,8 @@ int sub main() {
             cmake_plan = True;
         } else if (arg == "--source-deps-only") {
             source_deps_only = True;
+        } else if (arg == "--rebuild-closure") {
+            rebuild_closure = True;
         } else if (arg == "--scc-map" || arg == "--scc-for" || arg == "--scc-members"
                 || arg == "--scc-prerequisites" || arg == "--scc-generation"
                 || arg == "--scc-generation-token" || arg == "--scc-generation-dir"
@@ -3546,7 +3609,7 @@ int sub main() {
                     return engine.allGenerationsCurrent(context_info, context_path,
                         components, batch_bootstrap_stamp) ? 0 : 1;
                 case "stale":
-                case "source-stale":
+                case "source-stale": {
                     # One group-wide currency pass.  Each row contains enough
                     # information for the coordinator to build one representative
                     # member without another graph scan.  The source-only mode is
@@ -3554,9 +3617,18 @@ int sub main() {
                     # target already track toolchain/module/stub depfiles, so
                     # reparsing every member depfile here would duplicate that
                     # work on every one-source incremental build.
-                    foreach int component in (engine.staleGenerations(context_info,
-                            context_path, components, batch_bootstrap_stamp,
-                            component_command == "stale")) {
+                    list<int> stale = engine.staleGenerations(context_info,
+                        context_path, components, batch_bootstrap_stamp,
+                        component_command == "stale");
+                    # How much of the group a rebuild of that set actually
+                    # reaches.  Emitted only on request, and ahead of the rows,
+                    # so a caller that only wants the stale set keeps the output
+                    # it has always parsed.
+                    if (rebuild_closure) {
+                        printf("rebuild-closure\t%d\n",
+                            engine.componentRebuildClosure(components, stale).size());
+                    }
+                    foreach int component in (stale) {
                         int member = components.members[component][0];
                         printf("%d\t%s\t%d\t%s\t%s\n", component,
                             components.component_keys[component],
@@ -3564,6 +3636,7 @@ int sub main() {
                             context_info.inputs[member], context_info.outputs[member]);
                     }
                     return 0;
+                }
                 case "publish-all":
                     # A whole-group compile republishes every component at once,
                     # so every generation record has to be committed together;

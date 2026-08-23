@@ -108,9 +108,29 @@ write_stale_plan() {
     (
         QORE_QCC_GRAPH_SNAPSHOT=$graph_snapshot
         export QORE_QCC_GRAPH_SNAPSHOT
-        run_source_order --scc-source-stale --batch-stamp "$bootstrap_stamp" \
-            "$context"
+        run_source_order --scc-source-stale --rebuild-closure \
+            --batch-stamp "$bootstrap_stamp" "$context"
     ) > "$stale_file"
+    stale_count=$(awk -F '\t' '$1 != "rebuild-closure" { rows++ }
+        END { print rows + 0 }' "$stale_file")
+    # How much of the group the stale set will actually reach once it is
+    # rebuilt.  Absent only if the helper predates the row, in which case the
+    # stale count is the best available answer and the old behaviour stands.
+    rebuild_scope=$(awk -F '\t' '$1 == "rebuild-closure" { print $2; exit }' \
+        "$stale_file")
+    case "$rebuild_scope" in
+        ''|*[!0-9]*)
+            rebuild_scope=$stale_count
+            ;;
+    esac
+}
+
+#! True when a stale row names a component that spans several sources.
+#  Such a component has no valid internal order, so only the shared parse can
+#  compile it whatever the rest of the plan looks like.
+stale_plan_has_multi_member_component() {
+    awk -F '\t' '$1 != "rebuild-closure" && $3 > 1 { found = 1 }
+        END { exit !found }' "$stale_file"
 }
 
 run_group_batch() {
@@ -139,14 +159,23 @@ phase=1
 while [ "$phase" -le 2 ]; do
     freeze_graph || exit 1
     write_stale_plan
-    stale_count=$(awk 'END { print NR + 0 }' "$stale_file")
     if [ "$stale_count" -eq 0 ]; then
         touch "$plan_stamp"
         exit 0
     fi
 
-    if [ "$stale_count" -ge "$batch_threshold" ] \
-            || awk -F '\t' '$3 > 1 { found = 1 } END { exit !found }' "$stale_file"; then
+    # The batch decision is made from the rebuild CLOSURE, never from the stale
+    # set.  Compiling a component rewrites its compile contract, so every
+    # component that consumes it goes stale as a result -- which means the stale
+    # set is the work this pass starts with and the closure is the work the
+    # build ends up doing.  Deciding from the stale set let one edited widely
+    # required source look like a one-component job: the standalone path
+    # compiled it alone, on one core, and the next pass then found the whole
+    # group stale and ran the shared parse anyway, recompiling what had just
+    # been built.  Nothing reported the wasted serial pass, because from inside
+    # it the plan looked small.
+    if [ "$rebuild_scope" -ge "$batch_threshold" ] \
+            || stale_plan_has_multi_member_component; then
         run_group_batch
         # The batch rewrote every depfile in the group, so the frozen generation
         # no longer describes it.  Re-freeze before verifying, and leave the
@@ -154,7 +183,7 @@ while [ "$phase" -le 2 ]; do
         # against rather than the one it superseded.
         freeze_graph || exit 1
         write_stale_plan
-        if [ -s "$stale_file" ]; then
+        if [ "$stale_count" -ne 0 ]; then
             echo "$0: shared-parse incremental build left stale components" >&2
             exit 1
         fi
@@ -162,7 +191,14 @@ while [ "$phase" -le 2 ]; do
         exit 0
     fi
 
-    echo "$0: compiling $stale_count stale component(s) incrementally"
+    # Standalone compiles run one after another in this loop, so the count and
+    # the reason for choosing it are worth stating: a build that quietly serialises
+    # on a many-core host is otherwise indistinguishable from one that is simply
+    # slow.
+    echo "$0: compiling $stale_count stale component(s) incrementally, one at a" \
+        "time; their consumer closure spans $rebuild_scope component(s), under the" \
+        "QORE_QCC_INCREMENTAL_BATCH_THRESHOLD of $batch_threshold that selects the" \
+        "shared parse"
     tab=$(printf '\t')
     # Each row was resolved from the graph as it stood before this loop began,
     # and every compile in the loop rewrites a depfile that contributes required
@@ -170,6 +206,13 @@ while [ "$phase" -le 2 ]; do
     # the index does not, so the key is what the builder is given to address its
     # component with.
     while IFS="$tab" read -r component_index component_key component_size source output; do
+        # The closure row is a property of the plan, not a component in it.
+        # Written as a block rather than `test && continue`: an AND-OR list whose
+        # first command fails leaves the list's status non-zero, and this loop
+        # runs under `set -e`.
+        if [ "$component_index" = "rebuild-closure" ]; then
+            continue
+        fi
         [ -n "$component_key" ] || continue
         component_lock=$(dirname "$output")/.qcc-scc/$component_key.lock
         if ! QORE_QCC_PLANNED_STALE=1 \
@@ -193,12 +236,12 @@ done
 
 freeze_graph || exit 1
 write_stale_plan
-if [ -s "$stale_file" ]; then
+if [ "$stale_count" -ne 0 ]; then
     run_group_batch
     freeze_graph || exit 1
     write_stale_plan
 fi
-if [ -s "$stale_file" ]; then
+if [ "$stale_count" -ne 0 ]; then
     echo "$0: incremental plan did not converge" >&2
     exit 1
 fi

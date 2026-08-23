@@ -36,6 +36,8 @@ class AOTSccGenerationTest inherits QUnit::Test {
             \testGenerationIdentity());
         addTestCase("source-only stale planning delegates external dependencies to CMake",
             \testSourceStalePlanning());
+        addTestCase("a stale plan reports how much of the group a rebuild reaches",
+            \testRebuildClosurePlanning());
         addTestCase("a component larger than the old retry limit stays one unit",
             \testLargeComponent());
         addTestCase("component selectors reject unknown arguments",
@@ -445,6 +447,86 @@ class AOTSccGenerationTest inherits QUnit::Test {
                 ".source.manifest.json", ".source-parse-defines")) {
             write(output + suffix, suffix + "\n");
         }
+    }
+
+    #! What a rebuild reaches is a different quantity from what is stale now.
+    /** A component's generation names its own sources and its direct
+        predecessors' published compile contracts.  Editing one source therefore
+        leaves exactly one component stale: its consumers still name the contract
+        that source published last time, and they go stale only once it is
+        recompiled.  A build that sizes its work from the stale set is sizing it
+        from the first step of a cascade -- which is what made a group-wide
+        invalidation present as a one-component job.
+    */
+    testRebuildClosurePlanning() {
+        TmpDir tmp("qore-aot-scc-closure-");
+        # A chain plus a fan-in: everything reaches base, nothing reaches leaf.
+        string context_path = writeContext(tmp.path, (
+            "base": callRefSource("base", ()),
+            "middle": callRefSource("middle", "base"),
+            "leaf": callRefSource("leaf", ("middle", "base")),
+            "other": callRefSource("other", "base"),
+        ));
+        string external = tmp.path + "/external.qmod";
+        write(external, "module\n");
+        # Source-only planning does not weigh depfile inputs from outside the
+        # group, so this fixture needs no generation gap between the external
+        # dependency and the success stamps -- only the context, which is written
+        # before them, has to be no newer than they are.
+        foreach string name in (("base", "middle", "leaf", "other")) {
+            writeArtifactFamily(tmp.path + "/qo/" + name + ".qo", external);
+        }
+        assertEq(0, runOrder(context_path, "--scc-publish-all").rc,
+            "the complete fixture publishes every component generation");
+
+        # The row is opt-in: a caller that wants only the stale set keeps the
+        # output it has always parsed.
+        assertEq("", trim(order(context_path, "--scc-source-stale")),
+            "the complete fixture is source-current");
+        assertEq("rebuild-closure\t0\n",
+            order(context_path, ("--scc-source-stale", "--rebuild-closure")),
+            "a current group reaches nothing");
+
+        # One edited source at the root of the chain.
+        write(tmp.path + "/src/base.qc",
+            callRefSource("base", ()) + "# edited\n");
+        assertEq(1, staleRows(context_path).size(),
+            "editing one source leaves exactly one component stale");
+        assertEq(4, rebuildClosure(context_path),
+            "but rebuilding it reaches every component that requires it");
+
+        # A leaf has no consumers, so the two quantities agree there -- which is
+        # what keeps a genuinely small edit on the standalone path.
+        write(tmp.path + "/src/base.qc", callRefSource("base", ()));
+        write(tmp.path + "/src/leaf.qc",
+            callRefSource("leaf", ("middle", "base")) + "# edited\n");
+        assertEq(1, staleRows(context_path).size(),
+            "editing a leaf leaves one component stale");
+        assertEq(1, rebuildClosure(context_path),
+            "and rebuilding it reaches nothing else");
+    }
+
+    #! The stale rows of a source-only plan, without the closure row.
+    private list<string> staleRows(string context_path) {
+        list<string> rows = ();
+        foreach string line in (order(context_path,
+                ("--scc-source-stale", "--rebuild-closure")).split("\n")) {
+            if (trim(line) && line.split("\t")[0] != "rebuild-closure") {
+                push rows, line;
+            }
+        }
+        return rows;
+    }
+
+    #! The closure size a source-only plan reports.
+    private int rebuildClosure(string context_path) {
+        foreach string line in (order(context_path,
+                ("--scc-source-stale", "--rebuild-closure")).split("\n")) {
+            if (line.split("\t")[0] == "rebuild-closure") {
+                return line.split("\t")[1].toInt();
+            }
+        }
+        throw "CLOSURE-ERROR", "the stale plan reported no rebuild-closure row";
     }
 
     testSourceStalePlanning() {
