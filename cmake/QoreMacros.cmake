@@ -863,7 +863,19 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         set(_qore_qcc_job_server_args JOB_SERVER_AWARE TRUE)
     endif ()
     if (_qore_qcc_count GREATER 1)
-        set(_qore_qcc_bootstrap_stamp "${_QORE_QCO_SCRIPT_DIR}/.qcc-batch-bootstrap.stamp")
+        # Both group-level build stamps live in the OBJECT tree, beside the
+        # generation records whose currency they assert -- not in the script
+        # directory, which holds configure output.  A stamp that outlives the
+        # artifacts it describes is a lie the build tool believes: with these in
+        # the script directory, `rm -rf <OUTPUT_DIR>` removed every published
+        # generation and left the plan stamp asserting they were current, so the
+        # build tool had no reason to reach the coordinator and every reason to
+        # run the object recipes behind it.  Recovering from that took a wipe of
+        # both trees and a `cmake` re-run, neither of which the resulting error
+        # named.  Keeping the assertion in the tree it is about makes removing the
+        # object directory a complete invalidation by construction.
+        set(_qore_qcc_bootstrap_stamp
+            "${${_qore_qcc_scc_prefix}_GENERATION_DIR}/.qcc-batch-bootstrap.stamp")
         set(_qore_qcc_bootstrap_target "qore_qcc_${_qore_qcc_group_id}_batch_bootstrap")
         set(_qore_qcc_batch_script "${_QORE_QCO_SCRIPT_DIR}/qcc-batch.sh")
         set(_qore_qcc_batch_cmd "#!/bin/sh\nset -e\nQORE_INCLUDE_DIR='${_QORE_QCO_INCLUDE_DIR}' QORE_MODULE_DIR='${_QORE_QCO_MODULE_DIR}' exec '${_qore_qcc_command}'")
@@ -935,8 +947,9 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     set(_qore_qcc_incremental_plan_stamp)
     set(_qore_qcc_incremental_plan_target)
     if (_qore_qcc_count GREATER 1)
+        # In the object tree with the batch stamp above, for the same reason.
         set(_qore_qcc_incremental_plan_stamp
-            "${_QORE_QCO_SCRIPT_DIR}/.qcc-incremental-plan.stamp")
+            "${${_qore_qcc_scc_prefix}_GENERATION_DIR}/.qcc-incremental-plan.stamp")
         set(_qore_qcc_incremental_plan_target
             "qore_qcc_${_qore_qcc_group_id}_incremental_plan")
         add_custom_command(

@@ -28,6 +28,12 @@ const QO_SUFFIXES = (
     ".script-aggregate.manifest.json",
     ".script-aggregate-context",
 );
+#! Helper-owned files that are not derived from an object name.
+/** Recognised wherever they appear under a managed directory, which is what lets
+    the two group-level build stamps live in the object tree -- beside the
+    generation records whose currency they assert -- while the rest of these are
+    configure output in the script directory.
+*/
 const SCRIPT_FILES = (
     ".qcc-batch-bootstrap.stamp": True,
     ".qcc-batch-bootstrap.stamp.d": True,

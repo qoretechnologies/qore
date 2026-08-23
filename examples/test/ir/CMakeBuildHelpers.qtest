@@ -1224,7 +1224,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         assertTrue(is_file(build_dir + "/late-modules/LateAggregateModule.qmod"),
             "late-defined aggregate module dependency built: " + build1);
         string bootstrap_depfile = read(build_dir
-            + "/qo-scripts/.qcc-batch-bootstrap.stamp.d");
+            + "/qo/.qcc-scc/.qcc-batch-bootstrap.stamp.d");
         assertTrue(bootstrap_depfile.find(
                 build_dir + "/late-modules/LateObjectModule.qmod") != -1
                 && bootstrap_depfile.find(
@@ -1303,7 +1303,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         assertTrue(link_map.find("CMakeQoGlobal") != -1,
             "qo-link map records cross-file global resolution: " + link_map);
 
-        string bootstrap_stamp = build_dir + "/qo-scripts/.qcc-batch-bootstrap.stamp";
+        string bootstrap_stamp = build_dir + "/qo/.qcc-scc/.qcc-batch-bootstrap.stamp";
         unlink(bootstrap_stamp);
         string adopted = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertTrue(is_file(bootstrap_stamp)
@@ -1420,7 +1420,7 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         # object recipes run and recover through one shared parse, rather than
         # starting a recursive prerequisite walker for every missing generation.
         string incremental_plan_stamp = build_dir
-            + "/qo-scripts/.qcc-incremental-plan.stamp";
+            + "/qo/.qcc-scc/.qcc-incremental-plan.stamp";
         assertTrue(is_file(incremental_plan_stamp),
             "multi-source groups publish an incremental-plan barrier");
         list<string> generation_records = ();
@@ -1861,33 +1861,38 @@ file(WRITE \"${CMAKE_BINARY_DIR}/cycle-vars.txt\"
 
         # Removing the object directory is the recovery a developer reaches for,
         # and it used to end the next build with a message about strongly
-        # connected components.  The two trees are not invalidated together: the
-        # generation records live under OUTPUT_DIR while the plan stamp that
-        # asserts they are current lives under SCRIPT_DIR, so wiping the first
-        # leaves the build tool with no reason to reach the coordinator and every
-        # reason to run the object recipes.  Each then finds its component stale
-        # behind a claim that the group has a coordinator, and the pair and the
-        # ring span several sources, so neither has a standalone builder.
+        # connected components.  The two trees were not invalidated together: the
+        # generation records live under OUTPUT_DIR while the stamps asserting they
+        # are current lived under SCRIPT_DIR, so wiping the first left the build
+        # tool with no reason to reach the coordinator and every reason to run the
+        # object recipes behind it -- each of which then found its component stale
+        # behind a claim that the group had been planned.  Recovering took a wipe
+        # of both trees and a `cmake` re-run, neither of which the error named.
         #
-        # The build has to get itself out of that: the recipe hands its component
-        # to the group's shared parse instead of refusing to start it.  No `cmake`
-        # re-run here, deliberately -- needing one was the part of the old
-        # recovery that could not be derived from the failure.
-        assertTrue(is_dir(build_dir + "/qo"), "the object tree exists");
-        assertTrue(is_file(build_dir + "/qo-scripts/.qcc-incremental-plan.stamp"),
-            "and the plan stamp that describes it lives in the other tree");
+        # The stamps now live in the tree they describe, so removing it is a
+        # complete invalidation: the coordinator is reached again and plans the
+        # rebuild.  No `cmake` re-run here, deliberately -- needing one was the
+        # part of the old recovery that could not be derived from the failure.
+        assertTrue(is_file(build_dir + "/qo/.qcc-scc/.qcc-incremental-plan.stamp"),
+            "the plan stamp lives in the tree whose currency it asserts");
+        assertTrue(is_file(build_dir + "/qo/.qcc-scc/.qcc-batch-bootstrap.stamp"),
+            "and so does the batch bootstrap stamp");
+        assertFalse(is_file(build_dir + "/qo-scripts/.qcc-incremental-plan.stamp"),
+            "neither is left behind in the script directory");
+
         remove_tree(build_dir + "/qo");
         assertFalse(is_dir(build_dir + "/qo"), "the object tree is removed");
-        assertTrue(is_file(build_dir + "/qo-scripts/.qcc-incremental-plan.stamp"),
-            "while the plan stamp survives, still claiming the group is current");
+        assertTrue(is_file(build_dir + "/qo-scripts/qcc-batch.sh"),
+            "while the configure output beside it survives");
 
         string recovered = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertTrue(is_file(build_dir + "/linked.qo"),
             "the build recovers from a wiped object tree: " + recovered);
-        assertTrue(occurrences(recovered, "has no standalone builder") > 0,
-            "and says why it started the shared parse itself: " + recovered);
+        assertTrue(occurrences(recovered, "scheduling against dependency graph") > 0,
+            "the coordinator is reached again rather than bypassed: " + recovered);
         assertEq(0, occurrences(recovered, "cannot be started from a single object"),
-            "rather than refusing to rebuild the group: " + recovered);
+            "and no recipe is left holding a component it cannot build: "
+                + recovered);
         assertEq(4, occurrences(read(generation_map), "generation="),
             "every component is published again: " + read(generation_map));
 
@@ -2030,7 +2035,7 @@ endif()
         assertTrue(is_file(build_dir + "/qo/GROUP_A_script/A_SCRIPT.qo.script-aggregate-context"),
             "initial build registers script aggregate sidecars");
         assertTrue(is_file(build_dir
-                + "/qo-scripts/GROUP_A/.qcc-incremental-plan.stamp"),
+                + "/qo/GROUP_A/.qcc-scc/.qcc-incremental-plan.stamp"),
             "initial multi-source build publishes its incremental-plan barrier");
 
         date retained_mtime = mtime(initial_a[0]);
@@ -2067,12 +2072,12 @@ endif()
         }
         assertFalse(is_file(build_dir + "/qo-scripts/GROUP_A/qcc-batch.sh"),
             "single-source transition prunes the obsolete batch script");
-        assertFalse(is_file(build_dir + "/qo-scripts/GROUP_A/.qcc-batch-bootstrap.stamp"),
+        assertFalse(is_file(build_dir + "/qo/GROUP_A/.qcc-scc/.qcc-batch-bootstrap.stamp"),
             "single-source transition prunes the obsolete bootstrap stamp");
-        assertFalse(is_file(build_dir + "/qo-scripts/GROUP_A/.qcc-batch-bootstrap.stamp.d"),
+        assertFalse(is_file(build_dir + "/qo/GROUP_A/.qcc-scc/.qcc-batch-bootstrap.stamp.d"),
             "single-source transition prunes the obsolete bootstrap depfile");
         assertFalse(is_file(build_dir
-                + "/qo-scripts/GROUP_A/.qcc-incremental-plan.stamp"),
+                + "/qo/GROUP_A/.qcc-scc/.qcc-incremental-plan.stamp"),
             "single-source transition prunes the obsolete incremental-plan stamp");
         assertEq(retained_after_replace, mtime(replacement_a[0]),
             "source removal configuration preserves the retained object timestamp");
