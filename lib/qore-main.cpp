@@ -479,14 +479,13 @@ void qore_cleanup() {
 #endif
 
 #ifdef OPENSSL_3_PLUS
-        // unload legacy provider
-        if (!OSSL_PROVIDER_unload(ssl_prov_legacy)) {
-            assert(false);
-        }
-        // unload default provider
-        if (!OSSL_PROVIDER_unload(ssl_prov_default)) {
-            assert(false);
-        }
+        // Provider unload is best-effort during process teardown. OpenSSL can reject an unload
+        // while references owned by third-party modules are still being released; aborting here
+        // turns an otherwise successful debug process into a failure without improving cleanup.
+        OSSL_PROVIDER_unload(ssl_prov_legacy);
+        ssl_prov_legacy = nullptr;
+        OSSL_PROVIDER_unload(ssl_prov_default);
+        ssl_prov_default = nullptr;
 #endif
     }
 

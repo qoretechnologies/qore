@@ -645,6 +645,19 @@ class Test inherits QUnit::Test {
             assertEq({"b": 2}, remove h{"b","c"});
         }
         {
+            hash<auto> shared = {
+                "drop": 1,
+                "keep": 2,
+            };
+            hash<auto> alias = shared;
+            hash<auto> holder = {"nested": shared};
+
+            assertEq(1, remove holder.nested.drop);
+            assertEq({"keep": 2}, holder.nested);
+            assertEq({"drop": 1, "keep": 2}, alias,
+                "nested remove preserves a shared hash alias");
+        }
+        {
             Program p(PO_NEW_STYLE);
             p.parse("class HashTest; HashTest sub get() { HashTest ht(); ht.a = 1; ht.b = 2; return ht; }", "");
             object o = p.callFunction("get");

@@ -33,8 +33,6 @@
 #include "qore/intern/qore_socket_private.h"
 #include "qore/intern/SocketSyncPoll.h"
 
-#include <cassert>
-
 bool SocketSyncPoll::onIoExecutionPath() {
     return qore_on_async_io_thread() || qore_in_async_io_continue_poll_worker();
 }
@@ -58,9 +56,6 @@ void SocketSyncPoll::assertNotOnIoThread(const char* cname, const char* mname,
     // with a clear message so the bug surfaces as close to its origin as
     // possible.
     //
-    // In debug builds we also abort() so the stack trace points directly
-    // at the offending call site; in release builds the raised exception
-    // is sufficient.
     if (xsink) {
         xsink->raiseException("SOCKET-SYNC-ON-IO-THREAD-ERROR",
             "synchronous %s::%s() called from the %s: sync socket APIs "
@@ -68,12 +63,4 @@ void SocketSyncPoll::assertNotOnIoThread(const char* cname, const char* mname,
             "driven; use nonblocking poll-operation APIs instead",
             cname, mname, where);
     }
-#ifdef DEBUG
-    fprintf(stderr,
-        "FATAL: sync %s::%s() called from the %s. Sync socket APIs must "
-        "not be called while async I/O poll operations are being driven; "
-        "use nonblocking poll-operation APIs instead.\n",
-        cname, mname, where);
-    assert(false && "sync socket API called from async I/O execution path");
-#endif
 }

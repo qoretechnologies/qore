@@ -8,6 +8,26 @@
 
 %exec-class Test
 
+class ResolveAddrInfoWorkerPollOperation inherits Qore::AbstractPollOperation<auto> {
+    string getGoal() {
+        return "reject-sync-resolve-addrinfo";
+    }
+
+    string getState() {
+        return "resolving";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        list<hash<auto>> ignored = Socket::resolveAddrInfo("127.0.0.1", "0", AF_INET,
+            AI_NUMERICHOST | AI_NUMERICSERV);
+        return NOTHING;
+    }
+}
+
 class Test inherits QUnit::Test {
     constructor() : QUnit::Test("Socket resolveAddrInfo", "1.0") {
         addTestCase("numeric host", \testNumericHost());
@@ -16,6 +36,8 @@ class Test inherits QUnit::Test {
         addTestCase("global getnameinfo async", \testGlobalGetnameinfoAsync());
         addTestCase("passive wildcard", \testPassiveWildcard());
         addTestCase("numeric host error", \testNumericHostError());
+        addTestCase("sync resolution rejected from async worker",
+            \testSyncResolutionRejectedFromAsyncWorker());
         set_return_value(main());
     }
 
@@ -72,6 +94,21 @@ class Test inherits QUnit::Test {
     testNumericHostError() {
         assertThrows("QOREADDRINFO-GETINFO-ERROR", \Socket::resolveAddrInfo(),
             ("not-an-address", "80", AF_INET, AI_NUMERICHOST | AI_NUMERICSERV));
+    }
+
+    testSyncResolutionRejectedFromAsyncWorker() {
+        EventNotifier notifier();
+        ResolveAddrInfoWorkerPollOperation op();
+        Queue result_queue = AsyncIoController::submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": op,
+            "owner": "resolve-addrinfo-sync-worker-guard",
+            "to": 10s,
+        });
+
+        hash<SocketPollResultInfo> result = result_queue.get(10s);
+        assertEq("SOCKET-SYNC-ON-IO-THREAD-ERROR", result.ex.err);
+        assertEq("reject-sync-resolve-addrinfo", result.spop.getGoal());
     }
 
     private assertAddressInfo(hash<auto> h, bool expect_port) {

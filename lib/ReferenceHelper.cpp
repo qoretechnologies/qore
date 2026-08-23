@@ -100,7 +100,9 @@ QoreValue QoreTypeSafeReferenceHelper::removeHashObjKey(const char* key) {
         return qore_object_private::takeMember(*v.get<QoreObject>(), *priv, key);
     } else if (v.getType() == NT_HASH) {
         priv->ensureUnique();
-        QoreHashNode* h = v.get<QoreHashNode>();
+        // ensureUnique() can replace the referenced lvalue with a copy; reload it instead of
+        // mutating the stale shared value captured before copy-on-write.
+        QoreHashNode* h = priv->getValue().get<QoreHashNode>();
         ValueHolder rv(h->takeKeyValue(key), priv->vl.xsink);
         if (needs_scan(*rv)) {
             if (!qore_hash_private::getScanCount(*h)) {

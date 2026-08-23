@@ -62,7 +62,7 @@ public:
     */
     DLLLOCAL static bool onIoExecutionPath();
 
-    //! Asserts the current thread is not an async I/O controller thread.
+    //! Checks that the current thread is not on an async I/O execution path.
     /** Sync socket API entry points call this before doing any blocking
         work: sync-on-I/O-thread is a correctness bug that leads to
         deadlock of the controller (the wait primitives block the very
@@ -72,18 +72,13 @@ public:
         - Raises @c SOCKET-SYNC-ON-IO-THREAD-ERROR on @a xsink in both
           debug and release builds, so the bug surfaces as a clean
           exception at the offending call site instead of a deadlock.
-        - In debug builds additionally `abort()`s after logging the
-          violation to `stderr`, so the stack trace in the core file
-          points directly at the offending frame.
-
         Safe to call from any code path; has no side effects when
         running on a handler/worker thread.
 
         @param cname class name for the exception message (e.g. `"Socket"`,
             `"HTTPClient"`, `"FtpClient"`)
         @param mname method name for the exception message
-        @param xsink exception sink (may be NULL for callers that cannot
-            raise; the debug abort() still fires in that case)
+        @param xsink exception sink; may be NULL for callers that cannot raise
     */
     DLLLOCAL static void assertNotOnIoThread(const char* cname,
                                              const char* mname,
