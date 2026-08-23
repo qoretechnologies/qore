@@ -15,6 +15,7 @@ public class StreamNonBlockingTest inherits QUnit::Test {
         addTestCase("BinaryInputStream non-blocking defaults", \testBinaryInputStreamDefaults());
         addTestCase("StringInputStream non-blocking defaults", \testStringInputStreamDefaults());
         addTestCase("FileInputStream non-blocking overrides", \testFileInputStreamNonBlocking());
+        addTestCase("FileInputStream synchronous nonblocking-open reads", \testFileInputStreamNonblockingOpen());
         addTestCase("FileOutputStream non-blocking overrides", \testFileOutputStreamNonBlocking());
         addTestCase("OutputStream base defaults", \testOutputStreamDefaults());
         addTestCase("Transform stream I/O-thread-safe delegation", \testTransformStreamIoThreadSafe());
@@ -108,6 +109,37 @@ public class StreamNonBlockingTest inherits QUnit::Test {
         # read to EOF
         fis2.readWithTimeout(1000, -1);
         assertEq(NOTHING, fis2.readWithTimeout(1, 0), "readWithTimeout NOTHING at EOF");
+    }
+
+    testFileInputStreamNonblockingOpen() {
+        string fifo_path = tmp_location() + "/stream-sync-nb-fifo-" + getpid() + "-" + get_random_string(8);
+        mkfifo(fifo_path);
+        on_exit unlink(fifo_path);
+
+        FileInputStream fis(fifo_path, 75, True);
+        File writer();
+        writer.open2(fifo_path, O_WRONLY | O_NONBLOCK);
+
+        int start_us = clock_getmicros_monotonic();
+        assertThrows("FILE-READ-TIMEOUT-ERROR", sub() { fis.read(1); });
+        int elapsed_us = clock_getmicros_monotonic() - start_us;
+        assertTrue(elapsed_us >= 50000,
+            sprintf("FileInputStream positive timeout returned too early after %d us", elapsed_us));
+        assertTrue(elapsed_us < 1000000,
+            sprintf("FileInputStream positive timeout returned too late after %d us", elapsed_us));
+
+        Counter writer_done(1);
+        background sub() {
+            usleep(25ms);
+            writer.write("x");
+            writer_done.dec();
+        }();
+        assertEq(binary("x"), fis.read(1),
+            "FileInputStream returns data arriving after initial EAGAIN");
+
+        writer_done.waitForZero();
+        writer.close();
+        assertEq(NOTHING, fis.read(1), "FileInputStream distinguishes EOF from EAGAIN");
     }
 
     testFileOutputStreamNonBlocking() {

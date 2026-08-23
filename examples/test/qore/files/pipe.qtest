@@ -16,6 +16,10 @@ class PipeTest inherits QUnit::Test {
         addTestCase("pipeShortBinaryTest", \pipeShortBinaryTest());
         addTestCase("pipeTimeoutTest", \pipeTimeoutTest());
         addTestCase("pipeBlockingTest", \pipeBlockingTest());
+        addTestCase("nonblockingPipeReadTest", \nonblockingPipeReadTest());
+        addTestCase("nonblockingPipeFullReadTest", \nonblockingPipeFullReadTest());
+        addTestCase("nonblockingPipeCompetingReadersTest", \nonblockingPipeCompetingReadersTest());
+        addTestCase("nonblockingPipeCancellationTest", \nonblockingPipeCancellationTest());
 
         set_return_value(main());
     }
@@ -56,5 +60,159 @@ class PipeTest inherits QUnit::Test {
         testAssertionValue('ReadOnlyFile::readShortBinary() blocking value', b, binary("hi"));
         date elapsed = now_us() - start;
         testAssertionValue('ReadOnlyFile::readShortBinary() blocking duration', elapsed >= 30ms, True);
+    }
+
+    nonblockingPipeReadTest() {
+        string fifo_path = tmp_location() + "/qore-nonblocking-read-" + getpid() + "-" + get_random_string(8);
+        mkfifo(fifo_path);
+        on_exit unlink(fifo_path);
+
+        File r();
+        r.open2(fifo_path, O_RDONLY | O_NONBLOCK);
+        File w();
+        w.open2(fifo_path, O_WRONLY | O_NONBLOCK);
+
+        int start_us = clock_getmicros_monotonic();
+        assertThrows("FILE-READ-TIMEOUT", \r.readShortBinary(), list(1, 75));
+        int elapsed_us = clock_getmicros_monotonic() - start_us;
+        assertTrue(elapsed_us >= 50000,
+            sprintf("positive timeout returned too early after %d us", elapsed_us));
+        assertTrue(elapsed_us < 1000000,
+            sprintf("positive timeout returned too late after %d us", elapsed_us));
+
+        start_us = clock_getmicros_monotonic();
+        assertThrows("FILE-READ-TIMEOUT", \r.readShortBinary(), list(1, 0));
+        elapsed_us = clock_getmicros_monotonic() - start_us;
+        assertTrue(elapsed_us < 500000,
+            sprintf("zero timeout did not return promptly after %d us", elapsed_us));
+
+        Counter writer_done(1);
+        background sub() {
+            usleep(50ms);
+            w.write("x");
+            writer_done.dec();
+        }();
+        assertEq(binary("x"), r.readShortBinary(1, 1000),
+            "data arriving after initial unavailability is returned");
+
+        writer_done.waitForZero();
+        w.close();
+        assertEq(NOTHING, r.readShortBinary(1, 1000),
+            "EOF remains distinct from temporary unavailability");
+    }
+
+    nonblockingPipeFullReadTest() {
+        string fifo_path = tmp_location() + "/qore-nonblocking-full-read-" + getpid() + "-"
+            + get_random_string(8);
+        mkfifo(fifo_path);
+        on_exit unlink(fifo_path);
+
+        File r();
+        r.open2(fifo_path, O_RDONLY | O_NONBLOCK);
+        File w();
+        w.open2(fifo_path, O_WRONLY | O_NONBLOCK);
+
+        w.write("a");
+        background sub() {
+            usleep(50ms);
+            w.write("b");
+        }();
+        assertEq(binary("ab"), r.readBinary(2, 1000),
+            "full binary read waits for the requested size");
+
+        w.write("c");
+        background sub() {
+            usleep(50ms);
+            w.write("d");
+        }();
+        assertEq("cd", r.read(2, 1000), "full string read waits for the requested size");
+
+        w.write("ef");
+        assertEq(binary("ef"), r.readShortBinary(10, 1000),
+            "short binary read returns after the first successful read");
+    }
+
+    nonblockingPipeCompetingReadersTest() {
+        string fifo_path = tmp_location() + "/qore-nonblocking-competing-read-" + getpid() + "-"
+            + get_random_string(8);
+        mkfifo(fifo_path);
+        on_exit unlink(fifo_path);
+
+        File r1();
+        r1.open2(fifo_path, O_RDONLY | O_NONBLOCK);
+        File r2();
+        r2.open2(fifo_path, O_RDONLY | O_NONBLOCK);
+        File w();
+        w.open2(fifo_path, O_WRONLY | O_NONBLOCK);
+
+        for (int i = 0; i < 12; ++i) {
+            Counter ready(2);
+            Counter done(2);
+            Queue results();
+
+            background competingRead(r1, ready, done, results);
+            background competingRead(r2, ready, done, results);
+            ready.waitForZero();
+            usleep(10ms);
+
+            w.write("a");
+            usleep(2ms);
+            w.write("b");
+
+            assertEq(0, done.waitForZero(2000),
+                sprintf("competing nonblocking reads completed in iteration %d", i));
+            auto first = results.get(1000);
+            auto second = results.get(1000);
+            assertEq(NT_BINARY, first.typeCode(),
+                sprintf("first competing read returned data in iteration %d: %y", i, first));
+            assertEq(NT_BINARY, second.typeCode(),
+                sprintf("second competing read returned data in iteration %d: %y", i, second));
+            assertEq(2, first.size() + second.size(),
+                sprintf("competing readers consumed both bytes in iteration %d", i));
+        }
+    }
+
+    nonblockingPipeCancellationTest() {
+        string fifo_path = tmp_location() + "/qore-nonblocking-cancel-read-" + getpid() + "-"
+            + get_random_string(8);
+        mkfifo(fifo_path);
+        on_exit unlink(fifo_path);
+
+        File r();
+        r.open2(fifo_path, O_RDONLY | O_NONBLOCK);
+        File w();
+        w.open2(fifo_path, O_WRONLY | O_NONBLOCK);
+
+        Counter ready(1);
+        Counter done(1);
+        Queue result();
+        int tid = background sub() {
+            ready.dec();
+            try {
+                r.readShortBinary(1, -1);
+                result.push("NO-EXCEPTION");
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err);
+            }
+            done.dec();
+        }();
+
+        ready.waitForZero();
+        usleep(50ms);
+        assertTrue(cancel_thread(tid, "nonblocking file-read test"),
+            "cancellation request was delivered");
+        assertEq(0, done.waitForZero(2000), "infinite nonblocking read responded to cancellation");
+        assertEq("THREAD-CANCELLED", result.get(1000),
+            "infinite nonblocking read propagated the cancellation exception");
+    }
+
+    private competingRead(ReadOnlyFile r, Counter ready, Counter done, Queue results) {
+        ready.dec();
+        try {
+            results.push(r.readShortBinary(1, 1000));
+        } catch (hash<ExceptionInfo> ex) {
+            results.push(ex.err);
+        }
+        done.dec();
     }
 }

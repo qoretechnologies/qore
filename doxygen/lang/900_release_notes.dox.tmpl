@@ -2825,6 +2825,10 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         complex container base type but have different value types, such as
         <tt>union&lt;list&lt;string&gt;, list&lt;int&gt;&gt;</tt>
       - fixed non-blocking file and socket poll reads to ensure NUL-terminated strings when converting poll buffers
+      - fixed synchronous @ref Qore::ReadOnlyFile "ReadOnlyFile" and @ref Qore::FileInputStream
+        "FileInputStream" reads on descriptors opened with \c O_NONBLOCK: transient \c EAGAIN / \c EWOULDBLOCK
+        results now return to a cancellation-aware readiness wait with a bounded backoff and one monotonic timeout
+        deadline, without changing the descriptor's file-status flags
       - fixed scheduling of closure values created in object scope with the @ref background "background operator" so
         stale captured objects are rejected before thread creation and valid captured objects stay alive until the
         background expression finishes

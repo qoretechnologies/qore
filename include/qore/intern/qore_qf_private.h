@@ -41,6 +41,7 @@
 #include "qore/AbstractPollState.h"
 #include <qore/QoreSandboxManager.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -63,6 +64,104 @@
 #ifndef DEFAULT_FILE_BUFSIZE
 #define DEFAULT_FILE_BUFSIZE 16384
 #endif
+
+//! Tracks a synchronous file read timeout and bounded backoff using the monotonic clock.
+class qore_file_read_deadline {
+public:
+    DLLLOCAL qore_file_read_deadline(int timeout_ms)
+            : timeout_ms(timeout_ms), deadline_us(timeout_ms >= 0
+                ? q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000 : 0) {
+    }
+
+    //! Returns true and sets the next bounded poll timeout, or false if the deadline has expired.
+    DLLLOCAL bool getPollTimeout(int& poll_timeout_ms) {
+        if (timeout_ms < 0) {
+            poll_timeout_ms = QORE_IO_POLL_INTERVAL_MS;
+            return true;
+        }
+
+        // A zero timeout gets exactly one immediate readiness/read attempt.
+        if (!timeout_ms) {
+            if (!zero_poll_pending) {
+                return false;
+            }
+            zero_poll_pending = false;
+            poll_timeout_ms = 0;
+            return true;
+        }
+
+        int64 remaining_us = deadline_us - q_get_monotonic_us();
+        if (remaining_us <= 0) {
+            return false;
+        }
+
+        int64 remaining_ms = (remaining_us + 999) / 1000;
+        poll_timeout_ms = static_cast<int>(std::min<int64>(remaining_ms, QORE_IO_POLL_INTERVAL_MS));
+        return true;
+    }
+
+    DLLLOCAL bool expired() const {
+        if (timeout_ms < 0) {
+            return false;
+        }
+        if (!timeout_ms) {
+            return !zero_poll_pending;
+        }
+        return q_get_monotonic_us() >= deadline_us;
+    }
+
+    //! Sleeps after stale readiness followed by EAGAIN; returns 1 to retry, 0 on timeout, and -1 on error.
+    DLLLOCAL int backoff(ExceptionSink* xsink) {
+        if (expired()) {
+            return 0;
+        }
+        if (qore_check_cancel(xsink, "file read")) {
+            return -1;
+        }
+
+        int64 delay_us = backoff_us;
+        if (timeout_ms > 0) {
+            int64 remaining_us = deadline_us - q_get_monotonic_us();
+            if (remaining_us <= 0) {
+                return 0;
+            }
+            delay_us = std::min(delay_us, remaining_us);
+        }
+
+        if (qore_usleep(delay_us)) {
+            xsink->raiseErrnoException("FILE-READ-ERROR", errno,
+                "error applying backoff after stale file-read readiness");
+            return -1;
+        }
+
+        if (qore_check_cancel(xsink, "file read")) {
+            return -1;
+        }
+        if (expired()) {
+            return 0;
+        }
+
+        backoff_us = std::min<int64>(backoff_us * 2, MaxBackoffUs);
+        return 1;
+    }
+
+    DLLLOCAL void resetBackoff() {
+        backoff_us = InitialBackoffUs;
+    }
+
+    DLLLOCAL int getTimeout() const {
+        return timeout_ms;
+    }
+
+private:
+    static constexpr int64 InitialBackoffUs = 1000;
+    static constexpr int64 MaxBackoffUs = 16000;
+
+    int timeout_ms;
+    int64 deadline_us;
+    bool zero_poll_pending = true;
+    int64 backoff_us = InitialBackoffUs;
+};
 
 struct qore_qf_private {
     int fd = -1;
@@ -247,14 +346,27 @@ struct qore_qf_private {
 #if defined HAVE_POLL
     DLLLOCAL int poll_intern(int timeout_ms, bool read, const char* mname, ExceptionSink* xsink) const {
         int rc;
-        pollfd fds = {fd, (short)(read ? POLLIN : POLLOUT), 0};
+        int poll_timeout_ms = timeout_ms;
+        int64 deadline_us = timeout_ms >= 0
+            ? q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000 : 0;
+        pollfd fds = {fd, static_cast<short>(read ? POLLIN : POLLOUT), 0};
         while (true) {
-            rc = poll(&fds, 1, timeout_ms);
-            if (rc == -1 && errno == EINTR)
-                continue;
-            break;
+            rc = poll(&fds, 1, poll_timeout_ms);
+            if (rc != -1 || errno != EINTR) {
+                break;
+            }
+            if (qore_check_cancel(xsink, read ? "file read" : "file write")) {
+                return -1;
+            }
+            if (timeout_ms >= 0) {
+                int64 remaining_us = deadline_us - q_get_monotonic_us();
+                if (remaining_us <= 0) {
+                    return 0;
+                }
+                poll_timeout_ms = static_cast<int>((remaining_us + 999) / 1000);
+            }
         }
-        if (rc < 0)
+        if (rc < 0 && !*xsink)
             xsink->raiseException("FILE-SELECT-ERROR", "poll(2) returned an error in call to File::%s()", mname);
         else if (!rc && ((fds.revents & POLLHUP) || (fds.revents & (POLLERR|POLLNVAL))))
             rc = -1;
@@ -275,8 +387,10 @@ struct qore_qf_private {
                     FD_SETSIZE);
             return -1;
         }
-        struct timeval tv;
         int rc;
+        int select_timeout_ms = timeout_ms;
+        int64 deadline_us = timeout_ms >= 0
+            ? q_get_monotonic_us() + static_cast<int64>(timeout_ms) * 1000 : 0;
         while (true) {
             // to be safe, we set the file descriptor arg after each EINTR (required on Linux for example)
             fd_set sfs;
@@ -284,16 +398,30 @@ struct qore_qf_private {
             FD_ZERO(&sfs);
             FD_SET(fd, &sfs);
 
-            tv.tv_sec  = timeout_ms / 1000;
-            tv.tv_usec = (timeout_ms % 1000) * 1000;
+            struct timeval tv;
+            tv.tv_sec  = select_timeout_ms / 1000;
+            tv.tv_usec = (select_timeout_ms % 1000) * 1000;
 
             rc = read ? ::select(fd + 1, &sfs, 0, 0, &tv) : ::select(fd + 1, 0, &sfs, 0, &tv);
-            if (rc >= 0 || errno != EINTR)
+            if (rc >= 0 || errno != EINTR) {
                 break;
+            }
+            if (qore_check_cancel(xsink, read ? "file read" : "file write")) {
+                return -1;
+            }
+            if (timeout_ms >= 0) {
+                int64 remaining_us = deadline_us - q_get_monotonic_us();
+                if (remaining_us <= 0) {
+                    return 0;
+                }
+                select_timeout_ms = static_cast<int>((remaining_us + 999) / 1000);
+            }
         }
         if (rc == -1) {
             rc = 0;
-            xsink->raiseException("FILE-SELECT-ERROR", "select(2) returned an error in call to File::%s()", mname);
+            if (!*xsink) {
+                xsink->raiseException("FILE-SELECT-ERROR", "select(2) returned an error in call to File::%s()", mname);
+            }
         }
 
         return rc;
@@ -431,103 +559,152 @@ struct qore_qf_private {
     // private function, unlocked
     DLLLOCAL int readUnicode(int* n_len = 0) const;
 
-    DLLLOCAL qore_offset_t readData(void* dest, size_t limit, int timeout_ms, const char* mname,
-            ExceptionSink* xsink) {
-        // wait for data
-        if (timeout_ms >= 0 && !isDataAvailableIntern(timeout_ms, mname, xsink)) {
-            if (!*xsink)
-                xsink->raiseException("FILE-READ-TIMEOUT", "timeout limit exceeded (%d ms) reading file block in "
-                    "ReadOnlyFile::%s()", timeout_ms, mname);
-            return -1;
-        }
+    DLLLOCAL qore_offset_t readData(void* dest, size_t limit, qore_file_read_deadline& read_deadline,
+            const char* mname, ExceptionSink* xsink, const char* timeout_error = "FILE-READ-TIMEOUT",
+            bool readonly_context = true) {
+#ifndef _Q_WINDOWS
+        // A nonblocking read before polling returns buffered data or EOF immediately and avoids platform-specific
+        // cases where poll() does not report EOF on a FIFO with no writers. Blocking descriptors must poll first.
+        int flags = fcntl(fd, F_GETFL, 0);
+        if (flags >= 0 && (flags & O_NONBLOCK)) {
+            while (true) {
+                if (qore_check_cancel(xsink, "file read")) {
+                    return -1;
+                }
+                if (read_deadline.getTimeout() > 0 && read_deadline.expired()) {
+                    raiseReadTimeout(read_deadline, mname, timeout_error, readonly_context, xsink);
+                    return -1;
+                }
 
-        qore_offset_t rc;
-        while (true) {
-            rc = ::read(fd, dest, limit);
-            //printd(5, "qore_qf_private::readData(%p, %ld, %d, '%s') fd: %d rc: %d\n", dest, limit, timeout_ms,
-            //    mname, fd, rc);
-            // try again if we were interrupted by a signal
-            if (rc >= 0) {
-                break;
-            }
-            if (errno != EINTR) {
-                xsink->raiseErrnoException("FILE-READ-ERROR", errno, "error reading file in ReadOnlyFile::%s()",
-                    mname);
+                qore_offset_t rc = ::read(fd, dest, limit);
+                int read_errno = errno;
+                if (rc >= 0) {
+                    read_deadline.resetBackoff();
+                    return rc;
+                }
+                if (read_errno == EINTR) {
+                    continue;
+                }
+                if (read_errno == EAGAIN
+#ifdef EWOULDBLOCK
+                        || read_errno == EWOULDBLOCK
+#endif
+                ) {
+                    break;
+                }
+
+                if (readonly_context) {
+                    xsink->raiseErrnoException("FILE-READ-ERROR", read_errno,
+                        "error reading file in ReadOnlyFile::%s()", mname);
+                } else {
+                    xsink->raiseErrnoException("FILE-READ-ERROR", read_errno, "error reading file");
+                }
                 return -1;
             }
         }
+#endif
 
-        return rc;
+        while (true) {
+            if (qore_check_cancel(xsink, "file read")) {
+                return -1;
+            }
+
+            int poll_timeout_ms;
+            if (!read_deadline.getPollTimeout(poll_timeout_ms)) {
+                raiseReadTimeout(read_deadline, mname, timeout_error, readonly_context, xsink);
+                return -1;
+            }
+
+            int ready = isDataAvailableIntern(poll_timeout_ms, mname, xsink);
+            if (!ready) {
+                if (*xsink) {
+                    return -1;
+                }
+                if (read_deadline.expired()) {
+                    raiseReadTimeout(read_deadline, mname, timeout_error, readonly_context, xsink);
+                    return -1;
+                }
+                continue;
+            }
+
+            if (qore_check_cancel(xsink, "file read")) {
+                return -1;
+            }
+
+            qore_offset_t rc = ::read(fd, dest, limit);
+            int read_errno = errno;
+            if (rc >= 0) {
+                read_deadline.resetBackoff();
+                return rc;
+            }
+
+            if (read_errno == EINTR) {
+                continue;
+            }
+            if (read_errno == EAGAIN
+#ifdef EWOULDBLOCK
+                    || read_errno == EWOULDBLOCK
+#endif
+            ) {
+                int backoff_rc = read_deadline.backoff(xsink);
+                if (backoff_rc > 0) {
+                    continue;
+                }
+                if (!backoff_rc) {
+                    raiseReadTimeout(read_deadline, mname, timeout_error, readonly_context, xsink);
+                }
+                return -1;
+            }
+
+            if (readonly_context) {
+                xsink->raiseErrnoException("FILE-READ-ERROR", read_errno,
+                    "error reading file in ReadOnlyFile::%s()", mname);
+            } else {
+                xsink->raiseErrnoException("FILE-READ-ERROR", read_errno, "error reading file");
+            }
+            return -1;
+        }
+    }
+
+    DLLLOCAL qore_offset_t readData(void* dest, size_t limit, int timeout_ms, const char* mname,
+            ExceptionSink* xsink, const char* timeout_error = "FILE-READ-TIMEOUT", bool readonly_context = true) {
+        qore_file_read_deadline read_deadline(timeout_ms);
+        return readData(dest, limit, read_deadline, mname, xsink, timeout_error, readonly_context);
     }
 
     DLLLOCAL QoreStringNode* readString(qore_offset_t size, int timeout_ms, const char* mname, ExceptionSink* xsink) {
-        return q_read_string(xsink, size, charset, std::bind(&qore_qf_private::readData, this, _1, _2, timeout_ms,
-            mname, _3));
+        qore_file_read_deadline read_deadline(timeout_ms);
+        return q_read_string(xsink, size, charset,
+            [this, &read_deadline, mname](void* dest, size_t limit, ExceptionSink* read_xsink) {
+                return readData(dest, limit, read_deadline, mname, read_xsink);
+            });
     }
 
     DLLLOCAL char* readBlock(qore_offset_t &size, int timeout_ms, const char* mname, ExceptionSink* xsink) {
         size_t bs = size > 0 && size < DEFAULT_FILE_BUFSIZE ? size : DEFAULT_FILE_BUFSIZE;
         size_t br = 0;
-        char* buf = (char* )malloc(sizeof(char) * bs);
-        char* bbuf = 0;
+        char* buf = static_cast<char*>(malloc(sizeof(char) * bs));
+        char* bbuf = nullptr;
+        if (!buf) {
+            xsink->outOfMemory();
+            return nullptr;
+        }
 
-        const int poll_interval = QORE_IO_POLL_INTERVAL_MS;
+        qore_file_read_deadline read_deadline(timeout_ms);
 
         while (true) {
-            // Check for cancellation or program interrupt
-            if (qore_check_cancel(xsink, "file read")) {
-                br = 0;
-                break;
-            }
-
-            // wait for data with polling for cancel/interrupt checking
-            int effective_timeout = timeout_ms;
-            if (timeout_ms < 0 || timeout_ms > poll_interval) {
-                effective_timeout = poll_interval;
-            }
-
-            if (effective_timeout >= 0 && !isDataAvailableIntern(effective_timeout, mname, xsink)) {
-                if (*xsink) {
-                    br = 0;
-                    break;
-                }
-                // If we used a smaller timeout for polling, continue if not timed out yet
-                if (timeout_ms != effective_timeout) {
-                    if (timeout_ms > 0) {
-                        timeout_ms -= effective_timeout;
-                        if (timeout_ms <= 0) {
-                            xsink->raiseException("FILE-READ-TIMEOUT", "timeout limit exceeded reading file block in "
-                                "ReadOnlyFile::%s()", mname);
-                            br = 0;
-                            break;
-                        }
-                    }
-                    continue;  // Continue polling
-                }
-                xsink->raiseException("FILE-READ-TIMEOUT", "timeout limit exceeded (%d ms) reading file block in "
-                    "ReadOnlyFile::%s()", timeout_ms, mname);
-                br = 0;
-                break;
-            }
-
-            qore_offset_t rc;
-            while (true) {
-                rc = ::read(fd, buf, bs);
-                // try again if we were interrupted by a signal
-                if (rc >= 0)
-                    break;
-                if (errno != EINTR) {
-                    xsink->raiseErrnoException("FILE-READ-ERROR", errno, "error reading file after " QSD " bytes "
-                        "read in File::%s()", br, mname);
-                    break;
-                }
-            }
+            qore_offset_t rc = readData(buf, bs, read_deadline, mname, xsink);
             //printd(5, "readBlock(fd: %d, buf: %p, bs: %d) rc: %d\n", fd, buf, bs, rc);
             if (rc <= 0)
                 break;
 
             // enlarge bbuf (ensure buffer is 1 byte bigger than needed)
-            bbuf = (char* )realloc(bbuf, br + rc + 1);
+            char* new_bbuf = static_cast<char*>(realloc(bbuf, br + rc + 1));
+            if (!new_bbuf) {
+                xsink->outOfMemory();
+                break;
+            }
+            bbuf = new_bbuf;
             // append buffer to bbuf
             memcpy(bbuf + br, buf, rc);
             br += rc;
@@ -549,6 +726,17 @@ struct qore_qf_private {
         }
         size = br;
         return bbuf;
+    }
+
+    DLLLOCAL static void raiseReadTimeout(const qore_file_read_deadline& read_deadline, const char* mname,
+            const char* timeout_error, bool readonly_context, ExceptionSink* xsink) {
+        if (readonly_context) {
+            xsink->raiseException(timeout_error, "timeout limit exceeded (%d ms) reading file block in "
+                "ReadOnlyFile::%s()", read_deadline.getTimeout(), mname);
+        } else {
+            xsink->raiseException(timeout_error, "timeout limit exceeded (%d ms) reading file",
+                read_deadline.getTimeout());
+        }
     }
 
     DLLLOCAL QoreStringNode* readLine(bool incl_eol, ExceptionSink* xsink) {

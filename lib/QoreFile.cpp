@@ -929,13 +929,8 @@ size_t QoreFile::read(void* ptr, size_t limit, int timeout_ms, ExceptionSink* xs
     if (priv->checkNonBlock(xsink) || priv->checkReadOpen(xsink)) {
         return 0;
     }
-    if (timeout_ms >= 0 && !priv->isDataAvailableIntern(timeout_ms, "read", xsink)) {
-        xsink->raiseException("FILE-READ-TIMEOUT-ERROR", "timeout limit exceeded (%d ms) reading file", timeout_ms);
-        return 0;
-    }
-    ssize_t rc = priv->read(ptr, limit);
+    qore_offset_t rc = priv->readData(ptr, limit, timeout_ms, "read", xsink, "FILE-READ-TIMEOUT-ERROR", false);
     if (rc < 0) {
-        xsink->raiseErrnoException("FILE-READ-ERROR", errno, "error reading file");
         return 0;
     }
     return (size_t)rc;
