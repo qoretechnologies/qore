@@ -929,9 +929,15 @@ size_t QoreFile::read(void* ptr, size_t limit, int timeout_ms, ExceptionSink* xs
     if (priv->checkNonBlock(xsink) || priv->checkReadOpen(xsink)) {
         return 0;
     }
+    if (!limit) {
+        return 0;
+    }
     qore_offset_t rc = priv->readData(ptr, limit, timeout_ms, "read", xsink, "FILE-READ-TIMEOUT-ERROR", false);
     if (rc < 0) {
         return 0;
+    }
+    if (rc > 0) {
+        priv->do_read_event_unlocked(rc, rc, limit);
     }
     return (size_t)rc;
 }

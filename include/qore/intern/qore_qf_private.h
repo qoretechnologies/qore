@@ -616,10 +616,10 @@ struct qore_qf_private {
             }
 
             int ready = isDataAvailableIntern(poll_timeout_ms, mname, xsink);
+            if (*xsink) {
+                return -1;
+            }
             if (!ready) {
-                if (*xsink) {
-                    return -1;
-                }
                 if (read_deadline.expired()) {
                     raiseReadTimeout(read_deadline, mname, timeout_error, readonly_context, xsink);
                     return -1;

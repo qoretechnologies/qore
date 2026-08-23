@@ -402,6 +402,53 @@ static void ut_string_data_helper(UnitTestCounters& c) {
     }
 }
 
+//! verifies the public QoreFile timed-read C++ API preserves zero-length and event contracts
+static void ut_qorefile_timed_read_contract(UnitTestCounters& c) {
+#ifndef _Q_WINDOWS
+    int fds[2];
+    if (pipe(fds)) {
+        UT_ASSERT(c, false, "pipe creation for QoreFile timed-read tests succeeds");
+        return;
+    }
+
+    ExceptionSink xsink;
+    QoreFile file;
+    file.makeSpecial(fds[0]);
+    Queue* event_queue = new Queue();
+    file.setEventQueue(&xsink, event_queue, QoreValue(), false);
+    UT_ASSERT(c, !xsink, "QoreFile event queue setup succeeds");
+
+    char byte = 0;
+    int64 start_us = q_get_monotonic_us();
+    size_t rc = file.read(&byte, 0, 500, &xsink);
+    int64 elapsed_us = q_get_monotonic_us() - start_us;
+    UT_ASSERT_EQ(c, 0, rc, "a zero-length timed QoreFile read returns zero");
+    UT_ASSERT(c, !xsink, "a zero-length timed QoreFile read raises no exception");
+    UT_ASSERT(c, elapsed_us < 250000, "a zero-length timed QoreFile read returns immediately");
+    UT_ASSERT_EQ(c, 0, event_queue->size(), "a zero-length QoreFile read emits no data event");
+
+    const char input = 'x';
+    ssize_t write_rc = ::write(fds[1], &input, 1);
+    UT_ASSERT_EQ(c, 1, write_rc, "the QoreFile timed-read fixture writes one byte");
+    rc = file.read(&byte, 1, 1000, &xsink);
+    UT_ASSERT_EQ(c, 1, rc, "a timed QoreFile read returns one byte");
+    UT_ASSERT(c, !xsink, "a successful timed QoreFile read raises no exception");
+    UT_ASSERT_EQ(c, 'x', byte, "a timed QoreFile read returns the expected byte");
+    UT_ASSERT_EQ(c, 1, event_queue->size(), "a successful timed QoreFile read emits one data event");
+
+    QoreValue event = event_queue->shift(&xsink);
+    const QoreHashNode* event_hash = event.getType() == NT_HASH ? event.get<const QoreHashNode>() : nullptr;
+    UT_ASSERT(c, event_hash && event_hash->getKeyValue("event").getAsBigInt() == QORE_EVENT_DATA_READ,
+        "the timed QoreFile read emits EVENT_DATA_READ");
+    event.discard(&xsink);
+
+    file.cleanup(&xsink);
+    ::close(fds[0]);
+    ::close(fds[1]);
+    UT_ASSERT(c, !xsink, "QoreFile timed-read fixture cleanup succeeds");
+#endif
+}
+
 class TestRSectionPriv : public qore_rsection_priv {
 public:
     DLLLOCAL void setFakeWriter(int tid) {
@@ -3560,6 +3607,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     UnitTestCounters c;
     ut_qorevalue_operator_bool_null(c);
     ut_string_data_helper(c);
+    ut_qorefile_timed_read_contract(c);
     ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     return make_unit_test_result(c, xsink);
@@ -3570,6 +3618,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
 
     ut_qorevalue_operator_bool_null(c);
     ut_string_data_helper(c);
+    ut_qorefile_timed_read_contract(c);
     ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_event_loop_remove_recycled_fd(c);
