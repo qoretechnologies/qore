@@ -64,8 +64,12 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testCoordinatorConvergesInOneInvocation());
         addTestCase("a scheduled recipe uses the coordinator's currency rule",
             \testScheduledRecipeSharesTheCoordinatorsRule());
-        addTestCase("a scheduled recipe refuses to start the group's shared parse",
-            \testScheduledRecipeRefusesToStartTheBatch());
+        addTestCase("a scheduled recipe starts the shared parse it cannot replace",
+            \testScheduledRecipeStartsTheSharedParseItCannotReplace());
+        addTestCase("a group configured without a shared parse still builds",
+            \testScheduledRecipeBuildsAGroupWithoutASharedParse());
+        addTestCase("the batch is chosen from what a rebuild reaches, not from what is stale",
+            \testPlanChoosesTheBatchFromTheConsumerClosure());
         addTestCase("concurrent recipes publish one coherent generation",
             \testConcurrentRecipesPublishOneGeneration());
         addTestCase("a stale lock survives losing the race to reclaim it",
@@ -192,6 +196,31 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         return script;
     }
 
+    #! Writes the stand-in for qcc-batch.sh: one parse that writes the group.
+    /** The batch is the only builder for a component that spans several sources,
+        and the one the coordinator selects for a broad invalidation.  It writes
+        every member of the group, which is what makes "the group was built as
+        one unit" observable in the same compile log the standalone path uses.
+    */
+    private string writeBatchCompiler(hash<auto> fx) {
+        string script = fx.qo_dir + "/qcc-batch.sh";
+        string log = fx.qo_dir + "/compiles.log";
+        string body = "#!/bin/sh\nset -e\n";
+        foreach string name in (fx.names) {
+            string out = fx.qo_dir + "/" + name + ".qo";
+            body += "printf 'batch %s\\n' " + sprintf("%y", name + ".qo") + " >> "
+                + sprintf("%y", log) + "\n";
+            foreach string suffix in (MemberArtifactSuffixes) {
+                body += "printf 'compiled\\n' > " + sprintf("%y", out + suffix) + "\n";
+            }
+            body += "printf '%s\\n' '{\"source_parse_defines\": []}' > "
+                + sprintf("%y", out + ".idx.json") + "\n";
+        }
+        write(script, body);
+        chmod(script, 0755);
+        return script;
+    }
+
     private hash<auto> runTool(softlist<string> args) {
         list<string> command = (sprintf("%y", qore_bin), sprintf("%y", source_order_tool));
         foreach string arg in (args) {
@@ -290,11 +319,15 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
     #! Runs the group coordinator the way the build's plan target does.
     private hash<auto> plan(hash<auto> fx) {
         string qo_dir = fx.qo_dir;
-        # The coordinator refuses to start without a batch script; this one is
-        # never invoked, and says so loudly if the plan ever reaches for it.
-        write(qo_dir + "/qcc-batch.sh",
-            "#!/bin/sh\necho 'the plan should not have needed the batch' >&2\nexit 9\n");
-        chmod(qo_dir + "/qcc-batch.sh", 0755);
+        # The coordinator refuses to start without a batch script.  A test that
+        # expects the shared parse installs a working one first; for every other
+        # test this stand-in is never invoked, and says so loudly if the plan
+        # ever reaches for it.
+        if (!is_file(qo_dir + "/qcc-batch.sh")) {
+            write(qo_dir + "/qcc-batch.sh",
+                "#!/bin/sh\necho 'the plan should not have needed the batch' >&2\nexit 9\n");
+            chmod(qo_dir + "/qcc-batch.sh", 0755);
+        }
         # A component published before the group's last shared parse is stale by
         # definition, so the stamp that dates that parse has to exist for any
         # component to be able to reach currency at all.
@@ -604,29 +637,192 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             "the scheduled recipe does not compile behind the coordinator");
     }
 
-    testScheduledRecipeRefusesToStartTheBatch() {
-        TmpDir tmp("qore-aot-driver-nobatch-");
+    #! The batch decision must weigh the consumer closure, not the stale set.
+    /** A component's generation names its own sources and its DIRECT
+        predecessors' published compile contracts, so editing one widely
+        required source leaves exactly one component stale: its consumers still
+        name the contract that source published last time.  They go stale the
+        moment it is recompiled -- which is why the stale set understates the
+        work by the size of the closure, and why deciding from it sent a
+        group-wide invalidation down the standalone path.  The observed cost was
+        one compile at a time on a 32-core host, followed by the shared parse
+        recompiling everything the serial pass had just built.
+
+        The fixture is that shape exactly: one stale component whose consumers
+        are the rest of the group.  Holding the coordinator to the batch here is
+        what stops the wasted serial pass from coming back.
+    */
+    testPlanChoosesTheBatchFromTheConsumerClosure() {
+        TmpDir tmp("qore-aot-driver-closure-");
+        list<string> extra = ();
+        for (int i = 0; i < 10; ++i) {
+            push extra, sprintf("p%02d", i);
+        }
+        # Every component a singleton, so nothing is routed to the shared parse
+        # for spanning several sources; the decision can only come from the
+        # closure.
+        hash<auto> fx = fixture(tmp.path, NOTHING, False, extra);
+        foreach string name in (extra) {
+            writeDepfile(fx.qo_dir, name, "d");
+        }
+        writeCompiler(fx);
+        writeBatchCompiler(fx);
+
+        # A component published before the group's last shared parse is stale by
+        # definition, so the marker must not be newer than any member stamp for
+        # this fixture to be able to start out current.  Writing the marker first
+        # and the stamps after establishes that without waiting for anything: the
+        # comparison is strict, so the equal mtimes a whole-second filesystem
+        # produces satisfy it too.
+        write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
+        foreach string name in (fx.names) {
+            write(fx.qo_dir + "/" + name + ".qo.stamp", "stamp\n");
+        }
+        assertEq(0, runTool(("--scc-publish-all", fx.context)).rc,
+            "the fixture starts fully published");
+        assertEq((), stalePlan(fx).stale, "and fully current");
+
+        # One edited source, and nothing else.
+        write(fx.src_dir + "/d.qc", isolatedSource("d") + "# edited\n");
+
+        hash<auto> planned = stalePlan(fx);
+        assertEq(1, planned.stale.size(),
+            "exactly one component is stale: " + planned.output);
+        assertTrue(planned.stale[0].source =~ /\/d\.qc$/,
+            "and it is the edited one: " + planned.output);
+        assertEq(extra.size() + 1, planned.closure,
+            "its consumer closure is d and everything that requires it: "
+                + planned.output);
+
+        hash<auto> result = plan(fx);
+        assertEq(0, result.rc, "the coordinator succeeds: " + result.output);
+        assertTrue(result.output.find("selecting the shared-parse batch") >= 0,
+            "the closure selects the shared parse: " + result.output);
+        assertEq(-1, result.output.find("incrementally"),
+            "and no component is compiled one at a time: " + result.output);
+
+        # The compile log distinguishes the two builders, so "no standalone
+        # compile ran first" is checked rather than inferred from timing.
+        list<string> compiled = compiles(fx);
+        assertEq(fx.names.size(), (select compiled, $1 =~ /^batch /).size(),
+            "the shared parse writes every member: " + compiled.join(", "));
+        assertEq((), (select compiled, $1 !~ /^batch /),
+            "and nothing is compiled standalone: " + compiled.join(", "));
+
+        assertEq((), stalePlan(fx).stale,
+            "the group is current when the coordinator returns");
+    }
+
+    #! Reads the coordinator's stale plan: its rows and its closure size.
+    private hash<auto> stalePlan(hash<auto> fx) {
+        hash<auto> result = runTool(("--scc-source-stale", "--rebuild-closure",
+            "--batch-stamp", fx.qo_dir + "/.qcc-batch-bootstrap.stamp", fx.context));
+        assertEq(0, result.rc, "--scc-source-stale: " + result.output);
+        list<hash<auto>> stale = ();
+        int closure = -1;
+        foreach string line in (result.output.split("\n")) {
+            if (!trim(line)) {
+                continue;
+            }
+            list<string> fields = line.split("\t");
+            if (fields[0] == "rebuild-closure") {
+                closure = fields[1].toInt();
+                continue;
+            }
+            assertEq(5, fields.size(),
+                "a stale-plan row names its component and a representative member: "
+                    + line);
+            push stale, ("key": fields[1], "size": fields[2].toInt(),
+                "source": fields[3], "output": fields[4]);
+        }
+        return ("output": result.output, "stale": stale, "closure": closure);
+    }
+
+    #! A component spanning several sources has no builder but the shared parse.
+    /** The claim an object recipe carries says the group HAS a coordinator, not
+        that the coordinator has already run.  Which is reached first depends on
+        how the consuming project asks for the objects, and the plan can also
+        have been left behind entirely: its stamp lives beside the build scripts
+        while the generations it describes live beside the objects, so removing
+        the object directory leaves the stamp asserting a currency that no longer
+        exists.
+
+        Reaching a stale multi-member component behind that claim used to be
+        treated as a contradiction and end the build, with a message about
+        strongly connected components and a recovery nobody could derive from it.
+        The schedule is not this recipe's to control, and the component it was
+        handed has no valid internal order and therefore no standalone builder at
+        all: starting the shared parse is the answer, and refusing to only turned
+        a schedule into a failure.
+    */
+    testScheduledRecipeStartsTheSharedParseItCannotReplace() {
+        TmpDir tmp("qore-aot-driver-voidplan-");
         # a and b share a component, and nothing is published, so the recipe for
-        # a finds a stale two-member component -- which only the shared parse
-        # can compile, and which the coordinator routes there before any recipe
-        # runs.  Reaching it from a recipe means the plan was wrong.
+        # a finds a stale two-member component: the shape that only the shared
+        # parse can compile, reached with the plan still claiming to hold.
         hash<auto> fx = fixture(tmp.path);
         writeCompiler(fx);
+        writeBatchCompiler(fx);
         write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
 
         hash<auto> component = componentFor(fx.qo_dir, "a");
         assertEq("2", component.size, "a and b share one component");
 
         hash<auto> result = recipe(fx, "a", component);
-        assertEq(1, result.rc, "the recipe fails rather than improvising");
-        assertTrue(result.output.find("cannot be started from a single object") >= 0,
-            "it says why the shared parse is not its to start: " + result.output);
-        assertEq((), compiles(fx), "and it compiles nothing");
-        assertFalse(exists record(fx, component.key),
-            "nothing is published");
+        assertEq(0, result.rc, "the recipe builds it: " + result.output);
+        assertTrue(result.output.find("has no standalone builder") >= 0,
+            "it says why the shared parse is the only builder for it: "
+                + result.output);
+        assertEq(-1, result.output.find("cannot be started from a single object"),
+            "rather than refusing to start it: " + result.output);
+
+        list<string> compiled = compiles(fx);
+        assertEq(fx.names.size(), (select compiled, $1 =~ /^batch /).size(),
+            "the whole group is rebuilt through one shared parse: "
+                + compiled.join(", "));
+        assertEq((), (select compiled, $1 !~ /^batch /),
+            "and no member is compiled standalone: " + compiled.join(", "));
+
+        # Recovery means the group is usable, not merely that nothing failed.
+        foreach string name in (fx.names) {
+            hash<auto> published = componentFor(fx.qo_dir, name);
+            assertTrue(exists record(fx, published.key),
+                "component " + published.key + " is published");
+        }
     }
 
-    #! Every component of a group compiled at once, as a parallel build does it.
+    #! Not every group has a coordinator to have been planned by.
+    /** CMake configures the shared parse and the plan target together, and only
+        for a group with more than one source, but it writes the ordered claim
+        into every object recipe unconditionally.  A one-source group's recipe
+        therefore carries a claim about a coordinator that was never configured,
+        and its component is stale exactly when it needs compiling -- the normal
+        case, not a broken plan.  Escalating there would ask for a shared parse
+        the group does not have; the standalone path is the only builder it has
+        ever had, and reaching it is not an event worth reporting.
+    */
+    testScheduledRecipeBuildsAGroupWithoutASharedParse() {
+        TmpDir tmp("qore-aot-driver-nogroupbatch-");
+        hash<auto> fx = fixture(tmp.path, NOTHING, False);
+        writeCompiler(fx);
+        # Deliberately no batch script: this is how a one-source group is
+        # configured.
+        write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
+        assertFalse(is_file(fx.qo_dir + "/qcc-batch.sh"),
+            "the group has no shared parse");
+
+        hash<auto> component = componentFor(fx.qo_dir, "d");
+        assertEq("1", component.size, "d is a singleton component");
+
+        hash<auto> result = recipe(fx, "d", component);
+        assertEq(0, result.rc, "the recipe builds it: " + result.output);
+        assertEq(-1, result.output.find("shared parse"),
+            "a group with no shared parse does not reach for one: " + result.output);
+        assertEq(("d.qc d.qo",), compiles(fx),
+            "the component is compiled on the standalone path");
+        assertTrue(exists record(fx, component.key), "and published");
+    }
+
     /** The reported failure needed concurrency to become visible, so the fix is
         held to it: eighteen workers resolve identity, take locks, select
         preloads, compile and publish simultaneously, and one of them rewrites

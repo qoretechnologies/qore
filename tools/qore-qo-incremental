@@ -699,37 +699,25 @@ with_component_lock() (
     exit "$publish_rc"
 )
 
-#! Rebuilds every member of every component in the group through one shared parse.
-#  A component with more than one member has no valid internal order, so its
-#  members cannot be compiled separately against each other.  The group batch is
-#  the existing mechanism that parses many sources at once; it takes the group
-#  lock (never a component lock, because it writes every component's members)
-#  and republishes every generation record.
-build_group_batch() {
-    # The batch takes the GROUP lock while a per-object recipe holds only a
-    # component lock, so a batch started from here would republish every
-    # component's generation record underneath compiles it does not exclude.
-    # The coordinator routes every stale multi-member component to the shared
-    # parse before any object recipe runs, so reaching this point behind it
-    # means the plan was wrong -- and starting an unsynchronised group compile
-    # is a worse answer to that than saying so.
-    if [ "$coordinator_scheduled" = 1 ]; then
-        echo "$0: component $component_key spans $component_size sources and is" \
-            "still stale after the group was planned; the shared parse cannot be" \
-            "started from a single object's recipe because it publishes the whole" \
-            "group" >&2
-        return 1
-    fi
-    # Several members of one component can each reach this point before any of
-    # them takes the group lock; only the holder compiles, and the rest find the
-    # generation current. The batch itself reports the one compile that happens.
-    echo "$0: component $component_key spans $component_size sources; delegating" \
-        "to the group's shared parse"
-    if [ -z "$batch_bootstrap_stamp" ] || [ ! -f "$batch_script" ] \
-            || [ ! -x "$batch_bootstrap_tool" ]; then
-        echo "$0: component $component_key spans $component_size sources but the" \
-            "group has no batch compile script; cannot publish a coherent" \
-            "generation" >&2
+#! True when this group is configured with a shared parse.
+#  CMake configures the batch script, the batch bootstrap stamp and the plan
+#  target together, and only for a group with more than one source, so this also
+#  answers whether the group has a coordinator at all.
+have_group_batch() {
+    [ -n "$batch_bootstrap_stamp" ] && [ -f "$batch_script" ] \
+        && [ -x "$batch_bootstrap_tool" ]
+}
+
+#! Runs the group's shared parse, which writes and publishes every component.
+#  The batch takes the GROUP lock rather than a component lock, because it is the
+#  only builder that writes members it was not asked for.  Several callers can
+#  ask for it at once: only the lock holder compiles, and the rest find the
+#  generation current and return.
+run_group_batch() {
+    if ! have_group_batch; then
+        echo "$0: the group has no batch compile script, so its shared parse" \
+            "cannot be started; component $component_key cannot be published as" \
+            "part of a coherent generation" >&2
         return 1
     fi
     # No frozen graph: the batch compiles every member of every component under
@@ -742,12 +730,53 @@ build_group_batch() {
             "$batch_script" "$source_order_tool"
 }
 
+#! Rebuilds every member of every component in the group through one shared parse.
+#  A component with more than one member has no valid internal order, so its
+#  members cannot be compiled separately against each other.  The group batch is
+#  the existing mechanism that parses many sources at once.
+build_group_batch() {
+    # A group coordinator schedules every stale multi-member component into the
+    # shared parse before the object recipes it plans for, so reaching here
+    # behind one used to be treated as a contradiction and reported as a build
+    # failure.  It is not one.  The claim an object recipe carries says the group
+    # HAS a coordinator, not that the coordinator has already run: whether it is
+    # reached first depends on how the consuming project asks for the objects,
+    # and a project that depends on the object stamps as files rather than on the
+    # group's order targets reaches the recipes first.  The plan can also have
+    # been left behind entirely -- its stamp lives beside the build scripts while
+    # the generations it describes live beside the objects, so removing the object
+    # directory leaves the stamp asserting a currency that no longer exists.
+    #
+    # Either way this component spans several sources, which means it has no
+    # valid internal order and no standalone builder at all.  The shared parse is
+    # the only thing that can compile it, and refusing to start it only turned a
+    # schedule this recipe cannot control into a failed build.
+    if [ "$coordinator_scheduled" = 1 ]; then
+        echo "$0: component $component_key spans $component_size sources and is" \
+            "stale although the group has a coordinator; starting the group's" \
+            "shared parse from here, because a component spanning several sources" \
+            "has no standalone builder"
+        # Everything the claim authorises -- the narrowed currency rule, the
+        # skipped prerequisite pass -- is only sound while the plan holds for this
+        # component, and it does not.
+        coordinator_scheduled=0
+        currency_scope=
+    else
+        echo "$0: component $component_key spans $component_size sources;" \
+            "delegating to the group's shared parse"
+    fi
+    run_group_batch
+}
+
 #! Brings every transitive predecessor component current, in dependency order.
 #  One member per component is enough: the component is the unit of work, so
 #  building any member brings all of them current.
 build_prerequisites() {
+    # `$coordinator_scheduled`, not the environment variable it was read from:
+    # the claim it carries can be abandoned during this run, and the environment
+    # still says otherwise.
     if [ "${QORE_QCC_PREREQUISITES_READY:-0}" = 1 ] \
-            || [ "${QORE_QCC_PREREQUISITES_ORDERED:-0}" = 1 ] \
+            || [ "$coordinator_scheduled" = 1 ] \
             || ! have_source_order \
             || [ -z "$component_selector" ]; then
         return 0
@@ -774,6 +803,7 @@ build_prerequisites() {
         [ -n "$prerequisite_source" ] || continue
         [ -n "$prerequisite_output" ] || continue
         if ! QORE_QCC_PREREQUISITES_READY=1 \
+                QORE_QCC_PREREQUISITES_ORDERED="$coordinator_scheduled" \
                 QORE_QCC_BATCH_BOOTSTRAP_STAMP="$batch_bootstrap_stamp" \
                 "$this_script" "$prerequisite_output" "$prerequisite_source" \
                     "$single_script"; then

@@ -1858,6 +1858,42 @@ file(WRITE \"${CMAKE_BINARY_DIR}/cycle-vars.txt\"
         assertTrue(read(build_dir + "/linked.qo.qolink.manifest.json").find(
                 generation_map) != -1,
             "the qo-link aggregate validates the cyclic group's generation map");
+
+        # Removing the object directory is the recovery a developer reaches for,
+        # and it used to end the next build with a message about strongly
+        # connected components.  The two trees are not invalidated together: the
+        # generation records live under OUTPUT_DIR while the plan stamp that
+        # asserts they are current lives under SCRIPT_DIR, so wiping the first
+        # leaves the build tool with no reason to reach the coordinator and every
+        # reason to run the object recipes.  Each then finds its component stale
+        # behind a claim that the group has a coordinator, and the pair and the
+        # ring span several sources, so neither has a standalone builder.
+        #
+        # The build has to get itself out of that: the recipe hands its component
+        # to the group's shared parse instead of refusing to start it.  No `cmake`
+        # re-run here, deliberately -- needing one was the part of the old
+        # recovery that could not be derived from the failure.
+        assertTrue(is_dir(build_dir + "/qo"), "the object tree exists");
+        assertTrue(is_file(build_dir + "/qo-scripts/.qcc-incremental-plan.stamp"),
+            "and the plan stamp that describes it lives in the other tree");
+        remove_tree(build_dir + "/qo");
+        assertFalse(is_dir(build_dir + "/qo"), "the object tree is removed");
+        assertTrue(is_file(build_dir + "/qo-scripts/.qcc-incremental-plan.stamp"),
+            "while the plan stamp survives, still claiming the group is current");
+
+        string recovered = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertTrue(is_file(build_dir + "/linked.qo"),
+            "the build recovers from a wiped object tree: " + recovered);
+        assertTrue(occurrences(recovered, "has no standalone builder") > 0,
+            "and says why it started the shared parse itself: " + recovered);
+        assertEq(0, occurrences(recovered, "cannot be started from a single object"),
+            "rather than refusing to rebuild the group: " + recovered);
+        assertEq(4, occurrences(read(generation_map), "generation="),
+            "every component is published again: " + read(generation_map));
+
+        assertEq(0, occurrences(run(sprintf("cmake --build %s -- -j33", build_dir)),
+                "qcc: script-context .qo"),
+            "and the build after the recovery converges");
     }
 
     testManagedQccOutputPruning() {
