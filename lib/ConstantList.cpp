@@ -37,8 +37,10 @@
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_aot_deps.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <vector>
 
 // parse-time thread-local depth of constant value initialization in progress (see ConstantList.h)
 thread_local unsigned qore_constant_init_depth = 0;
@@ -601,9 +603,29 @@ static QoreValue resolveRtConstRefDeep(const QoreValue& start, ExceptionSink* xs
     return resolved;
 }
 
+//! Constants whose stored value this thread is currently materializing, innermost last
+/** A cycle in the serialized AOT constant-reference graph is always contained in one thread's call stack, so
+    per-thread state detects it exactly and needs no locking.  The stack is only ever a few entries deep, so a
+    linear scan costs far less than the container walk it guards.
+*/
+static thread_local std::vector<const ConstantEntry*> rt_deep_resolve_in_flight;
+
+bool qore_constant_deep_resolve_in_flight(const ConstantEntry* ce) {
+    return std::find(rt_deep_resolve_in_flight.begin(), rt_deep_resolve_in_flight.end(), ce)
+        != rt_deep_resolve_in_flight.end();
+}
+
 QoreValue ConstantEntry::getReferencedValue() const {
     ExceptionSink xsink;
     bool changed;
+    // Mark this entry in flight for the walk below, so a serialized reference that leads back to it is
+    // reported by RuntimeConstantPathRefNode::resolvePath() instead of recursing until the stack overflows.
+    rt_deep_resolve_in_flight.push_back(this);
+    struct DeepResolveGuard {
+        ~DeepResolveGuard() {
+            rt_deep_resolve_in_flight.pop_back();
+        }
+    } deep_resolve_guard;
     QoreValue rv = resolveRtConstRefDeep(val, &xsink, changed);
     if (!xsink) {
         return rv;

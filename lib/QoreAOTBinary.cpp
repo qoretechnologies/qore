@@ -2231,6 +2231,21 @@ private:
             return QoreValue();
         }
 
+        // A reference back into a constant whose value is already being materialized further up this call
+        // stack is a cycle in the serialized reference graph: getReferencedValue() would walk that value
+        // again, reach this node again, and recurse until the stack overflows.  Report it instead -- the
+        // writer must not emit such a graph, so reaching this is a defect in the artifact, and the message
+        // has to name both ends of the cycle to be actionable.
+        if (qore_constant_deep_resolve_in_flight(ce)) {
+            if (xsink) {
+                xsink->raiseException("RECURSIVE-CONSTANT-REFERENCE",
+                    "cannot resolve AOT-deserialized constant path '%s': its base constant '%s' is already "
+                    "being materialized, so the serialized constant references form a cycle",
+                    encoded_path.c_str(), ce->getName());
+            }
+            return QoreValue();
+        }
+
         QoreValue base = ce->getReferencedValue();
         bool resolved = false;
         QoreValue rv = aot_resolve_constant_path_tail(base, encoded_path, tail_pos, &resolved);
@@ -2301,8 +2316,26 @@ static void aot_add_constant_value_reverse_mappings_impl(AOTConstantReverseMap& 
         return;
     }
 
+    // A container shared by two constants keeps the path of whichever constant reached it first, and a
+    // later constant may not re-claim it.  Re-claiming is what makes the reference graph cyclic: a constant
+    // that both merges and embeds the same target reaches that target's interior nodes at equal depth and
+    // its root node one level down, so a re-claim can win the interiors while the target keeps its root.
+    // The two then reference each other, and nothing breaks that at load time -- resolution recurses until
+    // the stack overflows, or the value deserializes to a deferred reference that is not a value at all.
+    // Refusing the re-claim makes one constant win every node a given pair shares, so references between
+    // any two constants only ever run one way.
+    //
+    // Objects are the exception, because they are the values this map exists for: an object can never be
+    // written by value, so the constant holding one has nothing to fall back on if its path names the
+    // constant currently being written.  The traversal order across classes and namespaces is not
+    // declaration order, so first claim does not reliably name the object's own constant -- `SoftTypeMap`
+    // in DataProvider is reached before the `SoftIntType` constant holding the object it stores.  Objects
+    // therefore keep the best-path choice below, which prefers the whole-constant path that every other
+    // holder can reference.
+    const bool node_is_object = v.getType() == NT_OBJECT;
     auto it = crm.find(node);
-    if (it == crm.end() || aot_constant_reverse_path_is_better(it->second, path)) {
+    if (it == crm.end()
+            || (node_is_object && aot_constant_reverse_path_is_better(it->second, path))) {
         crm[node] = path;
         if (getenv("QORE_AOT_DEBUG_CONST_MAP")) {
             if (auto* obj = dynamic_cast<const QoreObject*>(node)) {

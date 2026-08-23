@@ -125,6 +125,17 @@ DLLLOCAL int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink
 //! Returns "err: desc" for the module-load failure recorded for an unpopulated AOT constant, or an empty string
 DLLLOCAL std::string qore_aot_get_pending_constant_error(ConstantEntry* ce);
 
+//! Returns true if this thread is already materializing the given constant's stored value
+/** ConstantEntry::getReferencedValue() walks the value it returns, resolving the AOT constant references
+    serialized inside it.  A reference that leads back to a constant already being walked further up the same
+    call stack is a cycle in the serialized reference graph, and following it recurses until the stack
+    overflows.  The state is per-thread because a cycle is always contained in one thread's call stack, which
+    also keeps concurrent reads of the same constant race-free.
+
+    @param ce the constant entry a reference is about to be resolved from
+*/
+DLLLOCAL bool qore_constant_deep_resolve_in_flight(const ConstantEntry* ce);
+
 class ConstantEntry : public QoreReferenceCounter {
     friend class ConstantEntryInitHelper;
     friend class RuntimeConstantRefNode;

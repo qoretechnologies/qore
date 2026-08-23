@@ -1,0 +1,302 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTAliasedConstantPathOwnershipTest
+
+# Regression tests for the constant paths an AOT object records for a value node that more than one
+# constant holds.
+#
+# The parser folds a constant used inside another constant's initializer into that initializer's value,
+# so both constants end up holding the *same* node.  The writer keeps a reverse map from node pointer to
+# the constant path the node can be recovered from and emits a VT_CONST_REF naming that path instead of a
+# value.  Which constant a shared node is recorded under decides whether the emitted references form a
+# cycle, and a cyclic reference graph is unresolvable at load time in two different ways, both fatal:
+#
+#   - reached while the other constant is still a pending shell, the value deserializes to a deferred
+#     RuntimeConstantPathRefNode instead of a value.  A later compilation unit that folds that constant
+#     into a new one hands the writer a node it has no case for:
+#       AOT cannot serialize class constant '...' without data loss
+#       (at ["stack-size"], value type 'AOT constant path reference')
+#   - reached while the other constant already holds a value, ConstantEntry::getReferencedValue() and
+#     RuntimeConstantPathRefNode::evalImpl() call each other with no base case and qcc dies of a stack
+#     overflow with no diagnostic at all.
+#
+# The rule is that a container keeps the path of whichever constant reached it first and a later constant
+# may not re-claim it, so one constant wins every node a given pair shares and references between any two
+# constants only ever run one way.  See design/aot-constant-value-references.md.
+#
+# THE SHAPES BELOW ARE LOAD-BEARING.  Each one is a distinct way for two constants to come to hold the
+# same node, and they were reached by different defects:
+#
+#   containment  a container constant holds another constant's whole value; its path to that value's
+#                interior is one subscript deeper.  The original report: the deeper alias path encoded
+#                *shorter* because the container's name is shorter, so a length-ranked map preferred it.
+#   merge        `X + {...}` shares X's interior nodes at EQUAL depth, so nothing about depth separates
+#                the two candidates and only the claim order does.
+#   alias        `const B = X;` shares every node at equal depth, including the root.
+#   cycle        a constant that both merges and embeds the same target gets a winner in each direction
+#                at once -- the interiors at equal depth, the root one level down -- which is what makes
+#                the reference graph mutual.  This is the shape that crashed qcc outright.
+#
+# The failure needs TWO compilation units.  A compile never emits a reference into the constant it is
+# currently writing, so a single unit folds the shared node in by value and looks correct no matter what
+# the map recorded.  Every case here therefore compiles a base object and then a second object against it.
+#
+# Each derived source also pins exact leaf values reached through the aliased constants with typed
+# constants: a constant declared `string` whose initializer folds to NOTHING fails the compile with
+# RUNTIME-TYPE-ERROR.  That asserts the resolved value inside the very compile under test, which a
+# separate interpreted run cannot do.
+class AOTAliasedConstantPathOwnershipTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTAliasedConstantPathOwnershipTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("a constant held by a shorter-named container stays serializable across units",
+            \testContainmentAlias());
+        addTestCase("a list-subscripted containment alias does not displace the owning constant",
+            \testContainmentAliasList());
+        addTestCase("a merged constant sharing interior nodes at equal depth stays serializable",
+            \testMergeAlias());
+        addTestCase("a whole-value alias of another constant stays serializable", \testWholeValueAlias());
+        addTestCase("a constant that both merges and embeds the same target does not write a "
+            "reference cycle", \testMergeAndEmbedCycle());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+    }
+
+    #! Compiles \a base_src to its own AOT object, then \a derived_src against it, and checks both
+    /** The second compile is the one under test: it is where a reference recorded against the wrong
+        constant is read back, and where a deferred reference reaches the writer.
+
+        @param name the shape being exercised, used in assertion messages and the temp dir name
+        @param base_src the unit declaring the aliased constants
+        @param derived_src the unit folding them into a new constant, carrying the value proofs
+        @param expected what the same sources print when run interpreted
+    */
+    private checkPair(string name, string base_src, string derived_src, string expected) {
+        TmpDir tmp("qore-aot-const-ownership-" + name + "-");
+        string lib_dir = tmp.path + "/aotlib";
+        mkdir(lib_dir);
+        string base_path = tmp.path + "/base.qc";
+        string derived_path = tmp.path + "/derived.qc";
+        writeFile(base_path, base_src);
+        writeFile(derived_path, derived_src);
+
+        string env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+        string base_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/base.qo %s",
+            env, qcc_bin, lib_dir, lib_dir, base_path));
+        assertTrue(is_file(lib_dir + "/base.qo"), name + ": compiled the base unit: " + base_out);
+
+        string derived_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/derived.qo %s",
+            env, qcc_bin, lib_dir, lib_dir, derived_path));
+        assertEq(-1, derived_out.find("without data loss"),
+            name + ": folding the aliased base constant serializes: " + derived_out);
+        assertEq(-1, derived_out.find("AOT constant path reference"),
+            name + ": the base constant deserialized to a value, not a deferred path reference: "
+            + derived_out);
+        assertEq(-1, derived_out.find("RECURSIVE-CONSTANT-REFERENCE"),
+            name + ": the emitted constant references are acyclic: " + derived_out);
+        assertEq(-1, derived_out.find("RUNTIME-TYPE-ERROR"),
+            name + ": every value reached through the aliased constants is intact: " + derived_out);
+        # a crash leaves no object and no message at all, so this also covers the stack overflow
+        assertTrue(is_file(lib_dir + "/derived.qo"),
+            name + ": compiled the unit folding the aliased base constant: " + derived_out);
+
+        # semantics: the same sources run interpreted must produce the expected values
+        string script_path = tmp.path + "/run.qr";
+        writeFile(script_path, base_src + derived_src + "printf(\"%s\\n\", describe());\n");
+        string value_out = run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug %s",
+            libqore_dir, qore_bin, script_path));
+        assertEq(expected + "\n", value_out, name + ": aliased constants keep their values: " + value_out);
+    }
+
+    # ---- containment: the container's path to the interior is one subscript deeper --------------------
+    #
+    # `OptionInfo` must stay short enough that its deeper path to ["stack-size"] still encodes shorter
+    # than the owner's own path -- that inversion is what a length-ranked map preferred:
+    #   OptionsBase::InterfaceSystemOptions["stack-size"]   73 bytes encoded
+    #   OptionsBase::OptionInfo["system"]["stack-size"]     70 bytes encoded
+    testContainmentAlias() {
+        checkPair("containment", "%modern
+public class OptionsBase {
+    public {
+        const InterfaceSystemOptions = {
+            \"stack-size\": {\"type\": \"byte-size\", \"desc\": \"default stack size\"},
+        };
+
+        const OptionInfo = {
+            \"system\": InterfaceSystemOptions,
+        };
+    }
+}
+", "%modern
+public class OptionsDerived inherits OptionsBase {
+    public {
+        const InterfaceSystemOptions = OptionsBase::InterfaceSystemOptions + {
+            \"java-max-heap\": {\"type\": \"byte-size\", \"desc\": \"default max JVM heap\"},
+        };
+
+        const string ProofOwner = {\"byte-size\": \"ok\"}{OptionsBase::InterfaceSystemOptions{\"stack-size\"}{\"type\"}};
+        const string ProofAlias = {\"byte-size\": \"ok\"}{OptionsBase::OptionInfo{\"system\"}{\"stack-size\"}{\"type\"}};
+        const string ProofMerged = {\"byte-size\": \"ok\"}{OptionsDerived::InterfaceSystemOptions{\"java-max-heap\"}{\"type\"}};
+    }
+}
+
+string sub describe() {
+    return sort(keys OptionsDerived::InterfaceSystemOptions).join(\",\")
+        + \"|\" + OptionsDerived::ProofOwner + OptionsDerived::ProofAlias + OptionsDerived::ProofMerged;
+}
+", "java-max-heap,stack-size|okokok");
+    }
+
+    # ---- containment through a list index rather than a hash key -------------------------------------
+    testContainmentAliasList() {
+        checkPair("containment-list", "%modern
+public class ListOptionsBase {
+    public {
+        const InterfaceSystemOptionList = (
+            {\"type\": \"byte-size\", \"name\": \"stack-size\"},
+        );
+
+        const OptInfo = {
+            \"system\": InterfaceSystemOptionList,
+        };
+    }
+}
+", "%modern
+public class ListOptionsDerived inherits ListOptionsBase {
+    public {
+        const InterfaceSystemOptionList = ListOptionsBase::InterfaceSystemOptionList + (
+            {\"type\": \"byte-size\", \"name\": \"java-max-heap\"},
+        );
+
+        const string ProofOwner = {\"stack-size\": \"ok\"}{ListOptionsBase::InterfaceSystemOptionList[0]{\"name\"}};
+        const string ProofAlias = {\"stack-size\": \"ok\"}{ListOptionsBase::OptInfo{\"system\"}[0]{\"name\"}};
+    }
+}
+
+string sub describe() {
+    return (map \$1.name, ListOptionsDerived::InterfaceSystemOptionList).join(\",\")
+        + \"|\" + ListOptionsDerived::ProofOwner + ListOptionsDerived::ProofAlias;
+}
+", "stack-size,java-max-heap|okok");
+    }
+
+    # ---- merge: `X + {...}` shares X's interior nodes at EQUAL depth ---------------------------------
+    #
+    # Nothing about depth separates `Mg::LongOptionsConstantName["p"]` from `Mg::B["p"]` here, so this
+    # case is decided purely by which constant claimed the node first.
+    testMergeAlias() {
+        checkPair("merge", "%modern
+public class Mg {
+    public {
+        const LongOptionsConstantName = {\"p\": {\"n\": 1}};
+        const B = LongOptionsConstantName + {\"extra\": {\"e\": 3}};
+    }
+}
+", "%modern
+public class MgDerived inherits Mg {
+    public {
+        const LongOptionsConstantName = Mg::LongOptionsConstantName + {\"more\": {\"z\": 9}};
+
+        const string ProofOwner = {\"1\": \"ok\"}{Mg::LongOptionsConstantName{\"p\"}{\"n\"}};
+        const string ProofMerged = {\"1\": \"ok\"}{Mg::B{\"p\"}{\"n\"}};
+        const string ProofCarried = {\"1\": \"ok\"}{MgDerived::LongOptionsConstantName{\"p\"}{\"n\"}};
+        const string ProofNew = {\"9\": \"ok\"}{MgDerived::LongOptionsConstantName{\"more\"}{\"z\"}};
+    }
+}
+
+string sub describe() {
+    return sort(keys MgDerived::LongOptionsConstantName).join(\",\") + \"|\"
+        + MgDerived::ProofOwner + MgDerived::ProofMerged + MgDerived::ProofCarried + MgDerived::ProofNew;
+}
+", "more,p|okokokok");
+    }
+
+    # ---- alias: `const B = X;` shares every node, root included, at equal depth -----------------------
+    testWholeValueAlias() {
+        checkPair("whole-value-alias", "%modern
+public class Al {
+    public {
+        const Xlonger = {\"p\": {\"n\": 1}, \"q\": {\"m\": 2}};
+        const B = Xlonger;
+    }
+}
+", "%modern
+public class AlDerived inherits Al {
+    public {
+        const Xlonger = Al::Xlonger + {\"extra\": {\"e\": 3}};
+
+        const string ProofOwner = {\"1\": \"ok\"}{Al::Xlonger{\"p\"}{\"n\"}};
+        const string ProofAlias = {\"2\": \"ok\"}{Al::B{\"q\"}{\"m\"}};
+        const string ProofMerged = {\"3\": \"ok\"}{AlDerived::Xlonger{\"extra\"}{\"e\"}};
+    }
+}
+
+string sub describe() {
+    return sort(keys AlDerived::Xlonger).join(\",\") + \"|\"
+        + AlDerived::ProofOwner + AlDerived::ProofAlias + AlDerived::ProofMerged;
+}
+", "extra,p,q|okokok");
+    }
+
+    # ---- cycle: merging AND embedding the same constant wins a node in each direction ----------------
+    #
+    # `B` merges LongOptionsConstantName (sharing its interior {"n": 1} at equal depth) and also embeds it
+    # (holding its root one level down).  A map that lets the later constant re-claim the interior records
+    # the interior under B and the root under LongOptionsConstantName, so each references the other.  This
+    # compile SIGSEGVs without the fix, producing no object and no message.
+    testMergeAndEmbedCycle() {
+        checkPair("merge-and-embed-cycle", "%modern
+public class Mx {
+    public {
+        const LongOptionsConstantName = {\"p\": {\"n\": 1}};
+        const B = LongOptionsConstantName + {\"nested\": LongOptionsConstantName};
+    }
+}
+", "%modern
+public class MxDerived inherits Mx {
+    public {
+        const LongOptionsConstantName = Mx::LongOptionsConstantName + {\"more\": {\"z\": 9}};
+
+        const string ProofOwner = {\"1\": \"ok\"}{Mx::LongOptionsConstantName{\"p\"}{\"n\"}};
+        const string ProofMerged = {\"1\": \"ok\"}{Mx::B{\"p\"}{\"n\"}};
+        const string ProofEmbedded = {\"1\": \"ok\"}{Mx::B{\"nested\"}{\"p\"}{\"n\"}};
+        const string ProofCarried = {\"1\": \"ok\"}{MxDerived::LongOptionsConstantName{\"p\"}{\"n\"}};
+        const string ProofNew = {\"9\": \"ok\"}{MxDerived::LongOptionsConstantName{\"more\"}{\"z\"}};
+    }
+}
+
+string sub describe() {
+    return sort(keys MxDerived::LongOptionsConstantName).join(\",\") + \"|\"
+        + MxDerived::ProofOwner + MxDerived::ProofMerged + MxDerived::ProofEmbedded
+        + MxDerived::ProofCarried + MxDerived::ProofNew;
+}
+", "more,p|okokokokok");
+    }
+}
