@@ -1353,6 +1353,21 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq("Mixed CASE Here", AbstractDataField::getDisplayName("MixedCASE_here"));
         assertEq("Payment User ID", AbstractDataField::getDisplayName("PAYMENT_userID"));
 
+        # a lower-case letter that upper-cases to a sequence is the only form that letter has, so a word in
+        # upper case that contains one is still a word in upper case and is case-folded like any other
+        assertEq("Straße Name", AbstractDataField::getDisplayName("STRAßE_NAME"));
+        assertEq("Straßen Name", AbstractDataField::getDisplayName("STRAßEN_NAME"));
+        assertEq("Große Menge", AbstractDataField::getDisplayName("GROßE_MENGE"));
+        assertEq("Straße Name", AbstractDataField::getDisplayName("straße_name"));
+        assertEq("Strasse Name", AbstractDataField::getDisplayName("STRASSE_NAME"));
+        # ligatures upper-case to a sequence in the same way; the ligature itself is preserved, as
+        # case-folding lower-cases letters rather than decomposing them
+        assertEq("Proﬁl Name", AbstractDataField::getDisplayName("PROﬁL_NAME"));
+        # a word that really is mixed case still carries its own case information, including across a
+        # sharp s, so the word break after it is preserved
+        assertEq("Groß Handel", AbstractDataField::getDisplayName("großHandel"));
+        assertEq("Meine Straße Hier", AbstractDataField::getDisplayName("meineStraßeHier"));
+
         # short words and well-known acronyms are preserved
         assertEq("ID", AbstractDataField::getDisplayName("ID"));
         assertEq("URL", AbstractDataField::getDisplayName("URL"));

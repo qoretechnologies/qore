@@ -1069,9 +1069,9 @@ public class AbstractDataField inherits Qore::Serializable {
     */
     private static string foldUpperCaseWord(string word, *hash<string, bool> extra_acronyms) {
         # words with no upper-case letter (ex: camelCase words, digits, and words in caseless scripts such as
-        # Chinese, Japanese, Arabic, and Hebrew) and words with any lower-case letter carry their own case
-        # information and are left unchanged
-        if (word !~ /\p{Lu}/ || word =~ /\p{Ll}/) {
+        # Chinese, Japanese, Arabic, and Hebrew) and words with a lower-case letter that carries case
+        # information are left unchanged
+        if (word !~ /\p{Lu}/ || AbstractDataField::hasCasedLowerCase(word)) {
             return word;
         }
         # an explicit classification by the caller takes precedence over all other rules
@@ -1100,6 +1100,38 @@ public class AbstractDataField inherits Qore::Serializable {
         # end of the word
         rv =~ s/σ$/ς/;
         return rv;
+    }
+
+    #! Returns @ref True "True" if a word contains a lower-case letter that carries case information
+    /** A lower-case letter says something about the case a word was written in only if it has a
+        single-character upper-case form.  Letters that upper-case to a sequence (ex: the German sharp s,
+        \c "ß" -> \c "SS", and the typographic ligatures) or that have no upper-case form at all are the only
+        form they have, so a word in upper case that contains one (ex: \c "STRAßE", produced by upper-casing
+        \c "Straße") is still a word in upper case and must be case-folded like any other
+
+        @param word the word to inspect
+
+        @return @ref True "True" if the word contains a lower-case letter with a single-character upper-case
+        form, @ref False "False" otherwise
+
+        @since DataProvider 3.8
+    */
+    private static bool hasCasedLowerCase(string word) {
+        # almost all words in upper case have no lower-case letter at all; check that first
+        if (word !~ /\p{Ll}/) {
+            return False;
+        }
+        for (int i = 0, int e = word.length(); i < e; ++i) {
+            string c = word[i];
+            if (c !~ /\p{Ll}/) {
+                continue;
+            }
+            string upper = c.upr();
+            if (upper.length() == c.length() && upper != c) {
+                return True;
+            }
+        }
+        return False;
     }
 
     #! Converts a display name into a technical name

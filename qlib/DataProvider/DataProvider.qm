@@ -1366,6 +1366,12 @@ fetch
       (ex: \c "wait_for_active_shards" -> \c "Wait for Active Shards")
     - @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" now
       produces a single word break for consecutive word separators instead of one space per separator
+    - fixed @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" to
+      case-fold words in upper case that contain a lower-case letter with no single-character upper-case form,
+      such as the German sharp s or a typographic ligature; such a letter is the only form it has and said
+      nothing about the case the word was written in, but it suppressed case folding and then introduced a
+      spurious word break (ex: \c "STRAßE_NAME" previously yielded \c "STRAß E Name" and now yields
+      \c "Straße Name")
 
     @subsection dataprovider_v3_7 DataProvider v3.7
     - added source-owned native i18n catalog metadata and deterministic message identities for localized application,
