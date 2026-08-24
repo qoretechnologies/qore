@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -38,6 +38,7 @@
 #include "qore/intern/qore_aot_deps.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
@@ -109,12 +110,22 @@ const char* ClassNs::getName() const {
 }
 #endif
 
+//! Monotonic across the process: relative order is all that is read, and a Program never sees another's nodes.
+static std::atomic<uint64_t> qore_constant_init_seq_counter{0};
+
+uint64_t qore_next_constant_init_seq() {
+    return qore_constant_init_seq_counter.fetch_add(1, std::memory_order_relaxed) + 1;
+}
+
 ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, QoreValue val, const QoreTypeInfo* ti,
         bool n_pub, bool n_init, bool n_builtin, ClassAccess n_access, QoreParseTypeInfo* pti)
         : loc(loc), name(n), typeInfo(ti), parseTypeInfo(pti), val(val), in_init(false), pub(n_pub),
         init(n_init), builtin(n_builtin), delayed_eval(false), explicit_type(ti || pti), has_init_expr(false),
         saved_val_set(false), aot_shell_pending(false), external_stub(false), external_stub_dependent(false),
         rt_in_init(false),
+        // a constant created already initialized -- every builtin -- is finished now; one that still has to
+        // be initialized is stamped when ConstantEntryInitHelper retires
+        init_seq(n_init ? qore_next_constant_init_seq() : 0),
         access(n_access) {
     QoreProgram* pgm = getProgram();
     if (pgm)
@@ -140,6 +151,10 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
         external_stub(old.external_stub),
         external_stub_dependent(old.external_stub_dependent),
         rt_in_init(false),
+        // the copy keeps the original's sequence: importing a module must not reorder its constants relative
+        // to each other, or the AOT writer would pick a different owner for a shared value in the importing
+        // Program than the module was built with
+        init_seq(old.init_seq),
         // an unpopulated AOT shell keeps its deferred initializer in the copy, so the importing Program can run
         // it from its own entry
         aot_pending_init(old.aot_pending_init),
@@ -216,6 +231,9 @@ void ConstantEntry::setRuntimeValue(QoreValue result, ExceptionSink* xsink) {
     }
     saved_val_set = true;
     init = true;
+    if (!init_seq) {
+        init_seq = qore_next_constant_init_seq();
+    }
     aot_shell_pending = false;
 }
 
@@ -251,6 +269,9 @@ void ConstantEntry::makeExternalStubDeclaration() {
     external_stub = true;
     external_stub_dependent = false;
     init = true;
+    if (!init_seq) {
+        init_seq = qore_next_constant_init_seq();
+    }
 
     saved_val.discard(nullptr);
     saved_val_set = false;

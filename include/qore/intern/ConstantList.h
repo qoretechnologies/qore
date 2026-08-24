@@ -136,6 +136,11 @@ DLLLOCAL std::string qore_aot_get_pending_constant_error(ConstantEntry* ce);
 */
 DLLLOCAL bool qore_constant_deep_resolve_in_flight(const ConstantEntry* ce);
 
+//! Returns the next value of the process-wide constant initialization counter
+/** Stamped on a ConstantEntry when its value is finished; see ConstantEntry::getInitSeq().
+*/
+DLLLOCAL uint64_t qore_next_constant_init_seq();
+
 class ConstantEntry : public QoreReferenceCounter {
     friend class ConstantEntryInitHelper;
     friend class RuntimeConstantRefNode;
@@ -171,6 +176,12 @@ public:
     */
     AOTPendingConstantInit* aot_pending_init = nullptr;
 
+    //! where this constant's value falls in the order constant values were finished
+    /** Copied with the entry, so importing a module preserves the relative order its constants were
+        initialized in.  See getInitSeq() for what depends on it.
+    */
+    uint64_t init_seq = 0;
+
     DLLLOCAL ConstantEntry(const QoreProgramLocation* loc, const char* n, QoreValue v,
         const QoreTypeInfo* ti = nullptr, bool n_pub = false, bool n_init = false, bool n_builtin = false,
         ClassAccess n_access = Public, QoreParseTypeInfo* pti = nullptr);
@@ -198,6 +209,29 @@ public:
     DLLLOCAL ConstantEntry* refSelf() const {
         ref();
         return const_cast<ConstantEntry*>(this);
+    }
+
+    //! Where this constant's value falls in the order constant values were finished
+    /** Initializing a constant resolves its initializer first, which initializes every constant that
+        initializer reads.  Completion order is therefore a topological order of the "holds another constant's
+        value" relation: whatever a constant folded in was finished before it was.
+
+        The AOT writer records a shared value node under the lowest sequence that reaches it, which makes the
+        constant that *defines* a shared value its owner and every constant aliasing or containing it a
+        reference to it.  A reference then always names a constant finished earlier, which any unit able to
+        see the holder has already loaded.
+
+        Declaration order cannot be used for this: constant initializers are resolved lazily, so an entry may
+        be created long before the constant its initializer reads.  Qorus declares
+        `MapperFieldCodeTypeHelper::JavaTypeMap = OMQ::MapperProgram::JavaTypeMap` in a source parsed 115
+        files ahead of the one declaring `MapperProgram::JavaTypeMap`, so by creation order the alias comes
+        first.  Ranking the candidate paths cannot express it either: the traversal walks namespaces and
+        classes in tree order, which has no relation to which source unit is upstream, and an alias whose
+        class name sorts first then owned a value its own definer's object had to reference -- unresolvable
+        for any consumer, since the alias is not one of the definer's predecessors.
+    */
+    DLLLOCAL uint64_t getInitSeq() const {
+        return init_seq;
     }
 
     DLLLOCAL QoreValue getReferencedValue() const;
@@ -351,6 +385,9 @@ public:
         --qore_constant_init_depth;
         ce.in_init = false;
         ce.init = true;
+        // the value is finished here, and so is every constant this one's initializer read: that is what
+        // makes the sequence a topological order of the folding relation rather than of the source text
+        ce.init_seq = qore_next_constant_init_seq();
         //printd(5, "ConstantEntryInitHelper::~ConstantEntryInitHelper() '%s'\n", ce.getName());
     }
 };

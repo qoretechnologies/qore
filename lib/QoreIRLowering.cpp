@@ -569,7 +569,7 @@ static QoreIRValue tryDescriptorPluginLowering(QoreIRLowering& lowering, QoreIRB
 }
 
 QoreIRLowering::QoreIRLowering(QoreIRBuilder& n_builder, QoreParseContext* n_parse_context,
-        const std::unordered_map<const AbstractQoreNode*, std::string>* n_constant_reverse_map)
+        const AOTConstantReverseMap* n_constant_reverse_map)
         : builder(n_builder), parse_context(n_parse_context), constant_reverse_map(n_constant_reverse_map) {
 }
 

@@ -75,6 +75,8 @@ class AOTAliasedConstantPathOwnershipTest inherits QUnit::Test {
         addTestCase("a whole-value alias of another constant stays serializable", \testWholeValueAlias());
         addTestCase("a constant that both merges and embeds the same target does not write a "
             "reference cycle", \testMergeAndEmbedCycle());
+        addTestCase("an alias compiled beside its definer does not take ownership of its value",
+            \testPeerAliasDoesNotOwnItsDefinersValue());
 
         set_return_value(main());
     }
@@ -87,6 +89,108 @@ class AOTAliasedConstantPathOwnershipTest inherits QUnit::Test {
         File f();
         f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
         f.write(contents);
+    }
+
+    #! An alias may not own a value its own definer's object then has to reference.
+    /** Every other case here compiles the two constants in sequence, so the second already sees the
+        first as an external constant.  A group batch does not: it writes both as PEERS out of one
+        shared parse, and then ownership of a shared node is settled between two constants that are
+        equally present.  Deciding that by namespace and class tree order gave it to whichever class
+        name sorted first, which has nothing to do with which unit is upstream -- and an alias that
+        wins leaves its own definer's object holding a reference to a constant declared in a unit
+        that depends on the definer.
+
+        Nothing can resolve that reference from the definer alone, which is exactly the preload a
+        consumer gets: the alias is a consumer of the definer, so it is not one of the definer's
+        predecessors and is not preloaded with it.  A Qorus incremental build stopped here with
+        "sibling .qo cross-resolution failed: ... cannot resolve const_ref".
+
+        The class names below are the ones from that build, and they matter: MapperFieldCodeTypeHelper
+        sorts before MapperProgram, so tree order picks the alias.
+    */
+    testPeerAliasDoesNotOwnItsDefinersValue() {
+        TmpDir tmp("qore-aot-const-ownership-peer-alias-");
+        string lib_dir = tmp.path + "/aotlib";
+        string preload_dir = tmp.path + "/preload";
+        mkdir(lib_dir);
+        mkdir(preload_dir);
+
+        string definer_src = "%modern
+public namespace OMQ {
+public class MapperProgram {
+    public {
+        const JavaTypeMap = {\"string\": \"String\", \"int\": \"Integer\"};
+    }
+}
+}
+";
+        string alias_src = "%modern
+public namespace OMQ {
+public class MapperFieldCodeTypeHelper {
+    public {
+        const JavaTypeMap = OMQ::MapperProgram::JavaTypeMap;
+    }
+}
+}
+";
+        # folds the definer's constant, which is what forces the reference to be read back
+        string consumer_src = "%modern
+public namespace OMQ {
+public class ServerMapperContainer {
+    public {
+        const Folded = OMQ::MapperProgram::JavaTypeMap;
+        const Proof = OMQ::MapperProgram::JavaTypeMap{\"string\"};
+    }
+}
+}
+string sub describe() {
+    string s = OMQ::ServerMapperContainer::Proof;
+    return s + \"/\" + OMQ::ServerMapperContainer::Folded{\"int\"};
+}
+";
+        string definer_path = tmp.path + "/definer.qc";
+        string alias_path = tmp.path + "/alias.qc";
+        string consumer_path = tmp.path + "/consumer.qc";
+        writeFile(definer_path, definer_src);
+        writeFile(alias_path, alias_src);
+        writeFile(consumer_path, consumer_src);
+
+        string env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+        # one shared parse writing both objects: the shape a group batch produces
+        string batch_out = run(sprintf("%s %s -c --parse-option=PO_MODERN --batch-build-sidecars "
+            "--output-dir=%s --depfile-dir=%s %s %s",
+            env, qcc_bin, lib_dir, lib_dir, definer_path, alias_path));
+        list<string> objects = glob(lib_dir + "/*.qo");
+        assertEq(2, objects.size(), "the shared parse writes both peers: " + batch_out);
+
+        # the definer alone, which is every predecessor a consumer of it is given
+        string definer_object = "";
+        foreach string object in (objects) {
+            if (object =~ /definer_qc\.qo$/) {
+                definer_object = object;
+            }
+        }
+        assertNeq("", definer_object, "the definer's object is identifiable: " + objects.join(", "));
+        copy_file(definer_object, preload_dir + DirSep + basename(definer_object));
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/consumer.qo %s",
+            env, qcc_bin, preload_dir, lib_dir, consumer_path));
+        assertEq(-1, consumer_out.find("cannot resolve const_ref"),
+            "the definer's object references no constant declared in a unit that depends on it: "
+                + consumer_out);
+        assertEq(-1, consumer_out.find("cross-resolution failed"),
+            "the definer resolves against its own predecessors alone: " + consumer_out);
+        assertTrue(is_file(lib_dir + "/consumer.qo"),
+            "the unit folding the definer's constant compiles: " + consumer_out);
+
+        # semantics: the same sources interpreted must produce the same values
+        string script_path = tmp.path + "/run.qr";
+        writeFile(script_path, definer_src + alias_src + consumer_src
+            + "printf(\"%s\\n\", describe());\n");
+        string value_out = run(sprintf("LD_LIBRARY_PATH=%s %s -b --enable-debug %s",
+            libqore_dir, qore_bin, script_path));
+        assertEq("String/Integer\n", value_out,
+            "the aliased constant keeps its value: " + value_out);
     }
 
     #! Compiles \a base_src to its own AOT object, then \a derived_src against it, and checks both

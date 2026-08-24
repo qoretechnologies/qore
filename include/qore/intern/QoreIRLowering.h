@@ -40,6 +40,8 @@
 
 #include <qore/intern/QoreIRBuilder.h>
 #include <qore/intern/QoreParseAnalysis.h>
+// AOTConstantReverseMap: the reverse map the lowering resolves constant nodes through
+#include "qore/intern/QoreAOTBinary.h"
 
 // Forward declaration for obe_type_e enum
 enum obe_type_e;
@@ -122,7 +124,7 @@ public:
     };
 
     explicit QoreIRLowering(QoreIRBuilder& builder, QoreParseContext* parse_context = nullptr,
-        const std::unordered_map<const AbstractQoreNode*, std::string>* constant_reverse_map = nullptr);
+        const AOTConstantReverseMap* constant_reverse_map = nullptr);
 
     QoreIRValue lowerExpression(const QoreValue& expr, std::string& error);
     bool lowerStatement(const AbstractStatement* stmt, std::string& error);
@@ -479,7 +481,7 @@ private:
 
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
-    const std::unordered_map<const AbstractQoreNode*, std::string>* constant_reverse_map = nullptr;
+    const AOTConstantReverseMap* constant_reverse_map = nullptr;
     //! Values known to never be NOTHING (produced by typed opcodes)
     std::unordered_set<uint32_t> never_nothing_values;
     uint32_t block_counter = 0;

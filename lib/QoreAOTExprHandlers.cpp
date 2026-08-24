@@ -1048,7 +1048,7 @@ static bool write_expr_runtime_const_ref(AOTExprWriteCtx& ctx) {
         auto it = ctx.const_reverse_map->find(node);
         if (it != ctx.const_reverse_map->end()) {
             ctx.writer.writeU8(static_cast<uint8_t>(AOTExprKind::RUNTIME_CONST_REF));
-            ctx.writer.writeStringRef(it->second.c_str());
+            ctx.writer.writeStringRef(it->second.path.c_str());
             return true;
         }
     }

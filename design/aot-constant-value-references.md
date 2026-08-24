@@ -9,11 +9,12 @@ resulting references acyclic.
 Relevant code:
 
 - `lib/QoreAOTBinary.cpp` — `aot_add_constant_value_reverse_mappings_impl()`
-  (which constant a node is recorded under) and
-  `aot_constant_reverse_path_is_better()` (the object exception),
+  (which constant a node is recorded under),
   `QoreAOTBinaryWriter::writeValue()` (`VT_CONST_REF` emission),
   `qore_aot_resolve_constant_path_value()` and `RuntimeConstantPathRefNode`
   (the load side)
+- `include/qore/intern/ConstantList.h` — `ConstantEntry::getInitSeq()` and
+  `~ConstantEntryInitHelper()` (the rule and where the sequence is stamped)
 - `lib/ConstantList.cpp` — `ConstantEntry::getReferencedValue()` and
   `qore_constant_deep_resolve_in_flight()` (the load-side cycle guard)
 - `examples/test/ir/AOTAliasedConstantPathOwnership.qtest` — the tests
@@ -41,13 +42,47 @@ The number of subscripts is the path's **depth**; a plain FQN has depth 0.
 
 ## The rule
 
-**A container keeps the path of whichever constant reached it first; a later
-constant may not re-claim it.**
+**A node is recorded under the constant with the lowest initialization sequence
+that reaches it** (`ConstantEntry::getInitSeq()`, stamped when the entry's value
+is finished — see `~ConstantEntryInitHelper()`).
 
-Constants are traversed when the reverse map is built, and every constant a given
-pair shares is reached by both of them, so refusing the re-claim makes one
-constant win *all* of them. References between any two constants then only ever
-run one way, and the graph cannot contain a cycle.
+Initializing a constant resolves its initializer, which initializes every
+constant that initializer reads, so completion order is a topological order of
+the "holds another constant's value" relation: the constant that *defines* a
+shared value is always finished before every constant aliasing or containing it.
+Two properties follow, and the rule is the only one tried so far that gives
+both.
+
+**Acyclic.** The sequence is a single total order over constants, so every node
+a given pair shares is won by the same one of them; references between any two
+constants run one way only.
+
+**Resolvable across compilation units.** A reference always names a constant
+declared before the one holding it, which is a constant that any unit able to
+see the holder has already loaded. This is the property no ranking of *paths*
+can express, because a path's shape says nothing about which source unit is
+upstream — see below.
+
+It has to be *completion* order and not declaration order. Constant initializers
+are resolved lazily, so an entry is created when its declaration is parsed —
+which can be long before the constant its initializer reads exists. Qorus
+declares
+
+```qore
+class MapperFieldCodeTypeHelper {
+    const JavaTypeMap = OMQ::MapperProgram::JavaTypeMap;   // Classes/…, source 160
+}
+```
+
+115 sources ahead of the `lib/qorus.ql` that declares `MapperProgram::JavaTypeMap`
+(source 275) in the same batch, so by creation order the alias comes first and
+takes the value — the very failure this rule exists to prevent. Completion order
+cannot be fooled that way: the alias cannot finish until the definer has.
+
+Constants a compile inherits from its preload are stamped as they load, which
+need not match how they were declared, but they are harmless: the preload is the
+unit's transitive predecessor set, so a reference into it resolves for every
+consumer of the unit as well.
 
 Nothing breaks a cycle at load time, and both of its outcomes are build-stopping:
 
@@ -59,7 +94,7 @@ Nothing breaks a cycle at load time, and both of its outcomes are build-stopping
 ### Why ranking the candidate paths does not work
 
 Every ranking of the *paths* is a per-node decision, and a cycle needs only two
-nodes ranked in opposite directions. Two failed rankings, in order:
+nodes ranked in opposite directions. Three failed rules, in order:
 
 - **encoded-string length.** A container constant with a short enough name
   encodes shorter *despite* the extra subscript:
@@ -76,22 +111,39 @@ nodes ranked in opposite directions. Two failed rankings, in order:
   the owner. Each constant then wins one, and they reference each other. That
   shape crashed `qcc` outright.
 
-Claim order is not a ranking of paths at all, which is why it does not have this
-failure mode.
+- **claim order.** Keeping the node under whichever constant the traversal
+  *reached* first is not a ranking of paths, so it has neither failure above. But
+  the traversal walks namespaces and classes in tree order, which has no relation
+  to which source unit is upstream. `MapperFieldCodeTypeHelper` sorts before
+  `MapperProgram`, so the alias
 
-### Objects are the exception
+  ```qore
+  const JavaTypeMap = OMQ::MapperProgram::JavaTypeMap;
+  ```
+
+  claimed the value its own definer declares, and `MapperProgram`'s object was
+  written referencing a constant declared in a unit that *depends* on it. A
+  consumer is preloaded with a unit's predecessors, and the alias is not one, so
+  nothing could resolve that reference: the Qorus incremental build stopped with
+  `sibling .qo cross-resolution failed: … cannot resolve const_ref`.
+
+Initialization order keeps claim order's freedom from path-shape cycles and adds
+the direction claim order had no way to see.
+
+### Objects need no exception
 
 An object can never be written by value, so a constant holding one has nothing to
 fall back on if the recorded path names the constant currently being written —
-the writer refuses a self-reference, and serialization fails. Claim order does
-not reliably name an object's own constant, because the traversal walks classes
-and namespaces in tree order rather than declaration order: `SoftTypeMap` in
-`DataProvider` is reached before the `SoftIntType` constant holding the object it
-stores. Objects therefore keep the best-path choice, which prefers the
-whole-constant path every other holder can reference.
+the writer refuses a self-reference, and serialization fails. Objects therefore
+have to be recorded under the constant that *declares* the object, not under one
+that merely stores it: `SoftTypeMap` in `DataProvider` holds the object the
+`SoftIntType` constant declares.
 
-That leaves object re-claims able to form a cycle in principle, which is what the
-load-side guard below is for.
+Initialization order gives that for free — `SoftIntType` is finished before the
+map that stores it can be — so objects follow the same rule as every other node
+and need no exception. Under claim order they did need one, because tree order reaches
+`SoftTypeMap` first, and the best-path fallback that provided it was itself able
+to form a cycle in principle.
 
 ## The load-side guard
 

@@ -73,12 +73,34 @@ struct AOTCompiledFuncWithSlots;
 
 bool qore_check_cancel(ExceptionSink* xsink, const char* operation);
 
-//! Reverse map from constant value node pointer to fully-qualified constant name
-typedef std::unordered_map<const AbstractQoreNode*, std::string> AOTConstantReverseMap;
+//! The constant path a shared value node is recorded under, and who declared that constant
+struct AOTConstantReversePath {
+    //! fully-qualified constant name, optionally followed by an encoded subscript chain
+    std::string path;
+    //! ConstantEntry::getInitSeq() of the constant \a path names; lower wins a contested node
+    uint64_t init_seq = 0;
+};
+
+//! Reverse map from constant value node pointer to the constant path it is recovered from
+typedef std::unordered_map<const AbstractQoreNode*, AOTConstantReversePath> AOTConstantReverseMap;
 
 //! Adds a constant value and any nested hash/list node values to the AOT reverse map.
+/** \a init_seq is ConstantEntry::getInitSeq() of the constant \a path names.  A node reached from more than
+    one constant is kept under the lowest sequence, which is the constant that defines the value: initializing
+    a constant finishes everything its initializer reads first, so every alias or container is finished after
+    what it holds.  References therefore always point from a later-finished constant to an earlier one, which
+    is both acyclic and resolvable from any unit that can see the holder.
+*/
 void qore_aot_add_constant_value_reverse_mappings(AOTConstantReverseMap& crm,
-    const QoreValue& v, const std::string& path);
+    const QoreValue& v, const std::string& path, uint64_t init_seq);
+
+//! Ranks a constant for ownership of a shared value node; lower wins
+/** An entry that has not finished initializing has no sequence yet and must never win a contested node, so it
+    ranks last rather than first.
+*/
+static inline uint64_t qore_aot_constant_owner_rank(uint64_t init_seq) {
+    return init_seq ? init_seq : UINT64_MAX;
+}
 
 //! Resolves a RuntimeConstantRefNode to an AOT-serializable constant path.
 bool qore_aot_resolve_runtime_constant_path(const RuntimeConstantRefNode* node,
