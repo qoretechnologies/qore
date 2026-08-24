@@ -1,0 +1,107 @@
+/** @page i18ncasemapping Case Mapping and Capitalization
+
+    @section i18ncasemappingintro Case Mapping
+
+    Case mappings are locale-sensitive.  Qore's own \c upr() and \c lwr() apply the locale-independent
+    Unicode mappings, which are right nearly everywhere and wrong in the places that matter most to the
+    people who live there: Turkish and Azeri case the dotted and dotless I as distinct letters, and Dutch
+    capitalizes the \c ij digraph as a unit.
+
+    @code{.py}
+%requires i18n
+
+printf("%s\n", I18n::to_upper("isim", "tr"));      # İSİM
+printf("%s\n", I18n::to_upper("isim", "en"));      # ISIM
+printf("%s\n", I18n::to_lower("ILETISIM", "tr"));  # ıletısım
+printf("%s\n", I18n::capitalize("ijsselmeer", "nl")); # IJsselmeer
+printf("%s\n", I18n::capitalize("ijsselmeer", "en")); # Ijsselmeer
+    @endcode
+
+    The Greek final sigma is positional rather than a separate case mapping, and it is produced where it
+    belongs without any manual substitution:
+
+    @code{.py}
+printf("%s\n", I18n::to_lower("ΟΔΟΣ", "el")); # οδος, ending in U+03C2
+    @endcode
+
+    @section i18ncasemappingfull Full and Simple Mappings
+
+    Full case mappings can change the length of a string: upper-casing the German sharp s yields two
+    letters, because it has no single-character upper-case form.  Pass \c simple for one-to-one mappings,
+    which return such a letter unchanged.
+
+    @code{.py}
+printf("%s\n", I18n::to_upper("ß", "de"));                     # SS
+printf("%s\n", I18n::to_upper("ß", "de", {"simple": True}));   # ß
+    @endcode
+
+    The distinction is the reliable way to ask whether a letter is cased at all: a lower-case letter has a
+    single-character upper-case form only if it genuinely carries case, so the sharp s and the typographic
+    ligatures answer no.
+
+    @section i18ncasemappingtitle Titlecasing Is Not Title Case
+
+    @ref Qore::I18n::to_title() "to_title()" applies the Unicode titlecase operation, capitalizing the first
+    letter of every word.  That is a character operation, <b>not</b> the typographic title case of any
+    language, and the names collide unhelpfully.  Use it to normalize a name or a shouted string:
+
+    @code{.py}
+printf("%s\n", I18n::to_title("JOHN SMITH", "en"));             # John Smith
+printf("%s\n", I18n::to_title("wait for active shards", "en")); # Wait For Active Shards -- every word
+    @endcode
+
+    To capitalize a label or a heading the way a locale expects, use
+    @ref Qore::I18n::to_display_case() "to_display_case()" instead.
+
+    @section i18ncasemappingfold Case Folding
+
+    Case folding produces a form for caseless matching.  It is locale-independent by definition and
+    therefore takes no locale; the result is a comparison key, not display text.
+
+    @code{.py}
+printf("%y\n", I18n::fold_case("straße") == I18n::fold_case("STRASSE")); # True
+    @endcode
+
+    @section i18ncasemappingdisplay Capitalization Convention
+
+    Languages disagree about how a short label or heading is capitalized.  English uses title case and
+    leaves a function word in lower case unless it begins or ends the phrase; most other languages
+    capitalize only the first word; scripts without case have no such convention at all.
+
+    @code{.py}
+printf("%s\n", I18n::to_display_case("wait for active shards", "en")); # Wait for Active Shards
+printf("%s\n", I18n::to_display_case("created at", "en"));             # Created At -- "at" ends it
+printf("%s\n", I18n::to_display_case("numero de commande", "fr"));     # Numero de commande
+printf("%s\n", I18n::to_display_case("支払い番号", "ja"));               # unchanged
+    @endcode
+
+    Initial letters are capitalized and the remainder of each word is left as written, so acronyms already
+    present in the phrase survive.  The one exception is an English function word between the first and last
+    words, which is lower-cased because the convention requires it.
+
+    The same data is available directly, for a caller that renders each word itself:
+
+    @code{.py}
+printf("%s\n", I18n::get_capitalization_style("en")); # title
+printf("%s\n", I18n::get_capitalization_style("fr")); # sentence
+printf("%s\n", I18n::get_capitalization_style("ja")); # preserve
+printf("%y\n", I18n::get_function_words("en"));       # ("a", "an", "and", ...)
+printf("%y\n", I18n::get_function_words("fr"));       # () -- not a title-style locale
+    @endcode
+
+    @note These capitalization styles are Qore data rather than CLDR data.  CLDR carries capitalization
+    context only for its own display names, through \c contextTransforms and the display-name and formatter
+    APIs, and that data describes how a locale capitalizes nouns in those names rather than how it
+    capitalizes a heading; read as a heading-style signal it inverts the answer for English, whose language
+    names are always capitalized.
+
+    @note This layer applies a language convention and knows nothing of technical or brand vocabulary; it
+    renders \c "api key" as \c "Api key".  Vocabulary of that kind is domain data rather than language data,
+    and belongs to the caller: use @ref Qore::I18n::get_capitalization_style() "get_capitalization_style()"
+    and @ref Qore::I18n::get_function_words() "get_function_words()" to drive a per-word rendering that
+    applies both.
+
+    @note A locale with no entry uses sentence case, the majority convention.  The root locale uses title
+    case so that a caller passing @ref Qore::I18n::get_thread_locale() "get_thread_locale()" through with no
+    locale set does not silently move existing English labels to sentence case.
+*/

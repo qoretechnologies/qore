@@ -65,6 +65,7 @@ set(I18N_CPP_SRC
 )
 
 set(QORE_DOX_I18N_TMPL_SRC
+    docs/case-mapping.dox.tmpl
     docs/catalogs.dox.tmpl
     docs/cli.dox.tmpl
     docs/locale-formatting.dox.tmpl

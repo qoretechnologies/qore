@@ -43,11 +43,13 @@
 #include <unicode/numberformatter.h>
 #include <unicode/parsepos.h>
 #include <unicode/plurrule.h>
+#include <unicode/stringoptions.h>
 #include <unicode/stringpiece.h>
 #include <unicode/stsearch.h>
 #include <unicode/tblcoll.h>
 #include <unicode/timezone.h>
 #include <unicode/uchar.h>
+#include <unicode/utf16.h>
 #include <unicode/ulocdata.h>
 #include <unicode/unistr.h>
 #include <unicode/uversion.h>
@@ -1999,6 +2001,384 @@ static QoreStringNode* i18n_select_plural_form(QoreValue value, const QoreString
     return new QoreStringNode(selected, QCS_UTF8);
 }
 
+// context tag used for case-mapping option errors, yielding I18N-CASE-ERROR
+#define I18N_CASE_CONTEXT "CASE"
+
+// converts an ICU string back to a UTF-8 std::string
+static std::string i18n_unicode_string_to_utf8(const icu::UnicodeString& str) {
+    std::string rv;
+    str.toUTF8String(rv);
+    return rv;
+}
+
+// applies simple (single code point) case mappings, which ICU has no whole-string API for
+/* full mappings can lengthen a string ("ß" -> "SS"); simple mappings never do, which is what a caller
+    asking for \c simple wants
+*/
+static bool i18n_simple_case_map(const icu::UnicodeString& src, bool upper, icu::UnicodeString& out,
+        ExceptionSink* xsink) {
+    int64_t seen = 0;
+    for (int32_t i = 0, e = src.length(); i < e;) {
+        if (!(seen++ % 100) && qore_check_cancel(xsink,
+            upper ? "converting a string to upper case" : "converting a string to lower case")) {
+            return false;
+        }
+        UChar32 c = src.char32At(i);
+        i += U16_LENGTH(c);
+        out.append(upper ? u_toupper(c) : u_tolower(c));
+    }
+    return true;
+}
+
+// capitalizes the first letter of a string without lower-casing the remainder
+static icu::UnicodeString i18n_capitalize_string(const icu::UnicodeString& src, const icu::Locale& locale,
+        bool keep_case) {
+    icu::UnicodeString rv(src);
+    // ADJUST_TO_CASED moves the titlecasing index to the first cased character, so a string starting with a
+    // digit or punctuation capitalizes its initial letter rather than its initial character
+    // (ex: "2factor" -> "2Factor" rather than "2factor")
+    uint32_t options = U_TITLECASE_WHOLE_STRING | U_TITLECASE_ADJUST_TO_CASED;
+    if (keep_case) {
+        options |= U_TITLECASE_NO_LOWERCASE;
+    }
+    rv.toTitle(nullptr, locale, options);
+    return rv;
+}
+
+// capitalization style a locale conventionally applies to a short label or heading
+/* This is Qore data, not CLDR data: CLDR carries capitalization context only for its own display names
+    (\c contextTransforms, reachable through the display-name and formatter APIs), and that data describes
+    how a locale capitalizes nouns in those names rather than how it capitalizes a heading.  Reading it as a
+    heading-style signal inverts the answer for English, whose language names are always capitalized.
+
+    Headline title case with lower-cased function words is essentially an English convention; nearly every
+    other language uses sentence case, and caseless scripts have no such convention at all.
+*/
+struct I18nCapitalizationStyleEntry {
+    const char* language;
+    const char* style;
+};
+
+static const I18nCapitalizationStyleEntry i18n_capitalization_styles[] = {
+    {"en", "title"},
+    {"de", "sentence"}, {"fr", "sentence"}, {"es", "sentence"}, {"it", "sentence"},
+    {"pt", "sentence"}, {"nl", "sentence"}, {"cs", "sentence"}, {"sk", "sentence"},
+    {"pl", "sentence"}, {"uk", "sentence"}, {"ru", "sentence"}, {"da", "sentence"},
+    {"sv", "sentence"}, {"nb", "sentence"}, {"nn", "sentence"}, {"fi", "sentence"},
+    {"hu", "sentence"}, {"ro", "sentence"}, {"el", "sentence"}, {"tr", "sentence"},
+    {"bg", "sentence"}, {"hr", "sentence"}, {"sl", "sentence"}, {"sr", "sentence"},
+    {"lt", "sentence"}, {"lv", "sentence"}, {"et", "sentence"}, {"ca", "sentence"},
+    {"ja", "preserve"}, {"ko", "preserve"}, {"zh", "preserve"}, {"ar", "preserve"},
+    {"he", "preserve"}, {"th", "preserve"}, {"hi", "preserve"},
+};
+
+// English function words, which title case leaves in lower case between the first and last words
+static const char* const i18n_en_function_words[] = {
+    "a", "an", "and", "as", "at", "but", "by", "for", "from", "if", "in", "into", "is", "nor",
+    "of", "off", "on", "or", "per", "the", "to", "via", "vs", "with",
+};
+
+// the style for a locale, matched on the language subtag alone
+/* the root locale maps to \c "title" for compatibility: get_thread_locale() returns "root" when no locale
+    is set, and any caller passing that through would otherwise silently move every existing English label to
+    sentence case
+*/
+static const char* i18n_capitalization_style_for(const icu::Locale& locale) {
+    const char* language = locale.getLanguage();
+    if (!language || !language[0] || !strcmp(language, "root")) {
+        return "title";
+    }
+    for (size_t i = 0, e = sizeof(i18n_capitalization_styles) / sizeof(i18n_capitalization_styles[0]);
+        i < e; ++i) {
+        if (!strcmp(language, i18n_capitalization_styles[i].language)) {
+            return i18n_capitalization_styles[i].style;
+        }
+    }
+    // a locale with no entry uses sentence case, which is the majority convention
+    return "sentence";
+}
+
+// returns True if the word is a function word for the given style and locale
+static bool i18n_is_function_word(const icu::UnicodeString& word, const icu::Locale& locale,
+        const std::vector<std::string>* overrides) {
+    icu::UnicodeString folded(word);
+    folded.foldCase(U_FOLD_CASE_DEFAULT);
+    std::string key = i18n_unicode_string_to_utf8(folded);
+    if (overrides) {
+        for (size_t i = 0, e = overrides->size(); i < e; ++i) {
+            if ((*overrides)[i] == key) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if (strcmp(i18n_capitalization_style_for(locale), "title")) {
+        return false;
+    }
+    for (size_t i = 0, e = sizeof(i18n_en_function_words) / sizeof(i18n_en_function_words[0]); i < e; ++i) {
+        if (key == i18n_en_function_words[i]) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// applies a locale's conventional capitalization to a phrase
+/* Words are the runs between whitespace; the whitespace itself is copied through unchanged, so the shape of
+    the input is preserved.  Initial letters are capitalized and the remainder of each word is left as
+    written, so acronyms survive; the one exception is an English function word between the first and last
+    word, which is lower-cased because that is what the convention requires.
+*/
+static bool i18n_apply_display_case(const icu::UnicodeString& src, const icu::Locale& locale,
+        const std::string& style, const std::vector<std::string>* function_words, icu::UnicodeString& out,
+        ExceptionSink* xsink) {
+    if (style == "preserve") {
+        out = src;
+        return true;
+    }
+
+    // find the word runs first, so the last word is known before any of them is transformed
+    std::vector<std::pair<int32_t, int32_t>> words;
+    int32_t i = 0;
+    int64_t seen = 0;
+    const int32_t len = src.length();
+    while (i < len) {
+        if (!(seen++ % 100) && qore_check_cancel(xsink, "finding the words of a display name")) {
+            return false;
+        }
+        UChar32 c = src.char32At(i);
+        int32_t clen = U16_LENGTH(c);
+        if (u_isUWhiteSpace(c)) {
+            i += clen;
+            continue;
+        }
+        int32_t start = i;
+        while (i < len) {
+            if (!(seen++ % 100) && qore_check_cancel(xsink, "finding the words of a display name")) {
+                return false;
+            }
+            c = src.char32At(i);
+            if (u_isUWhiteSpace(c)) {
+                break;
+            }
+            i += U16_LENGTH(c);
+        }
+        words.push_back(std::make_pair(start, i));
+    }
+
+    // word offsets index the source; a replacement can differ in length from what it replaces, so writes
+    // into the result carry a running shift
+    out = src;
+    int32_t shift = 0;
+    for (size_t w = 0, e = words.size(); w < e; ++w) {
+        if (!(w % 100) && qore_check_cancel(xsink, "capitalizing a display name")) {
+            return false;
+        }
+        const bool first = !w;
+        const bool last = w == (e - 1);
+        if (style == "sentence" && !first) {
+            continue;
+        }
+        icu::UnicodeString word;
+        src.extractBetween(words[w].first, words[w].second, word);
+        icu::UnicodeString replacement;
+        if (!first && !last && i18n_is_function_word(word, locale, function_words)) {
+            replacement = word;
+            replacement.toLower(locale);
+        } else {
+            replacement = i18n_capitalize_string(word, locale, true);
+        }
+        if (replacement != word) {
+            out.replaceBetween(words[w].first + shift, words[w].second + shift, replacement);
+            shift += replacement.length() - word.length();
+        }
+    }
+    return true;
+}
+
+// shared entry point for to_upper() and to_lower()
+static QoreValue i18n_case_convert(const QoreStringNode* str_arg, const QoreStringNode* locale_arg,
+        const QoreHashNode* opts, bool upper, ExceptionSink* xsink) {
+    std::string text = i18n_string_arg_to_utf8(str_arg, xsink, "str");
+    if (*xsink) {
+        return QoreValue();
+    }
+    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    bool simple = false;
+    if (!i18n_get_bool_option(opts, "simple", simple, xsink, I18N_CASE_CONTEXT)) {
+        return QoreValue();
+    }
+    if (text.empty()) {
+        return new QoreStringNode(QCS_UTF8);
+    }
+
+    icu::UnicodeString str = i18n_utf8_to_unicode_string(text);
+    if (simple) {
+        icu::UnicodeString mapped;
+        if (!i18n_simple_case_map(str, upper, mapped, xsink)) {
+            return QoreValue();
+        }
+        str = mapped;
+    } else if (upper) {
+        str.toUpper(locale);
+    } else {
+        str.toLower(locale);
+    }
+    return new QoreStringNode(i18n_unicode_string_to_utf8(str), QCS_UTF8);
+}
+
+// shared entry point for capitalize()
+static QoreValue i18n_capitalize_impl(const QoreStringNode* str_arg, const QoreStringNode* locale_arg,
+        const QoreHashNode* opts, ExceptionSink* xsink) {
+    std::string text = i18n_string_arg_to_utf8(str_arg, xsink, "str");
+    if (*xsink) {
+        return QoreValue();
+    }
+    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    bool keep_case = false;
+    if (!i18n_get_bool_option(opts, "keep_case", keep_case, xsink, I18N_CASE_CONTEXT)) {
+        return QoreValue();
+    }
+    if (text.empty()) {
+        return new QoreStringNode(QCS_UTF8);
+    }
+
+    icu::UnicodeString str = i18n_capitalize_string(i18n_utf8_to_unicode_string(text), locale, keep_case);
+    return new QoreStringNode(i18n_unicode_string_to_utf8(str), QCS_UTF8);
+}
+
+// shared entry point for to_title()
+static QoreValue i18n_to_title_impl(const QoreStringNode* str_arg, const QoreStringNode* locale_arg,
+        const QoreHashNode* opts, ExceptionSink* xsink) {
+    std::string text = i18n_string_arg_to_utf8(str_arg, xsink, "str");
+    if (*xsink) {
+        return QoreValue();
+    }
+    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    bool no_lowercase = false;
+    if (!i18n_get_bool_option(opts, "no_lowercase", no_lowercase, xsink, I18N_CASE_CONTEXT)) {
+        return QoreValue();
+    }
+    bool no_break_adjustment = false;
+    if (!i18n_get_bool_option(opts, "no_break_adjustment", no_break_adjustment, xsink, I18N_CASE_CONTEXT)) {
+        return QoreValue();
+    }
+    if (text.empty()) {
+        return new QoreStringNode(QCS_UTF8);
+    }
+
+    uint32_t options = 0;
+    if (no_lowercase) {
+        options |= U_TITLECASE_NO_LOWERCASE;
+    }
+    if (no_break_adjustment) {
+        options |= U_TITLECASE_NO_BREAK_ADJUSTMENT;
+    }
+    icu::UnicodeString str = i18n_utf8_to_unicode_string(text);
+    // a null break iterator makes ICU create one for the locale and destroy it with the call; ICU break
+    // iterators are not thread-safe, so none is cached
+    str.toTitle(nullptr, locale, options);
+    return new QoreStringNode(i18n_unicode_string_to_utf8(str), QCS_UTF8);
+}
+
+// shared entry point for fold_case()
+static QoreValue i18n_fold_case_impl(const QoreStringNode* str_arg, const QoreHashNode* opts,
+        ExceptionSink* xsink) {
+    std::string text = i18n_string_arg_to_utf8(str_arg, xsink, "str");
+    if (*xsink) {
+        return QoreValue();
+    }
+    bool turkic = false;
+    if (!i18n_get_bool_option(opts, "turkic", turkic, xsink, I18N_CASE_CONTEXT)) {
+        return QoreValue();
+    }
+    if (text.empty()) {
+        return new QoreStringNode(QCS_UTF8);
+    }
+
+    icu::UnicodeString str = i18n_utf8_to_unicode_string(text);
+    str.foldCase(turkic ? U_FOLD_CASE_EXCLUDE_SPECIAL_I : U_FOLD_CASE_DEFAULT);
+    return new QoreStringNode(i18n_unicode_string_to_utf8(str), QCS_UTF8);
+}
+
+// reads the function_words option into a case-folded comparison list
+static bool i18n_get_function_words_option(const QoreHashNode* opts, std::vector<std::string>& out,
+        bool& present, ExceptionSink* xsink) {
+    present = false;
+    QoreValue value = opts ? opts->getKeyValue("function_words") : QoreValue();
+    if (value.isNullOrNothing()) {
+        return true;
+    }
+    if (value.getType() != NT_LIST) {
+        xsink->raiseException("I18N-CASE-ERROR", "CASE option 'function_words' must be a list; got type '%s'",
+            value.getTypeName());
+        return false;
+    }
+    present = true;
+    const QoreListNode* list = value.get<const QoreListNode>();
+    for (size_t i = 0, e = list->size(); i < e; ++i) {
+        std::string word;
+        if (!i18n_qore_value_to_utf8_string(list->retrieveEntry(i), word, xsink,
+            "CASE option 'function_words' element")) {
+            return false;
+        }
+        icu::UnicodeString folded = i18n_utf8_to_unicode_string(word);
+        folded.foldCase(U_FOLD_CASE_DEFAULT);
+        out.push_back(i18n_unicode_string_to_utf8(folded));
+    }
+    return true;
+}
+
+// shared entry point for to_display_case()
+static QoreValue i18n_display_case_impl(const QoreStringNode* str_arg, const QoreStringNode* locale_arg,
+        const QoreHashNode* opts, ExceptionSink* xsink) {
+    std::string text = i18n_string_arg_to_utf8(str_arg, xsink, "str");
+    if (*xsink) {
+        return QoreValue();
+    }
+    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    std::string style;
+    if (!i18n_get_string_option(opts, "style", style, xsink, I18N_CASE_CONTEXT)) {
+        return QoreValue();
+    }
+    if (style.empty()) {
+        style = i18n_capitalization_style_for(locale);
+    } else if (style != "title" && style != "sentence" && style != "preserve") {
+        xsink->raiseException("I18N-CASE-ERROR", "unknown capitalization style '%s'; expected \"title\", "
+            "\"sentence\", or \"preserve\"", style.c_str());
+        return QoreValue();
+    }
+
+    std::vector<std::string> function_words;
+    bool have_function_words = false;
+    if (!i18n_get_function_words_option(opts, function_words, have_function_words, xsink)) {
+        return QoreValue();
+    }
+    if (text.empty()) {
+        return new QoreStringNode(QCS_UTF8);
+    }
+
+    icu::UnicodeString str;
+    if (!i18n_apply_display_case(i18n_utf8_to_unicode_string(text), locale, style,
+        have_function_words ? &function_words : nullptr, str, xsink)) {
+        return QoreValue();
+    }
+    return new QoreStringNode(i18n_unicode_string_to_utf8(str), QCS_UTF8);
+}
+
 /** @defgroup i18n_functions I18n Functions
  */
 ///@{
@@ -2856,6 +3236,350 @@ printf("2%s\n", I18n::plural_form(2, "en", en_ordinal, {"type": "ordinal"}));
 */
 string plural_form(auto value, string locale, hash<auto> forms, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
     return i18n_select_plural_form(value, locale, forms, opts, xsink);
+}
+
+//! Converts a string to upper case using the case mappings of a locale.
+/** @param str the string to convert
+    @param locale locale tag whose case mappings are used (ex: \c "tr" for Turkish)
+    @return the string in upper case
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
+
+    @note Full case mappings are used, so the result can be longer than the input
+    (ex: \c "ß" -> \c "SS"); pass the \c simple option for one-to-one mappings
+
+    @par Example:
+    @code{.py}
+assertEq("İSİM", I18n::to_upper("isim", "tr"));
+assertEq("ISIM", I18n::to_upper("isim", "en"));
+    @endcode
+*/
+string to_upper(string str, string locale) [flags=RET_VALUE_ONLY] {
+    return i18n_case_convert(str, locale, nullptr, true, xsink);
+}
+
+//! Converts a string to upper case using the case mappings of a locale.
+/** @param str the string to convert
+    @param locale locale tag whose case mappings are used
+    @param opts optional hash with a \c simple bool key; when @ref True "True", one-to-one case mappings are
+    used, so the result has the same number of characters as the input and a letter with no single-character
+    upper-case form is returned unchanged (ex: \c "ß")
+
+    @return the string in upper case
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
+    @throw I18N-CASE-ERROR if an option has an invalid type
+
+    @par Example:
+    @code{.py}
+assertEq("SS", I18n::to_upper("ß", "de"));
+assertEq("ß", I18n::to_upper("ß", "de", {"simple": True}));
+    @endcode
+*/
+string to_upper(string str, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
+    return i18n_case_convert(str, locale, opts, true, xsink);
+}
+
+//! Converts a string to lower case using the case mappings of a locale.
+/** @param str the string to convert
+    @param locale locale tag whose case mappings are used
+    @return the string in lower case
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
+
+    @note The Greek final sigma is produced where it belongs, so this is preferred over a manual
+    substitution (ex: \c "ΟΔΟΣ" -> \c "οδος" ending in \c "ς")
+
+    @par Example:
+    @code{.py}
+assertEq("ıletısım", I18n::to_lower("ILETISIM", "tr"));
+assertEq("iletisim", I18n::to_lower("ILETISIM", "en"));
+    @endcode
+*/
+string to_lower(string str, string locale) [flags=RET_VALUE_ONLY] {
+    return i18n_case_convert(str, locale, nullptr, false, xsink);
+}
+
+//! Converts a string to lower case using the case mappings of a locale.
+/** @param str the string to convert
+    @param locale locale tag whose case mappings are used
+    @param opts optional hash with a \c simple bool key, as documented in
+    @ref Qore::I18n::to_upper() "to_upper()"
+
+    @return the string in lower case
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
+    @throw I18N-CASE-ERROR if an option has an invalid type
+
+    @par Example:
+    @code{.py}
+assertEq("οδος", I18n::to_lower("ΟΔΟΣ", "el"));
+    @endcode
+*/
+string to_lower(string str, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
+    return i18n_case_convert(str, locale, opts, false, xsink);
+}
+
+//! Capitalizes the initial letter of a string using the case mappings of a locale.
+/** The remainder of the string is converted to lower case; pass the \c keep_case option to leave it as
+    written
+
+    @param str the string to capitalize
+    @param locale locale tag whose case mappings are used
+    @return the string with its initial letter capitalized
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
+
+    @note The initial <i>letter</i> is capitalized rather than the initial character, so a string beginning
+    with a digit or punctuation capitalizes the first letter that follows (ex: \c "2factor" ->
+    \c "2Factor")
+
+    @note Locale-specific rules apply to the initial letter, so a Dutch \c "ij" is capitalized as a digraph
+    and a Turkish \c "i" acquires its dot
+
+    @par Example:
+    @code{.py}
+assertEq("IJsselmeer", I18n::capitalize("ijsselmeer", "nl"));
+assertEq("Ijsselmeer", I18n::capitalize("ijsselmeer", "en"));
+    @endcode
+*/
+string capitalize(string str, string locale) [flags=RET_VALUE_ONLY] {
+    return i18n_capitalize_impl(str, locale, nullptr, xsink);
+}
+
+//! Capitalizes the initial letter of a string using the case mappings of a locale.
+/** @param str the string to capitalize
+    @param locale locale tag whose case mappings are used
+    @param opts optional hash with a \c keep_case bool key; when @ref True "True", the remainder of the
+    string is left as written instead of being converted to lower case, so acronyms keep their case
+    (ex: \c "URLs", \c "TPS")
+
+    @return the string with its initial letter capitalized
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
+    @throw I18N-CASE-ERROR if an option has an invalid type
+
+    @par Example:
+    @code{.py}
+assertEq("URLs", I18n::capitalize("URLs", "en", {"keep_case": True}));
+assertEq("Urls", I18n::capitalize("URLs", "en"));
+    @endcode
+*/
+string capitalize(string str, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
+    return i18n_capitalize_impl(str, locale, opts, xsink);
+}
+
+//! Applies Unicode titlecasing to a string, capitalizing the first letter of every word.
+/** @param str the string to convert
+    @param locale locale tag whose case mappings are used
+    @return the string with the first letter of every word capitalized and the rest in lower case
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
+
+    @note This is the Unicode titlecase operation, <b>not</b> the typographic title case of any language: it
+    capitalizes every word, so \c "wait for active shards" becomes \c "Wait For Active Shards" and a French
+    \c "numero de commande" becomes \c "Numero De Commande".  Use
+    @ref Qore::I18n::to_display_case() "to_display_case()" to apply the capitalization a locale conventionally
+    expects of a label or heading; use this function to normalize a name or a shouted string
+    (ex: \c "JOHN SMITH" -> \c "John Smith")
+
+    @par Example:
+    @code{.py}
+assertEq("John Smith", I18n::to_title("JOHN SMITH", "en"));
+    @endcode
+*/
+string to_title(string str, string locale) [flags=RET_VALUE_ONLY] {
+    return i18n_to_title_impl(str, locale, nullptr, xsink);
+}
+
+//! Applies Unicode titlecasing to a string, capitalizing the first letter of every word.
+/** @param str the string to convert
+    @param locale locale tag whose case mappings are used
+    @param opts optional hash with the following keys:
+    - \c no_lowercase: (bool) leave the remainder of each word as written instead of converting it to lower
+      case
+    - \c no_break_adjustment: (bool) capitalize at each word break rather than at the first cased letter
+      after it
+
+    @return the titlecased string
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
+    @throw I18N-CASE-ERROR if an option has an invalid type
+
+    @note This is the Unicode titlecase operation, not the typographic title case of any language; see
+    @ref Qore::I18n::to_title() "to_title()"
+
+    @par Example:
+    @code{.py}
+assertEq("URLs Here", I18n::to_title("URLs here", "en", {"no_lowercase": True}));
+    @endcode
+*/
+string to_title(string str, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
+    return i18n_to_title_impl(str, locale, opts, xsink);
+}
+
+//! Returns the case-folded form of a string for caseless matching.
+/** @param str the string to fold
+    @return the case-folded string
+
+    @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
+
+    @note Case folding is locale-independent by definition and therefore takes no locale; the folded form is
+    for comparison and as a lookup key, not for display
+
+    @par Example:
+    @code{.py}
+assertEq(I18n::fold_case("straße"), I18n::fold_case("STRASSE"));
+    @endcode
+*/
+string fold_case(string str) [flags=RET_VALUE_ONLY] {
+    return i18n_fold_case_impl(str, nullptr, xsink);
+}
+
+//! Returns the case-folded form of a string for caseless matching.
+/** @param str the string to fold
+    @param opts optional hash with a \c turkic bool key; when @ref True "True", the dotted and dotless I are
+    folded as the distinct letters they are in Turkic languages rather than as case variants
+
+    @return the case-folded string
+
+    @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
+    @throw I18N-CASE-ERROR if an option has an invalid type
+
+    @par Example:
+    @code{.py}
+assertNeq(I18n::fold_case("I", {"turkic": True}), I18n::fold_case("i", {"turkic": True}));
+    @endcode
+*/
+string fold_case(string str, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
+    return i18n_fold_case_impl(str, opts, xsink);
+}
+
+//! Applies the capitalization a locale conventionally expects of a short label or heading.
+/** @param str the phrase to convert
+    @param locale locale tag whose convention is applied
+    @return the phrase capitalized according to the locale's convention
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
+
+    @note Initial letters are capitalized and the remainder of each word is left as written, so acronyms
+    survive; the sole exception is an English function word between the first and last words of the phrase,
+    which is converted to lower case because the convention requires it
+
+    @note This function applies a language convention and knows nothing of technical or brand vocabulary; it
+    renders \c "api key" as \c "Api key".  A caller with such a vocabulary should render each word itself and
+    use @ref Qore::I18n::get_capitalization_style() "get_capitalization_style()" and
+    @ref Qore::I18n::get_function_words() "get_function_words()" to drive the convention
+
+    @note The capitalization styles are Qore data rather than CLDR data; CLDR carries capitalization context
+    only for its own display names, and that data describes how nouns are capitalized in those names rather
+    than how a heading is capitalized
+
+    @par Example:
+    @code{.py}
+assertEq("Wait for Active Shards", I18n::to_display_case("wait for active shards", "en"));
+assertEq("Numero de commande", I18n::to_display_case("numero de commande", "fr"));
+    @endcode
+*/
+string to_display_case(string str, string locale) [flags=RET_VALUE_ONLY] {
+    return i18n_display_case_impl(str, locale, nullptr, xsink);
+}
+
+//! Applies the capitalization a locale conventionally expects of a short label or heading.
+/** @param str the phrase to convert
+    @param locale locale tag whose convention is applied
+    @param opts optional hash with the following keys:
+    - \c style: (string) apply this style instead of the locale's: \c "title" capitalizes every word except a
+      function word between the first and last, \c "sentence" capitalizes only the first word, and
+      \c "preserve" capitalizes nothing
+    - \c function_words: (list of strings) use these function words instead of the built-in list; compared
+      case-folded
+
+    @return the phrase capitalized according to the requested convention
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-STRING-ERROR if \a str cannot be converted to UTF-8
+    @throw I18N-CASE-ERROR if an option has an invalid type or \c style has an unknown value
+
+    @par Example:
+    @code{.py}
+assertEq("Numero de commande", I18n::to_display_case("numero de commande", "en", {"style": "sentence"}));
+    @endcode
+*/
+string to_display_case(string str, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
+    return i18n_display_case_impl(str, locale, opts, xsink);
+}
+
+//! Returns the capitalization style a locale conventionally applies to a short label or heading.
+/** @param locale locale tag
+    @return one of \c "title", \c "sentence", or \c "preserve"
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+
+    @note A locale with no entry uses \c "sentence", which is the majority convention.  The root locale uses
+    \c "title" for compatibility: @ref Qore::I18n::get_thread_locale() "get_thread_locale()" returns
+    \c "root" when no locale is set, and any caller passing that through would otherwise move every existing
+    English label to sentence case
+
+    @note These styles are Qore data rather than CLDR data; see
+    @ref Qore::I18n::to_display_case() "to_display_case()"
+
+    @par Example:
+    @code{.py}
+assertEq("title", I18n::get_capitalization_style("en"));
+assertEq("sentence", I18n::get_capitalization_style("fr"));
+assertEq("preserve", I18n::get_capitalization_style("ja"));
+    @endcode
+*/
+string get_capitalization_style(string locale) [flags=RET_VALUE_ONLY] {
+    icu::Locale loc = i18n_make_locale(locale, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    return new QoreStringNode(i18n_capitalization_style_for(loc), QCS_UTF8);
+}
+
+//! Returns the function words a locale leaves in lower case in the middle of a label or heading.
+/** @param locale locale tag
+    @return the function words for the locale, in lower case; empty for every locale whose style is not
+    \c "title", because no other convention lower-cases them
+
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+
+    @note These words are Qore data rather than CLDR data; see
+    @ref Qore::I18n::to_display_case() "to_display_case()"
+
+    @par Example:
+    @code{.py}
+assertTrue(I18n::get_function_words("en").size() > 0);
+assertEq((), I18n::get_function_words("fr"));
+    @endcode
+*/
+list<string> get_function_words(string locale) [flags=RET_VALUE_ONLY] {
+    icu::Locale loc = i18n_make_locale(locale, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
+    ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
+    if (!strcmp(i18n_capitalization_style_for(loc), "title")) {
+        for (size_t i = 0, e = sizeof(i18n_en_function_words) / sizeof(i18n_en_function_words[0]); i < e;
+            ++i) {
+            rv->push(new QoreStringNode(i18n_en_function_words[i], QCS_UTF8), xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+    }
+    return rv.release();
 }
 
 ///@}

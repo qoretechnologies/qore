@@ -40,6 +40,8 @@ class I18nTest inherits QUnit::Test {
         addTestCase("catalog discovery index sandbox", \catalogDiscoveryIndexSandboxTest());
         addTestCase("message catalog literal text", \messageCatalogLiteralTextTest());
         addTestCase("message catalog validation", \messageCatalogValidationTest());
+        addTestCase("locale case mapping", \localeCaseMappingTest());
+        addTestCase("capitalization convention", \capitalizationConventionTest());
 
         set_return_value(main());
     }
@@ -149,6 +151,133 @@ class I18nTest inherits QUnit::Test {
         assertThrows("I18N-LOCALE-CONTEXT-ERROR", sub() {
             I18n::apply_locale_context({});
         });
+    }
+
+    localeCaseMappingTest() {
+        # Turkish casts the dotted and dotless I differently from every other locale
+        assertEq("İSİM", I18n::to_upper("isim", "tr"));
+        assertEq("ISIM", I18n::to_upper("isim", "en"));
+        assertEq("ıletısım", I18n::to_lower("ILETISIM", "tr"));
+        assertEq("iletisim", I18n::to_lower("ILETISIM", "en"));
+        assertNeq(I18n::to_upper("isim", "tr"), I18n::to_upper("isim", "en"));
+
+        # full case mappings can lengthen a string; simple mappings never do
+        assertEq("SS", I18n::to_upper("ß", "de"));
+        assertEq("ß", I18n::to_upper("ß", "de", {"simple": True}));
+        assertEq(1, I18n::to_upper("ß", "de", {"simple": True}).length());
+
+        # the Greek final sigma is positional, and ICU places it correctly
+        string odos = I18n::to_lower("ΟΔΟΣ", "el");
+        assertEq("οδος", odos);
+        assertEq(0x3c2, odos[-1].ord(), "final sigma");
+        assertEq(0x3c2, I18n::to_lower("ΣΟΦΟΣ ΑΝΘΡΩΠΟΣ", "el")[4].ord(), "final sigma mid-phrase");
+
+        # capitalizing the initial letter applies locale rules to it
+        assertEq("IJsselmeer", I18n::capitalize("ijsselmeer", "nl"));
+        assertEq("Ijsselmeer", I18n::capitalize("ijsselmeer", "en"));
+        assertEq("İsim", I18n::capitalize("isim", "tr"));
+        # the remainder is lower-cased by default and preserved on request
+        assertEq("Urls", I18n::capitalize("URLs", "en"));
+        assertEq("URLs", I18n::capitalize("URLs", "en", {"keep_case": True}));
+        assertEq("TPS", I18n::capitalize("TPS", "en", {"keep_case": True}));
+        # the initial LETTER is capitalized, not the initial character
+        assertEq("2Factor", I18n::capitalize("2factor", "en"));
+        assertEq("2Factor", I18n::capitalize("2FACTOR", "en"));
+        assertEq("_Name", I18n::capitalize("_name", "en"));
+        assertEq("'Quoted", I18n::capitalize("'quoted", "en"));
+
+        # to_title() is the Unicode operation, not the title case of any language
+        assertEq("John Smith", I18n::to_title("JOHN SMITH", "en"));
+        assertEq("Wait For Active Shards", I18n::to_title("wait for active shards", "en"));
+        assertEq("URLs Here", I18n::to_title("URLs here", "en", {"no_lowercase": True}));
+
+        # case folding is for matching, and is locale-independent
+        assertEq(I18n::fold_case("straße"), I18n::fold_case("STRASSE"));
+        assertEq(I18n::fold_case("API"), I18n::fold_case("api"));
+        assertNeq(I18n::fold_case("I", {"turkic": True}), I18n::fold_case("i", {"turkic": True}));
+
+        # boundaries
+        assertEq("", I18n::to_upper("", "en"));
+        assertEq("", I18n::capitalize("", "en"));
+        assertEq("", I18n::fold_case(""));
+        # caseless scripts are returned unchanged
+        assertEq("東京", I18n::to_upper("東京", "ja"));
+        assertEq("עברית", I18n::capitalize("עברית", "he"));
+
+        # negatives
+        assertThrows("I18N-LOCALE-ERROR", \I18n::to_upper(), ("x", "not a locale tag!"));
+        assertThrows("I18N-CASE-ERROR", \I18n::to_upper(), ("x", "en", {"simple": "yes"}));
+        # the option-error helper is shared by every function that takes an options hash; it must name the
+        # calling context in the exception, and the offending option and its type in the description
+        hash<ExceptionInfo> ex;
+        try {
+            string ignored = I18n::to_upper("x", "en", {"simple": 1});
+            assertTrue(False, sprintf("expected an exception; got %y", ignored));
+        } catch (hash<ExceptionInfo> e) {
+            ex = e;
+        }
+        assertEq("I18N-CASE-ERROR", ex.err);
+        assertRegex("option 'simple'", ex.desc);
+        assertRegex("got type 'integer'", ex.desc);
+        assertThrows("I18N-CASE-ERROR", \I18n::capitalize(), ("x", "en", {"keep_case": 1}));
+    }
+
+    capitalizationConventionTest() {
+        # English lower-cases a function word between the first and last words
+        assertEq("Wait for Active Shards", I18n::to_display_case("wait for active shards", "en"));
+        assertEq("Usage Limit per User", I18n::to_display_case("usage limit per user", "en"));
+        assertEq("Remove Customer from Group", I18n::to_display_case("remove customer from group", "en"));
+        # a function word that begins or ends the phrase is still capitalized
+        assertEq("Created At", I18n::to_display_case("created at", "en"));
+        assertEq("Is Active", I18n::to_display_case("is active", "en"));
+        assertEq("Of", I18n::to_display_case("of", "en"));
+
+        # most languages capitalize only the first word
+        assertEq("Numero de commande", I18n::to_display_case("numero de commande", "fr"));
+        assertEq("Bestellnummer der kunde", I18n::to_display_case("bestellnummer der kunde", "de"));
+        # caseless scripts are left alone
+        assertEq("支払い番号", I18n::to_display_case("支払い番号", "ja"));
+
+        # acronyms already in the phrase survive, because words are capitalized and never lower-cased
+        assertEq("API Key", I18n::to_display_case("API Key", "en"));
+        assertEq("Order ID Here", I18n::to_display_case("order ID here", "en"));
+
+        # style resolution; "root" maps to "title" for COMPATIBILITY, not for any linguistic reason:
+        # get_thread_locale() returns "root" when unset, and sentence case there would move every
+        # existing English label
+        assertEq("title", I18n::get_capitalization_style("en"));
+        assertEq("title", I18n::get_capitalization_style("root"));
+        assertEq("title", I18n::get_capitalization_style("en-US"));
+        assertEq("sentence", I18n::get_capitalization_style("fr"));
+        assertEq("sentence", I18n::get_capitalization_style("de-AT"));
+        assertEq("preserve", I18n::get_capitalization_style("ja"));
+        # a locale with no entry falls back to the majority convention
+        assertEq("sentence", I18n::get_capitalization_style("xh"));
+
+        # the accessors cannot drift from the transform: function words exist exactly for title locales
+        assertTrue(I18n::get_function_words("en").size() > 0);
+        assertEq((), I18n::get_function_words("fr"));
+        assertEq((), I18n::get_function_words("ja"));
+        assertTrue(inlist("of", I18n::get_function_words("en")));
+
+        # overrides
+        assertEq("Numero de commande", I18n::to_display_case("numero de commande", "en",
+            {"style": "sentence"}));
+        assertEq("Wait For Active Shards", I18n::to_display_case("wait for active shards", "en",
+            {"function_words": ()}));
+        assertEq("Alpha zz Beta", I18n::to_display_case("alpha zz beta", "en",
+            {"function_words": ("zz",)}));
+        assertEq("wait for active shards", I18n::to_display_case("wait for active shards", "en",
+            {"style": "preserve"}));
+
+        # boundaries and negatives
+        assertEq("", I18n::to_display_case("", "en"));
+        assertEq("Single", I18n::to_display_case("single", "en"));
+        # whitespace between words is preserved as written
+        assertEq("A  B", I18n::to_display_case("a  b", "en"));
+        assertThrows("I18N-CASE-ERROR", \I18n::to_display_case(), ("x", "en", {"style": "headline"}));
+        assertThrows("I18N-CASE-ERROR", \I18n::to_display_case(), ("x", "en", {"function_words": "of"}));
+        assertThrows("I18N-LOCALE-ERROR", \I18n::get_capitalization_style(), ("not a locale tag!",));
     }
 
     localeFormattingAndCollationTest() {
