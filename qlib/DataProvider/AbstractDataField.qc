@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractDataField class definition
 
-/** AbstractDataField.qc Copyright 2019 - 2025 Qore Technologies, s.r.o.
+/** AbstractDataField.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -128,10 +128,13 @@ public class AbstractDataField inherits Qore::Serializable {
             @since DataProvider 3.6
         */
         const NonAcronyms = map {$1: True}, (
-            "ADD", "AGE", "ALL", "AMT", "ANY", "AVG", "BOX", "BUY", "CNT", "COL", "DAY", "DIR", "DOC", "END",
-            "ERR", "FEE", "GET", "HAS", "IDX", "JOB", "KEY", "LEN", "LOG", "LOW", "MAP", "MAX", "MIN", "NET",
-            "NEW", "NUM", "OLD", "ONE", "OUT", "OWN", "PAY", "PCT", "QTY", "RAW", "REF", "ROW", "RUN", "SEQ",
-            "SET", "SRC", "SUB", "SUM", "TAG", "TAX", "TOP", "TWO", "USE", "VAL", "WEB", "YES", "ZIP",
+            "ADD", "AGE", "ALL", "AMT", "ANY", "ARE", "AVG", "BAD", "BIG", "BOX", "BUY", "CAN", "CNT", "COL",
+            "CUT", "DAY", "DID", "DIR", "DOC", "DUE", "END", "ERR", "FEE", "FEW", "FIT", "FIX", "GET", "GOT",
+            "HAD", "HAS", "HER", "HIM", "HIS", "HOT", "HOW", "IDX", "ITS", "JOB", "KEY", "LEN", "LET", "LOG",
+            "LOT", "LOW", "MAP", "MAX", "MAY", "MEN", "MIN", "NET", "NEW", "NOT", "NOW", "NUM", "OLD", "ONE",
+            "OUR", "OUT", "OWN", "PAY", "PCT", "PUT", "QTY", "RAW", "REF", "ROW", "RUN", "SEE", "SEQ", "SET",
+            "SHE", "SRC", "SUB", "SUM", "TAG", "TAX", "TOP", "TRY", "TWO", "USE", "VAL", "WAS", "WAY", "WEB",
+            "WHO", "WHY", "WIN", "YES", "YET", "YOU", "ZIP",
         );
 
         #! Well-known acronyms longer than @ref AcronymMaxLength that are never case-folded
@@ -154,6 +157,132 @@ public class AbstractDataField inherits Qore::Serializable {
             # business and finance
             "EDIFACT", "EORI", "IBAN", "IDOC", "ISBN", "ISIN", "SEPA", "SWIFT",
         );
+
+        #! Words that are never acronyms and are not capitalized in the middle of a display name
+        /** English function words are short enough to be mistaken for acronyms by the
+            @ref AcronymMaxLength rule (ex: \c "CREATED_AT" would otherwise yield \c "Created AT"), and
+            conventional English title case leaves them in lower case unless they begin or end the name
+            (ex: \c "wait_for_active_shards" -> \c "Wait for Active Shards", but \c "created_at" ->
+            \c "Created At", where \c "at" ends the name)
+
+            Compared in lower case.
+
+            @note This list is English-specific; use the \c extra_acronyms argument to
+            @ref getDisplayName() to override the classification of any word
+
+            @since DataProvider 3.8
+        */
+        const FunctionWords = map {$1: True}, (
+            "a", "an", "and", "as", "at", "but", "by", "for", "from", "if", "in", "into", "is", "nor",
+            "of", "off", "on", "or", "per", "the", "to", "via", "vs", "with",
+        );
+
+        #! Canonical renderings for acronyms, initialisms, and irregularly capitalized proper nouns
+        /** Used by @ref getDisplayName() to render a word in its conventional form regardless of the case
+            it is written in in the technical name, so that lower-case and upper-case technical names produce
+            the same display name (ex: \c "api_key" and \c "API_KEY" both yield \c "API Key")
+
+            Keys must be in lower case; values give the canonical rendering, which may be mixed case
+            (ex: \c "saas" -> \c "SaaS", \c "ipv4" -> \c "IPv4", \c "paypal" -> \c "PayPal")
+
+            This table supersedes @ref Acronyms, which is still honored for words with no entry here
+
+            @note Renderings must not contain word separators (space, \c ".", \c "-", or \c "/"), because
+            @ref getNameFromDisplayName() would otherwise not recover the original technical name; use
+            \c "UTF8" rather than \c "UTF-8" and \c "IO" rather than \c "I/O"
+
+            @note This list covers terms in general technical and business use; domain-, vendor-, or
+            language-specific terms can be supplied with the \c extra_acronyms argument to
+            @ref getDisplayName()
+
+            @since DataProvider 3.8
+        */
+        const WordRenderings = {
+            # network, transport, and protocols
+            "api": "API", "url": "URL", "uri": "URI", "urn": "URN", "http": "HTTP", "https": "HTTPS",
+            "ftp": "FTP", "ftps": "FTPS", "sftp": "SFTP", "smtp": "SMTP", "imap": "IMAP", "pop3": "POP3",
+            "ssh": "SSH", "ssl": "SSL", "tls": "TLS", "mtls": "mTLS", "tcp": "TCP", "udp": "UDP",
+            "ip": "IP", "ipv4": "IPv4", "ipv6": "IPv6", "dns": "DNS", "dhcp": "DHCP", "cidr": "CIDR",
+            "nat": "NAT", "vpn": "VPN", "cdn": "CDN", "mtu": "MTU", "qos": "QoS", "ws": "WS",
+            "wss": "WSS", "sse": "SSE", "rpc": "RPC", "grpc": "gRPC", "rest": "REST", "soap": "SOAP",
+            "wsdl": "WSDL", "graphql": "GraphQL", "mqtt": "MQTT", "amqp": "AMQP", "smpp": "SMPP",
+            "sip": "SIP", "rtp": "RTP", "srt": "SRT", "quic": "QUIC", "h2": "H2", "h3": "H3",
+            # data formats, encodings, and markup
+            "json": "JSON", "jsonl": "JSONL", "ndjson": "NDJSON", "xml": "XML", "xhtml": "XHTML",
+            "html": "HTML", "yaml": "YAML", "toml": "TOML", "csv": "CSV", "tsv": "TSV", "pdf": "PDF",
+            "sql": "SQL", "utf8": "UTF8", "utf16": "UTF16", "ascii": "ASCII", "ebcdic": "EBCDIC",
+            "mime": "MIME", "xslt": "XSLT", "xsd": "XSD", "xpath": "XPath", "css": "CSS", "svg": "SVG",
+            "png": "PNG", "jpeg": "JPEG", "gif": "GIF", "webp": "WebP", "mp3": "MP3", "mp4": "MP4",
+            "zip": "ZIP", "gzip": "GZip", "bmp": "BMP", "tiff": "TIFF", "eml": "EML", "ics": "ICS",
+            # security, identity, and authorization
+            "oauth": "OAuth", "oauth2": "OAuth2", "oidc": "OIDC", "saml": "SAML", "jwt": "JWT",
+            "jwk": "JWK", "sso": "SSO", "mfa": "MFA", "2fa": "2FA", "otp": "OTP", "totp": "TOTP",
+            "acl": "ACL", "rbac": "RBAC", "abac": "ABAC", "ldap": "LDAP", "ldaps": "LDAPS",
+            "sasl": "SASL", "gssapi": "GSSAPI", "hmac": "HMAC", "aes": "AES", "rsa": "RSA",
+            "cn": "CN", "dn": "DN", "ou": "OU",
+            "ecdsa": "ECDSA", "sha": "SHA", "md5": "MD5", "pki": "PKI", "csr": "CSR", "crl": "CRL",
+            "cors": "CORS", "csrf": "CSRF", "xss": "XSS", "waf": "WAF", "iam": "IAM",
+            # identifiers and reference numbers
+            "id": "ID", "uuid": "UUID", "guid": "GUID", "urid": "URID", "sku": "SKU", "upc": "UPC",
+            "ean": "EAN", "isbn": "ISBN", "issn": "ISSN", "isin": "ISIN", "iban": "IBAN", "bic": "BIC",
+            "swift": "SWIFT", "eori": "EORI", "vat": "VAT", "ein": "EIN", "ssn": "SSN", "tin": "TIN",
+            "duns": "DUNS", "lei": "LEI", "imei": "IMEI", "vin": "VIN", "msisdn": "MSISDN",
+            # platform, infrastructure, and computing
+            "aws": "AWS", "gcp": "GCP", "cpu": "CPU", "gpu": "GPU", "tpu": "TPU", "npu": "NPU",
+            "ram": "RAM", "rom": "ROM", "ssd": "SSD", "hdd": "HDD", "os": "OS", "io": "IO",
+            "sdk": "SDK", "cli": "CLI", "gui": "GUI", "tui": "TUI", "ui": "UI",
+            "ux": "UX", "db": "DB", "orm": "ORM", "crud": "CRUD", "jdbc": "JDBC", "odbc": "ODBC",
+            "rdbms": "RDBMS", "oltp": "OLTP", "olap": "OLAP", "etl": "ETL", "elt": "ELT",
+            "vm": "VM", "k8s": "K8s", "ci": "CI", "cd": "CD", "iac": "IaC", "dr": "DR",
+            "saas": "SaaS", "paas": "PaaS", "iaas": "IaaS", "faas": "FaaS", "utc": "UTC",
+            "gmt": "GMT", "tz": "TZ", "dst": "DST", "i18n": "i18n", "l10n": "l10n", "a11y": "a11y",
+            "ttl": "TTL", "fifo": "FIFO", "lifo": "LIFO", "lru": "LRU", "sla": "SLA",
+            "slo": "SLO", "sli": "SLI", "rto": "RTO", "rpo": "RPO", "eof": "EOF", "eol": "EOL",
+            # artificial intelligence and data science
+            "ai": "AI", "ml": "ML", "llm": "LLM", "nlp": "NLP", "nlu": "NLU", "ocr": "OCR",
+            "asr": "ASR", "tts": "TTS", "stt": "STT", "rag": "RAG", "cnn": "CNN", "rnn": "RNN",
+            "gan": "GAN", "svm": "SVM", "knn": "KNN", "pca": "PCA", "mcp": "MCP", "onnx": "ONNX",
+            # media and presentation
+            "qr": "QR", "rgb": "RGB", "rgba": "RGBA", "cmyk": "CMYK", "dpi": "DPI", "ppi": "PPI",
+            "fps": "FPS", "hdr": "HDR", "sdr": "SDR", "hd": "HD", "uhd": "UHD",
+            # business, finance, and accounting
+            "erp": "ERP", "crm": "CRM", "scm": "SCM", "plm": "PLM", "cms": "CMS", "hcm": "HCM",
+            "hr": "HR", "kpi": "KPI", "okr": "OKR", "roi": "ROI", "tco": "TCO", "npv": "NPV",
+            "irr": "IRR", "capex": "CapEx", "opex": "OpEx", "cogs": "COGS", "ebit": "EBIT",
+            "ebitda": "EBITDA", "gaap": "GAAP", "ifrs": "IFRS", "gl": "GL", "ap": "AP", "ar": "AR",
+            "po": "PO", "so": "SO", "pr": "PR", "rma": "RMA", "asn": "ASN", "bom": "BOM", "moq": "MOQ",
+            "eta": "ETA", "etd": "ETD", "fob": "FOB", "cif": "CIF", "ddp": "DDP", "lcl": "LCL",
+            "fcl": "FCL", "b2b": "B2B", "b2c": "B2C", "d2c": "D2C", "poc": "PoC", "mvp": "MVP",
+            "sow": "SOW", "rfp": "RFP", "rfq": "RFQ", "rfi": "RFI", "nda": "NDA", "eula": "EULA",
+            "faq": "FAQ", "toc": "ToC", "yoy": "YoY", "qoq": "QoQ", "mom": "MoM", "ytd": "YTD",
+            "mtd": "MTD", "qtd": "QTD", "arr": "ARR", "mrr": "MRR", "cac": "CAC", "ltv": "LTV",
+            "arpu": "ARPU", "cpc": "CPC", "cpm": "CPM", "ctr": "CTR", "seo": "SEO", "sem": "SEM",
+            "ach": "ACH", "sepa": "SEPA", "edi": "EDI", "edifact": "EDIFACT", "idoc": "IDoc",
+            "pos": "POS", "atm": "ATM", "kyc": "KYC", "aml": "AML", "pci": "PCI", "dso": "DSO",
+            # regulatory, legal, and standards bodies
+            "gdpr": "GDPR", "ccpa": "CCPA", "hipaa": "HIPAA", "ferpa": "FERPA", "sox": "SOX",
+            "pii": "PII", "phi": "PHI", "iso": "ISO", "ansi": "ANSI", "ieee": "IEEE", "ietf": "IETF",
+            "rfc": "RFC", "w3c": "W3C", "nist": "NIST", "osha": "OSHA", "epa": "EPA", "fda": "FDA",
+            "fcc": "FCC", "sec": "SEC", "irs": "IRS", "doe": "DOE", "dod": "DOD", "dot": "DOT",
+            "eu": "EU", "un": "UN", "wto": "WTO", "elf": "ELF",
+            # healthcare and life sciences
+            "ehr": "EHR", "emr": "EMR", "hl7": "HL7", "fhir": "FHIR", "icd": "ICD", "cpt": "CPT",
+            "npi": "NPI", "ndc": "NDC", "lims": "LIMS", "gxp": "GxP", "gmp": "GMP",
+            # brands and products with irregular capitalization
+            "paypal": "PayPal", "ebay": "eBay", "ios": "iOS", "macos": "macOS", "iphone": "iPhone",
+            "ipad": "iPad", "javascript": "JavaScript", "typescript": "TypeScript", "nodejs": "NodeJS",
+            "mysql": "MySQL", "postgresql": "PostgreSQL", "sqlite": "SQLite", "mongodb": "MongoDB",
+            "mariadb": "MariaDB", "dynamodb": "DynamoDB", "github": "GitHub", "gitlab": "GitLab",
+            "bitbucket": "Bitbucket", "openai": "OpenAI", "youtube": "YouTube", "linkedin": "LinkedIn",
+            "whatsapp": "WhatsApp", "docusign": "DocuSign", "quickbooks": "QuickBooks",
+            "salesforce": "Salesforce", "servicenow": "ServiceNow", "hubspot": "HubSpot",
+            "woocommerce": "WooCommerce", "bigcommerce": "BigCommerce", "shopify": "Shopify",
+            "tiktok": "TikTok", "npm": "npm", "php": "PHP", "dotnet": "dotNET", "jquery": "jQuery",
+            "graphviz": "GraphViz", "powershell": "PowerShell", "sharepoint": "SharePoint",
+            "onedrive": "OneDrive", "dropbox": "Dropbox", "mailchimp": "Mailchimp", "sendgrid": "SendGrid",
+            "netsuite": "NetSuite", "workday": "Workday", "sapui5": "SAPUI5", "sap": "SAP",
+            "aftership": "AfterShip", "baselinker": "BaseLinker", "clickfunnels": "ClickFunnels",
+        };
     }
 
     private {
@@ -751,12 +880,28 @@ public class AbstractDataField inherits Qore::Serializable {
         order of precedence:
         - words classified explicitly with the \c extra_acronyms argument
         - words listed in @ref Acronyms (ex: \c "HTTP_SERVER" -> \c "HTTP Server")
-        - words no longer than @ref AcronymMaxLength characters that are not listed in @ref NonAcronyms
-          (ex: \c "CUSTOMER_ID" -> \c "Customer ID", but \c "MAX_RETRIES" -> \c "Max Retries")
+        - words no longer than @ref AcronymMaxLength characters that are neither listed in @ref NonAcronyms
+          nor in @ref FunctionWords (ex: \c "CUSTOMER_ID" -> \c "Customer ID", but \c "MAX_RETRIES" ->
+          \c "Max Retries" and \c "CREATED_AT" -> \c "Created At")
 
-        Words that contain any lower-case letter carry their own case information and are therefore never
-        case-folded, and words in caseless scripts (ex: Chinese, Japanese, Korean, Arabic, Hebrew, Thai,
-        Devanagari) are always left unchanged
+        Each resulting word is then rendered as follows, in order of precedence:
+        - a word classified explicitly with the \c extra_acronyms argument keeps the case it was given by
+          the rules above
+        - a word listed in @ref FunctionWords is written in lower case unless it begins or ends the display
+          name (ex: \c "wait_for_active_shards" -> \c "Wait for Active Shards", but \c "created_at" ->
+          \c "Created At")
+        - a word listed in @ref WordRenderings is written in its canonical form, whatever case it is written
+          in in the technical name, so that lower-case, upper-case, and camel-case technical names all
+          produce the same display name (ex: \c "api_key", \c "API_KEY", and \c "apiKey" all yield
+          \c "API Key", and \c "saas_provider" yields \c "SaaS Provider")
+        - any other word has its initial letter capitalized and the rest of the word left unchanged, so that
+          acronyms preserved by the case-folding rules above keep their case (ex: \c "TPS", \c "URLs")
+
+        Words in caseless scripts (ex: Chinese, Japanese, Korean, Arabic, Hebrew, Thai, Devanagari) are
+        always left unchanged
+
+        Consecutive word separators produce a single word break, and a name consisting only of separators
+        has no words and therefore no display name
 
         @param name the technical name to convert
         @param extra_acronyms optional explicit acronym classification for domain- or language-specific words;
@@ -769,8 +914,16 @@ public class AbstractDataField inherits Qore::Serializable {
         form of the Greek sigma is used at the end of a word; language-specific mappings (ex: the Turkish
         dotless \c i) are not applied
 
+        @note The @ref FunctionWords rule and the English title-case convention it implements are
+        English-specific; use the \c extra_acronyms argument to override the classification of any word
+
         @since DataProvider 3.6 words in upper case are case-folded, and case handling is Unicode-aware in all
         scripts
+
+        @since DataProvider 3.8 words listed in @ref WordRenderings are written in their canonical form
+        regardless of the case they are written in in the technical name, function words listed in
+        @ref FunctionWords are no longer treated as acronyms and are written in lower case in the middle of a
+        display name, and consecutive word separators produce a single word break
     */
     static string getDisplayName(string name, *hash<string, bool> extra_acronyms) {
         # convert dashes and underscores to spaces
@@ -780,32 +933,104 @@ public class AbstractDataField inherits Qore::Serializable {
         if (name =~ /\p{Lu}/) {
             name = AbstractDataField::foldUpperCaseWords(name, extra_acronyms);
         }
-        # word break (space) before
-        bool wb;
-        string display_name = "";
+        list<string> words = AbstractDataField::splitWords(name);
+        list<string> rv = ();
+        for (int i = 0, int e = words.size(); i < e; ++i) {
+            rv += AbstractDataField::renderWord(words[i], !i, i == (e - 1), extra_acronyms);
+        }
+        return rv.join(" ");
+    }
+
+    #! Splits a technical name into words on separators and case transitions
+    /** @param name the technical name with dashes and underscores already converted to spaces and
+        upper-case non-acronym words already case-folded
+
+        @return the list of words in the name; empty words arising from consecutive separators are omitted
+
+        @since DataProvider 3.8
+    */
+    private static list<string> splitWords(string name) {
+        list<string> words = ();
+        string word = "";
         for (int i = 0, int e = name.length(); i < e; ++i) {
             string c = name[i];
-            if (!i || wb) {
-                display_name += c.upr();
-                wb = False;
-                continue;
-            }
+            # word separators must match those handled in foldUpperCaseWords()
             if (c == "." || c == " ") {
-                display_name += " ";
-                wb = True;
+                if (word.val()) {
+                    words += word;
+                    word = "";
+                }
                 continue;
             }
-            if (wb) {
-                wb = False;
+            if (word.val() && i > 1 && c =~ /\p{Lu}/ && word =~ /\p{Ll}$/) {
+                # an upper-case letter after a lower-case letter starts a new word
+                # (ex: "getUser" -> "get" + "User")
+                words += word;
+                word = c;
+                continue;
             }
-            if (c =~ /\p{Lu}/ && (display_name =~ /\p{Ll}$/) && i > 1) {
-                display_name += " ";
-            } else if (c =~ /\p{Ll}/ && display_name =~ /(^| )\p{Lu}{2,}\p{Ll}$/ && i > 1) {
-                splice display_name, -2, 0, " ";
+            if (i > 1 && c =~ /\p{Ll}/ && word =~ /^\p{Lu}{2,}\p{Ll}$/) {
+                # a run of upper-case letters followed by two lower-case letters breaks before the last
+                # upper-case letter, which begins the following word (ex: "XMLHttp" -> "XML" + "Http");
+                # a single trailing lower-case letter is a plural suffix instead (ex: "URLs")
+                words += word.substr(0, word.length() - 2);
+                word = word.substr(word.length() - 2);
             }
-            display_name += c;
+            word += c;
         }
-        return display_name;
+        if (word.val()) {
+            words += word;
+        }
+        return words;
+    }
+
+    #! Renders a single word of a display name in its conventional form
+    /** @param word the word to render
+        @param first @ref True "True" if the word begins the display name
+        @param last @ref True "True" if the word ends the display name
+        @param extra_acronyms optional explicit acronym classification as documented in @ref getDisplayName()
+
+        @return the word in its canonical rendering if it has one, in lower case if it is a function word in
+        the middle of the display name, and otherwise with its initial letter capitalized
+
+        @since DataProvider 3.8
+    */
+    private static string renderWord(string word, bool first, bool last, *hash<string, bool> extra_acronyms) {
+        string key = word.lwr();
+        # an explicit classification by the caller takes precedence over all other rules; the word was
+        # already preserved or case-folded accordingly when upper-case words were folded
+        if (exists extra_acronyms{word.upr()}) {
+            return AbstractDataField::capitalizeWord(word);
+        }
+        # function words are never acronyms, and English title case leaves them in lower case unless they
+        # begin or end the display name
+        if (FunctionWords{key}) {
+            return (first || last) ? AbstractDataField::capitalizeWord(word) : key;
+        }
+        # a canonical rendering applies regardless of the case the word is written in, so that lower-case
+        # and upper-case technical names produce the same display name
+        *string canonical = WordRenderings{key};
+        if (exists canonical) {
+            return canonical;
+        }
+        return AbstractDataField::capitalizeWord(word);
+    }
+
+    #! Capitalizes the initial letter of a word and leaves the rest of the word unchanged
+    /** The remainder of the word is left as it is, so that acronyms preserved when upper-case words were
+        case-folded keep their case (ex: \c "TPS" and \c "URLs")
+
+        @param word the word to capitalize
+
+        @return the word with its initial letter capitalized
+
+        @since DataProvider 3.8
+    */
+    private static string capitalizeWord(string word) {
+        if (!word.val()) {
+            return word;
+        }
+        return word[0].upr() + word.substr(1);
     }
 
     #! Case-folds all upper-case words in a technical name that are not acronyms
@@ -853,7 +1078,8 @@ public class AbstractDataField inherits Qore::Serializable {
         *bool acronym = extra_acronyms{word};
         if (!exists acronym) {
             # short words and well-known acronyms are assumed to be acronyms and are left unchanged
-            acronym = (word.length() <= AcronymMaxLength && !NonAcronyms{word}) || Acronyms{word};
+            acronym = (word.length() <= AcronymMaxLength && !NonAcronyms{word}
+                && !FunctionWords{word.lwr()}) || Acronyms{word};
         }
         if (acronym) {
             return word;

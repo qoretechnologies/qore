@@ -825,7 +825,7 @@ public class RestSchemaActionSetTest inherits QUnit::Test {
         assertTrue(widget.options.widget_id.required);
         assertTrue(widget.options.widget_id.preselected);
         assertFalse(widget.options.expand.required);
-        assertEq("Widget Id", widget.options.widget_id.display_name);
+        assertEq("Widget ID", widget.options.widget_id.display_name);
 
         # values merged into every action definition
         list<hash<DataProviderActionInfo>> with_common = aset.getActionInfoList("WidgetStore", {

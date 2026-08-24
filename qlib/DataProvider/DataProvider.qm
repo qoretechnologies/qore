@@ -1351,6 +1351,22 @@ fetch
 
     @section dataprovider_relnotes Release Notes
 
+    @subsection dataprovider_v3_8 DataProvider v3.8
+    - @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" now renders
+      acronyms, initialisms, and irregularly capitalized proper nouns in their canonical form regardless of
+      the case they are written in in the technical name, so that lower-case and camel-case technical names
+      produce the same display names as upper-case ones (ex: \c "api_key" -> \c "API Key",
+      \c "saas_provider" -> \c "SaaS Provider", \c "ipv4_address" -> \c "IPv4 Address"); the renderings are
+      given by @ref DataProvider::AbstractDataField::WordRenderings "AbstractDataField::WordRenderings"
+    - fixed @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" to
+      stop treating short English function words in upper-case technical names as acronyms
+      (ex: \c "CREATED_AT" previously yielded \c "Created AT" and now yields \c "Created At"); such words
+      are listed in @ref DataProvider::AbstractDataField::FunctionWords "AbstractDataField::FunctionWords"
+      and are written in lower case in the middle of a display name in accordance with English title case
+      (ex: \c "wait_for_active_shards" -> \c "Wait for Active Shards")
+    - @ref DataProvider::AbstractDataField::getDisplayName() "AbstractDataField::getDisplayName()" now
+      produces a single word break for consecutive word separators instead of one space per separator
+
     @subsection dataprovider_v3_7 DataProvider v3.7
     - added source-owned native i18n catalog metadata and deterministic message identities for localized application,
       action, and option presentation without changing technical identities

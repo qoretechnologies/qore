@@ -1333,8 +1333,8 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq("Get User URL", AbstractDataField::getDisplayName("GetUserURL"));
         assertEq("Client URLs", AbstractDataField::getDisplayName("clientURLs"));
         assertEq("Client URLs", AbstractDataField::getDisplayName("ClientURLs"));
-        assertEq("User Id", AbstractDataField::getDisplayName("userId"));
-        assertEq("User Id", AbstractDataField::getDisplayName("UserId"));
+        assertEq("User ID", AbstractDataField::getDisplayName("userId"));
+        assertEq("User ID", AbstractDataField::getDisplayName("UserId"));
         assertEq("User ID", AbstractDataField::getDisplayName("userID"));
         assertEq("User ID", AbstractDataField::getDisplayName("UserID"));
         assertEq("Create TPS Reports", AbstractDataField::getDisplayName("createTPSReports"));
@@ -1372,6 +1372,97 @@ public class DataProviderTest inherits QUnit::Test {
         assertEq("Top MAX Val", AbstractDataField::getDisplayName("TOP_MAX_VAL", {"MAX": True}));
         assertEq("Iban Code", AbstractDataField::getDisplayName("IBAN_CODE", {"IBAN": False}));
         assertEq("Id List", AbstractDataField::getDisplayName("ID_LIST", {"ID": False}));
+        # an explicit classification also overrides a canonical rendering
+        assertEq("Api Key", AbstractDataField::getDisplayName("api_key", {"API": False}));
+        assertEq("Saas Tier", AbstractDataField::getDisplayName("saas_tier", {"SAAS": False}));
+
+        # canonical renderings apply to technical names written in lower case
+        assertEq("API Key", AbstractDataField::getDisplayName("api_key"));
+        assertEq("API Schema Manager WS", AbstractDataField::getDisplayName("api-schema-manager-ws"));
+        assertEq("JSON Payload", AbstractDataField::getDisplayName("json_payload"));
+        assertEq("SQL Query", AbstractDataField::getDisplayName("sql_query"));
+        assertEq("HTTP Client", AbstractDataField::getDisplayName("http_client"));
+        assertEq("LDAP Server", AbstractDataField::getDisplayName("ldap_server"));
+        assertEq("URL", AbstractDataField::getDisplayName("url"));
+        assertEq("ID", AbstractDataField::getDisplayName("id"));
+
+        # canonical renderings restore irregular capitalization that no case rule can derive
+        assertEq("SaaS Provider", AbstractDataField::getDisplayName("saas_provider"));
+        assertEq("IPv4 Address", AbstractDataField::getDisplayName("ipv4_address"));
+        assertEq("IPv6 Address", AbstractDataField::getDisplayName("ipv6_address"));
+        assertEq("OAuth2 Token", AbstractDataField::getDisplayName("oauth2_token"));
+        assertEq("gRPC Stub", AbstractDataField::getDisplayName("grpc_stub"));
+        assertEq("GraphQL Query", AbstractDataField::getDisplayName("graphql_query"));
+        assertEq("PayPal Account", AbstractDataField::getDisplayName("paypal_account"));
+        assertEq("eBay Listing", AbstractDataField::getDisplayName("ebay_listing"));
+        assertEq("iOS Device", AbstractDataField::getDisplayName("ios_device"));
+        assertEq("MySQL Connection", AbstractDataField::getDisplayName("mysql_connection"));
+        assertEq("GitHub Repo", AbstractDataField::getDisplayName("github_repo"));
+        assertEq("YoY Growth", AbstractDataField::getDisplayName("yoy_growth"));
+        assertEq("CapEx Budget", AbstractDataField::getDisplayName("capex_budget"));
+
+        # business acronyms longer than AcronymMaxLength are no longer case-folded
+        assertEq("EBITDA Value", AbstractDataField::getDisplayName("ebitda_value"));
+        assertEq("EBITDA Value", AbstractDataField::getDisplayName("EBITDA_VALUE"));
+        assertEq("GDPR Consent", AbstractDataField::getDisplayName("gdpr_consent"));
+        assertEq("HIPAA Flag", AbstractDataField::getDisplayName("hipaa_flag"));
+        assertEq("EULA Text", AbstractDataField::getDisplayName("eula_text"));
+        assertEq("RMA Number", AbstractDataField::getDisplayName("rma_number"));
+        assertEq("DOE Form", AbstractDataField::getDisplayName("doe_form"));
+        assertEq("ELF Binary", AbstractDataField::getDisplayName("elf_binary"));
+
+        # the same word yields the same display name however the technical name is written
+        foreach hash<auto> i in ((
+            {"lower": "api_key", "upper": "API_KEY", "camel": "apiKey", "expect": "API Key"},
+            {"lower": "user_id", "upper": "USER_ID", "camel": "userId", "expect": "User ID"},
+            {"lower": "http_server", "upper": "HTTP_SERVER", "camel": "httpServer", "expect": "HTTP Server"},
+            {"lower": "vat_number", "upper": "VAT_NUMBER", "camel": "vatNumber", "expect": "VAT Number"},
+        )) {
+            assertEq(i.expect, AbstractDataField::getDisplayName(i.lower), i.lower);
+            assertEq(i.expect, AbstractDataField::getDisplayName(i.upper), i.upper);
+            assertEq(i.expect, AbstractDataField::getDisplayName(i.camel), i.camel);
+        }
+
+        # function words are not acronyms, whatever case the technical name is written in
+        assertEq("Created At", AbstractDataField::getDisplayName("created_at"));
+        assertEq("Created At", AbstractDataField::getDisplayName("CREATED_AT"));
+        assertEq("Updated By", AbstractDataField::getDisplayName("UPDATED_BY"));
+        assertEq("Is Active", AbstractDataField::getDisplayName("IS_ACTIVE"));
+        assertEq("In Stock", AbstractDataField::getDisplayName("IN_STOCK"));
+        assertEq("Per Page", AbstractDataField::getDisplayName("PER_PAGE"));
+        assertEq("Due Date", AbstractDataField::getDisplayName("DUE_DATE"));
+
+        # function words stay in lower case in the middle of a display name, but not at either end
+        assertEq("Wait for Active Shards", AbstractDataField::getDisplayName("wait_for_active_shards"));
+        assertEq("Usage Limit per User", AbstractDataField::getDisplayName("usage_limit_per_user"));
+        assertEq("Date on Sale From", AbstractDataField::getDisplayName("date_on_sale_from"));
+        assertEq("Remove Customer from Group", AbstractDataField::getDisplayName("remove-customer-from-group"));
+        assertEq("Of", AbstractDataField::getDisplayName("of"));
+        assertEq("To Do", AbstractDataField::getDisplayName("to_do"));
+
+        # words with no canonical rendering keep the behavior they had
+        assertEq("Widget Sprocket", AbstractDataField::getDisplayName("widget_sprocket"));
+        assertEq("Zzz Qqq", AbstractDataField::getDisplayName("zzz_qqq"));
+        assertEq("Frobnicate", AbstractDataField::getDisplayName("FROBNICATE"));
+
+        # consecutive separators do not produce consecutive spaces
+        assertEq("Order Number", AbstractDataField::getDisplayName("order__number"));
+        assertEq("Order Number", AbstractDataField::getDisplayName("_order-number_"));
+
+        # canonical renderings never contain a word separator, so that display names convert back to the
+        # technical names they were derived from
+        foreach string word in (keys AbstractDataField::WordRenderings) {
+            string rendering = AbstractDataField::WordRenderings{word};
+            assertFalse(rendering =~ /[ .\/-]/, sprintf("%y rendering %y has no separator", word, rendering));
+            assertEq(word, rendering.lwr(), sprintf("%y rendering %y folds back to its key", word, rendering));
+        }
+
+        # display names convert back to the technical names they were derived from
+        foreach string name in (("api-key", "saas-provider", "ipv4-address", "oauth2-token", "user-id",
+            "paypal-account", "ios-device", "created-at", "wait-for-active-shards", "ebitda-value")) {
+            assertEq(name, AbstractDataField::getNameFromDisplayName(AbstractDataField::getDisplayName(name)),
+                name);
+        }
 
         # case handling is Unicode-aware in all scripts
         assertEq("Платіж Дата", AbstractDataField::getDisplayName("ПЛАТІЖ_ДАТА"));
@@ -1395,7 +1486,9 @@ public class DataProviderTest inherits QUnit::Test {
 
         # corner cases
         assertEq("", AbstractDataField::getDisplayName(""));
-        assertEq(" ", AbstractDataField::getDisplayName("-"));
+        # a name consisting only of separators has no words, and therefore no display name
+        assertEq("", AbstractDataField::getDisplayName("-"));
+        assertEq("", AbstractDataField::getDisplayName("__"));
         assertEq("2", AbstractDataField::getDisplayName("2"));
 
         # technical names round-trip through display names in all scripts
