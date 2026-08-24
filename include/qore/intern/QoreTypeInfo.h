@@ -47,6 +47,19 @@ class UserSignature;
 class QoreComplexBufferTypeInfo;
 class QoreProgramLocation;
 class QoreTypeInfo;
+class LValueHelper;
+
+//! The kind of container whose value type produced an lvalue's declared type, if any
+/** Carried into the runtime type-error path so a rejected assignment can be explained in terms of
+    the container holding the target.  Only the complex hash and list element lvalue paths set a
+    value other than @ref QLVTS_None, so an error on a plain variable, an object member, a hashdecl
+    member, a return value or a cast never claims a container is involved.
+*/
+enum q_lvalue_vts_e : unsigned char {
+    QLVTS_None = 0,   //!< the type did not come from a container's value type
+    QLVTS_Hash = 1,   //!< the type is the value type of a complex hash
+    QLVTS_List = 2,   //!< the type is the value type of a complex list
+};
 
 //! Returns true and sets @a result if either type is an AOT deferred type placeholder.
 DLLLOCAL bool qore_type_info_aot_deferred_compare(const QoreTypeInfo* a, const QoreTypeInfo* b, bool& result);
@@ -543,7 +556,12 @@ public:
             ExceptionSink* xsink, LValueHelper* lvhelper = nullptr) {
         assert(text && text[0] == '<');
         if (hasType(ti)) {
-            ti->acceptInputIntern(xsink, "lvalue", false, -1, text, n, lvhelper);
+            // the helper is deliberately not forwarded into the conversion chain: it changes
+            // temporary lifetime there and a reference assignment would build a second
+            // LValueHelper under this one's write lock (issue #2889).  Only the container kind is
+            // carried, and only so the diagnostic can name it.
+            ti->acceptInputIntern(xsink, "lvalue", false, -1, text, n, nullptr,
+                lvalueValueTypeSource(lvhelper));
         } else if (ti != autoTypeInfo) {
             stripTypeInfo(n, xsink, lvhelper);
         }
@@ -789,10 +807,10 @@ public:
     }
 
     DLLLOCAL int doAcceptError(bool priv_error, const char* arg_type, bool obj, int param_num, const char* param_name,
-            const QoreValue& n, ExceptionSink* xsink, LValueHelper* lvhelper = nullptr) const;
+            const QoreValue& n, ExceptionSink* xsink, q_lvalue_vts_e vts = QLVTS_None) const;
 
     DLLLOCAL int doTypeException(const char* arg_type, int param_num, const char* param_name, const QoreValue& n,
-            ExceptionSink* xsink, LValueHelper* lvhelper = nullptr) const;
+            ExceptionSink* xsink, q_lvalue_vts_e vts = QLVTS_None) const;
 
     //! Returns true if this type can be the value type of a complex hash or list
     /** Used to decide whether a rejected container element assignment is worth explaining in
@@ -809,7 +827,13 @@ public:
     }
 
     DLLLOCAL void acceptInputIntern(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
-            const char* param_name, QoreValue& n, LValueHelper* lvhelper = nullptr) const;
+            const char* param_name, QoreValue& n, LValueHelper* lvhelper = nullptr,
+            q_lvalue_vts_e vts = QLVTS_None) const;
+
+    //! Returns the container kind an lvalue's type came from; QLVTS_None without a helper
+    /** Defined in Variable.cpp, where LValueHelper is a complete type.
+    */
+    DLLLOCAL static q_lvalue_vts_e lvalueValueTypeSource(LValueHelper* lvhelper);
 
     DLLLOCAL void doNonNumericWarning(const QoreProgramLocation* loc, const char* preface) const;
     DLLLOCAL void doNonBooleanWarning(const QoreProgramLocation* loc, const char* preface) const;

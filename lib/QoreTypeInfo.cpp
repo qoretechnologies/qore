@@ -5530,7 +5530,7 @@ void QoreTypeInfo::ptext(QoreString& str, const char* arg_type, int param_num, c
 }
 
 int QoreTypeInfo::doAcceptError(bool priv_error, const char* arg_type, bool obj, int param_num, const char* param_name,
-        const QoreValue& n, ExceptionSink* xsink, LValueHelper* lvhelper) const {
+        const QoreValue& n, ExceptionSink* xsink, q_lvalue_vts_e vts) const {
     if (priv_error) {
         if (obj) {
             doObjectPrivateClassException(param_name, xsink);
@@ -5541,14 +5541,14 @@ int QoreTypeInfo::doAcceptError(bool priv_error, const char* arg_type, bool obj,
         if (obj) {
             doObjectHashDeclTypeException(arg_type, param_name, n, xsink);
         } else {
-            doTypeException(arg_type, param_num + 1, param_name, n, xsink, lvhelper);
+            doTypeException(arg_type, param_num + 1, param_name, n, xsink, vts);
         }
     }
     return -1;
 }
 
 int QoreTypeInfo::doTypeException(const char* arg_type, int param_num, const char* param_name, const QoreValue& n,
-        ExceptionSink* xsink, LValueHelper* lvhelper) const {
+        ExceptionSink* xsink, q_lvalue_vts_e vts) const {
     // xsink may be null in case parse exceptions have been disabled in the QoreProgram object
     // for example if there was a "requires" error
     if (!xsink)
@@ -5564,16 +5564,16 @@ int QoreTypeInfo::doTypeException(const char* arg_type, int param_num, const cha
     // container in the lvalue path there is nothing to narrow, so no hint is added: every
     // assignment to a simple-typed lvalue used to claim a hash was involved even when the program
     // contained no hash at all.
-    if (lvhelper && isSimpleTypeNarrowed()) {
+    if (vts != QLVTS_None && isSimpleTypeNarrowed()) {
         const char* container = nullptr;
-        switch (lvhelper->getValueTypeSource()) {
-            case LValueHelper::VTS_Hash:
+        switch (vts) {
+            case QLVTS_Hash:
                 container = "hash";
                 break;
-            case LValueHelper::VTS_List:
+            case QLVTS_List:
                 container = "list";
                 break;
-            case LValueHelper::VTS_None:
+            case QLVTS_None:
                 break;
         }
         if (container) {
@@ -6045,7 +6045,7 @@ bool QoreTypeInfo::outputSuperSetOf(const QoreTypeInfo* t) const {
 }
 
 void QoreTypeInfo::acceptInputIntern(ExceptionSink* xsink, const char* arg_type, bool obj, int param_num,
-        const char* param_name, QoreValue& n, LValueHelper* lvhelper) const {
+        const char* param_name, QoreValue& n, LValueHelper* lvhelper, q_lvalue_vts_e vts) const {
     // CRITICAL FIX Phase 2: Prioritize complex hash/list handlers for optional types
     // For optional types (return_vec.size() > 1), we need to ensure complex hash/list
     // handlers are tried BEFORE hashdecl handlers to prevent incorrect routing.
@@ -6077,7 +6077,7 @@ void QoreTypeInfo::acceptInputIntern(ExceptionSink* xsink, const char* arg_type,
                     }
                 }
             }
-            doAcceptError(false, arg_type, obj, param_num, param_name, n, xsink, lvhelper);
+            doAcceptError(false, arg_type, obj, param_num, param_name, n, xsink, vts);
             return;
         }
     }
@@ -6088,7 +6088,7 @@ void QoreTypeInfo::acceptInputIntern(ExceptionSink* xsink, const char* arg_type,
             return;
         }
     }
-    doAcceptError(false, arg_type, obj, param_num, param_name, n, xsink, lvhelper);
+    doAcceptError(false, arg_type, obj, param_num, param_name, n, xsink, vts);
 }
 
 qore_type_result_e QoreTypeInfo::parseAcceptsIntern(const QoreAcceptSpec& at, const QoreReturnSpec& rt,

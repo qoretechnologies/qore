@@ -107,7 +107,7 @@ int qore_list_private::getLValue(size_t ind, LValueHelper& lvh, bool for_remove,
     if (complexTypeInfo) {
         // the element type is this list's declared value type; see the hash case in
         // qore_hash_private::getLValue()
-        lvh.setValueTypeSource(LValueHelper::VTS_List);
+        lvh.setValueTypeSource(QLVTS_List);
     }
     return 0;
 }

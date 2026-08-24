@@ -1746,6 +1746,13 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
     return 0;
 }
 
+//! Returns the container kind an lvalue's type came from; QLVTS_None without a helper
+/** Declared in QoreTypeInfo.h, defined here because LValueHelper is only complete in this file.
+*/
+q_lvalue_vts_e QoreTypeInfo::lvalueValueTypeSource(LValueHelper* lvhelper) {
+    return lvhelper ? lvhelper->getValueTypeSource() : QLVTS_None;
+}
+
 int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool weak_assignment) {
     assert(!*vl.xsink);
     if (n.hasNode() && n.getInternalNode() == &Nothing) {
