@@ -352,7 +352,7 @@
           "message": "Obraz dla tego produktu. Dołączany do kasy (checkout) i niektórych dokumentów klienta."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.display_name": {
-          "source": "Image Url",
+          "source": "Image URL",
           "message": "Adres URL obrazu"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.short_desc": {
@@ -584,7 +584,7 @@
           "message": "Identyfikator Paddle adresu, dla którego przeznaczona jest ta transakcja, poprzedzony prefiksem `add_`. Wymaga `customer_id`. W przypadku pominięcia status transakcji to `draft`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.display_name": {
-          "source": "Address Id",
+          "source": "Address ID",
           "message": "Identyfikator adresu"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.desc": {
@@ -624,7 +624,7 @@
           "message": "Identyfikator Paddle firmy, której dotyczy ta transakcja, z prefiksem `biz_`. Wymaga `customer_id`. "
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.display_name": {
-          "source": "Business Id",
+          "source": "Business ID",
           "message": "Identyfikator firmy"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGV0YWlscw.desc": {
@@ -652,7 +652,7 @@
           "message": "Identyfikator Paddle rabatu do zastosowania w tej transakcji, z prefiksem `dsc_`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.display_name": {
-          "source": "Discount Id",
+          "source": "Discount ID",
           "message": "Identyfikator rabatu"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.short_desc": {
@@ -664,7 +664,7 @@
           "message": "Identyfikator Paddle faktury, z którą powiązana jest ta transakcja, z prefiksem `inv_`. Używany w celu zachowania zgodności z interfejsem Paddle Invoice API, który jest obecnie przestarzały. To pole ma zostać usunięte w następnej wersji interfejsu Paddle API."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.display_name": {
-          "source": "Invoice Id",
+          "source": "Invoice ID",
           "message": "Identyfikator faktury"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9udW1iZXI.desc": {
@@ -696,7 +696,7 @@
           "message": "Unikalny identyfikator Paddle dla tej jednostki transakcji, z prefiksem `txn_`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aWQ.display_name": {
-          "source": "Id",
+          "source": "ID",
           "message": "Identyfikator"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aWQ.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "Zwróć obiekty powiązane z określonym adresem. Użyj listy rozdzielanej przecinkami, aby podać wiele identyfikatorów adresów."
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWRkcmVzc19pZA.display_name": {
-          "source": "Address Id",
+          "source": "Address ID",
           "message": "Identyfikator adresu"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWRkcmVzc19pZA.short_desc": {
@@ -2896,7 +2896,7 @@
           "message": "Obraz dla tego produktu. Dołączany do kasy (checkout) i niektórych dokumentów klienta."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.display_name": {
-          "source": "Image Url",
+          "source": "Image URL",
           "message": "Adres URL obrazu"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.short_desc": {

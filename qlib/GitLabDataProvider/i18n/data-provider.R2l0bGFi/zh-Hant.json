@@ -124,7 +124,7 @@
           "message": "返回在此日期標記為刪除的群組"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWFya2VkX2Zvcl9kZWxldGlvbl9vbg.display_name": {
-          "source": "Marked For Deletion On",
+          "source": "Marked for Deletion On",
           "message": "標記為刪除的日期"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWFya2VkX2Zvcl9kZWxldGlvbl9vbg.short_desc": {
@@ -460,7 +460,7 @@
           "message": "僅列出具有已連結 SAML 身分的成員"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnM.option.d2l0aF9zYW1sX2lkZW50aXR5.display_name": {
-          "source": "With Saml Identity",
+          "source": "With SAML Identity",
           "message": "具有 SAML 身分"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnM.option.d2l0aF9zYW1sX2lkZW50aXR5.short_desc": {
@@ -752,7 +752,7 @@
           "message": "與議題關聯的 Epic ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.ZXBpY19pZA.display_name": {
-          "source": "Epic Id",
+          "source": "Epic ID",
           "message": "Epic ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.ZXBpY19pZA.short_desc": {
@@ -856,7 +856,7 @@
           "message": "傳回指派給指定 ID 之反覆項目的議題"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.aXRlcmF0aW9uX2lk.display_name": {
-          "source": "Iteration Id",
+          "source": "Iteration ID",
           "message": "反覆項目 ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.aXRlcmF0aW9uX2lk.short_desc": {
@@ -968,7 +968,7 @@
           "message": "傳回指派給具有指定時間箱值（\"Any\"、\"None\"、\"Upcoming\" 或 \"Started\"）之里程碑的議題"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bWlsZXN0b25lX2lk.display_name": {
-          "source": "Milestone Id",
+          "source": "Milestone ID",
           "message": "Milestone Id"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bXlfcmVhY3Rpb25fZW1vamk.desc": {
@@ -1632,7 +1632,7 @@
           "message": "與議題關聯的 Epic ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.ZXBpY19pZA.display_name": {
-          "source": "Epic Id",
+          "source": "Epic ID",
           "message": "Epic ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.ZXBpY19pZA.short_desc": {
@@ -1748,7 +1748,7 @@
           "message": "傳回指派給指定 ID 之反覆項目的議題"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.aXRlcmF0aW9uX2lk.display_name": {
-          "source": "Iteration Id",
+          "source": "Iteration ID",
           "message": "反覆項目 ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.aXRlcmF0aW9uX2lk.short_desc": {
@@ -2388,7 +2388,7 @@
           "message": "僅列出具有已連結 SAML 身分的成員"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVycw.option.d2l0aF9zYW1sX2lkZW50aXR5.display_name": {
-          "source": "With Saml Identity",
+          "source": "With SAML Identity",
           "message": "具有 SAML 身分"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVycw.option.d2l0aF9zYW1sX2lkZW50aXR5.short_desc": {
@@ -2436,7 +2436,7 @@
           "message": "若為 `true`，回應將包含是否正在進行變基 (rebase) 操作。"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.aW5jbHVkZV9yZWJhc2VfaW5fcHJvZ3Jlc3M.display_name": {
-          "source": "Include Rebase In Progress",
+          "source": "Include Rebase in Progress",
           "message": "包含正在進行的變基"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.aW5jbHVkZV9yZWJhc2VfaW5fcHJvZ3Jlc3M.short_desc": {
@@ -2472,7 +2472,7 @@
           "message": "若為 `true`，回應將包含標題與描述的已轉譯 HTML。"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.cmVuZGVyX2h0bWw.display_name": {
-          "source": "Render Html",
+          "source": "Render HTML",
           "message": "轉譯 HTML"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.cmVuZGVyX2h0bWw.short_desc": {
@@ -2520,7 +2520,7 @@
           "message": "傳回已由具有指定 ID 的特定使用者核准的合併請求"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfaWRz.display_name": {
-          "source": "Approved By Ids",
+          "source": "Approved by Ids",
           "message": "核准者 ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfdXNlcm5hbWVz.desc": {
@@ -2528,7 +2528,7 @@
           "message": "傳回已由具有指定\n            使用者名稱的特定使用者核准的合併請求"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfdXNlcm5hbWVz.display_name": {
-          "source": "Approved By Usernames",
+          "source": "Approved by Usernames",
           "message": "核准者使用者名稱"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZXJfaWRz.desc": {
@@ -3836,7 +3836,7 @@
           "message": "若為 `true`，回應將包含標題與描述的已轉譯 HTML。"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.option.cmVuZGVyX2h0bWw.display_name": {
-          "source": "Render Html",
+          "source": "Render HTML",
           "message": "轉譯 HTML"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.option.cmVuZGVyX2h0bWw.short_desc": {
@@ -4124,7 +4124,7 @@
           "message": "將結果限制為 ID 大於指定 ID 的專案"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.aWRfYWZ0ZXI.display_name": {
-          "source": "Id After",
+          "source": "ID After",
           "message": "ID 之後"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.aWRfYWZ0ZXI.short_desc": {
@@ -4136,7 +4136,7 @@
           "message": "將結果限制為 ID 小於指定 ID 的專案"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.aWRfYmVmb3Jl.display_name": {
-          "source": "Id Before",
+          "source": "ID Before",
           "message": "ID 之前"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.aWRfYmVmb3Jl.short_desc": {
@@ -4244,7 +4244,7 @@
           "message": "返回在此日期標記為刪除的群組"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWFya2VkX2Zvcl9kZWxldGlvbl9vbg.display_name": {
-          "source": "Marked For Deletion On",
+          "source": "Marked for Deletion On",
           "message": "標記為刪除的日期"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWFya2VkX2Zvcl9kZWxldGlvbl9vbg.short_desc": {
@@ -4580,7 +4580,7 @@
           "message": "主題的組織 ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRUb3BpY3M.option.b3JnYW5pemF0aW9uX2lk.display_name": {
-          "source": "Organization Id",
+          "source": "Organization ID",
           "message": "組織 ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRUb3BpY3M.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
@@ -4884,7 +4884,7 @@
           "message": "略過 LDAP 使用者"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRVc2Vycw.option.c2tpcF9sZGFw.display_name": {
-          "source": "Skip Ldap",
+          "source": "Skip LDAP",
           "message": "略過 LDAP"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRVc2Vycw.option.c2tpcF9sZGFw.short_desc": {
@@ -5948,7 +5948,7 @@
           "message": "為此群組啟用客戶關係管理 (CRM)"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.Y3JtX2VuYWJsZWQ.display_name": {
-          "source": "Crm Enabled",
+          "source": "CRM Enabled",
           "message": "已啟用 CRM"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.Y3JtX2VuYWJsZWQ.short_desc": {
@@ -5972,7 +5972,7 @@
           "message": "AI 相關設定"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.display_name": {
-          "source": "Ai Settings Attributes",
+          "source": "AI Settings Attributes",
           "message": "AI 設定屬性"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.short_desc": {
@@ -6244,7 +6244,7 @@
           "message": "群組的組織識別碼"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.b3JnYW5pemF0aW9uX2lk.display_name": {
-          "source": "Organization Id",
+          "source": "Organization ID",
           "message": "組織 ID"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
@@ -6268,7 +6268,7 @@
           "message": "有效的存取層級"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.bGRhcF9hY2Nlc3M.display_name": {
-          "source": "Ldap Access",
+          "source": "LDAP Access",
           "message": "LDAP 存取權"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.bGRhcF9hY2Nlc3M.short_desc": {
@@ -6280,7 +6280,7 @@
           "message": "LDAP 常用名稱"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.bGRhcF9jbg.display_name": {
-          "source": "Ldap Cn",
+          "source": "LDAP CN",
           "message": "LDAP CN"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.bGRhcF9jbg.short_desc": {
@@ -6352,7 +6352,7 @@
           "message": "防止將專案與此群組內的其他群組共用"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.c2hhcmVfd2l0aF9ncm91cF9sb2Nr.display_name": {
-          "source": "Share With Group Lock",
+          "source": "Share with Group Lock",
           "message": "與群組共用鎖定"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.c2hhcmVfd2l0aF9ncm91cF9sb2Nr.short_desc": {
@@ -6376,7 +6376,7 @@
           "message": "在合併請求通知電子郵件中包含程式碼差異預覽"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.display_name": {
-          "source": "Show Diff Preview In Email",
+          "source": "Show Diff Preview in Email",
           "message": "在電子郵件中顯示差異預覽"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.short_desc": {
@@ -6536,7 +6536,7 @@
           "message": "工作階段可用性的工具核准。`default_on`、`default_off` 或 `never_on` 之一"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.dG9vbF9hcHByb3ZhbF9mb3Jfc2Vzc2lvbl9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "Tool Approval For Session Availability",
+          "source": "Tool Approval for Session Availability",
           "message": "工作階段可用性的工具核准"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.dG9vbF9hcHByb3ZhbF9mb3Jfc2Vzc2lvbl9hdmFpbGFiaWxpdHk.short_desc": {
@@ -6736,7 +6736,7 @@
           "message": "是否遮蔽並隱藏變數"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRWYXJpYWJsZXM.option.bWFza2VkX2FuZF9oaWRkZW4.display_name": {
-          "source": "Masked And Hidden",
+          "source": "Masked and Hidden",
           "message": "已遮蔽並隱藏"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRWYXJpYWJsZXM.option.bWFza2VkX2FuZF9oaWRkZW4.short_desc": {
@@ -6860,7 +6860,7 @@
           "message": "CI 設定檔路徑。預設為 `.gitlab-ci.yml`"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Y2lfY29uZmlnX3BhdGg.display_name": {
-          "source": "Ci Config Path",
+          "source": "CI Config Path",
           "message": "CI 設定路徑"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Y2lfY29uZmlnX3BhdGg.short_desc": {
@@ -6908,7 +6908,7 @@
           "message": "若管線已略過則允許合併"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.display_name": {
-          "source": "Allow Merge On Skipped Pipeline",
+          "source": "Allow Merge on Skipped Pipeline",
           "message": "管線略過時允許合併"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.short_desc": {
@@ -7092,7 +7092,7 @@
           "message": "作為範本來源的群組 ID"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Z3JvdXBfd2l0aF9wcm9qZWN0X3RlbXBsYXRlc19pZA.display_name": {
-          "source": "Group With Project Templates Id",
+          "source": "Group with Project Templates ID",
           "message": "含專案範本的群組 ID"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Z3JvdXBfd2l0aF9wcm9qZWN0X3RlbXBsYXRlc19pZA.short_desc": {
@@ -7236,7 +7236,7 @@
           "message": "對上傳強制執行身分驗證檢查"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.ZW5mb3JjZV9hdXRoX2NoZWNrc19vbl91cGxvYWRz.display_name": {
-          "source": "Enforce Auth Checks On Uploads",
+          "source": "Enforce Auth Checks on Uploads",
           "message": "對上傳強制執行身分驗證檢查"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.ZW5mb3JjZV9hdXRoX2NoZWNrc19vbl91cGxvYWRz.short_desc": {
@@ -7308,7 +7308,7 @@
           "message": "匯入專案的來源 URL"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aW1wb3J0X3VybA.display_name": {
-          "source": "Import Url",
+          "source": "Import URL",
           "message": "匯入 URL"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aW1wb3J0X3VybA.short_desc": {
@@ -7344,7 +7344,7 @@
           "message": "使用 README.md 初始化專案"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aW5pdGlhbGl6ZV93aXRoX3JlYWRtZQ.display_name": {
-          "source": "Initialize With Readme",
+          "source": "Initialize with Readme",
           "message": "使用 Readme 初始化"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aXNzdWVfYnJhbmNoX3RlbXBsYXRl.desc": {
@@ -7412,7 +7412,7 @@
           "message": "僅在所有討論串皆已解決時才允許合併"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.display_name": {
-          "source": "Only Allow Merge If All Discussions Are Resolved",
+          "source": "Only Allow Merge if All Discussions Are Resolved",
           "message": "僅在所有討論皆已解決時允許合併"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.short_desc": {
@@ -7424,7 +7424,7 @@
           "message": "除非所有狀態檢查均已通過，否則阻止合併請求"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfc3RhdHVzX2NoZWNrc19wYXNzZWQ.display_name": {
-          "source": "Only Allow Merge If All Status Checks Passed",
+          "source": "Only Allow Merge if All Status Checks Passed",
           "message": "僅在所有狀態檢查均通過時允許合併"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfc3RhdHVzX2NoZWNrc19wYXNzZWQ.short_desc": {
@@ -7436,7 +7436,7 @@
           "message": "僅在建置成功時才允許合併"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.display_name": {
-          "source": "Only Allow Merge If Pipeline Succeeds",
+          "source": "Only Allow Merge if Pipeline Succeeds",
           "message": "僅在管線成功時允許合併"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.short_desc": {
@@ -7748,7 +7748,7 @@
           "message": "安全與合規存取層級。可為 `disabled`、`private` 或 `enabled` 之一"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c2VjdXJpdHlfYW5kX2NvbXBsaWFuY2VfYWNjZXNzX2xldmVs.display_name": {
-          "source": "Security And Compliance Access Level",
+          "source": "Security and Compliance Access Level",
           "message": "安全與合規存取層級"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c2VjdXJpdHlfYW5kX2NvbXBsaWFuY2VfYWNjZXNzX2xldmVs.short_desc": {
@@ -7796,7 +7796,7 @@
           "message": "在合併請求通知電子郵件中包含程式碼差異預覽"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.display_name": {
-          "source": "Show Diff Preview In Email",
+          "source": "Show Diff Preview in Email",
           "message": "在電子郵件中顯示差異預覽"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.short_desc": {
@@ -8244,7 +8244,7 @@
           "message": "用於建立專案的範本專案 ID"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.dGVtcGxhdGVfcHJvamVjdF9pZA.display_name": {
-          "source": "Template Project Id",
+          "source": "Template Project ID",
           "message": "範本專案 ID"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.dGVtcGxhdGVfcHJvamVjdF9pZA.short_desc": {
@@ -8408,7 +8408,7 @@
           "message": "[已棄用] 請參閱 allow_collaboration"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.option.YWxsb3dfbWFpbnRhaW5lcl90b19wdXNo.display_name": {
-          "source": "Allow Maintainer To Push",
+          "source": "Allow Maintainer to Push",
           "message": "允許維護者推送"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.option.YWxsb3dfbWFpbnRhaW5lcl90b19wdXNo.short_desc": {
@@ -8924,7 +8924,7 @@
           "message": "要解決的討論 ID，亦請傳遞 `merge_request_to_resolve_discussions_of`"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl90b19yZXNvbHZl.display_name": {
-          "source": "Discussion To Resolve",
+          "source": "Discussion to Resolve",
           "message": "要解決的討論"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl9sb2NrZWQ.desc": {
@@ -8956,7 +8956,7 @@
           "message": "要與議題關聯的 Epic ID"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZXBpY19pZA.display_name": {
-          "source": "Epic Id",
+          "source": "Epic ID",
           "message": "Epic ID"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZXBpY19pZA.short_desc": {
@@ -9052,7 +9052,7 @@
           "message": "要解決其討論的合併請求 IID"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.bWVyZ2VfcmVxdWVzdF90b19yZXNvbHZlX2Rpc2N1c3Npb25zX29m.display_name": {
-          "source": "Merge Request To Resolve Discussions Of",
+          "source": "Merge Request to Resolve Discussions Of",
           "message": "要解決其討論的合併請求"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.bWVyZ2VfcmVxdWVzdF90b19yZXNvbHZlX2Rpc2N1c3Npb25zX29m.short_desc": {
@@ -9524,7 +9524,7 @@
           "message": "是否遮蔽並隱藏變數"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFZhcmlhYmxlcw.option.bWFza2VkX2FuZF9oaWRkZW4.display_name": {
-          "source": "Masked And Hidden",
+          "source": "Masked and Hidden",
           "message": "已遮蔽並隱藏"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFZhcmlhYmxlcw.option.bWFza2VkX2FuZF9oaWRkZW4.short_desc": {
@@ -9704,7 +9704,7 @@
           "message": "為此群組啟用客戶關係管理 (CRM)"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.Y3JtX2VuYWJsZWQ.display_name": {
-          "source": "Crm Enabled",
+          "source": "CRM Enabled",
           "message": "已啟用 CRM"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.Y3JtX2VuYWJsZWQ.short_desc": {
@@ -9728,7 +9728,7 @@
           "message": "指出是否為群組儲存 AI 稽核事件"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfYXVkaXRfZXZlbnRzX3N0b3JhZ2VfZW5hYmxlZA.display_name": {
-          "source": "Ai Audit Events Storage Enabled",
+          "source": "AI Audit Events Storage Enabled",
           "message": "已啟用 AI 稽核事件儲存"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfYXVkaXRfZXZlbnRzX3N0b3JhZ2VfZW5hYmxlZA.short_desc": {
@@ -9740,7 +9740,7 @@
           "message": "AI 相關設定"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.display_name": {
-          "source": "Ai Settings Attributes",
+          "source": "AI Settings Attributes",
           "message": "AI 設定屬性"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.short_desc": {
@@ -9752,7 +9752,7 @@
           "message": "若管線已略過則允許合併"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.display_name": {
-          "source": "Allow Merge On Skipped Pipeline",
+          "source": "Allow Merge on Skipped Pipeline",
           "message": "管線略過時允許合併"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.short_desc": {
@@ -9788,7 +9788,7 @@
           "message": "當使用者在指定時間內超過下載不重複專案的上限時，將其從群組封鎖"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YXV0b19iYW5fdXNlcl9vbl9leGNlc3NpdmVfcHJvamVjdHNfZG93bmxvYWQ.display_name": {
-          "source": "Auto Ban User On Excessive Projects Download",
+          "source": "Auto Ban User on Excessive Projects Download",
           "message": "下載過多專案時自動封鎖使用者"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YXV0b19kZXZvcHNfZW5hYmxlZA.desc": {
@@ -9832,7 +9832,7 @@
           "message": "啟用內建專案範本以用於建立專案"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YnVpbHRfaW5fcHJvamVjdF90ZW1wbGF0ZXNfZW5hYmxlZA.display_name": {
-          "source": "Built In Project Templates Enabled",
+          "source": "Built in Project Templates Enabled",
           "message": "已啟用內建專案範本"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YnVpbHRfaW5fcHJvamVjdF90ZW1wbGF0ZXNfZW5hYmxlZA.short_desc": {
@@ -10032,7 +10032,7 @@
           "message": "用作此群組的 Duo Code Review 自訂指示範本的專案 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZHVvX3RlbXBsYXRlX3Byb2plY3RfaWQ.display_name": {
-          "source": "Duo Template Project Id",
+          "source": "Duo Template Project ID",
           "message": "Duo 範本專案 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZW1haWxzX2Rpc2FibGVk.desc": {
@@ -10132,7 +10132,7 @@
           "message": "用於此群組自訂範本的專案 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZmlsZV90ZW1wbGF0ZV9wcm9qZWN0X2lk.display_name": {
-          "source": "File Template Project Id",
+          "source": "File Template Project ID",
           "message": "檔案範本專案 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZmlsZV90ZW1wbGF0ZV9wcm9qZWN0X2lk.short_desc": {
@@ -10156,7 +10156,7 @@
           "message": "群組需要限制的 IP 位址清單"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.aXBfcmVzdHJpY3Rpb25fcmFuZ2Vz.display_name": {
-          "source": "Ip Restriction Ranges",
+          "source": "IP Restriction Ranges",
           "message": "IP 限制範圍"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.aXBfcmVzdHJpY3Rpb25fcmFuZ2Vz.short_desc": {
@@ -10168,7 +10168,7 @@
           "message": "僅在所有討論串皆已解決時才允許合併"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.display_name": {
-          "source": "Only Allow Merge If All Discussions Are Resolved",
+          "source": "Only Allow Merge if All Discussions Are Resolved",
           "message": "僅在所有討論皆已解決時允許合併"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.short_desc": {
@@ -10180,7 +10180,7 @@
           "message": "僅在建置成功時才允許合併"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.display_name": {
-          "source": "Only Allow Merge If Pipeline Succeeds",
+          "source": "Only Allow Merge if Pipeline Succeeds",
           "message": "僅在管線成功時允許合併"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.short_desc": {
@@ -10192,7 +10192,7 @@
           "message": "指出是否對所有子群組和專案強制啟用 AI 稽核事件儲存"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19haV9hdWRpdF9ldmVudHNfc3RvcmFnZV9lbmFibGVk.display_name": {
-          "source": "Lock Ai Audit Events Storage Enabled",
+          "source": "Lock AI Audit Events Storage Enabled",
           "message": "鎖定啟用 AI 稽核事件儲存"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19idWlsdF9pbl9wcm9qZWN0X3RlbXBsYXRlc19lbmFibGVk.desc": {
@@ -10200,7 +10200,7 @@
           "message": "對所有子群組強制套用內建專案範本設定"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19idWlsdF9pbl9wcm9qZWN0X3RlbXBsYXRlc19lbmFibGVk.display_name": {
-          "source": "Lock Built In Project Templates Enabled",
+          "source": "Lock Built in Project Templates Enabled",
           "message": "鎖定啟用內建專案範本"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19idWlsdF9pbl9wcm9qZWN0X3RlbXBsYXRlc19lbmFibGVk.short_desc": {
@@ -10244,7 +10244,7 @@
           "message": "有效的存取層級"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bGRhcF9hY2Nlc3M.display_name": {
-          "source": "Ldap Access",
+          "source": "LDAP Access",
           "message": "LDAP 存取權"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bGRhcF9hY2Nlc3M.short_desc": {
@@ -10256,7 +10256,7 @@
           "message": "LDAP 常用名稱"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bGRhcF9jbg.display_name": {
-          "source": "Ldap Cn",
+          "source": "LDAP CN",
           "message": "LDAP CN"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bGRhcF9jbg.short_desc": {
@@ -10364,7 +10364,7 @@
           "message": "防止將專案與此群組內的其他群組共用"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c2hhcmVfd2l0aF9ncm91cF9sb2Nr.display_name": {
-          "source": "Share With Group Lock",
+          "source": "Share with Group Lock",
           "message": "與群組共用鎖定"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c2hhcmVfd2l0aF9ncm91cF9sb2Nr.short_desc": {
@@ -10412,7 +10412,7 @@
           "message": "在合併請求通知電子郵件中包含程式碼差異預覽"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.display_name": {
-          "source": "Show Diff Preview In Email",
+          "source": "Show Diff Preview in Email",
           "message": "在電子郵件中顯示差異預覽"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.short_desc": {
@@ -10424,7 +10424,7 @@
           "message": "升級驗證所需的 OAuth 提供者。傳遞空字串以停用。"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c3RlcF91cF9hdXRoX3JlcXVpcmVkX29hdXRoX3Byb3ZpZGVy.display_name": {
-          "source": "Step Up Auth Required Oauth Provider",
+          "source": "Step Up Auth Required OAuth Provider",
           "message": "升級驗證所需的 OAuth 提供者"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c3RlcF91cF9hdXRoX3JlcXVpcmVkX29hdXRoX3Byb3ZpZGVy.short_desc": {
@@ -10604,7 +10604,7 @@
           "message": "工作階段可用性的工具核准。`default_on`、`default_off` 或 `never_on` 之一"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dG9vbF9hcHByb3ZhbF9mb3Jfc2Vzc2lvbl9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "Tool Approval For Session Availability",
+          "source": "Tool Approval for Session Availability",
           "message": "工作階段可用性的工具核准"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dG9vbF9hcHByb3ZhbF9mb3Jfc2Vzc2lvbl9hdmFpbGFiaWxpdHk.short_desc": {
@@ -10660,7 +10660,7 @@
           "message": "使用者在被封禁前可下載最多專案數量的時間間隔。"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXRfaW50ZXJ2YWxfaW5fc2Vjb25kcw.display_name": {
-          "source": "Unique Project Download Limit Interval In Seconds",
+          "source": "Unique Project Download Limit Interval in Seconds",
           "message": "不重複專案下載限制間隔 (秒)"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmludGVybmFs.display_name": {
@@ -10740,7 +10740,7 @@
           "message": "要更新的成員角色 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.option.bWVtYmVyX3JvbGVfaWQ.display_name": {
-          "source": "Member Role Id",
+          "source": "Member Role ID",
           "message": "成員角色 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.option.bWVtYmVyX3JvbGVfaWQ.short_desc": {
@@ -10948,7 +10948,7 @@
           "message": "CI 設定檔路徑。預設為 `.gitlab-ci.yml`"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfY29uZmlnX3BhdGg.display_name": {
-          "source": "Ci Config Path",
+          "source": "CI Config Path",
           "message": "CI 設定路徑"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfY29uZmlnX3BhdGg.short_desc": {
@@ -10960,7 +10960,7 @@
           "message": "允許派生合併請求流水線在父專案中執行"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfYWxsb3dfZm9ya19waXBlbGluZXNfdG9fcnVuX2luX3BhcmVudF9wcm9qZWN0.display_name": {
-          "source": "Ci Allow Fork Pipelines To Run In Parent Project",
+          "source": "CI Allow Fork Pipelines to Run in Parent Project",
           "message": "CI 允許派生流水線在父專案中執行"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfYWxsb3dfZm9ya19waXBlbGluZXNfdG9fcnVuX2luX3BhcmVudF9wcm9qZWN0.short_desc": {
@@ -10972,7 +10972,7 @@
           "message": "淺層複製的預設修訂版本數"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGVmYXVsdF9naXRfZGVwdGg.display_name": {
-          "source": "Ci Default Git Depth",
+          "source": "CI Default Git Depth",
           "message": "CI 預設 Git 深度"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGVmYXVsdF9naXRfZGVwdGg.short_desc": {
@@ -10984,7 +10984,7 @@
           "message": "早於設定時間的流水線將被刪除"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGVsZXRlX3BpcGVsaW5lc19pbl9zZWNvbmRz.display_name": {
-          "source": "Ci Delete Pipelines In Seconds",
+          "source": "CI Delete Pipelines in Seconds",
           "message": "CI 刪除流水線時間 (秒)"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGVsZXRlX3BpcGVsaW5lc19pbl9zZWNvbmRz.short_desc": {
@@ -10996,7 +10996,7 @@
           "message": "手動執行流水線後，在流水線詳細資料頁面中顯示所有手動定義的變數"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGlzcGxheV9waXBlbGluZV92YXJpYWJsZXM.display_name": {
-          "source": "Ci Display Pipeline Variables",
+          "source": "CI Display Pipeline Variables",
           "message": "CI 顯示流水線變數"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X2VuYWJsZWQ.desc": {
@@ -11004,7 +11004,7 @@
           "message": "防止較舊且仍處於擱置狀態的部署作業"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X2VuYWJsZWQ.display_name": {
-          "source": "Ci Forward Deployment Enabled",
+          "source": "CI Forward Deployment Enabled",
           "message": "CI 啟用順向部署"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X2VuYWJsZWQ.short_desc": {
@@ -11016,7 +11016,7 @@
           "message": "允許回滾部署重試作業"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X3JvbGxiYWNrX2FsbG93ZWQ.display_name": {
-          "source": "Ci Forward Deployment Rollback Allowed",
+          "source": "CI Forward Deployment Rollback Allowed",
           "message": "CI 允許順向部署回滾"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X3JvbGxiYWNrX2FsbG93ZWQ.short_desc": {
@@ -11028,7 +11028,7 @@
           "message": "將用於在 ID 權杖中建構 sub 宣告的宣告"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfaWRfdG9rZW5fc3ViX2NsYWltX2NvbXBvbmVudHM.display_name": {
-          "source": "Ci Id Token Sub Claim Components",
+          "source": "CI ID Token Sub Claim Components",
           "message": "CI ID 權杖 Sub 宣告元件"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfaWRfdG9rZW5fc3ViX2NsYWltX2NvbXBvbmVudHM.short_desc": {
@@ -11040,7 +11040,7 @@
           "message": "根據分支保護啟用或停用獨立快取。"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfc2VwYXJhdGVkX2NhY2hlcw.display_name": {
-          "source": "Ci Separated Caches",
+          "source": "CI Separated Caches",
           "message": "CI 獨立快取"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfc2VwYXJhdGVkX2NhY2hlcw.short_desc": {
@@ -11068,7 +11068,7 @@
           "message": "限制僅具有至少所設定最低角色的使用者才能在觸發管線時覆寫 CI/CD 變數"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcGlwZWxpbmVfdmFyaWFibGVzX21pbmltdW1fb3ZlcnJpZGVfcm9sZQ.display_name": {
-          "source": "Ci Pipeline Variables Minimum Override Role",
+          "source": "CI Pipeline Variables Minimum Override Role",
           "message": "CI 管線變數最低覆寫角色"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.desc": {
@@ -11076,7 +11076,7 @@
           "message": "允許使用在此專案中產生的 CI/CD 作業權杖進行驗證以推送至此專案的存放庫。"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.display_name": {
-          "source": "Ci Push Repository For Job Token Allowed",
+          "source": "CI Push Repository for Job Token Allowed",
           "message": "允許透過作業權杖推送存放庫"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcmVzdHJpY3RfcGlwZWxpbmVfY2FuY2VsbGF0aW9uX3JvbGU.desc": {
@@ -11084,7 +11084,7 @@
           "message": "允許取消管線與作業的角色。"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcmVzdHJpY3RfcGlwZWxpbmVfY2FuY2VsbGF0aW9uX3JvbGU.display_name": {
-          "source": "Ci Restrict Pipeline Cancellation Role",
+          "source": "CI Restrict Pipeline Cancellation Role",
           "message": "CI 限制管線取消角色"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcmVzdHJpY3RfcGlwZWxpbmVfY2FuY2VsbGF0aW9uX3JvbGU.short_desc": {
@@ -11132,7 +11132,7 @@
           "message": "若管線已略過則允許合併"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.display_name": {
-          "source": "Allow Merge On Skipped Pipeline",
+          "source": "Allow Merge on Skipped Pipeline",
           "message": "管線略過時允許合併"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.short_desc": {
@@ -11460,7 +11460,7 @@
           "message": "對上傳強制執行身分驗證檢查"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.ZW5mb3JjZV9hdXRoX2NoZWNrc19vbl91cGxvYWRz.display_name": {
-          "source": "Enforce Auth Checks On Uploads",
+          "source": "Enforce Auth Checks on Uploads",
           "message": "對上傳強制執行身分驗證檢查"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.ZW5mb3JjZV9hdXRoX2NoZWNrc19vbl91cGxvYWRz.short_desc": {
@@ -11556,7 +11556,7 @@
           "message": "匯入專案的來源 URL"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.aW1wb3J0X3VybA.display_name": {
-          "source": "Import Url",
+          "source": "Import URL",
           "message": "匯入 URL"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.aW1wb3J0X3VybA.short_desc": {
@@ -11676,7 +11676,7 @@
           "message": "僅在所有討論串皆已解決時才允許合併"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.display_name": {
-          "source": "Only Allow Merge If All Discussions Are Resolved",
+          "source": "Only Allow Merge if All Discussions Are Resolved",
           "message": "僅在所有討論皆已解決時允許合併"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.short_desc": {
@@ -11688,7 +11688,7 @@
           "message": "除非所有狀態檢查均已通過，否則阻止合併請求"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfc3RhdHVzX2NoZWNrc19wYXNzZWQ.display_name": {
-          "source": "Only Allow Merge If All Status Checks Passed",
+          "source": "Only Allow Merge if All Status Checks Passed",
           "message": "僅在所有狀態檢查均通過時允許合併"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfc3RhdHVzX2NoZWNrc19wYXNzZWQ.short_desc": {
@@ -11700,7 +11700,7 @@
           "message": "僅在建置成功時才允許合併"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.display_name": {
-          "source": "Only Allow Merge If Pipeline Succeeds",
+          "source": "Only Allow Merge if Pipeline Succeeds",
           "message": "僅在管線成功時允許合併"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.short_desc": {
@@ -11820,7 +11820,7 @@
           "message": "此專案每個合併列車的平行管線數上限。"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWF4X3BpcGVsaW5lc19wZXJfbWVyZ2VfdHJhaW4.display_name": {
-          "source": "Max Pipelines Per Merge Train",
+          "source": "Max Pipelines per Merge Train",
           "message": "每個合併列車最大管線數"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWF4X3BpcGVsaW5lc19wZXJfbWVyZ2VfdHJhaW4.short_desc": {
@@ -12044,7 +12044,7 @@
           "message": "[已棄用] 負責提取鏡像事件所有相關活動的使用者。僅可由管理員設定"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWlycm9yX3VzZXJfaWQ.display_name": {
-          "source": "Mirror User Id",
+          "source": "Mirror User ID",
           "message": "鏡像使用者 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bXJfZGVmYXVsdF90YXJnZXRfc2VsZg.desc": {
@@ -12136,7 +12136,7 @@
           "message": "安全與合規存取層級。可為 `disabled`、`private` 或 `enabled` 之一"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2VjdXJpdHlfYW5kX2NvbXBsaWFuY2VfYWNjZXNzX2xldmVs.display_name": {
-          "source": "Security And Compliance Access Level",
+          "source": "Security and Compliance Access Level",
           "message": "安全與合規存取層級"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2VjdXJpdHlfYW5kX2NvbXBsaWFuY2VfYWNjZXNzX2xldmVs.short_desc": {
@@ -12192,7 +12192,7 @@
           "message": "在合併請求通知電子郵件中包含程式碼差異預覽"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.display_name": {
-          "source": "Show Diff Preview In Email",
+          "source": "Show Diff Preview in Email",
           "message": "在電子郵件中顯示差異預覽"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.short_desc": {
@@ -12852,7 +12852,7 @@
           "message": "要與議題關聯的 Epic ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.option.ZXBpY19pZA.display_name": {
-          "source": "Epic Id",
+          "source": "Epic ID",
           "message": "Epic ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.option.ZXBpY19pZA.short_desc": {
@@ -13132,7 +13132,7 @@
           "message": "要更新的成員角色 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.option.bWVtYmVyX3JvbGVfaWQ.display_name": {
-          "source": "Member Role Id",
+          "source": "Member Role ID",
           "message": "成員角色 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.option.bWVtYmVyX3JvbGVfaWQ.short_desc": {
@@ -13192,7 +13192,7 @@
           "message": "[已棄用] 請參閱 allow_collaboration"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.YWxsb3dfbWFpbnRhaW5lcl90b19wdXNo.display_name": {
-          "source": "Allow Maintainer To Push",
+          "source": "Allow Maintainer to Push",
           "message": "允許維護者推送"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.YWxsb3dfbWFpbnRhaW5lcl90b19wdXNo.short_desc": {

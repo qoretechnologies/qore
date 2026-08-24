@@ -352,7 +352,7 @@
           "message": "Зображення для цього продукту. Включається в процес оформлення замовлення та в деякі документи клієнта."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.display_name": {
-          "source": "Image Url",
+          "source": "Image URL",
           "message": "URL-адреса зображення"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.short_desc": {
@@ -584,7 +584,7 @@
           "message": "Paddle ID адреси, для якої призначена ця транзакція, з префіксом `add_`. Потрібно `customer_id`. Якщо опущено, статус транзакції — `draft`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.display_name": {
-          "source": "Address Id",
+          "source": "Address ID",
           "message": "ID адреси"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.desc": {
@@ -624,7 +624,7 @@
           "message": "Paddle ID бізнесу, для якого призначена ця транзакція, із префіксом `biz_`. Потрібно `customer_id`. "
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.display_name": {
-          "source": "Business Id",
+          "source": "Business ID",
           "message": "ID бізнесу"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGV0YWlscw.desc": {
@@ -652,7 +652,7 @@
           "message": "Paddle ID знижки для застосування до цієї транзакції, із префіксом `dsc_`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.display_name": {
-          "source": "Discount Id",
+          "source": "Discount ID",
           "message": "ID знижки"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.short_desc": {
@@ -664,7 +664,7 @@
           "message": "Paddle ID інвойсу, з яким пов’язана ця транзакція, із префіксом `inv_`. Використовується для сумісності з Paddle Invoice API, яке наразі застаріло. Це поле планується видалити в наступній версії Paddle API."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.display_name": {
-          "source": "Invoice Id",
+          "source": "Invoice ID",
           "message": "ID інвойсу"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9udW1iZXI.desc": {
@@ -696,7 +696,7 @@
           "message": "Унікальний Paddle ID для цієї сутності транзакції, із префіксом `txn_`."
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aWQ.display_name": {
-          "source": "Id",
+          "source": "ID",
           "message": "ID"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aWQ.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "Повертати сутності, пов'язані з указаною адресою. Використовуйте список, розділений комами, щоб указати кілька ID адрес."
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWRkcmVzc19pZA.display_name": {
-          "source": "Address Id",
+          "source": "Address ID",
           "message": "ID адреси"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWRkcmVzc19pZA.short_desc": {
@@ -2896,7 +2896,7 @@
           "message": "Зображення для цього продукту. Включається в процес оформлення замовлення та в деякі документи клієнта."
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.display_name": {
-          "source": "Image Url",
+          "source": "Image URL",
           "message": "URL-адреса зображення"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.short_desc": {

@@ -1168,7 +1168,7 @@
           "message": "ID issue, která má být označena jako kanonický duplikát, pokud je `state_reason` `duplicate`. Issue musí existovat a být přístupná ověřenému uživateli. Ignorováno, pokud `state_reason` není `duplicate`."
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.display_name": {
-          "source": "Duplicate Issue Id",
+          "source": "Duplicate Issue ID",
           "message": "ID duplicitní issue"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.aXNzdWVfZmllbGRfdmFsdWVz.desc": {
@@ -2968,7 +2968,7 @@
           "message": "Zda po sloučení pull requestů smazat zdrojové větve"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch On Merge",
+          "source": "Delete Branch on Merge",
           "message": "Smazat větev při sloučení"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
@@ -3196,7 +3196,7 @@
           "message": "ID týmu, kterému bude udělen přístup k tomuto repozitáři. Toto je platné pouze při vytváření repozitáře v organizaci."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.dGVhbV9pZA.display_name": {
-          "source": "Team Id",
+          "source": "Team ID",
           "message": "ID týmu"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.dGVhbV9pZA.short_desc": {
@@ -3284,7 +3284,7 @@
           "message": "Buď `true` pro povolení automatického mazání zdrojových větví po sloučení pull requestů, nebo `false` pro zabránění automatickému mazání. **Pro nastavení této vlastnosti na `true` musí být ověřený uživatel vlastníkem organizace.**"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch On Merge",
+          "source": "Delete Branch on Merge",
           "message": "Smazat větev při sloučení"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVzY3JpcHRpb24.desc": {
@@ -3500,7 +3500,7 @@
           "message": "ID týmu, kterému bude udělen přístup k tomuto repozitáři. Toto je platné pouze při vytváření repozitáře v organizaci."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dGVhbV9pZA.display_name": {
-          "source": "Team Id",
+          "source": "Team ID",
           "message": "ID týmu"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dGVhbV9pZA.short_desc": {
@@ -3512,7 +3512,7 @@
           "message": "Buď `true` pro povolení použití názvu pull requestu pro squash-merge commity, nebo `false` pro použití zprávy commitu. **Tato vlastnost bude zrušena. Použijte místo ní `squash_merge_commit_title`."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
-          "source": "Use Squash Pr Title As Default",
+          "source": "Use Squash PR Title as Default",
           "message": "Použít název PR pro squash jako výchozí"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
@@ -4928,7 +4928,7 @@
           "message": "Buď `true` pro povolení automatického mazání zdrojových větví po sloučení pull requestů, nebo `false` pro zabránění automatickému mazání."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch On Merge",
+          "source": "Delete Branch on Merge",
           "message": "Smazat větev při sloučení"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVzY3JpcHRpb24.desc": {
@@ -5076,7 +5076,7 @@
           "message": "Určete, které funkce zabezpečení a analýzy chcete pro repozitář povolit nebo zakázat.\n\nChcete-li tento parametr použít, musíte mít pro repozitář oprávnění správce nebo být vlastníkem či správcem zabezpečení organizace, která repozitář vlastní. Další informace naleznete v části „[Managing security managers in your organization](https://docs.github.com/organizations/managing-peoples-access-to-your-organization-with-roles/managing-security-managers-in-your-organization)“.\n\nChcete-li například povolit GitHub Advanced Security, použijte tato data v těle požadavku `PATCH`:\n`{ \"security_and_analysis\": {\"advanced_security\": { \"status\": \"enabled\" } } }`.\n\nKteré funkce zabezpečení a analýzy jsou aktuálně povoleny, můžete zkontrolovat pomocí požadavku `GET /repos/{owner}/{repo}`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.display_name": {
-          "source": "Security And Analysis",
+          "source": "Security and Analysis",
           "message": "Zabezpečení a analýza"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.allowed-value.c3RyaW5nOkNPTU1JVF9PUl9QUl9USVRMRQ.display_name": {
@@ -5172,7 +5172,7 @@
           "message": "Buď `true` pro povolení použití názvu pull requestu pro squash-merge commity, nebo `false` pro použití zprávy commitu. **Tato vlastnost bude zrušena. Použijte místo ní `squash_merge_commit_title`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
-          "source": "Use Squash Pr Title As Default",
+          "source": "Use Squash PR Title as Default",
           "message": "Použít název PR pro squash jako výchozí"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {

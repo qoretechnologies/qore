@@ -140,7 +140,7 @@
           "message": "URL-адреса, на яку буде перенаправлено користувача після виходу або завершення пов'язаного процесу."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmV0dXJuX3VybA.display_name": {
-          "source": "Return Url",
+          "source": "Return URL",
           "message": "URL повернення"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmVmcmVzaF91cmw.desc": {
@@ -148,7 +148,7 @@
           "message": "URL-адреса, на яку буде перенаправлено користувача, якщо термін дії посилання на акаунт минув, його вже відвідували або воно з іншої причини недійсне. Вказана вами URL-адреса має спробувати згенерувати нове посилання на акаунт із тими самими параметрами, що й початкове посилання, а потім перенаправити користувача на нову URL-адресу посилання на акаунт, щоб він міг продовжити процес Connect Onboarding. Якщо нове посилання створити не вдалося або перенаправлення зазнало невдачі, слід показати користувачеві відповідне повідомлення про помилку."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmVmcmVzaF91cmw.display_name": {
-          "source": "Refresh Url",
+          "source": "Refresh URL",
           "message": "URL оновлення"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmFjY291bnRfb25ib2FyZGluZw.display_name": {
@@ -340,7 +340,7 @@
           "message": "Ідентифікаційний номер особи відповідно до її країни. Наприклад, номер соціального страхування (SSN) у США, номер соціального страхування (SIN) у Канаді тощо. Замість самого номера ви також можете надати [токен PII, наданий Stripe.js](https://docs.stripe.com/js/tokens/create_token?type=pii).\n\nЗміна цього значення для представника облікового запису вимагає повторного прийняття [умов надання послуг](/api/accounts/object#account_object-tos_acceptance)."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.aWRfbnVtYmVy.display_name": {
-          "source": "Id Number",
+          "source": "ID Number",
           "message": "Ідентифікаційний номер"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.aWRfbnVtYmVy.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Вторинний ідентифікаційний номер особи відповідно до її країни, який використовуватиметься для розширеної перевірки. У Таїланді це лазерний код на звороті посвідчення особи. Замість самого номера ви також можете надати [токен PII, наданий Stripe.js](https://docs.stripe.com/js/tokens/create_token?type=pii).\n\nЗміна цього значення для представника облікового запису вимагає повторного прийняття [умов надання послуг](/api/accounts/object#account_object-tos_acceptance)."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.aWRfbnVtYmVyX3NlY29uZGFyeQ.display_name": {
-          "source": "Id Number Secondary",
+          "source": "ID Number Secondary",
           "message": "Вторинний ідентифікаційний номер"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.bGFzdF9uYW1l.desc": {
@@ -428,7 +428,7 @@
           "message": "Останні чотири цифри номера соціального страхування особи (лише для США).\n\nЗміна цього значення для представника облікового запису вимагає повторного прийняття [умов надання послуг](/api/accounts/object#account_object-tos_acceptance)."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.c3NuX2xhc3RfNA.display_name": {
-          "source": "Ssn Last 4",
+          "source": "SSN Last 4",
           "message": "Останні 4 цифри SSN"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.cG9saXRpY2FsX2V4cG9zdXJl.allowed-value.c3RyaW5nOm5vbmU.display_name": {
@@ -756,7 +756,7 @@
           "message": "Податкові ідентифікатори клієнта."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.dGF4X2lkX2RhdGE.display_name": {
-          "source": "Tax Id Data",
+          "source": "Tax ID Data",
           "message": "Дані податкового ідентифікатора"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.dGF4X2lkX2RhdGE.short_desc": {
@@ -896,7 +896,7 @@
           "message": "Вказує, чи слід скасувати цю підписку наприкінці поточного періоду (`current_period_end`). За замовчуванням — `false`."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y2FuY2VsX2F0X3BlcmlvZF9lbmQ.display_name": {
-          "source": "Cancel At Period End",
+          "source": "Cancel at Period End",
           "message": "Скасувати наприкінці періоду"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y3VycmVuY3k.desc": {
@@ -1176,7 +1176,7 @@
           "message": "Вказує, чи слід застосовувати `trial_period_days` плану до підписки. Рекомендується встановлювати `trial_end` для кожної підписки окремо, а це значення за замовчуванням дорівнює `false`. Установлення цього прапорця в `true` разом із `trial_end` не дозволяється. Докладніше див. у розділі [Використання пробних періодів для підписок](https://docs.stripe.com/billing/subscriptions/trials)."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfZnJvbV9wbGFu.display_name": {
-          "source": "Trial From Plan",
+          "source": "Trial from Plan",
           "message": "Пробний період із плану"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfc2V0dGluZ3M.desc": {
@@ -1508,7 +1508,7 @@
           "message": "Якщо встановлено значення true або якщо це перший зовнішній рахунок, доданий у цій валюті, цей рахунок стає типовим зовнішнім рахунком для своєї валюти."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZGVmYXVsdF9mb3JfY3VycmVuY3k.display_name": {
-          "source": "Default For Currency",
+          "source": "Default for Currency",
           "message": "За замовчуванням для валюти"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZXh0ZXJuYWxfYWNjb3VudA.desc": {
@@ -2120,7 +2120,7 @@
           "message": "Встановіть `true`, щоб спроба оплати завершувалася помилкою, якщо PaymentIntent переходить у стан `requires_action`. Використовуйте цей параметр для простіших інтеграцій, які не обробляють дії клієнта, наприклад [збереження карток без автентифікації](https://docs.stripe.com/payments/save-card-without-authentication). Цей параметр можна використовувати лише разом із [`confirm=true`](https://docs.stripe.com/api/payment_intents/create#create_payment_intent-confirm)."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.ZXJyb3Jfb25fcmVxdWlyZXNfYWN0aW9u.display_name": {
-          "source": "Error On Requires Action",
+          "source": "Error on Requires Action",
           "message": "Помилка при потребі дії"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.ZXhjbHVkZWRfcGF5bWVudF9tZXRob2RfdHlwZXM.desc": {
@@ -2332,7 +2332,7 @@
           "message": "URL-адреса для перенаправлення вашого клієнта після автентифікації або скасування платежу в додатку чи на сайті методу оплати. Якщо ви бажаєте перенаправити до мобільного додатка, ви можете надати схему URI додатка. Цей параметр можна використовувати лише з [`confirm=true`](https://docs.stripe.com/api/payment_intents/create#create_payment_intent-confirm)."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cmV0dXJuX3VybA.display_name": {
-          "source": "Return Url",
+          "source": "Return URL",
           "message": "URL повернення"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cmVjZWlwdF9lbWFpbA.desc": {
@@ -2376,7 +2376,7 @@
           "message": "Встановіть значення `true`, якщо підтвердження виконується на стороні сервера та використовуються клієнтські SDK Stripe.js, iOS або Android для обробки наступних дій."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.dXNlX3N0cmlwZV9zZGs.display_name": {
-          "source": "Use Stripe Sdk",
+          "source": "Use Stripe SDK",
           "message": "Використовувати Stripe SDK"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.short_desc": {

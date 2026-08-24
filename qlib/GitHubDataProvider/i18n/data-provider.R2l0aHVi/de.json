@@ -1168,7 +1168,7 @@
           "message": "Die ID des Issues, das als kanonisches Duplikat markiert werden soll, wenn `state_reason` `duplicate` ist. Das Issue muss existieren und für den authentifizierten Benutzer zugänglich sein. Wird ignoriert, wenn `state_reason` nicht `duplicate` ist."
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.display_name": {
-          "source": "Duplicate Issue Id",
+          "source": "Duplicate Issue ID",
           "message": "Duplikat-Issue-ID"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.aXNzdWVfZmllbGRfdmFsdWVz.desc": {
@@ -2968,7 +2968,7 @@
           "message": "Gibt an, ob Head-Branches gelöscht werden sollen, wenn Pull Requests gemergt werden"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch On Merge",
+          "source": "Delete Branch on Merge",
           "message": "Branch beim Mergen löschen"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
@@ -3196,7 +3196,7 @@
           "message": "Die ID des Teams, dem Zugriff auf dieses Repository gewährt wird. Dies ist nur beim Erstellen eines Repositorys in einer Organisation gültig."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.dGVhbV9pZA.display_name": {
-          "source": "Team Id",
+          "source": "Team ID",
           "message": "Team-ID"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.dGVhbV9pZA.short_desc": {
@@ -3284,7 +3284,7 @@
           "message": "Entweder `true`, um das automatische Löschen von Head-Branches beim Mergen von Pull Requests zu erlauben, oder `false`, um das automatische Löschen zu verhindern. **Der authentifizierte Benutzer muss ein Organisationsinhaber sein, um diese Eigenschaft auf `true` zu setzen.**"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch On Merge",
+          "source": "Delete Branch on Merge",
           "message": "Branch beim Mergen löschen"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVzY3JpcHRpb24.desc": {
@@ -3500,7 +3500,7 @@
           "message": "Die ID des Teams, dem Zugriff auf dieses Repository gewährt wird. Dies ist nur beim Erstellen eines Repositorys in einer Organisation gültig."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dGVhbV9pZA.display_name": {
-          "source": "Team Id",
+          "source": "Team ID",
           "message": "Team-ID"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dGVhbV9pZA.short_desc": {
@@ -3512,7 +3512,7 @@
           "message": "Entweder `true`, damit Squash-Merge-Commits den Pull-Request-Titel verwenden, oder `false`, um die Commit-Nachricht zu verwenden. **Diese Eigenschaft wird eingestellt. Bitte verwenden Sie stattdessen `squash_merge_commit_title`."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
-          "source": "Use Squash Pr Title As Default",
+          "source": "Use Squash PR Title as Default",
           "message": "Squash-PR-Titel standardmäßig verwenden"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
@@ -4928,7 +4928,7 @@
           "message": "Entweder `true`, um das automatische Löschen von Head-Branches beim Zusammenführen von Pull-Requests zu erlauben, oder `false`, um das automatische Löschen zu verhindern."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch On Merge",
+          "source": "Delete Branch on Merge",
           "message": "Branch beim Mergen löschen"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVzY3JpcHRpb24.desc": {
@@ -5076,7 +5076,7 @@
           "message": "Geben Sie an, welche Sicherheits- und Analysefunktionen für das Repository aktiviert oder deaktiviert werden sollen.\n\nUm diesen Parameter zu verwenden, müssen Sie über Administratorberechtigungen für das Repository verfügen oder ein Eigentümer oder Sicherheitsmanager für die Organisation sein, die das Repository besitzt. Weitere Informationen finden Sie unter \"[Managing security managers in your organization](https://docs.github.com/organizations/managing-peoples-access-to-your-organization-with-roles/managing-security-managers-in-your-organization)\".\n\nUm beispielsweise GitHub Advanced Security zu aktivieren, verwenden Sie diese Daten im Textkörper der `PATCH`-Anfrage:\n`{ \"security_and_analysis\": {\"advanced_security\": { \"status\": \"enabled\" } } }`.\n\nSie können mit einer `GET /repos/{owner}/{repo}`-Anfrage überprüfen, welche Sicherheits- und Analysefunktionen derzeit aktiviert sind."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.display_name": {
-          "source": "Security And Analysis",
+          "source": "Security and Analysis",
           "message": "Sicherheit und Analyse"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.allowed-value.c3RyaW5nOkNPTU1JVF9PUl9QUl9USVRMRQ.display_name": {
@@ -5172,7 +5172,7 @@
           "message": "Entweder `true`, damit Squash-Merge-Commits den Pull-Request-Titel verwenden, oder `false`, um die Commit-Nachricht zu verwenden. **Diese Eigenschaft wird eingestellt. Bitte verwenden Sie stattdessen `squash_merge_commit_title`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
-          "source": "Use Squash Pr Title As Default",
+          "source": "Use Squash PR Title as Default",
           "message": "Squash-PR-Titel standardmäßig verwenden"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {

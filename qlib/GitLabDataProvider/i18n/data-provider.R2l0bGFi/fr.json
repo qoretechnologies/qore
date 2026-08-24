@@ -124,7 +124,7 @@
           "message": "Renvoyer les groupes marqués pour suppression à cette date"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWFya2VkX2Zvcl9kZWxldGlvbl9vbg.display_name": {
-          "source": "Marked For Deletion On",
+          "source": "Marked for Deletion On",
           "message": "Marqué pour suppression le"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWFya2VkX2Zvcl9kZWxldGlvbl9vbg.short_desc": {
@@ -460,7 +460,7 @@
           "message": "Lister uniquement les membres avec une identité SAML associée"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnM.option.d2l0aF9zYW1sX2lkZW50aXR5.display_name": {
-          "source": "With Saml Identity",
+          "source": "With SAML Identity",
           "message": "Avec identité SAML"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnM.option.d2l0aF9zYW1sX2lkZW50aXR5.short_desc": {
@@ -752,7 +752,7 @@
           "message": "L'ID d'un epic associé aux tickets"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.ZXBpY19pZA.display_name": {
-          "source": "Epic Id",
+          "source": "Epic ID",
           "message": "ID d'epic"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.ZXBpY19pZA.short_desc": {
@@ -856,7 +856,7 @@
           "message": "Renvoyer les tickets assignés à l'itération avec l'ID indiqué"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.aXRlcmF0aW9uX2lk.display_name": {
-          "source": "Iteration Id",
+          "source": "Iteration ID",
           "message": "ID d'itération"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.aXRlcmF0aW9uX2lk.short_desc": {
@@ -968,7 +968,7 @@
           "message": "Renvoie les tickets assignés aux jalons avec la valeur de période spécifiée (\"Any\", \"None\", \"Upcoming\" ou \"Started\")"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bWlsZXN0b25lX2lk.display_name": {
-          "source": "Milestone Id",
+          "source": "Milestone ID",
           "message": "ID du jalon"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bXlfcmVhY3Rpb25fZW1vamk.desc": {
@@ -1632,7 +1632,7 @@
           "message": "L'ID d'un epic associé aux tickets"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.ZXBpY19pZA.display_name": {
-          "source": "Epic Id",
+          "source": "Epic ID",
           "message": "ID d'epic"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.ZXBpY19pZA.short_desc": {
@@ -1748,7 +1748,7 @@
           "message": "Renvoyer les tickets assignés à l'itération avec l'ID indiqué"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.aXRlcmF0aW9uX2lk.display_name": {
-          "source": "Iteration Id",
+          "source": "Iteration ID",
           "message": "ID d'itération"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.aXRlcmF0aW9uX2lk.short_desc": {
@@ -2388,7 +2388,7 @@
           "message": "Lister uniquement les membres avec une identité SAML associée"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVycw.option.d2l0aF9zYW1sX2lkZW50aXR5.display_name": {
-          "source": "With Saml Identity",
+          "source": "With SAML Identity",
           "message": "Avec identité SAML"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVycw.option.d2l0aF9zYW1sX2lkZW50aXR5.short_desc": {
@@ -2436,7 +2436,7 @@
           "message": "Si `true`, la réponse indique si une opération de rebase est en cours."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.aW5jbHVkZV9yZWJhc2VfaW5fcHJvZ3Jlc3M.display_name": {
-          "source": "Include Rebase In Progress",
+          "source": "Include Rebase in Progress",
           "message": "Inclure rebase en cours"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.aW5jbHVkZV9yZWJhc2VfaW5fcHJvZ3Jlc3M.short_desc": {
@@ -2472,7 +2472,7 @@
           "message": "Si `true`, la réponse inclut le HTML généré pour le titre et la description."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.cmVuZGVyX2h0bWw.display_name": {
-          "source": "Render Html",
+          "source": "Render HTML",
           "message": "Générer le HTML"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.cmVuZGVyX2h0bWw.short_desc": {
@@ -2520,7 +2520,7 @@
           "message": "Renvoie les demandes de fusion qui ont été approuvées par les utilisateurs spécifiés avec les ID donnés"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfaWRz.display_name": {
-          "source": "Approved By Ids",
+          "source": "Approved by Ids",
           "message": "Approuvé par les ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfdXNlcm5hbWVz.desc": {
@@ -2528,7 +2528,7 @@
           "message": "Renvoie les demandes de fusion qui ont été approuvées par les utilisateurs spécifiés avec les\n            noms d'utilisateur donnés"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfdXNlcm5hbWVz.display_name": {
-          "source": "Approved By Usernames",
+          "source": "Approved by Usernames",
           "message": "Approuvé par les noms d'utilisateur"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZXJfaWRz.desc": {
@@ -3836,7 +3836,7 @@
           "message": "Si `true`, la réponse inclut le HTML généré pour le titre et la description."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.option.cmVuZGVyX2h0bWw.display_name": {
-          "source": "Render Html",
+          "source": "Render HTML",
           "message": "Générer le HTML"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.option.cmVuZGVyX2h0bWw.short_desc": {
@@ -4124,7 +4124,7 @@
           "message": "Limiter les résultats aux projets dont l'ID est supérieur à l'ID spécifié"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.aWRfYWZ0ZXI.display_name": {
-          "source": "Id After",
+          "source": "ID After",
           "message": "ID après"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.aWRfYWZ0ZXI.short_desc": {
@@ -4136,7 +4136,7 @@
           "message": "Limiter les résultats aux projets dont l'ID est inférieur à l'ID spécifié"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.aWRfYmVmb3Jl.display_name": {
-          "source": "Id Before",
+          "source": "ID Before",
           "message": "ID avant"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.aWRfYmVmb3Jl.short_desc": {
@@ -4244,7 +4244,7 @@
           "message": "Renvoyer les groupes marqués pour suppression à cette date"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWFya2VkX2Zvcl9kZWxldGlvbl9vbg.display_name": {
-          "source": "Marked For Deletion On",
+          "source": "Marked for Deletion On",
           "message": "Marqué pour suppression le"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWFya2VkX2Zvcl9kZWxldGlvbl9vbg.short_desc": {
@@ -4580,7 +4580,7 @@
           "message": "L'ID d'organisation pour les sujets"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRUb3BpY3M.option.b3JnYW5pemF0aW9uX2lk.display_name": {
-          "source": "Organization Id",
+          "source": "Organization ID",
           "message": "ID d'organisation"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRUb3BpY3M.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
@@ -4884,7 +4884,7 @@
           "message": "Ignorer les utilisateurs LDAP"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRVc2Vycw.option.c2tpcF9sZGFw.display_name": {
-          "source": "Skip Ldap",
+          "source": "Skip LDAP",
           "message": "Ignorer LDAP"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRVc2Vycw.option.c2tpcF9sZGFw.short_desc": {
@@ -5948,7 +5948,7 @@
           "message": "Activer la gestion de la relation client (CRM) pour ce groupe"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.Y3JtX2VuYWJsZWQ.display_name": {
-          "source": "Crm Enabled",
+          "source": "CRM Enabled",
           "message": "CRM activé"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.Y3JtX2VuYWJsZWQ.short_desc": {
@@ -5972,7 +5972,7 @@
           "message": "Paramètres liés à l'IA"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.display_name": {
-          "source": "Ai Settings Attributes",
+          "source": "AI Settings Attributes",
           "message": "Attributs des paramètres d'IA"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.short_desc": {
@@ -6244,7 +6244,7 @@
           "message": "L'identifiant d'organisation pour le groupe"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.b3JnYW5pemF0aW9uX2lk.display_name": {
-          "source": "Organization Id",
+          "source": "Organization ID",
           "message": "ID d'organisation"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
@@ -6268,7 +6268,7 @@
           "message": "Un niveau d'accès valide"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.bGRhcF9hY2Nlc3M.display_name": {
-          "source": "Ldap Access",
+          "source": "LDAP Access",
           "message": "Accès LDAP"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.bGRhcF9hY2Nlc3M.short_desc": {
@@ -6280,7 +6280,7 @@
           "message": "Nom commun LDAP"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.bGRhcF9jbg.display_name": {
-          "source": "Ldap Cn",
+          "source": "LDAP CN",
           "message": "CN LDAP"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.bGRhcF9jbg.short_desc": {
@@ -6352,7 +6352,7 @@
           "message": "Empêcher le partage d'un projet avec un autre groupe au sein de ce groupe"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.c2hhcmVfd2l0aF9ncm91cF9sb2Nr.display_name": {
-          "source": "Share With Group Lock",
+          "source": "Share with Group Lock",
           "message": "Verrouillage du partage avec un groupe"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.c2hhcmVfd2l0aF9ncm91cF9sb2Nr.short_desc": {
@@ -6376,7 +6376,7 @@
           "message": "Inclure l'aperçu du diff de code dans les e-mails de notification de demande de fusion"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.display_name": {
-          "source": "Show Diff Preview In Email",
+          "source": "Show Diff Preview in Email",
           "message": "Afficher l'aperçu du diff dans l'e-mail"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.short_desc": {
@@ -6536,7 +6536,7 @@
           "message": "Approbation de l'outil pour la disponibilité de la session. L'un des suivants : `default_on`, `default_off` ou `never_on`"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.dG9vbF9hcHByb3ZhbF9mb3Jfc2Vzc2lvbl9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "Tool Approval For Session Availability",
+          "source": "Tool Approval for Session Availability",
           "message": "Approbation de l'outil pour la disponibilité de la session"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.dG9vbF9hcHByb3ZhbF9mb3Jfc2Vzc2lvbl9hdmFpbGFiaWxpdHk.short_desc": {
@@ -6736,7 +6736,7 @@
           "message": "Indique si la variable est masquée et cachée"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRWYXJpYWJsZXM.option.bWFza2VkX2FuZF9oaWRkZW4.display_name": {
-          "source": "Masked And Hidden",
+          "source": "Masked and Hidden",
           "message": "Masquée et cachée"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRWYXJpYWJsZXM.option.bWFza2VkX2FuZF9oaWRkZW4.short_desc": {
@@ -6860,7 +6860,7 @@
           "message": "Le chemin vers le fichier de configuration CI. Valeur par défaut : `.gitlab-ci.yml`"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Y2lfY29uZmlnX3BhdGg.display_name": {
-          "source": "Ci Config Path",
+          "source": "CI Config Path",
           "message": "Chemin de configuration CI"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Y2lfY29uZmlnX3BhdGg.short_desc": {
@@ -6908,7 +6908,7 @@
           "message": "Autoriser la fusion si le pipeline est ignoré"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.display_name": {
-          "source": "Allow Merge On Skipped Pipeline",
+          "source": "Allow Merge on Skipped Pipeline",
           "message": "Autoriser la fusion si le pipeline est ignoré"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.short_desc": {
@@ -7092,7 +7092,7 @@
           "message": "ID de groupe servant de source de modèle"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Z3JvdXBfd2l0aF9wcm9qZWN0X3RlbXBsYXRlc19pZA.display_name": {
-          "source": "Group With Project Templates Id",
+          "source": "Group with Project Templates ID",
           "message": "ID de groupe avec modèles de projet"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Z3JvdXBfd2l0aF9wcm9qZWN0X3RlbXBsYXRlc19pZA.short_desc": {
@@ -7236,7 +7236,7 @@
           "message": "Appliquer la vérification d'authentification lors des téléversements"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.ZW5mb3JjZV9hdXRoX2NoZWNrc19vbl91cGxvYWRz.display_name": {
-          "source": "Enforce Auth Checks On Uploads",
+          "source": "Enforce Auth Checks on Uploads",
           "message": "Appliquer les vérifications d'authentification sur les téléversements"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.ZW5mb3JjZV9hdXRoX2NoZWNrc19vbl91cGxvYWRz.short_desc": {
@@ -7308,7 +7308,7 @@
           "message": "URL à partir de laquelle le projet est importé"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aW1wb3J0X3VybA.display_name": {
-          "source": "Import Url",
+          "source": "Import URL",
           "message": "URL d'importation"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aW1wb3J0X3VybA.short_desc": {
@@ -7344,7 +7344,7 @@
           "message": "Initialiser un projet avec un README.md"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aW5pdGlhbGl6ZV93aXRoX3JlYWRtZQ.display_name": {
-          "source": "Initialize With Readme",
+          "source": "Initialize with Readme",
           "message": "Initialiser avec un README"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aXNzdWVfYnJhbmNoX3RlbXBsYXRl.desc": {
@@ -7412,7 +7412,7 @@
           "message": "Autoriser la fusion uniquement si tous les fils de discussion sont résolus"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.display_name": {
-          "source": "Only Allow Merge If All Discussions Are Resolved",
+          "source": "Only Allow Merge if All Discussions Are Resolved",
           "message": "Autoriser la fusion uniquement si toutes les discussions sont résolues"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.short_desc": {
@@ -7424,7 +7424,7 @@
           "message": "Empêche la fusion des merge requests tant que tous les contrôles de statut n'ont pas réussi"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfc3RhdHVzX2NoZWNrc19wYXNzZWQ.display_name": {
-          "source": "Only Allow Merge If All Status Checks Passed",
+          "source": "Only Allow Merge if All Status Checks Passed",
           "message": "Autoriser la fusion uniquement si tous les contrôles de statut sont validés"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfc3RhdHVzX2NoZWNrc19wYXNzZWQ.short_desc": {
@@ -7436,7 +7436,7 @@
           "message": "Autoriser la fusion uniquement si les builds réussissent"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.display_name": {
-          "source": "Only Allow Merge If Pipeline Succeeds",
+          "source": "Only Allow Merge if Pipeline Succeeds",
           "message": "Autoriser la fusion uniquement si le pipeline réussit"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.short_desc": {
@@ -7748,7 +7748,7 @@
           "message": "Niveau d'accès à la sécurité et à la conformité. L'un de `disabled`, `private` ou `enabled`"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c2VjdXJpdHlfYW5kX2NvbXBsaWFuY2VfYWNjZXNzX2xldmVs.display_name": {
-          "source": "Security And Compliance Access Level",
+          "source": "Security and Compliance Access Level",
           "message": "Niveau d'accès à la sécurité et à la conformité"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c2VjdXJpdHlfYW5kX2NvbXBsaWFuY2VfYWNjZXNzX2xldmVs.short_desc": {
@@ -7796,7 +7796,7 @@
           "message": "Inclure l'aperçu du diff de code dans les e-mails de notification de demande de fusion"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.display_name": {
-          "source": "Show Diff Preview In Email",
+          "source": "Show Diff Preview in Email",
           "message": "Afficher l'aperçu du diff dans l'e-mail"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.short_desc": {
@@ -8244,7 +8244,7 @@
           "message": "ID de projet du modèle à partir duquel créer le projet"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.dGVtcGxhdGVfcHJvamVjdF9pZA.display_name": {
-          "source": "Template Project Id",
+          "source": "Template Project ID",
           "message": "ID du projet modèle"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.dGVtcGxhdGVfcHJvamVjdF9pZA.short_desc": {
@@ -8408,7 +8408,7 @@
           "message": "[obsolète] Voir allow_collaboration"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.option.YWxsb3dfbWFpbnRhaW5lcl90b19wdXNo.display_name": {
-          "source": "Allow Maintainer To Push",
+          "source": "Allow Maintainer to Push",
           "message": "Autoriser le mainteneur à pousser"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.option.YWxsb3dfbWFpbnRhaW5lcl90b19wdXNo.short_desc": {
@@ -8924,7 +8924,7 @@
           "message": "L'ID d'une discussion à résoudre ; transmettez également `merge_request_to_resolve_discussions_of`"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl90b19yZXNvbHZl.display_name": {
-          "source": "Discussion To Resolve",
+          "source": "Discussion to Resolve",
           "message": "Discussion à résoudre"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl9sb2NrZWQ.desc": {
@@ -8956,7 +8956,7 @@
           "message": "L'ID d'une épopée à associer au ticket"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZXBpY19pZA.display_name": {
-          "source": "Epic Id",
+          "source": "Epic ID",
           "message": "ID d'epic"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZXBpY19pZA.short_desc": {
@@ -9052,7 +9052,7 @@
           "message": "L'IID d'une merge request pour laquelle résoudre les discussions"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.bWVyZ2VfcmVxdWVzdF90b19yZXNvbHZlX2Rpc2N1c3Npb25zX29m.display_name": {
-          "source": "Merge Request To Resolve Discussions Of",
+          "source": "Merge Request to Resolve Discussions Of",
           "message": "Merge request dont résoudre les discussions"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.bWVyZ2VfcmVxdWVzdF90b19yZXNvbHZlX2Rpc2N1c3Npb25zX29m.short_desc": {
@@ -9524,7 +9524,7 @@
           "message": "Indique si la variable est masquée et cachée"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFZhcmlhYmxlcw.option.bWFza2VkX2FuZF9oaWRkZW4.display_name": {
-          "source": "Masked And Hidden",
+          "source": "Masked and Hidden",
           "message": "Masquée et cachée"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFZhcmlhYmxlcw.option.bWFza2VkX2FuZF9oaWRkZW4.short_desc": {
@@ -9704,7 +9704,7 @@
           "message": "Activer la gestion de la relation client (CRM) pour ce groupe"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.Y3JtX2VuYWJsZWQ.display_name": {
-          "source": "Crm Enabled",
+          "source": "CRM Enabled",
           "message": "CRM activé"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.Y3JtX2VuYWJsZWQ.short_desc": {
@@ -9728,7 +9728,7 @@
           "message": "Indique si les événements d'audit de l'IA sont stockés pour le groupe"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfYXVkaXRfZXZlbnRzX3N0b3JhZ2VfZW5hYmxlZA.display_name": {
-          "source": "Ai Audit Events Storage Enabled",
+          "source": "AI Audit Events Storage Enabled",
           "message": "Stockage des événements d'audit IA activé"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfYXVkaXRfZXZlbnRzX3N0b3JhZ2VfZW5hYmxlZA.short_desc": {
@@ -9740,7 +9740,7 @@
           "message": "Paramètres liés à l'IA"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.display_name": {
-          "source": "Ai Settings Attributes",
+          "source": "AI Settings Attributes",
           "message": "Attributs des paramètres d'IA"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.short_desc": {
@@ -9752,7 +9752,7 @@
           "message": "Autoriser la fusion si le pipeline est ignoré"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.display_name": {
-          "source": "Allow Merge On Skipped Pipeline",
+          "source": "Allow Merge on Skipped Pipeline",
           "message": "Autoriser la fusion si le pipeline est ignoré"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.short_desc": {
@@ -9788,7 +9788,7 @@
           "message": "Bannir les utilisateurs du groupe lorsqu'ils dépassent le nombre maximal de téléchargements de projets uniques au cours de la période spécifiée"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YXV0b19iYW5fdXNlcl9vbl9leGNlc3NpdmVfcHJvamVjdHNfZG93bmxvYWQ.display_name": {
-          "source": "Auto Ban User On Excessive Projects Download",
+          "source": "Auto Ban User on Excessive Projects Download",
           "message": "Bannissement automatique des utilisateurs en cas de téléchargement excessif de projets"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YXV0b19kZXZvcHNfZW5hYmxlZA.desc": {
@@ -9832,7 +9832,7 @@
           "message": "Activer les modèles de projet intégrés pour la création de projet"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YnVpbHRfaW5fcHJvamVjdF90ZW1wbGF0ZXNfZW5hYmxlZA.display_name": {
-          "source": "Built In Project Templates Enabled",
+          "source": "Built in Project Templates Enabled",
           "message": "Modèles de projet intégrés activés"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YnVpbHRfaW5fcHJvamVjdF90ZW1wbGF0ZXNfZW5hYmxlZA.short_desc": {
@@ -10032,7 +10032,7 @@
           "message": "L'ID d'un projet à utiliser comme modèle d'instructions personnalisées de revue de code Duo pour ce groupe"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZHVvX3RlbXBsYXRlX3Byb2plY3RfaWQ.display_name": {
-          "source": "Duo Template Project Id",
+          "source": "Duo Template Project ID",
           "message": "ID du projet de modèle Duo"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZW1haWxzX2Rpc2FibGVk.desc": {
@@ -10132,7 +10132,7 @@
           "message": "L'ID d'un projet à utiliser pour les modèles personnalisés dans ce groupe"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZmlsZV90ZW1wbGF0ZV9wcm9qZWN0X2lk.display_name": {
-          "source": "File Template Project Id",
+          "source": "File Template Project ID",
           "message": "ID du projet de modèles de fichiers"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZmlsZV90ZW1wbGF0ZV9wcm9qZWN0X2lk.short_desc": {
@@ -10156,7 +10156,7 @@
           "message": "Liste des adresses IP qui doivent être restreintes pour le groupe"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.aXBfcmVzdHJpY3Rpb25fcmFuZ2Vz.display_name": {
-          "source": "Ip Restriction Ranges",
+          "source": "IP Restriction Ranges",
           "message": "Plages de restriction IP"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.aXBfcmVzdHJpY3Rpb25fcmFuZ2Vz.short_desc": {
@@ -10168,7 +10168,7 @@
           "message": "Autoriser la fusion uniquement si tous les fils de discussion sont résolus"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.display_name": {
-          "source": "Only Allow Merge If All Discussions Are Resolved",
+          "source": "Only Allow Merge if All Discussions Are Resolved",
           "message": "Autoriser la fusion uniquement si toutes les discussions sont résolues"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.short_desc": {
@@ -10180,7 +10180,7 @@
           "message": "Autoriser la fusion uniquement si les builds réussissent"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.display_name": {
-          "source": "Only Allow Merge If Pipeline Succeeds",
+          "source": "Only Allow Merge if Pipeline Succeeds",
           "message": "Autoriser la fusion uniquement si le pipeline réussit"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.short_desc": {
@@ -10192,7 +10192,7 @@
           "message": "Indique si le stockage des événements d'audit d'IA est appliqué à tous les sous-groupes et projets"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19haV9hdWRpdF9ldmVudHNfc3RvcmFnZV9lbmFibGVk.display_name": {
-          "source": "Lock Ai Audit Events Storage Enabled",
+          "source": "Lock AI Audit Events Storage Enabled",
           "message": "Verrouillage de l'activation du stockage des événements d'audit d'IA"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19idWlsdF9pbl9wcm9qZWN0X3RlbXBsYXRlc19lbmFibGVk.desc": {
@@ -10200,7 +10200,7 @@
           "message": "Appliquer le paramètre des modèles de projet intégrés à tous les sous-groupes"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19idWlsdF9pbl9wcm9qZWN0X3RlbXBsYXRlc19lbmFibGVk.display_name": {
-          "source": "Lock Built In Project Templates Enabled",
+          "source": "Lock Built in Project Templates Enabled",
           "message": "Verrouillage de l'activation des modèles de projet intégrés"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19idWlsdF9pbl9wcm9qZWN0X3RlbXBsYXRlc19lbmFibGVk.short_desc": {
@@ -10244,7 +10244,7 @@
           "message": "Un niveau d'accès valide"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bGRhcF9hY2Nlc3M.display_name": {
-          "source": "Ldap Access",
+          "source": "LDAP Access",
           "message": "Accès LDAP"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bGRhcF9hY2Nlc3M.short_desc": {
@@ -10256,7 +10256,7 @@
           "message": "Nom commun LDAP"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bGRhcF9jbg.display_name": {
-          "source": "Ldap Cn",
+          "source": "LDAP CN",
           "message": "CN LDAP"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bGRhcF9jbg.short_desc": {
@@ -10364,7 +10364,7 @@
           "message": "Empêcher le partage d'un projet avec un autre groupe au sein de ce groupe"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c2hhcmVfd2l0aF9ncm91cF9sb2Nr.display_name": {
-          "source": "Share With Group Lock",
+          "source": "Share with Group Lock",
           "message": "Verrouillage du partage avec un groupe"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c2hhcmVfd2l0aF9ncm91cF9sb2Nr.short_desc": {
@@ -10412,7 +10412,7 @@
           "message": "Inclure l'aperçu du diff de code dans les e-mails de notification de demande de fusion"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.display_name": {
-          "source": "Show Diff Preview In Email",
+          "source": "Show Diff Preview in Email",
           "message": "Afficher l'aperçu du diff dans l'e-mail"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.short_desc": {
@@ -10424,7 +10424,7 @@
           "message": "Fournisseur OAuth requis pour l'authentification renforcée. Transmettez une chaîne vide pour désactiver."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c3RlcF91cF9hdXRoX3JlcXVpcmVkX29hdXRoX3Byb3ZpZGVy.display_name": {
-          "source": "Step Up Auth Required Oauth Provider",
+          "source": "Step Up Auth Required OAuth Provider",
           "message": "Fournisseur OAuth requis pour l'authentification renforcée"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c3RlcF91cF9hdXRoX3JlcXVpcmVkX29hdXRoX3Byb3ZpZGVy.short_desc": {
@@ -10604,7 +10604,7 @@
           "message": "Approbation de l'outil pour la disponibilité de la session. L'un des suivants : `default_on`, `default_off` ou `never_on`"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dG9vbF9hcHByb3ZhbF9mb3Jfc2Vzc2lvbl9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "Tool Approval For Session Availability",
+          "source": "Tool Approval for Session Availability",
           "message": "Approbation de l'outil pour la disponibilité de la session"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dG9vbF9hcHByb3ZhbF9mb3Jfc2Vzc2lvbl9hdmFpbGFiaWxpdHk.short_desc": {
@@ -10660,7 +10660,7 @@
           "message": "Période pendant laquelle un utilisateur peut télécharger un nombre maximal de projets avant d'être banni."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXRfaW50ZXJ2YWxfaW5fc2Vjb25kcw.display_name": {
-          "source": "Unique Project Download Limit Interval In Seconds",
+          "source": "Unique Project Download Limit Interval in Seconds",
           "message": "Intervalle de limite de téléchargement de projets uniques en secondes"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmludGVybmFs.display_name": {
@@ -10740,7 +10740,7 @@
           "message": "L'ID du rôle de membre à mettre à jour"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.option.bWVtYmVyX3JvbGVfaWQ.display_name": {
-          "source": "Member Role Id",
+          "source": "Member Role ID",
           "message": "ID du rôle de membre"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.option.bWVtYmVyX3JvbGVfaWQ.short_desc": {
@@ -10948,7 +10948,7 @@
           "message": "Le chemin vers le fichier de configuration CI. Valeur par défaut : `.gitlab-ci.yml`"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfY29uZmlnX3BhdGg.display_name": {
-          "source": "Ci Config Path",
+          "source": "CI Config Path",
           "message": "Chemin de configuration CI"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfY29uZmlnX3BhdGg.short_desc": {
@@ -10960,7 +10960,7 @@
           "message": "Autoriser l'exécution des pipelines de merge request des forks dans le projet parent"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfYWxsb3dfZm9ya19waXBlbGluZXNfdG9fcnVuX2luX3BhcmVudF9wcm9qZWN0.display_name": {
-          "source": "Ci Allow Fork Pipelines To Run In Parent Project",
+          "source": "CI Allow Fork Pipelines to Run in Parent Project",
           "message": "Autoriser l'exécution des pipelines de fork CI dans le projet parent"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfYWxsb3dfZm9ya19waXBlbGluZXNfdG9fcnVuX2luX3BhcmVudF9wcm9qZWN0.short_desc": {
@@ -10972,7 +10972,7 @@
           "message": "Nombre de révisions par défaut pour le clonage superficiel"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGVmYXVsdF9naXRfZGVwdGg.display_name": {
-          "source": "Ci Default Git Depth",
+          "source": "CI Default Git Depth",
           "message": "Profondeur Git CI par défaut"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGVmYXVsdF9naXRfZGVwdGg.short_desc": {
@@ -10984,7 +10984,7 @@
           "message": "Les pipelines plus anciens que le délai configuré sont supprimés"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGVsZXRlX3BpcGVsaW5lc19pbl9zZWNvbmRz.display_name": {
-          "source": "Ci Delete Pipelines In Seconds",
+          "source": "CI Delete Pipelines in Seconds",
           "message": "Suppression des pipelines CI en secondes"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGVsZXRlX3BpcGVsaW5lc19pbl9zZWNvbmRz.short_desc": {
@@ -10996,7 +10996,7 @@
           "message": "Afficher toutes les variables définies manuellement sur la page des détails du pipeline après l'exécution manuelle d'un pipeline"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGlzcGxheV9waXBlbGluZV92YXJpYWJsZXM.display_name": {
-          "source": "Ci Display Pipeline Variables",
+          "source": "CI Display Pipeline Variables",
           "message": "Affichage des variables de pipeline CI"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X2VuYWJsZWQ.desc": {
@@ -11004,7 +11004,7 @@
           "message": "Empêcher les jobs de déploiement plus anciens qui sont toujours en attente"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X2VuYWJsZWQ.display_name": {
-          "source": "Ci Forward Deployment Enabled",
+          "source": "CI Forward Deployment Enabled",
           "message": "Déploiement vers l'avant CI activé"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X2VuYWJsZWQ.short_desc": {
@@ -11016,7 +11016,7 @@
           "message": "Autoriser les nouvelles tentatives de job pour les déploiements de retour arrière"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X3JvbGxiYWNrX2FsbG93ZWQ.display_name": {
-          "source": "Ci Forward Deployment Rollback Allowed",
+          "source": "CI Forward Deployment Rollback Allowed",
           "message": "Retour arrière du déploiement vers l'avant CI autorisé"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X3JvbGxiYWNrX2FsbG93ZWQ.short_desc": {
@@ -11028,7 +11028,7 @@
           "message": "Revendications qui seront utilisées pour construire la revendication sub dans les jetons d'identification"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfaWRfdG9rZW5fc3ViX2NsYWltX2NvbXBvbmVudHM.display_name": {
-          "source": "Ci Id Token Sub Claim Components",
+          "source": "CI ID Token Sub Claim Components",
           "message": "Composants de la sous-revendication du jeton d'identification CI"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfaWRfdG9rZW5fc3ViX2NsYWltX2NvbXBvbmVudHM.short_desc": {
@@ -11040,7 +11040,7 @@
           "message": "Active ou désactive les caches séparés selon la protection des branches."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfc2VwYXJhdGVkX2NhY2hlcw.display_name": {
-          "source": "Ci Separated Caches",
+          "source": "CI Separated Caches",
           "message": "Caches séparés CI"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfc2VwYXJhdGVkX2NhY2hlcw.short_desc": {
@@ -11068,7 +11068,7 @@
           "message": "Limiter la possibilité de remplacer les variables CI/CD lors du déclenchement d'un pipeline aux seuls utilisateurs ayant au moins le rôle minimal défini"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcGlwZWxpbmVfdmFyaWFibGVzX21pbmltdW1fb3ZlcnJpZGVfcm9sZQ.display_name": {
-          "source": "Ci Pipeline Variables Minimum Override Role",
+          "source": "CI Pipeline Variables Minimum Override Role",
           "message": "Rôle minimal pour remplacer les variables de pipeline CI"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.desc": {
@@ -11076,7 +11076,7 @@
           "message": "Autoriser le push vers le dépôt de ce projet en s'authentifiant avec un jeton de tâche CI/CD généré dans ce projet."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.display_name": {
-          "source": "Ci Push Repository For Job Token Allowed",
+          "source": "CI Push Repository for Job Token Allowed",
           "message": "Push vers le dépôt autorisé pour le jeton de tâche CI"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcmVzdHJpY3RfcGlwZWxpbmVfY2FuY2VsbGF0aW9uX3JvbGU.desc": {
@@ -11084,7 +11084,7 @@
           "message": "Rôles autorisés à annuler les pipelines et les tâches."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcmVzdHJpY3RfcGlwZWxpbmVfY2FuY2VsbGF0aW9uX3JvbGU.display_name": {
-          "source": "Ci Restrict Pipeline Cancellation Role",
+          "source": "CI Restrict Pipeline Cancellation Role",
           "message": "Rôle de restriction de l'annulation de pipeline CI"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcmVzdHJpY3RfcGlwZWxpbmVfY2FuY2VsbGF0aW9uX3JvbGU.short_desc": {
@@ -11132,7 +11132,7 @@
           "message": "Autoriser la fusion si le pipeline est ignoré"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.display_name": {
-          "source": "Allow Merge On Skipped Pipeline",
+          "source": "Allow Merge on Skipped Pipeline",
           "message": "Autoriser la fusion si le pipeline est ignoré"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.short_desc": {
@@ -11460,7 +11460,7 @@
           "message": "Appliquer la vérification d'authentification lors des téléversements"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.ZW5mb3JjZV9hdXRoX2NoZWNrc19vbl91cGxvYWRz.display_name": {
-          "source": "Enforce Auth Checks On Uploads",
+          "source": "Enforce Auth Checks on Uploads",
           "message": "Appliquer les vérifications d'authentification sur les téléversements"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.ZW5mb3JjZV9hdXRoX2NoZWNrc19vbl91cGxvYWRz.short_desc": {
@@ -11556,7 +11556,7 @@
           "message": "URL à partir de laquelle le projet est importé"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.aW1wb3J0X3VybA.display_name": {
-          "source": "Import Url",
+          "source": "Import URL",
           "message": "URL d'importation"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.aW1wb3J0X3VybA.short_desc": {
@@ -11676,7 +11676,7 @@
           "message": "Autoriser la fusion uniquement si tous les fils de discussion sont résolus"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.display_name": {
-          "source": "Only Allow Merge If All Discussions Are Resolved",
+          "source": "Only Allow Merge if All Discussions Are Resolved",
           "message": "Autoriser la fusion uniquement si toutes les discussions sont résolues"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.short_desc": {
@@ -11688,7 +11688,7 @@
           "message": "Empêche la fusion des merge requests tant que tous les contrôles de statut n'ont pas réussi"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfc3RhdHVzX2NoZWNrc19wYXNzZWQ.display_name": {
-          "source": "Only Allow Merge If All Status Checks Passed",
+          "source": "Only Allow Merge if All Status Checks Passed",
           "message": "Autoriser la fusion uniquement si tous les contrôles de statut sont validés"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfc3RhdHVzX2NoZWNrc19wYXNzZWQ.short_desc": {
@@ -11700,7 +11700,7 @@
           "message": "Autoriser la fusion uniquement si les builds réussissent"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.display_name": {
-          "source": "Only Allow Merge If Pipeline Succeeds",
+          "source": "Only Allow Merge if Pipeline Succeeds",
           "message": "Autoriser la fusion uniquement si le pipeline réussit"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.short_desc": {
@@ -11820,7 +11820,7 @@
           "message": "Nombre maximal de pipelines parallèles par train de fusion pour ce projet."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWF4X3BpcGVsaW5lc19wZXJfbWVyZ2VfdHJhaW4.display_name": {
-          "source": "Max Pipelines Per Merge Train",
+          "source": "Max Pipelines per Merge Train",
           "message": "Pipelines max. par train de fusion"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWF4X3BpcGVsaW5lc19wZXJfbWVyZ2VfdHJhaW4.short_desc": {
@@ -12044,7 +12044,7 @@
           "message": "[Obsolète] Utilisateur responsable de toute l'activité entourant un événement de miroir pull. Peut uniquement être défini par les administrateurs"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWlycm9yX3VzZXJfaWQ.display_name": {
-          "source": "Mirror User Id",
+          "source": "Mirror User ID",
           "message": "ID de l'utilisateur du miroir"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bXJfZGVmYXVsdF90YXJnZXRfc2VsZg.desc": {
@@ -12136,7 +12136,7 @@
           "message": "Niveau d'accès à la sécurité et à la conformité. L'un de `disabled`, `private` ou `enabled`"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2VjdXJpdHlfYW5kX2NvbXBsaWFuY2VfYWNjZXNzX2xldmVs.display_name": {
-          "source": "Security And Compliance Access Level",
+          "source": "Security and Compliance Access Level",
           "message": "Niveau d'accès à la sécurité et à la conformité"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2VjdXJpdHlfYW5kX2NvbXBsaWFuY2VfYWNjZXNzX2xldmVs.short_desc": {
@@ -12192,7 +12192,7 @@
           "message": "Inclure l'aperçu du diff de code dans les e-mails de notification de demande de fusion"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.display_name": {
-          "source": "Show Diff Preview In Email",
+          "source": "Show Diff Preview in Email",
           "message": "Afficher l'aperçu du diff dans l'e-mail"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.short_desc": {
@@ -12852,7 +12852,7 @@
           "message": "L'ID d'une épopée à associer au ticket"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.option.ZXBpY19pZA.display_name": {
-          "source": "Epic Id",
+          "source": "Epic ID",
           "message": "ID d'epic"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.option.ZXBpY19pZA.short_desc": {
@@ -13132,7 +13132,7 @@
           "message": "L'ID du rôle de membre à mettre à jour"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.option.bWVtYmVyX3JvbGVfaWQ.display_name": {
-          "source": "Member Role Id",
+          "source": "Member Role ID",
           "message": "ID du rôle de membre"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.option.bWVtYmVyX3JvbGVfaWQ.short_desc": {
@@ -13192,7 +13192,7 @@
           "message": "[obsolète] Voir allow_collaboration"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.YWxsb3dfbWFpbnRhaW5lcl90b19wdXNo.display_name": {
-          "source": "Allow Maintainer To Push",
+          "source": "Allow Maintainer to Push",
           "message": "Autoriser le mainteneur à pousser"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.YWxsb3dfbWFpbnRhaW5lcl90b19wdXNo.short_desc": {

@@ -1532,7 +1532,7 @@
           "message": "desc"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWFya2VkX2Zvcl9kZWxldGlvbl9vbg.display_name": {
-          "source": "Marked For Deletion On",
+          "source": "Marked for Deletion On",
           "message": "Marked For Deletion On"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWFya2VkX2Zvcl9kZWxldGlvbl9vbg.short_desc": {
@@ -1676,7 +1676,7 @@
           "message": "public"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.b3JnYW5pemF0aW9uX2lk.display_name": {
-          "source": "Organization Id",
+          "source": "Organization ID",
           "message": "Organization Id"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
@@ -1700,7 +1700,7 @@
           "message": "Avatar image for the group"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.c2hhcmVfd2l0aF9ncm91cF9sb2Nr.display_name": {
-          "source": "Share With Group Lock",
+          "source": "Share with Group Lock",
           "message": "Share With Group Lock"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.c2hhcmVfd2l0aF9ncm91cF9sb2Nr.short_desc": {
@@ -1824,7 +1824,7 @@
           "message": "Enable email notifications"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.display_name": {
-          "source": "Show Diff Preview In Email",
+          "source": "Show Diff Preview in Email",
           "message": "Show Diff Preview In Email"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.short_desc": {
@@ -1952,7 +1952,7 @@
           "message": "all"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.Y3JtX2VuYWJsZWQ.display_name": {
-          "source": "Crm Enabled",
+          "source": "CRM Enabled",
           "message": "Crm Enabled"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.Y3JtX2VuYWJsZWQ.short_desc": {
@@ -2000,7 +2000,7 @@
           "message": "Prevent adding new members to projects within this group"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.bGRhcF9jbg.display_name": {
-          "source": "Ldap Cn",
+          "source": "LDAP CN",
           "message": "Ldap Cn"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.bGRhcF9jbg.short_desc": {
@@ -2012,7 +2012,7 @@
           "message": "LDAP Common Name"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.bGRhcF9hY2Nlc3M.display_name": {
-          "source": "Ldap Access",
+          "source": "LDAP Access",
           "message": "Ldap Access"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.bGRhcF9hY2Nlc3M.short_desc": {
@@ -2160,7 +2160,7 @@
           "message": "Enable GitLab Duo external agents for this group"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.dG9vbF9hcHByb3ZhbF9mb3Jfc2Vzc2lvbl9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "Tool Approval For Session Availability",
+          "source": "Tool Approval for Session Availability",
           "message": "Tool Approval For Session Availability"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.dG9vbF9hcHByb3ZhbF9mb3Jfc2Vzc2lvbl9hdmFpbGFiaWxpdHk.short_desc": {
@@ -2232,7 +2232,7 @@
           "message": "Whether each foundational agent has been enabled or disabled."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.display_name": {
-          "source": "Ai Settings Attributes",
+          "source": "AI Settings Attributes",
           "message": "Ai Settings Attributes"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.short_desc": {
@@ -2424,7 +2424,7 @@
           "message": "Avatar image for the group"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c2hhcmVfd2l0aF9ncm91cF9sb2Nr.display_name": {
-          "source": "Share With Group Lock",
+          "source": "Share with Group Lock",
           "message": "Share With Group Lock"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c2hhcmVfd2l0aF9ncm91cF9sb2Nr.short_desc": {
@@ -2548,7 +2548,7 @@
           "message": "Enable email notifications"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.display_name": {
-          "source": "Show Diff Preview In Email",
+          "source": "Show Diff Preview in Email",
           "message": "Show Diff Preview In Email"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.short_desc": {
@@ -2676,7 +2676,7 @@
           "message": "all"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.Y3JtX2VuYWJsZWQ.display_name": {
-          "source": "Crm Enabled",
+          "source": "CRM Enabled",
           "message": "Crm Enabled"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.Y3JtX2VuYWJsZWQ.short_desc": {
@@ -2724,7 +2724,7 @@
           "message": "Prevent adding new members to projects within this group"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bGRhcF9jbg.display_name": {
-          "source": "Ldap Cn",
+          "source": "LDAP CN",
           "message": "Ldap Cn"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bGRhcF9jbg.short_desc": {
@@ -2736,7 +2736,7 @@
           "message": "LDAP Common Name"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bGRhcF9hY2Nlc3M.display_name": {
-          "source": "Ldap Access",
+          "source": "LDAP Access",
           "message": "Ldap Access"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bGRhcF9hY2Nlc3M.short_desc": {
@@ -2884,7 +2884,7 @@
           "message": "Enable GitLab Duo external agents for this group"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dG9vbF9hcHByb3ZhbF9mb3Jfc2Vzc2lvbl9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "Tool Approval For Session Availability",
+          "source": "Tool Approval for Session Availability",
           "message": "Tool Approval For Session Availability"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dG9vbF9hcHByb3ZhbF9mb3Jfc2Vzc2lvbl9hdmFpbGFiaWxpdHk.short_desc": {
@@ -2956,7 +2956,7 @@
           "message": "Whether each foundational agent has been enabled or disabled."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.display_name": {
-          "source": "Ai Settings Attributes",
+          "source": "AI Settings Attributes",
           "message": "Ai Settings Attributes"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.short_desc": {
@@ -2980,7 +2980,7 @@
           "message": "Prevent sharing groups within this namespace with any groups outside the namespace. Only available on top-level groups."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c3RlcF91cF9hdXRoX3JlcXVpcmVkX29hdXRoX3Byb3ZpZGVy.display_name": {
-          "source": "Step Up Auth Required Oauth Provider",
+          "source": "Step Up Auth Required OAuth Provider",
           "message": "Step Up Auth Required Oauth Provider"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c3RlcF91cF9hdXRoX3JlcXVpcmVkX29hdXRoX3Byb3ZpZGVy.short_desc": {
@@ -3028,7 +3028,7 @@
           "message": "Set the maximum file size for each job's artifacts"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZmlsZV90ZW1wbGF0ZV9wcm9qZWN0X2lk.display_name": {
-          "source": "File Template Project Id",
+          "source": "File Template Project ID",
           "message": "File Template Project Id"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZmlsZV90ZW1wbGF0ZV9wcm9qZWN0X2lk.short_desc": {
@@ -3064,7 +3064,7 @@
           "message": "Maximum number of unique projects a user can download in the specified time period before they are banned."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXRfaW50ZXJ2YWxfaW5fc2Vjb25kcw.display_name": {
-          "source": "Unique Project Download Limit Interval In Seconds",
+          "source": "Unique Project Download Limit Interval in Seconds",
           "message": "Unique Project Download Limit Interval In Seconds"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXRfaW50ZXJ2YWxfaW5fc2Vjb25kcw.short_desc": {
@@ -3100,7 +3100,7 @@
           "message": "List of user ids who will be emailed when Git abuse rate limit is exceeded"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YXV0b19iYW5fdXNlcl9vbl9leGNlc3NpdmVfcHJvamVjdHNfZG93bmxvYWQ.display_name": {
-          "source": "Auto Ban User On Excessive Projects Download",
+          "source": "Auto Ban User on Excessive Projects Download",
           "message": "Auto Ban User On Excessive Projects Download"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YXV0b19iYW5fdXNlcl9vbl9leGNlc3NpdmVfcHJvamVjdHNfZG93bmxvYWQ.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "Ban users from the group when they exceed maximum number of unique projects download in the specified time period"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.aXBfcmVzdHJpY3Rpb25fcmFuZ2Vz.display_name": {
-          "source": "Ip Restriction Ranges",
+          "source": "IP Restriction Ranges",
           "message": "Ip Restriction Ranges"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.aXBfcmVzdHJpY3Rpb25fcmFuZ2Vz.short_desc": {
@@ -3196,7 +3196,7 @@
           "message": "Enable automatic reviews by GitLab Duo on merge requests"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfYXVkaXRfZXZlbnRzX3N0b3JhZ2VfZW5hYmxlZA.display_name": {
-          "source": "Ai Audit Events Storage Enabled",
+          "source": "AI Audit Events Storage Enabled",
           "message": "Ai Audit Events Storage Enabled"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfYXVkaXRfZXZlbnRzX3N0b3JhZ2VfZW5hYmxlZA.short_desc": {
@@ -3208,7 +3208,7 @@
           "message": "Indicates whether AI audit events are stored for the group"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19haV9hdWRpdF9ldmVudHNfc3RvcmFnZV9lbmFibGVk.display_name": {
-          "source": "Lock Ai Audit Events Storage Enabled",
+          "source": "Lock AI Audit Events Storage Enabled",
           "message": "Lock Ai Audit Events Storage Enabled"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19haV9hdWRpdF9ldmVudHNfc3RvcmFnZV9lbmFibGVk.short_desc": {
@@ -3232,7 +3232,7 @@
           "message": "Enable web based commit signing for this group"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.display_name": {
-          "source": "Only Allow Merge If Pipeline Succeeds",
+          "source": "Only Allow Merge if Pipeline Succeeds",
           "message": "Only Allow Merge If Pipeline Succeeds"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.short_desc": {
@@ -3244,7 +3244,7 @@
           "message": "Only allow to merge if builds succeed"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.display_name": {
-          "source": "Allow Merge On Skipped Pipeline",
+          "source": "Allow Merge on Skipped Pipeline",
           "message": "Allow Merge On Skipped Pipeline"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.short_desc": {
@@ -3256,7 +3256,7 @@
           "message": "Allow to merge if pipeline is skipped"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.display_name": {
-          "source": "Only Allow Merge If All Discussions Are Resolved",
+          "source": "Only Allow Merge if All Discussions Are Resolved",
           "message": "Only Allow Merge If All Discussions Are Resolved"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.short_desc": {
@@ -3280,7 +3280,7 @@
           "message": "References of enabled foundational flows"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZHVvX3RlbXBsYXRlX3Byb2plY3RfaWQ.display_name": {
-          "source": "Duo Template Project Id",
+          "source": "Duo Template Project ID",
           "message": "Duo Template Project Id"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZHVvX3RlbXBsYXRlX3Byb2plY3RfaWQ.short_desc": {
@@ -3316,7 +3316,7 @@
           "message": "AI entity access rules for controlling Duo feature access"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YnVpbHRfaW5fcHJvamVjdF90ZW1wbGF0ZXNfZW5hYmxlZA.display_name": {
-          "source": "Built In Project Templates Enabled",
+          "source": "Built in Project Templates Enabled",
           "message": "Built In Project Templates Enabled"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YnVpbHRfaW5fcHJvamVjdF90ZW1wbGF0ZXNfZW5hYmxlZA.short_desc": {
@@ -3328,7 +3328,7 @@
           "message": "Enable built-in project templates for project creation"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19idWlsdF9pbl9wcm9qZWN0X3RlbXBsYXRlc19lbmFibGVk.display_name": {
-          "source": "Lock Built In Project Templates Enabled",
+          "source": "Lock Built in Project Templates Enabled",
           "message": "Lock Built In Project Templates Enabled"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19idWlsdF9pbl9wcm9qZWN0X3RlbXBsYXRlc19lbmFibGVk.short_desc": {
@@ -3728,7 +3728,7 @@
           "message": "Milestone title"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bWlsZXN0b25lX2lk.display_name": {
-          "source": "Milestone Id",
+          "source": "Milestone ID",
           "message": "Milestone Id"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bWlsZXN0b25lX2lk.short_desc": {
@@ -4024,7 +4024,7 @@
           "message": "The weight of the issue"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.ZXBpY19pZA.display_name": {
-          "source": "Epic Id",
+          "source": "Epic ID",
           "message": "Epic Id"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.ZXBpY19pZA.short_desc": {
@@ -4068,7 +4068,7 @@
           "message": "any"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.aXRlcmF0aW9uX2lk.display_name": {
-          "source": "Iteration Id",
+          "source": "Iteration ID",
           "message": "Iteration Id"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.aXRlcmF0aW9uX2lk.short_desc": {
@@ -4764,7 +4764,7 @@
           "message": "The weight of the issue"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.ZXBpY19pZA.display_name": {
-          "source": "Epic Id",
+          "source": "Epic ID",
           "message": "Epic Id"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.ZXBpY19pZA.short_desc": {
@@ -4808,7 +4808,7 @@
           "message": "any"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.aXRlcmF0aW9uX2lk.display_name": {
-          "source": "Iteration Id",
+          "source": "Iteration ID",
           "message": "Iteration Id"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.aXRlcmF0aW9uX2lk.short_desc": {
@@ -4964,7 +4964,7 @@
           "message": "Date time when the issue was created. Available only for admins and project owners."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.bWVyZ2VfcmVxdWVzdF90b19yZXNvbHZlX2Rpc2N1c3Npb25zX29m.display_name": {
-          "source": "Merge Request To Resolve Discussions Of",
+          "source": "Merge Request to Resolve Discussions Of",
           "message": "Merge Request To Resolve Discussions Of"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.bWVyZ2VfcmVxdWVzdF90b19yZXNvbHZlX2Rpc2N1c3Npb25zX29m.short_desc": {
@@ -4976,7 +4976,7 @@
           "message": "The IID of a merge request for which to resolve discussions"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl90b19yZXNvbHZl.display_name": {
-          "source": "Discussion To Resolve",
+          "source": "Discussion to Resolve",
           "message": "Discussion To Resolve"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl90b19yZXNvbHZl.short_desc": {
@@ -5152,7 +5152,7 @@
           "message": "The weight of the issue"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZXBpY19pZA.display_name": {
-          "source": "Epic Id",
+          "source": "Epic ID",
           "message": "Epic Id"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZXBpY19pZA.short_desc": {
@@ -5516,7 +5516,7 @@
           "message": "The weight of the issue"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.option.ZXBpY19pZA.display_name": {
-          "source": "Epic Id",
+          "source": "Epic ID",
           "message": "Epic Id"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.option.ZXBpY19pZA.short_desc": {
@@ -6112,7 +6112,7 @@
           "message": "Filter with custom attributes"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRVc2Vycw.option.c2tpcF9sZGFw.display_name": {
-          "source": "Skip Ldap",
+          "source": "Skip LDAP",
           "message": "Skip Ldap"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRVc2Vycw.option.c2tpcF9sZGFw.short_desc": {
@@ -6304,7 +6304,7 @@
           "message": "Show seat information for members"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVycw.option.d2l0aF9zYW1sX2lkZW50aXR5.display_name": {
-          "source": "With Saml Identity",
+          "source": "With SAML Identity",
           "message": "With Saml Identity"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVycw.option.d2l0aF9zYW1sX2lkZW50aXR5.short_desc": {
@@ -6492,7 +6492,7 @@
           "message": "Date string in the format YEAR-MONTH-DAY"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.option.bWVtYmVyX3JvbGVfaWQ.display_name": {
-          "source": "Member Role Id",
+          "source": "Member Role ID",
           "message": "Member Role Id"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.option.bWVtYmVyX3JvbGVfaWQ.short_desc": {
@@ -6660,7 +6660,7 @@
           "message": "Show seat information for members"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnM.option.d2l0aF9zYW1sX2lkZW50aXR5.display_name": {
-          "source": "With Saml Identity",
+          "source": "With SAML Identity",
           "message": "With Saml Identity"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnM.option.d2l0aF9zYW1sX2lkZW50aXR5.short_desc": {
@@ -6848,7 +6848,7 @@
           "message": "Date string in the format YEAR-MONTH-DAY"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.option.bWVtYmVyX3JvbGVfaWQ.display_name": {
-          "source": "Member Role Id",
+          "source": "Member Role ID",
           "message": "Member Role Id"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.option.bWVtYmVyX3JvbGVfaWQ.short_desc": {
@@ -7604,7 +7604,7 @@
           "message": "Return merge requests which have specified the users with the given IDs as an individual approver"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfaWRz.display_name": {
-          "source": "Approved By Ids",
+          "source": "Approved by Ids",
           "message": "Approved By Ids"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfaWRz.short_desc": {
@@ -7616,7 +7616,7 @@
           "message": "Return merge requests which have been approved by the specified users with the given IDs"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfdXNlcm5hbWVz.display_name": {
-          "source": "Approved By Usernames",
+          "source": "Approved by Usernames",
           "message": "Approved By Usernames"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfdXNlcm5hbWVz.short_desc": {
@@ -7856,7 +7856,7 @@
           "message": "Allow commits from members who can merge to the target branch."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.option.YWxsb3dfbWFpbnRhaW5lcl90b19wdXNo.display_name": {
-          "source": "Allow Maintainer To Push",
+          "source": "Allow Maintainer to Push",
           "message": "Allow Maintainer To Push"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.option.YWxsb3dfbWFpbnRhaW5lcl90b19wdXNo.short_desc": {
@@ -7932,7 +7932,7 @@
           "message": "The merge request's **IID**: the project-relative number shown in the web UI and written `!7`, not the instance-wide `id`."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.cmVuZGVyX2h0bWw.display_name": {
-          "source": "Render Html",
+          "source": "Render HTML",
           "message": "Render Html"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.cmVuZGVyX2h0bWw.short_desc": {
@@ -7956,7 +7956,7 @@
           "message": "If `true`, response includes the commits behind the target branch."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.aW5jbHVkZV9yZWJhc2VfaW5fcHJvZ3Jlc3M.display_name": {
-          "source": "Include Rebase In Progress",
+          "source": "Include Rebase in Progress",
           "message": "Include Rebase In Progress"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.aW5jbHVkZV9yZWJhc2VfaW5fcHJvZ3Jlc3M.short_desc": {
@@ -8192,7 +8192,7 @@
           "message": "Allow commits from members who can merge to the target branch."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.YWxsb3dfbWFpbnRhaW5lcl90b19wdXNo.display_name": {
-          "source": "Allow Maintainer To Push",
+          "source": "Allow Maintainer to Push",
           "message": "Allow Maintainer To Push"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.YWxsb3dfbWFpbnRhaW5lcl90b19wdXNo.short_desc": {
@@ -8712,7 +8712,7 @@
           "message": "Limit to repositories which use the given programming language"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.aWRfYWZ0ZXI.display_name": {
-          "source": "Id After",
+          "source": "ID After",
           "message": "Id After"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.aWRfYWZ0ZXI.short_desc": {
@@ -8724,7 +8724,7 @@
           "message": "Limit results to projects with IDs greater than the specified ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.aWRfYmVmb3Jl.display_name": {
-          "source": "Id Before",
+          "source": "ID Before",
           "message": "Id Before"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.aWRfYmVmb3Jl.short_desc": {
@@ -8820,7 +8820,7 @@
           "message": "Include projects in pending delete state. Can only be set by admins"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWFya2VkX2Zvcl9kZWxldGlvbl9vbg.display_name": {
-          "source": "Marked For Deletion On",
+          "source": "Marked for Deletion On",
           "message": "Marked For Deletion On"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWFya2VkX2Zvcl9kZWxldGlvbl9vbg.short_desc": {
@@ -9000,7 +9000,7 @@
           "message": "public"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aW5pdGlhbGl6ZV93aXRoX3JlYWRtZQ.display_name": {
-          "source": "Initialize With Readme",
+          "source": "Initialize with Readme",
           "message": "Initialize With Readme"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aW5pdGlhbGl6ZV93aXRoX3JlYWRtZQ.short_desc": {
@@ -9088,7 +9088,7 @@
           "message": "enabled"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Y2lfY29uZmlnX3BhdGg.display_name": {
-          "source": "Ci Config Path",
+          "source": "CI Config Path",
           "message": "Ci Config Path"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Y2lfY29uZmlnX3BhdGg.short_desc": {
@@ -9444,7 +9444,7 @@
           "message": "enabled"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c2VjdXJpdHlfYW5kX2NvbXBsaWFuY2VfYWNjZXNzX2xldmVs.display_name": {
-          "source": "Security And Compliance Access Level",
+          "source": "Security and Compliance Access Level",
           "message": "Security And Compliance Access Level"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c2VjdXJpdHlfYW5kX2NvbXBsaWFuY2VfYWNjZXNzX2xldmVs.short_desc": {
@@ -9672,7 +9672,7 @@
           "message": "Show default award emojis"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.display_name": {
-          "source": "Show Diff Preview In Email",
+          "source": "Show Diff Preview in Email",
           "message": "Show Diff Preview In Email"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.short_desc": {
@@ -9696,7 +9696,7 @@
           "message": "Warn about potentially unwanted characters"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.ZW5mb3JjZV9hdXRoX2NoZWNrc19vbl91cGxvYWRz.display_name": {
-          "source": "Enforce Auth Checks On Uploads",
+          "source": "Enforce Auth Checks on Uploads",
           "message": "Enforce Auth Checks On Uploads"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.ZW5mb3JjZV9hdXRoX2NoZWNrc19vbl91cGxvYWRz.short_desc": {
@@ -9868,7 +9868,7 @@
           "message": "Allow users to request member access"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.display_name": {
-          "source": "Only Allow Merge If Pipeline Succeeds",
+          "source": "Only Allow Merge if Pipeline Succeeds",
           "message": "Only Allow Merge If Pipeline Succeeds"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.short_desc": {
@@ -9880,7 +9880,7 @@
           "message": "Only allow to merge if builds succeed"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.display_name": {
-          "source": "Allow Merge On Skipped Pipeline",
+          "source": "Allow Merge on Skipped Pipeline",
           "message": "Allow Merge On Skipped Pipeline"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.short_desc": {
@@ -9892,7 +9892,7 @@
           "message": "Allow to merge if pipeline is skipped"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.display_name": {
-          "source": "Only Allow Merge If All Discussions Are Resolved",
+          "source": "Only Allow Merge if All Discussions Are Resolved",
           "message": "Only Allow Merge If All Discussions Are Resolved"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.short_desc": {
@@ -10136,7 +10136,7 @@
           "message": "Set whether the project is a CI/CD catalog project"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfc3RhdHVzX2NoZWNrc19wYXNzZWQ.display_name": {
-          "source": "Only Allow Merge If All Status Checks Passed",
+          "source": "Only Allow Merge if All Status Checks Passed",
           "message": "Only Allow Merge If All Status Checks Passed"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfc3RhdHVzX2NoZWNrc19wYXNzZWQ.short_desc": {
@@ -10372,7 +10372,7 @@
           "message": "Use custom template"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Z3JvdXBfd2l0aF9wcm9qZWN0X3RlbXBsYXRlc19pZA.display_name": {
-          "source": "Group With Project Templates Id",
+          "source": "Group with Project Templates ID",
           "message": "Group With Project Templates Id"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Z3JvdXBfd2l0aF9wcm9qZWN0X3RlbXBsYXRlc19pZA.short_desc": {
@@ -10384,7 +10384,7 @@
           "message": "Group ID that serves as the template source"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aW1wb3J0X3VybA.display_name": {
-          "source": "Import Url",
+          "source": "Import URL",
           "message": "Import Url"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aW1wb3J0X3VybA.short_desc": {
@@ -10408,7 +10408,7 @@
           "message": "Name of template from which to create project"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.dGVtcGxhdGVfcHJvamVjdF9pZA.display_name": {
-          "source": "Template Project Id",
+          "source": "Template Project ID",
           "message": "Template Project Id"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.dGVtcGxhdGVfcHJvamVjdF9pZA.short_desc": {
@@ -10652,7 +10652,7 @@
           "message": "enabled"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfY29uZmlnX3BhdGg.display_name": {
-          "source": "Ci Config Path",
+          "source": "CI Config Path",
           "message": "Ci Config Path"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfY29uZmlnX3BhdGg.short_desc": {
@@ -11008,7 +11008,7 @@
           "message": "enabled"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2VjdXJpdHlfYW5kX2NvbXBsaWFuY2VfYWNjZXNzX2xldmVs.display_name": {
-          "source": "Security And Compliance Access Level",
+          "source": "Security and Compliance Access Level",
           "message": "Security And Compliance Access Level"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2VjdXJpdHlfYW5kX2NvbXBsaWFuY2VfYWNjZXNzX2xldmVs.short_desc": {
@@ -11236,7 +11236,7 @@
           "message": "Show default award emojis"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.display_name": {
-          "source": "Show Diff Preview In Email",
+          "source": "Show Diff Preview in Email",
           "message": "Show Diff Preview In Email"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.short_desc": {
@@ -11260,7 +11260,7 @@
           "message": "Warn about potentially unwanted characters"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.ZW5mb3JjZV9hdXRoX2NoZWNrc19vbl91cGxvYWRz.display_name": {
-          "source": "Enforce Auth Checks On Uploads",
+          "source": "Enforce Auth Checks on Uploads",
           "message": "Enforce Auth Checks On Uploads"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.ZW5mb3JjZV9hdXRoX2NoZWNrc19vbl91cGxvYWRz.short_desc": {
@@ -11432,7 +11432,7 @@
           "message": "Allow users to request member access"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.display_name": {
-          "source": "Only Allow Merge If Pipeline Succeeds",
+          "source": "Only Allow Merge if Pipeline Succeeds",
           "message": "Only Allow Merge If Pipeline Succeeds"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.short_desc": {
@@ -11444,7 +11444,7 @@
           "message": "Only allow to merge if builds succeed"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.display_name": {
-          "source": "Allow Merge On Skipped Pipeline",
+          "source": "Allow Merge on Skipped Pipeline",
           "message": "Allow Merge On Skipped Pipeline"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.short_desc": {
@@ -11456,7 +11456,7 @@
           "message": "Allow to merge if pipeline is skipped"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.display_name": {
-          "source": "Only Allow Merge If All Discussions Are Resolved",
+          "source": "Only Allow Merge if All Discussions Are Resolved",
           "message": "Only Allow Merge If All Discussions Are Resolved"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.short_desc": {
@@ -11700,7 +11700,7 @@
           "message": "Set whether the project is a CI/CD catalog project"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfc3RhdHVzX2NoZWNrc19wYXNzZWQ.display_name": {
-          "source": "Only Allow Merge If All Status Checks Passed",
+          "source": "Only Allow Merge if All Status Checks Passed",
           "message": "Only Allow Merge If All Status Checks Passed"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfc3RhdHVzX2NoZWNrc19wYXNzZWQ.short_desc": {
@@ -11904,7 +11904,7 @@
           "message": "The description for the regex the Merge Request must adhere to"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGVmYXVsdF9naXRfZGVwdGg.display_name": {
-          "source": "Ci Default Git Depth",
+          "source": "CI Default Git Depth",
           "message": "Ci Default Git Depth"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGVmYXVsdF9naXRfZGVwdGg.short_desc": {
@@ -11928,7 +11928,7 @@
           "message": "Indicates if the latest artifact should be kept for this project."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X2VuYWJsZWQ.display_name": {
-          "source": "Ci Forward Deployment Enabled",
+          "source": "CI Forward Deployment Enabled",
           "message": "Ci Forward Deployment Enabled"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X2VuYWJsZWQ.short_desc": {
@@ -11940,7 +11940,7 @@
           "message": "Prevent older deployment jobs that are still pending"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X3JvbGxiYWNrX2FsbG93ZWQ.display_name": {
-          "source": "Ci Forward Deployment Rollback Allowed",
+          "source": "CI Forward Deployment Rollback Allowed",
           "message": "Ci Forward Deployment Rollback Allowed"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X3JvbGxiYWNrX2FsbG93ZWQ.short_desc": {
@@ -11952,7 +11952,7 @@
           "message": "Allow job retries for rollback deployments"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfYWxsb3dfZm9ya19waXBlbGluZXNfdG9fcnVuX2luX3BhcmVudF9wcm9qZWN0.display_name": {
-          "source": "Ci Allow Fork Pipelines To Run In Parent Project",
+          "source": "CI Allow Fork Pipelines to Run in Parent Project",
           "message": "Ci Allow Fork Pipelines To Run In Parent Project"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfYWxsb3dfZm9ya19waXBlbGluZXNfdG9fcnVuX2luX3BhcmVudF9wcm9qZWN0.short_desc": {
@@ -11964,7 +11964,7 @@
           "message": "Allow fork merge request pipelines to run in parent project"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfc2VwYXJhdGVkX2NhY2hlcw.display_name": {
-          "source": "Ci Separated Caches",
+          "source": "CI Separated Caches",
           "message": "Ci Separated Caches"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfc2VwYXJhdGVkX2NhY2hlcw.short_desc": {
@@ -11988,7 +11988,7 @@
           "message": "Restrict use of user-defined variables when triggering a pipeline"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcGlwZWxpbmVfdmFyaWFibGVzX21pbmltdW1fb3ZlcnJpZGVfcm9sZQ.display_name": {
-          "source": "Ci Pipeline Variables Minimum Override Role",
+          "source": "CI Pipeline Variables Minimum Override Role",
           "message": "Ci Pipeline Variables Minimum Override Role"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcGlwZWxpbmVfdmFyaWFibGVzX21pbmltdW1fb3ZlcnJpZGVfcm9sZQ.short_desc": {
@@ -12016,7 +12016,7 @@
           "message": "owner"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.display_name": {
-          "source": "Ci Push Repository For Job Token Allowed",
+          "source": "CI Push Repository for Job Token Allowed",
           "message": "Ci Push Repository For Job Token Allowed"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.short_desc": {
@@ -12028,7 +12028,7 @@
           "message": "Allow pushing to this project's repository by authenticating with a CI/CD job token generated in this project."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfaWRfdG9rZW5fc3ViX2NsYWltX2NvbXBvbmVudHM.display_name": {
-          "source": "Ci Id Token Sub Claim Components",
+          "source": "CI ID Token Sub Claim Components",
           "message": "Ci Id Token Sub Claim Components"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfaWRfdG9rZW5fc3ViX2NsYWltX2NvbXBvbmVudHM.short_desc": {
@@ -12040,7 +12040,7 @@
           "message": "Claims that will be used to build the sub claim in id tokens"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGVsZXRlX3BpcGVsaW5lc19pbl9zZWNvbmRz.display_name": {
-          "source": "Ci Delete Pipelines In Seconds",
+          "source": "CI Delete Pipelines in Seconds",
           "message": "Ci Delete Pipelines In Seconds"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGVsZXRlX3BpcGVsaW5lc19pbl9zZWNvbmRz.short_desc": {
@@ -12076,7 +12076,7 @@
           "message": "Make protected CI/CD variables and runners available in merge request pipelines"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGlzcGxheV9waXBlbGluZV92YXJpYWJsZXM.display_name": {
-          "source": "Ci Display Pipeline Variables",
+          "source": "CI Display Pipeline Variables",
           "message": "Ci Display Pipeline Variables"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGlzcGxheV9waXBlbGluZV92YXJpYWJsZXM.short_desc": {
@@ -12100,7 +12100,7 @@
           "message": "Allow pipeline triggerer to approve deployments"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWlycm9yX3VzZXJfaWQ.display_name": {
-          "source": "Mirror User Id",
+          "source": "Mirror User ID",
           "message": "Mirror User Id"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWlycm9yX3VzZXJfaWQ.short_desc": {
@@ -12148,7 +12148,7 @@
           "message": "[Deprecated] Pull mirror overwrites diverged branches"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.aW1wb3J0X3VybA.display_name": {
-          "source": "Import Url",
+          "source": "Import URL",
           "message": "Import Url"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.aW1wb3J0X3VybA.short_desc": {
@@ -12256,7 +12256,7 @@
           "message": "enforce_with_owner_override"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWF4X3BpcGVsaW5lc19wZXJfbWVyZ2VfdHJhaW4.display_name": {
-          "source": "Max Pipelines Per Merge Train",
+          "source": "Max Pipelines per Merge Train",
           "message": "Max Pipelines Per Merge Train"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWF4X3BpcGVsaW5lc19wZXJfbWVyZ2VfdHJhaW4.short_desc": {
@@ -12268,7 +12268,7 @@
           "message": "Maximum number of parallel pipelines per merge train for this project."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcmVzdHJpY3RfcGlwZWxpbmVfY2FuY2VsbGF0aW9uX3JvbGU.display_name": {
-          "source": "Ci Restrict Pipeline Cancellation Role",
+          "source": "CI Restrict Pipeline Cancellation Role",
           "message": "Ci Restrict Pipeline Cancellation Role"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcmVzdHJpY3RfcGlwZWxpbmVfY2FuY2VsbGF0aW9uX3JvbGU.short_desc": {
@@ -12412,7 +12412,7 @@
           "message": "Filters only users without projects"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRUb3BpY3M.option.b3JnYW5pemF0aW9uX2lk.display_name": {
-          "source": "Organization Id",
+          "source": "Organization ID",
           "message": "Organization Id"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRUb3BpY3M.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
@@ -12544,7 +12544,7 @@
           "message": "Whether the variable is masked"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFZhcmlhYmxlcw.option.bWFza2VkX2FuZF9oaWRkZW4.display_name": {
-          "source": "Masked And Hidden",
+          "source": "Masked and Hidden",
           "message": "Masked And Hidden"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFZhcmlhYmxlcw.option.bWFza2VkX2FuZF9oaWRkZW4.short_desc": {
@@ -12992,7 +12992,7 @@
           "message": "Whether the variable is masked"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRWYXJpYWJsZXM.option.bWFza2VkX2FuZF9oaWRkZW4.display_name": {
-          "source": "Masked And Hidden",
+          "source": "Masked and Hidden",
           "message": "Masked And Hidden"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRWYXJpYWJsZXM.option.bWFza2VkX2FuZF9oaWRkZW4.short_desc": {
@@ -13432,7 +13432,7 @@
           "message": "The version hash of a wiki page"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.option.cmVuZGVyX2h0bWw.display_name": {
-          "source": "Render Html",
+          "source": "Render HTML",
           "message": "Render Html"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.option.cmVuZGVyX2h0bWw.short_desc": {

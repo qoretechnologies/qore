@@ -352,7 +352,7 @@
           "message": "この商品の画像。チェックアウト時や一部の顧客向けドキュメントに含まれます。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.display_name": {
-          "source": "Image Url",
+          "source": "Image URL",
           "message": "画像URL"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.short_desc": {
@@ -584,7 +584,7 @@
           "message": "このトランザクションの対象となる住所のPaddle ID（プレフィックス: `add_`）。`customer_id` が必要です。省略した場合、トランザクションのステータスは `draft` になります。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.display_name": {
-          "source": "Address Id",
+          "source": "Address ID",
           "message": "住所ID"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.desc": {
@@ -624,7 +624,7 @@
           "message": "このトランザクションの対象となる法人のPaddle ID（プレフィックス: `biz_`）。`customer_id` が必要です。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.display_name": {
-          "source": "Business Id",
+          "source": "Business ID",
           "message": "法人ID"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGV0YWlscw.desc": {
@@ -652,7 +652,7 @@
           "message": "この取引に適用する割引のPaddle ID（プレフィックス: `dsc_`）。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.display_name": {
-          "source": "Discount Id",
+          "source": "Discount ID",
           "message": "割引ID"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.short_desc": {
@@ -664,7 +664,7 @@
           "message": "この取引に関連付けられている請求書のPaddle ID（プレフィックス: `inv_`）。現在は非推奨となっているPaddle Invoice APIとの互換性のために使用されます。このフィールドはPaddle APIの次期バージョンで削除される予定です。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.display_name": {
-          "source": "Invoice Id",
+          "source": "Invoice ID",
           "message": "請求書ID"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9udW1iZXI.desc": {
@@ -696,7 +696,7 @@
           "message": "この取引エンティティの一意のPaddle ID（プレフィックス: `txn_`）。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aWQ.display_name": {
-          "source": "Id",
+          "source": "ID",
           "message": "ID"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aWQ.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "指定された住所に関連するエンティティを返します。複数の住所IDを指定する場合はカンマ区切りリストを使用してください。"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWRkcmVzc19pZA.display_name": {
-          "source": "Address Id",
+          "source": "Address ID",
           "message": "住所ID"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWRkcmVzc19pZA.short_desc": {
@@ -2896,7 +2896,7 @@
           "message": "この商品の画像。チェックアウト時や一部の顧客向けドキュメントに含まれます。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.display_name": {
-          "source": "Image Url",
+          "source": "Image URL",
           "message": "画像URL"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.short_desc": {

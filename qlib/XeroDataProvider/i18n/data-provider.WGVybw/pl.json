@@ -380,7 +380,7 @@
           "message": "Termin wykonania projektu. Data i godzina UTC w formacie ISO-8601."
         },
         "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZGVhZGxpbmVVdGM.display_name": {
-          "source": "Deadline Utc",
+          "source": "Deadline UTC",
           "message": "Termin w UTC"
         },
         "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZGVhZGxpbmVVdGM.short_desc": {
@@ -920,7 +920,7 @@
           "message": "Gdy ustawione na true, pobierane będą tylko faktury utworzone przez Twoją aplikację"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.display_name": {
-          "source": "Created By My App",
+          "source": "Created by My App",
           "message": "Utworzone przez moją aplikację"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.short_desc": {

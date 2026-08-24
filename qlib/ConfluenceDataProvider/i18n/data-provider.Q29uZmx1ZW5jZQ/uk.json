@@ -448,7 +448,7 @@
           "message": "Включає інформацію про те, чи додана ця сторінка поточним користувачем до обраного."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.display_name": {
-          "source": "Include Favorited By Current User Status",
+          "source": "Include Favorited by Current User Status",
           "message": "Включити статус додавання до обраного поточним користувачем"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
@@ -1040,7 +1040,7 @@
           "message": "Фільтрує за ідентифікатором мітки. Кілька ідентифікаторів можна вказати через кому."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxz.option.bGFiZWwtaWQ.display_name": {
-          "source": "Label Id",
+          "source": "Label ID",
           "message": "Ідентифікатор мітки"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxz.option.bGFiZWwtaWQ.short_desc": {
@@ -1524,7 +1524,7 @@
           "message": "Включає інформацію про те, чи додана ця сторінка поточним користувачем до обраного."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.display_name": {
-          "source": "Include Favorited By Current User Status",
+          "source": "Include Favorited by Current User Status",
           "message": "Включити статус додавання до обраного поточним користувачем"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Фільтрує за початком діапазону дати й часу завдання на основі дати завершення (включно). Вхідні дані — час epoch у мілісекундах."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LWZyb20.display_name": {
-          "source": "Completed At From",
+          "source": "Completed at From",
           "message": "Завершено від"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LWZyb20.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Фільтрує за кінцем діапазону дати й часу завдання на основі дати завершення (включно). Вхідні дані — час epoch у мілісекундах."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LXRv.display_name": {
-          "source": "Completed At To",
+          "source": "Completed at To",
           "message": "Завершено до"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LXRv.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "Фільтрує за кінцем діапазону дати й часу завдання на основі дати створення (включно). Вхідні дані — час epoch у мілісекундах."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC10bw.display_name": {
-          "source": "Created At To",
+          "source": "Created at To",
           "message": "Створено до"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC10bw.short_desc": {
@@ -2020,7 +2020,7 @@
           "message": "Фільтрує за початком діапазону дати й часу завдання на основі дати створення (включно). Вхідні дані — час epoch у мілісекундах."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC1mcm9t.display_name": {
-          "source": "Created At From",
+          "source": "Created at From",
           "message": "Створено від"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC1mcm9t.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Фільтрує за ID допису блогу завдання. Можна вказати кілька ID. Зверніть увагу: фільтри сторінок і дописів блогу можна використовувати разом."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YmxvZ3Bvc3QtaWQ.display_name": {
-          "source": "Blogpost Id",
+          "source": "Blogpost ID",
           "message": "ID допису блогу"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YmxvZ3Bvc3QtaWQ.short_desc": {
@@ -2096,7 +2096,7 @@
           "message": "Фільтрує за початком діапазону дати й часу завдання на основі строку виконання (включно). Вхідні дані — час epoch у мілісекундах."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LWZyb20.display_name": {
-          "source": "Due At From",
+          "source": "Due at From",
           "message": "Строк виконання від"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LWZyb20.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "Фільтрує за кінцем діапазону дати й часу завдання на основі строку виконання (включно). Вхідні дані — час epoch у мілісекундах."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LXRv.display_name": {
-          "source": "Due At To",
+          "source": "Due at To",
           "message": "Строк виконання до"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LXRv.short_desc": {
@@ -2144,7 +2144,7 @@
           "message": "Фільтрує за ID простору завдання. Можна вказати кілька ID."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.c3BhY2UtaWQ.display_name": {
-          "source": "Space Id",
+          "source": "Space ID",
           "message": "ID простору"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.c3BhY2UtaWQ.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "Фільтрує за ID сторінки завдання. Можна вказати кілька ID. Зверніть увагу: фільтри сторінок і дописів блогу можна використовувати разом."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.cGFnZS1pZA.display_name": {
-          "source": "Page Id",
+          "source": "Page ID",
           "message": "ID сторінки"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.cGFnZS1pZA.short_desc": {
@@ -2188,7 +2188,7 @@
           "message": "Фільтрує за ID завдання. Можна вказати кілька ID."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.dGFzay1pZA.display_name": {
-          "source": "Task Id",
+          "source": "Task ID",
           "message": "ID завдання"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.dGFzay1pZA.short_desc": {
@@ -2888,7 +2888,7 @@
           "message": "ID облікового запису власника сторінки.\n\nЦе дозволяє передати право власності на сторінку іншому користувачу."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.b3duZXJJZA.display_name": {
-          "source": "Owner Id",
+          "source": "Owner ID",
           "message": "ID власника"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.b3duZXJJZA.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "ID допису блогу, у якому міститься завдання."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.display_name": {
-          "source": "Blog Post Id",
+          "source": "Blog Post ID",
           "message": "ID допису блогу"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.short_desc": {
@@ -3148,7 +3148,7 @@
           "message": "Локальний ID завдання. Цей ID є локальним для відповідної сторінки або допису блогу."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.bG9jYWxJZA.display_name": {
-          "source": "Local Id",
+          "source": "Local ID",
           "message": "Локальний ID"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.bG9jYWxJZA.short_desc": {
@@ -3160,7 +3160,7 @@
           "message": "ID простору, у якому міститься завдання."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.c3BhY2VJZA.display_name": {
-          "source": "Space Id",
+          "source": "Space ID",
           "message": "ID простору"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.c3BhY2VJZA.short_desc": {
@@ -3192,7 +3192,7 @@
           "message": "ID сторінки, у якій міститься завдання."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.cGFnZUlk.display_name": {
-          "source": "Page Id",
+          "source": "Page ID",
           "message": "ID сторінки"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.cGFnZUlk.short_desc": {

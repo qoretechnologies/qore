@@ -352,7 +352,7 @@
           "message": "此產品的圖片。包含在結帳頁面及部分客戶文件中。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.display_name": {
-          "source": "Image Url",
+          "source": "Image URL",
           "message": "圖片 URL"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.short_desc": {
@@ -584,7 +584,7 @@
           "message": "此交易所屬地址的 Paddle ID，前綴為 `add_`。需要 `customer_id`。如果省略，交易狀態為 `draft`。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.display_name": {
-          "source": "Address Id",
+          "source": "Address ID",
           "message": "地址 ID"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.desc": {
@@ -624,7 +624,7 @@
           "message": "此交易所屬企業的 Paddle ID，前綴為 `biz_`。需要 `customer_id`。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.display_name": {
-          "source": "Business Id",
+          "source": "Business ID",
           "message": "企業 ID"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGV0YWlscw.desc": {
@@ -652,7 +652,7 @@
           "message": "要套用至此交易的折扣 Paddle ID，前綴為 `dsc_`。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.display_name": {
-          "source": "Discount Id",
+          "source": "Discount ID",
           "message": "折扣 ID"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.short_desc": {
@@ -664,7 +664,7 @@
           "message": "與此交易相關的發票 Paddle ID，前綴為 `inv_`。用於與現已棄用的 Paddle Invoice API 相容。此欄位預計在下一版 Paddle API 中移除。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.display_name": {
-          "source": "Invoice Id",
+          "source": "Invoice ID",
           "message": "發票 ID"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9udW1iZXI.desc": {
@@ -696,7 +696,7 @@
           "message": "此交易實體的唯一 Paddle ID，前綴為 `txn_`。"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aWQ.display_name": {
-          "source": "Id",
+          "source": "ID",
           "message": "ID"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aWQ.short_desc": {
@@ -1880,7 +1880,7 @@
           "message": "傳回與指定地址相關的實體。使用逗號分隔清單指定多個地址 ID。"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWRkcmVzc19pZA.display_name": {
-          "source": "Address Id",
+          "source": "Address ID",
           "message": "地址 ID"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWRkcmVzc19pZA.short_desc": {
@@ -2896,7 +2896,7 @@
           "message": "此產品的圖片。包含在結帳頁面及部分客戶文件中。"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.display_name": {
-          "source": "Image Url",
+          "source": "Image URL",
           "message": "圖片 URL"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.short_desc": {

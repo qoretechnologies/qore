@@ -448,7 +448,7 @@
           "message": "Schließt ein, ob diese Seite vom aktuellen Benutzer favorisiert wurde."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.display_name": {
-          "source": "Include Favorited By Current User Status",
+          "source": "Include Favorited by Current User Status",
           "message": "Status „Vom aktuellen Benutzer favorisiert“ einschließen"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
@@ -1040,7 +1040,7 @@
           "message": "Filtert nach Label-ID. Mehrere IDs können als kommagetrennte Liste angegeben werden."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxz.option.bGFiZWwtaWQ.display_name": {
-          "source": "Label Id",
+          "source": "Label ID",
           "message": "Label-ID"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxz.option.bGFiZWwtaWQ.short_desc": {
@@ -1524,7 +1524,7 @@
           "message": "Schließt ein, ob diese Seite vom aktuellen Benutzer favorisiert wurde."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.display_name": {
-          "source": "Include Favorited By Current User Status",
+          "source": "Include Favorited by Current User Status",
           "message": "Status „Vom aktuellen Benutzer favorisiert“ einschließen"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Filtert nach dem Beginn des Datums-/Uhrzeitbereichs der Aufgabe basierend auf dem Abschlussdatum (einschließlich). Die Eingabe erfolgt als Epoch-Zeit in Millisekunden."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LWZyb20.display_name": {
-          "source": "Completed At From",
+          "source": "Completed at From",
           "message": "Abgeschlossen am von"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LWZyb20.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Filtert nach dem Ende des Datums-/Uhrzeitbereichs der Aufgabe basierend auf dem Abschlussdatum (einschließlich). Die Eingabe erfolgt als Epoch-Zeit in Millisekunden."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LXRv.display_name": {
-          "source": "Completed At To",
+          "source": "Completed at To",
           "message": "Abgeschlossen am bis"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LXRv.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "Filtert nach dem Ende des Datums-/Uhrzeitbereichs der Aufgabe basierend auf dem Erstellungsdatum (einschließlich). Die Eingabe erfolgt als Epoch-Zeit in Millisekunden."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC10bw.display_name": {
-          "source": "Created At To",
+          "source": "Created at To",
           "message": "Erstellt am bis"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC10bw.short_desc": {
@@ -2020,7 +2020,7 @@
           "message": "Filtert nach dem Beginn des Datums-/Uhrzeitbereichs der Aufgabe basierend auf dem Erstellungsdatum (einschließlich). Die Eingabe erfolgt als Epoch-Zeit in Millisekunden."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC1mcm9t.display_name": {
-          "source": "Created At From",
+          "source": "Created at From",
           "message": "Erstellt am von"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC1mcm9t.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Filtert nach der Blogbeitrags-ID der Aufgabe. Es können mehrere IDs angegeben werden. Hinweis: Seiten- und Blogbeitragsfilter können kombiniert verwendet werden."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YmxvZ3Bvc3QtaWQ.display_name": {
-          "source": "Blogpost Id",
+          "source": "Blogpost ID",
           "message": "Blogbeitrags-ID"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YmxvZ3Bvc3QtaWQ.short_desc": {
@@ -2096,7 +2096,7 @@
           "message": "Filtert nach dem Beginn des Datums-/Uhrzeitbereichs der Aufgabe basierend auf dem Fälligkeitsdatum (einschließlich). Die Eingabe erfolgt als Epoch-Zeit in Millisekunden."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LWZyb20.display_name": {
-          "source": "Due At From",
+          "source": "Due at From",
           "message": "Fällig am von"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LWZyb20.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "Filtert nach dem Ende des Datums-/Uhrzeitbereichs der Aufgabe basierend auf dem Fälligkeitsdatum (einschließlich). Die Eingabe erfolgt als Epoch-Zeit in Millisekunden."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LXRv.display_name": {
-          "source": "Due At To",
+          "source": "Due at To",
           "message": "Fällig am bis"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LXRv.short_desc": {
@@ -2144,7 +2144,7 @@
           "message": "Filtert nach der Bereichs-ID der Aufgabe. Es können mehrere IDs angegeben werden."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.c3BhY2UtaWQ.display_name": {
-          "source": "Space Id",
+          "source": "Space ID",
           "message": "Bereichs-ID"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.c3BhY2UtaWQ.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "Filtert nach der Seiten-ID der Aufgabe. Es können mehrere IDs angegeben werden. Hinweis: Seiten- und Blogbeitragsfilter können kombiniert verwendet werden."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.cGFnZS1pZA.display_name": {
-          "source": "Page Id",
+          "source": "Page ID",
           "message": "Seiten-ID"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.cGFnZS1pZA.short_desc": {
@@ -2188,7 +2188,7 @@
           "message": "Filtert nach der Aufgaben-ID. Es können mehrere IDs angegeben werden."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.dGFzay1pZA.display_name": {
-          "source": "Task Id",
+          "source": "Task ID",
           "message": "Aufgaben-ID"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.dGFzay1pZA.short_desc": {
@@ -2888,7 +2888,7 @@
           "message": "Konto-ID des Seiteninhabers.\n\nErmöglicht die Übertragung der Seiteneigentümerschaft auf einen anderen Benutzer."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.b3duZXJJZA.display_name": {
-          "source": "Owner Id",
+          "source": "Owner ID",
           "message": "Eigentümer-ID"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.b3duZXJJZA.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "ID des Blogbeitrags, in dem sich die Aufgabe befindet."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.display_name": {
-          "source": "Blog Post Id",
+          "source": "Blog Post ID",
           "message": "Blogbeitrag-ID"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.short_desc": {
@@ -3148,7 +3148,7 @@
           "message": "Lokale ID der Aufgabe. Diese ID ist lokal für die entsprechende Seite oder den entsprechenden Blogbeitrag."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.bG9jYWxJZA.display_name": {
-          "source": "Local Id",
+          "source": "Local ID",
           "message": "Lokale ID"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.bG9jYWxJZA.short_desc": {
@@ -3160,7 +3160,7 @@
           "message": "ID des Bereichs, in dem sich die Aufgabe befindet."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.c3BhY2VJZA.display_name": {
-          "source": "Space Id",
+          "source": "Space ID",
           "message": "Bereichs-ID"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.c3BhY2VJZA.short_desc": {
@@ -3192,7 +3192,7 @@
           "message": "ID der Seite, in der sich die Aufgabe befindet."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.cGFnZUlk.display_name": {
-          "source": "Page Id",
+          "source": "Page ID",
           "message": "Seiten-ID"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.cGFnZUlk.short_desc": {

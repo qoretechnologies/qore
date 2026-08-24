@@ -380,7 +380,7 @@
           "message": "Кінцевий термін для проєкту. Дата й час UTC у форматі ISO-8601."
         },
         "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZGVhZGxpbmVVdGM.display_name": {
-          "source": "Deadline Utc",
+          "source": "Deadline UTC",
           "message": "Кінцевий термін UTC"
         },
         "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZGVhZGxpbmVVdGM.short_desc": {
@@ -920,7 +920,7 @@
           "message": "Якщо встановлено true, ви отримуватимете лише рахунки-фактури, створені вашим застосунком"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.display_name": {
-          "source": "Created By My App",
+          "source": "Created by My App",
           "message": "Створено моїм застосунком"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.short_desc": {

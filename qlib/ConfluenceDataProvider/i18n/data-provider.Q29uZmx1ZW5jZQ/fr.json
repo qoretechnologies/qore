@@ -448,7 +448,7 @@
           "message": "Indique si cette page a été ajoutée aux favoris par l'utilisateur actuel."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.display_name": {
-          "source": "Include Favorited By Current User Status",
+          "source": "Include Favorited by Current User Status",
           "message": "Inclure le statut des favoris de l'utilisateur actuel"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
@@ -1040,7 +1040,7 @@
           "message": "Filtre selon l'identifiant d'étiquette. Plusieurs identifiants peuvent être spécifiés sous forme de liste séparée par des virgules."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxz.option.bGFiZWwtaWQ.display_name": {
-          "source": "Label Id",
+          "source": "Label ID",
           "message": "Identifiant d'étiquette"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxz.option.bGFiZWwtaWQ.short_desc": {
@@ -1524,7 +1524,7 @@
           "message": "Indique si cette page a été ajoutée aux favoris par l'utilisateur actuel."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.display_name": {
-          "source": "Include Favorited By Current User Status",
+          "source": "Include Favorited by Current User Status",
           "message": "Inclure le statut des favoris de l'utilisateur actuel"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Filtre sur le début de la plage de dates et heures de la tâche en fonction de la date d'achèvement (inclusif). La valeur d'entrée est l'heure epoch en millisecondes."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LWZyb20.display_name": {
-          "source": "Completed At From",
+          "source": "Completed at From",
           "message": "Terminé à partir de"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LWZyb20.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Filtre sur la fin de la plage de dates et heures de la tâche en fonction de la date d'achèvement (inclusif). La valeur d'entrée est l'heure epoch en millisecondes."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LXRv.display_name": {
-          "source": "Completed At To",
+          "source": "Completed at To",
           "message": "Terminé jusqu'à"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LXRv.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "Filtre sur la fin de la plage de dates et heures de la tâche en fonction de la date de création (inclusif). La valeur d'entrée est l'heure epoch en millisecondes."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC10bw.display_name": {
-          "source": "Created At To",
+          "source": "Created at To",
           "message": "Créé jusqu'à"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC10bw.short_desc": {
@@ -2020,7 +2020,7 @@
           "message": "Filtre sur le début de la plage de dates et heures de la tâche en fonction de la date de création (inclusif). La valeur d'entrée est l'heure epoch en millisecondes."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC1mcm9t.display_name": {
-          "source": "Created At From",
+          "source": "Created at From",
           "message": "Créé à partir de"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC1mcm9t.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Filtre sur l'ID de l'article de blog de la tâche. Plusieurs ID peuvent être spécifiés. Remarque : les filtres de page et d'article de blog peuvent être utilisés conjointement."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YmxvZ3Bvc3QtaWQ.display_name": {
-          "source": "Blogpost Id",
+          "source": "Blogpost ID",
           "message": "ID de l'article de blog"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YmxvZ3Bvc3QtaWQ.short_desc": {
@@ -2096,7 +2096,7 @@
           "message": "Filtre sur le début de la plage de dates et heures de la tâche en fonction de la date d'échéance (inclusif). La valeur d'entrée est l'heure epoch en millisecondes."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LWZyb20.display_name": {
-          "source": "Due At From",
+          "source": "Due at From",
           "message": "Date d'échéance à partir de"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LWZyb20.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "Filtre sur la fin de la plage de dates et heures de la tâche en fonction de la date d'échéance (inclusif). La valeur d'entrée est l'heure epoch en millisecondes."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LXRv.display_name": {
-          "source": "Due At To",
+          "source": "Due at To",
           "message": "Date d'échéance jusqu'à"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LXRv.short_desc": {
@@ -2144,7 +2144,7 @@
           "message": "Filtre sur l'ID d'espace de la tâche. Plusieurs ID peuvent être spécifiés."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.c3BhY2UtaWQ.display_name": {
-          "source": "Space Id",
+          "source": "Space ID",
           "message": "ID d'espace"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.c3BhY2UtaWQ.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "Filtre sur l'ID de page de la tâche. Plusieurs ID peuvent être spécifiés. Remarque : les filtres de page et d'article de blog peuvent être utilisés conjointement."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.cGFnZS1pZA.display_name": {
-          "source": "Page Id",
+          "source": "Page ID",
           "message": "ID de page"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.cGFnZS1pZA.short_desc": {
@@ -2188,7 +2188,7 @@
           "message": "Filtre sur l'ID de tâche. Plusieurs ID peuvent être spécifiés."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.dGFzay1pZA.display_name": {
-          "source": "Task Id",
+          "source": "Task ID",
           "message": "ID de tâche"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.dGFzay1pZA.short_desc": {
@@ -2888,7 +2888,7 @@
           "message": "ID de compte du propriétaire de la page.\n\nCela permet de transférer la propriété de la page à un autre utilisateur."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.b3duZXJJZA.display_name": {
-          "source": "Owner Id",
+          "source": "Owner ID",
           "message": "ID du propriétaire"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.b3duZXJJZA.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "ID de l'article de blog dans lequel se trouve la tâche."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.display_name": {
-          "source": "Blog Post Id",
+          "source": "Blog Post ID",
           "message": "ID de l'article de blog"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.short_desc": {
@@ -3148,7 +3148,7 @@
           "message": "ID local de la tâche. Cet ID est local à la page ou à l'article de blog correspondant."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.bG9jYWxJZA.display_name": {
-          "source": "Local Id",
+          "source": "Local ID",
           "message": "ID local"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.bG9jYWxJZA.short_desc": {
@@ -3160,7 +3160,7 @@
           "message": "ID de l'espace dans lequel se trouve la tâche."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.c3BhY2VJZA.display_name": {
-          "source": "Space Id",
+          "source": "Space ID",
           "message": "ID d'espace"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.c3BhY2VJZA.short_desc": {
@@ -3192,7 +3192,7 @@
           "message": "ID de la page dans laquelle se trouve la tâche."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.cGFnZUlk.display_name": {
-          "source": "Page Id",
+          "source": "Page ID",
           "message": "ID de page"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.cGFnZUlk.short_desc": {

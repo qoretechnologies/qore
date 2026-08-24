@@ -1168,7 +1168,7 @@
           "message": "L'identifiant du ticket à marquer comme doublon canonique lorsque `state_reason` est `duplicate`. Le ticket doit exister et être accessible à l'utilisateur authentifié. Ignoré lorsque `state_reason` n'est pas `duplicate`."
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.display_name": {
-          "source": "Duplicate Issue Id",
+          "source": "Duplicate Issue ID",
           "message": "ID du ticket dupliqué"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.aXNzdWVfZmllbGRfdmFsdWVz.desc": {
@@ -2968,7 +2968,7 @@
           "message": "Indique si les branches sources doivent être supprimées lorsque les pull requests sont fusionnées"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch On Merge",
+          "source": "Delete Branch on Merge",
           "message": "Supprimer la branche lors de la fusion"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
@@ -3196,7 +3196,7 @@
           "message": "L'identifiant de l'équipe qui aura accès à ce dépôt. Valable uniquement lors de la création d'un dépôt dans une organisation."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.dGVhbV9pZA.display_name": {
-          "source": "Team Id",
+          "source": "Team ID",
           "message": "Identifiant de l'équipe"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.dGVhbV9pZA.short_desc": {
@@ -3284,7 +3284,7 @@
           "message": "Soit `true` pour autoriser la suppression automatique des branches sources lors de la fusion des pull requests, soit `false` pour empêcher la suppression automatique. **L'utilisateur authentifié doit être propriétaire de l'organisation pour définir cette propriété sur `true`.**"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch On Merge",
+          "source": "Delete Branch on Merge",
           "message": "Supprimer la branche lors de la fusion"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVzY3JpcHRpb24.desc": {
@@ -3500,7 +3500,7 @@
           "message": "L'identifiant de l'équipe qui aura accès à ce dépôt. Valable uniquement lors de la création d'un dépôt dans une organisation."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dGVhbV9pZA.display_name": {
-          "source": "Team Id",
+          "source": "Team ID",
           "message": "Identifiant de l'équipe"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dGVhbV9pZA.short_desc": {
@@ -3512,7 +3512,7 @@
           "message": "Soit `true` pour autoriser les commits de squash-merge à utiliser le titre de la pull request, soit `false` pour utiliser le message de commit. **Cette propriété est en cours d'abandon. Veuillez utiliser `squash_merge_commit_title` à la place."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
-          "source": "Use Squash Pr Title As Default",
+          "source": "Use Squash PR Title as Default",
           "message": "Utiliser par défaut le titre de la PR pour le squash"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
@@ -4928,7 +4928,7 @@
           "message": "Soit `true` pour autoriser la suppression automatique des branches de tête lors de la fusion des pull requests, soit `false` pour empêcher la suppression automatique."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch On Merge",
+          "source": "Delete Branch on Merge",
           "message": "Supprimer la branche lors de la fusion"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVzY3JpcHRpb24.desc": {
@@ -5076,7 +5076,7 @@
           "message": "Spécifiez les fonctionnalités de sécurité et d'analyse à activer ou désactiver pour le dépôt.\n\nPour utiliser ce paramètre, vous devez disposer des autorisations d'administrateur pour le dépôt ou être propriétaire ou responsable de la sécurité pour l'organisation propriétaire du dépôt. Pour plus d'informations, consultez \"[Managing security managers in your organization](https://docs.github.com/organizations/managing-peoples-access-to-your-organization-with-roles/managing-security-managers-in-your-organization)\".\n\nPar exemple, pour activer GitHub Advanced Security, utilisez ces données dans le corps de la requête `PATCH` :\n`{ \"security_and_analysis\": {\"advanced_security\": { \"status\": \"enabled\" } } }`.\n\nVous pouvez vérifier quelles fonctionnalités de sécurité et d'analyse sont actuellement activées à l'aide d'une requête `GET /repos/{owner}/{repo}`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.display_name": {
-          "source": "Security And Analysis",
+          "source": "Security and Analysis",
           "message": "Sécurité et analyse"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.allowed-value.c3RyaW5nOkNPTU1JVF9PUl9QUl9USVRMRQ.display_name": {
@@ -5172,7 +5172,7 @@
           "message": "Soit `true` pour autoriser les commits de squash-merge à utiliser le titre de la pull request, soit `false` pour utiliser le message de commit. **Cette propriété est en cours d'abandon. Veuillez utiliser `squash_merge_commit_title` à la place."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
-          "source": "Use Squash Pr Title As Default",
+          "source": "Use Squash PR Title as Default",
           "message": "Utiliser par défaut le titre de la PR pour le squash"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {

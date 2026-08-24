@@ -380,7 +380,7 @@
           "message": "Date limite pour le projet. Date et heure UTC au format ISO-8601."
         },
         "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZGVhZGxpbmVVdGM.display_name": {
-          "source": "Deadline Utc",
+          "source": "Deadline UTC",
           "message": "Date limite UTC"
         },
         "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZGVhZGxpbmVVdGM.short_desc": {
@@ -920,7 +920,7 @@
           "message": "Lorsque défini sur true, vous ne récupérerez que les factures créées par votre application"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.display_name": {
-          "source": "Created By My App",
+          "source": "Created by My App",
           "message": "Créé par mon application"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.short_desc": {

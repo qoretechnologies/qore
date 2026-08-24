@@ -124,7 +124,7 @@
           "message": "이 날짜에 삭제 대상으로 표시된 그룹 반환"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWFya2VkX2Zvcl9kZWxldGlvbl9vbg.display_name": {
-          "source": "Marked For Deletion On",
+          "source": "Marked for Deletion On",
           "message": "삭제 예정 날짜"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHM.option.bWFya2VkX2Zvcl9kZWxldGlvbl9vbg.short_desc": {
@@ -460,7 +460,7 @@
           "message": "연결된 SAML ID가 있는 멤버만 나열"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnM.option.d2l0aF9zYW1sX2lkZW50aXR5.display_name": {
-          "source": "With Saml Identity",
+          "source": "With SAML Identity",
           "message": "SAML ID 포함"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRHcm91cHNJZE1lbWJlcnM.option.d2l0aF9zYW1sX2lkZW50aXR5.short_desc": {
@@ -752,7 +752,7 @@
           "message": "이슈와 연결된 에픽의 ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.ZXBpY19pZA.display_name": {
-          "source": "Epic Id",
+          "source": "Epic ID",
           "message": "에픽 ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.ZXBpY19pZA.short_desc": {
@@ -856,7 +856,7 @@
           "message": "지정된 ID를 가진 이터레이션에 할당된 이슈를 반환합니다"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.aXRlcmF0aW9uX2lk.display_name": {
-          "source": "Iteration Id",
+          "source": "Iteration ID",
           "message": "이터레이션 ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.aXRlcmF0aW9uX2lk.short_desc": {
@@ -968,7 +968,7 @@
           "message": "지정된 타임박스 값(\"Any\", \"None\", \"Upcoming\" 또는 \"Started\")을 가진 마일스톤에 할당된 이슈를 반환합니다."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bWlsZXN0b25lX2lk.display_name": {
-          "source": "Milestone Id",
+          "source": "Milestone ID",
           "message": "마일스톤 ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRJc3N1ZXM.option.bXlfcmVhY3Rpb25fZW1vamk.desc": {
@@ -1632,7 +1632,7 @@
           "message": "이슈와 연결된 에픽의 ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.ZXBpY19pZA.display_name": {
-          "source": "Epic Id",
+          "source": "Epic ID",
           "message": "에픽 ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.ZXBpY19pZA.short_desc": {
@@ -1748,7 +1748,7 @@
           "message": "지정된 ID를 가진 이터레이션에 할당된 이슈를 반환합니다"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.aXRlcmF0aW9uX2lk.display_name": {
-          "source": "Iteration Id",
+          "source": "Iteration ID",
           "message": "이터레이션 ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkSXNzdWVz.option.aXRlcmF0aW9uX2lk.short_desc": {
@@ -2388,7 +2388,7 @@
           "message": "연결된 SAML ID가 있는 멤버만 나열"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVycw.option.d2l0aF9zYW1sX2lkZW50aXR5.display_name": {
-          "source": "With Saml Identity",
+          "source": "With SAML Identity",
           "message": "SAML ID 포함"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVtYmVycw.option.d2l0aF9zYW1sX2lkZW50aXR5.short_desc": {
@@ -2436,7 +2436,7 @@
           "message": "`true`인 경우 리베이스 작업이 진행 중인지 여부가 응답에 포함됩니다."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.aW5jbHVkZV9yZWJhc2VfaW5fcHJvZ3Jlc3M.display_name": {
-          "source": "Include Rebase In Progress",
+          "source": "Include Rebase in Progress",
           "message": "진행 중인 리베이스 포함"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.aW5jbHVkZV9yZWJhc2VfaW5fcHJvZ3Jlc3M.short_desc": {
@@ -2472,7 +2472,7 @@
           "message": "`true`인 경우 응답에 제목과 설명에 대해 렌더링된 HTML이 포함됩니다."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.cmVuZGVyX2h0bWw.display_name": {
-          "source": "Render Html",
+          "source": "Render HTML",
           "message": "HTML 렌더링"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.cmVuZGVyX2h0bWw.short_desc": {
@@ -2520,7 +2520,7 @@
           "message": "지정된 ID를 가진 사용자가 승인한 병합 요청을 반환합니다"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfaWRz.display_name": {
-          "source": "Approved By Ids",
+          "source": "Approved by Ids",
           "message": "Approved By Ids"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfdXNlcm5hbWVz.desc": {
@@ -2528,7 +2528,7 @@
           "message": "지정된 사용자 이름을 가진 사용자가 승인한 병합 요청을\n            반환합니다"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZWRfYnlfdXNlcm5hbWVz.display_name": {
-          "source": "Approved By Usernames",
+          "source": "Approved by Usernames",
           "message": "Approved By Usernames"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0cw.option.YXBwcm92ZXJfaWRz.desc": {
@@ -3836,7 +3836,7 @@
           "message": "`true`인 경우 응답에 제목과 설명에 대해 렌더링된 HTML이 포함됩니다."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.option.cmVuZGVyX2h0bWw.display_name": {
-          "source": "Render Html",
+          "source": "Render HTML",
           "message": "HTML 렌더링"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0c0lkV2lraXNTbHVn.option.cmVuZGVyX2h0bWw.short_desc": {
@@ -4124,7 +4124,7 @@
           "message": "지정된 ID보다 큰 ID를 가진 프로젝트로 결과 제한"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.aWRfYWZ0ZXI.display_name": {
-          "source": "Id After",
+          "source": "ID After",
           "message": "이후 ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.aWRfYWZ0ZXI.short_desc": {
@@ -4136,7 +4136,7 @@
           "message": "지정된 ID보다 작은 ID를 가진 프로젝트로 결과 제한"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.aWRfYmVmb3Jl.display_name": {
-          "source": "Id Before",
+          "source": "ID Before",
           "message": "이전 ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.aWRfYmVmb3Jl.short_desc": {
@@ -4244,7 +4244,7 @@
           "message": "이 날짜에 삭제 대상으로 표시된 그룹 반환"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWFya2VkX2Zvcl9kZWxldGlvbl9vbg.display_name": {
-          "source": "Marked For Deletion On",
+          "source": "Marked for Deletion On",
           "message": "삭제 예정 날짜"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRQcm9qZWN0cw.option.bWFya2VkX2Zvcl9kZWxldGlvbl9vbg.short_desc": {
@@ -4580,7 +4580,7 @@
           "message": "토픽의 조직 ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRUb3BpY3M.option.b3JnYW5pemF0aW9uX2lk.display_name": {
-          "source": "Organization Id",
+          "source": "Organization ID",
           "message": "조직 ID"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRUb3BpY3M.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
@@ -4884,7 +4884,7 @@
           "message": "LDAP 사용자를 건너뜁니다."
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRVc2Vycw.option.c2tpcF9sZGFw.display_name": {
-          "source": "Skip Ldap",
+          "source": "Skip LDAP",
           "message": "LDAP 건너뛰기"
         },
         "app.R2l0bGFi.action.Z2V0QXBpVjRVc2Vycw.option.c2tpcF9sZGFw.short_desc": {
@@ -5948,7 +5948,7 @@
           "message": "이 그룹에 고객 관계 관리(CRM) 활성화"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.Y3JtX2VuYWJsZWQ.display_name": {
-          "source": "Crm Enabled",
+          "source": "CRM Enabled",
           "message": "CRM 활성화됨"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.Y3JtX2VuYWJsZWQ.short_desc": {
@@ -5972,7 +5972,7 @@
           "message": "AI 관련 설정"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.display_name": {
-          "source": "Ai Settings Attributes",
+          "source": "AI Settings Attributes",
           "message": "AI 설정 속성"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.short_desc": {
@@ -6244,7 +6244,7 @@
           "message": "그룹의 조직 ID"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.b3JnYW5pemF0aW9uX2lk.display_name": {
-          "source": "Organization Id",
+          "source": "Organization ID",
           "message": "조직 ID"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.b3JnYW5pemF0aW9uX2lk.short_desc": {
@@ -6268,7 +6268,7 @@
           "message": "유효한 액세스 수준"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.bGRhcF9hY2Nlc3M.display_name": {
-          "source": "Ldap Access",
+          "source": "LDAP Access",
           "message": "LDAP 액세스"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.bGRhcF9hY2Nlc3M.short_desc": {
@@ -6280,7 +6280,7 @@
           "message": "LDAP 일반 이름"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.bGRhcF9jbg.display_name": {
-          "source": "Ldap Cn",
+          "source": "LDAP CN",
           "message": "LDAP CN"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.bGRhcF9jbg.short_desc": {
@@ -6352,7 +6352,7 @@
           "message": "이 그룹 내에서 프로젝트를 다른 그룹과 공유하지 못하도록 방지"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.c2hhcmVfd2l0aF9ncm91cF9sb2Nr.display_name": {
-          "source": "Share With Group Lock",
+          "source": "Share with Group Lock",
           "message": "그룹 공유 잠금"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.c2hhcmVfd2l0aF9ncm91cF9sb2Nr.short_desc": {
@@ -6376,7 +6376,7 @@
           "message": "병합 요청 알림 이메일에 코드 diff 미리보기 포함"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.display_name": {
-          "source": "Show Diff Preview In Email",
+          "source": "Show Diff Preview in Email",
           "message": "이메일에 Diff 미리보기 표시"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.short_desc": {
@@ -6536,7 +6536,7 @@
           "message": "세션 가용성에 대한 도구 승인입니다. `default_on`, `default_off` 또는 `never_on` 중 하나입니다."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.dG9vbF9hcHByb3ZhbF9mb3Jfc2Vzc2lvbl9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "Tool Approval For Session Availability",
+          "source": "Tool Approval for Session Availability",
           "message": "세션 가용성에 대한 도구 승인"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBz.option.dG9vbF9hcHByb3ZhbF9mb3Jfc2Vzc2lvbl9hdmFpbGFiaWxpdHk.short_desc": {
@@ -6736,7 +6736,7 @@
           "message": "변수의 마스킹 및 숨김 여부"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRWYXJpYWJsZXM.option.bWFza2VkX2FuZF9oaWRkZW4.display_name": {
-          "source": "Masked And Hidden",
+          "source": "Masked and Hidden",
           "message": "마스킹 및 숨김"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0R3JvdXBzSWRWYXJpYWJsZXM.option.bWFza2VkX2FuZF9oaWRkZW4.short_desc": {
@@ -6860,7 +6860,7 @@
           "message": "CI 구성 파일 경로입니다. 기본값은 `.gitlab-ci.yml`입니다."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Y2lfY29uZmlnX3BhdGg.display_name": {
-          "source": "Ci Config Path",
+          "source": "CI Config Path",
           "message": "CI 구성 경로"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Y2lfY29uZmlnX3BhdGg.short_desc": {
@@ -6908,7 +6908,7 @@
           "message": "파이프라인을 건너뛴 경우 병합 허용"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.display_name": {
-          "source": "Allow Merge On Skipped Pipeline",
+          "source": "Allow Merge on Skipped Pipeline",
           "message": "건너뛴 파이프라인에서 병합 허용"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.short_desc": {
@@ -7092,7 +7092,7 @@
           "message": "템플릿 소스 역할을 하는 그룹 ID"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Z3JvdXBfd2l0aF9wcm9qZWN0X3RlbXBsYXRlc19pZA.display_name": {
-          "source": "Group With Project Templates Id",
+          "source": "Group with Project Templates ID",
           "message": "프로젝트 템플릿이 있는 그룹 ID"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.Z3JvdXBfd2l0aF9wcm9qZWN0X3RlbXBsYXRlc19pZA.short_desc": {
@@ -7236,7 +7236,7 @@
           "message": "업로드 시 인증 확인 적용"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.ZW5mb3JjZV9hdXRoX2NoZWNrc19vbl91cGxvYWRz.display_name": {
-          "source": "Enforce Auth Checks On Uploads",
+          "source": "Enforce Auth Checks on Uploads",
           "message": "업로드 시 인증 확인 적용"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.ZW5mb3JjZV9hdXRoX2NoZWNrc19vbl91cGxvYWRz.short_desc": {
@@ -7308,7 +7308,7 @@
           "message": "프로젝트를 가져올 URL"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aW1wb3J0X3VybA.display_name": {
-          "source": "Import Url",
+          "source": "Import URL",
           "message": "가져오기 URL"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aW1wb3J0X3VybA.short_desc": {
@@ -7344,7 +7344,7 @@
           "message": "README.md로 프로젝트 초기화"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aW5pdGlhbGl6ZV93aXRoX3JlYWRtZQ.display_name": {
-          "source": "Initialize With Readme",
+          "source": "Initialize with Readme",
           "message": "README로 초기화"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.aXNzdWVfYnJhbmNoX3RlbXBsYXRl.desc": {
@@ -7412,7 +7412,7 @@
           "message": "모든 스레드가 해결된 경우에만 병합 허용"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.display_name": {
-          "source": "Only Allow Merge If All Discussions Are Resolved",
+          "source": "Only Allow Merge if All Discussions Are Resolved",
           "message": "모든 토론이 해결된 경우에만 병합 허용"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.short_desc": {
@@ -7424,7 +7424,7 @@
           "message": "모든 상태 검사를 통과하지 않은 경우 병합 요청 병합 차단"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfc3RhdHVzX2NoZWNrc19wYXNzZWQ.display_name": {
-          "source": "Only Allow Merge If All Status Checks Passed",
+          "source": "Only Allow Merge if All Status Checks Passed",
           "message": "모든 상태 검사를 통과한 경우에만 병합 허용"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfc3RhdHVzX2NoZWNrc19wYXNzZWQ.short_desc": {
@@ -7436,7 +7436,7 @@
           "message": "빌드가 성공한 경우에만 병합 허용"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.display_name": {
-          "source": "Only Allow Merge If Pipeline Succeeds",
+          "source": "Only Allow Merge if Pipeline Succeeds",
           "message": "파이프라인이 성공한 경우에만 병합 허용"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.short_desc": {
@@ -7748,7 +7748,7 @@
           "message": "보안 및 규정 준수 접근 수준입니다. `disabled`, `private` 또는 `enabled` 중 하나입니다."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c2VjdXJpdHlfYW5kX2NvbXBsaWFuY2VfYWNjZXNzX2xldmVs.display_name": {
-          "source": "Security And Compliance Access Level",
+          "source": "Security and Compliance Access Level",
           "message": "보안 및 규정 준수 접근 수준"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c2VjdXJpdHlfYW5kX2NvbXBsaWFuY2VfYWNjZXNzX2xldmVs.short_desc": {
@@ -7796,7 +7796,7 @@
           "message": "병합 요청 알림 이메일에 코드 diff 미리보기 포함"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.display_name": {
-          "source": "Show Diff Preview In Email",
+          "source": "Show Diff Preview in Email",
           "message": "이메일에 Diff 미리보기 표시"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.short_desc": {
@@ -8244,7 +8244,7 @@
           "message": "프로젝트를 생성할 템플릿의 프로젝트 ID"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.dGVtcGxhdGVfcHJvamVjdF9pZA.display_name": {
-          "source": "Template Project Id",
+          "source": "Template Project ID",
           "message": "템플릿 프로젝트 ID"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHM.option.dGVtcGxhdGVfcHJvamVjdF9pZA.short_desc": {
@@ -8408,7 +8408,7 @@
           "message": "[사용 중단됨] allow_collaboration 참조"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.option.YWxsb3dfbWFpbnRhaW5lcl90b19wdXNo.display_name": {
-          "source": "Allow Maintainer To Push",
+          "source": "Allow Maintainer to Push",
           "message": "메인테이너 푸시 허용"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZE1lcmdlUmVxdWVzdHM.option.YWxsb3dfbWFpbnRhaW5lcl90b19wdXNo.short_desc": {
@@ -8924,7 +8924,7 @@
           "message": "해결할 토론의 ID이며, `merge_request_to_resolve_discussions_of`도 함께 전달해야 합니다."
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl90b19yZXNvbHZl.display_name": {
-          "source": "Discussion To Resolve",
+          "source": "Discussion to Resolve",
           "message": "해결할 토론"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZGlzY3Vzc2lvbl9sb2NrZWQ.desc": {
@@ -8956,7 +8956,7 @@
           "message": "이슈와 연결할 에픽의 ID"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZXBpY19pZA.display_name": {
-          "source": "Epic Id",
+          "source": "Epic ID",
           "message": "에픽 ID"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.ZXBpY19pZA.short_desc": {
@@ -9052,7 +9052,7 @@
           "message": "토론을 해결할 병합 요청의 IID"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.bWVyZ2VfcmVxdWVzdF90b19yZXNvbHZlX2Rpc2N1c3Npb25zX29m.display_name": {
-          "source": "Merge Request To Resolve Discussions Of",
+          "source": "Merge Request to Resolve Discussions Of",
           "message": "토론을 해결할 병합 요청"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZElzc3Vlcw.option.bWVyZ2VfcmVxdWVzdF90b19yZXNvbHZlX2Rpc2N1c3Npb25zX29m.short_desc": {
@@ -9524,7 +9524,7 @@
           "message": "변수의 마스킹 및 숨김 여부"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFZhcmlhYmxlcw.option.bWFza2VkX2FuZF9oaWRkZW4.display_name": {
-          "source": "Masked And Hidden",
+          "source": "Masked and Hidden",
           "message": "마스킹 및 숨김"
         },
         "app.R2l0bGFi.action.cG9zdEFwaVY0UHJvamVjdHNJZFZhcmlhYmxlcw.option.bWFza2VkX2FuZF9oaWRkZW4.short_desc": {
@@ -9704,7 +9704,7 @@
           "message": "이 그룹에 고객 관계 관리(CRM) 활성화"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.Y3JtX2VuYWJsZWQ.display_name": {
-          "source": "Crm Enabled",
+          "source": "CRM Enabled",
           "message": "CRM 활성화됨"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.Y3JtX2VuYWJsZWQ.short_desc": {
@@ -9728,7 +9728,7 @@
           "message": "그룹에 대해 AI 감사 이벤트가 저장되는지 여부를 나타냅니다."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfYXVkaXRfZXZlbnRzX3N0b3JhZ2VfZW5hYmxlZA.display_name": {
-          "source": "Ai Audit Events Storage Enabled",
+          "source": "AI Audit Events Storage Enabled",
           "message": "AI 감사 이벤트 저장 사용 여부"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfYXVkaXRfZXZlbnRzX3N0b3JhZ2VfZW5hYmxlZA.short_desc": {
@@ -9740,7 +9740,7 @@
           "message": "AI 관련 설정"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.display_name": {
-          "source": "Ai Settings Attributes",
+          "source": "AI Settings Attributes",
           "message": "AI 설정 속성"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWlfc2V0dGluZ3NfYXR0cmlidXRlcw.short_desc": {
@@ -9752,7 +9752,7 @@
           "message": "파이프라인을 건너뛴 경우 병합 허용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.display_name": {
-          "source": "Allow Merge On Skipped Pipeline",
+          "source": "Allow Merge on Skipped Pipeline",
           "message": "건너뛴 파이프라인에서 병합 허용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.short_desc": {
@@ -9788,7 +9788,7 @@
           "message": "지정된 기간 동안 고유 프로젝트 다운로드 최대 수를 초과할 경우 그룹에서 사용자를 차단합니다."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YXV0b19iYW5fdXNlcl9vbl9leGNlc3NpdmVfcHJvamVjdHNfZG93bmxvYWQ.display_name": {
-          "source": "Auto Ban User On Excessive Projects Download",
+          "source": "Auto Ban User on Excessive Projects Download",
           "message": "과도한 프로젝트 다운로드 시 사용자 자동 차단"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YXV0b19kZXZvcHNfZW5hYmxlZA.desc": {
@@ -9832,7 +9832,7 @@
           "message": "프로젝트 생성을 위한 기본 제공 프로젝트 템플릿 사용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YnVpbHRfaW5fcHJvamVjdF90ZW1wbGF0ZXNfZW5hYmxlZA.display_name": {
-          "source": "Built In Project Templates Enabled",
+          "source": "Built in Project Templates Enabled",
           "message": "기본 제공 프로젝트 템플릿 사용 여부"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.YnVpbHRfaW5fcHJvamVjdF90ZW1wbGF0ZXNfZW5hYmxlZA.short_desc": {
@@ -10032,7 +10032,7 @@
           "message": "이 그룹의 Duo Code Review 맞춤형 지침 템플릿으로 사용할 프로젝트의 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZHVvX3RlbXBsYXRlX3Byb2plY3RfaWQ.display_name": {
-          "source": "Duo Template Project Id",
+          "source": "Duo Template Project ID",
           "message": "Duo 템플릿 프로젝트 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZW1haWxzX2Rpc2FibGVk.desc": {
@@ -10132,7 +10132,7 @@
           "message": "이 그룹의 맞춤형 템플릿에 사용할 프로젝트의 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZmlsZV90ZW1wbGF0ZV9wcm9qZWN0X2lk.display_name": {
-          "source": "File Template Project Id",
+          "source": "File Template Project ID",
           "message": "파일 템플릿 프로젝트 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.ZmlsZV90ZW1wbGF0ZV9wcm9qZWN0X2lk.short_desc": {
@@ -10156,7 +10156,7 @@
           "message": "그룹에 대해 제한해야 하는 IP 주소 목록"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.aXBfcmVzdHJpY3Rpb25fcmFuZ2Vz.display_name": {
-          "source": "Ip Restriction Ranges",
+          "source": "IP Restriction Ranges",
           "message": "IP 제한 범위"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.aXBfcmVzdHJpY3Rpb25fcmFuZ2Vz.short_desc": {
@@ -10168,7 +10168,7 @@
           "message": "모든 스레드가 해결된 경우에만 병합 허용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.display_name": {
-          "source": "Only Allow Merge If All Discussions Are Resolved",
+          "source": "Only Allow Merge if All Discussions Are Resolved",
           "message": "모든 토론이 해결된 경우에만 병합 허용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.short_desc": {
@@ -10180,7 +10180,7 @@
           "message": "빌드가 성공한 경우에만 병합 허용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.display_name": {
-          "source": "Only Allow Merge If Pipeline Succeeds",
+          "source": "Only Allow Merge if Pipeline Succeeds",
           "message": "파이프라인이 성공한 경우에만 병합 허용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.short_desc": {
@@ -10192,7 +10192,7 @@
           "message": "모든 하위 그룹 및 프로젝트에 대해 AI 감사 이벤트 저장이 강제 적용되는지 여부를 나타냅니다."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19haV9hdWRpdF9ldmVudHNfc3RvcmFnZV9lbmFibGVk.display_name": {
-          "source": "Lock Ai Audit Events Storage Enabled",
+          "source": "Lock AI Audit Events Storage Enabled",
           "message": "AI 감사 이벤트 저장 잠금 사용 여부"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19idWlsdF9pbl9wcm9qZWN0X3RlbXBsYXRlc19lbmFibGVk.desc": {
@@ -10200,7 +10200,7 @@
           "message": "모든 하위 그룹에 기본 제공 프로젝트 템플릿 설정을 강제 적용합니다."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19idWlsdF9pbl9wcm9qZWN0X3RlbXBsYXRlc19lbmFibGVk.display_name": {
-          "source": "Lock Built In Project Templates Enabled",
+          "source": "Lock Built in Project Templates Enabled",
           "message": "기본 제공 프로젝트 템플릿 잠금 활성화됨"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bG9ja19idWlsdF9pbl9wcm9qZWN0X3RlbXBsYXRlc19lbmFibGVk.short_desc": {
@@ -10244,7 +10244,7 @@
           "message": "유효한 액세스 수준"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bGRhcF9hY2Nlc3M.display_name": {
-          "source": "Ldap Access",
+          "source": "LDAP Access",
           "message": "LDAP 액세스"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bGRhcF9hY2Nlc3M.short_desc": {
@@ -10256,7 +10256,7 @@
           "message": "LDAP 일반 이름"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bGRhcF9jbg.display_name": {
-          "source": "Ldap Cn",
+          "source": "LDAP CN",
           "message": "LDAP CN"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.bGRhcF9jbg.short_desc": {
@@ -10364,7 +10364,7 @@
           "message": "이 그룹 내에서 프로젝트를 다른 그룹과 공유하지 못하도록 방지"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c2hhcmVfd2l0aF9ncm91cF9sb2Nr.display_name": {
-          "source": "Share With Group Lock",
+          "source": "Share with Group Lock",
           "message": "그룹 공유 잠금"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c2hhcmVfd2l0aF9ncm91cF9sb2Nr.short_desc": {
@@ -10412,7 +10412,7 @@
           "message": "병합 요청 알림 이메일에 코드 diff 미리보기 포함"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.display_name": {
-          "source": "Show Diff Preview In Email",
+          "source": "Show Diff Preview in Email",
           "message": "이메일에 Diff 미리보기 표시"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.short_desc": {
@@ -10424,7 +10424,7 @@
           "message": "단계별 인증에 필요한 OAuth 공급자입니다. 비활성화하려면 빈 문자열을 전달하세요."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c3RlcF91cF9hdXRoX3JlcXVpcmVkX29hdXRoX3Byb3ZpZGVy.display_name": {
-          "source": "Step Up Auth Required Oauth Provider",
+          "source": "Step Up Auth Required OAuth Provider",
           "message": "단계별 인증 필수 OAuth 공급자"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.c3RlcF91cF9hdXRoX3JlcXVpcmVkX29hdXRoX3Byb3ZpZGVy.short_desc": {
@@ -10604,7 +10604,7 @@
           "message": "세션 가용성에 대한 도구 승인입니다. `default_on`, `default_off` 또는 `never_on` 중 하나입니다."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dG9vbF9hcHByb3ZhbF9mb3Jfc2Vzc2lvbl9hdmFpbGFiaWxpdHk.display_name": {
-          "source": "Tool Approval For Session Availability",
+          "source": "Tool Approval for Session Availability",
           "message": "세션 가용성에 대한 도구 승인"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dG9vbF9hcHByb3ZhbF9mb3Jfc2Vzc2lvbl9hdmFpbGFiaWxpdHk.short_desc": {
@@ -10660,7 +10660,7 @@
           "message": "차단되기 전에 사용자가 최대 수량의 프로젝트를 다운로드할 수 있는 기간입니다."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dW5pcXVlX3Byb2plY3RfZG93bmxvYWRfbGltaXRfaW50ZXJ2YWxfaW5fc2Vjb25kcw.display_name": {
-          "source": "Unique Project Download Limit Interval In Seconds",
+          "source": "Unique Project Download Limit Interval in Seconds",
           "message": "고유 프로젝트 다운로드 제한 간격(초)"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZA.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmludGVybmFs.display_name": {
@@ -10740,7 +10740,7 @@
           "message": "업데이트할 멤버 역할의 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.option.bWVtYmVyX3JvbGVfaWQ.display_name": {
-          "source": "Member Role Id",
+          "source": "Member Role ID",
           "message": "멤버 역할 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRHcm91cHNJZE1lbWJlcnNVc2VySWQ.option.bWVtYmVyX3JvbGVfaWQ.short_desc": {
@@ -10948,7 +10948,7 @@
           "message": "CI 구성 파일 경로입니다. 기본값은 `.gitlab-ci.yml`입니다."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfY29uZmlnX3BhdGg.display_name": {
-          "source": "Ci Config Path",
+          "source": "CI Config Path",
           "message": "CI 구성 경로"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfY29uZmlnX3BhdGg.short_desc": {
@@ -10960,7 +10960,7 @@
           "message": "포크 병합 요청 파이프라인이 상위 프로젝트에서 실행되도록 허용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfYWxsb3dfZm9ya19waXBlbGluZXNfdG9fcnVuX2luX3BhcmVudF9wcm9qZWN0.display_name": {
-          "source": "Ci Allow Fork Pipelines To Run In Parent Project",
+          "source": "CI Allow Fork Pipelines to Run in Parent Project",
           "message": "CI 포크 파이프라인의 상위 프로젝트 실행 허용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfYWxsb3dfZm9ya19waXBlbGluZXNfdG9fcnVuX2luX3BhcmVudF9wcm9qZWN0.short_desc": {
@@ -10972,7 +10972,7 @@
           "message": "얕은 복제를 위한 기본 리비전 수"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGVmYXVsdF9naXRfZGVwdGg.display_name": {
-          "source": "Ci Default Git Depth",
+          "source": "CI Default Git Depth",
           "message": "CI 기본 Git 깊이"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGVmYXVsdF9naXRfZGVwdGg.short_desc": {
@@ -10984,7 +10984,7 @@
           "message": "설정된 시간보다 오래된 파이프라인이 삭제됩니다"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGVsZXRlX3BpcGVsaW5lc19pbl9zZWNvbmRz.display_name": {
-          "source": "Ci Delete Pipelines In Seconds",
+          "source": "CI Delete Pipelines in Seconds",
           "message": "CI 파이프라인 삭제 시간(초)"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGVsZXRlX3BpcGVsaW5lc19pbl9zZWNvbmRz.short_desc": {
@@ -10996,7 +10996,7 @@
           "message": "파이프라인을 수동으로 실행한 후 파이프라인 세부 정보 페이지에 모든 수동 정의 변수 표시"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZGlzcGxheV9waXBlbGluZV92YXJpYWJsZXM.display_name": {
-          "source": "Ci Display Pipeline Variables",
+          "source": "CI Display Pipeline Variables",
           "message": "CI 파이프라인 변수 표시"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X2VuYWJsZWQ.desc": {
@@ -11004,7 +11004,7 @@
           "message": "아직 대기 중인 이전 배포 작업 방지"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X2VuYWJsZWQ.display_name": {
-          "source": "Ci Forward Deployment Enabled",
+          "source": "CI Forward Deployment Enabled",
           "message": "CI 포워드 배포 활성화됨"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X2VuYWJsZWQ.short_desc": {
@@ -11016,7 +11016,7 @@
           "message": "롤백 배포에 대한 작업 재시도 허용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X3JvbGxiYWNrX2FsbG93ZWQ.display_name": {
-          "source": "Ci Forward Deployment Rollback Allowed",
+          "source": "CI Forward Deployment Rollback Allowed",
           "message": "CI 포워드 배포 롤백 허용됨"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfZm9yd2FyZF9kZXBsb3ltZW50X3JvbGxiYWNrX2FsbG93ZWQ.short_desc": {
@@ -11028,7 +11028,7 @@
           "message": "ID 토큰의 sub 클레임을 구성하는 데 사용될 클레임"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfaWRfdG9rZW5fc3ViX2NsYWltX2NvbXBvbmVudHM.display_name": {
-          "source": "Ci Id Token Sub Claim Components",
+          "source": "CI ID Token Sub Claim Components",
           "message": "CI ID 토큰 Sub 클레임 구성 요소"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfaWRfdG9rZW5fc3ViX2NsYWltX2NvbXBvbmVudHM.short_desc": {
@@ -11040,7 +11040,7 @@
           "message": "브랜치 보호에 따라 분리된 캐시를 활성화하거나 비활성화합니다."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfc2VwYXJhdGVkX2NhY2hlcw.display_name": {
-          "source": "Ci Separated Caches",
+          "source": "CI Separated Caches",
           "message": "CI 분리된 캐시"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfc2VwYXJhdGVkX2NhY2hlcw.short_desc": {
@@ -11068,7 +11068,7 @@
           "message": "파이프라인을 트리거할 때 CI/CD 변수를 재정의하는 권한을 최소 설정된 역할 이상의 사용자에게만 제한합니다."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcGlwZWxpbmVfdmFyaWFibGVzX21pbmltdW1fb3ZlcnJpZGVfcm9sZQ.display_name": {
-          "source": "Ci Pipeline Variables Minimum Override Role",
+          "source": "CI Pipeline Variables Minimum Override Role",
           "message": "CI 파이프라인 변수 최소 재정의 역할"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.desc": {
@@ -11076,7 +11076,7 @@
           "message": "이 프로젝트에서 생성된 CI/CD 작업 토큰으로 인증하여 이 프로젝트의 저장소에 푸시할 수 있도록 허용합니다."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcHVzaF9yZXBvc2l0b3J5X2Zvcl9qb2JfdG9rZW5fYWxsb3dlZA.display_name": {
-          "source": "Ci Push Repository For Job Token Allowed",
+          "source": "CI Push Repository for Job Token Allowed",
           "message": "작업 토큰에 대한 CI 저장소 푸시 허용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcmVzdHJpY3RfcGlwZWxpbmVfY2FuY2VsbGF0aW9uX3JvbGU.desc": {
@@ -11084,7 +11084,7 @@
           "message": "파이프라인 및 작업을 취소할 수 있는 역할입니다."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcmVzdHJpY3RfcGlwZWxpbmVfY2FuY2VsbGF0aW9uX3JvbGU.display_name": {
-          "source": "Ci Restrict Pipeline Cancellation Role",
+          "source": "CI Restrict Pipeline Cancellation Role",
           "message": "CI 파이프라인 취소 제한 역할"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.Y2lfcmVzdHJpY3RfcGlwZWxpbmVfY2FuY2VsbGF0aW9uX3JvbGU.short_desc": {
@@ -11132,7 +11132,7 @@
           "message": "파이프라인을 건너뛴 경우 병합 허용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.display_name": {
-          "source": "Allow Merge On Skipped Pipeline",
+          "source": "Allow Merge on Skipped Pipeline",
           "message": "건너뛴 파이프라인에서 병합 허용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.YWxsb3dfbWVyZ2Vfb25fc2tpcHBlZF9waXBlbGluZQ.short_desc": {
@@ -11460,7 +11460,7 @@
           "message": "업로드 시 인증 확인 적용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.ZW5mb3JjZV9hdXRoX2NoZWNrc19vbl91cGxvYWRz.display_name": {
-          "source": "Enforce Auth Checks On Uploads",
+          "source": "Enforce Auth Checks on Uploads",
           "message": "업로드 시 인증 확인 적용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.ZW5mb3JjZV9hdXRoX2NoZWNrc19vbl91cGxvYWRz.short_desc": {
@@ -11556,7 +11556,7 @@
           "message": "프로젝트를 가져올 URL"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.aW1wb3J0X3VybA.display_name": {
-          "source": "Import Url",
+          "source": "Import URL",
           "message": "가져오기 URL"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.aW1wb3J0X3VybA.short_desc": {
@@ -11676,7 +11676,7 @@
           "message": "모든 스레드가 해결된 경우에만 병합 허용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.display_name": {
-          "source": "Only Allow Merge If All Discussions Are Resolved",
+          "source": "Only Allow Merge if All Discussions Are Resolved",
           "message": "모든 토론이 해결된 경우에만 병합 허용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfZGlzY3Vzc2lvbnNfYXJlX3Jlc29sdmVk.short_desc": {
@@ -11688,7 +11688,7 @@
           "message": "모든 상태 검사를 통과하지 않은 경우 병합 요청 병합 차단"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfc3RhdHVzX2NoZWNrc19wYXNzZWQ.display_name": {
-          "source": "Only Allow Merge If All Status Checks Passed",
+          "source": "Only Allow Merge if All Status Checks Passed",
           "message": "모든 상태 검사를 통과한 경우에만 병합 허용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9hbGxfc3RhdHVzX2NoZWNrc19wYXNzZWQ.short_desc": {
@@ -11700,7 +11700,7 @@
           "message": "빌드가 성공한 경우에만 병합 허용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.display_name": {
-          "source": "Only Allow Merge If Pipeline Succeeds",
+          "source": "Only Allow Merge if Pipeline Succeeds",
           "message": "파이프라인이 성공한 경우에만 병합 허용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.b25seV9hbGxvd19tZXJnZV9pZl9waXBlbGluZV9zdWNjZWVkcw.short_desc": {
@@ -11820,7 +11820,7 @@
           "message": "이 프로젝트의 머지 트레인당 최대 병렬 파이프라인 수입니다."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWF4X3BpcGVsaW5lc19wZXJfbWVyZ2VfdHJhaW4.display_name": {
-          "source": "Max Pipelines Per Merge Train",
+          "source": "Max Pipelines per Merge Train",
           "message": "머지 트레인당 최대 파이프라인 수"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWF4X3BpcGVsaW5lc19wZXJfbWVyZ2VfdHJhaW4.short_desc": {
@@ -12044,7 +12044,7 @@
           "message": "[더 이상 사용되지 않음] 풀 미러 이벤트와 관련된 모든 활동을 담당하는 사용자입니다. 관리자만 설정할 수 있습니다"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bWlycm9yX3VzZXJfaWQ.display_name": {
-          "source": "Mirror User Id",
+          "source": "Mirror User ID",
           "message": "미러 사용자 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.bXJfZGVmYXVsdF90YXJnZXRfc2VsZg.desc": {
@@ -12136,7 +12136,7 @@
           "message": "보안 및 규정 준수 접근 수준입니다. `disabled`, `private` 또는 `enabled` 중 하나입니다."
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2VjdXJpdHlfYW5kX2NvbXBsaWFuY2VfYWNjZXNzX2xldmVs.display_name": {
-          "source": "Security And Compliance Access Level",
+          "source": "Security and Compliance Access Level",
           "message": "보안 및 규정 준수 접근 수준"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2VjdXJpdHlfYW5kX2NvbXBsaWFuY2VfYWNjZXNzX2xldmVs.short_desc": {
@@ -12192,7 +12192,7 @@
           "message": "병합 요청 알림 이메일에 코드 diff 미리보기 포함"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.display_name": {
-          "source": "Show Diff Preview In Email",
+          "source": "Show Diff Preview in Email",
           "message": "이메일에 Diff 미리보기 표시"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lk.option.c2hvd19kaWZmX3ByZXZpZXdfaW5fZW1haWw.short_desc": {
@@ -12852,7 +12852,7 @@
           "message": "이슈와 연결할 에픽의 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.option.ZXBpY19pZA.display_name": {
-          "source": "Epic Id",
+          "source": "Epic ID",
           "message": "에픽 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkSXNzdWVzSXNzdWVJaWQ.option.ZXBpY19pZA.short_desc": {
@@ -13132,7 +13132,7 @@
           "message": "업데이트할 멤버 역할의 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.option.bWVtYmVyX3JvbGVfaWQ.display_name": {
-          "source": "Member Role Id",
+          "source": "Member Role ID",
           "message": "멤버 역할 ID"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVtYmVyc1VzZXJJZA.option.bWVtYmVyX3JvbGVfaWQ.short_desc": {
@@ -13192,7 +13192,7 @@
           "message": "[사용 중단됨] allow_collaboration 참조"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.YWxsb3dfbWFpbnRhaW5lcl90b19wdXNo.display_name": {
-          "source": "Allow Maintainer To Push",
+          "source": "Allow Maintainer to Push",
           "message": "메인테이너 푸시 허용"
         },
         "app.R2l0bGFi.action.cHV0QXBpVjRQcm9qZWN0c0lkTWVyZ2VSZXF1ZXN0c01lcmdlUmVxdWVzdElpZA.option.YWxsb3dfbWFpbnRhaW5lcl90b19wdXNo.short_desc": {

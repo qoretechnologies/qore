@@ -380,7 +380,7 @@
           "message": "Termín dokončení projektu. Datum a čas v UTC ve formátu ISO-8601."
         },
         "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZGVhZGxpbmVVdGM.display_name": {
-          "source": "Deadline Utc",
+          "source": "Deadline UTC",
           "message": "Termín v UTC"
         },
         "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZGVhZGxpbmVVdGM.short_desc": {
@@ -920,7 +920,7 @@
           "message": "Při nastavení na hodnotu true se načtou pouze faktury vytvořené vaší aplikací"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.display_name": {
-          "source": "Created By My App",
+          "source": "Created by My App",
           "message": "Created By My App"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.short_desc": {

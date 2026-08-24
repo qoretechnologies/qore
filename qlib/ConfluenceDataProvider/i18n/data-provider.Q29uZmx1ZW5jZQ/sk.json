@@ -448,7 +448,7 @@
           "message": "Zahrnie informáciu, či si aktuálny používateľ pridal túto stránku medzi obľúbené."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.display_name": {
-          "source": "Include Favorited By Current User Status",
+          "source": "Include Favorited by Current User Status",
           "message": "Zahrnúť stav obľúbenosti aktuálnym používateľom"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
@@ -1040,7 +1040,7 @@
           "message": "Filtruje podľa ID štítka. Viacero ID je možné zadať ako zoznam oddelený čiarkami."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxz.option.bGFiZWwtaWQ.display_name": {
-          "source": "Label Id",
+          "source": "Label ID",
           "message": "ID štítka"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxz.option.bGFiZWwtaWQ.short_desc": {
@@ -1524,7 +1524,7 @@
           "message": "Zahrnie informáciu, či si aktuálny používateľ pridal túto stránku medzi obľúbené."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.display_name": {
-          "source": "Include Favorited By Current User Status",
+          "source": "Include Favorited by Current User Status",
           "message": "Zahrnúť stav obľúbenosti aktuálnym používateľom"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Filtruje podľa začiatku rozsahu dátumu a času úlohy na základe dátumu dokončenia (vrátane). Vstupom je čas v epoch formáte v milisekundách."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LWZyb20.display_name": {
-          "source": "Completed At From",
+          "source": "Completed at From",
           "message": "Dokončené od"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LWZyb20.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Filtruje podľa konca časového rozsahu úlohy na základe dátumu dokončenia (vrátane). Vstupom je čas epochy v milisekundách."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LXRv.display_name": {
-          "source": "Completed At To",
+          "source": "Completed at To",
           "message": "Dokončené do"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LXRv.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "Filtruje podľa konca časového rozsahu úlohy na základe dátumu vytvorenia (vrátane). Vstupom je čas epochy v milisekundách."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC10bw.display_name": {
-          "source": "Created At To",
+          "source": "Created at To",
           "message": "Vytvorené do"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC10bw.short_desc": {
@@ -2020,7 +2020,7 @@
           "message": "Filtruje podľa začiatku časového rozsahu úlohy na základe dátumu vytvorenia (vrátane). Vstupom je čas epochy v milisekundách."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC1mcm9t.display_name": {
-          "source": "Created At From",
+          "source": "Created at From",
           "message": "Vytvorené od"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC1mcm9t.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Filtruje podľa ID blogového príspevku úlohy. Je možné zadať viacero ID. Poznámka – filtre stránok a blogových príspevkov možno použiť súčasne."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YmxvZ3Bvc3QtaWQ.display_name": {
-          "source": "Blogpost Id",
+          "source": "Blogpost ID",
           "message": "ID blogového príspevku"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YmxvZ3Bvc3QtaWQ.short_desc": {
@@ -2096,7 +2096,7 @@
           "message": "Filtruje podľa začiatku časového rozsahu úlohy na základe termínu dokončenia (vrátane). Vstupom je čas epochy v milisekundách."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LWZyb20.display_name": {
-          "source": "Due At From",
+          "source": "Due at From",
           "message": "Termín od"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LWZyb20.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "Filtruje podľa konca časového rozsahu úlohy na základe termínu dokončenia (vrátane). Vstupom je čas epochy v milisekundách."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LXRv.display_name": {
-          "source": "Due At To",
+          "source": "Due at To",
           "message": "Termín do"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LXRv.short_desc": {
@@ -2144,7 +2144,7 @@
           "message": "Filtruje podľa ID priestoru úlohy. Je možné zadať viacero ID."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.c3BhY2UtaWQ.display_name": {
-          "source": "Space Id",
+          "source": "Space ID",
           "message": "ID priestoru"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.c3BhY2UtaWQ.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "Filtruje podľa ID stránky úlohy. Je možné zadať viacero ID. Poznámka – filtre stránok a blogových príspevkov možno použiť súčasne."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.cGFnZS1pZA.display_name": {
-          "source": "Page Id",
+          "source": "Page ID",
           "message": "ID stránky"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.cGFnZS1pZA.short_desc": {
@@ -2188,7 +2188,7 @@
           "message": "Filtruje podľa ID úlohy. Je možné zadať viacero ID."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.dGFzay1pZA.display_name": {
-          "source": "Task Id",
+          "source": "Task ID",
           "message": "ID úlohy"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.dGFzay1pZA.short_desc": {
@@ -2888,7 +2888,7 @@
           "message": "ID účtu vlastníka stránky.\n\nToto umožňuje previesť vlastníctvo stránky na iného používateľa."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.b3duZXJJZA.display_name": {
-          "source": "Owner Id",
+          "source": "Owner ID",
           "message": "ID vlastníka"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.b3duZXJJZA.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "ID blogového príspevku, v ktorom sa úloha nachádza."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.display_name": {
-          "source": "Blog Post Id",
+          "source": "Blog Post ID",
           "message": "ID blogového príspevku"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.short_desc": {
@@ -3148,7 +3148,7 @@
           "message": "Lokálne ID úlohy. Toto ID je lokálne pre príslušnú stránku alebo blogový príspevok."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.bG9jYWxJZA.display_name": {
-          "source": "Local Id",
+          "source": "Local ID",
           "message": "Lokálne ID"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.bG9jYWxJZA.short_desc": {
@@ -3160,7 +3160,7 @@
           "message": "ID priestoru, v ktorom sa úloha nachádza."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.c3BhY2VJZA.display_name": {
-          "source": "Space Id",
+          "source": "Space ID",
           "message": "ID priestoru"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.c3BhY2VJZA.short_desc": {
@@ -3192,7 +3192,7 @@
           "message": "ID stránky, v ktorej sa úloha nachádza."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.cGFnZUlk.display_name": {
-          "source": "Page Id",
+          "source": "Page ID",
           "message": "ID stránky"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.cGFnZUlk.short_desc": {

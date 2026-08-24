@@ -448,7 +448,7 @@
           "message": "Incluye si el usuario actual ha marcado esta página como favorita."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.display_name": {
-          "source": "Include Favorited By Current User Status",
+          "source": "Include Favorited by Current User Status",
           "message": "Incluir estado de favorito por el usuario actual"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
@@ -1040,7 +1040,7 @@
           "message": "Filtra por ID de etiqueta. Se pueden especificar varios ID como una lista separada por comas."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxz.option.bGFiZWwtaWQ.display_name": {
-          "source": "Label Id",
+          "source": "Label ID",
           "message": "ID de etiqueta"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxz.option.bGFiZWwtaWQ.short_desc": {
@@ -1524,7 +1524,7 @@
           "message": "Incluye si el usuario actual ha marcado esta página como favorita."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.display_name": {
-          "source": "Include Favorited By Current User Status",
+          "source": "Include Favorited by Current User Status",
           "message": "Incluir estado de favorito por el usuario actual"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
@@ -1972,7 +1972,7 @@
           "message": "Filtra por el inicio del intervalo de fecha y hora de la tarea según la fecha de finalización (inclusive). La entrada es la hora epoch en milisegundos."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LWZyb20.display_name": {
-          "source": "Completed At From",
+          "source": "Completed at From",
           "message": "Completado desde"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LWZyb20.short_desc": {
@@ -1984,7 +1984,7 @@
           "message": "Filtra por el final del intervalo de fecha y hora de la tarea según la fecha de finalización (inclusive). La entrada es la hora epoch en milisegundos."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LXRv.display_name": {
-          "source": "Completed At To",
+          "source": "Completed at To",
           "message": "Completado hasta"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWF0LXRv.short_desc": {
@@ -2008,7 +2008,7 @@
           "message": "Filtra por el final del intervalo de fecha y hora de la tarea según la fecha de creación (inclusive). La entrada es la hora epoch en milisegundos."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC10bw.display_name": {
-          "source": "Created At To",
+          "source": "Created at To",
           "message": "Creado hasta"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC10bw.short_desc": {
@@ -2020,7 +2020,7 @@
           "message": "Filtra por el inicio del intervalo de fecha y hora de la tarea según la fecha de creación (inclusive). La entrada es la hora epoch en milisegundos."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC1mcm9t.display_name": {
-          "source": "Created At From",
+          "source": "Created at From",
           "message": "Creado desde"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1hdC1mcm9t.short_desc": {
@@ -2084,7 +2084,7 @@
           "message": "Filtra por el ID de la entrada de blog de la tarea. Se pueden especificar varios ID. Nota: los filtros de página y entrada de blog se pueden usar conjuntamente."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YmxvZ3Bvc3QtaWQ.display_name": {
-          "source": "Blogpost Id",
+          "source": "Blogpost ID",
           "message": "ID de la entrada de blog"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YmxvZ3Bvc3QtaWQ.short_desc": {
@@ -2096,7 +2096,7 @@
           "message": "Filtra por el inicio del intervalo de fecha y hora de la tarea según la fecha de vencimiento (inclusive). La entrada es la hora epoch en milisegundos."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LWZyb20.display_name": {
-          "source": "Due At From",
+          "source": "Due at From",
           "message": "Vencimiento desde"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LWZyb20.short_desc": {
@@ -2108,7 +2108,7 @@
           "message": "Filtra por el final del intervalo de fecha y hora de la tarea según la fecha de vencimiento (inclusive). La entrada es la hora epoch en milisegundos."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LXRv.display_name": {
-          "source": "Due At To",
+          "source": "Due at To",
           "message": "Vencimiento hasta"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.ZHVlLWF0LXRv.short_desc": {
@@ -2144,7 +2144,7 @@
           "message": "Filtra por el ID de espacio de la tarea. Se pueden especificar varios ID."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.c3BhY2UtaWQ.display_name": {
-          "source": "Space Id",
+          "source": "Space ID",
           "message": "ID de espacio"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.c3BhY2UtaWQ.short_desc": {
@@ -2176,7 +2176,7 @@
           "message": "Filtra por el ID de página de la tarea. Se pueden especificar varios ID. Nota: los filtros de página y entrada de blog se pueden usar conjuntamente."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.cGFnZS1pZA.display_name": {
-          "source": "Page Id",
+          "source": "Page ID",
           "message": "ID de página"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.cGFnZS1pZA.short_desc": {
@@ -2188,7 +2188,7 @@
           "message": "Filtra por el ID de tarea. Se pueden especificar varios ID."
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.dGFzay1pZA.display_name": {
-          "source": "Task Id",
+          "source": "Task ID",
           "message": "ID de tarea"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.dGFzay1pZA.short_desc": {
@@ -2888,7 +2888,7 @@
           "message": "ID de cuenta del propietario de la página.\n\nEsto permite transferir la propiedad de la página a otro usuario."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.b3duZXJJZA.display_name": {
-          "source": "Owner Id",
+          "source": "Owner ID",
           "message": "ID de propietario"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.b3duZXJJZA.short_desc": {
@@ -3112,7 +3112,7 @@
           "message": "ID de la entrada de blog en la que se encuentra la tarea."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.display_name": {
-          "source": "Blog Post Id",
+          "source": "Blog Post ID",
           "message": "ID de entrada de blog"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.short_desc": {
@@ -3148,7 +3148,7 @@
           "message": "ID local de la tarea. Este ID es local respecto a la página o entrada de blog correspondiente."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.bG9jYWxJZA.display_name": {
-          "source": "Local Id",
+          "source": "Local ID",
           "message": "ID local"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.bG9jYWxJZA.short_desc": {
@@ -3160,7 +3160,7 @@
           "message": "ID del espacio en el que se encuentra la tarea."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.c3BhY2VJZA.display_name": {
-          "source": "Space Id",
+          "source": "Space ID",
           "message": "ID de espacio"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.c3BhY2VJZA.short_desc": {
@@ -3192,7 +3192,7 @@
           "message": "ID de la página en la que se encuentra la tarea."
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.cGFnZUlk.display_name": {
-          "source": "Page Id",
+          "source": "Page ID",
           "message": "ID de página"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.cGFnZUlk.short_desc": {

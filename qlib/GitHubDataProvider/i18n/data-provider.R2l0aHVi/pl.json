@@ -1168,7 +1168,7 @@
           "message": "Identyfikator zgłoszenia do oznaczenia jako kanoniczny duplikat, gdy `state_reason` to `duplicate`. Zgłoszenie musi istnieć i być dostępne dla uwierzytelnionego użytkownika. Ignorowane, gdy `state_reason` nie jest równe `duplicate`."
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.display_name": {
-          "source": "Duplicate Issue Id",
+          "source": "Duplicate Issue ID",
           "message": "Duplicate Issue Id"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.aXNzdWVfZmllbGRfdmFsdWVz.desc": {
@@ -2968,7 +2968,7 @@
           "message": "Określa, czy usuwać gałęzie źródłowe po scaleniu pull requestów"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch On Merge",
+          "source": "Delete Branch on Merge",
           "message": "Usuwaj gałąź po scaleniu"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
@@ -3196,7 +3196,7 @@
           "message": "Identyfikator zespołu, któremu zostanie przyznany dostęp do tego repozytorium. Jest to prawidłowe tylko podczas tworzenia repozytorium w organizacji."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.dGVhbV9pZA.display_name": {
-          "source": "Team Id",
+          "source": "Team ID",
           "message": "Identyfikator zespołu"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.dGVhbV9pZA.short_desc": {
@@ -3284,7 +3284,7 @@
           "message": "Wartość `true`, aby zezwolić na automatyczne usuwanie gałęzi źródłowych (head) po scaleniu pull requestów, lub `false`, aby wyłączyć automatyczne usuwanie. **Uwierzytelniony użytkownik musi być właścicielem organizacji, aby ustawić tę właściwość na `true`.**"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch On Merge",
+          "source": "Delete Branch on Merge",
           "message": "Usuwaj gałąź po scaleniu"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVzY3JpcHRpb24.desc": {
@@ -3500,7 +3500,7 @@
           "message": "Identyfikator zespołu, któremu zostanie przyznany dostęp do tego repozytorium. Jest to prawidłowe tylko podczas tworzenia repozytorium w organizacji."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dGVhbV9pZA.display_name": {
-          "source": "Team Id",
+          "source": "Team ID",
           "message": "Identyfikator zespołu"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dGVhbV9pZA.short_desc": {
@@ -3512,7 +3512,7 @@
           "message": "Wartość `true`, aby commity squash-merge używały tytułu pull requesta, lub `false`, aby używały komunikatu commita. **Ta właściwość jest wycofywana. Zamiast tego użyj `squash_merge_commit_title`."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
-          "source": "Use Squash Pr Title As Default",
+          "source": "Use Squash PR Title as Default",
           "message": "Używaj domyślnie tytułu PR dla squash"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
@@ -4928,7 +4928,7 @@
           "message": "Wartość `true`, aby zezwolić na automatyczne usuwanie gałęzi źródłowych po scaleniu pull requestów, lub `false`, aby uniemożliwić automatyczne usuwanie."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch On Merge",
+          "source": "Delete Branch on Merge",
           "message": "Usuwaj gałąź po scaleniu"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVzY3JpcHRpb24.desc": {
@@ -5076,7 +5076,7 @@
           "message": "Określ, które funkcje bezpieczeństwa i analizy włączyć lub wyłączyć dla repozytorium.\n\nAby użyć tego parametru, musisz mieć uprawnienia administratora do repozytorium lub być właścicielem albo menedżerem ds. bezpieczeństwa w organizacji będącej właścicielem repozytorium. Więcej informacji można znaleźć w temacie „[Managing security managers in your organization](https://docs.github.com/organizations/managing-peoples-access-to-your-organization-with-roles/managing-security-managers-in-your-organization)”.\n\nNa przykład, aby włączyć GitHub Advanced Security, użyj tych danych w treści żądania `PATCH`:\n`{ \"security_and_analysis\": {\"advanced_security\": { \"status\": \"enabled\" } } }`.\n\nMożesz sprawdzić, które funkcje bezpieczeństwa i analizy są obecnie włączone, wysyłając żądanie `GET /repos/{owner}/{repo}`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.display_name": {
-          "source": "Security And Analysis",
+          "source": "Security and Analysis",
           "message": "Bezpieczeństwo i analiza"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.allowed-value.c3RyaW5nOkNPTU1JVF9PUl9QUl9USVRMRQ.display_name": {
@@ -5172,7 +5172,7 @@
           "message": "Wartość `true`, aby commity squash-merge używały tytułu pull requesta, lub `false`, aby używały komunikatu commita. **Ta właściwość jest wycofywana. Zamiast tego użyj `squash_merge_commit_title`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
-          "source": "Use Squash Pr Title As Default",
+          "source": "Use Squash PR Title as Default",
           "message": "Używaj domyślnie tytułu PR dla squash"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {

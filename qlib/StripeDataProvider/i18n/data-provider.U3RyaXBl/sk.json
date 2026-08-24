@@ -140,7 +140,7 @@
           "message": "URL adresa, na ktorú bude používateľ presmerovaný po opustení alebo dokončení prepojeného procesu."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmV0dXJuX3VybA.display_name": {
-          "source": "Return Url",
+          "source": "Return URL",
           "message": "Návratová URL adresa"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmVmcmVzaF91cmw.desc": {
@@ -148,7 +148,7 @@
           "message": "URL adresa, na ktorú bude používateľ presmerovaný, ak odkaz na účet vypršal, bol už predtým navštívený alebo je inak neplatný. Zadaná URL adresa by sa mala pokúsiť vygenerovať nový odkaz na účet s rovnakými parametrami, aké boli použité pri vytvorení pôvodného odkazu na účet, a potom používateľa presmerovať na URL adresu nového odkazu na účet, aby mohol pokračovať v Connect Onboarding. Ak nie je možné vygenerovať nový odkaz na účet alebo presmerovanie zlyhá, mali by ste používateľovi zobraziť užitočné chybové hlásenie."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmVmcmVzaF91cmw.display_name": {
-          "source": "Refresh Url",
+          "source": "Refresh URL",
           "message": "Obnovovacia URL adresa"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmFjY291bnRfb25ib2FyZGluZw.display_name": {
@@ -340,7 +340,7 @@
           "message": "Identifikačné číslo osoby podľa príslušnej krajiny. Napríklad číslo sociálneho poistenia v USA, číslo sociálneho poistenia v Kanade atď. Namiesto samotného čísla môžete zadať aj [token PII poskytnutý cez Stripe.js](https://docs.stripe.com/js/tokens/create_token?type=pii).\n\nZmena tejto hodnoty pre zástupcu účtu vyžaduje, aby účet znova prijal [zmluvné podmienky](/api/accounts/object#account_object-tos_acceptance)."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.aWRfbnVtYmVy.display_name": {
-          "source": "Id Number",
+          "source": "ID Number",
           "message": "Identifikačné číslo"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.aWRfbnVtYmVy.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Sekundárne identifikačné číslo osoby podľa príslušnej krajiny, ktoré sa použije na rozšírené overovacie kontroly. V Thajsku by to bol laserový kód na zadnej strane občianskeho preukazu. Namiesto samotného čísla môžete zadať aj [token PII poskytnutý cez Stripe.js](https://docs.stripe.com/js/tokens/create_token?type=pii).\n\nZmena tejto hodnoty pre zástupcu účtu vyžaduje, aby účet znova prijal [zmluvné podmienky](/api/accounts/object#account_object-tos_acceptance)."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.aWRfbnVtYmVyX3NlY29uZGFyeQ.display_name": {
-          "source": "Id Number Secondary",
+          "source": "ID Number Secondary",
           "message": "Sekundárne identifikačné číslo"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.bGFzdF9uYW1l.desc": {
@@ -428,7 +428,7 @@
           "message": "Posledné štyri číslice čísla sociálneho poistenia osoby (iba USA).\n\nZmena tejto hodnoty pre zástupcu účtu vyžaduje, aby účet znova prijal [zmluvné podmienky](/api/accounts/object#account_object-tos_acceptance)."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.c3NuX2xhc3RfNA.display_name": {
-          "source": "Ssn Last 4",
+          "source": "SSN Last 4",
           "message": "Posledné 4 číslice SSN"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.cG9saXRpY2FsX2V4cG9zdXJl.allowed-value.c3RyaW5nOm5vbmU.display_name": {
@@ -756,7 +756,7 @@
           "message": "Daňové identifikačné čísla zákazníka."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.dGF4X2lkX2RhdGE.display_name": {
-          "source": "Tax Id Data",
+          "source": "Tax ID Data",
           "message": "Údaje o daňovom identifikačnom čísle"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.dGF4X2lkX2RhdGE.short_desc": {
@@ -896,7 +896,7 @@
           "message": "Určuje, či sa má toto predplatné zrušiť na konci aktuálneho obdobia (`current_period_end`). Predvolená hodnota je `false`."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y2FuY2VsX2F0X3BlcmlvZF9lbmQ.display_name": {
-          "source": "Cancel At Period End",
+          "source": "Cancel at Period End",
           "message": "Zrušiť na konci obdobia"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y3VycmVuY3k.desc": {
@@ -1176,7 +1176,7 @@
           "message": "Označuje, či sa má na predplatné uplatniť `trial_period_days` plánu. Preferuje sa nastavenie `trial_end` pre predplatné, pričom predvolená hodnota je `false`. Nastavenie tohto príznaku na `true` spolu s `trial_end` nie je povolené. Ďalšie informácie nájdete v časti [Používanie skúšobných období pri predplatnom](https://docs.stripe.com/billing/subscriptions/trials)."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfZnJvbV9wbGFu.display_name": {
-          "source": "Trial From Plan",
+          "source": "Trial from Plan",
           "message": "Skúšobné obdobie z plánu"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfc2V0dGluZ3M.desc": {
@@ -1508,7 +1508,7 @@
           "message": "Ak je nastavené na true alebo ak ide o prvý externý účet pridaný v tejto mene, tento účet sa stane predvoleným externým účtom pre svoju menu."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZGVmYXVsdF9mb3JfY3VycmVuY3k.display_name": {
-          "source": "Default For Currency",
+          "source": "Default for Currency",
           "message": "Predvolené pre menu"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZXh0ZXJuYWxfYWNjb3VudA.desc": {
@@ -2120,7 +2120,7 @@
           "message": "Nastavte na `true`, aby sa pokus o platbu zlyhal, ak PaymentIntent prejde do stavu `requires_action`. Tento parameter použite pri jednoduchších integráciách, ktoré nespracúvajú akcie zákazníka, ako je napríklad [ukladanie kariet bez autentifikácie](https://docs.stripe.com/payments/save-card-without-authentication). Tento parameter je možné použiť iba s [`confirm=true`](https://docs.stripe.com/api/payment_intents/create#create_payment_intent-confirm)."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.ZXJyb3Jfb25fcmVxdWlyZXNfYWN0aW9u.display_name": {
-          "source": "Error On Requires Action",
+          "source": "Error on Requires Action",
           "message": "Chyba pri vyžadovaní akcie"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.ZXhjbHVkZWRfcGF5bWVudF9tZXRob2RfdHlwZXM.desc": {
@@ -2332,7 +2332,7 @@
           "message": "URL adresa, na ktorú chcete presmerovať zákazníka späť po tom, ako overí alebo zruší svoju platbu v aplikácii alebo na stránke platobnej metódy. Ak preferujete presmerovanie do mobilnej aplikácie, môžete alternatívne zadať URI schému aplikácie. Tento parameter je možné použiť iba s [`confirm=true`](https://docs.stripe.com/api/payment_intents/create#create_payment_intent-confirm)."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cmV0dXJuX3VybA.display_name": {
-          "source": "Return Url",
+          "source": "Return URL",
           "message": "Návratová URL adresa"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cmVjZWlwdF9lbWFpbA.desc": {
@@ -2376,7 +2376,7 @@
           "message": "Nastavte na `true` pri potvrdzovaní na strane servera a použití klientskych SDK Stripe.js, iOS alebo Android na spracovanie ďalších akcií."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.dXNlX3N0cmlwZV9zZGs.display_name": {
-          "source": "Use Stripe Sdk",
+          "source": "Use Stripe SDK",
           "message": "Použiť Stripe SDK"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.short_desc": {

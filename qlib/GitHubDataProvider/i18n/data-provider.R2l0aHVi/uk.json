@@ -1168,7 +1168,7 @@
           "message": "Ідентифікатор завдання, яке слід позначити як канонічний дублікат, коли `state_reason` має значення `duplicate`. Завдання має існувати та бути доступним автентифікованому користувачу. Ігнорується, якщо `state_reason` не має значення `duplicate`."
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.display_name": {
-          "source": "Duplicate Issue Id",
+          "source": "Duplicate Issue ID",
           "message": "Duplicate Issue Id"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.aXNzdWVfZmllbGRfdmFsdWVz.desc": {
@@ -2968,7 +2968,7 @@
           "message": "Чи видаляти вихідні гілки після злиття пул-реквестів"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch On Merge",
+          "source": "Delete Branch on Merge",
           "message": "Видаляти гілку після злиття"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
@@ -3196,7 +3196,7 @@
           "message": "Ідентифікатор (id) команди, якій буде надано доступ до цього репозиторію. Це дійсно лише під час створення репозиторію в організації."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.dGVhbV9pZA.display_name": {
-          "source": "Team Id",
+          "source": "Team ID",
           "message": "Ідентифікатор команди"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.dGVhbV9pZA.short_desc": {
@@ -3284,7 +3284,7 @@
           "message": "Або `true`, щоб дозволити автоматичне видалення head-гілок після злиття pull requests, або `false`, щоб запобігти автоматичному видаленню. **Автентифікований користувач має бути власником організації, щоб встановити цю властивість у `true`.**"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch On Merge",
+          "source": "Delete Branch on Merge",
           "message": "Видаляти гілку після злиття"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVzY3JpcHRpb24.desc": {
@@ -3500,7 +3500,7 @@
           "message": "Ідентифікатор (id) команди, якій буде надано доступ до цього репозиторію. Це дійсно лише під час створення репозиторію в організації."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dGVhbV9pZA.display_name": {
-          "source": "Team Id",
+          "source": "Team ID",
           "message": "Ідентифікатор команди"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dGVhbV9pZA.short_desc": {
@@ -3512,7 +3512,7 @@
           "message": "Або `true`, щоб дозволити комітам squash-merge використовувати заголовок pull request, або `false`, щоб використовувати повідомлення коміту. **Ця властивість застаріває. Будь ласка, використовуйте замість неї `squash_merge_commit_title`."
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
-          "source": "Use Squash Pr Title As Default",
+          "source": "Use Squash PR Title as Default",
           "message": "Використовувати назву Squash PR за замовчуванням"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
@@ -4928,7 +4928,7 @@
           "message": "Або `true`, щоб дозволити автоматичне видалення гілок head після злиття запитів на злиття, або `false`, щоб запобігти автоматичному видаленню."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch On Merge",
+          "source": "Delete Branch on Merge",
           "message": "Видаляти гілку після злиття"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVzY3JpcHRpb24.desc": {
@@ -5076,7 +5076,7 @@
           "message": "Вкажіть, які функції безпеки та аналізу ввімкнути чи вимкнути для репозиторію.\n\nЩоб використовувати цей параметр, ви повинні мати права адміністратора репозиторію або бути власником чи менеджером із безпеки організації, якій належить репозиторій. Докладніші відомості див. у розділі \"[Managing security managers in your organization](https://docs.github.com/organizations/managing-peoples-access-to-your-organization-with-roles/managing-security-managers-in-your-organization)\".\n\nНаприклад, щоб увімкнути GitHub Advanced Security, використайте ці дані в тілі запиту `PATCH`:\n`{ \"security_and_analysis\": {\"advanced_security\": { \"status\": \"enabled\" } } }`.\n\nВи можете перевірити, які функції безпеки та аналізу зараз увімкнено, за допомогою запиту `GET /repos/{owner}/{repo}`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.display_name": {
-          "source": "Security And Analysis",
+          "source": "Security and Analysis",
           "message": "Безпека та аналіз"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.allowed-value.c3RyaW5nOkNPTU1JVF9PUl9QUl9USVRMRQ.display_name": {
@@ -5172,7 +5172,7 @@
           "message": "Або `true`, щоб дозволити комітам squash-merge використовувати заголовок pull request, або `false`, щоб використовувати повідомлення коміту. **Ця властивість застаріває. Будь ласка, використовуйте замість неї `squash_merge_commit_title`."
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
-          "source": "Use Squash Pr Title As Default",
+          "source": "Use Squash PR Title as Default",
           "message": "Використовувати назву Squash PR за замовчуванням"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {

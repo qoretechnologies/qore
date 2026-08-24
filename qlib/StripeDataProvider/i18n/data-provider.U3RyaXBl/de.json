@@ -140,7 +140,7 @@
           "message": "Die URL, zu der der Benutzer nach Verlassen oder Abschluss des verlinkten Ablaufs weitergeleitet wird."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmV0dXJuX3VybA.display_name": {
-          "source": "Return Url",
+          "source": "Return URL",
           "message": "Rückkehr-URL"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmVmcmVzaF91cmw.desc": {
@@ -148,7 +148,7 @@
           "message": "Die URL, zu der der Benutzer weitergeleitet wird, wenn der Kontolink abgelaufen ist, bereits besucht wurde oder anderweitig ungültig ist. Die angegebene URL sollte versuchen, einen neuen Kontolink mit denselben Parametern wie beim ursprünglichen Kontolink zu generieren und den Benutzer dann zur URL des neuen Kontolinks weiterzuleiten, damit dieser mit dem Connect-Onboarding fortfahren kann. Wenn kein neuer Kontolink generiert werden kann oder die Weiterleitung fehlschlägt, sollten Sie dem Benutzer einen hilfreichen Fehler anzeigen."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmVmcmVzaF91cmw.display_name": {
-          "source": "Refresh Url",
+          "source": "Refresh URL",
           "message": "Aktualisierungs-URL"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmFjY291bnRfb25ib2FyZGluZw.display_name": {
@@ -340,7 +340,7 @@
           "message": "Die Ausweisnummer der Person, wie für ihr Land zutreffend. Zum Beispiel eine Social Security Number in den USA, Social Insurance Number in Kanada usw. Anstelle der Nummer selbst können Sie auch ein [von Stripe.js bereitgestelltes PII-Token](https://docs.stripe.com/js/tokens/create_token?type=pii) angeben.\n\nWenn dieser Wert für die vertretungsberechtigte Person des Kontos geändert wird, muss das Konto die [Nutzungsbedingungen](/api/accounts/object#account_object-tos_acceptance) erneut akzeptieren."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.aWRfbnVtYmVy.display_name": {
-          "source": "Id Number",
+          "source": "ID Number",
           "message": "Ausweisnummer"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.aWRfbnVtYmVy.short_desc": {
@@ -352,7 +352,7 @@
           "message": "Die sekundäre Ausweisnummer der Person, wie für ihr Land zutreffend, wird für erweiterte Verifizierungsprüfungen verwendet. In Thailand wäre dies der Lasercode auf der Rückseite eines Personalausweises. Anstelle der Nummer selbst können Sie auch ein [von Stripe.js bereitgestelltes PII-Token](https://docs.stripe.com/js/tokens/create_token?type=pii) angeben.\n\nWenn dieser Wert für die vertretungsberechtigte Person des Kontos geändert wird, muss das Konto die [Nutzungsbedingungen](/api/accounts/object#account_object-tos_acceptance) erneut akzeptieren."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.aWRfbnVtYmVyX3NlY29uZGFyeQ.display_name": {
-          "source": "Id Number Secondary",
+          "source": "ID Number Secondary",
           "message": "Sekundäre Ausweisnummer"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.bGFzdF9uYW1l.desc": {
@@ -428,7 +428,7 @@
           "message": "Die letzten vier Ziffern der Social Security Number der Person (nur USA).\n\nWenn dieser Wert für die vertretungsberechtigte Person des Kontos geändert wird, muss das Konto die [Nutzungsbedingungen](/api/accounts/object#account_object-tos_acceptance) erneut akzeptieren."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.c3NuX2xhc3RfNA.display_name": {
-          "source": "Ssn Last 4",
+          "source": "SSN Last 4",
           "message": "Letzte 4 Ziffern der SSN"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.cG9saXRpY2FsX2V4cG9zdXJl.allowed-value.c3RyaW5nOm5vbmU.display_name": {
@@ -756,7 +756,7 @@
           "message": "Die Steuer-IDs des Kunden."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.dGF4X2lkX2RhdGE.display_name": {
-          "source": "Tax Id Data",
+          "source": "Tax ID Data",
           "message": "Steuer-ID-Daten"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.dGF4X2lkX2RhdGE.short_desc": {
@@ -896,7 +896,7 @@
           "message": "Gibt an, ob dieses Abonnement am Ende des aktuellen Zeitraums gekündigt werden soll (`current_period_end`). Standardwert ist `false`."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y2FuY2VsX2F0X3BlcmlvZF9lbmQ.display_name": {
-          "source": "Cancel At Period End",
+          "source": "Cancel at Period End",
           "message": "Am Periodenende kündigen"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y3VycmVuY3k.desc": {
@@ -1176,7 +1176,7 @@
           "message": "Gibt an, ob `trial_period_days` eines Tarifs auf das Abonnement angewendet werden soll. Das Festlegen von `trial_end` pro Abonnement wird bevorzugt, und der Standardwert ist `false`. Das Festlegen dieses Flags auf `true` zusammen mit `trial_end` ist nicht zulässig. Weitere Informationen finden Sie unter [Testzeiträume für Abonnements verwenden](https://docs.stripe.com/billing/subscriptions/trials)."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfZnJvbV9wbGFu.display_name": {
-          "source": "Trial From Plan",
+          "source": "Trial from Plan",
           "message": "Testzeitraum aus Tarif"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfc2V0dGluZ3M.desc": {
@@ -1508,7 +1508,7 @@
           "message": "Wenn auf true gesetzt oder wenn dies das erste externe Konto ist, das in dieser Währung hinzugefügt wurde, wird dieses Konto zum Standard-externen Konto für seine Währung."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZGVmYXVsdF9mb3JfY3VycmVuY3k.display_name": {
-          "source": "Default For Currency",
+          "source": "Default for Currency",
           "message": "Standard für Währung"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZXh0ZXJuYWxfYWNjb3VudA.desc": {
@@ -2120,7 +2120,7 @@
           "message": "Auf `true` setzen, damit der Zahlungsversuch fehlschlägt, wenn der PaymentIntent in `requires_action` übergeht. Verwenden Sie diesen Parameter für einfachere Integrationen, die keine Kundenaktionen verarbeiten, wie z. B. [Karten ohne Authentifizierung speichern](https://docs.stripe.com/payments/save-card-without-authentication). Dieser Parameter kann nur mit [`confirm=true`](https://docs.stripe.com/api/payment_intents/create#create_payment_intent-confirm) verwendet werden."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.ZXJyb3Jfb25fcmVxdWlyZXNfYWN0aW9u.display_name": {
-          "source": "Error On Requires Action",
+          "source": "Error on Requires Action",
           "message": "Fehler bei erforderlicher Aktion"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.ZXhjbHVkZWRfcGF5bWVudF9tZXRob2RfdHlwZXM.desc": {
@@ -2332,7 +2332,7 @@
           "message": "Die URL, zu der Ihre Kundschaft zurückgeleitet wird, nachdem sie ihre Zahlung in der App oder auf der Website der Zahlungsmethode authentifiziert oder abgebrochen hat. Wenn Sie die Weiterleitung an eine mobile Anwendung bevorzugen, können Sie alternativ ein Anwendungs-URI-Schema angeben. Dieser Parameter kann nur mit [`confirm=true`](https://docs.stripe.com/api/payment_intents/create#create_payment_intent-confirm) verwendet werden."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cmV0dXJuX3VybA.display_name": {
-          "source": "Return Url",
+          "source": "Return URL",
           "message": "Rückkehr-URL"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cmVjZWlwdF9lbWFpbA.desc": {
@@ -2376,7 +2376,7 @@
           "message": "Auf `true` setzen, wenn serverseitig bestätigt wird und clientseitige Stripe.js-, iOS- oder Android-SDKs verwendet werden, um die nächsten Aktionen zu verarbeiten."
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.dXNlX3N0cmlwZV9zZGs.display_name": {
-          "source": "Use Stripe Sdk",
+          "source": "Use Stripe SDK",
           "message": "Stripe-SDK verwenden"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.short_desc": {

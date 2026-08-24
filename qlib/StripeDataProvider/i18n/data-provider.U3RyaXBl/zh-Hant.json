@@ -140,7 +140,7 @@
           "message": "使用者離開或完成連結流程後將被重新導向的 URL。"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmV0dXJuX3VybA.display_name": {
-          "source": "Return Url",
+          "source": "Return URL",
           "message": "返回 URL"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmVmcmVzaF91cmw.desc": {
@@ -148,7 +148,7 @@
           "message": "帳戶連結若已過期、先前已存取過或在其他情況下無效時，使用者將被重新導向的 URL。您指定的 URL 應嘗試使用建立原始帳戶連結時的相同參數產生新的帳戶連結，然後將使用者重新導向至新帳戶連結的 URL，以便他們繼續進行 Connect 入駐。如果無法產生新帳戶連結或重新導向失敗，您應向使用者顯示有用的錯誤訊息。"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmVmcmVzaF91cmw.display_name": {
-          "source": "Refresh Url",
+          "source": "Refresh URL",
           "message": "重新整理 URL"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.dHlwZQ.allowed-value.c3RyaW5nOmFjY291bnRfb25ib2FyZGluZw.display_name": {
@@ -340,7 +340,7 @@
           "message": "該人員所在國家相應的身分證號碼。例如美國的社會安全號碼、加拿大的社會保險號碼等。除了號碼本身之外，您也可以提供 [Stripe.js 提供的 PII 權杖](https://docs.stripe.com/js/tokens/create_token?type=pii)。\n\n變更帳戶代表的此值需要該帳戶重新接受[服務條款](/api/accounts/object#account_object-tos_acceptance)。"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.aWRfbnVtYmVy.display_name": {
-          "source": "Id Number",
+          "source": "ID Number",
           "message": "身分證號碼"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.aWRfbnVtYmVy.short_desc": {
@@ -352,7 +352,7 @@
           "message": "該人員所在國家相應的第二身分證號碼，將用於增強型驗證檢查。在泰國，這指的是身分證背面的雷射代碼。除了號碼本身之外，您也可以提供 [Stripe.js 提供的 PII 權杖](https://docs.stripe.com/js/tokens/create_token?type=pii)。\n\n變更帳戶代表的此值需要該帳戶重新接受[服務條款](/api/accounts/object#account_object-tos_acceptance)。"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.aWRfbnVtYmVyX3NlY29uZGFyeQ.display_name": {
-          "source": "Id Number Secondary",
+          "source": "ID Number Secondary",
           "message": "第二身分證號碼"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.bGFzdF9uYW1l.desc": {
@@ -428,7 +428,7 @@
           "message": "該人員社會安全號碼的後四碼（僅限美國）。\n\n變更帳戶代表的此值需要該帳戶重新接受[服務條款](/api/accounts/object#account_object-tos_acceptance)。"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.c3NuX2xhc3RfNA.display_name": {
-          "source": "Ssn Last 4",
+          "source": "SSN Last 4",
           "message": "SSN 後 4 碼"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.cG9saXRpY2FsX2V4cG9zdXJl.allowed-value.c3RyaW5nOm5vbmU.display_name": {
@@ -756,7 +756,7 @@
           "message": "客戶的稅號。"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.dGF4X2lkX2RhdGE.display_name": {
-          "source": "Tax Id Data",
+          "source": "Tax ID Data",
           "message": "稅號資料"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.dGF4X2lkX2RhdGE.short_desc": {
@@ -896,7 +896,7 @@
           "message": "指出此訂閱是否應在當前週期結束時取消 (`current_period_end`)。預設為 `false`。"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y2FuY2VsX2F0X3BlcmlvZF9lbmQ.display_name": {
-          "source": "Cancel At Period End",
+          "source": "Cancel at Period End",
           "message": "週期結束時取消"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y3VycmVuY3k.desc": {
@@ -1176,7 +1176,7 @@
           "message": "指示方案的 `trial_period_days` 是否應套用至該訂閱。建議針對每個訂閱設定 `trial_end`，此項預設為 `false`。不允許將此旗標設定為 `true` 同時又搭配 `trial_end`。請參閱[在訂閱中使用試用期](https://docs.stripe.com/billing/subscriptions/trials)以了解更多資訊。"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfZnJvbV9wbGFu.display_name": {
-          "source": "Trial From Plan",
+          "source": "Trial from Plan",
           "message": "來自方案的試用期"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfc2V0dGluZ3M.desc": {
@@ -1508,7 +1508,7 @@
           "message": "設定為 true 時，或者如果這是該貨幣新增的第一個外部帳戶，此帳戶將成為該貨幣的預設外部帳戶。"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZGVmYXVsdF9mb3JfY3VycmVuY3k.display_name": {
-          "source": "Default For Currency",
+          "source": "Default for Currency",
           "message": "貨幣預設帳戶"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZXh0ZXJuYWxfYWNjb3VudA.desc": {
@@ -2120,7 +2120,7 @@
           "message": "設為 `true` 可在 PaymentIntent 轉變為 `requires_action` 時使付款嘗試失敗。將此參數用於不處理客戶操作的較簡單整合，例如[未經驗證儲存卡片](https://docs.stripe.com/payments/save-card-without-authentication)。此參數只能與 [`confirm=true`](https://docs.stripe.com/api/payment_intents/create#create_payment_intent-confirm) 一起使用。"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.ZXJyb3Jfb25fcmVxdWlyZXNfYWN0aW9u.display_name": {
-          "source": "Error On Requires Action",
+          "source": "Error on Requires Action",
           "message": "需要動作時報錯"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.ZXhjbHVkZWRfcGF5bWVudF9tZXRob2RfdHlwZXM.desc": {
@@ -2332,7 +2332,7 @@
           "message": "客戶在付款方式的應用程式或網站上完成驗證或取消付款後，將其重新導向回的 URL。若您希望重新導向至行動應用程式，也可以提供應用程式 URI 配置。此參數僅能與 [`confirm=true`](https://docs.stripe.com/api/payment_intents/create#create_payment_intent-confirm) 搭配使用。"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cmV0dXJuX3VybA.display_name": {
-          "source": "Return Url",
+          "source": "Return URL",
           "message": "返回 URL"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cmVjZWlwdF9lbWFpbA.desc": {
@@ -2376,7 +2376,7 @@
           "message": "在伺服器端確認並使用 Stripe.js、iOS 或 Android 用戶端 SDK 處理後續動作時設定為 `true`。"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.dXNlX3N0cmlwZV9zZGs.display_name": {
-          "source": "Use Stripe Sdk",
+          "source": "Use Stripe SDK",
           "message": "使用 Stripe SDK"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.short_desc": {

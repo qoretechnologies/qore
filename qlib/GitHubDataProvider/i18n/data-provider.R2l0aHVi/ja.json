@@ -1168,7 +1168,7 @@
           "message": "`state_reason` が `duplicate` の場合に正規の重複としてマークする Issue の ID。Issue が存在し、認証されたユーザーがアクセスできる必要があります。`state_reason` が `duplicate` ではない場合は無視されます。"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.display_name": {
-          "source": "Duplicate Issue Id",
+          "source": "Duplicate Issue ID",
           "message": "重複 Issue ID"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.aXNzdWVfZmllbGRfdmFsdWVz.desc": {
@@ -2968,7 +2968,7 @@
           "message": "プルリクエストのマージ時にヘッドブランチを削除するかどうか"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch On Merge",
+          "source": "Delete Branch on Merge",
           "message": "マージ時にブランチを削除"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
@@ -3196,7 +3196,7 @@
           "message": "このリポジトリへのアクセス権が付与されるチームのID。これは組織内にリポジトリを作成する場合にのみ有効です。"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.dGVhbV9pZA.display_name": {
-          "source": "Team Id",
+          "source": "Team ID",
           "message": "チームID"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.dGVhbV9pZA.short_desc": {
@@ -3284,7 +3284,7 @@
           "message": "プルリクエストのマージ時にヘッドブランチを自動的に削除することを許可する場合は `true`、自動削除を防止する場合は `false`。**このプロパティを `true` に設定するには、認証されたユーザーがOrganizationのオーナーである必要があります。**"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch On Merge",
+          "source": "Delete Branch on Merge",
           "message": "マージ時にブランチを削除"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVzY3JpcHRpb24.desc": {
@@ -3500,7 +3500,7 @@
           "message": "このリポジトリへのアクセス権が付与されるチームのID。これは組織内にリポジトリを作成する場合にのみ有効です。"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dGVhbV9pZA.display_name": {
-          "source": "Team Id",
+          "source": "Team ID",
           "message": "チームID"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dGVhbV9pZA.short_desc": {
@@ -3512,7 +3512,7 @@
           "message": "スカッシュマージコミットでプルリクエストのタイトルを使用することを許可する場合は `true`、コミットメッセージを使用する場合は `false`。**このプロパティは廃止予定です。代わりに `squash_merge_commit_title` を使用してください。"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
-          "source": "Use Squash Pr Title As Default",
+          "source": "Use Squash PR Title as Default",
           "message": "スカッシュPRタイトルをデフォルトとして使用"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
@@ -4928,7 +4928,7 @@
           "message": "プルリクエストのマージ時にヘッドブランチの自動削除を許可する場合は `true`、自動削除を無効にする場合は `false`。"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
-          "source": "Delete Branch On Merge",
+          "source": "Delete Branch on Merge",
           "message": "マージ時にブランチを削除"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVzY3JpcHRpb24.desc": {
@@ -5076,7 +5076,7 @@
           "message": "リポジトリで有効または無効にするセキュリティおよび分析機能を指定します。\n\nこのパラメータを使用するには、リポジトリの管理者権限を持つか、リポジトリを所有する組織のオーナーまたはセキュリティマネージャーである必要があります。詳細については、「[Managing security managers in your organization](https://docs.github.com/organizations/managing-peoples-access-to-your-organization-with-roles/managing-security-managers-in-your-organization)」を参照してください。\n\nたとえば、GitHub Advanced Security を有効にするには、`PATCH` リクエストの本文でこのデータを使用します:\n`{ \"security_and_analysis\": {\"advanced_security\": { \"status\": \"enabled\" } } }`。\n\n`GET /repos/{owner}/{repo}` リクエストを使用して、現在どのセキュリティおよび分析機能が有効になっているかを確認できます。"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.display_name": {
-          "source": "Security And Analysis",
+          "source": "Security and Analysis",
           "message": "セキュリティと分析"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.allowed-value.c3RyaW5nOkNPTU1JVF9PUl9QUl9USVRMRQ.display_name": {
@@ -5172,7 +5172,7 @@
           "message": "スカッシュマージコミットでプルリクエストのタイトルを使用することを許可する場合は `true`、コミットメッセージを使用する場合は `false`。**このプロパティは廃止予定です。代わりに `squash_merge_commit_title` を使用してください。"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
-          "source": "Use Squash Pr Title As Default",
+          "source": "Use Squash PR Title as Default",
           "message": "スカッシュPRタイトルをデフォルトとして使用"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
