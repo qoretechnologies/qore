@@ -977,7 +977,7 @@
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.display_name": {
           "source": "Image URL",
-          "message": "Image Url"
+          "message": "Image URL"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.short_desc": {
           "source": "Image for this product",
@@ -1129,7 +1129,7 @@
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.display_name": {
           "source": "Image URL",
-          "message": "Image Url"
+          "message": "Image URL"
         },
         "app.UGFkZGxl.action.dXBkYXRlX3Byb2R1Y3Q.option.aW1hZ2VfdXJs.short_desc": {
           "source": "Image for this product",
@@ -1985,7 +1985,7 @@
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWRkcmVzc19pZA.display_name": {
           "source": "Address ID",
-          "message": "Address Id"
+          "message": "Address ID"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.YWRkcmVzc19pZA.short_desc": {
           "source": "Return entities related to the specified address",
@@ -2365,7 +2365,7 @@
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.display_name": {
           "source": "Address ID",
-          "message": "Address Id"
+          "message": "Address ID"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.short_desc": {
           "source": "Paddle ID of the address that this transaction is for, prefixed with 'add_'.…",
@@ -2377,7 +2377,7 @@
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.display_name": {
           "source": "Business ID",
-          "message": "Business Id"
+          "message": "Business ID"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.short_desc": {
           "source": "Paddle ID of the business that this transaction is for, prefixed with 'biz_'.…",
@@ -2389,7 +2389,7 @@
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.display_name": {
           "source": "Discount ID",
-          "message": "Discount Id"
+          "message": "Discount ID"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.short_desc": {
           "source": "Paddle ID of the discount to apply to this transaction, prefixed with 'dsc_'",
@@ -2461,7 +2461,7 @@
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aWQ.display_name": {
           "source": "ID",
-          "message": "Id"
+          "message": "ID"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aWQ.short_desc": {
           "source": "Unique Paddle ID for this transaction entity, prefixed with 'txn_'",
@@ -2509,7 +2509,7 @@
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.display_name": {
           "source": "Invoice ID",
-          "message": "Invoice Id"
+          "message": "Invoice ID"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.short_desc": {
           "source": "Paddle ID of the invoice that this transaction is related to, prefixed with…",

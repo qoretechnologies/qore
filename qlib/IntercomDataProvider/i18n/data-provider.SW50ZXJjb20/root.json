@@ -857,7 +857,7 @@
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YnJhbmRfaWQ.display_name": {
           "source": "Brand ID",
-          "message": "Brand Id"
+          "message": "Brand ID"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YnJhbmRfaWQ.short_desc": {
           "source": "The unique identifier of the brand to associate with this conversation",
@@ -1409,7 +1409,7 @@
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
           "source": "AI Chatbot Availability",
-          "message": "Ai Chatbot Availability"
+          "message": "AI Chatbot Availability"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article should be available for AI Chatbot (Fin)",
@@ -1421,7 +1421,7 @@
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
           "source": "AI Copilot Availability",
-          "message": "Ai Copilot Availability"
+          "message": "AI Copilot Availability"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article should be available for AI Copilot",
@@ -1433,7 +1433,7 @@
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
           "source": "AI Sales Agent Availability",
-          "message": "Ai Sales Agent Availability"
+          "message": "AI Sales Agent Availability"
         },
         "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
           "source": "Whether the article should be available for AI Sales Agent",
@@ -1565,7 +1565,7 @@
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZXh0ZXJuYWxfaWQ.display_name": {
           "source": "External ID",
-          "message": "External Id"
+          "message": "External ID"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZXh0ZXJuYWxfaWQ.short_desc": {
           "source": "A unique identifier for the contact which is given to Intercom",
@@ -1661,7 +1661,7 @@
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.b3duZXJfaWQ.display_name": {
           "source": "Owner ID",
-          "message": "Owner Id"
+          "message": "Owner ID"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.b3duZXJfaWQ.short_desc": {
           "source": "The id of an admin that has been assigned account ownership of the contact",
@@ -1673,7 +1673,7 @@
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.display_name": {
           "source": "Unsubscribed from Emails",
-          "message": "Unsubscribed From Emails"
+          "message": "Unsubscribed from Emails"
         },
         "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.short_desc": {
           "source": "Whether the contact is unsubscribed from emails",
@@ -2065,7 +2065,7 @@
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.display_name": {
           "source": "Parent ID",
-          "message": "Parent Id"
+          "message": "Parent ID"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.short_desc": {
           "source": "The id of the article's parent collection or section",
@@ -2113,7 +2113,7 @@
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
           "source": "AI Chatbot Availability",
-          "message": "Ai Chatbot Availability"
+          "message": "AI Chatbot Availability"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article should be available for AI Chatbot (Fin)",
@@ -2125,7 +2125,7 @@
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
           "source": "AI Copilot Availability",
-          "message": "Ai Copilot Availability"
+          "message": "AI Copilot Availability"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
           "source": "Whether the article should be available for AI Copilot",
@@ -2137,7 +2137,7 @@
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
           "source": "AI Sales Agent Availability",
-          "message": "Ai Sales Agent Availability"
+          "message": "AI Sales Agent Availability"
         },
         "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
           "source": "Whether the article should be available for AI Sales Agent",

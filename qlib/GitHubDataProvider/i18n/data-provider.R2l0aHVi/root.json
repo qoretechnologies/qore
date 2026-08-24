@@ -505,7 +505,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.display_name": {
           "source": "Security and Analysis",
-          "message": "Security And Analysis"
+          "message": "Security and Analysis"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.short_desc": {
           "source": "Specify which security and analysis features to enable or disable for the…",
@@ -645,7 +645,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
           "source": "Delete Branch on Merge",
-          "message": "Delete Branch On Merge"
+          "message": "Delete Branch on Merge"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
           "source": "Either 'true' to allow automatically deleting head branches when pull requests…",
@@ -669,7 +669,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
           "source": "Use Squash PR Title as Default",
-          "message": "Use Squash Pr Title As Default"
+          "message": "Use Squash PR Title as Default"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.short_desc": {
           "source": "Either 'true' to allow squash-merge commits to use pull request title, or…",
@@ -1269,7 +1269,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.dGVhbV9pZA.display_name": {
           "source": "Team ID",
-          "message": "Team Id"
+          "message": "Team ID"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.dGVhbV9pZA.short_desc": {
           "source": "The id of the team that will be granted access to this repository",
@@ -1329,7 +1329,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
           "source": "Delete Branch on Merge",
-          "message": "Delete Branch On Merge"
+          "message": "Delete Branch on Merge"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
           "source": "Whether to delete head branches when pull requests are merged",
@@ -1641,7 +1641,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dGVhbV9pZA.display_name": {
           "source": "Team ID",
-          "message": "Team Id"
+          "message": "Team ID"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dGVhbV9pZA.short_desc": {
           "source": "The id of the team that will be granted access to this repository",
@@ -1701,7 +1701,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
           "source": "Delete Branch on Merge",
-          "message": "Delete Branch On Merge"
+          "message": "Delete Branch on Merge"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
           "source": "Either 'true' to allow automatically deleting head branches when pull requests…",
@@ -1713,7 +1713,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
           "source": "Use Squash PR Title as Default",
-          "message": "Use Squash Pr Title As Default"
+          "message": "Use Squash PR Title as Default"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.short_desc": {
           "source": "Either 'true' to allow squash-merge commits to use pull request title, or…",
@@ -3161,7 +3161,7 @@
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.display_name": {
           "source": "Duplicate Issue ID",
-          "message": "Duplicate Issue Id"
+          "message": "Duplicate Issue ID"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.short_desc": {
           "source": "The ID of the issue to mark as the canonical duplicate when 'state_reason' is…",

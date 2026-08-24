@@ -913,7 +913,7 @@
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmVmcmVzaF91cmw.display_name": {
           "source": "Refresh URL",
-          "message": "Refresh Url"
+          "message": "Refresh URL"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmVmcmVzaF91cmw.short_desc": {
           "source": "The URL the user will be redirected to if the account link is expired, has…",
@@ -925,7 +925,7 @@
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmV0dXJuX3VybA.display_name": {
           "source": "Return URL",
-          "message": "Return Url"
+          "message": "Return URL"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtbGluaw.option.cmV0dXJuX3VybA.short_desc": {
           "source": "The URL that the user will be redirected to upon leaving or completing the…",
@@ -1121,7 +1121,7 @@
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZGVmYXVsdF9mb3JfY3VycmVuY3k.display_name": {
           "source": "Default for Currency",
-          "message": "Default For Currency"
+          "message": "Default for Currency"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWV4dGVybmFsLWFjY291bnQ.option.ZGVmYXVsdF9mb3JfY3VycmVuY3k.short_desc": {
           "source": "When set to true, or if this is the first external account added in this…",
@@ -1441,7 +1441,7 @@
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.aWRfbnVtYmVy.display_name": {
           "source": "ID Number",
-          "message": "Id Number"
+          "message": "ID Number"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.aWRfbnVtYmVy.short_desc": {
           "source": "The person's ID number, as appropriate for their country",
@@ -1453,7 +1453,7 @@
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.aWRfbnVtYmVyX3NlY29uZGFyeQ.display_name": {
           "source": "ID Number Secondary",
-          "message": "Id Number Secondary"
+          "message": "ID Number Secondary"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.aWRfbnVtYmVyX3NlY29uZGFyeQ.short_desc": {
           "source": "The person's secondary ID number, as appropriate for their country, will be…",
@@ -1581,7 +1581,7 @@
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.c3NuX2xhc3RfNA.display_name": {
           "source": "SSN Last 4",
-          "message": "Ssn Last 4"
+          "message": "SSN Last 4"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWFjY291bnQtcGVyc29u.option.c3NuX2xhc3RfNA.short_desc": {
           "source": "The last four digits of the person's Social Security number (U.S",
@@ -2481,7 +2481,7 @@
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.dGF4X2lkX2RhdGE.display_name": {
           "source": "Tax ID Data",
-          "message": "Tax Id Data"
+          "message": "Tax ID Data"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVy.option.dGF4X2lkX2RhdGE.short_desc": {
           "source": "The customer's tax IDs",
@@ -3421,7 +3421,7 @@
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y2FuY2VsX2F0X3BlcmlvZF9lbmQ.display_name": {
           "source": "Cancel at Period End",
-          "message": "Cancel At Period End"
+          "message": "Cancel at Period End"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.Y2FuY2VsX2F0X3BlcmlvZF9lbmQ.short_desc": {
           "source": "Indicate whether this subscription should cancel at the end of the current…",
@@ -3661,7 +3661,7 @@
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfZnJvbV9wbGFu.display_name": {
           "source": "Trial from Plan",
-          "message": "Trial From Plan"
+          "message": "Trial from Plan"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLWN1c3RvbWVyLXN1YnNjcmlwdGlvbg.option.dHJpYWxfZnJvbV9wbGFu.short_desc": {
           "source": "Indicates if a plan's 'trial_period_days' should be applied to the subscription",
@@ -4997,7 +4997,7 @@
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.ZXJyb3Jfb25fcmVxdWlyZXNfYWN0aW9u.display_name": {
           "source": "Error on Requires Action",
-          "message": "Error On Requires Action"
+          "message": "Error on Requires Action"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.ZXJyb3Jfb25fcmVxdWlyZXNfYWN0aW9u.short_desc": {
           "source": "Set to 'true' to fail the payment attempt if the PaymentIntent transitions…",
@@ -5189,7 +5189,7 @@
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cmV0dXJuX3VybA.display_name": {
           "source": "Return URL",
-          "message": "Return Url"
+          "message": "Return URL"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.cmV0dXJuX3VybA.short_desc": {
           "source": "The URL to redirect your customer back to after they authenticate or cancel…",
@@ -5281,7 +5281,7 @@
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.dXNlX3N0cmlwZV9zZGs.display_name": {
           "source": "Use Stripe SDK",
-          "message": "Use Stripe Sdk"
+          "message": "Use Stripe SDK"
         },
         "app.U3RyaXBl.action.Y3JlYXRlLXBheW1lbnQtaW50ZW50.option.dXNlX3N0cmlwZV9zZGs.short_desc": {
           "source": "Set to 'true' when confirming server-side and using Stripe.js, iOS, or Android…",

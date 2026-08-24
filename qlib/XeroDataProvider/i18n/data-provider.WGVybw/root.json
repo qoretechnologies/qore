@@ -589,7 +589,7 @@
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.display_name": {
           "source": "Created by My App",
-          "message": "Created By My App"
+          "message": "Created by My App"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.short_desc": {
           "source": "When set to true you'll only retrieve Invoices created by your app",
@@ -1921,7 +1921,7 @@
         },
         "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZGVhZGxpbmVVdGM.display_name": {
           "source": "Deadline UTC",
-          "message": "Deadline Utc"
+          "message": "Deadline UTC"
         },
         "app.WGVybw.action.Y3JlYXRlUHJvamVjdA.option.ZGVhZGxpbmVVdGM.short_desc": {
           "source": "Deadline for the project",
