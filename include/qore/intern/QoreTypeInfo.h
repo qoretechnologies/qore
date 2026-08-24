@@ -543,7 +543,7 @@ public:
             ExceptionSink* xsink, LValueHelper* lvhelper = nullptr) {
         assert(text && text[0] == '<');
         if (hasType(ti)) {
-            ti->acceptInputIntern(xsink, "lvalue", false, -1, text, n);
+            ti->acceptInputIntern(xsink, "lvalue", false, -1, text, n, lvhelper);
         } else if (ti != autoTypeInfo) {
             stripTypeInfo(n, xsink, lvhelper);
         }
@@ -789,23 +789,20 @@ public:
     }
 
     DLLLOCAL int doAcceptError(bool priv_error, const char* arg_type, bool obj, int param_num, const char* param_name,
-            const QoreValue& n, ExceptionSink* xsink) const;
+            const QoreValue& n, ExceptionSink* xsink, LValueHelper* lvhelper = nullptr) const;
 
     DLLLOCAL int doTypeException(const char* arg_type, int param_num, const char* param_name, const QoreValue& n,
-            ExceptionSink* xsink) const;
+            ExceptionSink* xsink, LValueHelper* lvhelper = nullptr) const;
 
-    //! Returns true if this type looks like it could have come from type narrowing
-    /** Simple scalar types like int, string, float, etc. that appear in hash value positions
-        are likely to have come from type narrowing of hash<auto>.
-
-        @note We only check hard types (not soft types) since type narrowing typically produces
-        hard types. We don't include nothing/null since those represent absence of value rather
-        than narrowed types.
+    //! Returns true if this type can be the value type of a complex hash or list
+    /** Used to decide whether a rejected container element assignment is worth explaining in
+        terms of the container's value type.  Only hard scalar types are considered, because
+        those are what type narrowing produces; nothing/null represent the absence of a value
+        rather than a narrowed type.
 
         @since %Qore 2.1
     */
     DLLLOCAL bool isSimpleTypeNarrowed() const {
-        // Check if this is a simple type that could be the result of hash<auto> narrowing
         return this == bigIntTypeInfo || this == stringTypeInfo || this == floatTypeInfo
             || this == boolTypeInfo || this == dateTypeInfo || this == binaryTypeInfo
             || this == numberTypeInfo;

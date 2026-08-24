@@ -11451,17 +11451,20 @@ extern "C" DLLEXPORT void qore_rt_pop_closure_var_aot(QoreAOTContext* ctx, int32
 
 static Var* qore_rt_resolve_global_slot_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     assert(ctx && idx >= 0 && idx < ctx->num_globals);
+    // resolved once per process: this runs on every resolved AOT global slot access, and getenv()
+    // is a linear scan of the environment
+    static const char* const trace_env = getenv("QORE_AOT_TRACE_GLOBAL_SLOT");
+    static const std::string trace_pattern = trace_env ? trace_env : std::string();
     auto trace_slot = [ctx, idx]() -> bool {
-        const char* trace = getenv("QORE_AOT_TRACE_GLOBAL_SLOT");
-        if (!trace) {
+        if (!trace_env) {
             return false;
         }
-        if (!*trace) {
+        if (trace_pattern.empty()) {
             return true;
         }
         const char* name = (static_cast<size_t>(idx) < ctx->global_names.size())
             ? ctx->global_names[idx].c_str() : "";
-        return strstr(name, trace) != nullptr;
+        return strstr(name, trace_pattern.c_str()) != nullptr;
     };
     auto slot_name = [ctx, idx]() -> const char* {
         return (static_cast<size_t>(idx) < ctx->global_names.size())
@@ -11519,7 +11522,8 @@ static Var* qore_rt_resolve_global_slot_aot(QoreAOTContext* ctx, int32_t idx, Ex
 extern "C" DLLEXPORT uint64_t qore_rt_load_global_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink) {
     Var* var = qore_rt_resolve_global_slot_aot(ctx, idx, xsink);
     uint64_t rv = qore_rt_load_global(var, xsink);
-    const char* trace = getenv("QORE_AOT_TRACE_GLOBAL_SLOT");
+    // resolved once per process: this runs on every AOT global variable read
+    static const char* const trace = getenv("QORE_AOT_TRACE_GLOBAL_SLOT");
     if (trace) {
         const char* name = (ctx && static_cast<size_t>(idx) < ctx->global_names.size())
             ? ctx->global_names[idx].c_str() : "";
@@ -14860,20 +14864,71 @@ extern "C" DLLEXPORT uint64_t qore_rt_regex_op_with_operand_aot(QoreAOTContext* 
 // freshly-constructed QoreRegex defaults to non-global. The flag lives on
 // QoreRegex separately from the PCRE options bitfield, so it must be plumbed
 // through explicitly.
+//! Cache key for a compiled AOT regex: the pattern text plus everything that changes its behaviour
+namespace {
+struct AOTRegexCacheKey {
+    std::string pattern;
+    int64_t options = 0;
+    bool global = false;
+
+    bool operator==(const AOTRegexCacheKey& other) const {
+        return options == other.options && global == other.global && pattern == other.pattern;
+    }
+};
+
+struct AOTRegexCacheKeyHash {
+    size_t operator()(const AOTRegexCacheKey& key) const {
+        size_t h = std::hash<std::string>{}(key.pattern);
+        h ^= std::hash<int64_t>{}(key.options) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+        return key.global ? ~h : h;
+    }
+};
+}
+
+//! Returns a compiled regex for an AOT pattern operand, compiling it at most once per process
+/** Compiling a pattern is expensive: a PCRE2 compile plus JIT code generation.  An AOT image cannot
+    embed a pointer to the parse-time QoreRegex, so the lowering passes the pattern as a string
+    constant in the image and this helper used to build - and therefore recompile - the regex on
+    every evaluation, which dominated regex-heavy AOT code.  QoreRegex is reference-counted and
+    exec() is const, and the parse-time path already shares one instance across threads, so a
+    compiled pattern is safe to share here as well.  The lowering only emits literal patterns, so
+    the cache is bounded by the number of distinct regex literals in the loaded AOT modules.
+
+    @return the shared compiled regex, or nullptr if the pattern did not compile, in which case the
+    error has been raised through \a xsink
+*/
+static const QoreRegex* qore_rt_get_cached_aot_regex(const char* pattern, int64_t options, bool global,
+        ExceptionSink* xsink) {
+    static std::mutex cache_mutex;
+    static std::unordered_map<AOTRegexCacheKey, std::unique_ptr<QoreRegex>, AOTRegexCacheKeyHash> cache;
+
+    AOTRegexCacheKey key{pattern ? pattern : "", options, global};
+    std::lock_guard<std::mutex> lock(cache_mutex);
+    auto i = cache.find(key);
+    if (i != cache.end()) {
+        return i->second.get();
+    }
+    QoreString pat_str(key.pattern.c_str());
+    std::unique_ptr<QoreRegex> regex(new QoreRegex(pat_str, static_cast<int>(options), xsink));
+    if (xsink && *xsink) {
+        return nullptr;
+    }
+    if (global) {
+        regex->setGlobal();
+    }
+    return cache.emplace(std::move(key), std::move(regex)).first->second.get();
+}
+
 extern "C" DLLEXPORT uint64_t qore_rt_regex_op_by_pattern(int32_t opcode, const char* pattern,
         int64_t options, int32_t global, uint64_t operand_bits, ExceptionSink* xsink) {
     QoreValue operand = fromBits(operand_bits);
     QoreStringNodeValueHelper str(operand);
 
-    // Compile the regex from the pattern
-    QoreString pat_str(pattern);
-    QoreRegex regex(&pat_str, static_cast<int>(options), xsink);
-    if (xsink && *xsink) {
+    const QoreRegex* regex_ptr = qore_rt_get_cached_aot_regex(pattern, options, global, xsink);
+    if (!regex_ptr) {
         return toBits(QoreValue());
     }
-    if (global) {
-        regex.setGlobal();
-    }
+    const QoreRegex& regex = *regex_ptr;
 
     QoreIROpcode op = static_cast<QoreIROpcode>(opcode);
     switch (op) {
@@ -15077,7 +15132,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_ref_foreach_get_entry(uint64_t state_ptr, 
         // Scalar: return the value (first and only iteration)
         entry = state->tlist.refSelf();
     }
-    if (getenv("QORE_AOT_TRACE_REF_FOREACH")) {
+    // resolved once per process: this runs on every reference-foreach iteration
+    static const bool trace_ref_foreach = getenv("QORE_AOT_TRACE_REF_FOREACH") != nullptr;
+    if (trace_ref_foreach) {
         fprintf(stderr, "[ref-foreach] get_entry state=%p l_tlist=%p index=%ld "
             "entry_type=%d\n",
             (void*)state, (const void*)(state ? state->l_tlist : nullptr),

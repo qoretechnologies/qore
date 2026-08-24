@@ -5823,6 +5823,80 @@ static bool isContainerLiteral(const QoreValue& v) {
         || dynamic_cast<const QoreHashNode*>(node) || dynamic_cast<const QoreListNode*>(node);
 }
 
+//! Largest container a constant is still rebuilt from its entries rather than referenced
+/** Below this bound the native MakeHash/MakeList form is worth keeping: the fixed-aggregate
+    scalar-replacement pass consumes it and can remove the container altogether, which beats
+    materializing it once.  That pass only ever applies to a handful of members, while rebuilding
+    costs O(entries) at every read, so above the bound referencing the value always wins.
+*/
+static constexpr size_t qore_ir_max_rebuilt_constant_entries = 8;
+
+//! Returns the entry count of a concrete container value, or 0 for anything else
+static size_t qoreIrConstantContainerEntryCount(const QoreValue& expr) {
+    if (expr.getType() == NT_HASH) {
+        const QoreHashNode* h = expr.get<const QoreHashNode>();
+        return h ? h->size() : 0;
+    }
+    if (expr.getType() == NT_LIST) {
+        const QoreListNode* l = expr.get<const QoreListNode>();
+        return l ? l->size() : 0;
+    }
+    return 0;
+}
+
+//! Returns true when nothing inside a value has to be evaluated at runtime
+/** Parse nodes (including RuntimeConstantRefNode, whose deferred-initialization identity must be
+    preserved) and objects are reported as non-concrete so they keep their existing lowering.  The
+    walk covers every entry of a container, so it shares one cooperative-cancellation counter
+    across the whole recursion; a cancelled walk reports "not concrete", which is the conservative
+    answer because it keeps the existing per-entry lowering.
+*/
+static bool qoreIrValueIsFullyConcrete(const QoreValue& expr, size_t& check_count, unsigned depth = 0) {
+    if (depth > 16) {
+        return false;
+    }
+    if (!expr.hasNode()) {
+        // an immediate scalar carries no node to evaluate
+        return true;
+    }
+    if (expr.needsEval()) {
+        return false;
+    }
+    const AbstractQoreNode* node = expr.getInternalNode();
+    if (auto* hash = dynamic_cast<const QoreHashNode*>(node)) {
+        ConstHashIterator it(hash);
+        while (it.next()) {
+            if (((++check_count % 100) == 0)
+                    && qore_check_cancel(nullptr, "IR constant container analysis")) {
+                return false;
+            }
+            if (!qoreIrValueIsFullyConcrete(it.get(), check_count, depth + 1)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    if (auto* list = dynamic_cast<const QoreListNode*>(node)) {
+        for (size_t i = 0; i < list->size(); ++i) {
+            if (((++check_count % 100) == 0)
+                    && qore_check_cancel(nullptr, "IR constant container analysis")) {
+                return false;
+            }
+            if (!qoreIrValueIsFullyConcrete(list->retrieveEntry(i), check_count, depth + 1)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    return !dynamic_cast<const ParseNode*>(node) && node->getType() != NT_OBJECT;
+}
+
+//! Convenience wrapper owning the cooperative-cancellation counter for one walk
+static bool qoreIrConstantValueIsFullyConcrete(const QoreValue& expr) {
+    size_t check_count = 0;
+    return qoreIrValueIsFullyConcrete(expr, check_count);
+}
+
 QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& error) {
     // TAG_ENUM must be checked first: getType() returns the base type (e.g., NT_INT),
     // so base-type-specific paths below would strip enum identity
@@ -5856,6 +5930,28 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
     // Handle QoreFloatNode (heap-allocated float, e.g., negative NaN)
     if (expr.getType() == NT_FLOAT && expr.hasNode()) {
         return builder.createConstFloat(expr.getAsFloat())->result;
+    }
+    // A constant whose value is an already-built container is materialized once.  Rebuilding it
+    // from one operand per entry plants an O(entries) reconstruction at *every* read, which is why
+    // reading a 300-entry constant hash cost 86us under ir/jit/tiered against 1.8us under the AST
+    // interpreter, which evaluates the value node to a reference to itself.  LoadConstant
+    // reproduces the AST result exactly; constants are immutable and container value semantics are
+    // preserved by copy-on-write.  Containers still holding anything evaluable (a nested runtime
+    // constant reference, an object) fall through to the per-entry lowering below.
+    //
+    // Only for lowering that runs in this process (constant_reverse_map is supplied by AOT
+    // compilation alone).  An AOT image cannot embed the value: it recovers a constant through a
+    // recorded path, and a constant's value node is shared with the expression that computed it -
+    // the hash returned by a `makeX()` helper *is* the value node of `const X = makeX()`.
+    // Referencing it by name from AOT-lowered code would make that helper read the very constant it
+    // computes, so the constant's deferred initializer reads it while still pending
+    // (AOT-PENDING-CONSTANT).  Ruling that out needs the initializer call graph, so AOT keeps
+    // rebuilding the container for now.
+    if (!constant_reverse_map && (expr.getType() == NT_LIST || expr.getType() == NT_HASH)
+            && expr.isValue()
+            && qoreIrConstantContainerEntryCount(expr) > qore_ir_max_rebuilt_constant_entries
+            && qoreIrConstantValueIsFullyConcrete(expr)) {
+        return builder.createLoadConstant(nullptr, expr, nullptr)->result;
     }
     if (expr.getType() == NT_LIST && expr.isValue()) {
         const QoreListNode* list = expr.get<const QoreListNode>();

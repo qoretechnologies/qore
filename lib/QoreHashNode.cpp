@@ -199,6 +199,11 @@ int qore_hash_private::getLValue(const char* key, LValueHelper& lvh, bool for_re
     //    complexTypeInfo, key, QoreTypeInfo::getName(memTypeInfo));
 
     lvh.resetValue(m->val, memTypeInfo);
+    if (!hashdecl && complexTypeInfo) {
+        // the member type is this hash's declared value type, so a rejected assignment here can
+        // be explained by that value type; a hashdecl member type cannot
+        lvh.setValueTypeSource(LValueHelper::VTS_Hash);
+    }
     //lvh.resetPtr(&m->node, memTypeInfo);
     return 0;
 }

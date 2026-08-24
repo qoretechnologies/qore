@@ -169,8 +169,10 @@ static bool qore_ir_try_string_arg_pseudo_fast_path(bool pseudo, bool base_known
         bool arg0_known_string, bool arg0_known_assigned_int, bool arg1_known_assigned_int,
         QoreIRIntrinsic intrinsic, const QoreValue& base, uint64_t* nanboxed_args,
         int nargs, QoreValue& res, ExceptionSink* xsink) {
-    if (std::getenv("QORE_DISABLE_IR_GUARDED_STRING_PSEUDO")
-            || !pseudo || !base_known_string || base.getType() != NT_STRING) {
+    // read the environment once per process, and only after the cheap guards: this runs on every
+    // string pseudo-method call in the interpreter, and getenv() is a linear scan of the environment
+    static const bool disabled = std::getenv("QORE_DISABLE_IR_GUARDED_STRING_PSEUDO") != nullptr;
+    if (!pseudo || !base_known_string || base.getType() != NT_STRING || disabled) {
         return false;
     }
 
@@ -1835,8 +1837,20 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     bool needs_slot_cache_tls = false;
     bool may_invalidate_external_caches = false;
     std::vector<const QoreIRCallDirectInstruction*> direct_calls;
+    // Block locality of every value slot, used to build interpreter_cross_block_slots below.
+    // UINT32_MAX means "not seen yet"; a second definition or use in a different block makes
+    // the slot cross-block.  Definitions and uses are recorded in one pass, so a use reached
+    // through a back edge can be visited before the definition; the verdict is only computed
+    // after the whole function has been walked.
+    constexpr uint32_t no_block = UINT32_MAX;
+    std::vector<uint32_t> slot_def_block(func.max_value_id + 1, no_block);
+    std::vector<uint32_t> slot_use_block(func.max_value_id + 1, no_block);
+    std::vector<uint8_t> slot_multi_def_block(func.max_value_id + 1, 0);
+    std::vector<uint8_t> slot_multi_use_block(func.max_value_id + 1, 0);
     size_t inst_count = 0;
+    uint32_t block_index = 0;
     for (const auto& b : func.blocks) {
+        const uint32_t cur_block = block_index++;
         for (const auto& inst_ptr : b->instructions) {
             if (((++inst_count % 100) == 0)
                     && qore_check_cancel(xsink, "IR interpreter analysis")) {
@@ -1870,15 +1884,45 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
                     && qore_ir_instruction_may_invalidate_caller_caches(func, inst_ptr.get())) {
                 may_invalidate_external_caches = true;
             }
-            auto countOperand = [&operand_use_counts](QoreIRValue op) {
+            if (inst_ptr->result.isValid() && inst_ptr->result.id < slot_def_block.size()) {
+                uint32_t& def_block = slot_def_block[inst_ptr->result.id];
+                if (def_block == no_block) {
+                    def_block = cur_block;
+                } else if (def_block != cur_block) {
+                    slot_multi_def_block[inst_ptr->result.id] = 1;
+                }
+            }
+            auto countOperand = [&](QoreIRValue op) {
                 if (op.isValid() && op.id < operand_use_counts.size()) {
                     ++operand_use_counts[op.id];
+                    uint32_t& use_block = slot_use_block[op.id];
+                    if (use_block == no_block) {
+                        use_block = cur_block;
+                    } else if (use_block != cur_block) {
+                        slot_multi_use_block[op.id] = 1;
+                    }
                 }
             };
             if (!qore_ir_visit_value_operands(*inst_ptr, countOperand, &inst_count,
                     "IR interpreter analysis")) {
                 return false;
             }
+        }
+    }
+    // A slot is safe for the block-local liveness scan only when its single definition and
+    // every use live in the same block; otherwise the scan cannot prove the value is dead.
+    std::vector<uint8_t> cross_block_slots(func.max_value_id + 1, 0);
+    for (size_t id = 0; id < cross_block_slots.size(); ++id) {
+        if (id && ((id % 100) == 0) && qore_check_cancel(xsink, "IR interpreter analysis")) {
+            return false;
+        }
+        if (slot_use_block[id] == no_block) {
+            // never read: the block-local scan has nothing to get wrong
+            continue;
+        }
+        if (slot_multi_use_block[id] || slot_multi_def_block[id]
+                || slot_def_block[id] == no_block || slot_def_block[id] != slot_use_block[id]) {
+            cross_block_slots[id] = 1;
         }
     }
     int max_param_idx = -1;
@@ -1933,6 +1977,7 @@ static bool buildInterpreterAnalysis(const QoreIRFunction& func, ExceptionSink* 
     func.interpreter_param_local_vars = std::move(param_local_vars);
     func.interpreter_locals_ir_only = std::move(locals_ir_only);
     func.interpreter_return_protected_slots = std::move(return_protected_slots);
+    func.interpreter_cross_block_slots = std::move(cross_block_slots);
     func.interpreter_return_value_slot_ids = std::move(return_value_slot_ids);
     func.interpreter_return_preserve_slot_ids = std::move(return_preserve_slot_ids);
     func.interpreter_direct_calls = std::move(direct_calls);
@@ -6434,8 +6479,10 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     QoreIRBasicBlock* block = func.blocks.front().get();
     QoreIRBasicBlock* prev_block = nullptr;
     size_t ip = 0;
-    const bool trace_ir_refs = getenv("QORE_IR_TRACE_REFS") != nullptr;
-    const bool trace_ir_refs_deep = getenv("QORE_IR_TRACE_REFS_DEEP") != nullptr;
+    // execute() runs once per Qore function call, so these diagnostic flags must not re-scan the
+    // environment per call; every other debug flag in this file is resolved once as well
+    static const bool trace_ir_refs = getenv("QORE_IR_TRACE_REFS") != nullptr;
+    static const bool trace_ir_refs_deep = getenv("QORE_IR_TRACE_REFS_DEEP") != nullptr;
     // Deep ref tracing intentionally dereferences object internals; leave it
     // off unless narrowing an IR lifetime/refcount bug under a debugger.
     auto traceIRRef = [&](const QoreIRInstruction* trace_inst, const char* event, uint32_t slot, QoreValue val,
@@ -6631,14 +6678,24 @@ bool QoreIRInterpreter::execute(const QoreIRFunction& func, QoreValue& return_va
     };
 
     const std::vector<uint8_t>& return_protected_slots = func.interpreter_return_protected_slots;
+    const std::vector<uint8_t>& cross_block_slots = func.interpreter_cross_block_slots;
     const std::vector<uint32_t>& return_value_slot_ids = func.interpreter_return_value_slot_ids;
     const std::vector<uint32_t>& return_preserve_slot_ids = func.interpreter_return_preserve_slot_ids;
     const std::vector<int32_t>& operand_use_counts = func.interpreter_operand_use_counts;
 
-    auto valueUsedLaterInCurrentBlock = [&block, &ip, xsink, &return_protected_slots](uint32_t id) -> bool {
+    auto valueUsedLaterInCurrentBlock = [&block, &ip, xsink, &return_protected_slots,
+            &cross_block_slots](uint32_t id) -> bool {
         // A slot that is the operand of any Return in the function must stay
         // alive across scope exits regardless of basic-block locality.
         if (id < return_protected_slots.size() && return_protected_slots[id]) {
+            return true;
+        }
+        // The forward scan below only sees the rest of the current block, so it can only
+        // prove a value dead when the value is defined and consumed in that one block.  A
+        // slot used from another block - most importantly one whose definition sits in a
+        // loop preheader and whose use is in the loop body, reached again on every back edge
+        // - must survive this cleanup and is released by end-of-function value cleanup.
+        if (id < cross_block_slots.size() && cross_block_slots[id]) {
             return true;
         }
         if (!block) {
@@ -10445,7 +10502,9 @@ load_local_done:
             }
             case QoreIROpcode::UninstantiateLocal: {
                 auto* local_inst = static_cast<QoreIRLocalInstruction*>(inst);
-                if (getenv("QORE_DEBUG_UNINST")) {
+                // resolved once: this opcode runs at every block scope exit
+                static const bool debug_uninst = getenv("QORE_DEBUG_UNINST") != nullptr;
+                if (debug_uninst) {
                     bool ip2 = pre_instantiated && pre_instantiated->find(local_inst->local) != pre_instantiated->end();
                     fprintf(stderr, "UNINST: %s is_closure=%d slot=%d is_pre=%d\n",
                         local_inst->local ? local_inst->local->getName() : "null",

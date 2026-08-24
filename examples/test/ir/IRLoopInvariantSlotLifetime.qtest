@@ -1,0 +1,234 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class IRLoopInvariantSlotLifetimeTest
+
+#! Regression coverage for loop-invariant values consumed by a block-scoped local.
+/** The IR lowerer hoists invariant string/list pseudo-method calls into the block ahead of
+    the loop, so the value is defined once and read on every iteration.  The interpreter used
+    to decide whether such a value slot was still live with a forward scan of the current
+    basic block only, which cannot see a use reached again through the loop back edge: at the
+    UninstantiateLocal that ends the body's scope the slot was destroyed, and every iteration
+    after the first read NOTHING.  A typed declaration surfaced that as a RUNTIME-TYPE-ERROR
+    while an untyped one silently produced NOTHING, so the assertions below check values and
+    not just the absence of an exception.
+*/
+class IRLoopInvariantSlotLifetimeTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+
+        #! every execution tier must agree with the AST interpreter
+        const Modes = ("ast", "ir", "tiered", "jit");
+
+        #! expected program output, verified independently against the AST tier
+        const Expected = "15:[5, 5, 5]:1:20:9:20:15:9:9:16:10:9:6\n";
+    }
+
+    constructor() : QUnit::Test("IRLoopInvariantSlotLifetimeTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("hoisted value survives a block-scoped local in every tier", \testTiers());
+        addTestCase("hoisted value survives a block-scoped local under AOT", \testAot());
+
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    private string runMode(string script_path, string mode) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+            libqore_dir, qore_bin, mode, script_path));
+    }
+
+    #! The program under test; every loop body declares a local initialized from a hoisted value.
+    private string scriptCode() {
+        return "%modern
+
+# --- inside a function --------------------------------------------------------------------
+
+int sub scopedTypedLocal() {
+    string s = \"abcde\";
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        int len = s.length();
+        sum += len;
+    }
+    return sum;
+}
+
+int sub scopedLocalInWhile() {
+    string s = \"abc\";
+    int sum = 0;
+    int n = 0;
+    while (n < 3) {
+        int len = s.length();
+        sum += len;
+        ++n;
+    }
+    return sum;
+}
+
+int sub scopedListSize() {
+    list<auto> l = (1, 2, 3);
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        int sz = l.size();
+        sum += sz;
+    }
+    return sum;
+}
+
+int sub nestedScopedLocal() {
+    string s = \"abcd\";
+    int sum = 0;
+    for (int i = 0; i < 2; ++i) {
+        for (int j = 0; j < 2; ++j) {
+            int len = s.length();
+            sum += len;
+        }
+    }
+    return sum;
+}
+
+# a hoisted value declared into a local of every hoistable string predicate
+int sub scopedNoArgPredicates() {
+    string s = \"abcdef\";
+    int sum = 0;
+    for (int i = 0; i < 2; ++i) {
+        bool a = s.empty();
+        bool b = s.val();
+        bool c = s.strp();
+        bool d = s.intp();
+        bool e = s.sizep();
+        if (!a) ++sum;
+        if (b) ++sum;
+        if (c) ++sum;
+        if (!d) ++sum;
+        if (e) ++sum;
+    }
+    return sum;
+}
+
+int sub scopedGlobalLength() {
+    string s = \"abc\";
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        int len = length(s);
+        sum += len;
+    }
+    return sum;
+}
+
+# the hoisted local must be re-read, not remembered, when the base string changes
+int sub scopedLocalWithReassign() {
+    string s = \"a\";
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        int len = s.length();
+        sum += len;
+        s += \"b\";
+    }
+    return sum;
+}
+
+# --- at the top level ---------------------------------------------------------------------
+
+string ts = \"abcde\";
+list<auto> tl = (1, 2, 3);
+
+# the originally reported failure: a typed declaration is the whole loop body
+int top_typed = 0;
+for (int i = 0; i < 3; ++i) {
+    int len = ts.length();
+    top_typed += len;
+}
+
+# the same shape with no other statement in the body raised RUNTIME-TYPE-ERROR before the fix
+for (int i = 0; i < 3; ++i) {
+    int len = ts.length();
+}
+int top_bare_reached = 1;
+
+# an untyped declaration took no type error and silently collected NOTHING
+list<auto> top_auto = ();
+for (int i = 0; i < 3; ++i) {
+    auto len = ts.length();
+    top_auto += len;
+}
+
+int top_while = 0;
+int tn = 0;
+while (tn < 4) {
+    int len = ts.length();
+    top_while += len;
+    ++tn;
+}
+
+int top_list = 0;
+for (int i = 0; i < 3; ++i) {
+    int sz = tl.size();
+    top_list += sz;
+}
+
+int top_nested = 0;
+for (int i = 0; i < 2; ++i) {
+    for (int j = 0; j < 2; ++j) {
+        int len = ts.length();
+        top_nested += len;
+    }
+}
+
+printf(\"%d:%y:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\\n\",
+    top_typed, top_auto, top_bare_reached, top_while, top_list, top_nested,
+    scopedTypedLocal(), scopedLocalInWhile(), scopedListSize(), nestedScopedLocal(),
+    scopedNoArgPredicates(), scopedGlobalLength(), scopedLocalWithReassign());
+";
+    }
+
+    private checkTier(string script_path, string mode) {
+        string actual = runMode(script_path, mode);
+        assertEq(Expected, actual, sprintf("exec-mode=%s output", mode));
+    }
+
+    testTiers() {
+        TmpDir tmp("qore-ir-loop-invariant-slot-lifetime-");
+        string script_path = tmp.path + "/slot-lifetime.qr";
+        write(script_path, scriptCode());
+
+        foreach string mode in (Modes) {
+            checkTier(script_path, mode);
+        }
+    }
+
+    testAot() {
+        if (!is_file(qcc_bin) && !backquote("command -v " + qcc_bin + " 2>/dev/null")) {
+            testSkip("qcc not available");
+        }
+        TmpDir tmp("qore-ir-loop-invariant-slot-lifetime-aot-");
+        string script_path = tmp.path + "/slot-lifetime.qr";
+        string exe = tmp.path + "/slot-lifetime";
+        write(script_path, scriptCode());
+
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1",
+            libqore_dir, qcc_bin, exe, script_path));
+        assertTrue(is_file(exe), "AOT compile produced an executable: " + compile_out);
+        assertEq(Expected, backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", libqore_dir, exe)),
+            "AOT output");
+    }
+}

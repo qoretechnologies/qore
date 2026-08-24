@@ -3298,6 +3298,16 @@ public:
     mutable std::vector<const LocalVar*> interpreter_param_local_vars;
     mutable std::vector<uint8_t> interpreter_locals_ir_only;
     mutable std::vector<uint8_t> interpreter_return_protected_slots;
+    //! Slots whose definition and uses are not all in the same basic block.
+    /** The interpreter's scope-exit cleanup decides whether a value slot is
+        still live with a forward scan of the current basic block only.  That
+        scan cannot see a use in another block, and in particular cannot see a
+        use that is reached again through a loop back edge, so a value defined
+        outside a loop and consumed inside it would be destroyed on the first
+        iteration and read as NOTHING on every later one.  Slots marked here are
+        excluded from that block-local kill and are released by the normal
+        end-of-function value cleanup instead. */
+    mutable std::vector<uint8_t> interpreter_cross_block_slots;
     mutable std::vector<uint32_t> interpreter_return_value_slot_ids;
     mutable std::vector<uint32_t> interpreter_return_preserve_slot_ids;
     mutable std::vector<const QoreIRCallDirectInstruction*> interpreter_direct_calls;

@@ -5530,7 +5530,7 @@ void QoreTypeInfo::ptext(QoreString& str, const char* arg_type, int param_num, c
 }
 
 int QoreTypeInfo::doAcceptError(bool priv_error, const char* arg_type, bool obj, int param_num, const char* param_name,
-        const QoreValue& n, ExceptionSink* xsink) const {
+        const QoreValue& n, ExceptionSink* xsink, LValueHelper* lvhelper) const {
     if (priv_error) {
         if (obj) {
             doObjectPrivateClassException(param_name, xsink);
@@ -5541,14 +5541,14 @@ int QoreTypeInfo::doAcceptError(bool priv_error, const char* arg_type, bool obj,
         if (obj) {
             doObjectHashDeclTypeException(arg_type, param_name, n, xsink);
         } else {
-            doTypeException(arg_type, param_num + 1, param_name, n, xsink);
+            doTypeException(arg_type, param_num + 1, param_name, n, xsink, lvhelper);
         }
     }
     return -1;
 }
 
 int QoreTypeInfo::doTypeException(const char* arg_type, int param_num, const char* param_name, const QoreValue& n,
-        ExceptionSink* xsink) const {
+        ExceptionSink* xsink, LValueHelper* lvhelper) const {
     // xsink may be null in case parse exceptions have been disabled in the QoreProgram object
     // for example if there was a "requires" error
     if (!xsink)
@@ -5559,11 +5559,28 @@ int QoreTypeInfo::doTypeException(const char* arg_type, int param_num, const cha
     desc->sprintf("expects type '%s', but got ", tname.c_str());
     QoreTypeInfo::getNodeType(*desc, n);
     desc->concat(" instead");
-    // Add a hint about type narrowing for lvalue/key assignments when the expected type is a simple type
-    // that could have come from type narrowing of hash<auto>
-    if (!strcmp(arg_type, "lvalue") && isSimpleTypeNarrowed()) {
-        desc->concat("; this may be due to type narrowing from hash<auto>; to store values of "
-            "different types, use 'hash<auto!> h' to avoid type narrowing in assignment");
+    // When the target type is a container's declared value type, say so and point at auto!, which
+    // is the fix when that value type was narrowed from the container's initial value.  Without a
+    // container in the lvalue path there is nothing to narrow, so no hint is added: every
+    // assignment to a simple-typed lvalue used to claim a hash was involved even when the program
+    // contained no hash at all.
+    if (lvhelper && isSimpleTypeNarrowed()) {
+        const char* container = nullptr;
+        switch (lvhelper->getValueTypeSource()) {
+            case LValueHelper::VTS_Hash:
+                container = "hash";
+                break;
+            case LValueHelper::VTS_List:
+                container = "list";
+                break;
+            case LValueHelper::VTS_None:
+                break;
+        }
+        if (container) {
+            desc->sprintf("; this type is the value type of the %s holding the target; if that "
+                "value type was narrowed from the %s's initial value, declare the variable as "
+                "'%s<auto!>' to disable type narrowing", container, container, container);
+        }
     }
     xsink->raiseException("RUNTIME-TYPE-ERROR", desc);
     return -1;
@@ -6060,7 +6077,7 @@ void QoreTypeInfo::acceptInputIntern(ExceptionSink* xsink, const char* arg_type,
                     }
                 }
             }
-            doAcceptError(false, arg_type, obj, param_num, param_name, n, xsink);
+            doAcceptError(false, arg_type, obj, param_num, param_name, n, xsink, lvhelper);
             return;
         }
     }
@@ -6071,7 +6088,7 @@ void QoreTypeInfo::acceptInputIntern(ExceptionSink* xsink, const char* arg_type,
             return;
         }
     }
-    doAcceptError(false, arg_type, obj, param_num, param_name, n, xsink);
+    doAcceptError(false, arg_type, obj, param_num, param_name, n, xsink, lvhelper);
 }
 
 qore_type_result_e QoreTypeInfo::parseAcceptsIntern(const QoreAcceptSpec& at, const QoreReturnSpec& rt,

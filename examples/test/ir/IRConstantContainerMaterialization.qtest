@@ -1,0 +1,159 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class IRConstantContainerMaterializationTest
+
+#! A constant whose value is a container must be materialized once, not rebuilt at every read.
+/** QoreIRLowering::lowerConstant() used to lower such a constant by emitting one operand per entry
+    followed by a MakeHash/MakeList, so every read reconstructed the whole container: reading a
+    300-entry constant hash cost 86us under ir/jit/tiered against 1.8us under the AST interpreter,
+    which evaluates the value node to a reference to itself.  The cost was therefore O(entries) per
+    read instead of O(1).
+
+    The shape assertions below are the real regression guard - they check that the emitted IR loads
+    the constant instead of building it.  The timing assertion is a ratio between a small and a
+    large constant measured in one process, which stays meaningful under CI CPU throttling where an
+    absolute threshold would not.
+*/
+class IRConstantContainerMaterializationTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+
+        const Modes = ("ast", "ir", "tiered", "jit");
+
+        #! entries in the large constant used for the shape and ratio checks
+        const LargeEntries = 300;
+
+        #! a rebuilt constant grew ~23x from 3 to 300 entries; a materialized one does not grow at
+        #! all, so anything under this bound distinguishes the two without being timing-sensitive
+        const MaxSizeCostRatio = 5.0;
+    }
+
+    constructor() : QUnit::Test("IRConstantContainerMaterializationTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("a constant hash is loaded, not rebuilt", \testHashShape());
+        addTestCase("a constant list is loaded, not rebuilt", \testListShape());
+        addTestCase("read cost does not grow with constant size", \testCostIndependentOfSize());
+        addTestCase("every tier reads the same values", \testTiersAgree());
+
+        set_return_value(main());
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    private string hashEntries(int n) {
+        list<string> parts = ();
+        for (int i = 0; i < n; ++i) {
+            parts += sprintf("\"k%d\": %d", i, i);
+        }
+        return parts.join(", ");
+    }
+
+    private string listEntries(int n) {
+        list<string> parts = ();
+        for (int i = 0; i < n; ++i) {
+            parts += string(i);
+        }
+        return parts.join(", ");
+    }
+
+    #! Dumps the IR for a read of a container constant through a runtime key/index
+    private string dumpIr(string decl, string read) {
+        TmpDir tmp("qore-ir-const-materialization-");
+        string path = tmp.path + "/const.qr";
+        # no output calls: nothing else in the program may build a container
+        write(path, sprintf("%%modern\n%s\nstring k = \"k1\";\nint idx = 1;\nauto sink;\n"
+            "for (int i = 0; i < 3; ++i) { sink = %s; }\n", decl, read));
+        return backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=ir --ir-dump %s 2>&1",
+            libqore_dir, qore_bin, path));
+    }
+
+    testHashShape() {
+        string ir = dumpIr(sprintf("const T = {%s};", hashEntries(LargeEntries)), "T{k}");
+        assertTrue(ir =~ /load\.constant/, "constant hash is loaded by reference");
+        assertFalse(ir =~ /make\.hash/, "constant hash is not rebuilt per read");
+    }
+
+    testListShape() {
+        string ir = dumpIr(sprintf("const L = (%s);", listEntries(LargeEntries)), "L[idx]");
+        assertTrue(ir =~ /load\.constant/, "constant list is loaded by reference");
+        assertFalse(ir =~ /make\.list/, "constant list is not rebuilt per read");
+    }
+
+    #! Times one read of a small and a large constant in the same process and returns both
+    private hash<auto> measure() {
+        TmpDir tmp("qore-ir-const-materialization-cost-");
+        string path = tmp.path + "/cost.qr";
+        write(path, sprintf("%%modern
+const Small = {%s};
+const Large = {%s};
+string k = \"k1\";
+auto sink;
+int N = 20000;
+for (int i = 0; i < 2000; ++i) { sink = Small{k}; sink = Large{k}; }
+int t0 = clock_getmicros();
+for (int i = 0; i < N; ++i) { sink = Small{k}; }
+int t1 = clock_getmicros();
+for (int i = 0; i < N; ++i) { sink = Large{k}; }
+int t2 = clock_getmicros();
+printf(\"%%d:%%d\\n\", t1 - t0, t2 - t1);
+", hashEntries(3), hashEntries(LargeEntries)));
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b %s 2>&1",
+            libqore_dir, qore_bin, path));
+        list<string> parts = (trim out).split(":");
+        assertEq(2, parts.size(), "cost probe produced two timings: " + out);
+        return {"small": parts[0].toInt(), "large": parts[1].toInt()};
+    }
+
+    testCostIndependentOfSize() {
+        hash<auto> t = measure();
+        assertGt(0, t.small, "small-constant loop was measurable");
+        assertGt(0, t.large, "large-constant loop was measurable");
+        float ratio = t.large.toFloat() / t.small.toFloat();
+        assertLt(MaxSizeCostRatio, ratio,
+            sprintf("reading a %d-entry constant costs %.2fx a 3-entry one (small=%dus large=%dus)",
+                LargeEntries, ratio, t.small, t.large));
+    }
+
+    testTiersAgree() {
+        TmpDir tmp("qore-ir-const-materialization-values-");
+        string path = tmp.path + "/values.qr";
+        write(path, sprintf("%%modern
+const T = {%s};
+const L = (%s);
+string k = \"k7\";
+int idx = 7;
+list<auto> acc = ();
+for (int i = 0; i < 3; ++i) { acc += T{k}; acc += L[idx]; }
+# a constant read with a literal key must still fold, and a copy must not alias the constant
+hash<auto> copy = T;
+copy.k7 = -1;
+printf(\"%%y:%%y:%%y\\n\", acc, T.k7, copy.k7);
+", hashEntries(20), listEntries(20)));
+        string expected;
+        foreach string mode in (Modes) {
+            string actual = backquote(sprintf("LD_LIBRARY_PATH=%s %s -b --exec-mode=%s %s 2>&1",
+                libqore_dir, qore_bin, mode, path));
+            if (!expected.val()) {
+                expected = actual;
+                assertEq("[7, 7, 7, 7, 7, 7]:7:-1\n", actual, "AST-tier values");
+            } else {
+                assertEq(expected, actual, sprintf("exec-mode=%s values", mode));
+            }
+        }
+    }
+}

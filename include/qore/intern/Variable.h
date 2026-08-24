@@ -507,6 +507,20 @@ public:
     QoreValue* qv = nullptr;
     const QoreTypeInfo* typeInfo = nullptr;
 
+    //! The kind of container whose value type produced the current lvalue's type, if any
+    /** Assigning through a complex hash or list gives the target the container's value type, so
+        a rejected assignment there can be explained by that value type.  Assigning to a plain
+        variable, an object member, a hashdecl member, a return value or a cast cannot, and must
+        not be reported as if a container were involved.  Only the two container element lvalue
+        paths set this; every method that (re)binds the target resets it.
+    */
+    enum ValueTypeSource : uint8_t {
+        VTS_None = 0,     //!< the type did not come from a container's value type
+        VTS_Hash = 1,     //!< the type is the value type of a complex hash
+        VTS_List = 2,     //!< the type is the value type of a complex list
+    };
+    ValueTypeSource value_type_source = VTS_None;
+
     DLLLOCAL LValueHelper(const ReferenceNode& ref, ExceptionSink* xsink, bool for_remove = false);
     DLLLOCAL LValueHelper(const QoreValue& exp, ExceptionSink* xsink, bool for_remove = false);
     DLLLOCAL LValueHelper(const ReferenceNode& ref, RuntimeConfig& rc, ExceptionSink* xsink, bool for_remove = false);
@@ -568,6 +582,19 @@ public:
         //printd(5, "LValueHelper::setTypeInfo() this: %p ti: %s\n", this, QoreTypeInfo::getName(ti));
 
         typeInfo = ti;
+        value_type_source = VTS_None;
+    }
+
+    //! Records that the current lvalue type is the value type of the given container kind
+    /** Called by the complex hash and list element lvalue paths immediately after resetValue(),
+        which resets the source to @ref VTS_None.
+    */
+    DLLLOCAL void setValueTypeSource(ValueTypeSource src) {
+        value_type_source = src;
+    }
+
+    DLLLOCAL ValueTypeSource getValueTypeSource() const {
+        return value_type_source;
     }
 
     DLLLOCAL void setValue(QoreLValueGeneric& nv, const QoreTypeInfo* ti = nullptr) {
@@ -580,6 +607,7 @@ public:
         before = nv.assigned && nv.type == QV_Node ? needs_scan(nv.v.n) : false;
 
         typeInfo = ti;
+        value_type_source = VTS_None;
     }
 
     DLLLOCAL void setValue(QoreValue& nqv, const QoreTypeInfo* ti = nullptr) {
@@ -593,6 +621,7 @@ public:
         before = needs_scan(nqv);
 
         typeInfo = ti;
+        value_type_source = VTS_None;
     }
 
     DLLLOCAL void resetValue(QoreLValueGeneric& nv, const QoreTypeInfo* ti = nullptr) {
@@ -608,6 +637,7 @@ public:
         before = nv.assigned && nv.type == QV_Node ? needs_scan(nv.v.n) : false;
 
         typeInfo = ti;
+        value_type_source = VTS_None;
     }
 
     DLLLOCAL void resetValue(QoreValue& nqv, const QoreTypeInfo* ti = nullptr) {
@@ -623,6 +653,7 @@ public:
         before = needs_scan(nqv);
 
         typeInfo = ti;
+        value_type_source = VTS_None;
     }
 
     DLLLOCAL void clearPtr() {
@@ -632,6 +663,7 @@ public:
             qv = nullptr;
         }
         typeInfo = nullptr;
+        value_type_source = VTS_None;
         before = false;
     }
 
