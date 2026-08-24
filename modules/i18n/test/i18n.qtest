@@ -152,6 +152,19 @@ class I18nTest inherits QUnit::Test {
     }
 
     localeFormattingAndCollationTest() {
+        # the option-error helper is shared by every function taking an options hash; it must name the
+        # calling context in the exception and the offending option and its type in the description
+        hash<ExceptionInfo> opt_ex;
+        try {
+            bool ignored = I18n::string_predicate("abc", "contains", "b", "en", {"normalization": 1});
+            assertTrue(False, sprintf("expected an exception; got %y", ignored));
+        } catch (hash<ExceptionInfo> e) {
+            opt_ex = e;
+        }
+        assertEq("I18N-STRING-PREDICATE-ERROR", opt_ex.err);
+        assertRegex("option 'normalization'", opt_ex.desc);
+        assertRegex("got type 'integer'", opt_ex.desc);
+
         assertEq("1,234.50", I18n::format_number("1234.50", "en-US"));
         assertEq("1234.50", I18n::format_number("1234.50", "en-US", {"grouping": False}));
         assertEq("1.00", I18n::format_number(1, "en-US", {"min_fraction_digits": 2}));

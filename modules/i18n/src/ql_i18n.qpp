@@ -1571,6 +1571,12 @@ static icu::UnicodeString i18n_utf8_to_unicode_string(const std::string& value) 
     return icu::UnicodeString::fromUTF8(icu::StringPiece(value));
 }
 
+// builds the exception name for an option error; ExceptionSink::raiseException() does not expand format
+// specifiers in the exception name, only in the description, so the name has to be assembled here
+static std::string i18n_option_error_name(const char* context) {
+    return std::string("I18N-") + context + "-ERROR";
+}
+
 static bool i18n_get_string_option(const QoreHashNode* opts, const char* key, std::string& out,
         ExceptionSink* xsink, const char* context) {
     QoreValue value = opts ? opts->getKeyValue(key) : QoreValue();
@@ -1581,7 +1587,8 @@ static bool i18n_get_string_option(const QoreHashNode* opts, const char* key, st
         if (*xsink) {
             return false;
         }
-        xsink->raiseException("I18N-%s-ERROR", "%s option '%s' must be a string", context, context, key);
+        xsink->raiseException(i18n_option_error_name(context).c_str(),
+            "%s option '%s' must be a string; got type '%s'", context, key, value.getTypeName());
         return false;
     }
     return true;
@@ -1594,8 +1601,8 @@ static bool i18n_get_bool_option(const QoreHashNode* opts, const char* key, bool
         return true;
     }
     if (value.getType() != NT_BOOLEAN) {
-        xsink->raiseException("I18N-%s-ERROR", "%s option '%s' must be a bool; got type '%s'",
-            context, context, key, value.getTypeName());
+        xsink->raiseException(i18n_option_error_name(context).c_str(),
+            "%s option '%s' must be a bool; got type '%s'", context, key, value.getTypeName());
         return false;
     }
     out = value.getAsBool();
