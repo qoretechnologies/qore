@@ -2014,9 +2014,15 @@ file(WRITE \"${CMAKE_BINARY_DIR}/cycle-vars.txt\"
         assertEq(1, occurrences(failed, "one shared parse"),
             "a broken member of a multi-source component reaches the shared "
                 "parse: " + failed);
-        assertEq(token_before, mtime(bootstrap_stamp),
-            "a failed shared parse does not advance the group's ordering token: "
-                + failed);
+        # Not an equality: the token is put back with touch -r, and busybox --
+        # /bin/sh on Alpine -- restores whole seconds where coreutils restores
+        # nanoseconds.  Rounding down is safe and is what must hold: the token
+        # must not have ADVANCED, because what it dominates is every member
+        # stamp.
+        assertTrue(mtime(bootstrap_stamp) <= token_before,
+            sprintf("a failed shared parse does not advance the group's ordering "
+                "token (%y vs %y): %s", mtime(bootstrap_stamp), token_before,
+                failed));
         assertEq(0, membersOlderThan(glob(build_dir + "/qo/*.qo.stamp"),
                 mtime(bootstrap_stamp)),
             "and so leaves no member of the group looking stale: " + failed);
