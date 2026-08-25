@@ -68,6 +68,8 @@ publication_marker="${bootstrap_stamp}.publication"
 subset_plan=${QORE_QCC_SUBSET_PLAN:-}
 subset_script=${QORE_QCC_SUBSET_SCRIPT:-}
 subset_keys=
+current_stamps=
+currency_file=
 # Set by qore-qo-incremental when the group holds a component that spans several
 # sources. It does NOT skip the currency check -- doing so made every member of
 # one component force its own redundant batch -- it only says that a batch
@@ -156,6 +158,9 @@ cleanup() {
     fi
     if [ -n "${currency_file:-}" ]; then
         rm -f "$currency_file"
+    fi
+    if [ -n "${current_stamps:-}" ]; then
+        rm -f "$current_stamps"
     fi
     if [ -n "$outputs_file" ]; then
         rm -f "$outputs_file"
@@ -407,6 +412,7 @@ if [ "$partial" = true ] && [ -f "$bootstrap_stamp" ]; then
     adopt_generation
     # One pass over both lists, and one touch: a group with hundreds of members
     # would otherwise spend more time forking than the currency scan took.
+    current_stamps=$(mktemp "${TMPDIR:-/tmp}/qore-qo-bootstrap-current.XXXXXX")
     awk -F '\t' 'NR == FNR {
             if ($1 != "rebuild-closure" && $5 != "") {
                 stale[$5] = 1
@@ -414,8 +420,14 @@ if [ "$partial" = true ] && [ -f "$bootstrap_stamp" ]; then
             next
         }
         NF && !($0 in stale) { print $0 ".stamp" }' "$currency_file" "$outputs_file" \
-        | tr '\n' '\0' | xargs -0 touch
-    rm -f "$currency_file"
+        > "$current_stamps"
+    # Never hand xargs an empty list: GNU xargs runs the command anyway, and
+    # `touch` with no operand is an error that `set -e` turns into a failed
+    # build.  BSD xargs does not, and only one of the two has -r.
+    if [ -s "$current_stamps" ]; then
+        tr '\n' '\0' < "$current_stamps" | xargs -0 touch
+    fi
+    rm -f "$current_stamps" "$currency_file"
     commit_ordering_token
     exit 0
 fi

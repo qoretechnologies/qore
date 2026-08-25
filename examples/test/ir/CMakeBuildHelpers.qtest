@@ -1517,15 +1517,17 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         # whole-group parse here -- which is what a flat component threshold did
         # -- reparsed every current source in the group to republish eight.
         #
-        # An upper bound rather than an equality: this fixture's qo-objects
+        # An upper bound rather than an equality.  This fixture's qo-objects
         # target depends on the object stamps rather than on the group's order
-        # targets, so an object recipe may reach a stale component before the
-        # coordinator does and compile it first.  What must hold either way is
+        # target, so an object recipe can reach a stale component before the
+        # coordinator does; and a component whose artifacts are all intact --
+        # which is the case here, only the generation records were removed --
+        # republishes without recompiling at all.  What must hold either way is
         # that nothing outside the stale set is compiled.
         int recovery_compiles = occurrences(broad_recovery,
             "qcc: script-context .qo");
-        assertTrue(recovery_compiles > 0 && recovery_compiles <= 8,
-            sprintf("compiles only the components that were stale (%d): %s",
+        assertTrue(recovery_compiles <= 8,
+            sprintf("compiles no more than the components that were stale (%d): %s",
                 recovery_compiles, broad_recovery));
         assertEq(0, occurrences(broad_recovery, "broad incremental invalidation"),
             "a stale set this far below the group's size does not reparse the "
