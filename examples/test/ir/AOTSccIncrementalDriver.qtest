@@ -66,6 +66,8 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testScheduledRecipeSharesTheCoordinatorsRule());
         addTestCase("a scheduled recipe starts the shared parse it cannot replace",
             \testScheduledRecipeStartsTheSharedParseItCannotReplace());
+        addTestCase("a scheduled recipe parses only its own component",
+            \testScheduledRecipeParsesOnlyItsOwnComponent());
         addTestCase("a group configured without a shared parse still builds",
             \testScheduledRecipeBuildsAGroupWithoutASharedParse());
         addTestCase("the batch is chosen from what a rebuild reaches, not from what is stale",
@@ -216,6 +218,29 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             body += "printf '%s\\n' '{\"source_parse_defines\": []}' > "
                 + sprintf("%y", out + ".idx.json") + "\n";
         }
+        write(script, body);
+        chmod(script, 0755);
+        return script;
+    }
+
+    #! A stand-in for qcc-subset.sh: compiles exactly the sources it is given.
+    /** The real script parses the sources on its command line together and
+        preloads the rest of the group from their objects; what matters to the
+        driver is which sources reach it, so the stand-in logs them and writes the
+        artifacts each one publishes.
+    */
+    private string writeSubsetCompiler(hash<auto> fx) {
+        string script = fx.qo_dir + "/qcc-subset.sh";
+        string log = fx.qo_dir + "/compiles.log";
+        string body = "#!/bin/sh\nset -e\nfor src in \"$@\"; do\n"
+            + "    name=$(basename \"$src\" .qc)\n"
+            + "    out=" + sprintf("%y", fx.qo_dir) + "/$name.qo\n"
+            + "    printf 'subset %s\\n' \"$name.qo\" >> " + sprintf("%y", log) + "\n";
+        foreach string suffix in (MemberArtifactSuffixes) {
+            body += "    printf 'compiled\\n' > \"$out" + suffix + "\"\n";
+        }
+        body += "    printf '%s\\n' '{\"source_parse_defines\": []}' > \"$out.idx.json\"\n"
+            + "done\n";
         write(script, body);
         chmod(script, 0755);
         return script;
@@ -576,9 +601,13 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         group coordinator already scheduled this group, which makes the recipe a
         verifier rather than a second scheduler.
     */
-    private hash<auto> recipe(hash<auto> fx, string name, hash<auto> component) {
+    private hash<auto> recipe(hash<auto> fx, string name, hash<auto> component,
+            *string subset_script) {
         string qo_dir = fx.qo_dir;
-        string command = sprintf(
+        string command = exists subset_script
+            ? sprintf("QORE_QCC_SUBSET_SCRIPT=%y ", subset_script)
+            : "";
+        command += sprintf(
             "QORE_QCC_PREREQUISITES_ORDERED=1 QORE_QCC_BATCH_BOOTSTRAP_STAMP=%y "
             "QORE_QCC_QORE_EXECUTABLE=%y QORE_QCC_SOURCE_ORDER_HELPER=%y "
             "QORE_QCC_BATCH_BOOTSTRAP_HELPER=%y QORE_QCC_GRAPH_SNAPSHOT=%y %y %y %y %y",
@@ -789,6 +818,35 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             assertTrue(exists record(fx, published.key),
                 "component " + published.key + " is published");
         }
+    }
+
+    #! A component that needs a shared parse does not need the group's.
+    /** Its members are mutually dependent; every other member of the group is
+        current as far as this recipe is concerned, and is preloaded rather than
+        recompiled.  Before a parse could cover part of a group, one stale
+        two-source component sent every source in the group through qcc again.
+    */
+    testScheduledRecipeParsesOnlyItsOwnComponent() {
+        TmpDir tmp("qore-aot-driver-subset-");
+        hash<auto> fx = fixture(tmp.path);
+        writeCompiler(fx);
+        writeBatchCompiler(fx);
+        string subset = writeSubsetCompiler(fx);
+        write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
+
+        hash<auto> component = componentFor(fx.qo_dir, "a");
+        assertEq("2", component.size, "a and b share one component");
+
+        hash<auto> result = recipe(fx, "a", component, subset);
+        assertEq(0, result.rc, "the recipe builds it: " + result.output);
+
+        list<string> compiled = compiles(fx);
+        assertEq(2, (select compiled, $1 =~ /^subset /).size(),
+            "only the component's own members are parsed: " + compiled.join(", "));
+        assertEq((), (select compiled, $1 =~ /^batch /),
+            "and the group's shared parse is not started: " + compiled.join(", "));
+        assertTrue(exists record(fx, component.key),
+            "the component is published from the parse of its members");
     }
 
     #! Not every group has a coordinator to have been planned by.
