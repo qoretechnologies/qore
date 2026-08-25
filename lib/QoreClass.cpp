@@ -7356,15 +7356,21 @@ public:
     }
 
     DLLLOCAL bool next() {
+        // handle classes with no base classes; in this case there is no base class list to iterate
+        if (!qc->scl) {
+            if (do_class) {
+                do_class = false;
+                return false;
+            }
+            do_class = true;
+            return true;
+        }
         if (!do_class && i == qc->scl->sml.rend()) {
             do_class = true;
             return true;
         }
         if (do_class) {
             do_class = false;
-        }
-        if (!qc->scl) {
-            return false;
         }
 
         if (i == qc->scl->sml.rend()) {

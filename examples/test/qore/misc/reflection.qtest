@@ -102,6 +102,10 @@ class MethodEnumNoParent {
     private:internal static intStatic() {}
 }
 
+class MethodEnumNoStatic {
+    normalOnly() {}
+}
+
 class MethodEnumBase {
     baseNormal() {}
     private basePrivate() {}
@@ -120,6 +124,51 @@ class MethodEnumBase {
     static string overStatic() {
         return "base";
     }
+}
+
+class MethodEnumMid inherits MethodEnumBase {
+    midNormal() {}
+
+    static midStatic() {}
+}
+
+class MethodEnumDerived inherits MethodEnumMid {
+    derivedNormal() {}
+
+    string over() {
+        return "derived";
+    }
+
+    static derivedStatic() {}
+
+    static string overStatic() {
+        return "derived";
+    }
+}
+
+# the parent is inherited with private:internal access, so its methods are not accessible in this class
+class MethodEnumInternalChild inherits private:internal MethodEnumBase {
+    childNormal() {}
+
+    static childStatic() {}
+}
+
+class MethodEnumA {
+    shared() {}
+    aOnly() {}
+    private:internal aInternal() {}
+
+    static sharedStatic() {}
+}
+
+class MethodEnumB {
+    shared() {}
+    bOnly() {}
+
+    static sharedStatic() {}
+}
+
+class MethodEnumMulti inherits MethodEnumA, MethodEnumB {
 }
 
 namespace TestNs {
@@ -192,6 +241,7 @@ class ReflectionTest inherits QUnit::Test {
         addTestCase("type member pseudo-method dispatch", \typeMemberPseudoMethodDispatchTest());
         addTestCase("program tests", \programTests());
         addTestCase("static variant tests", \staticVariantTests());
+        addTestCase("method enumeration tests", \methodEnumerationTests());
         addTestCase("cross-module namespace test", \crossModuleNamespaceTest());
         set_return_value(main());
     }
@@ -3418,6 +3468,173 @@ class ReflectionTest inherits QUnit::Test {
             }
             assertThrows("PROGRAM-ERROR", \v.getReturnType());
         }
+    }
+
+    # returns the names of the given methods
+    private list<string> getMethodNameList(list<AbstractMethod> l) {
+        list<string> rv = ();
+        foreach AbstractMethod m in (l) {
+            rv += m.getName();
+        }
+        return rv;
+    }
+
+    # returns the names of the given methods qualified with the class declaring each method
+    private list<string> getMethodOwnerList(list<AbstractMethod> l) {
+        list<string> rv = ();
+        foreach AbstractMethod m in (l) {
+            rv += sprintf("%s::%s", m.getClass().getName(), m.getName());
+        }
+        return rv;
+    }
+
+    methodEnumerationTests() {
+        # getStaticMethods() returns every static method declared in the class, including
+        # private:internal ones, and never returns special methods
+        {
+            Class c = Class::forName("MethodEnumNoParent");
+            assertEq(("intStatic", "pubStatic"), sort(getMethodNameList(c.getStaticMethods())));
+
+            int count = 0;
+            foreach StaticMethod m in (c.getStaticMethods()) {
+                assertEq("static", m.getMethodTypeName());
+                assertTrue(m.isStatic());
+                assertEq("MethodEnumNoParent", m.getClass().getName());
+                ++count;
+            }
+            assertEq(2, count);
+            assertEq("pub", c.getStaticMethods()[1].call(1));
+
+            # getMethods() returns special methods, getStaticMethods() does not
+            assertEq(("constructor", "copy", "destructor", "intM", "intStatic", "privM", "pubM", "pubStatic"),
+                sort(getMethodNameList(c.getMethods())));
+        }
+
+        # a class with no static methods returns an empty list
+        assertEq((), Class::forName("MethodEnumNoStatic").getStaticMethods());
+
+        # getStaticMethods() is declared-only; a subclass does not return its parents' static methods
+        {
+            Class c = Class::forName("MethodEnumDerived");
+            assertEq(("derivedStatic", "overStatic"), sort(getMethodNameList(c.getStaticMethods())));
+
+            # ... but it composes with getClassHierarchy() to produce the full declared set, including
+            # static methods that are not accessible in the subclass
+            hash<string, bool> all;
+            foreach Class hc in (c.getClassHierarchy()) {
+                foreach string name in (getMethodNameList(hc.getStaticMethods())) {
+                    all{name} = True;
+                }
+            }
+            assertEq(("baseInternalStatic", "baseStatic", "derivedStatic", "midStatic", "overStatic"),
+                sort(keys all));
+        }
+
+        # getAll*Methods() return inherited methods as well
+        {
+            Class c = Class::forName("MethodEnumDerived");
+
+            # a parent's public and private methods are returned, but not its private:internal methods
+            assertEq(("MethodEnumBase::baseNormal", "MethodEnumBase::basePrivate",
+                "MethodEnumDerived::derivedNormal", "MethodEnumDerived::over", "MethodEnumMid::midNormal"),
+                sort(getMethodOwnerList(c.getAllNormalMethods())));
+            assertEq(("MethodEnumBase::baseStatic", "MethodEnumDerived::derivedStatic",
+                "MethodEnumDerived::overStatic", "MethodEnumMid::midStatic"),
+                sort(getMethodOwnerList(c.getAllStaticMethods())));
+
+            # an overridden method is returned exactly once, and it is the method that would be called
+            MethodEnumDerived obj();
+            int normal_overrides = 0;
+            foreach NormalMethod m in (c.getAllNormalMethods()) {
+                if (m.getName() == "over") {
+                    assertEq("MethodEnumDerived", m.getClass().getName());
+                    assertEq("derived", m.call(obj));
+                    ++normal_overrides;
+                }
+            }
+            assertEq(1, normal_overrides);
+
+            int static_overrides = 0;
+            foreach StaticMethod m in (c.getAllStaticMethods()) {
+                if (m.getName() == "overStatic") {
+                    assertEq("MethodEnumDerived", m.getClass().getName());
+                    assertEq("derived", m.call());
+                    ++static_overrides;
+                }
+            }
+            assertEq(1, static_overrides);
+
+            # getAllMethods() is the normal methods followed by the static methods
+            assertEq(getMethodOwnerList(c.getAllNormalMethods()) + getMethodOwnerList(c.getAllStaticMethods()),
+                getMethodOwnerList(c.getAllMethods()));
+
+            # methods are returned most-derived first
+            list<string> owners = getMethodOwnerList(c.getAllNormalMethods());
+            assertRegex("^MethodEnumDerived::", owners[0]);
+            assertRegex("^MethodEnumBase::", owners.last());
+        }
+
+        # for a class with no parents, getAllMethods() returns getMethods() without the special methods
+        {
+            Class c = Class::forName("MethodEnumNoParent");
+            list<string> all = sort(getMethodNameList(c.getAllMethods()));
+            assertEq(("intM", "intStatic", "privM", "pubM", "pubStatic"), all);
+
+            list<string> declared = ();
+            foreach AbstractMethod m in (c.getMethods()) {
+                switch (m.getMethodTypeName()) {
+                    case "constructor":
+                    case "destructor":
+                    case "copy":
+                        break;
+
+                    default:
+                        declared += m.getName();
+                        break;
+                }
+            }
+            assertEq(all, sort(declared));
+        }
+
+        # methods inherited with private:internal access are not accessible in the class, so they are not
+        # returned, even though the parent class is in the class hierarchy
+        {
+            Class c = Class::forName("MethodEnumInternalChild");
+            assertEq(("MethodEnumInternalChild::childNormal",), getMethodOwnerList(c.getAllNormalMethods()));
+            assertEq(("MethodEnumInternalChild::childStatic",), getMethodOwnerList(c.getAllStaticMethods()));
+            assertEq(("MethodEnumBase", "MethodEnumInternalChild"),
+                (map $1.getName(), c.getClassHierarchy()));
+            assertThrows("UNKNOWN-METHOD", \c.findMethod(), ("baseNormal",));
+        }
+
+        # with multiple inheritance, a method declared in more than one parent is returned once with the
+        # method that would actually be called
+        {
+            Class c = Class::forName("MethodEnumMulti");
+            assertEq(("MethodEnumA::aOnly", "MethodEnumA::shared", "MethodEnumB::bOnly"),
+                sort(getMethodOwnerList(c.getAllNormalMethods())));
+            assertEq(("MethodEnumA::sharedStatic",), getMethodOwnerList(c.getAllStaticMethods()));
+            assertEq("MethodEnumA", c.findMethod("shared").method.getClass().getName());
+        }
+
+        # a deep builtin hierarchy resolves through more than one level
+        {
+            Class c = Class::forName("HashListIterator");
+            assertGt(2, c.getClassHierarchy().size());
+
+            hash<string, bool> all;
+            foreach string name in (getMethodNameList(c.getAllNormalMethods())) {
+                all{name} = True;
+            }
+            # every method declared in the class is also returned by getAllNormalMethods()
+            foreach string name in (getMethodNameList(c.getNormalMethods())) {
+                assertTrue(all{name} ?? False, name);
+            }
+            # abstract methods declared in the parent classes are returned by the implementing class
+            assertTrue(all.next);
+            assertTrue(all.getValue);
+        }
+
     }
 
     staticVariantTests() {

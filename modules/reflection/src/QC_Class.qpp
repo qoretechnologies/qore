@@ -50,6 +50,10 @@
 #include <QC_Type.h>
 #include <QC_Namespace.h>
 
+#include <set>
+#include <string>
+#include <vector>
+
 static QoreHashNode* QoreReflectionClass_serializer(const QoreObject& self, const QoreReflectionClass& cls,
         QoreSerializationContext& context, RuntimeConfig& rc, ExceptionSink* xsink) {
     (void)rc;
@@ -191,6 +195,98 @@ static QoreHashNode* find_method_intern(const QoreStringNode* name, QoreReflecti
     rv->setKeyValue("access_string", new QoreStringNode(get_access_string(method->getClassAccess())), xsink);
 
     return rv.release();
+}
+
+// a list of methods in declaration order
+typedef std::vector<const QoreMethod*> meth_vec_t;
+
+// a set of method names
+typedef std::set<std::string> meth_name_set_t;
+
+// appends the methods of the given type declared in the class to "methods" in declaration order; only
+// methods declared in the class itself are returned, and special methods (constructor, destructor, and
+// copy) are never returned
+static void get_local_methods(const QoreClass& cls, method_type_e type, meth_vec_t& methods) {
+    assert(type == MT_Normal || type == MT_Static);
+
+    if (type == MT_Static) {
+        QoreStaticMethodIterator i(cls);
+        while (i.next()) {
+            const QoreMethod* m = i.getMethod();
+            if (m->getMethodType() != MT_Static) {
+                continue;
+            }
+            methods.push_back(m);
+        }
+        return;
+    }
+
+    QoreMethodIterator i(cls);
+    while (i.next()) {
+        const QoreMethod* m = i.getMethod();
+        // skip special methods (constructor, destructor, copy)
+        if (m->getMethodType() != MT_Normal) {
+            continue;
+        }
+        methods.push_back(m);
+    }
+}
+
+// appends all methods of the given type accessible in the class, including inherited methods, to "l";
+// methods declared in the class itself are always returned, while inherited methods are resolved with the
+// same rules as QoreClass::findMethod() and QoreClass::findStaticMethod(), so that inherited methods that
+// cannot be accessed in the class (ex: a parent's private:internal methods) are not returned; methods are
+// returned most-derived first, and each method name is returned exactly once with the method that would
+// actually be called; special methods are never returned
+// returns 0 for OK, -1 if a Qore-language exception was raised
+static int append_all_methods(const QoreReflectionClass* c, method_type_e type, QoreListNode& l,
+        ExceptionSink* xsink) {
+    meth_name_set_t seen;
+    size_t count = 0;
+
+    // iterate the class hierarchy in destructor execution order; this returns the most-derived class first,
+    // so that overridden methods resolve to the method that would actually be called
+    QoreClassDestructorHierarchyIterator hi(c->cls);
+    while (hi.next()) {
+        const QoreClass* cls = hi.get();
+
+        meth_vec_t methods;
+        get_local_methods(*cls, type, methods);
+
+        for (auto& lm : methods) {
+            if (count && !(count % 100) && qore_check_cancel(xsink, "class method hierarchy reflection")) {
+                return -1;
+            }
+            ++count;
+
+            const char* name = lm->getName();
+            // only the most-derived declaration of each method name is returned
+            if (!seen.insert(name).second) {
+                continue;
+            }
+
+            const QoreMethod* m;
+            if (cls == c->cls) {
+                // all methods declared in the class itself are accessible in the class
+                m = lm;
+            } else {
+                // let the runtime apply its own accessibility rules to inherited methods
+                m = type == MT_Static ? c->cls->findStaticMethod(name) : c->cls->findMethod(name);
+                // inherited methods that are not accessible in the class are not returned
+                if (!m || m->getMethodType() != type) {
+                    continue;
+                }
+            }
+
+            ReferenceHolder<QoreReflectionMethod> meth(new QoreReflectionMethod(c->pgm, m), xsink);
+            l.push(get_method_object(meth, xsink), xsink);
+            if (*xsink) {
+                return -1;
+            }
+        }
+    }
+
+    return 0;
 }
 
 static QoreValue find_all_classes(const QoreString& pattern, int re_opts, QoreProgram* pgm, ExceptionSink* xsink) {
@@ -1040,6 +1136,192 @@ list<NormalMethod> Class::getNormalMethods() [flags=RET_VALUE_ONLY] {
         if (*xsink) {
             return QoreValue();
         }
+    }
+
+    return l.release();
+}
+
+//! returns a list of all static methods declared in the class
+/** @par Example:
+    @code{.py}
+list<StaticMethod> l = cls.getStaticMethods();
+    @endcode
+
+    @return a list of all static methods declared in the class; inherited static methods are not returned
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
+
+    @note like all \c get*() enumerators in this class, only methods declared in the class itself are
+    returned; to retrieve inherited static methods as well, use getAllStaticMethods(), resolve a single
+    method name with findStaticMethod(), or iterate the class hierarchy with getClassHierarchy()
+
+    @see
+    - getAllStaticMethods()
+    - getNormalMethods()
+    - findStaticMethod()
+
+    @since %Qore 3.0
+*/
+list<StaticMethod> Class::getStaticMethods() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, c->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> l(new QoreListNode(QC_ABSTRACTMETHOD->getTypeInfo()), xsink);
+
+    size_t count = 0;
+    QoreStaticMethodIterator i(*c->cls);
+    while (i.next()) {
+        if (count && !(count % 100) && qore_check_cancel(xsink, "class static method reflection")) {
+            return QoreValue();
+        }
+        ++count;
+
+        const QoreMethod* m = i.getMethod();
+        if (m->getMethodType() != MT_Static) {
+            continue;
+        }
+
+        ReferenceHolder<QoreReflectionMethod> meth(new QoreReflectionMethod(c->pgm, m), xsink);
+        l->push(get_method_object(meth, xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+    }
+
+    return l.release();
+}
+
+//! returns a list of all normal (non-static, non-special) methods accessible in the class, including inherited methods
+/** @par Example:
+    @code{.py}
+list<NormalMethod> l = cls.getAllNormalMethods();
+    @endcode
+
+    @return a list of all normal (non-static, non-special) methods accessible in the class, including
+    methods inherited from parent classes; methods are returned most-derived first, and each method name is
+    returned exactly once with the method that would actually be called
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
+
+    @note
+    - methods declared in the class itself are always returned, including
+      @ref private_methods "private:internal" methods
+    - inherited methods are resolved with the same rules as findNormalMethod(), so inherited methods that
+      cannot be accessed in the class (a parent's @ref private_methods "private:internal" methods
+      as well as any method inherited with @ref private_inheritance "private:internal" access) are not
+      returned
+    - special methods (\c constructor, \c destructor, and \c copy) are never returned
+
+    @see
+    - getNormalMethods() for a method returning only the methods declared in the class
+    - getAllMethods()
+    - getAllStaticMethods()
+
+    @since %Qore 3.0
+*/
+list<NormalMethod> Class::getAllNormalMethods() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, c->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> l(new QoreListNode(QC_ABSTRACTMETHOD->getTypeInfo()), xsink);
+
+    if (append_all_methods(c, MT_Normal, **l, xsink)) {
+        return QoreValue();
+    }
+
+    return l.release();
+}
+
+//! returns a list of all static methods accessible in the class, including inherited methods
+/** @par Example:
+    @code{.py}
+list<StaticMethod> l = cls.getAllStaticMethods();
+    @endcode
+
+    @return a list of all static methods accessible in the class, including methods inherited from parent
+    classes; methods are returned most-derived first, and each method name is returned exactly once with
+    the method that would actually be called
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
+
+    @note
+    - methods declared in the class itself are always returned, including
+      @ref private_methods "private:internal" methods
+    - inherited methods are resolved with the same rules as findStaticMethod(), so inherited methods that
+      cannot be accessed in the class (a parent's @ref private_methods "private:internal" methods
+      as well as any method inherited with @ref private_inheritance "private:internal" access) are not
+      returned
+
+    @see
+    - getStaticMethods() for a method returning only the methods declared in the class
+    - getAllMethods()
+    - getAllNormalMethods()
+
+    @since %Qore 3.0
+*/
+list<StaticMethod> Class::getAllStaticMethods() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, c->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> l(new QoreListNode(QC_ABSTRACTMETHOD->getTypeInfo()), xsink);
+
+    if (append_all_methods(c, MT_Static, **l, xsink)) {
+        return QoreValue();
+    }
+
+    return l.release();
+}
+
+//! returns a list of all normal and static methods accessible in the class, including inherited methods
+/** @par Example:
+    @code{.py}
+list<AbstractMethod> l = cls.getAllMethods();
+    @endcode
+
+    @return a list of all normal and static methods accessible in the class, including methods inherited
+    from parent classes; the normal methods are returned first, followed by the static methods, each
+    most-derived first, so that the value returned is always equal to
+    <tt>getAllNormalMethods() + getAllStaticMethods()</tt>
+
+    @throw PROGRAM-ERROR thrown if the @ref Qore::Program "Program" object holding the class has been destroyed
+
+    @note
+    - methods declared in the class itself are always returned, including
+      @ref private_methods "private:internal" methods
+    - inherited methods are resolved with the same rules as findMethod(), so inherited methods that cannot
+      be accessed in the class (a parent's @ref private_methods "private:internal" methods as well
+      as any method inherited with @ref private_inheritance "private:internal" access) are not returned
+    - special methods (\c constructor, \c destructor, and \c copy) are never returned, unlike with
+      @ref Qore::Reflection::AbstractClass::getMethods() "AbstractClass::getMethods()"
+
+    @see
+    - @ref Qore::Reflection::AbstractClass::getMethods() "AbstractClass::getMethods()" for a method
+      returning only the methods declared in the class
+    - getAllNormalMethods()
+    - getAllStaticMethods()
+
+    @since %Qore 3.0
+*/
+list<AbstractMethod> Class::getAllMethods() [flags=RET_VALUE_ONLY] {
+    // get read access to program object
+    QoreExternalProgramContextHelper tch(xsink, c->pgm);
+    if (*xsink) {
+        return QoreValue();
+    }
+
+    ReferenceHolder<QoreListNode> l(new QoreListNode(QC_ABSTRACTMETHOD->getTypeInfo()), xsink);
+
+    if (append_all_methods(c, MT_Normal, **l, xsink) || append_all_methods(c, MT_Static, **l, xsink)) {
+        return QoreValue();
     }
 
     return l.release();

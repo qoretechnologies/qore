@@ -1570,6 +1570,18 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - @ref Qore::Reflection::Namespace::getEnums() "Namespace::getEnums()" to list enums in a namespace
       - @ref Qore::Reflection::Namespace::getEnum() "Namespace::getEnum()" to get an enum by name
       - @ref Qore::Reflection::Class::tryGetConstant() "Class::tryGetConstant()"
+      - @ref Qore::Reflection::Class::getStaticMethods() "Class::getStaticMethods()", the static-method
+        counterpart to @ref Qore::Reflection::Class::getNormalMethods() "Class::getNormalMethods()"; like
+        every other \c get*() enumerator, it returns only the methods declared in the class itself
+      - @ref Qore::Reflection::Class::getAllMethods() "Class::getAllMethods()",
+        @ref Qore::Reflection::Class::getAllNormalMethods() "Class::getAllNormalMethods()", and
+        @ref Qore::Reflection::Class::getAllStaticMethods() "Class::getAllStaticMethods()", which return
+        every method accessible in the class, inherited methods included; overridden methods are returned
+        once with the method that would actually be called, and inherited methods that cannot be accessed
+        in the class (such as a parent's @ref private_methods "private:internal" methods) are excluded, so
+        that tooling that has to determine which methods can be called on a class no longer has to
+        reimplement the runtime's accessibility rules on top of
+        @ref Qore::Reflection::Class::getClassHierarchy() "Class::getClassHierarchy()"
 
     - @ref restclientintro "RestClient" module
       - new @ref RestClient::RestClientPool "RestClientPool" class providing thread-safe connection pooling
