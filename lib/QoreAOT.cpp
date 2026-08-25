@@ -4998,7 +4998,7 @@ static void buildConstantReverseMapImpl(qore_ns_private* ns, AOTConstantReverseM
             if (ce->val.hasNode()) {
                 const AbstractQoreNode* node = ce->val.getInternalNode();
                 if (node && crm.find(node) == crm.end()) {
-                    crm.emplace(node, fqn);
+                    crm.emplace(node, AOTConstantReversePath{fqn, 0, true});
                 }
             }
             // Function bodies can retain the evaluated value graph of a
@@ -5011,7 +5011,7 @@ static void buildConstantReverseMapImpl(qore_ns_private* ns, AOTConstantReverseM
             if (!dynamic_cast<const RuntimeConstantRefNode*>(init_expr.getInternalNode())) {
                 QoreValue v = ce->getReferencedValue();
                 if (v.hasNode()) {
-                    qore_aot_add_constant_value_reverse_mappings(crm, v, fqn, ce->getInitSeq());
+                    qore_aot_add_constant_value_reverse_mappings(crm, v, fqn, ce->getInitSeq(), true);
                 }
                 v.discard(nullptr);
             }
@@ -5042,17 +5042,18 @@ static void buildConstantReverseMapImpl(qore_ns_private* ns, AOTConstantReverseM
                     const uint64_t rank = qore_aot_constant_owner_rank(ce->getInitSeq());
                     auto rit = crm.find(node);
                     if (rit == crm.end()) {
-                        crm.emplace(node, AOTConstantReversePath{fqn, rank});
+                        crm.emplace(node, AOTConstantReversePath{fqn, rank, true});
                     } else if (rank < rit->second.init_seq) {
                         rit->second.path = fqn;
                         rit->second.init_seq = rank;
+                        rit->second.deferred_init = true;
                     }
                 }
                 QoreValue init_expr = ce->getInitExpr();
                 if (!dynamic_cast<const RuntimeConstantRefNode*>(init_expr.getInternalNode())) {
                     QoreValue v = ce->getReferencedValue();
                     if (v.hasNode()) {
-                        qore_aot_add_constant_value_reverse_mappings(crm, v, fqn, ce->getInitSeq());
+                        qore_aot_add_constant_value_reverse_mappings(crm, v, fqn, ce->getInitSeq(), true);
                     }
                     v.discard(nullptr);
                 }
@@ -5166,7 +5167,7 @@ static AOTConstantReverseMap filterPendingInitConstantReverseMap(
 }
 
 static void addConstantRootReverseMapping(AOTConstantReverseMap& crm,
-        const QoreValue& v, const std::string& fqn, uint64_t raw_init_seq) {
+        const QoreValue& v, const std::string& fqn, uint64_t raw_init_seq, bool deferred_init) {
     const uint64_t init_seq = qore_aot_constant_owner_rank(raw_init_seq);
     if (!v.hasNode()) {
         return;
@@ -5177,10 +5178,11 @@ static void addConstantRootReverseMapping(AOTConstantReverseMap& crm,
     }
     auto it = crm.find(node);
     if (it == crm.end()) {
-        crm.emplace(node, AOTConstantReversePath{fqn, init_seq});
+        crm.emplace(node, AOTConstantReversePath{fqn, init_seq, deferred_init});
     } else if (init_seq < it->second.init_seq) {
         it->second.path = fqn;
         it->second.init_seq = init_seq;
+        it->second.deferred_init = deferred_init;
     }
 }
 
@@ -5200,7 +5202,7 @@ static void buildPendingSafeConstantReverseMapImpl(qore_ns_private* ns,
         }
         std::string fqn = ns_path + ce->name;
         if (pending_fqns.find(fqn) != pending_fqns.end()) {
-            addConstantRootReverseMapping(crm, ce->val, fqn, ce->getInitSeq());
+            addConstantRootReverseMapping(crm, ce->val, fqn, ce->getInitSeq(), true);
         }
         QoreValue v = ce->getReferencedValue();
         if (v.hasNode()) {
@@ -5208,9 +5210,10 @@ static void buildPendingSafeConstantReverseMapImpl(qore_ns_private* ns,
             // pending-constant ref is safe after dependency ordering; nested paths
             // into pending constants can embed stale/self-referential data.
             if (pending_fqns.find(fqn) != pending_fqns.end()) {
-                addConstantRootReverseMapping(crm, v, fqn, ce->getInitSeq());
+                addConstantRootReverseMapping(crm, v, fqn, ce->getInitSeq(), true);
             } else {
-                qore_aot_add_constant_value_reverse_mappings(crm, v, fqn, ce->getInitSeq());
+                qore_aot_add_constant_value_reverse_mappings(crm, v, fqn, ce->getInitSeq(),
+                    ce->hasInitExpr());
             }
         }
         v.discard(nullptr);
@@ -5228,7 +5231,7 @@ static void buildPendingSafeConstantReverseMapImpl(qore_ns_private* ns,
             std::string fqn = class_prefix + cci.getName();
             const ConstantEntry* ce = cci.getEntry();
             if (pending_fqns.find(fqn) != pending_fqns.end()) {
-                addConstantRootReverseMapping(crm, ce->val, fqn, ce->getInitSeq());
+                addConstantRootReverseMapping(crm, ce->val, fqn, ce->getInitSeq(), true);
             }
             QoreValue v = ce->getReferencedValue();
             if (!v.hasNode()) {
@@ -5237,9 +5240,10 @@ static void buildPendingSafeConstantReverseMapImpl(qore_ns_private* ns,
             }
             // See namespace-constant handling above for the direct-only pending rule.
             if (pending_fqns.find(fqn) != pending_fqns.end()) {
-                addConstantRootReverseMapping(crm, v, fqn, ce->getInitSeq());
+                addConstantRootReverseMapping(crm, v, fqn, ce->getInitSeq(), true);
             } else {
-                qore_aot_add_constant_value_reverse_mappings(crm, v, fqn, ce->getInitSeq());
+                qore_aot_add_constant_value_reverse_mappings(crm, v, fqn, ce->getInitSeq(),
+                    ce->hasInitExpr());
             }
             v.discard(nullptr);
         }

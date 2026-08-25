@@ -2229,7 +2229,7 @@ public:
 
 static void aot_add_constant_value_reverse_mappings_impl(AOTConstantReverseMap& crm,
         const QoreValue& v, const std::string& path, uint64_t init_seq,
-        std::unordered_set<const AbstractQoreNode*>& seen, bool root_value) {
+        std::unordered_set<const AbstractQoreNode*>& seen, bool root_value, bool deferred_init) {
     if (!v.hasNode()) {
         return;
     }
@@ -2255,10 +2255,11 @@ static void aot_add_constant_value_reverse_mappings_impl(AOTConstantReverseMap& 
     // which is how a Qorus incremental build stopped with "cannot resolve const_ref".
     auto it = crm.find(node);
     if (it == crm.end()) {
-        crm.emplace(node, AOTConstantReversePath{path, init_seq});
+        crm.emplace(node, AOTConstantReversePath{path, init_seq, deferred_init});
     } else if (init_seq < it->second.init_seq) {
         it->second.path = path;
         it->second.init_seq = init_seq;
+        it->second.deferred_init = deferred_init;
     }
     if (getenv("QORE_AOT_DEBUG_CONST_MAP")) {
         if (auto* obj = dynamic_cast<const QoreObject*>(node)) {
@@ -2278,7 +2279,8 @@ static void aot_add_constant_value_reverse_mappings_impl(AOTConstantReverseMap& 
             QoreValue hv = hi.get();
             if (hv.hasNode()) {
                 aot_add_constant_value_reverse_mappings_impl(crm, hv,
-                    aot_append_constant_hash_key_path(path, hi.getKey()), init_seq, seen, false);
+                    aot_append_constant_hash_key_path(path, hi.getKey()), init_seq, seen, false,
+                    deferred_init);
             }
         }
         return;
@@ -2293,7 +2295,8 @@ static void aot_add_constant_value_reverse_mappings_impl(AOTConstantReverseMap& 
             QoreValue lv = l->retrieveEntry(i);
             if (lv.hasNode()) {
                 aot_add_constant_value_reverse_mappings_impl(crm, lv,
-                    aot_append_constant_list_index_path(path, i), init_seq, seen, false);
+                    aot_append_constant_list_index_path(path, i), init_seq, seen, false,
+                    deferred_init);
             }
         }
     }
@@ -2309,10 +2312,10 @@ static const std::string* aotFindConstantReverseMapPath(
 }
 
 void qore_aot_add_constant_value_reverse_mappings(AOTConstantReverseMap& crm,
-        const QoreValue& v, const std::string& path, uint64_t init_seq) {
+        const QoreValue& v, const std::string& path, uint64_t init_seq, bool deferred_init) {
     std::unordered_set<const AbstractQoreNode*> seen;
     aot_add_constant_value_reverse_mappings_impl(crm, v, path,
-        qore_aot_constant_owner_rank(init_seq), seen, true);
+        qore_aot_constant_owner_rank(init_seq), seen, true, deferred_init);
 }
 
 static bool qore_aot_resolve_runtime_constant_path_impl(const RuntimeConstantRefNode* node,
@@ -2399,7 +2402,7 @@ bool qore_aot_resolve_runtime_constant_path(const RuntimeConstantRefNode* node,
 }
 
 static void aot_add_constant_root_reverse_mapping(AOTConstantReverseMap& crm,
-        const QoreValue& v, const std::string& path, uint64_t raw_init_seq) {
+        const QoreValue& v, const std::string& path, uint64_t raw_init_seq, bool deferred_init) {
     const uint64_t init_seq = qore_aot_constant_owner_rank(raw_init_seq);
     if (!v.hasNode()) {
         return;
@@ -2410,10 +2413,11 @@ static void aot_add_constant_root_reverse_mapping(AOTConstantReverseMap& crm,
     }
     auto it = crm.find(node);
     if (it == crm.end()) {
-        crm.emplace(node, AOTConstantReversePath{path, init_seq});
+        crm.emplace(node, AOTConstantReversePath{path, init_seq, deferred_init});
     } else if (init_seq < it->second.init_seq) {
         it->second.path = path;
         it->second.init_seq = init_seq;
+        it->second.deferred_init = deferred_init;
     }
 }
 
@@ -10647,7 +10651,7 @@ static void buildProgramConstantReverseMapImpl(qore_ns_private* ns,
         }
         std::string fqn = ns_path.empty() ? nsi.getName() : ns_path + "::" + nsi.getName();
         if (ce->hasInitExpr()) {
-            aot_add_constant_root_reverse_mapping(crm, ce->val, fqn, ce->getInitSeq());
+            aot_add_constant_root_reverse_mapping(crm, ce->val, fqn, ce->getInitSeq(), true);
             continue;
         }
         QoreValue v = ce->getReferencedValue();
@@ -10672,7 +10676,7 @@ static void buildProgramConstantReverseMapImpl(qore_ns_private* ns,
             const ConstantEntry* ce = cci.getEntry();
             std::string fqn = class_prefix + cci.getName();
             if (ce->hasInitExpr()) {
-                aot_add_constant_root_reverse_mapping(crm, ce->val, fqn, ce->getInitSeq());
+                aot_add_constant_root_reverse_mapping(crm, ce->val, fqn, ce->getInitSeq(), true);
                 continue;
             }
             QoreValue v = ce->getReferencedValue();
@@ -10710,7 +10714,7 @@ static AOTConstantReverseMap buildClassConstantReverseMap(const QoreClass* qc) {
         const ConstantEntry* ce = cci.getEntry();
         std::string fqn = class_prefix + cci.getName();
         if (ce->hasInitExpr()) {
-            aot_add_constant_root_reverse_mapping(crm, ce->val, fqn, ce->getInitSeq());
+            aot_add_constant_root_reverse_mapping(crm, ce->val, fqn, ce->getInitSeq(), true);
             continue;
         }
         QoreValue v = ce->getReferencedValue();
@@ -10736,7 +10740,7 @@ static AOTConstantReverseMap buildClassConstantReverseMap(const QoreClass* qc) {
                 }
                 std::string fqn = ns_path.empty() ? nsi.getName() : ns_path + "::" + nsi.getName();
                 if (ce->hasInitExpr()) {
-                    aot_add_constant_root_reverse_mapping(crm, ce->val, fqn, ce->getInitSeq());
+                    aot_add_constant_root_reverse_mapping(crm, ce->val, fqn, ce->getInitSeq(), true);
                     continue;
                 }
                 QoreValue v = ce->getReferencedValue();

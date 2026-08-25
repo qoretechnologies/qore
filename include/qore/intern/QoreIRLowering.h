@@ -479,6 +479,9 @@ private:
     bool lowerHandlersAtExit(bool is_error, std::string& error, size_t start_index = 0,
             size_t end_index = SIZE_MAX, size_t barrier_depth = SIZE_MAX);
 
+    //! Returns true when a concrete constant container can be loaded once instead of rebuilt per read
+    bool constantContainerLoadsByReference(const QoreValue& expr) const;
+
     QoreIRBuilder& builder;
     QoreParseContext* parse_context = nullptr;
     const AOTConstantReverseMap* constant_reverse_map = nullptr;

@@ -79,6 +79,12 @@ struct AOTConstantReversePath {
     std::string path;
     //! ConstantEntry::getInitSeq() of the constant \a path names; lower wins a contested node
     uint64_t init_seq = 0;
+    //! true when the constant \a path names is populated by a deferred initializer (__const_init)
+    /** Such a constant has no value in the image; it is computed at load time, and its value node is
+        shared with the expression that computes it, so AOT-lowered code must not name it.  See
+        QoreIRLowering::constantContainerLoadsByReference().
+    */
+    bool deferred_init = false;
 };
 
 //! Reverse map from constant value node pointer to the constant path it is recovered from
@@ -92,7 +98,7 @@ typedef std::unordered_map<const AbstractQoreNode*, AOTConstantReversePath> AOTC
     is both acyclic and resolvable from any unit that can see the holder.
 */
 void qore_aot_add_constant_value_reverse_mappings(AOTConstantReverseMap& crm,
-    const QoreValue& v, const std::string& path, uint64_t init_seq);
+    const QoreValue& v, const std::string& path, uint64_t init_seq, bool deferred_init = false);
 
 //! Ranks a constant for ownership of a shared value node; lower wins
 /** An entry that has not finished initializing has no sequence yet and must never win a contested node, so it

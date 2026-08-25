@@ -21,6 +21,13 @@
     the constant instead of building it.  The timing assertion is a ratio between a small and a
     large constant measured in one process, which stays meaningful under CI CPU throttling where an
     absolute threshold would not.
+
+    AOT-compiled code cannot embed a constant value, so it names the constant instead; the same
+    shape and cost assertions are made against a compiled \c .qmod.  A constant whose value a
+    deferred initializer produces must keep being rebuilt there: its value node is shared with the
+    expression that computes it, so naming it would make that expression read the constant it is
+    computing.  That case is asserted in both directions - the IR shape stays a rebuild, and the
+    module still runs with initialization deferred to the first read.
 */
 class IRConstantContainerMaterializationTest inherits QUnit::Test {
     private {
@@ -45,6 +52,10 @@ class IRConstantContainerMaterializationTest inherits QUnit::Test {
         addTestCase("a constant list is loaded, not rebuilt", \testListShape());
         addTestCase("read cost does not grow with constant size", \testCostIndependentOfSize());
         addTestCase("every tier reads the same values", \testTiersAgree());
+        addTestCase("an AOT constant container is loaded, not rebuilt", \testAotShape());
+        addTestCase("AOT read cost does not grow with constant size", \testAotCostIndependentOfSize());
+        addTestCase("an AOT qmod reads the same values as its source", \testAotValuesMatchSource());
+        addTestCase("a deferred AOT constant is still rebuilt", \testAotDeferredConstantIsRebuilt());
 
         set_return_value(main());
     }
@@ -155,5 +166,204 @@ printf(\"%%y:%%y:%%y\\n\", acc, T.k7, copy.k7);
                 assertEq(expected, actual, sprintf("exec-mode=%s values", mode));
             }
         }
+    }
+
+    #! Compiles a module source to a .qmod and returns the compiler output
+    private string compileModule(string qmod_path, string qm_path) {
+        return backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path));
+    }
+
+    #! Writes a module source and its compiled .qmod into \a tmp and returns both directory paths
+    /** The source directory doubles as a module path, so the same script can be run against the
+        interpreted \c .qm and the AOT-compiled \c .qmod.
+    */
+    private hash<auto> buildModule(TmpDir tmp, string module_name, string body) {
+        string src_dir = tmp.path + "/src";
+        string qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+        string qm_path = sprintf("%s/%s.qm", src_dir, module_name);
+        string qmod_path = sprintf("%s/%s.qmod", qmod_dir, module_name);
+        write(qm_path, body);
+        string out = compileModule(qmod_path, qm_path);
+        assertTrue(is_file(qmod_path), sprintf("compiled module %s: %s", module_name, out));
+        return {"src_dir": src_dir, "qmod_dir": qmod_dir, "qm_path": qm_path, "qmod_path": qmod_path};
+    }
+
+    #! Dumps the IR the AOT compiler lowers for \a body, without keeping the compiled output
+    private string dumpAotIr(TmpDir tmp, string module_name, string body) {
+        string qm_path = sprintf("%s/%s.qm", tmp.path, module_name);
+        string qmod_path = sprintf("%s/%s.qmod", tmp.path, module_name);
+        write(qm_path, body);
+        return backquote(sprintf("QORE_LIBDIR=%s QORE_AOT_DUMP_IR=1 %s -b --compile-module "
+            "--strip-source --output %s %s 2>&1", libqore_dir, qore_bin, qmod_path, qm_path));
+    }
+
+    #! Returns the dumped IR of one function, so an assertion cannot match another function's shape
+    private string irFor(string dump, string header) {
+        int start = dump.find(header);
+        assertGt(-1, start, sprintf("IR dump contains '%s': %s", header, dump));
+        int end = dump.find("=== IR for ", start + header.size());
+        return end < 0 ? dump.substr(start) : dump.substr(start, end - start);
+    }
+
+    private string moduleSource(string module_name, string decls, string funcs) {
+        return sprintf("%%modern
+
+module %s {
+    version = \"1.0\";
+    desc = \"AOT constant container materialization test\";
+    author = \"Qore\";
+    license = \"MIT\";
+}
+
+public namespace %s {
+%s
+%s
+}
+", module_name, module_name, decls, funcs);
+    }
+
+    #! Runs \a script with \a module_dir as the only module path
+    private string runWithModule(string module_dir, string script_path, string env = "") {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s %s -b %s 2>&1",
+            libqore_dir, module_dir, env, qore_bin, script_path));
+    }
+
+    testAotShape() {
+        TmpDir tmp("qore-ir-const-materialization-aot-shape-");
+        # a class constant is the shape DataProvider reads per word, so it is covered alongside the
+        # namespace constants
+        string dump = dumpAotIr(tmp, "AOTConstShapeMod", moduleSource("AOTConstShapeMod",
+            sprintf("public const T = {%s};
+public const L = (%s);
+public class Holder {
+    public {
+        const CT = {%s};
+    }
+
+    static int lookupClass(string k) {
+        return CT{k};
+    }
+}", hashEntries(LargeEntries), listEntries(LargeEntries), hashEntries(LargeEntries)),
+            "public int sub lookupHash(string k) {\n    return T{k};\n}\n"
+            "public int sub lookupList(int idx) {\n    return L[idx];\n}"));
+
+        string hash_ir = irFor(dump, "=== IR for AOTConstShapeMod::lookupHash(string) ===");
+        assertTrue(hash_ir =~ /load\.constant/, "AOT constant hash is loaded by reference");
+        assertFalse(hash_ir =~ /make\.hash/, "AOT constant hash is not rebuilt per read");
+
+        string list_ir = irFor(dump, "=== IR for AOTConstShapeMod::lookupList(int) ===");
+        assertTrue(list_ir =~ /load\.constant/, "AOT constant list is loaded by reference");
+        assertFalse(list_ir =~ /make\.list/, "AOT constant list is not rebuilt per read");
+
+        # a static method is dumped under its internal _static_ name
+        string class_ir = irFor(dump,
+            "=== IR for AOTConstShapeMod::Holder::_static_lookupClass(string) ===");
+        assertTrue(class_ir =~ /load\.constant/, "AOT class constant is loaded by reference");
+        assertFalse(class_ir =~ /make\.hash/, "AOT class constant is not rebuilt per read");
+    }
+
+    testAotCostIndependentOfSize() {
+        TmpDir tmp("qore-ir-const-materialization-aot-cost-");
+        hash<auto> m = buildModule(tmp, "AOTConstCostMod", moduleSource("AOTConstCostMod",
+            sprintf("public const Small = {%s};\npublic const Large = {%s};",
+                hashEntries(3), hashEntries(LargeEntries)),
+            "public int sub readSmall(string k, int n) {
+    int sink;
+    for (int i = 0; i < n; ++i) { sink = Small{k}; }
+    return sink;
+}
+public int sub readLarge(string k, int n) {
+    int sink;
+    for (int i = 0; i < n; ++i) { sink = Large{k}; }
+    return sink;
+}"));
+
+        string script = tmp.path + "/cost.qr";
+        write(script, "%modern
+%requires AOTConstCostMod
+int N = 20000;
+AOTConstCostMod::readSmall(\"k1\", 2000);
+AOTConstCostMod::readLarge(\"k1\", 2000);
+int t0 = clock_getmicros();
+AOTConstCostMod::readSmall(\"k1\", N);
+int t1 = clock_getmicros();
+AOTConstCostMod::readLarge(\"k1\", N);
+int t2 = clock_getmicros();
+printf(\"%d:%d\\n\", t1 - t0, t2 - t1);
+");
+        string out = runWithModule(m.qmod_dir, script);
+        list<string> parts = (trim out).split(":");
+        assertEq(2, parts.size(), "AOT cost probe produced two timings: " + out);
+        int small = parts[0].toInt();
+        int large = parts[1].toInt();
+        assertGt(0, small, "AOT small-constant loop was measurable");
+        assertGt(0, large, "AOT large-constant loop was measurable");
+        float ratio = large.toFloat() / small.toFloat();
+        assertLt(MaxSizeCostRatio, ratio,
+            sprintf("an AOT read of a %d-entry constant costs %.2fx a 3-entry one "
+                "(small=%dus large=%dus)", LargeEntries, ratio, small, large));
+    }
+
+    testAotValuesMatchSource() {
+        TmpDir tmp("qore-ir-const-materialization-aot-values-");
+        hash<auto> m = buildModule(tmp, "AOTConstValueMod", moduleSource("AOTConstValueMod",
+            sprintf("public const T = {%s};\npublic const L = (%s);",
+                hashEntries(LargeEntries), listEntries(LargeEntries)),
+            "public int sub lookupHash(string k) {\n    return T{k};\n}\n"
+            "public int sub lookupList(int idx) {\n    return L[idx];\n}"));
+
+        string script = tmp.path + "/values.qr";
+        # a copy must not alias the constant, and the constant must survive the copy's mutation
+        write(script, "%modern
+%requires AOTConstValueMod
+string k = \"k7\";
+int idx = 7;
+hash<auto!> copy = AOTConstValueMod::T;
+copy{k} = -1;
+printf(\"%y:%y:%y:%y:%d\\n\", AOTConstValueMod::lookupHash(k), AOTConstValueMod::lookupList(idx),
+    copy{k}, AOTConstValueMod::T{k}, AOTConstValueMod::T.size());
+");
+        string from_source = runWithModule(m.src_dir, script);
+        assertEq(sprintf("7:7:-1:7:%d\n", LargeEntries), from_source, "source module values");
+        assertEq(from_source, runWithModule(m.qmod_dir, script), "AOT qmod values");
+    }
+
+    #! A constant computed by an initializer must keep being rebuilt where the initializer runs
+    /** The folded literal a helper returns *is* the value node of the constant it initializes, so
+        both are the same pointer in the AOT constant reverse map.  Naming the constant there would
+        make the helper read the very constant it computes, and the generated \c __const_init would
+        then read it while still pending (\c AOT-PENDING-CONSTANT).
+    */
+    testAotDeferredConstantIsRebuilt() {
+        string decls = sprintf("hash<auto> sub makeBase() {\n    return {%s};\n}\n"
+            "public const Base = makeBase();", hashEntries(LargeEntries));
+        string funcs = "public int sub readBase(string k) {\n    return Base{k};\n}";
+
+        TmpDir dump_tmp("qore-ir-const-materialization-aot-deferred-ir-");
+        string dump = dumpAotIr(dump_tmp, "AOTConstDeferredMod",
+            moduleSource("AOTConstDeferredMod", decls, funcs));
+        string ir = irFor(dump, "=== IR for AOTConstDeferredMod::makeBase() ===");
+        assertTrue(ir =~ /make\.hash/, "the helper that computes a constant still builds its value");
+        assertFalse(ir =~ /load\.constant/,
+            "the helper that computes a constant does not read that constant");
+
+        TmpDir tmp("qore-ir-const-materialization-aot-deferred-");
+        hash<auto> m = buildModule(tmp, "AOTConstDeferredMod",
+            moduleSource("AOTConstDeferredMod", decls, funcs));
+        string script = tmp.path + "/deferred.qr";
+        write(script, "%modern
+%requires AOTConstDeferredMod
+printf(\"%y:%y\\n\", AOTConstDeferredMod::readBase(\"k7\"), AOTConstDeferredMod::Base.k7);
+");
+        assertEq("7:7\n", runWithModule(m.qmod_dir, script), "AOT qmod reads its computed constant");
+        # deferring initialization to the first read is the only deterministic way to reach the
+        # path a false self-reference breaks
+        string deferred = runWithModule(m.qmod_dir, script, "QORE_AOT_TEST_DEFER_CONSTANT_INIT=1");
+        assertEq("7:7\n", deferred, "AOT qmod reads its computed constant with init deferred");
+        assertEq(-1, deferred.find("AOT-PENDING-CONSTANT"),
+            "reading a computed constant does not report it as unpopulated");
     }
 }

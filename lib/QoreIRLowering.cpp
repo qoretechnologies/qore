@@ -5897,6 +5897,31 @@ static bool qoreIrConstantValueIsFullyConcrete(const QoreValue& expr) {
     return qoreIrValueIsFullyConcrete(expr, check_count);
 }
 
+//! Returns true when a concrete constant container can be loaded once instead of rebuilt per read
+/** Lowering that runs in this process holds the value in the instruction itself, so any concrete
+    container qualifies.  An AOT image cannot embed the value: it recovers a constant through a path
+    recorded in the reverse map, so the node must be mapped there for a reference to be recoverable
+    at all.
+
+    A constant populated by a deferred initializer must still be rebuilt.  Its value node is shared
+    with the expression that computes it - the hash returned by a `makeX()` helper *is* the value node
+    of `const X = makeX()` - so naming it here would make that helper read the very constant it
+    computes, and `X`'s generated \c __const_init would then read it while still pending
+    (\c AOT-PENDING-CONSTANT).  Nothing distinguishes the two roles at the node, so every constant
+    whose value is produced by an initializer is excluded; a constant serialized by value has no
+    initializer to re-enter and is always safe to name.
+*/
+bool QoreIRLowering::constantContainerLoadsByReference(const QoreValue& expr) const {
+    if (!constant_reverse_map) {
+        return true;
+    }
+    if (!expr.hasNode()) {
+        return false;
+    }
+    auto i = constant_reverse_map->find(expr.getInternalNode());
+    return i != constant_reverse_map->end() && !i->second.deferred_init;
+}
+
 QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& error) {
     // TAG_ENUM must be checked first: getType() returns the base type (e.g., NT_INT),
     // so base-type-specific paths below would strip enum identity
@@ -5939,17 +5964,12 @@ QoreIRValue QoreIRLowering::lowerConstant(const QoreValue& expr, std::string& er
     // preserved by copy-on-write.  Containers still holding anything evaluable (a nested runtime
     // constant reference, an object) fall through to the per-entry lowering below.
     //
-    // Only for lowering that runs in this process (constant_reverse_map is supplied by AOT
-    // compilation alone).  An AOT image cannot embed the value: it recovers a constant through a
-    // recorded path, and a constant's value node is shared with the expression that computed it -
-    // the hash returned by a `makeX()` helper *is* the value node of `const X = makeX()`.
-    // Referencing it by name from AOT-lowered code would make that helper read the very constant it
-    // computes, so the constant's deferred initializer reads it while still pending
-    // (AOT-PENDING-CONSTANT).  Ruling that out needs the initializer call graph, so AOT keeps
-    // rebuilding the container for now.
-    if (!constant_reverse_map && (expr.getType() == NT_LIST || expr.getType() == NT_HASH)
+    // AOT compilation names the constant instead of embedding it, and excludes constants whose
+    // value an initializer produces; see constantContainerLoadsByReference().
+    if ((expr.getType() == NT_LIST || expr.getType() == NT_HASH)
             && expr.isValue()
             && qoreIrConstantContainerEntryCount(expr) > qore_ir_max_rebuilt_constant_entries
+            && constantContainerLoadsByReference(expr)
             && qoreIrConstantValueIsFullyConcrete(expr)) {
         return builder.createLoadConstant(nullptr, expr, nullptr)->result;
     }

@@ -3,11 +3,15 @@
 ## Status
 
 Implemented. This document records how a value node that appears inside more
-than one constant is serialized into an AOT object, and the rule that keeps the
-resulting references acyclic.
+than one constant is serialized into an AOT object, the rule that keeps the
+resulting references acyclic, and when lowered code may name a constant instead
+of rebuilding its value.
 
 Relevant code:
 
+- `lib/QoreIRLowering.cpp` — `QoreIRLowering::lowerConstant()` and
+  `constantContainerLoadsByReference()` (whether lowered code names a constant
+  or rebuilds its value)
 - `lib/QoreAOTBinary.cpp` — `aot_add_constant_value_reverse_mappings_impl()`
   (which constant a node is recorded under),
   `QoreAOTBinaryWriter::writeValue()` (`VT_CONST_REF` emission),
@@ -17,7 +21,9 @@ Relevant code:
   `~ConstantEntryInitHelper()` (the rule and where the sequence is stamped)
 - `lib/ConstantList.cpp` — `ConstantEntry::getReferencedValue()` and
   `qore_constant_deep_resolve_in_flight()` (the load-side cycle guard)
-- `examples/test/ir/AOTAliasedConstantPathOwnership.qtest` — the tests
+- `examples/test/ir/AOTAliasedConstantPathOwnership.qtest`,
+  `examples/test/ir/IRConstantContainerMaterialization.qtest`,
+  `examples/test/ir/AOTPendingConstantRecovery.qtest` — the tests
 
 ## Why constants reference each other at all
 
@@ -144,6 +150,76 @@ map that stores it can be — so objects follow the same rule as every other nod
 and need no exception. Under claim order they did need one, because tree order reaches
 `SoftTypeMap` first, and the best-path fallback that provided it was itself able
 to form a cycle in principle.
+
+## Naming a constant from lowered code
+
+The reverse map answers a second question as well: whether *lowered code* may
+name a constant instead of rebuilding its value.
+
+`QoreIRLowering::lowerConstant()` reaches a container constant through
+`claimConstant()` whenever a folded hash or list value appears in an expression —
+which is how a constant read looks after the parser substitutes the constant's
+value node into the reading expression. Lowering it entry by entry into a
+`MakeHash`/`MakeList` plants an O(entries) reconstruction at **every** read;
+emitting a single `LoadConstant` materializes it once. Reading a 300-entry
+constant hash cost 86us rebuilt against 1.8us under the AST interpreter, which
+evaluates the value node to a reference to itself.
+
+Runtime tiers hold the value in the instruction, so any concrete container
+qualifies. An AOT image cannot embed the value: it recovers the constant through
+a recorded path, so the node must be in the reverse map for the reference to be
+recoverable at all — which is the same condition
+`QoreIRLowering::lowerContainerLiteral()` already applies to a nested container.
+
+### A constant its own initializer computes must still be rebuilt
+
+The parser folds a hash or list literal to a value node, and evaluating that node
+returns a reference to it, so the literal a helper returns **is** the value node
+of the constant it initializes:
+
+```qore
+hash<auto> sub makeBase() { return {"driver": {"oracle": {"native_type": "date"}}}; }
+public const Base = makeBase();
+```
+
+Both are the same pointer, and the reverse map names it `Base`. Naming it while
+lowering `makeBase()` would make that helper read the very constant it computes;
+`Base`'s generated `__const_init` then reads it while still pending and raises
+`AOT-PENDING-CONSTANT`. The lowering invented a self-reference the source does
+not have — `makeBase()` does not read `Base` — so making the recovery re-entrant
+would be papering over it in the wrong place.
+
+Nothing at the node distinguishes the two roles, so the rule is by constant, not
+by node: **a constant whose value a deferred initializer produces is never named
+from lowered code.** `AOTConstantReversePath::deferred_init` carries that from
+where the map is built (`ConstantEntry::hasInitExpr()`) to
+`QoreIRLowering::constantContainerLoadsByReference()`. A constant serialized by
+value has no initializer to re-enter and is always safe to name; it also cannot
+be the shape above, because a value that needed computing would have an
+initializer.
+
+Two narrower conditions were tried first and both admit `Base`:
+
+| Condition | Why it fails |
+|---|---|
+| the node is in the reverse map | `Base` is in it — that is how the false reference is emitted at all |
+| ... and its path is top level, carrying no subscript chain | `Base` is top level too |
+
+The remaining ways to tell the roles apart are the initializer call graph — is
+this function reachable from a `__const_init`? — and serializing the payload
+inline, by value, at each reference. Neither is needed: excluding every
+initializer-computed constant costs only the rebuild those constants already do,
+and inlining would both duplicate the payload per reference and freeze a
+load-time value at `qcc` time.
+
+### The size bound
+
+`qore_ir_max_rebuilt_constant_entries` (8) keeps the native `MakeHash`/`MakeList`
+form for small aggregates in both modes. The fixed-aggregate scalar-replacement
+pass consumes that form and can delete the container outright, which beats
+materializing it once; it only ever applies to a handful of members, while
+rebuilding costs O(entries) at every read. Loading *every* concrete container by
+reference regressed ten IR tests that use 1-3 entry aggregates.
 
 ## The load-side guard
 
