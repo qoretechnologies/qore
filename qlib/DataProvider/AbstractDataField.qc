@@ -177,6 +177,23 @@ public class AbstractDataField inherits Qore::Serializable {
             "of", "off", "on", "or", "per", "the", "to", "via", "vs", "with",
         );
 
+        #! Capitalization convention that capitalizes every word but a function word in the middle
+        /** Value returned by @ref Qore::I18n::get_capitalization_style() for languages using title case
+
+            @since DataProvider 3.8
+        */
+        const TitleCaseStyle = "title";
+
+        #! Capitalization convention that capitalizes the first word of a display name only
+        /** @since DataProvider 3.8
+        */
+        const SentenceCaseStyle = "sentence";
+
+        #! Capitalization convention that changes no case at all
+        /** @since DataProvider 3.8
+        */
+        const PreserveCaseStyle = "preserve";
+
         #! Canonical renderings for acronyms, initialisms, and irregularly capitalized proper nouns
         /** Used by @ref getDisplayName() to render a word in its conventional form regardless of the case
             it is written in in the technical name, so that lower-case and upper-case technical names produce
@@ -908,6 +925,11 @@ public class AbstractDataField inherits Qore::Serializable {
         keys must be in upper case, a @ref True "True" value marks the word as an acronym to be preserved, and
         a @ref False "False" value marks it as an ordinary word to be case-folded
 
+        @param locale optional BCP 47 language whose capitalization convention and case mappings are
+        applied; without it the display name is rendered in English, exactly as before.  Note that a
+        provider's presentation source locale, not the locale of whoever is reading, is the one that
+        applies to metadata: readers are served translations from the presentation catalogs
+
         @return the display name corresponding to the technical name
 
         @note Case conversions use locale-independent Unicode case mappings, with the exception that the final
@@ -924,19 +946,32 @@ public class AbstractDataField inherits Qore::Serializable {
         regardless of the case they are written in in the technical name, function words listed in
         @ref FunctionWords are no longer treated as acronyms and are written in lower case in the middle of a
         display name, and consecutive word separators produce a single word break
+
+        @since DataProvider 3.8 \a locale renders the display name according to a language's own
+        conventions
     */
-    static string getDisplayName(string name, *hash<string, bool> extra_acronyms) {
+    static string getDisplayName(string name, *hash<string, bool> extra_acronyms, *string locale) {
+        # the capitalization convention and the function words are properties of the language, so they are
+        # resolved once per call rather than per word; without a locale the English rules are used, which
+        # keeps the result and the cost identical for callers that do not ask for a language
+        string style = TitleCaseStyle;
+        *hash<string, bool> function_words;
+        if (locale.val()) {
+            style = I18n::get_capitalization_style(locale);
+            function_words = map {$1: True}, I18n::get_function_words(locale);
+        }
         # convert dashes and underscores to spaces
         name =~ s/[-_]/ /g;
         # case-fold all upper-case words that are not acronyms; this must be done before word breaks are
         # detected below, as case transitions carry no information in an all upper-case word
         if (name =~ /\p{Lu}/) {
-            name = AbstractDataField::foldUpperCaseWords(name, extra_acronyms);
+            name = AbstractDataField::foldUpperCaseWords(name, extra_acronyms, function_words, locale);
         }
         list<string> words = AbstractDataField::splitWords(name);
         list<string> rv = ();
         for (int i = 0, int e = words.size(); i < e; ++i) {
-            rv += AbstractDataField::renderWord(words[i], !i, i == (e - 1), extra_acronyms);
+            rv += AbstractDataField::renderWord(words[i], !i, i == (e - 1), extra_acronyms, style,
+                function_words, locale);
         }
         return rv.join(" ");
     }
@@ -989,23 +1024,34 @@ public class AbstractDataField inherits Qore::Serializable {
         @param first @ref True "True" if the word begins the display name
         @param last @ref True "True" if the word ends the display name
         @param extra_acronyms optional explicit acronym classification as documented in @ref getDisplayName()
+        @param style the capitalization convention of the language, one of @ref TitleCaseStyle,
+        @ref SentenceCaseStyle or @ref PreserveCaseStyle
+        @param function_words the function words of the language, or @ref nothing for @ref FunctionWords
+        @param locale the language to case for, or @ref nothing for the locale-independent mappings
 
-        @return the word in its canonical rendering if it has one, in lower case if it is a function word in
-        the middle of the display name, and otherwise with its initial letter capitalized
+        @return the word in its canonical rendering if it has one, in lower case if it is a function word
+        that the convention leaves in lower case, and otherwise capitalized as the convention requires
 
         @since DataProvider 3.8
     */
-    private static string renderWord(string word, bool first, bool last, *hash<string, bool> extra_acronyms) {
-        string key = word.lwr();
+    private static string renderWord(string word, bool first, bool last, *hash<string, bool> extra_acronyms,
+            string style, *hash<string, bool> function_words, *string locale) {
+        string key = AbstractDataField::lowerCase(word, locale);
+        # a language with no capitalization convention for display text (ex: Japanese) renders every word as
+        # it is written; only the canonical vocabulary, which is spelling rather than case, still applies
+        if (style == PreserveCaseStyle) {
+            return WordRenderings{key} ?? word;
+        }
         # an explicit classification by the caller takes precedence over all other rules; the word was
         # already preserved or case-folded accordingly when upper-case words were folded
-        if (exists extra_acronyms{word.upr()}) {
-            return AbstractDataField::capitalizeWord(word);
+        if (exists extra_acronyms{AbstractDataField::upperCase(word, locale)}) {
+            return AbstractDataField::capitalizeWord(word, locale);
         }
-        # function words are never acronyms, and English title case leaves them in lower case unless they
-        # begin or end the display name
-        if (FunctionWords{key}) {
-            return (first || last) ? AbstractDataField::capitalizeWord(word) : key;
+        # function words are never acronyms; title case leaves them in lower case unless they begin or end
+        # the display name, while sentence case capitalizes them only at the beginning
+        if ((function_words ?? FunctionWords){key}) {
+            return (first || (last && style == TitleCaseStyle))
+                ? AbstractDataField::capitalizeWord(word, locale) : key;
         }
         # a canonical rendering applies regardless of the case the word is written in, so that lower-case
         # and upper-case technical names produce the same display name
@@ -1013,7 +1059,11 @@ public class AbstractDataField inherits Qore::Serializable {
         if (exists canonical) {
             return canonical;
         }
-        return AbstractDataField::capitalizeWord(word);
+        # sentence case capitalizes the first word of the display name only
+        if (style == SentenceCaseStyle && !first) {
+            return key;
+        }
+        return AbstractDataField::capitalizeWord(word, locale);
     }
 
     #! Capitalizes the initial letter of a word and leaves the rest of the word unchanged
@@ -1021,53 +1071,93 @@ public class AbstractDataField inherits Qore::Serializable {
         case-folded keep their case (ex: \c "TPS" and \c "URLs")
 
         @param word the word to capitalize
+        @param locale the language to case for, or @ref nothing for the locale-independent mapping
 
         @return the word with its initial letter capitalized
 
         @since DataProvider 3.8
     */
-    private static string capitalizeWord(string word) {
+    private static string capitalizeWord(string word, *string locale) {
         if (!word.val()) {
             return word;
         }
-        return word[0].upr() + word.substr(1);
+        # note that I18n::capitalize() cannot be used here: it lower-cases the remainder of the word
+        # (ex: "TPS" -> "Tps"), which would destroy the acronyms this function exists to preserve
+        return AbstractDataField::upperCase(word[0], locale) + word.substr(1);
+    }
+
+    #! Converts a string to upper case, honoring the language when one was requested
+    /** Qore's \c upr() and \c lwr() apply the locale-independent Unicode mappings.  Those are right nearly
+        everywhere and wrong where a language cases a letter differently, most visibly in Turkish and Azeri,
+        which case the dotted and dotless I as distinct letters.  Without a language the locale-independent
+        mapping is used, so a caller that does not ask for one gets exactly the previous result.
+
+        @param str the string to convert
+        @param locale the BCP 47 language to case for, or @ref nothing for the locale-independent mapping
+
+        @return the string in upper case
+
+        @since DataProvider 3.8
+    */
+    private static string upperCase(string str, *string locale) {
+        return locale.val() ? I18n::to_upper(str, locale) : str.upr();
+    }
+
+    #! Converts a string to lower case, honoring the language when one was requested
+    /** @param str the string to convert
+        @param locale the BCP 47 language to case for, or @ref nothing for the locale-independent mapping
+
+        @return the string in lower case
+
+        @see @ref upperCase() for why the language matters
+
+        @since DataProvider 3.8
+    */
+    private static string lowerCase(string str, *string locale) {
+        return locale.val() ? I18n::to_lower(str, locale) : str.lwr();
     }
 
     #! Case-folds all upper-case words in a technical name that are not acronyms
     /** @param name the technical name with dashes and underscores already converted to spaces
         @param extra_acronyms optional explicit acronym classification as documented in @ref getDisplayName()
+        @param function_words the function words of the language, or @ref nothing for @ref FunctionWords
+        @param locale the language to case for, or @ref nothing for the locale-independent mappings
 
         @return the name with all upper-case non-acronym words converted to an initial capital followed by
         lower case; all other characters are returned unchanged
 
         @since DataProvider 3.6
     */
-    private static string foldUpperCaseWords(string name, *hash<string, bool> extra_acronyms) {
+    private static string foldUpperCaseWords(string name, *hash<string, bool> extra_acronyms,
+            *hash<string, bool> function_words, *string locale) {
         string rv = "";
         string word = "";
         for (int i = 0, int e = name.length(); i < e; ++i) {
             string c = name[i];
             # word separators must match those handled in getDisplayName()
             if (c == " " || c == ".") {
-                rv += AbstractDataField::foldUpperCaseWord(word, extra_acronyms) + c;
+                rv += AbstractDataField::foldUpperCaseWord(word, extra_acronyms, function_words, locale) + c;
                 word = "";
                 continue;
             }
             word += c;
         }
-        return rv + AbstractDataField::foldUpperCaseWord(word, extra_acronyms);
+        return rv + AbstractDataField::foldUpperCaseWord(word, extra_acronyms, function_words, locale);
     }
 
     #! Case-folds a single word if it is in all upper case and is not an acronym
     /** @param word the word to case-fold
         @param extra_acronyms optional explicit acronym classification as documented in @ref getDisplayName()
+        @param function_words the function words of the language, or @ref nothing for @ref FunctionWords
+        @param locale the language to case for, or @ref nothing for the locale-independent mappings
 
         @return the word converted to an initial capital followed by lower case, if it is an all upper-case
         non-acronym word, otherwise the word unchanged
 
         @since DataProvider 3.6
     */
-    private static string foldUpperCaseWord(string word, *hash<string, bool> extra_acronyms) {
+    private static string foldUpperCaseWord(string word, *hash<string, bool> extra_acronyms,
+            *hash<string, bool> function_words, *string locale) {
         # words with no upper-case letter (ex: camelCase words, digits, and words in caseless scripts such as
         # Chinese, Japanese, Arabic, and Hebrew) and words with a lower-case letter that carries case
         # information are left unchanged
@@ -1079,7 +1169,8 @@ public class AbstractDataField inherits Qore::Serializable {
         if (!exists acronym) {
             # short words and well-known acronyms are assumed to be acronyms and are left unchanged
             acronym = (word.length() <= AcronymMaxLength && !NonAcronyms{word}
-                && !FunctionWords{word.lwr()}) || Acronyms{word};
+                && !(function_words ?? FunctionWords){AbstractDataField::lowerCase(word, locale)})
+                || Acronyms{word};
         }
         if (acronym) {
             return word;
@@ -1094,7 +1185,7 @@ public class AbstractDataField inherits Qore::Serializable {
                 rv += c;
                 continue;
             }
-            rv += c.lwr();
+            rv += AbstractDataField::lowerCase(c, locale);
         }
         # Unicode case mappings always produce the medial form of the Greek sigma; use the final form at the
         # end of the word

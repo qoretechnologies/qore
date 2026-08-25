@@ -867,6 +867,7 @@ public class DataProviderTest inherits QUnit::Test {
 
         addTestCase("expression tests", \expressionTests());
         addTestCase("get display name", \getDisplayNameTest());
+        addTestCase("get display name - locale", \getDisplayNameLocaleTest());
         addTestCase("action option example determinism", \actionOptionExampleDeterminismTest());
         addTestCase("action option semantic attributes", \actionOptionSemanticAttrTest());
         addTestCase("semantic string format types", \semanticStringFormatTypesTest());
@@ -1324,6 +1325,54 @@ public class DataProviderTest inherits QUnit::Test {
         });
         assertEq("{account} in ([\"A\", \"B\", \"C\"]) [loc \"extra.info\"]", str);
 
+    }
+
+    getDisplayNameLocaleTest() {
+        # a display name rendered without a locale must be byte-identical to one rendered for English:
+        # every checked-in presentation catalog is keyed on the English source string, so any drift here
+        # silently invalidates them
+        list<string> corpus = (
+            "a_technical_name_here", "getUserProfileId", "XMLHttpRequestFactory", "getURL",
+            "customer_billing_address", "oauth2_client_secret_value", "refresh_url", "id_number",
+            "ssn_last_4", "tax_id_data", "cancel_at_period_end", "default_for_currency", "api_key",
+            "include_favorited_by_current_user_status", "URLs", "TPS_report", "ebitda_value",
+            "der_beste_wert", "islem_id", "created_at_from", "ipv6_address", "yoy_growth",
+        );
+        foreach string name in (corpus) {
+            assertEq(AbstractDataField::getDisplayName(name),
+                AbstractDataField::getDisplayName(name, NOTHING, "en"),
+                sprintf("%y renders identically with and without an explicit English locale", name));
+        }
+
+        # a language that cases a letter differently gets its own mapping; Turkish and Azeri case the
+        # dotted and dotless I as distinct letters
+        assertEq("İslem ID", AbstractDataField::getDisplayName("islem_id", NOTHING, "tr"));
+        assertEq("Islem ID", AbstractDataField::getDisplayName("islem_id", NOTHING, "en"));
+
+        # languages using sentence case capitalize the first word of the display name only
+        assertEq("Der Beste Wert", AbstractDataField::getDisplayName("der_beste_wert", NOTHING, "en"));
+        assertEq("Der beste wert", AbstractDataField::getDisplayName("der_beste_wert", NOTHING, "de"));
+        assertEq("Der beste wert", AbstractDataField::getDisplayName("der_beste_wert", NOTHING, "cs"));
+
+        # a language with no capitalization convention for display text renders each word as written
+        assertEq("der beste wert", AbstractDataField::getDisplayName("der_beste_wert", NOTHING, "ja"));
+
+        # canonical renderings are spelling rather than case, so they survive every convention
+        foreach string locale in (("en", "de", "tr", "ja")) {
+            assertEq(True, AbstractDataField::getDisplayName("api_key", NOTHING, locale) =~ /API/,
+                sprintf("the API acronym survives the %y capitalization convention", locale));
+            assertEq(True, AbstractDataField::getDisplayName("oauth2_token", NOTHING, locale) =~ /OAuth2/,
+                sprintf("the OAuth2 rendering survives the %y capitalization convention", locale));
+        }
+
+        # English title case capitalizes a function word that ends the display name; sentence case does not
+        assertEq("Cancel at Period End", AbstractDataField::getDisplayName("cancel_at_period_end"));
+        assertEq("Values To", AbstractDataField::getDisplayName("values_to", NOTHING, "en"));
+        assertEq("Values to", AbstractDataField::getDisplayName("values_to", NOTHING, "de"));
+
+        # an invalid language is reported rather than silently ignored
+        assertThrows("I18N-LOCALE-ERROR", \AbstractDataField::getDisplayName(),
+            ("test_name", NOTHING, "not a locale"));
     }
 
     getDisplayNameTest() {
