@@ -321,6 +321,12 @@ failed for any other reason.
 7. No convergence loops. Every unpublishable outcome is rebuilt at most once,
    and repetition is a reported failure rather than a strategy.
 8. Removing a lock succeeds when the lock is gone, whoever removed it.
+9. A parse publishes what it compiled or nothing, and a run that publishes
+   nothing leaves the tree exactly as it found it -- including the ordering
+   token, whose advance would otherwise mark the whole group stale.
+10. A graph transition under a partial parse is re-planned, not failed: a
+    consumer is free to reach the object recipes without waiting for the
+    coordinator, so a member can be compiled while the parse is running.
 
 ## Tests
 
