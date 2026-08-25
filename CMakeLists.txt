@@ -492,6 +492,7 @@ set(QORE_DOX_TMPL_SRC
     doxygen/lang/245_parse_directives.dox.tmpl
     doxygen/lang/250_warnings.dox.tmpl
     doxygen/lang/255_keywords.dox.tmpl
+    doxygen/lang/258_common_pitfalls.dox.tmpl
     doxygen/lang/900_release_notes.dox.tmpl
     doxygen/lang/Doxyfile.tmpl
 )

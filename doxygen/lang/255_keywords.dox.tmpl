@@ -7,6 +7,7 @@
     |Soft 1|Keywords of this type cannot be used as static variable names or constant names but can be used as function or method names if they are followed immediately by an open parenthesis (with no whitespace between the keyword and the open parenthesis), and they can be referenced as unquoted object or hash member names only if they are immediately preceded by the @ref dot_operator ". operator" (again with no whitespace between the "." and the keyword):
     |Soft 2|Keywords of this type cannot be used as static variable names or constant names but can be used as function or method names if they are followed by an open parenthesis (whitespace is allowed between the keyword and the open parenthesis), and they can be referenced as unquoted object or hash member names if they are immediately preceded by the @ref dot_operator ". operator" (again with no whitespace between the "." and the keyword):
     |Soft 3|Keywords of this type be referenced as unquoted object or hash member names if preceded immediately by the "." operator, however they may not be used as function or class method names or static variable names or constant names
+    |Hard|Keywords of this type are reserved unconditionally; they cannot be used as identifiers in any position, including as unquoted object or hash member names after the @ref dot_operator ". operator".  A hash key that collides with a hard keyword must be written as a quoted subscript, e.g. <tt>h{"enum"}</tt>
 
     <b>Keywords</b>
     |!Keywords|!Type|!Description
@@ -27,6 +28,7 @@
     |@ref do "do"|Soft 3|for the @ref do "do statement"
     |@ref elements "elements"|Soft 3|for the @ref elements "elements operator"
     |@ref if "else"|Soft 3|used with the @ref if "if statement"
+    |@ref enums "enum"|Hard|used when declaring @ref enums "enums"
     |@ref exists "exists"|Soft 1|for the @ref exists "exists operator"
     |@ref False "False"|Soft 3|represents a boolean false value
     |@ref find "find"|Soft 3|for the @ref find "find expression"

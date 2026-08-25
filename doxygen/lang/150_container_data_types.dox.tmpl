@@ -680,6 +680,27 @@ hash<string, int> h(("key1": 2, "key2": 3));
     - the @ref hmap "hash version of the map operator" is used when a literal single member hash expression with curly brackets is given to the @ref hmap "map" operator; this version of the map operator can be used to build a hash dynamically from a list or iterator expression
 
     <hr>
+    @anchor hash_key_presence
+    @subsection hash_key_presence_tests Testing for Key Presence
+
+    Three different tests are commonly used on a hash key, and they answer three different questions.  Reading a key that is not present returns @ref nothing, so a truth test cannot distinguish a missing key from a key whose value is empty or @ref nothing:
+    |!Key state|!Truth test <tt>h.k</tt>|!<tt>exists h.k</tt>|!<tt>h.hasKey("k")</tt>
+    |present, non-empty value|@ref True|@ref True|@ref True
+    |present, value is an empty hash or list|@ref False|@ref True|@ref True
+    |present, value is @ref nothing|@ref False|@ref False|@ref True
+    |absent|@ref False|@ref False|@ref False
+
+    Use @ref <hash>::hasKey() "hasKey()" whenever the <i>presence</i> of the key is what carries the meaning.  This is the common case in protocol handling, where a capability or option is declared by the presence of a key whose value is an often-empty settings hash:
+    @code{.py}
+# wrong: a declared capability with an empty settings hash reads as absent
+if (caps.elicitation) { ... }
+
+# right: tests what is actually meant
+if (caps.hasKey("elicitation")) { ... }
+    @endcode
+
+    Use <tt>exists</tt> when a key that is present but set to @ref nothing should be treated the same as a missing key, and a truth test only when emptiness and absence genuinely mean the same thing.
+
     @section object Object
 
     @par Description:

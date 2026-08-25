@@ -622,6 +622,30 @@ class XmlRpcClient inherits Qore::HTTPClient {
 
     @note Base classes that give explicit arguments to their base class constructors can be overridden by subclasses by simply listing the base class in the base class constructor list and providing new arguments.
 
+    @anchor multiple_inheritance_resolution
+    @subsection multiple_inheritance_order Method Resolution Order with Multiple Inheritance
+
+    When a class inherits two or more classes that each supply a definition of the same method, the definition reached through the branch listed <b>first</b> in the <tt><b>inherits</b></tt> clause is the one that is used.  Reordering the <tt><b>inherits</b></tt> clause therefore changes which implementation runs:
+    @code{.py}
+class Base {
+    private string hook() { return "a"; }
+    string call() { return hook(); }
+}
+class Leaf inherits Base {
+    string doIt() { return call(); }
+}
+class SpBase inherits Base {
+    private string hook() { return "b"; }
+}
+
+class A inherits Leaf, SpBase {}   # (new A()).doIt() returns "a" - Leaf's branch is listed first
+class B inherits SpBase, Leaf {}   # (new B()).doIt() returns "b" - SpBase's branch is listed first
+    @endcode
+
+    Note that \c Base appears twice in each hierarchy but is inherited only once, as described above, and that @ref private_methods "private" methods participate in this resolution normally — in %Qore, <tt><b>private</b></tt> restricts access to the class hierarchy, so a <tt><b>private</b></tt> method can be overridden by another class in the hierarchy (only @ref private_methods "private:internal" methods are invisible to subclasses).
+
+    This is what allows a class to combine a "policy" base that overrides a shared hook once with "behavior" leaf classes reused unchanged from another module: list the class supplying the override <b>first</b>.  If the un-overridden behavior is what runs, the <tt><b>inherits</b></tt> clause is in the wrong order.
+
     @subsection private_inheritance Private Inheritance
 
     Classes inherited using the <b><tt>private</tt></b> access modifier encapsulate the functionality (members, constants, methods, etc) of the parent class privately in the class hierarchy; that is, any access to the privately-inherited parent class's functionality from outside the class hierarchy will result in either a parse-time or runtime exception, depending on when the error is caught.  When inheritance is declared <tt><b>private</b></tt>, the inherted class is accessible in all child classes in the hierarchy.

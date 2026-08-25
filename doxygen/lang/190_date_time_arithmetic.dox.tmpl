@@ -52,6 +52,28 @@ True@endverbatim
 
     See the Qore::TimeZone class for more information on time zone information.
 
+    @anchor calendar_vs_absolute_components
+    @subsection date_time_arithmetic_calendar_components Calendar Components vs Absolute Components
+
+    The components of a @ref relative_dates "relative date" do not all behave the same way when added to an absolute date:
+    |!Components|!Behavior|!Meaning
+    |years, months, days|calendar arithmetic|the wall-clock time of day is preserved; the elapsed time actually represented varies
+    |hours, minutes, seconds, microseconds|absolute arithmetic|a fixed elapsed duration is added
+
+    Because a day is a <b>calendar</b> component and not a synonym for 24 hours, adding \c 92D across a daylight savings time transition preserves the time of day and therefore advances the clock by 2209 hours, while adding \c 2208h advances it by exactly 2208 hours:
+    @code{.py}
+TimeZone tz("Europe/Prague");
+date v = tz.date("20260725090739");
+printf("%y\n", v + 92D);    # 2026-10-25 09:07:39 +01:00  <- same wall-clock time
+printf("%y\n", v + 2208h);  # 2026-10-25 08:07:39 +01:00  <- exactly 2208 hours later
+    @endcode
+
+    Months vary in length as well, so \c 3M spans 89 to 92 days depending on the starting date, plus or minus an hour if a DST transition falls in the interval.
+
+    @note Any value that must represent a fixed elapsed duration — a timeout, a retry interval, or a window checked against a service's maximum-interval limit — should be expressed in hours or seconds, never in days or months.  A limit written as \c 3M silently exceeds a 92-day server-side cap in a DST-observing time zone while working correctly in \c UTC, which presents as an intermittent failure of the remote service.
+
+    A date literal written with a fixed UTC offset (<tt>2026-07-25T09:07:39+02:00</tt>) carries no time zone rules and therefore shows no DST effect at all; a test built from such literals will not reproduce what the same code does with a value obtained from @ref Qore::now() "now()" in a DST-observing zone.  Build the date from a @ref Qore::TimeZone "TimeZone" object (<tt>tz.date("20260725090739")</tt>) so that it carries its zone and behaves the same way in any CI time zone.
+
     @section date_time_arithmetic_leap_years Leap Years and the Gregorian Calendar
 
     %Qore is capable of representing and performing calculations on dates before the adoption of the Gregorian calendar (proposed in 1582 and adopted at various times in Europe after this point). However all calculations are made as if the Gregorian calendar were always in effect (%Qore implements a <a href="http://en.wikipedia.org/wiki/Proleptic_Gregorian_calendar">proleptic Gregorian calendar</a>).

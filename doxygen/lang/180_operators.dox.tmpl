@@ -803,6 +803,17 @@ map printf("%s\n", $1), hash.keyIterator();
 
     This operator does not throw any exceptions (however note that exceptions could be thrown by expressions executed by this operator).
 
+    @note If <em>@ref expressions "iterator_expression"</em> is @ref nothing, the <em>@ref expressions "map_expression"</em> is not executed and the operator returns @ref nothing — not an empty list.  An empty <i>list</i> source returns an empty list, so the two cases differ:
+    @code{.py}
+*list<int> src;               # no value
+auto a = map $1, src;         # NOTHING
+auto b = map $1, ();          # () - an empty list
+    @endcode
+    This matters when the result is assigned to or returned as a typed list, because @ref nothing does not satisfy \c list<T>: the result is a \c RUNTIME-TYPE-ERROR on exactly the input (an unset optional argument) that produces no elements.  Coerce the result with <tt>?? ()</tt> when the source may be @ref nothing:
+    @code{.py}
+list<string> rv = (map format($1), src) ?? ();
+    @endcode
+
     @see @ref hmap for a variant of this operator that creates and returns a hash rather than a list
 
     @since %Qore 0.8.6.2 the map operator when used with an @ref Qore::AbstractIterator "AbstractIterator" object instantiates the value returned by @ref Qore::AbstractIterator::getValue() "AbstractIterator::getValue()" instead of the iterator itself

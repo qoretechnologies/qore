@@ -25,6 +25,28 @@
 
     Variables may be assigned any value unless restricted with a type declaration. If no type declaration is given, then the variable is assumed to be type @ref any_type "any". Note that type declarations are required for all variables (and for function and method parameters and class members) when the @ref require-types "%require-types" parse option is set.
 
+    @anchor declaration_does_not_initialize
+    @subsection declaration_vs_initialization Declaring a Variable Does Not Initialize It
+    A type restriction on a declaration constrains what the variable may later hold; it does <b>not</b> give the variable a value of that type.  Until it is assigned, a declared variable has @ref nothing "no value", whatever its declared type:
+    @code{.py}
+int i;
+printf("%y %y\n", exists i, i.type());  # False "nothing"
+    @endcode
+
+    This is easy to miss because most reads of such a variable appear to work: @ref nothing is converted to \c 0, an empty string, or @ref False as the context requires, so <tt>i == 0</tt> is @ref True and <tt>i + 1</tt> evaluates to \c 1.  The failure comes only when the value reaches something that requires the declared type:
+    @code{.py}
+int i;
+int j = i;   # RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got no value instead
+    @endcode
+
+    Note that this is a <i>runtime</i> error, not a parse error, so it surfaces only on the path that reads the unassigned variable.  Assign an explicit initial value in the declaration whenever the variable is read before it is unconditionally set:
+    @code{.py}
+int i = 0;
+hash<auto> h = {};
+    @endcode
+
+    Use @ref exists "exists" (not a comparison with \c 0, \c "" or @ref False) to test whether such a variable has been assigned, or declare it with an @ref int_or_nothing_type "or-nothing type" (\c *int) to say that "no value" is an expected state.
+
     @subsection readonly_local_variables Read-Only Local Variables
     A local variable can be declared with \c const to make the binding read-only after its initializer has run:
     @code{.py}

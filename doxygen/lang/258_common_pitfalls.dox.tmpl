@@ -1,0 +1,124 @@
+/** @page common_pitfalls Common Pitfalls
+
+    @tableofcontents
+
+    This page is an index of %Qore behaviors that are correct and documented but that commonly
+    surprise programmers coming from other languages.  Each entry states the rule briefly and links
+    to the reference section that covers it in full; nothing here is unique to this page.
+
+    The entries share a shape: the behavior is not an error, so the parser accepts the code, and the
+    consequence appears somewhere else — usually at run time, and usually only on the input that
+    triggers it.  That is what makes them worth collecting in one place.
+
+    @section pitfalls_index Index by Symptom
+
+    |!What you see|!Cause|!Read
+    |<tt>RUNTIME-TYPE-ERROR: &lt;lvalue&gt; expects type 'int', but got no value instead</tt>|a declared variable was read before being assigned; a declaration does not initialize|@ref declaration_vs_initialization
+    |<tt>PARSE-TYPE-ERROR: ... the container's element type was inferred from the initial value</tt>|a \c hash<auto> or \c list<auto> was narrowed by its first assignment|@ref auto_no_narrow
+    |a \c map result fails to satisfy a \c list&lt;T&gt; lvalue, but only sometimes|the source was @ref nothing, so \c map returned @ref nothing rather than an empty list|@ref map
+    |a hash key that is present tests as absent|the key's value is an empty hash or list, which is @ref False|@ref hash_key_presence_tests
+    |a value compares equal to both a real value and "missing"|@ref NULL is not @ref NOTHING; <tt>exists NULL</tt> is @ref True|@ref null
+    |a method override is silently ignored|another branch of the <tt>inherits</tt> clause is listed first|@ref multiple_inheritance_order
+    |a subclass reads a parent member as empty, with no error|the member is <tt>private:internal</tt> and is invisible to subclasses|@ref pitfalls_private_internal
+    |an interval drifts by an hour, or exceeds a remote limit only in some time zones|\c D and \c M are calendar components, not fixed durations|@ref date_time_arithmetic_calendar_components
+    |<tt>syntax error</tt> pointing at the line after the real mistake|an identifier collided with a @ref keywords "keyword"|@ref pitfalls_keywords
+    |a character loop truncates non-ASCII text|@ref <string>::size() "size()" counts bytes, not characters|@ref pitfalls_size_length
+
+    @section pitfalls_types Types and Declarations
+
+    @subsection pitfalls_declaration Declaring a variable does not initialize it
+    <tt>int i;</tt> leaves \c i with no value, not \c 0.  Reads mostly appear to work because
+    @ref nothing converts to \c 0, \c "" or @ref False as needed, so the failure arrives only where
+    the declared type is actually required.  See @ref declaration_vs_initialization.
+
+    @subsection pitfalls_narrowing Container types are narrowed by the first assignment
+    <tt>hash&lt;auto&gt; h = {"x": 1};</tt> makes \c h a <tt>hash&lt;string, int&gt;</tt>, so <tt>h.y = "s";</tt>
+    is a parse error.  A <i>heterogeneous</i> initial value does not narrow, which is why this only
+    bites sometimes.  Declare the variable <tt>hash&lt;auto!&gt;</tt> or <tt>list&lt;auto!&gt;</tt> when it
+    genuinely holds mixed types; see @ref auto_no_narrow.
+
+    @subsection pitfalls_null NULL is not NOTHING
+    @ref NULL is the SQL \c NULL value and is a value: <tt>exists NULL</tt> is @ref True and
+    <tt>NULL === NOTHING</tt> is @ref False.  @ref NOTHING is the absence of a value.  Database
+    columns and protocol payloads distinguish the two; see @ref null and @ref nothing.
+
+    @section pitfalls_containers Containers
+
+    @subsection pitfalls_presence Presence, emptiness, and absence are three different things
+    An empty hash or list is @ref False, so a truth test cannot tell a missing key from a key whose
+    value is empty.  Use @ref <hash>::hasKey() "hasKey()" when presence is what carries the
+    meaning; see @ref hash_key_presence_tests.
+
+    @subsection pitfalls_map_nothing map over NOTHING returns NOTHING
+    A @ref nothing source yields @ref nothing, while an empty list yields an empty list.  Coerce with
+    <tt>?? ()</tt> where the result must satisfy a typed list; see @ref map.
+
+    @section pitfalls_operators Operators and Functions
+
+    @anchor pitfalls_size_length
+    @subsection pitfalls_size size() counts bytes; length() counts characters
+    Bounding a character loop with @ref <string>::size() "size()" truncates multi-byte text and reads
+    past the end of the string.  Use @ref <string>::length() "length()" for a character count; see
+    @ref character_encoding.
+
+    @subsection pitfalls_split split() does not split a string into characters
+    <tt>split("", str)</tt> returns a one-element list holding the whole string.  Iterate characters
+    with @ref <string>::length() "length()" and @ref <string>::substr() "substr()" instead.  Note
+    also that the third parameter of @ref Qore::split() "split()" is \c with_separator, which
+    <i>keeps</i> each separator attached to its token — it is not a "keep trailing empty" flag.
+
+    @subsection pitfalls_int_division Integer division truncates toward zero
+    <tt>int / int</tt> is integer division: <tt>7 / 2</tt> is \c 3 and <tt>-7 / 2</tt> is \c -3.
+    Truncation is toward zero, not toward negative infinity, so flooring a negative quotient needs an
+    explicit correction.
+
+    @subsection pitfalls_string_repeat Multiplication is always numeric
+    <tt>"0" * 64</tt> converts the string to a number and evaluates to the integer \c 0; it does not
+    repeat the string.  Use @ref Qore::strmul() "strmul()" to repeat a string.
+
+    @section pitfalls_dates Dates and Intervals
+
+    @subsection pitfalls_calendar Days and months are calendar units
+    Adding \c 92D preserves the wall-clock time and so can advance the clock by 2209 hours across a
+    daylight savings time transition, while \c 2208h always advances it by exactly 2208 hours.  Any
+    value that must be a fixed elapsed duration belongs in hours or seconds; see
+    @ref date_time_arithmetic_calendar_components.
+
+    @section pitfalls_classes Classes
+
+    @subsection pitfalls_mi_order The first inherits branch wins
+    When two inherited branches supply the same method, the one listed first in the
+    <tt>inherits</tt> clause is used.  Reordering the clause changes which implementation runs; see
+    @ref multiple_inheritance_order.
+
+    @anchor pitfalls_private_internal
+    @subsection pitfalls_private private is not private
+    In %Qore, <tt><b>private</b></tt> restricts access to the class hierarchy — it is what other
+    languages call <i>protected</i> — so a <tt><b>private</b></tt> method can be overridden by a
+    subclass.  <tt><b>private:internal</b></tt> is the genuinely private form.  A subclass that
+    references a <tt>private:internal</tt> parent member gets no parse error: the name simply does
+    not resolve to that member, so a loop over it iterates zero times and a lookup always reports
+    "not found".  See @ref private_methods.
+
+    @section pitfalls_syntax Syntax and Keywords
+
+    @anchor pitfalls_keywords
+    @subsection pitfalls_reserved Identifiers that collide with keywords
+    @ref keywords "Keywords" such as \c sub, \c elements, \c keys, \c context and \c final are
+    accepted as hash member names after the @ref dot_operator ". operator", but \c enum is a hard
+    keyword and is not.  This bites when mirroring an external field name — a JSON Schema \c enum
+    field, or OpenID Connect's \c sub — into %Qore code.  Write the key as a quoted subscript
+    (<tt>h{"enum"}</tt>) whenever it could collide, and note that the resulting parse error usually
+    points at the <i>following</i> line.
+
+    @subsection pitfalls_new Constructing an object in an expression requires new
+    <tt>C().f()</tt> is parsed as a call to a function named \c C, giving
+    <tt>PARSE-EXCEPTION: function 'C()' cannot be found</tt>.  Write <tt>(new C()).f()</tt>, or
+    assign the object to a variable first.
+
+    @subsection pitfalls_const_type A read-only local variable needs an explicit type
+    <tt>const X = "v";</tt> inside a method body is rejected with
+    <tt>read-only local variable 'X' declared without type information</tt>.  Write
+    <tt>const string X = "v";</tt> or <tt>const auto X = "v";</tt>; see
+    @ref readonly_local_variables.
+*/
