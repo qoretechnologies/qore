@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -911,10 +911,20 @@ list<AbstractMethodVariant> AbstractClass::getVariants() [flags=RET_VALUE_ONLY] 
     // the class ptr must be valid
     ReferenceHolder<QoreListNode> rv(new QoreListNode(QC_ABSTRACTMETHODVARIANT->getTypeInfo()), xsink);
 
-    QoreMethodIterator i(*c->cls);
-    while (i.next()) {
-        const QoreMethod* m = i.getMethod();
-        append_variant_objects(**rv, c->pgm, m->getFunction(), m->getMethodType(), xsink);
+    {
+        QoreMethodIterator i(*c->cls);
+        while (i.next()) {
+            const QoreMethod* m = i.getMethod();
+            append_variant_objects(**rv, c->pgm, m->getFunction(), m->getMethodType(), xsink);
+        }
+    }
+
+    {
+        QoreStaticMethodIterator i(*c->cls);
+        while (i.next()) {
+            const QoreMethod* m = i.getMethod();
+            append_variant_objects(**rv, c->pgm, m->getFunction(), m->getMethodType(), xsink);
+        }
     }
 
     return rv.release();

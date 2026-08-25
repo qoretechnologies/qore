@@ -3,7 +3,7 @@
 /*
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1098,7 +1098,7 @@ list<StaticMethodVariant> Class::getStaticVariants() [flags=RET_VALUE_ONLY] {
     // the class ptr must be valid
     ReferenceHolder<QoreListNode> rv(new QoreListNode(QC_STATICMETHODVARIANT->getTypeInfo()), xsink);
 
-    QoreMethodIterator i(*c->cls);
+    QoreStaticMethodIterator i(*c->cls);
     while (i.next()) {
         const QoreMethod* m = i.getMethod();
         method_type_e mtype = m->getMethodType();

@@ -85,6 +85,43 @@ class ITest inherits private:internal Test {
     }
 }
 
+# classes used by the method enumeration tests
+class MethodEnumNoParent {
+    constructor() {}
+    destructor() {}
+    copy() {}
+
+    pubM() {}
+    private privM() {}
+    private:internal intM() {}
+
+    static string pubStatic(int a) {
+        return "pub";
+    }
+
+    private:internal static intStatic() {}
+}
+
+class MethodEnumBase {
+    baseNormal() {}
+    private basePrivate() {}
+    private:internal baseInternal() {}
+
+    string over() {
+        return "base";
+    }
+
+    static string baseStatic(int a, *string b) {
+        return "base";
+    }
+
+    private:internal static baseInternalStatic() {}
+
+    static string overStatic() {
+        return "base";
+    }
+}
+
 namespace TestNs {
     our int global_i;
 
@@ -154,6 +191,7 @@ class ReflectionTest inherits QUnit::Test {
         addTestCase("pseudo-class tests", \pseudoClassTests());
         addTestCase("type member pseudo-method dispatch", \typeMemberPseudoMethodDispatchTest());
         addTestCase("program tests", \programTests());
+        addTestCase("static variant tests", \staticVariantTests());
         addTestCase("cross-module namespace test", \crossModuleNamespaceTest());
         set_return_value(main());
     }
@@ -3379,6 +3417,35 @@ class ReflectionTest inherits QUnit::Test {
                 v = p.callFunction("get");
             }
             assertThrows("PROGRAM-ERROR", \v.getReturnType());
+        }
+    }
+
+    staticVariantTests() {
+        # getStaticVariants() returns the class's static method variants
+        {
+            Class c = Class::forName("MethodEnumBase");
+            list<string> l = ();
+            foreach StaticMethodVariant v in (c.getStaticVariants()) {
+                l += v.toString();
+            }
+            assertEq(3, l.size());
+            assertEq(("static private:internal nothing MethodEnumBase::baseInternalStatic()",
+                "static public string MethodEnumBase::baseStatic(int a, *string b)",
+                "static public string MethodEnumBase::overStatic()"), sort(l));
+        }
+
+        # getVariants() includes static method variants as documented
+        {
+            Class c = Class::forName("MethodEnumNoParent");
+            int static_variants = 0;
+            foreach AbstractMethodVariant v in (c.getVariants()) {
+                if (v.getMethod().isStatic()) {
+                    ++static_variants;
+                }
+            }
+            assertEq(2, static_variants);
+            # every method in this class has exactly one variant
+            assertEq(c.getMethods().size(), c.getVariants().size());
         }
     }
 

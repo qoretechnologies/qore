@@ -2887,6 +2887,11 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
     - @ref reflectionintro "reflection" module
       - @ref Qore::Reflection::Class::getConstant() "Class::getConstant()" now searches the class hierarchy
         (<a href="https://github.com/qoretechnologies/qore/issues/4998">issue 4998</a>)
+      - fixed @ref Qore::Reflection::Class::getStaticVariants() "Class::getStaticVariants()" always
+        returning an empty list; it iterated the class's normal and special methods, which never include
+        static methods
+      - fixed @ref Qore::Reflection::AbstractClass::getVariants() "AbstractClass::getVariants()" omitting
+        static method variants, despite documenting that they are included
 
     - @ref restclientintro "RestClient" module
       - fixed non-blocking polling with connections that use basic auth
