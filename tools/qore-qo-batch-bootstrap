@@ -399,7 +399,7 @@ if [ "$current" = true ] && [ -f "$bootstrap_stamp" ]; then
     exit 0
 fi
 
-if [ "$partial" = true ] && [ -f "$bootstrap_stamp" ]; then
+if [ "$partial" = true ]; then
     # Part of the group is stale, and the group coordinator that runs right after
     # this recipe is what decides how to rebuild it: one shared parse over the
     # stale set, standalone compiles, or -- when the stale set really is the
@@ -407,6 +407,10 @@ if [ "$partial" = true ] && [ -f "$bootstrap_stamp" ]; then
     # instead, which is what this recipe used to do for ANY staleness, meant a
     # module timestamp or a handful of stale components reparsed every source in
     # the group before the coordinator was ever consulted.
+    #
+    # The ordering token need not already exist: a tree published before this
+    # helper dated its parses has none, and creating it here is what lets the
+    # hand-over be expressed at all.
     #
     # The stale set is handed on in the vocabulary the whole build already
     # speaks: every member that is NOT stale gets a stamp newer than the ordering
