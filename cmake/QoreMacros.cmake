@@ -589,6 +589,8 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     set(_qore_qcc_compile_contract_stamps)
     set(_qore_qcc_aggregate_contract_stamps)
     set(_qore_qcc_order_targets)
+    #! The group's order target: what a consumer waits for before reading objects.
+    set(_qore_qcc_group_order_target "qore_qcc_${_qore_qcc_group_id}_objects")
     set(_qore_qcc_abs_sources)
     set(_qore_qcc_source_content_digests)
     set(_qore_qcc_managed_files)
@@ -601,7 +603,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         set(_qore_qcc_output "${_QORE_QCO_OUTPUT_DIR}/${_qore_qcc_source_id}.qo")
         set(_qore_qcc_source_content_digest
             "${_QORE_QCO_SCRIPT_DIR}/source-content/${_qore_qcc_source_id}.sha256")
-        set(_qore_qcc_order_target "qore_qcc_${_qore_qcc_group_id}_${_qore_qcc_index}")
+
         list(APPEND _qore_qcc_abs_sources "${_qore_qcc_real_source}")
         list(APPEND _qore_qcc_source_content_digests
             "${_qore_qcc_source_content_digest}")
@@ -614,7 +616,10 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             "${_qore_qcc_output}.compile-contract.stamp")
         list(APPEND _qore_qcc_aggregate_contract_stamps
             "${_qore_qcc_output}.aggregate-contract.stamp")
-        list(APPEND _qore_qcc_order_targets "${_qore_qcc_order_target}")
+        # The same target for every source: ORDER_TARGETS_VAR is a per-source
+        # list in the caller's contract, and one entry per source keeps a caller
+        # that indexes it by source working while the build tool sees one target.
+        list(APPEND _qore_qcc_order_targets "${_qore_qcc_group_order_target}")
         _QORE_QCC_OBJECT_ARTIFACT_PATHS(_qore_qcc_object_artifacts
             "${_qore_qcc_output}")
         list(APPEND _qore_qcc_managed_files ${_qore_qcc_object_artifacts})
@@ -1040,87 +1045,36 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
 
     if (_qore_qcc_count GREATER 0)
         math(EXPR _qore_qcc_last "${_qore_qcc_count} - 1")
-        foreach(_qore_qcc_idx RANGE 0 ${_qore_qcc_last})
-            list(GET _qore_qcc_order_targets ${_qore_qcc_idx} _qore_qcc_order_target)
-            list(GET _qore_qcc_stamps ${_qore_qcc_idx} _qore_qcc_stamp)
-            add_custom_target(${_qore_qcc_order_target}
-                DEPENDS ${_qore_qcc_stamp})
-            add_dependencies(${_qore_qcc_order_target}
-                ${_qore_qcc_source_content_target}
-                ${_qore_qcc_source_symbols_target})
-            if (_qore_qcc_bootstrap_target)
-                add_dependencies(${_qore_qcc_order_target} ${_qore_qcc_bootstrap_target})
-            endif ()
-            if (_qore_qcc_incremental_plan_target)
-                add_dependencies(${_qore_qcc_order_target}
-                    ${_qore_qcc_incremental_plan_target})
-            endif ()
-        endforeach()
-
-        # Target-level publication order follows the condensed component DAG, not
-        # the required-edge graph. The required graph has cycles, and a CMake
-        # target cycle is invalid, so ordering members individually meant dropping
-        # every required edge that pointed backwards -- which is exactly what left
-        # a cyclic component's members racing each other. Condensing first removes
-        # the need to drop anything: the condensation is acyclic by construction,
-        # members of one component are published together and so need no order
-        # between them, and a member of a consuming component waits for every
-        # member of every component it depends on.
-        math(EXPR _qore_qcc_scc_last "${${_qore_qcc_scc_prefix}_COUNT} - 1")
-        if (${_qore_qcc_scc_prefix}_COUNT GREATER 0)
-            foreach(_qore_qcc_scc_idx RANGE 0 ${_qore_qcc_scc_last})
-                set(_qore_qcc_scc_member_targets)
-                foreach(_qore_qcc_scc_output
-                        ${${_qore_qcc_scc_prefix}_OUTPUTS_${_qore_qcc_scc_idx}})
-                    list(FIND _qore_qcc_outputs "${_qore_qcc_scc_output}"
-                        _qore_qcc_scc_member_idx)
-                    if (NOT _qore_qcc_scc_member_idx EQUAL -1)
-                        list(GET _qore_qcc_order_targets ${_qore_qcc_scc_member_idx}
-                            _qore_qcc_scc_member_target)
-                        list(APPEND _qore_qcc_scc_member_targets
-                            "${_qore_qcc_scc_member_target}")
-                    endif ()
-                endforeach()
-                set(_qore_qcc_scc_predecessor_targets)
-                foreach(_qore_qcc_scc_predecessor
-                        ${${_qore_qcc_scc_prefix}_PREDECESSORS_${_qore_qcc_scc_idx}})
-                    foreach(_qore_qcc_scc_predecessor_output
-                            ${${_qore_qcc_scc_prefix}_OUTPUTS_${_qore_qcc_scc_predecessor}})
-                        list(FIND _qore_qcc_outputs
-                            "${_qore_qcc_scc_predecessor_output}"
-                            _qore_qcc_scc_predecessor_idx)
-                        if (NOT _qore_qcc_scc_predecessor_idx EQUAL -1)
-                            list(GET _qore_qcc_order_targets
-                                ${_qore_qcc_scc_predecessor_idx}
-                                _qore_qcc_scc_predecessor_target)
-                            list(APPEND _qore_qcc_scc_predecessor_targets
-                                "${_qore_qcc_scc_predecessor_target}")
-                        endif ()
-                    endforeach()
-                endforeach()
-                if (_qore_qcc_scc_member_targets AND _qore_qcc_scc_predecessor_targets)
-                    list(REMOVE_DUPLICATES _qore_qcc_scc_predecessor_targets)
-                    foreach(_qore_qcc_scc_member_target ${_qore_qcc_scc_member_targets})
-                        add_dependencies(${_qore_qcc_scc_member_target}
-                            ${_qore_qcc_scc_predecessor_targets})
-                    endforeach()
-                endif ()
-                # A component that spans several sources is one build unit, so it
-                # is addressable as one target.
-                list(LENGTH _qore_qcc_scc_member_targets _qore_qcc_scc_member_count)
-                if (_qore_qcc_scc_member_count GREATER 1)
-                    add_custom_target(
-                        qore_qcc_${_qore_qcc_group_id}_scc_${_qore_qcc_scc_idx})
-                    add_dependencies(
-                        qore_qcc_${_qore_qcc_group_id}_scc_${_qore_qcc_scc_idx}
-                        ${_qore_qcc_scc_member_targets})
-                endif ()
-            endforeach()
+        # One order target for the whole group, not one per source.
+        #
+        # The per-source targets predate the coordinator.  They gave the build
+        # tool the condensation DAG so object recipes could be ordered against
+        # each other, which cost one custom target per source and one dependency
+        # edge per condensation edge: a 868-source group emitted 868 targets and
+        # some 16,000 edges, and a 1,511-source project spent 12 seconds of make
+        # bookkeeping deciding to build ONE of them and 46 seconds on a no-op
+        # build -- before any recipe ran.
+        #
+        # The coordinator makes that ordering redundant: it plans the whole group
+        # once, compiles every stale component in dependency order, and only then
+        # lets the object recipes run.  What still has to hold is that the
+        # coordinator is reached first, and one target expresses that just as well
+        # as 868 did.
+        add_custom_target(${_qore_qcc_group_order_target}
+            DEPENDS ${_qore_qcc_stamps})
+        add_dependencies(${_qore_qcc_group_order_target}
+            ${_qore_qcc_source_content_target}
+            ${_qore_qcc_source_symbols_target})
+        if (_qore_qcc_bootstrap_target)
+            add_dependencies(${_qore_qcc_group_order_target}
+                ${_qore_qcc_bootstrap_target})
+        endif ()
+        if (_qore_qcc_incremental_plan_target)
+            add_dependencies(${_qore_qcc_group_order_target}
+                ${_qore_qcc_incremental_plan_target})
         endif ()
 
         foreach(_qore_qcc_idx RANGE 0 ${_qore_qcc_last})
-            list(GET _qore_qcc_order_targets ${_qore_qcc_idx}
-                _qore_qcc_order_target)
             list(GET _qore_qcc_abs_sources ${_qore_qcc_idx} _qore_qcc_source)
             list(GET _qore_qcc_source_content_digests ${_qore_qcc_idx}
                 _qore_qcc_source_content_digest)
@@ -1242,8 +1196,9 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     if (_qore_qcc_incremental_plan_target)
         add_dependencies(${_qore_qcc_generation_target}
             ${_qore_qcc_incremental_plan_target})
-    elseif (_qore_qcc_order_targets)
-        add_dependencies(${_qore_qcc_generation_target} ${_qore_qcc_order_targets})
+    elseif (_qore_qcc_count GREATER 0)
+        add_dependencies(${_qore_qcc_generation_target}
+            ${_qore_qcc_group_order_target})
     endif ()
 
     set_source_files_properties(${_qore_qcc_outputs}

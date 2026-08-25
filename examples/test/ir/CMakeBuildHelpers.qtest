@@ -1131,6 +1131,33 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
                 ".qo.aggregate-contract.stamp") != -1,
             "qcc object helper exports aggregate-contract stamps");
 
+        # The build tool's view of the group is a fixed handful of targets, not
+        # one per source.  Ordering object recipes against each other through the
+        # condensation DAG cost a custom target per source and a dependency edge
+        # per condensation edge -- 868 targets and some 16,000 edges for one real
+        # 868-source group, whose no-op build spent 46 seconds in make before any
+        # recipe ran.  The coordinator plans the whole group in dependency order
+        # before the recipes run, so one target per group expresses the same
+        # constraint.
+        *string makefile2 = is_file(build_dir + "/CMakeFiles/Makefile2")
+            ? read(build_dir + "/CMakeFiles/Makefile2")
+            : NOTHING;
+        if (exists makefile2) {
+            int per_source_targets = 0;
+            int group_order_targets = 0;
+            foreach string line in (makefile2.split("\n")) {
+                if (line.regex("^CMakeFiles/qore_qcc_[A-Za-z_]+_[0-9]+\\.dir/all:")) {
+                    ++per_source_targets;
+                } else if (line.regex("^CMakeFiles/qore_qcc_[A-Za-z_]+_objects\\.dir/all:")) {
+                    ++group_order_targets;
+                }
+            }
+            assertEq(0, per_source_targets,
+                "no build-tool target is emitted per source");
+            assertTrue(group_order_targets > 0,
+                "each object group has one order target instead");
+        }
+
         string direct = read(build_dir + "/qo-scripts/direct-deps.cmake");
         string build_deps = read(build_dir + "/qo-scripts/build-deps.cmake");
         assertTrue(direct.regex("set\\(QORE_QCC_DIRECT_DEPS_cmake_smoke_1 \"\"\\)"),

@@ -249,6 +249,29 @@ back on the way out. Leaving it advanced marked every member of the group as
 belonging to a previous bootstrap, which turned one syntax error into a
 whole-group rebuild on the next build.
 
+## One order target per group, not one per source
+
+The scheduler used to hand the build tool the condensation DAG: one custom target
+per source, plus one target-level dependency per condensation edge, so object
+recipes could be ordered against each other. That is one target and a handful of
+edges per source — 868 targets and some 16,000 edges for one real group, 1,554
+targets and 47,000 prerequisite lines for a project with seven of them. The cost
+is paid on every build invocation, before any recipe runs: 12 seconds to decide
+to build a single object, 46 seconds for a no-op build, and a 7.6 MB `Makefile2`
+that every one of those recursive sub-makes re-reads.
+
+The coordinator makes that ordering redundant. It plans the whole group once,
+compiles every stale component in dependency order under the group lock, and only
+then are the object recipes reached; each recipe is a verifier of the same
+predicate rather than a builder that has to be sequenced. So the group publishes
+**one** order target (`qore_qcc_<group>_objects`), which depends on every object
+stamp and on the coordinator. `ORDER_TARGETS_VAR` still returns one entry per
+source — the same target repeated — so a caller that indexes it by source is
+unaffected.
+
+On a 200-source group this takes the build tool from 206 targets to 7, a 600 KB
+`Makefile2` to 21 KB, and a no-op build from 31 s to 0.7 s.
+
 ## Depfiles are shared inputs
 
 A depfile is not private to the process that writes it: the scheduler reads every
