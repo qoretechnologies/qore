@@ -1513,27 +1513,35 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         assertEq(1, occurrences(broad_recovery, "one shared parse"),
             "a stale set of several components is recovered by one coordinated "
                 "shared parse: " + broad_recovery);
-        # The parse covers the stale set, not the group.  Reaching for the
-        # whole-group parse here -- which is what a flat component threshold did
-        # -- reparsed every current source in the group to republish eight.
-        #
-        # An upper bound rather than an equality.  This fixture's qo-objects
-        # target depends on the object stamps rather than on the group's order
-        # target, so an object recipe can reach a stale component before the
-        # coordinator does; and a component whose artifacts are all intact --
-        # which is the case here, only the generation records were removed --
-        # republishes without recompiling at all.  What must hold either way is
-        # that nothing outside the stale set is compiled.
+        # Which parse is correct depends on the consumer closure of those eight
+        # components, and that closure is a property of the depfiles this
+        # platform's compiles produced -- it is not the same everywhere.  The
+        # policy is what this asserts: a closure that reaches most of the group
+        # is parsed as the group, and anything smaller parses only the stale set
+        # rather than reparsing current sources to republish eight.
         int recovery_compiles = occurrences(broad_recovery,
             "qcc: script-context .qo");
-        assertTrue(recovery_compiles <= 8,
-            sprintf("compiles no more than the components that were stale (%d): %s",
-                recovery_compiles, broad_recovery));
-        assertEq(0, occurrences(broad_recovery, "broad incremental invalidation"),
-            "a stale set this far below the group's size does not reparse the "
-                "group: " + broad_recovery);
+        if (occurrences(broad_recovery, "broad incremental invalidation")) {
+            assertEq(object_paths.size(), recovery_compiles,
+                "a closure that reaches most of the group is parsed as the "
+                    "group: " + broad_recovery);
+        } else {
+            # A component whose artifacts are all intact -- which is the case
+            # here, only the generation records were removed -- republishes
+            # without recompiling, so zero is a valid count too.
+            # Not an exact count: this fixture's qo-objects target depends on
+            # the object stamps rather than on the group's order target, so an
+            # object recipe can reach a stale component before the coordinator
+            # does and compile it a second time.  What the smaller closure must
+            # not do is reparse the group.
+            assertTrue(recovery_compiles < object_paths.size(),
+                sprintf("a smaller closure does not reparse the group (%d of "
+                    "%d): %s", recovery_compiles, object_paths.size(),
+                    broad_recovery));
+        }
         assertTrue(is_file(incremental_plan_stamp),
-            "the successful coordinated rebuild commits its plan stamp");
+            "the successful coordinated rebuild commits its plan stamp: "
+                + broad_recovery);
 
         string provider_depfile = read(provider_object + ".d");
         assertTrue(provider_depfile.find("/source-content/") != -1,

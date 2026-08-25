@@ -307,7 +307,21 @@ while [ "$phase" -le 2 ]; do
         # at a time, which is what this scheduler did before partial parses
         # existed.
         if have_subset_parse; then
-            if ! run_subset_batch; then
+            if run_subset_batch; then
+                subset_rc=0
+            else
+                subset_rc=$?
+            fi
+            # 76 is a dependency-graph transition, not a failure: another builder
+            # -- an object recipe a consumer scheduled without waiting for this
+            # target -- compiled a member while the parse was running, so the
+            # decomposition the parse resolved its components against no longer
+            # names them.  The next pass freezes the graph again and re-plans
+            # against what is now there, which is the whole point of the loop.
+            if [ "$subset_rc" -eq 76 ]; then
+                echo "$0: the dependency graph moved while the stale set was" \
+                    "compiled; re-planning against the graph it left"
+            elif [ "$subset_rc" -ne 0 ]; then
                 echo "$0: shared parse of the stale set failed" >&2
                 exit 1
             fi

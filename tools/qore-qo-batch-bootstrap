@@ -318,7 +318,15 @@ run_subset_parse() {
         [ -n "$subset_output" ] || continue
         touch "$subset_output.stamp"
     done < "$subset_plan"
-    run_source_order --scc-publish-set "$context" "$subset_keys"
+    # The status matters to the caller: a graph transition means "re-plan", while
+    # anything else means the parse did not publish what it compiled.
+    # `$?` after a completed `if` is the compound's status, not the condition's,
+    # so the publish status has to be captured in the else branch.
+    if run_source_order --scc-publish-set "$context" "$subset_keys"; then
+        return 0
+    else
+        return $?
+    fi
 }
 
 if [ -n "$subset_plan" ]; then
