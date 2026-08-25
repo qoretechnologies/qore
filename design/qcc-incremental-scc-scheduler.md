@@ -219,6 +219,26 @@ partial parses, and a group configured by an older `QoreMacros.cmake` has no
 `qcc-subset.sh`, in which case the scheduler behaves exactly as it did before
 partial parses existed.
 
+The partial parse is **opt-in** (`QORE_QCC_SUBSET_PARSE=1`) until one defect in
+preload-based compilation is fixed. A `.qo` carries every declaration it was
+compiled against, including declarations made in OTHER sources: an enum declared
+in one source and folded into another comes back through the second source's
+object, so the source that declares it can no longer declare it —
+
+```
+PARSE-EXCEPTION: enum 'X' conflicts with existing namespace 'X' in namespace '::'
+```
+
+The standalone path has the same defect today for the same sources; it is rarely
+reached because any staleness used to select the whole-group parse. Two fixes are
+possible: attribute each declaration in a `.qo` to the source that declared it, so
+the preload can skip the ones the parse itself makes (the blob-level label filter
+extended to declarations); or let a source declaration adopt the preloaded
+declaration in place, which must keep the object identity that already-preloaded
+lowered code refers to. Until then the coordinator falls back to the group's own
+parse when a partial parse fails, so enabling it cannot break a build — it can
+only cost a wasted parse.
+
 A whole-group parse still lowers cross-member calls it can see in its own parse,
 so an object it emits is not byte-identical to one emitted against preloaded
 shells; switching a component between the two therefore changes its compile

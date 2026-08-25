@@ -1510,15 +1510,12 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         }
         unlink(incremental_plan_stamp);
         string broad_recovery = run(sprintf("cmake --build %s -- -j33", build_dir));
-        assertEq(1, occurrences(broad_recovery, "one shared parse"),
-            "a stale set of several components is recovered by one coordinated "
-                "shared parse: " + broad_recovery);
-        # Which parse is correct depends on the consumer closure of those eight
-        # components, and that closure is a property of the depfiles this
+        # How the coordinator recovers depends on the consumer closure of those
+        # eight components, and that closure is a property of the depfiles this
         # platform's compiles produced -- it is not the same everywhere.  The
         # policy is what this asserts: a closure that reaches most of the group
-        # is parsed as the group, and anything smaller parses only the stale set
-        # rather than reparsing current sources to republish eight.
+        # is parsed as the group, and anything smaller rebuilds only what was
+        # stale rather than reparsing current sources to republish eight.
         int recovery_compiles = occurrences(broad_recovery,
             "qcc: script-context .qo");
         if (occurrences(broad_recovery, "broad incremental invalidation")) {

@@ -207,8 +207,16 @@ stale_plan_has_multi_member_component() {
 #  path's semantics with the standalone path's per-source preload cost paid once
 #  for the whole stale set.  A consumer configured by an older QoreMacros.cmake
 #  has no subset script, and QORE_QCC_SUBSET_PARSE=0 declines it explicitly.
+#  Off by default while a preloaded shell can carry a declaration the parse
+#  itself makes: an enum declared in one source and folded into another comes
+#  back through the second source's object, and the first source can then no
+#  longer declare it ("enum 'X' conflicts with existing namespace 'X'").  That is
+#  a property of preload-based compilation -- the standalone path has it today
+#  for the same sources -- and until it is fixed a group with such an enum would
+#  parse the stale set, fail, and parse the group anyway.  QORE_QCC_SUBSET_PARSE=1
+#  selects it; the fallback below keeps that safe.
 have_subset_parse() {
-    [ "${QORE_QCC_SUBSET_PARSE:-1}" = 1 ] && [ -n "$subset_script" ] \
+    [ "${QORE_QCC_SUBSET_PARSE:-0}" = 1 ] && [ -n "$subset_script" ] \
         && [ -f "$subset_script" ]
 }
 
@@ -322,8 +330,21 @@ while [ "$phase" -le 2 ]; do
                 echo "$0: the dependency graph moved while the stale set was" \
                     "compiled; re-planning against the graph it left"
             elif [ "$subset_rc" -ne 0 ]; then
-                echo "$0: shared parse of the stale set failed" >&2
-                exit 1
+                # A parse of part of a group resolves the members it did not
+                # compile from their `.qo` shells, and a shell can carry a
+                # declaration the parse itself makes -- an enum declared in one
+                # source and folded into another comes back through the second
+                # source's object, and the first source can then no longer
+                # declare it.  The group's own parse has no shells and so no such
+                # conflict; it is the answer this build would have used before
+                # partial parses existed, and reaching for it keeps a build that
+                # works today working.
+                echo "$0: the shared parse of the stale set failed; falling back" \
+                    "to the group's own parse" >&2
+                if ! run_group_batch; then
+                    echo "$0: shared parse of the group failed" >&2
+                    exit 1
+                fi
             fi
         elif stale_plan_has_multi_member_component; then
             if ! run_group_batch; then

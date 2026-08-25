@@ -619,8 +619,12 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
     private hash<auto> recipe(hash<auto> fx, string name, hash<auto> component,
             *string subset_script) {
         string qo_dir = fx.qo_dir;
+        # The partial parse is opt-in while a preloaded shell can carry a
+        # declaration the parse itself makes; a caller that hands the recipe a
+        # subset script is asking for it.
         string command = exists subset_script
-            ? sprintf("QORE_QCC_SUBSET_SCRIPT=%y ", subset_script)
+            ? sprintf("QORE_QCC_SUBSET_PARSE=1 QORE_QCC_SUBSET_SCRIPT=%y ",
+                subset_script)
             : "";
         command += sprintf(
             "QORE_QCC_PREREQUISITES_ORDERED=1 QORE_QCC_BATCH_BOOTSTRAP_STAMP=%y "

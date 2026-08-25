@@ -747,7 +747,7 @@ run_component_parse() {
         return 1
     fi
     # See qore-qo-incremental-plan for what selects this and what it costs.
-    if [ "${QORE_QCC_SUBSET_PARSE:-1}" != 1 ] || [ -z "$subset_script" ] \
+    if [ "${QORE_QCC_SUBSET_PARSE:-0}" != 1 ] || [ -z "$subset_script" ] \
             || [ ! -f "$subset_script" ] || [ -z "$component_selector" ]; then
         run_group_batch
         return $?
@@ -770,7 +770,15 @@ run_component_parse() {
             "$batch_script" "$source_order_tool"
     component_parse_rc=$?
     rm -f "$component_plan"
-    return $component_parse_rc
+    if [ "$component_parse_rc" -eq 0 ]; then
+        return 0
+    fi
+    # See qore-qo-incremental-plan: a parse of part of a group resolves what it
+    # did not compile from `.qo` shells, and a shell can carry a declaration the
+    # parse itself makes.  The group's own parse has no shells.
+    echo "$0: the shared parse of component $component_key failed; falling back" \
+        "to the group's own parse" >&2
+    run_group_batch
 }
 
 #! Rebuilds every member of every component in the group through one shared parse.
