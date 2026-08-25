@@ -172,8 +172,13 @@ public class AbstractDataField inherits Qore::Serializable {
 
             @since DataProvider 3.8
         */
+        const FunctionWords = map {$1: True}, (
+            "a", "an", "and", "as", "at", "but", "by", "for", "from", "if", "in", "into", "is", "nor",
+            "of", "off", "on", "or", "per", "the", "to", "via", "vs", "with",
+        );
+
         #! Capitalization convention that capitalizes every word but a function word in the middle
-        /** Value returned by @ref i18n::get_capitalization_style() for languages using title case
+        /** Value returned by @ref Qore::I18n::get_capitalization_style() for languages using title case
 
             @since DataProvider 3.8
         */
@@ -188,11 +193,6 @@ public class AbstractDataField inherits Qore::Serializable {
         /** @since DataProvider 3.8
         */
         const PreserveCaseStyle = "preserve";
-
-        const FunctionWords = map {$1: True}, (
-            "a", "an", "and", "as", "at", "but", "by", "for", "from", "if", "in", "into", "is", "nor",
-            "of", "off", "on", "or", "per", "the", "to", "via", "vs", "with",
-        );
 
         #! Canonical renderings for acronyms, initialisms, and irregularly capitalized proper nouns
         /** Used by @ref getDisplayName() to render a word in its conventional form regardless of the case
@@ -957,8 +957,8 @@ public class AbstractDataField inherits Qore::Serializable {
         string style = TitleCaseStyle;
         *hash<string, bool> function_words;
         if (locale.val()) {
-            style = get_capitalization_style(locale);
-            function_words = map {$1: True}, get_function_words(locale);
+            style = I18n::get_capitalization_style(locale);
+            function_words = map {$1: True}, I18n::get_function_words(locale);
         }
         # convert dashes and underscores to spaces
         name =~ s/[-_]/ /g;
@@ -1081,7 +1081,7 @@ public class AbstractDataField inherits Qore::Serializable {
         if (!word.val()) {
             return word;
         }
-        # note that i18n::capitalize() cannot be used here: it lower-cases the remainder of the word
+        # note that I18n::capitalize() cannot be used here: it lower-cases the remainder of the word
         # (ex: "TPS" -> "Tps"), which would destroy the acronyms this function exists to preserve
         return AbstractDataField::upperCase(word[0], locale) + word.substr(1);
     }
@@ -1100,7 +1100,7 @@ public class AbstractDataField inherits Qore::Serializable {
         @since DataProvider 3.8
     */
     private static string upperCase(string str, *string locale) {
-        return locale.val() ? to_upper(str, locale) : str.upr();
+        return locale.val() ? I18n::to_upper(str, locale) : str.upr();
     }
 
     #! Converts a string to lower case, honoring the language when one was requested
@@ -1114,7 +1114,7 @@ public class AbstractDataField inherits Qore::Serializable {
         @since DataProvider 3.8
     */
     private static string lowerCase(string str, *string locale) {
-        return locale.val() ? to_lower(str, locale) : str.lwr();
+        return locale.val() ? I18n::to_lower(str, locale) : str.lwr();
     }
 
     #! Case-folds all upper-case words in a technical name that are not acronyms
