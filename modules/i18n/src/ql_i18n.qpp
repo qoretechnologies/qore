@@ -1196,7 +1196,8 @@ static bool i18n_get_optional_fraction_digits(const QoreHashNode* opts, const ch
     return true;
 }
 
-static bool i18n_get_optional_bool(const QoreHashNode* opts, const char* key, bool& out, bool& present) {
+static bool i18n_get_optional_bool(const QoreHashNode* opts, const char* key, bool& out, bool& present,
+        ExceptionSink* xsink) {
     present = false;
     if (!opts) {
         return true;
@@ -1206,6 +1207,11 @@ static bool i18n_get_optional_bool(const QoreHashNode* opts, const char* key, bo
     if (value.isNullOrNothing()) {
         return true;
     }
+    if (value.getType() != NT_BOOLEAN) {
+        xsink->raiseException("I18N-FORMAT-ERROR", "opts.%s must be a bool; got type '%s'", key,
+            value.getTypeName());
+        return false;
+    }
 
     out = value.getAsBool();
     present = true;
@@ -1213,7 +1219,7 @@ static bool i18n_get_optional_bool(const QoreHashNode* opts, const char* key, bo
 }
 
 static bool i18n_apply_number_options(icu::number::UnlocalizedNumberFormatter& formatter,
-        const I18nDecimalInfo& decimal, const QoreHashNode* opts, bool currency, ExceptionSink* xsink) {
+        const QoreHashNode* opts, int32_t default_fraction_digits, ExceptionSink* xsink) {
     int32_t min_fraction = 0;
     int32_t max_fraction = 0;
     bool has_min_fraction = false;
@@ -1235,13 +1241,15 @@ static bool i18n_apply_number_options(icu::number::UnlocalizedNumberFormatter& f
         formatter = formatter.precision(icu::number::Precision::minFraction(min_fraction));
     } else if (has_max_fraction) {
         formatter = formatter.precision(icu::number::Precision::maxFraction(max_fraction));
-    } else if (!currency) {
-        formatter = formatter.precision(icu::number::Precision::fixedFraction(decimal.fraction_digits));
+    } else if (default_fraction_digits >= 0) {
+        formatter = formatter.precision(icu::number::Precision::fixedFraction(default_fraction_digits));
     }
 
     bool grouping = false;
     bool has_grouping = false;
-    i18n_get_optional_bool(opts, "grouping", grouping, has_grouping);
+    if (!i18n_get_optional_bool(opts, "grouping", grouping, has_grouping, xsink)) {
+        return false;
+    }
     if (has_grouping && !grouping) {
         formatter = formatter.grouping(UNUM_GROUPING_OFF);
     }
@@ -1261,7 +1269,7 @@ static QoreStringNode* i18n_format_number_value(QoreValue value, const QoreStrin
     }
 
     icu::number::UnlocalizedNumberFormatter formatter = icu::number::NumberFormatter::with();
-    if (!i18n_apply_number_options(formatter, decimal, opts, false, xsink)) {
+    if (!i18n_apply_number_options(formatter, opts, decimal.fraction_digits, xsink)) {
         return nullptr;
     }
 
@@ -1277,6 +1285,49 @@ static QoreStringNode* i18n_format_number_value(QoreValue value, const QoreStrin
     icu::UnicodeString formatted_text = formatted.toString(status);
     if (U_FAILURE(status)) {
         xsink->raiseException("I18N-ICU-ERROR", "cannot render formatted number '%s': %s",
+            decimal.formatted.c_str(), i18n_icu_error_name(status));
+        return nullptr;
+    }
+
+    std::string rv;
+    formatted_text.toUTF8String(rv);
+    return new QoreStringNode(rv, QCS_UTF8);
+}
+
+static QoreStringNode* i18n_format_percent_value(QoreValue value, const QoreStringNode* locale_arg,
+        const QoreHashNode* opts, ExceptionSink* xsink) {
+    I18nDecimalInfo decimal;
+    if (!i18n_value_to_decimal_info(value, decimal, xsink)) {
+        return nullptr;
+    }
+
+    icu::Locale locale = i18n_make_locale(locale_arg, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+
+    // Percent values use ratio semantics. Scaling through ICU preserves exact decimal input and delegates the
+    // locale-specific sign, spacing, symbol placement, digits, and bidi marks to CLDR data.
+    icu::number::UnlocalizedNumberFormatter formatter = icu::number::NumberFormatter::with()
+        .unit(icu::NoUnit::percent())
+        .scale(icu::number::Scale::powerOfTen(2));
+    int32_t default_fraction_digits = std::max<int32_t>(0, decimal.fraction_digits - 2);
+    if (!i18n_apply_number_options(formatter, opts, default_fraction_digits, xsink)) {
+        return nullptr;
+    }
+
+    UErrorCode status = U_ZERO_ERROR;
+    icu::number::FormattedNumber formatted = formatter.locale(locale).formatDecimal(
+        icu::StringPiece(decimal.formatted), status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot format percent value '%s': %s",
+            decimal.formatted.c_str(), i18n_icu_error_name(status));
+        return nullptr;
+    }
+
+    icu::UnicodeString formatted_text = formatted.toString(status);
+    if (U_FAILURE(status)) {
+        xsink->raiseException("I18N-ICU-ERROR", "cannot render formatted percent value '%s': %s",
             decimal.formatted.c_str(), i18n_icu_error_name(status));
         return nullptr;
     }
@@ -1312,7 +1363,7 @@ static QoreStringNode* i18n_format_currency_value(QoreValue value, const QoreStr
     }
 
     icu::number::UnlocalizedNumberFormatter formatter = icu::number::NumberFormatter::with().unit(currency);
-    if (!i18n_apply_number_options(formatter, decimal, opts, true, xsink)) {
+    if (!i18n_apply_number_options(formatter, opts, -1, xsink)) {
         return nullptr;
     }
 
@@ -1358,7 +1409,9 @@ static QoreValue i18n_parse_number_value(const QoreStringNode* text_arg, const Q
 
     bool integer_only = false;
     bool has_integer_only = false;
-    i18n_get_optional_bool(opts, "integer_only", integer_only, has_integer_only);
+    if (!i18n_get_optional_bool(opts, "integer_only", integer_only, has_integer_only, xsink)) {
+        return QoreValue();
+    }
     if (has_integer_only) {
         formatter->setParseIntegerOnly(integer_only);
     }
@@ -2859,6 +2912,55 @@ string format_number(auto value, string locale) [flags=RET_VALUE_ONLY] {
 */
 string format_number(auto value, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
     return i18n_format_number_value(value, locale, opts, xsink);
+}
+
+//! Formats a ratio as a percentage with explicit locale data.
+/** @param value ratio as an integer, floating-point, number, or base-10 decimal string; \c 0.125 means 12.5 percent
+    @param locale BCP 47 locale tag, including supported Unicode numbering-system extensions
+    @return locale-formatted percentage
+
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-FORMAT-ERROR if formatting options are invalid
+    @throw I18N-ICU-ERROR if ICU cannot format the value
+
+    @par Example:
+    @code{.py}
+assertEq("12.5%", I18n::format_percent("0.125", "en-US"));
+    @endcode
+
+    @note The result is presentation text. Keep the ratio as structured data
+        for calculations, comparisons, and persistence.
+*/
+string format_percent(auto value, string locale) [flags=RET_VALUE_ONLY] {
+    return i18n_format_percent_value(value, locale, nullptr, xsink);
+}
+
+//! Formats a ratio as a percentage with explicit locale data and options.
+/** @param value ratio as an integer, floating-point, number, or base-10 decimal string; \c 0.125 means 12.5 percent
+    @param locale BCP 47 locale tag
+    @param opts optional hash; supported keys are \c min_fraction_digits, \c max_fraction_digits, and \c grouping
+    @return locale-formatted percentage
+
+    @throw I18N-NUMBER-ERROR if \a value is a malformed decimal string
+    @throw I18N-LOCALE-ERROR if \a locale is invalid
+    @throw I18N-FORMAT-ERROR if \a opts is invalid
+    @throw I18N-ICU-ERROR if ICU cannot format the value
+
+    @par Example:
+    @code{.py}
+assertEq("12,50\u00a0%", I18n::format_percent("0.125", "de-DE", {
+    "min_fraction_digits": 2,
+    "max_fraction_digits": 2,
+}));
+    @endcode
+
+    @note Fraction-digit options apply after the ratio is scaled by 100; ICU
+        still owns locale-specific digits, punctuation, spacing, sign
+        placement, and bidirectional marks.
+*/
+string format_percent(auto value, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY] {
+    return i18n_format_percent_value(value, locale, opts, xsink);
 }
 
 //! Parses a locale-formatted decimal number with explicit locale data.

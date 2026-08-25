@@ -39,8 +39,10 @@ I18n::apply_locale_context(locale_context);
 
     @section i18nformatting Formatting and Collation
 
-    Number and currency formatting use explicit locale arguments and do not change existing core machine-format
-    functions. Collation APIs expose compare, binary sort-key, and collation-version primitives; sort keys are for
+    Number, percentage, and currency formatting use explicit locale arguments and do not change existing core
+    machine-format functions. Percentage values use ratio semantics, so \c 0.125 represents 12.5 percent. ICU and
+    CLDR own scaling, digits, decimal and grouping marks, percent-sign placement and spacing, and bidirectional
+    marks. Collation APIs expose compare, binary sort-key, and collation-version primitives; sort keys are for
     cache-local ordering unless they are tagged with locale, collation options, backend, ICU/CLDR versions, and
     collation version.
 
@@ -48,6 +50,10 @@ I18n::apply_locale_context(locale_context);
 %requires i18n
 
 printf("%s\n", I18n::format_number("1234.50", "en-US"));
+printf("%s\n", I18n::format_percent("0.125", "de-DE", {
+    "min_fraction_digits": 1,
+    "max_fraction_digits": 1,
+}));
 printf("%y\n", I18n::parse_number("1,234.50", "en-US"));
 printf("%s\n", I18n::format_currency("12.5", "USD", "en-US"));
 printf("%s\n", I18n::format_datetime(2020-05-04T15:06:07Z, "en-US",

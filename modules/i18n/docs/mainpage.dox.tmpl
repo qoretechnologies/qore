@@ -25,6 +25,7 @@
 %requires i18n
 
 printf("%s\n", I18n::plural_category(2, "ru"));
+printf("%s\n", I18n::format_percent("0.125", "de-DE"));
 printf("%s\n", I18n::format_currency("12.5", "USD", "en-US"));
 
 hash<auto> catalog_data = I18n::load_native_catalog("catalog.json");

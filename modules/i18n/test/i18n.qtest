@@ -24,6 +24,7 @@ class I18nTest inherits QUnit::Test {
         addTestCase("locale negotiation utilities", \localeNegotiationTest());
         addTestCase("thread locale control", \threadLocaleControlTest());
         addTestCase("locale formatting and collation", \localeFormattingAndCollationTest());
+        addTestCase("locale percentage formatting", \localePercentageFormattingTest());
         addTestCase("plural form selection", \pluralFormTest());
         addTestCase("plural validation errors", \validationErrorTest());
         addTestCase("message catalog lookup", \messageCatalogLookupTest());
@@ -297,12 +298,16 @@ class I18nTest inherits QUnit::Test {
         assertEq("1,234.50", I18n::format_number("1234.50", "en-US"));
         assertEq("1234.50", I18n::format_number("1234.50", "en-US", {"grouping": False}));
         assertEq("1.00", I18n::format_number(1, "en-US", {"min_fraction_digits": 2}));
+        assertThrows("I18N-FORMAT-ERROR", \I18n::format_number(),
+            (1, "en-US", {"grouping": "no"}));
         assertEq(1234, I18n::parse_number("1,234", "en-US"));
         assertEq(1234, I18n::parse_number("1.234", "de-DE"));
         assertEq("1234.5", string(I18n::parse_number("1,234.50", "en-US")));
         assertThrows("I18N-PARSE-ERROR", auto sub() {
             return I18n::parse_number("1,234.50 trailing", "en-US");
         });
+        assertThrows("I18N-FORMAT-ERROR", \I18n::parse_number(),
+            ("1,234", "en-US", {"integer_only": "yes"}));
         assertRegex("^\\$12\\.50$", I18n::format_currency("12.5", "USD", "en-US"));
         date instant = 2020-05-04T15:06:07Z;
         assertEq("May 4, 2020",
@@ -337,6 +342,38 @@ class I18nTest inherits QUnit::Test {
             "tr-TR");
         assertEq("buffer<bool>", mask.fullType());
         assertEq((True, False, False), mask.toList());
+    }
+
+    localePercentageFormattingTest() {
+        hash<auto> one_fraction = {
+            "min_fraction_digits": 1,
+            "max_fraction_digits": 1,
+        };
+        assertEq("12.5%", I18n::format_percent("0.125", "en-US", one_fraction));
+        assertEq("12,5\u00a0%", I18n::format_percent("0.125", "de-DE", one_fraction));
+        assertEq("%12,5", I18n::format_percent("0.125", "tr-TR", one_fraction));
+        assertEq("\u0661\u0662\u066b\u0665\u066a\u061c",
+            I18n::format_percent("0.125", "ar-EG", one_fraction));
+        assertEq("12.5%", I18n::format_percent("0.125", "en-US"));
+        assertEq("-12.5%", I18n::format_percent("-0.125", "en-US", one_fraction));
+        assertEq("125.0%", I18n::format_percent("1.25", "en-US", one_fraction));
+        assertEq("12.3456789012345678901234567890%",
+            I18n::format_percent("0.123456789012345678901234567890", "en-US", {
+                "min_fraction_digits": 28,
+                "max_fraction_digits": 28,
+            }));
+        assertEq("123456.7%", I18n::format_percent("1234.567", "en-US", one_fraction + {
+            "grouping": False,
+        }));
+        assertThrows("I18N-NUMBER-ERROR", \I18n::format_percent(), ("not-a-number", "en-US"));
+        assertThrows("I18N-LOCALE-ERROR", \I18n::format_percent(), ("0.5", "not a locale!"));
+        assertThrows("I18N-FORMAT-ERROR", \I18n::format_percent(), ("0.5", "en-US", {
+            "min_fraction_digits": 2,
+            "max_fraction_digits": 1,
+        }));
+        assertThrows("I18N-FORMAT-ERROR", \I18n::format_percent(), ("0.5", "en-US", {
+            "grouping": "no",
+        }));
     }
 
     pluralFormTest() {

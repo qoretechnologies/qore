@@ -1766,8 +1766,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         domains and locales instead of re-probing the same directories for every catalog; the index is owned and
         scoped by the caller, so it has no stale process-global state, and it never changes which catalog files a
         program can discover
-      - locale-sensitive number/currency/date formatting, collation, and string-predicate APIs, plus a
-        \c qore-i18n catalog extraction and management tool
+      - locale-sensitive number/percentage/currency/date formatting, collation, and string-predicate APIs, plus a
+        \c qore-i18n catalog extraction and management tool; percentage formatting uses ratio inputs and ICU/CLDR
+        percent-sign placement, spacing, digits, and bidirectional marks
 
     - @ref jsonintro "json" module
       - previously the external \c module-json repository, now built and installed with %Qore, so
