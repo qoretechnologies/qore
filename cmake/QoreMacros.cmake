@@ -922,7 +922,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         # depfile and the bootstrap aggregate describe the WHOLE group, and a
         # partial parse cannot honestly rewrite either.
         set(_qore_qcc_subset_script "${_QORE_QCO_SCRIPT_DIR}/qcc-subset.sh")
-        set(_qore_qcc_subset_cmd "#!/bin/sh\nset -e\nQORE_INCLUDE_DIR='${_QORE_QCO_INCLUDE_DIR}' QORE_MODULE_DIR='${_QORE_QCO_MODULE_DIR}' exec '${_qore_qcc_command}'")
+        set(_qore_qcc_subset_cmd "#!/bin/sh\nset -e\npreload_dir=$1\nshift\nQORE_INCLUDE_DIR='${_QORE_QCO_INCLUDE_DIR}' QORE_MODULE_DIR='${_QORE_QCO_MODULE_DIR}' exec '${_qore_qcc_command}'")
         foreach(_qore_qcc_arg
                 ${_qore_qcc_warning_flags}
                 ${_qore_qcc_stub_flags}
@@ -934,7 +934,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                 ${_qore_qcc_manifest_input_flags})
             set(_qore_qcc_subset_cmd "${_qore_qcc_subset_cmd} '${_qore_qcc_arg}'")
         endforeach()
-        set(_qore_qcc_subset_cmd "${_qore_qcc_subset_cmd} -c -L '${_QORE_QCO_OUTPUT_DIR}' --batch-build-sidecars --depfile-compile-contract-stamps --depfile-source-content-map='${_qore_qcc_source_content_map}' --output-dir='${_QORE_QCO_OUTPUT_DIR}' --depfile-dir='${_QORE_QCO_OUTPUT_DIR}' \"$@\"\n")
+        set(_qore_qcc_subset_cmd "${_qore_qcc_subset_cmd} -c -L \"$preload_dir\" --batch-build-sidecars --depfile-compile-contract-stamps --depfile-source-content-map='${_qore_qcc_source_content_map}' --output-dir='${_QORE_QCO_OUTPUT_DIR}' --depfile-dir='${_QORE_QCO_OUTPUT_DIR}' \"$@\"\n")
         QORE_WRITE_IF_CHANGED("${_qore_qcc_subset_script}" "${_qore_qcc_subset_cmd}")
 
         add_custom_command(OUTPUT ${_qore_qcc_bootstrap_stamp}

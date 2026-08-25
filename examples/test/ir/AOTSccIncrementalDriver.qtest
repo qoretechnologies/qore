@@ -226,15 +226,17 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
     }
 
     #! A stand-in for qcc-subset.sh: compiles exactly the sources it is given.
-    /** The real script parses the sources on its command line together and
-        preloads the rest of the group from their objects; what matters to the
-        driver is which sources reach it, so the stand-in logs them and writes the
-        artifacts each one publishes.
+    /** The real script takes the preload directory as its first argument, parses
+        the sources that follow together, and resolves what it did not compile
+        from the objects staged in that directory.  What matters to the driver is
+        which sources reach it, so the stand-in drops the directory, logs them and
+        writes the artifacts each one publishes.
     */
     private string writeSubsetCompiler(hash<auto> fx) {
         string script = fx.qo_dir + "/qcc-subset.sh";
         string log = fx.qo_dir + "/compiles.log";
-        string body = "#!/bin/sh\nset -e\nfor src in \"$@\"; do\n"
+        string body = "#!/bin/sh\nset -e\npreload_dir=$1\nshift\n"
+            + "for src in \"$@\"; do\n"
             + "    name=$(basename \"$src\" .qc)\n"
             + "    out=" + sprintf("%y", fx.qo_dir) + "/$name.qo\n"
             + "    printf 'subset %s\\n' \"$name.qo\" >> " + sprintf("%y", log) + "\n";

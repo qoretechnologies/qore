@@ -9226,6 +9226,19 @@ int main(int argc, char** argv) {
         for (int i = optind; i < argc; ++i) {
             batch_sources.emplace_back(argv[i]);
         }
+        QoreAOTSourceSymbolManifest batch_source_symbols;
+        const QoreAOTSourceSymbolManifest* batch_source_symbol_arg = nullptr;
+        if (source_symbol_manifest_path) {
+            std::string manifest_error;
+            if (!read_source_symbol_manifest(source_symbol_manifest_path,
+                    batch_source_symbols, manifest_error)) {
+                fprintf(stderr, "error: %s\n", manifest_error.c_str());
+                return 1;
+            }
+            if (!batch_source_symbols.empty()) {
+                batch_source_symbol_arg = &batch_source_symbols;
+            }
+        }
         QCCBuildManifest batch_input_manifest;
         batch_input_manifest.output = batch_script_aggregate_output
             ? batch_script_aggregate_output : batch_output_dir;
@@ -9300,7 +9313,11 @@ int main(int argc, char** argv) {
             // A batch over PART of a group resolves its remaining cross-member
             // references against these; a whole-group batch is given none,
             // because every declaration it needs is in the same parse.
-            script_lib_dirs);
+            script_lib_dirs,
+            // And it needs to know which source provides each symbol, for the
+            // same reason the per-file path does: a declaration this parse makes
+            // can also arrive through a sibling's object.
+            batch_source_symbol_arg);
         qore_aot_set_module_dep_sink(nullptr);
         if (!ok) {
             fprintf(stderr, "error: %s\n", error.c_str());

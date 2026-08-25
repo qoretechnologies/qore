@@ -68,6 +68,8 @@ publication_marker="${bootstrap_stamp}.publication"
 subset_plan=${QORE_QCC_SUBSET_PLAN:-}
 subset_script=${QORE_QCC_SUBSET_SCRIPT:-}
 subset_keys=
+subset_preloads=
+subset_preload_dir=
 current_stamps=
 currency_file=
 # Set by qore-qo-incremental when the group holds a component that spans several
@@ -161,6 +163,12 @@ cleanup() {
     fi
     if [ -n "${current_stamps:-}" ]; then
         rm -f "$current_stamps"
+    fi
+    if [ -n "${subset_preloads:-}" ]; then
+        rm -f "$subset_preloads"
+    fi
+    if [ -n "${subset_preload_dir:-}" ]; then
+        rm -rf "$subset_preload_dir"
     fi
     if [ -n "$outputs_file" ]; then
         rm -f "$outputs_file"
@@ -298,8 +306,47 @@ run_subset_parse() {
     subset_count=$(awk -F '\t' 'NF && $2 != ""' "$subset_plan" | wc -l | tr -d ' ')
     group_count=$(awk 'NF' "$outputs_file" | wc -l | tr -d ' ')
     echo "$0: compiling $subset_count of $group_count sources in one shared parse"
+
+    # What the parse resolves against: the transitive predecessors of the
+    # components it compiles, and nothing else.
+    #
+    # Not the whole object directory.  A `.qo` carries every declaration it was
+    # compiled against, including ones made in OTHER sources, so preloading a
+    # CONSUMER of a source this parse compiles brings that source's own
+    # declarations back -- and the parse can then no longer make them ("enum 'X'
+    # conflicts with existing namespace 'X'").  The per-file path has always
+    # staged its preloads this way; a parse of several sources needs the union.
+    subset_preloads=$(mktemp "${TMPDIR:-/tmp}/qore-qo-subset-preloads.XXXXXX")
+    if ! run_source_order --scc-preload-set "$context" "$subset_keys" \
+            > "$subset_preloads"; then
+        subset_preload_rc=$?
+        rm -f "$subset_preloads"
+        subset_preloads=
+        return $subset_preload_rc
+    fi
+    subset_preload_dir=$(mktemp -d "$(dirname "$bootstrap_stamp")/../.qcc-preload.subset.XXXXXX")
+    while IFS= read -r preload_qo; do
+        [ -n "$preload_qo" ] || continue
+        [ -f "$preload_qo" ] || continue
+        preload_name=$(basename "$preload_qo")
+        [ -e "$subset_preload_dir/$preload_name" ] && continue
+        # A hard link, as the per-file path does: one coherent artifact
+        # generation for the duration of this parse, immune to a concurrent
+        # provider's atomic replacement.
+        ln "$preload_qo" "$subset_preload_dir/$preload_name"
+        if [ -f "$preload_qo.compile-contract.stamp" ]; then
+            ln -s "$preload_qo.compile-contract.stamp" \
+                "$subset_preload_dir/$preload_name.compile-contract.stamp"
+        fi
+        if [ -f "$preload_qo.idx.json" ]; then
+            ln "$preload_qo.idx.json" "$subset_preload_dir/$preload_name.idx.json"
+        fi
+    done < "$subset_preloads"
+    rm -f "$subset_preloads"
+    subset_preloads=
+
     tab=$(printf '\t')
-    set --
+    set -- "$subset_preload_dir"
     while IFS="$tab" read -r subset_key subset_source subset_output; do
         [ -n "$subset_source" ] || continue
         set -- "$@" "$subset_source"

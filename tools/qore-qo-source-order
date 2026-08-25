@@ -3284,7 +3284,8 @@ sub usage(*string error = NOTHING, bool success = False) {
         "       %s --scc-map-cmake PREFIX CONTEXT\n"
         "       %s --cmake-plan GROUP CONTEXT\n"
         "       %s --scc-generation-map FILE CONTEXT\n"
-        "       %s [--scc-publish-set|--scc-current-set] CONTEXT KEY_FILE\n"
+        "       %s [--scc-publish-set|--scc-current-set|--scc-preload-set]\n"
+        "           CONTEXT KEY_FILE\n"
         "       %s [--scc-map|--scc-publish-all|--scc-generation-dir\n"
         "           |--scc-current-all|--scc-stale|--scc-source-stale]\n"
         "           [--batch-stamp STAMP] [--rebuild-closure] CONTEXT\n"
@@ -3556,7 +3557,8 @@ int sub main() {
                 || arg == "--scc-current-all" || arg == "--scc-source-token"
                 || arg == "--scc-stale" || arg == "--scc-source-stale"
                 || arg == "--scc-compile-plan" || arg == "--scc-graph-generation"
-                || arg == "--scc-publish-set" || arg == "--scc-current-set") {
+                || arg == "--scc-publish-set" || arg == "--scc-current-set"
+                || arg == "--scc-preload-set") {
             string requested = arg.substr(6);
             if (exists component_command && component_command != requested) {
                 usage(sprintf("--scc-%s conflicts with --scc-%s",
@@ -3800,7 +3802,8 @@ int sub main() {
                     return 0;
             }
         }
-        if (component_command == "publish-set" || component_command == "current-set") {
+        if (component_command == "publish-set" || component_command == "current-set"
+                || component_command == "preload-set") {
             # A shared parse over PART of a group publishes exactly the
             # components it compiled.  Naming them in a file rather than on the
             # command line keeps a subset of any size addressable, and resolving
@@ -3829,6 +3832,37 @@ int sub main() {
                     return 76;
                 }
                 push selected, resolved;
+            }
+            if (component_command == "preload-set") {
+                # What a parse of these components must resolve against, and
+                # nothing more: every member of every transitive predecessor,
+                # minus the members the parse compiles itself.  Preloading one of
+                # those would read the generation this compile replaces -- and
+                # worse, a `.qo` carries the declarations it was compiled
+                # against, so preloading a CONSUMER of one of these sources
+                # brings that source's own declarations back and the parse can no
+                # longer make them.
+                hash<string, bool> compiled = {};
+                foreach int resolved in (selected) {
+                    foreach int node in (components.members[resolved]) {
+                        compiled{context_info.outputs[node]} = True;
+                    }
+                }
+                hash<string, bool> emitted = {};
+                foreach int resolved in (selected) {
+                    foreach int prerequisite in (
+                            engine.componentPrerequisites(components, resolved)) {
+                        foreach int node in (components.members[prerequisite]) {
+                            string output = context_info.outputs[node];
+                            if (compiled{output} || emitted{output}) {
+                                continue;
+                            }
+                            emitted{output} = True;
+                            printf("%s\n", output);
+                        }
+                    }
+                }
+                return 0;
             }
             if (component_command == "current-set") {
                 foreach int resolved in (selected) {

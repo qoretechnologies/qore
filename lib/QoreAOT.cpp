@@ -27137,6 +27137,17 @@ struct AOTSourceParseGuard {
     bool old;
 };
 
+//! Names which source provides each symbol, for a parse resolving against shells.
+struct AOTSourceSymbolGuard {
+    explicit AOTSourceSymbolGuard(const QoreAOTSourceSymbolManifest* manifest)
+            : old(qore_aot_set_source_symbol_manifest(manifest)) {
+    }
+    ~AOTSourceSymbolGuard() {
+        qore_aot_set_source_symbol_manifest(old);
+    }
+    const QoreAOTSourceSymbolManifest* old;
+};
+
 //! Names the canonical sources whose declarations came from a preloaded `.qo`.
 struct AOTPreloadedSourceGuard {
     explicit AOTPreloadedSourceGuard(const std::unordered_set<std::string>* labels)
@@ -27436,7 +27447,8 @@ bool QoreAOT::compileScriptFilesBatch(
         bool script_aggregate_native_registers,
         int* script_aggregate_compiled_count_out,
         std::vector<QoreAOTSourceFingerprint>* source_fingerprints,
-        const std::vector<std::string>& library_paths) {
+        const std::vector<std::string>& library_paths,
+        const QoreAOTSourceSymbolManifest* source_symbols) {
     const bool trace_timing = getenv("QORE_AOT_BATCH_TIMING") != nullptr;
     const auto batch_start = std::chrono::steady_clock::now();
     auto input_done = batch_start;
@@ -27649,7 +27661,14 @@ bool QoreAOT::compileScriptFilesBatch(
             return false;
         }
     }
+    // The manifest names which source provides each symbol, and it is armed only
+    // for a parse that resolves against preloaded shells.  A whole-group parse
+    // has no shells: every declaration it needs is in the same parse, and arming
+    // source-mode resolution there would change what its objects record -- the
+    // cross-object fast-entry providers among them -- for every build.
     const bool sibling_parse = !library_paths.empty();
+    const QoreAOTSourceSymbolManifest* parse_source_symbols =
+        sibling_parse ? source_symbols : nullptr;
 
     qore_program_private* batch_pp = qore_program_private::get(**qpgm);
     for (size_t i = 0; i < entries.size(); ++i) {
@@ -27665,6 +27684,7 @@ bool QoreAOT::compileScriptFilesBatch(
         {
             AOTBatchDepConsumerGuard consumer_guard(e.canon.c_str());
             AOTSourceParseGuard source_guard(sibling_parse);
+            AOTSourceSymbolGuard source_symbol_guard(parse_source_symbols);
             AOTPreloadedSourceGuard preloaded_source_guard(
                 &sibling_preload.source_labels);
             qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
@@ -27689,6 +27709,7 @@ bool QoreAOT::compileScriptFilesBatch(
             return false;
         }
         AOTSourceParseGuard source_guard(sibling_parse);
+        AOTSourceSymbolGuard source_symbol_guard(parse_source_symbols);
         AOTPreloadedSourceGuard preloaded_source_guard(
             &sibling_preload.source_labels);
         std::string resolve_error;
@@ -27699,6 +27720,7 @@ bool QoreAOT::compileScriptFilesBatch(
     }
     {
         AOTSourceParseGuard source_guard(sibling_parse);
+        AOTSourceSymbolGuard source_symbol_guard(parse_source_symbols);
         AOTPreloadedSourceGuard preloaded_source_guard(
             &sibling_preload.source_labels);
         qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
@@ -27717,6 +27739,7 @@ bool QoreAOT::compileScriptFilesBatch(
             return false;
         }
         AOTSourceParseGuard source_guard(sibling_parse);
+        AOTSourceSymbolGuard source_symbol_guard(parse_source_symbols);
         AOTPreloadedSourceGuard preloaded_source_guard(
             &sibling_preload.source_labels);
         std::string resolve_error;
@@ -28842,15 +28865,6 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         ~AOTDepSinkGuard() {
             qore_aot_set_dep_sink(nullptr);
         }
-    };
-    struct AOTSourceSymbolGuard {
-        explicit AOTSourceSymbolGuard(const QoreAOTSourceSymbolManifest* manifest)
-                : old(qore_aot_set_source_symbol_manifest(manifest)) {
-        }
-        ~AOTSourceSymbolGuard() {
-            qore_aot_set_source_symbol_manifest(old);
-        }
-        const QoreAOTSourceSymbolManifest* old;
     };
     const bool source_symbol_parse = source_symbols && !source_symbols->empty();
 
