@@ -70,6 +70,8 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testScheduledRecipeParsesOnlyItsOwnComponent());
         addTestCase("a group configured without a shared parse still builds",
             \testScheduledRecipeBuildsAGroupWithoutASharedParse());
+        addTestCase("the bootstrap hands the stale set to the coordinator",
+            \testBootstrapHandsTheStaleSetToTheCoordinator());
         addTestCase("the batch is chosen from what a rebuild reaches, not from what is stale",
             \testPlanChoosesTheBatchFromTheConsumerClosure());
         addTestCase("concurrent recipes publish one coherent generation",
@@ -373,6 +375,19 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             "rc": output.substr(marker + 3).toInt());
     }
 
+    #! Runs the bootstrap recipe the way CMake's custom command does.
+    private hash<auto> bootstrap(hash<auto> fx) {
+        string qo_dir = fx.qo_dir;
+        string command = sprintf("QORE_QCC_QORE_EXECUTABLE=%y %y %y %y %y %y",
+            qore_bin, tools_dir + DirSep + "qore-qo-batch-bootstrap",
+            fx.context, qo_dir + "/.qcc-batch-bootstrap.stamp",
+            qo_dir + "/qcc-batch.sh", source_order_tool);
+        string output = backquote("{ " + command + "; } 2>&1; echo \"rc=$?\"");
+        int marker = output.rfind("rc=");
+        return ("output": output.substr(0, marker),
+            "rc": output.substr(marker + 3).toInt());
+    }
+
     private *hash<auto> record(hash<auto> fx, string key) {
         string path = fx.qo_dir + "/.qcc-scc/" + key + ".generation.json";
         return is_file(path) ? parse_json(read(path)) : NOTHING;
@@ -664,6 +679,54 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         assertEq(0, verified.rc, "the scheduled recipe succeeds: " + verified.output);
         assertEq(4, compiles(fx).size(),
             "the scheduled recipe does not compile behind the coordinator");
+    }
+
+    #! Part of a group being stale is the coordinator's decision to make.
+    /** The bootstrap recipe runs before the coordinator and used to parse the
+        whole group for ANY staleness, so a module timestamp or one missing
+        generation record reparsed every source before the coordinator was ever
+        consulted.  It now reports what it found in the vocabulary currency
+        already speaks: the members it found current get a stamp newer than the
+        ordering token, and the ones it did not keep the older one, which is what
+        "belongs to a previous bootstrap" means to every reader of that tree.
+    */
+    testBootstrapHandsTheStaleSetToTheCoordinator() {
+        TmpDir tmp("qore-aot-driver-handover-");
+        hash<auto> fx = fixture(tmp.path, NOTHING, False);
+        writeCompiler(fx);
+        # A tripwire, not a builder: reaching the group's shared parse for one
+        # stale component is the behaviour this replaces.
+        write(fx.qo_dir + "/qcc-batch.sh",
+            "#!/bin/sh\necho 'the bootstrap should not have parsed the group' >&2\nexit 9\n");
+        chmod(fx.qo_dir + "/qcc-batch.sh", 0755);
+        assertEq(0, plan(fx).rc, "the coordinator brings the group current");
+
+        hash<auto> stale = componentFor(fx.qo_dir, "d");
+        unlink(fx.qo_dir + "/.qcc-scc/" + stale.key + ".generation.json");
+
+        hash<auto> result = bootstrap(fx);
+        assertEq(0, result.rc, "the bootstrap succeeds: " + result.output);
+        assertEq(-1, result.output.find("one shared parse"),
+            "and does not parse the group for one stale component: "
+                + result.output);
+
+        date token = hstat(fx.qo_dir + "/.qcc-batch-bootstrap.stamp").mtime;
+        assertTrue(hstat(fx.qo_dir + "/d.qo.stamp").mtime < token,
+            "the stale component stays older than the ordering token");
+        foreach string name in (fx.names) {
+            if (name == "d") {
+                continue;
+            }
+            assertTrue(hstat(fx.qo_dir + "/" + name + ".qo.stamp").mtime >= token,
+                sprintf("current member %s is dated after the token", name));
+        }
+
+        # And the coordinator that runs next rebuilds exactly that component.
+        int before = compiles(fx).size();
+        assertEq(0, plan(fx).rc, "the coordinator rebuilds what was handed to it");
+        assertEq(before + 1, compiles(fx).size(),
+            "one compile, for the one component that was stale: "
+                + compiles(fx).join(", "));
     }
 
     #! The batch decision must weigh the consumer closure, not the stale set.
