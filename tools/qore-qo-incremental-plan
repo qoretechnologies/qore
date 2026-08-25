@@ -41,6 +41,9 @@ cleanup() {
     if [ -n "$stale_file" ]; then
         rm -f "$stale_file"
     fi
+    if [ -n "$subset_plan_file" ]; then
+        rm -f "$subset_plan_file"
+    fi
 }
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
@@ -58,13 +61,47 @@ for helper in "$source_order_tool" "$incremental_tool" "$batch_bootstrap_tool"; 
     fi
 done
 
-batch_threshold=${QORE_QCC_INCREMENTAL_BATCH_THRESHOLD:-8}
+# The stale-component count at which compiling one at a time stops paying.
+#
+# A standalone compile preloads every other member of the group to resolve its
+# cross-file references, so N standalone compiles read the group N times; one
+# shared parse over the same N sources reads it once.  The boundary is therefore
+# low: two stale components already pay for the shared parse.  It was 8 while
+# "shared parse" could only mean the WHOLE group, where the trade was 8 compiles
+# against reparsing hundreds of current sources.
+batch_threshold=${QORE_QCC_INCREMENTAL_BATCH_THRESHOLD:-2}
 case "$batch_threshold" in
     ''|*[!0-9]*|0)
         echo "$0: QORE_QCC_INCREMENTAL_BATCH_THRESHOLD must be a positive integer" >&2
         exit 2
         ;;
 esac
+
+# When the rebuild closure is so much of the group that parsing the group is the
+# same work, expressed as a percentage of the group's components.
+#
+# The threshold above used to select the WHOLE-GROUP parse, which made it a
+# cliff: a group of 813 components sent one edit with 13 consumers through a
+# reparse of all 868 sources.  The closure decides only this question now --
+# whether to skip the subset parse and reparse everything -- and it scales with
+# the group, so a small group still reaches the whole-group parse early while a
+# large one does not reparse hundreds of current sources to rebuild ten.
+group_batch_percent=${QORE_QCC_INCREMENTAL_GROUP_BATCH_PERCENT:-50}
+group_batch_minimum=${QORE_QCC_INCREMENTAL_GROUP_BATCH_MINIMUM:-8}
+case "$group_batch_minimum" in
+    ''|*[!0-9]*|0)
+        echo "$0: QORE_QCC_INCREMENTAL_GROUP_BATCH_MINIMUM must be a positive integer" >&2
+        exit 2
+        ;;
+esac
+case "$group_batch_percent" in
+    ''|*[!0-9]*)
+        echo "$0: QORE_QCC_INCREMENTAL_GROUP_BATCH_PERCENT must be an integer" >&2
+        exit 2
+        ;;
+esac
+subset_script=${QORE_QCC_SUBSET_SCRIPT:-}
+subset_plan_file=
 
 mkdir -p "$(dirname "$plan_stamp")"
 stale_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-incremental-plan.XXXXXX")
@@ -90,11 +127,13 @@ graph_snapshot=${QORE_QCC_GRAPH_SNAPSHOT:-$context.graph-snapshot.json}
 # external command's prefix assignment is reliably scoped to that command.
 freeze_graph() {
     # The batch stamp names the whole-group publication the frozen edge set was
-    # read from.  The snapshot is a plain file that outlives this build, so
-    # without it a recipe the build tool schedules ahead of the next build's
-    # first freeze -- which any target depending on the object stamps rather
-    # than on the group's order targets is free to do -- applies the previous
-    # build's graph, and its publication is then refused as a graph transition.
+    # read from; the helper dates it by the publication sidecar beside the stamp,
+    # never by the stamp, which recipes that publish nothing also touch.  The
+    # snapshot is a plain file that outlives this build, so without that date a
+    # recipe the build tool schedules ahead of the next build's first freeze --
+    # which any target depending on the object stamps rather than on the group's
+    # order targets is free to do -- applies the previous build's graph, and its
+    # publication is then refused as a graph transition.
     frozen=$(
         QORE_QCC_GRAPH_SNAPSHOT=
         export QORE_QCC_GRAPH_SNAPSHOT
@@ -108,10 +147,12 @@ write_stale_plan() {
     (
         QORE_QCC_GRAPH_SNAPSHOT=$graph_snapshot
         export QORE_QCC_GRAPH_SNAPSHOT
-        run_source_order --scc-source-stale --rebuild-closure \
+        run_source_order --scc-source-stale --rebuild-closure --all-members \
             --batch-stamp "$bootstrap_stamp" "$context"
     ) > "$stale_file"
-    stale_count=$(awk -F '\t' '$1 != "rebuild-closure" { rows++ }
+    # Rows are members; components are the unit of work, and one shared parse
+    # over the stale set needs every member of every one of them.
+    stale_count=$(awk -F '\t' '$1 != "rebuild-closure" && !seen[$2]++ { rows++ }
         END { print rows + 0 }' "$stale_file")
     # How much of the group the stale set will actually reach once it is
     # rebuilt.  Absent only if the helper predates the row, in which case the
@@ -123,6 +164,26 @@ write_stale_plan() {
             rebuild_scope=$stale_count
             ;;
     esac
+    group_components=$(awk -F '\t' '$1 == "rebuild-closure" { print $3; exit }' \
+        "$stale_file")
+    case "$group_components" in
+        ''|*[!0-9]*|0)
+            group_components=0
+            ;;
+    esac
+    # The closure that makes the whole-group parse the cheaper answer: it is only
+    # cheaper when the parse would preload objects it is about to replace anyway.
+    #
+    # The absolute floor is the value this scheduler has always used, so a small
+    # group behaves as it did; the scaled floor is what keeps a large one from
+    # reparsing 868 sources to rebuild a closure of thirteen.
+    group_batch_floor=$group_batch_minimum
+    if [ "$group_components" -gt 0 ]; then
+        scaled=$(( (group_components * group_batch_percent + 99) / 100 ))
+        if [ "$scaled" -gt "$group_batch_floor" ]; then
+            group_batch_floor=$scaled
+        fi
+    fi
 }
 
 #! True when a stale row names a component that spans several sources.
@@ -131,6 +192,45 @@ write_stale_plan() {
 stale_plan_has_multi_member_component() {
     awk -F '\t' '$1 != "rebuild-closure" && $3 > 1 { found = 1 }
         END { exit !found }' "$stale_file"
+}
+
+#! One shared parse over the stale set, preloading everything it does not compile.
+#  This is the answer for every invalidation that is too wide for standalone
+#  compiles and too narrow to be worth reparsing the group: a component that spans
+#  several sources (which has no standalone builder at all), and a stale set of
+#  several components (which as standalone compiles pays the sibling-preload cost
+#  once per source).
+#! True when this group can parse part of itself in one go.
+#  A subset parse publishes exactly what a standalone compile of the same source
+#  publishes -- same object, same compile contract -- because both resolve their
+#  cross-member references against preloaded `.qo` shells.  It is the standalone
+#  path's semantics with the standalone path's per-source preload cost paid once
+#  for the whole stale set.  A consumer configured by an older QoreMacros.cmake
+#  has no subset script, and QORE_QCC_SUBSET_PARSE=0 declines it explicitly.
+have_subset_parse() {
+    [ "${QORE_QCC_SUBSET_PARSE:-1}" = 1 ] && [ -n "$subset_script" ] \
+        && [ -f "$subset_script" ]
+}
+
+run_subset_batch() {
+    subset_plan_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-subset-plan.XXXXXX")
+    awk -F '\t' '$1 != "rebuild-closure" && NF >= 5 { print $2 "\t" $4 "\t" $5 }' \
+        "$stale_file" > "$subset_plan_file"
+    echo "$0: $stale_count stale component(s) of $group_components; compiling them" \
+        "together and preloading the rest of the group"
+    # No snapshot: the parse holds the group lock and rewrites the depfile of
+    # every member it compiles, so it must publish against the graph its own
+    # compiles produce -- the same rule the whole-group parse follows.
+    QORE_QCC_GRAPH_SNAPSHOT= \
+    QORE_QCC_SUBSET_PLAN="$subset_plan_file" \
+    QORE_QCC_SUBSET_SCRIPT="$subset_script" \
+        QORE_QCC_QORE_EXECUTABLE="${QORE_QCC_QORE_EXECUTABLE:-}" \
+        "$batch_bootstrap_tool" "$context" "$bootstrap_stamp" \
+            "$batch_script" "$source_order_tool"
+    subset_rc=$?
+    rm -f "$subset_plan_file"
+    subset_plan_file=
+    return $subset_rc
 }
 
 run_group_batch() {
@@ -174,8 +274,17 @@ while [ "$phase" -le 2 ]; do
     # group stale and ran the shared parse anyway, recompiling what had just
     # been built.  Nothing reported the wasted serial pass, because from inside
     # it the plan looked small.
-    if [ "$rebuild_scope" -ge "$batch_threshold" ] \
-            || stale_plan_has_multi_member_component; then
+    # Three answers, in order of how much of the group each one parses.
+    #
+    # The closure -- not the stale set -- decides whether to parse the whole
+    # group, because compiling a component rewrites its compile contract and
+    # every consumer of it goes stale as a result: a closure that covers most of
+    # the group will be compiled either way, and one parse is cheaper than two
+    # passes over the same sources.  Below that, the stale set decides between
+    # one shared parse and standalone compiles, and a component that spans
+    # several sources always needs a parse: its members are mutually dependent
+    # and have no valid internal order.
+    if [ "$rebuild_scope" -ge "$group_batch_floor" ]; then
         run_group_batch
         # The batch rewrote every depfile in the group, so the frozen generation
         # no longer describes it.  Re-freeze before verifying, and leave the
@@ -189,6 +298,30 @@ while [ "$phase" -le 2 ]; do
         fi
         touch "$plan_stamp"
         exit 0
+    fi
+    if stale_plan_has_multi_member_component \
+            || { have_subset_parse && [ "$stale_count" -ge "$batch_threshold" ]; }; then
+        # A component that spans several sources has no standalone builder at
+        # all, so it needs a shared parse whether or not this group can parse
+        # part of itself; everything else falls back to compiling one component
+        # at a time, which is what this scheduler did before partial parses
+        # existed.
+        if have_subset_parse; then
+            if ! run_subset_batch; then
+                echo "$0: shared parse of the stale set failed" >&2
+                exit 1
+            fi
+        elif stale_plan_has_multi_member_component; then
+            if ! run_group_batch; then
+                echo "$0: shared parse of the group failed" >&2
+                exit 1
+            fi
+        fi
+        # The parse rewrote the depfiles of everything it compiled, so the frozen
+        # generation no longer describes the graph; the loop's next pass freezes
+        # again and picks up whatever the compiles made stale.
+        phase=$((phase + 1))
+        continue
     fi
 
     # Standalone compiles run one after another in this loop, so the count and
@@ -205,6 +338,7 @@ while [ "$phase" -le 2 ]; do
     # edges.  The component key survives that -- it names a member set -- while
     # the index does not, so the key is what the builder is given to address its
     # component with.
+    awk -F '\t' '$1 == "rebuild-closure" || !seen[$2]++' "$stale_file" > "$stale_file.components"
     while IFS="$tab" read -r component_index component_key component_size source output; do
         # The closure row is a property of the plan, not a component in it.
         # Written as a block rather than `test && continue`: an AND-OR list whose
@@ -230,7 +364,8 @@ while [ "$phase" -le 2 ]; do
             echo "$0: cannot build stale component $component_key" >&2
             exit 1
         fi
-    done < "$stale_file"
+    done < "$stale_file.components"
+    rm -f "$stale_file.components"
     phase=$((phase + 1))
 done
 

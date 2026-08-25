@@ -13,6 +13,12 @@
 # command/output and orchestration-only edits must not make every large consumer
 # rescan all of its sources on the next otherwise-no-op build.
 const CACHE_VERSION = 38;
+#! The sidecar beside a batch stamp that dates the group's last shared parse.
+/** The batch stamp cannot date it: the build tool also uses the stamp for
+    ordering, so recipes that publish nothing touch it.  qore-qo-batch-bootstrap
+    advances this file only when a shared parse has published the whole group.
+*/
+const BATCH_PUBLICATION_SUFFIX = ".publication";
 const SOURCE_SYMBOL_CACHE_VERSION = 1;
 const SOURCE_SUMMARY_KEYS = (
     "provides",
@@ -1300,7 +1306,34 @@ class SourceOrderEngine {
     private {
         Regex compile_contract_re = new Regex(
             "((?:\\\\[\\s\\S]|[^\\s])+\\.compile-contract\\.stamp)", RE_Global);
+        #! Every whitespace-separated make prerequisite, escapes included.
+        /** Scanning depfiles a byte at a time from Qore made a whole-group
+            currency pass the most expensive thing the build ran: 7.8 MB of
+            depfiles in one 868-source group is 8 million loop iterations, and the
+            pass reads every member's depfile.  The same shape as
+            compile_contract_re, which has always scanned the same text at C
+            speed.
+        */
+        Regex depfile_input_re = new Regex(
+            "((?:\\\\[\\s\\S]|[^\\s])+)", RE_Global);
         hash<string, string> contract_digests = {};
+        #! Depfile prerequisites by depfile path, parsed once per process.
+        hash<string, list<string>> depfile_inputs = {};
+        #! Build inputs from outside the group by member output, filtered once.
+        hash<string, list<string>> external_inputs = {};
+        #! Modification times of paths outside the group, stat'ed once.
+        /** One 868-source group names 116k dependency references that resolve to
+            1.9k distinct paths, and currency compares each against every member
+            stamp: without this the pass makes sixty times the stat calls it
+            needs.
+        */
+        hash<string, date> external_times = {};
+        #! Paths outside the group that do not exist; a missing input is not current.
+        hash<string, bool> external_absent = {};
+        #! What each component publishes to its consumers, by component key.
+        hash<string, list<hash<auto>>> component_provides = {};
+        #! Member source-content digests by member output, read once per process.
+        hash<string, string> content_digests = {};
         *string loaded_graph_context;
         *hash<SourceOrderGraph> loaded_graph;
         #! The depfile-derived required edges the loaded graph was built from.
@@ -1828,48 +1861,65 @@ class SourceOrderEngine {
         }
     }
 
+    #! Every prerequisite a make depfile records, unescaped, parsed once per process.
+    /** A whole-group currency pass asks for the same depfile once per member of
+        the component that names it, and several passes can run in one helper
+        invocation, so the parse is memoized on the depfile path.  Nothing in one
+        invocation rewrites a depfile it also reads: freezing and compiling are
+        separate processes by construction.
+    */
     private list<string> parseMakeDepfileInputs(string path) {
+        *list<string> cached = depfile_inputs{path};
+        if (exists cached) {
+            return cached;
+        }
+        list<string> values = ();
         string text = ReadOnlyFile::readTextFile(path);
         int colon = text.find(":");
         if (colon < 0) {
-            return ();
+            depfile_inputs{path} = values;
+            return values;
         }
-        list<string> values = ();
-        list<string> token_parts = ();
-        int token_start = -1;
-        for (int offset = colon + 1; offset < text.size(); ++offset) {
-            int byte = text.getByte(offset);
-            if (byte == 0x5c) {
-                if (token_start >= 0 && offset > token_start) {
-                    push token_parts, text.substr(token_start, offset - token_start);
-                }
-                if (++offset < text.size() && text.getByte(offset) != 0x0a) {
-                    push token_parts, text.substr(offset, 1);
-                }
-                token_start = offset + 1;
-            } else if (byte == 0x20 || byte == 0x09 || byte == 0x0a
-                    || byte == 0x0d || byte == 0x0b || byte == 0x0c) {
-                if (token_start >= 0 && offset > token_start) {
-                    push token_parts, text.substr(token_start, offset - token_start);
-                }
-                if (token_parts) {
-                    push values, join("", token_parts);
-                    token_parts = ();
-                }
-                token_start = -1;
-            } else {
-                if (token_start < 0) {
-                    token_start = offset;
-                }
+        foreach *string value in (depfile_input_re.extractGroups(
+                text.substr(colon + 1)) ?? ()) {
+            if (!exists value) {
+                continue;
             }
+            if (value.find("\\") >= 0) {
+                value = regex_subst(value, "\\\\([\\s\\S])",
+                    string sub (hash<RegexMatchInfo> match) {
+                        return match.groups[0] == "\n" ? "" : match.groups[0];
+                    }, RE_Global);
+            }
+            if (value == "") {
+                continue;
+            }
+            push values, value;
         }
-        if (token_start >= 0 && token_start < text.size()) {
-            push token_parts, text.substr(token_start);
-        }
-        if (token_parts) {
-            push values, join("", token_parts);
-        }
+        depfile_inputs{path} = values;
         return values;
+    }
+
+    #! The modification time of a build input outside the group, or NOTHING.
+    /** Memoized: the same toolchain, module and include paths appear in every
+        member's depfile, and currency compares each of them against every member
+        stamp.
+    */
+    private *date externalInputTime(string path) {
+        if (external_absent{path}) {
+            return NOTHING;
+        }
+        *date cached = external_times{path};
+        if (exists cached) {
+            return cached;
+        }
+        *hash<StatInfo> info = hstat(path);
+        if (!exists info) {
+            external_absent{path} = True;
+            return NOTHING;
+        }
+        external_times{path} = info.mtime;
+        return info.mtime;
     }
 
     private list<string> parseMakeDepfileContractInputs(string path) {
@@ -1974,19 +2024,33 @@ class SourceOrderEngine {
         return digest("sha256", join("\n", normalized) + "\n").toHex();
     }
 
-    #! Names the group's last whole-group publication, or NOTHING when it has none.
-    /** The batch stamp is touched by every shared-parse publication, and a shared
-        parse is the only operation that rewrites every depfile in the group at
-        once.  Its modification time is therefore the marker that says which
+    #! Names the group's last whole-group publication, or NOTHING without a stamp.
+    /** A shared parse is the only operation that rewrites every depfile in the
+        group at once, so the moment it published is the marker that says which
         whole-group edge set a snapshot was frozen from.
+
+        That marker is the publication sidecar beside the batch stamp, never the
+        batch stamp itself.  The stamp is also the build tool's ordering token, so
+        it is touched by runs that publish nothing: CMake's Makefile generator
+        duplicates the bootstrap recipe into every independent target that depends
+        on the stamp, and the copy that loses the race to the group lock finds the
+        tree the winner published current and touches the stamp so the members do
+        not stay older than their dependencies.  That touch can land after the
+        coordinator's final freeze, which would leave a snapshot naming a
+        publication the group no longer reports -- and every later build would
+        discard an edge set that is still exact.
+
+        A batch stamp with no publication sidecar names generation 0: the group
+        has published nothing this helper can date, so any snapshot carrying a
+        dated generation is discarded rather than trusted.
     */
     private *int batchStampGeneration(*string batch_stamp) {
         if (!batch_stamp) {
             return NOTHING;
         }
-        *hash<StatInfo> info = hstat(batch_stamp);
+        *hash<StatInfo> info = hstat(batch_stamp + BATCH_PUBLICATION_SUFFIX);
         if (!exists info) {
-            return NOTHING;
+            return 0;
         }
         return get_duration_microseconds(info.mtime - 1970-01-01Z);
     }
@@ -2014,10 +2078,13 @@ class SourceOrderEngine {
         list<list<int>> edges = collectDepfileContractEdges(context_info.outputs);
         string generation = contractEdgeGeneration(edges, context_info.outputs);
         hash<auto> snapshot = {
-            # Format 2 records the whole-group publication the edge set was read
-            # from.  A format 1 snapshot cannot be checked against one, so it is
-            # not applied: it may predate a shared parse that superseded it.
-            "format": 2,
+            # Format 3 dates the whole-group publication the edge set was read
+            # from by the batch publication sidecar.  An earlier snapshot dated it
+            # by the batch stamp, which the build tool also touches for ordering,
+            # so its generation cannot be compared against this one; and a format 1
+            # snapshot names no publication at all.  Neither is applied: both may
+            # predate a shared parse that superseded them.
+            "format": 3,
             "generation": generation,
             "outputs_digest": outputsDigest(context_info.outputs),
         };
@@ -2046,7 +2113,9 @@ class SourceOrderEngine {
         A snapshot frozen before the group's current whole-group publication is
         discarded for the same reason: the shared parse that produced that
         publication rewrote every depfile in the group, so the frozen edge set
-        describes a graph it superseded.  A build tool is free to schedule an
+        describes a graph it superseded.  That publication is dated by the sidecar
+        beside the batch stamp rather than by the stamp, which recipes that publish
+        nothing also touch.  A build tool is free to schedule an
         object recipe before this build's first freeze -- any target that depends
         on the object stamps rather than on the group's order targets does
         exactly that -- and applying the previous build's edge set there produces
@@ -2063,7 +2132,7 @@ class SourceOrderEngine {
                 return NOTHING;
             }
             hash<auto> snapshot = data;
-            if (snapshot.format != 2 || snapshot.edges.typeCode() != NT_LIST
+            if (snapshot.format != 3 || snapshot.edges.typeCode() != NT_LIST
                     || snapshot.outputs_digest != outputsDigest(outputs)) {
                 return NOTHING;
             }
@@ -2643,6 +2712,18 @@ class SourceOrderEngine {
         the fallback for a context configured without sidecars.
     */
     private string memberContentDigest(hash<SourceOrderContext> context_info, int node) {
+        string key = context_info.outputs[node];
+        *string cached = content_digests{key};
+        if (exists cached) {
+            return cached;
+        }
+        string result = memberContentDigestImpl(context_info, node);
+        content_digests{key} = result;
+        return result;
+    }
+
+    private string memberContentDigestImpl(hash<SourceOrderContext> context_info,
+            int node) {
         if (context_info.source_content_digests) {
             string sidecar = context_info.source_content_digests[node];
             if (is_file(sidecar)) {
@@ -2735,6 +2816,47 @@ class SourceOrderEngine {
         Members and prerequisites are ordered by output path rather than by node
         index, so reordering the context source list cannot change a token.
     */
+    #! What one component publishes to its consumers, computed once per process.
+    /** A hub component appears in the prerequisite list of every component that
+        consumes it -- 400 of them in one 868-source group -- and the list it
+        contributes is the same every time.  Recomputing it per consumer made a
+        whole-group currency pass spend most of its time re-deriving identical
+        contract digests, and the sorts around them.  The key, not the index:
+        component numbering is a function of the graph, which a compile in the
+        same process can change.
+    */
+    private list<hash<auto>> componentProvides(hash<SourceOrderComponents> components,
+            hash<SourceOrderContext> context_info, int component) {
+        string key = components.component_keys[component];
+        *list<hash<auto>> cached = component_provides{key};
+        if (exists cached) {
+            return cached;
+        }
+        list<hash<auto>> provided = ();
+        foreach int node in (components.members[component]) {
+            push provided, (
+                "output": absoluteNormalized(context_info.outputs[node]),
+                "contract_digest": memberContractDigest(context_info.outputs[node]),
+            );
+        }
+        provided = sortByOutput(provided);
+        component_provides{key} = provided;
+        return provided;
+    }
+
+    #! Sorts manifest entries by output path, without sorting what cannot move.
+    /** Most components have one member and most prerequisite lists one entry, and
+        a comparator call through a closure is not free at that size.
+    */
+    private list<hash<auto>> sortByOutput(list<hash<auto>> entries) {
+        if (entries.size() < 2) {
+            return entries;
+        }
+        return sort(entries, int sub (hash<auto> left, hash<auto> right) {
+            return left.output < right.output ? -1 : (left.output > right.output ? 1 : 0);
+        });
+    }
+
     hash<auto> componentGeneration(hash<SourceOrderComponents> components,
             hash<SourceOrderContext> context_info, int component) {
         list<hash<auto>> members = ();
@@ -2745,29 +2867,19 @@ class SourceOrderEngine {
                 "content_digest": memberContentDigest(context_info, node),
             );
         }
-        members = sort(members, int sub (hash<auto> left, hash<auto> right) {
-            return left.output < right.output ? -1 : (left.output > right.output ? 1 : 0);
-        });
+        members = sortByOutput(members);
         list<hash<auto>> prerequisites = ();
         foreach int predecessor in (components.predecessors[component]) {
-            list<hash<auto>> provided = ();
-            foreach int node in (components.members[predecessor]) {
-                push provided, (
-                    "output": absoluteNormalized(context_info.outputs[node]),
-                    "contract_digest": memberContractDigest(context_info.outputs[node]),
-                );
-            }
-            provided = sort(provided, int sub (hash<auto> left, hash<auto> right) {
-                return left.output < right.output ? -1 : (left.output > right.output ? 1 : 0);
-            });
             push prerequisites, (
                 "scc": components.component_keys[predecessor],
-                "provides": provided,
+                "provides": componentProvides(components, context_info, predecessor),
             );
         }
-        prerequisites = sort(prerequisites, int sub (hash<auto> left, hash<auto> right) {
-            return left.scc < right.scc ? -1 : (left.scc > right.scc ? 1 : 0);
-        });
+        if (prerequisites.size() > 1) {
+            prerequisites = sort(prerequisites, int sub (hash<auto> left, hash<auto> right) {
+                return left.scc < right.scc ? -1 : (left.scc > right.scc ? 1 : 0);
+            });
+        }
         string manifest = make_json((
             "format": 1,
             "scc": components.component_keys[component],
@@ -2886,6 +2998,10 @@ class SourceOrderEngine {
                 }
             }
         }
+        *list<string> cached = external_inputs{output};
+        if (exists cached) {
+            return cached;
+        }
         list<string> external = ();
         foreach string dependency in (parseMakeDepfileInputs(output + ".d")) {
             if (exists covered{dependency}
@@ -2894,6 +3010,7 @@ class SourceOrderEngine {
             }
             push external, dependency;
         }
+        external_inputs{output} = external;
         return external;
     }
 
@@ -2962,8 +3079,8 @@ class SourceOrderEngine {
                 if (check_external_dependencies) {
                     foreach string dependency in (externalDepfileInputs(output,
                             context_info, \covered)) {
-                        *hash<StatInfo> info = hstat(dependency);
-                        if (!exists info || info.mtime >= stamp_time) {
+                        *date dependency_time = externalInputTime(dependency);
+                        if (!exists dependency_time || dependency_time >= stamp_time) {
                             return False;
                         }
                     }
@@ -3167,6 +3284,7 @@ sub usage(*string error = NOTHING, bool success = False) {
         "       %s --scc-map-cmake PREFIX CONTEXT\n"
         "       %s --cmake-plan GROUP CONTEXT\n"
         "       %s --scc-generation-map FILE CONTEXT\n"
+        "       %s [--scc-publish-set|--scc-current-set] CONTEXT KEY_FILE\n"
         "       %s [--scc-map|--scc-publish-all|--scc-generation-dir\n"
         "           |--scc-current-all|--scc-stale|--scc-source-stale]\n"
         "           [--batch-stamp STAMP] [--rebuild-closure] CONTEXT\n"
@@ -3199,7 +3317,10 @@ sub usage(*string error = NOTHING, bool success = False) {
         "second, stricter answer is what makes recipes compile behind its back.\n"
         "\n"
         "--rebuild-closure prefixes a stale listing with a rebuild-closure row\n"
-        "naming how many components a rebuild of the stale set would leave stale.\n"
+        "naming how many components a rebuild of the stale set would leave stale,\n"
+        "and how many components the group has.  --all-members lists every member\n"
+        "of each stale component rather than one representative, which is what a\n"
+        "caller compiling the stale set in one parse needs.\n"
         "Compiling a component rewrites its compile contract, so its consumers go\n"
         "stale too: the stale set is what must be rebuilt first, the closure is\n"
         "what will be rebuilt in total, and only the closure can decide whether a\n"
@@ -3212,11 +3333,14 @@ sub usage(*string error = NOTHING, bool success = False) {
         "decomposition another builder resolved against.\n"
         "\n"
         "--batch-stamp given to --scc-freeze-graph records which whole-group\n"
-        "publication the snapshot was frozen from. A later shared parse rewrites\n"
-        "every depfile in the group, so a snapshot naming an older batch stamp is\n"
-        "discarded for a live scan: the file outlives the build that wrote it, and\n"
-        "a recipe the build tool scheduled ahead of the next freeze must not apply\n"
-        "the previous build's edge set.\n",
+        "publication the snapshot was frozen from, dated by the STAMP.publication\n"
+        "sidecar that qore-qo-batch-bootstrap advances when a shared parse has\n"
+        "published the group -- not by the stamp, which the build tool also touches\n"
+        "for ordering. A later shared parse rewrites every depfile in the group, so\n"
+        "a snapshot naming an older publication is discarded for a live scan: the\n"
+        "file outlives the build that wrote it, and a recipe the build tool\n"
+        "scheduled ahead of the next freeze must not apply the previous build's\n"
+        "edge set.\n",
         name, name, name, name, name, name, name, name, name, name, name, name, name,
         name, name);
     if (success) {
@@ -3397,6 +3521,13 @@ int sub main() {
     *string batch_bootstrap_stamp;
     bool source_deps_only = False;
     bool rebuild_closure = False;
+    #! Emit every member of a stale component rather than one representative.
+    /** A caller that compiles components one at a time wants the representative:
+        building any member builds the component.  A caller that compiles the
+        stale set in ONE parse has to name every member, because the parse is the
+        unit that publishes them.
+    */
+    bool all_members = False;
     list<string> positional = ();
     for (int index = 0; index < ARGV.size(); ++index) {
         string arg = ARGV[index];
@@ -3414,6 +3545,8 @@ int sub main() {
             source_deps_only = True;
         } else if (arg == "--rebuild-closure") {
             rebuild_closure = True;
+        } else if (arg == "--all-members") {
+            all_members = True;
         } else if (arg == "--scc-map" || arg == "--scc-for" || arg == "--scc-members"
                 || arg == "--scc-prerequisites" || arg == "--scc-generation"
                 || arg == "--scc-generation-token" || arg == "--scc-generation-dir"
@@ -3422,7 +3555,8 @@ int sub main() {
                 || arg == "--scc-lock" || arg == "--scc-preload"
                 || arg == "--scc-current-all" || arg == "--scc-source-token"
                 || arg == "--scc-stale" || arg == "--scc-source-stale"
-                || arg == "--scc-compile-plan" || arg == "--scc-graph-generation") {
+                || arg == "--scc-compile-plan" || arg == "--scc-graph-generation"
+                || arg == "--scc-publish-set" || arg == "--scc-current-set") {
             string requested = arg.substr(6);
             if (exists component_command && component_command != requested) {
                 usage(sprintf("--scc-%s conflicts with --scc-%s",
@@ -3625,15 +3759,25 @@ int sub main() {
                     # so a caller that only wants the stale set keeps the output
                     # it has always parsed.
                     if (rebuild_closure) {
-                        printf("rebuild-closure\t%d\n",
-                            engine.componentRebuildClosure(components, stale).size());
+                        # The group's component count rides along: the coordinator
+                        # scales its "the closure is the whole group anyway"
+                        # decision to the group, and asking for the count
+                        # separately would mean a second graph scan.
+                        printf("rebuild-closure\t%d\t%d\n",
+                            engine.componentRebuildClosure(components, stale).size(),
+                            components.members.size());
                     }
                     foreach int component in (stale) {
-                        int member = components.members[component][0];
-                        printf("%d\t%s\t%d\t%s\t%s\n", component,
-                            components.component_keys[component],
-                            components.members[component].size(),
-                            context_info.inputs[member], context_info.outputs[member]);
+                        list<int> members = all_members
+                            ? components.members[component]
+                            : (components.members[component][0],);
+                        foreach int member in (members) {
+                            printf("%d\t%s\t%d\t%s\t%s\n", component,
+                                components.component_keys[component],
+                                components.members[component].size(),
+                                context_info.inputs[member],
+                                context_info.outputs[member]);
+                        }
                     }
                     return 0;
                 }
@@ -3655,6 +3799,58 @@ int sub main() {
                     }
                     return 0;
             }
+        }
+        if (component_command == "publish-set" || component_command == "current-set") {
+            # A shared parse over PART of a group publishes exactly the
+            # components it compiled.  Naming them in a file rather than on the
+            # command line keeps a subset of any size addressable, and resolving
+            # them all in one process is what keeps the cost of a partial batch
+            # proportional to the partial batch.
+            if (positional.size() != 2) {
+                usage(sprintf("--scc-%s requires a context and a file naming "
+                    "component keys", component_command));
+            }
+            list<int> selected = ();
+            foreach string line in (
+                    ReadOnlyFile::readTextFile(positional[1]).split("\n")) {
+                string key = trim(line);
+                if (!key) {
+                    continue;
+                }
+                int resolved = findComponent(components, key);
+                if (resolved < 0) {
+                    # As for a single component: a key the current graph does not
+                    # name is a transition, and the caller's answer to it is to
+                    # re-resolve rather than to fail the build.
+                    stderr.printf("%s: component %s is not present in the current "
+                        "dependency graph %s; the decomposition changed since it "
+                        "was resolved\n", get_script_name(), key,
+                        engine.graphGeneration(context_path, context_info));
+                    return 76;
+                }
+                push selected, resolved;
+            }
+            if (component_command == "current-set") {
+                foreach int resolved in (selected) {
+                    if (!engine.generationCurrent(context_info, context_path,
+                            components, resolved, batch_bootstrap_stamp,
+                            !source_deps_only)) {
+                        return 1;
+                    }
+                }
+                return 0;
+            }
+            foreach int resolved in (selected) {
+                string result = engine.publishGeneration(context_info,
+                    context_path, components, resolved, NOTHING);
+                if (result != "published") {
+                    stderr.printf("%s: cannot publish component %s: %s\n",
+                        get_script_name(), components.component_keys[resolved],
+                        result);
+                    return result == "moved" ? 75 : 1;
+                }
+            }
+            return 0;
         }
         if (positional.size() != 2) {
             usage(sprintf("--scc-%s requires a context and a %s argument",

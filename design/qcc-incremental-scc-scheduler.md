@@ -122,12 +122,24 @@ The rule for who freezes and who reads live is one sentence:
   ordering onto the coordinator reaches the group's order targets, but CMake
   duplicates each object rule into every independent target that depends on the
   object stamps, and such a target carries no planner barrier. The snapshot
-  therefore records the batch stamp it was read from (`format` 2), and is
-  discarded when that stamp has moved — a shared parse rewrites every depfile in
+  therefore dates the whole-group publication it was read from (`format` 3), and
+  is discarded when that date has moved — a shared parse rewrites every depfile in
   the group, so the frozen edge set describes a graph it superseded. Without
   this, the recipe resolves its compile plan from the previous build's edge set,
   the coordinator's freeze makes the publication a graph transition (76), and the
   component is compiled a second time.
+- **The publication is dated by `<batch stamp>.publication`, not by the batch
+  stamp.** The stamp is also the build tool's ordering token, so runs of
+  `qore-qo-batch-bootstrap` that publish nothing touch it: CMake's Makefile
+  generator duplicates the bootstrap recipe into every independent target that
+  depends on the stamp, and in a parallel build the copy that loses the race to
+  the group lock finds the tree the winner published current and touches the stamp
+  so no member stays older than its dependencies. That touch can land after the
+  coordinator's last freeze. Dating the publication by the stamp therefore left
+  the snapshot naming a publication the group no longer reported, and every later
+  build discarded an edge set that was still exact — silently giving up the
+  determinism the snapshot exists for. The sidecar is advanced only after
+  `--scc-publish-all`, and adoption paths only create it when it is missing.
 
 The snapshot is close to performance-neutral: it replaces reading and scanning
 every member depfile (12.3 ms on a synthetic 600-source group) with one JSON read
@@ -176,6 +188,66 @@ concurrently, which is the fan-out the coordinator exists to replace.
   would republish every component's generation record underneath compiles it does
   not exclude. Reaching that point behind the coordinator means the plan was
   wrong, and is reported.
+
+## How much of the group one pass parses
+
+A shared parse used to mean the whole group, so the coordinator's only choices
+were "compile stale components one at a time" and "reparse every source". With
+`qcc -c --output-dir=DIR -L <object dir>` a parse can cover **part** of a group:
+the sources on the command line are parsed together and every other member is
+preloaded from its `.qo` as a declaration shell — the same mechanism a standalone
+compile has always used, applied to a set instead of a single file. A partial
+parse therefore publishes exactly what a standalone compile of the same source
+publishes: the same object and the same compile contract.
+
+The coordinator picks between three answers, in order of how much it parses:
+
+|!Condition|!Answer
+|rebuild closure ≥ `max(8, 50% of components)`|whole-group parse
+|stale set spans a multi-source component, or ≥ 2 components|one parse over the stale set
+|otherwise|standalone compiles, one component at a time
+
+The **closure** decides only the first question — compiling a component rewrites
+its compile contract, so its consumers go stale as a result, and a closure that
+covers half the group will be parsed either way. The **stale set** decides the
+second: two stale components already pay for a shared parse, because N standalone
+compiles preload the group N times while one parse preloads it once. The
+thresholds are `QORE_QCC_INCREMENTAL_GROUP_BATCH_PERCENT` (50),
+`QORE_QCC_INCREMENTAL_GROUP_BATCH_MINIMUM` (8) and
+`QORE_QCC_INCREMENTAL_BATCH_THRESHOLD` (2); `QORE_QCC_SUBSET_PARSE=0` declines
+partial parses, and a group configured by an older `QoreMacros.cmake` has no
+`qcc-subset.sh`, in which case the scheduler behaves exactly as it did before
+partial parses existed.
+
+A whole-group parse still lowers cross-member calls it can see in its own parse,
+so an object it emits is not byte-identical to one emitted against preloaded
+shells; switching a component between the two therefore changes its compile
+contract and rebuilds its consumers once. That difference is a property of the
+two compile modes, not of the partial parse — a standalone compile has always
+published the preload-based contract — but it is why the coordinator prefers to
+stay in one mode for a whole build rather than mixing them.
+
+## The bootstrap recipe hands the stale set to the coordinator
+
+`qore-qo-batch-bootstrap` runs before the coordinator and used to make its own
+whole-group decision: any staleness at all selected the whole-group parse, so a
+changed module timestamp or a handful of stale components reparsed every source
+before the coordinator was consulted.
+
+It now runs the group-wide currency pass — the one that compares build inputs
+from OUTSIDE the group by mtime, which the coordinator's source-content scan
+cannot see — and reports the result in the vocabulary the whole build already
+speaks: it advances the ordering token, then touches the success stamp of every
+member it found current. A member whose stamp predates the token is what currency
+already means by "belongs to a previous bootstrap", so the coordinator, the object
+recipes and the build tool all read the same stale set. Only when the tree has no
+published generation at all — a first build, or a wiped object directory — does
+this recipe still parse the group itself.
+
+A parse that fails publishes nothing, so the ordering token it advanced is put
+back on the way out. Leaving it advanced marked every member of the group as
+belonging to a previous bootstrap, which turned one syntax error into a
+whole-group rebuild on the next build.
 
 ## Depfiles are shared inputs
 

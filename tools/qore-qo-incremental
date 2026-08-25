@@ -68,6 +68,10 @@ source_order_tool="${QORE_QCC_SOURCE_ORDER_HELPER:-$script_dir/qore-qo-source-or
 source_parse_define_tool="${QORE_QCC_SOURCE_PARSE_DEFINE_HELPER:-$script_dir/qore-qo-source-parse-defines}"
 batch_bootstrap_tool="${QORE_QCC_BATCH_BOOTSTRAP_HELPER:-$script_dir/qore-qo-batch-bootstrap}"
 batch_bootstrap_stamp=${QORE_QCC_BATCH_BOOTSTRAP_STAMP:-}
+# The script that parses PART of a group in one go, preloading the rest.  A
+# component that spans several sources needs a shared parse, but it does not need
+# the group's: only its own members are mutually dependent.
+subset_script=${QORE_QCC_SUBSET_SCRIPT:-}
 batch_script="$single_script_dir/qcc-batch.sh"
 
 # The component this recipe actually builds, resolved once.
@@ -730,6 +734,45 @@ run_group_batch() {
             "$batch_script" "$source_order_tool"
 }
 
+#! Rebuilds this component's members through one shared parse over just them.
+#  Its members are mutually dependent, so they have no valid internal order and
+#  no standalone builder; every other member of the group is current as far as
+#  this recipe is concerned and is preloaded rather than recompiled.  Falls back
+#  to the whole-group parse when the group was configured without a subset script.
+run_component_parse() {
+    if ! have_group_batch; then
+        echo "$0: the group has no batch compile script, so its shared parse" \
+            "cannot be started; component $component_key cannot be published as" \
+            "part of a coherent generation" >&2
+        return 1
+    fi
+    # See qore-qo-incremental-plan for what selects this and what it costs.
+    if [ "${QORE_QCC_SUBSET_PARSE:-1}" != 1 ] || [ -z "$subset_script" ] \
+            || [ ! -f "$subset_script" ] || [ -z "$component_selector" ]; then
+        run_group_batch
+        return $?
+    fi
+    component_members=$(mktemp "${TMPDIR:-/tmp}/qore-qo-component-members.XXXXXX")
+    component_plan=$(mktemp "${TMPDIR:-/tmp}/qore-qo-component-plan.XXXXXX")
+    if ! run_scoped_source_order --scc-members "$context_file" \
+            "$component_selector" > "$component_members"; then
+        rm -f "$component_members" "$component_plan"
+        return 1
+    fi
+    awk -F '\t' -v key="$component_key" 'NF >= 2 { print key "\t" $1 "\t" $2 }' \
+        "$component_members" > "$component_plan"
+    rm -f "$component_members"
+    QORE_QCC_GRAPH_SNAPSHOT= \
+    QORE_QCC_SUBSET_PLAN="$component_plan" \
+    QORE_QCC_SUBSET_SCRIPT="$subset_script" \
+        QORE_QCC_QORE_EXECUTABLE="${QORE_QCC_QORE_EXECUTABLE:-}" \
+        "$batch_bootstrap_tool" "$context_file" "$batch_bootstrap_stamp" \
+            "$batch_script" "$source_order_tool"
+    component_parse_rc=$?
+    rm -f "$component_plan"
+    return $component_parse_rc
+}
+
 #! Rebuilds every member of every component in the group through one shared parse.
 #  A component with more than one member has no valid internal order, so its
 #  members cannot be compiled separately against each other.  The group batch is
@@ -753,9 +796,9 @@ build_group_batch() {
     # schedule this recipe cannot control into a failed build.
     if [ "$coordinator_scheduled" = 1 ]; then
         echo "$0: component $component_key spans $component_size sources and is" \
-            "stale although the group has a coordinator; starting the group's" \
-            "shared parse from here, because a component spanning several sources" \
-            "has no standalone builder"
+            "stale although the group has a coordinator; starting a shared parse" \
+            "of its members from here, because a component spanning several" \
+            "sources has no standalone builder"
         # Everything the claim authorises -- the narrowed currency rule, the
         # skipped prerequisite pass -- is only sound while the plan holds for this
         # component, and it does not.
@@ -763,9 +806,9 @@ build_group_batch() {
         currency_scope=
     else
         echo "$0: component $component_key spans $component_size sources;" \
-            "delegating to the group's shared parse"
+            "delegating to a shared parse of its members"
     fi
-    run_group_batch
+    run_component_parse
 }
 
 #! Brings every transitive predecessor component current, in dependency order.

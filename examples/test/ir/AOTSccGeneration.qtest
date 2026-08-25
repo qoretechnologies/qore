@@ -483,9 +483,12 @@ class AOTSccGenerationTest inherits QUnit::Test {
         # output it has always parsed.
         assertEq("", trim(order(context_path, "--scc-source-stale")),
             "the complete fixture is source-current");
-        assertEq("rebuild-closure\t0\n",
+        # The row also carries the group's component count, so a coordinator can
+        # scale "the closure is the whole group anyway" to the group it is
+        # planning rather than to a flat number.
+        assertEq("rebuild-closure\t0\t4\n",
             order(context_path, ("--scc-source-stale", "--rebuild-closure")),
-            "a current group reaches nothing");
+            "a current group reaches nothing, and the row names the group size");
 
         # One edited source at the root of the chain.
         write(tmp.path + "/src/base.qc",

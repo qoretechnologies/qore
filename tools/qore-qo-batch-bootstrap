@@ -27,6 +27,47 @@ lock_path="${bootstrap_stamp}.lock"
 lock_candidate="${lock_path}.$$"
 lock_owned=false
 outputs_file=
+# The ordering token's state before this run advanced it, and whether the run
+# reached its publication.
+#
+# Currency treats a member whose stamp is older than the ordering token as
+# belonging to a previous bootstrap, so advancing the token marks the WHOLE group
+# stale until a publication touches every member stamp again.  A parse that fails
+# -- a syntax error in one source, the common case while editing -- publishes
+# nothing and touches no member stamp, so leaving the token advanced converted a
+# one-component rebuild into a whole-group one: the next build found every member
+# older than the token, and the build after that recompiled all of them.  A failed
+# parse must leave the tree exactly as it found it.
+saved_stamp=
+stamp_existed=false
+token_committed=false
+# When this group last published a whole-group generation.
+#
+# The bootstrap stamp cannot say that.  It is also the build tool's ordering
+# token, so it is touched by runs of this helper that publish nothing: CMake's
+# Makefile generator duplicates this recipe into every independent target that
+# depends on the stamp, and with a parallel build the copy that loses the race to
+# the group lock finds the tree the winner published current and touches the stamp
+# so no member stays older than its dependencies.  That touch is invisible to the
+# build, but it moved the marker the frozen dependency graph is compared against,
+# and it can land after the coordinator's last freeze -- which then names a
+# publication the group no longer reports, and every later build discards an edge
+# set that is still exact.
+#
+# This file is advanced only by a shared parse -- the one operation that rewrites
+# every depfile in the group -- and never by a run that compiles nothing.
+publication_marker="${bootstrap_stamp}.publication"
+# One shared parse over PART of the group: the plan file names the components to
+# compile and publish, one `KEY<TAB>SOURCE<TAB>OUTPUT` row per member.
+#
+# The group lock covers it exactly as it covers a whole-group parse -- the parse
+# writes members the caller did not ask for only in the sense that a component
+# spans several -- but nothing else about the group changes: the ordering token
+# is not advanced, no whole-group publication is dated, and the components that
+# were not compiled keep the generation they had.
+subset_plan=${QORE_QCC_SUBSET_PLAN:-}
+subset_script=${QORE_QCC_SUBSET_SCRIPT:-}
+subset_keys=
 # Set by qore-qo-incremental when the group holds a component that spans several
 # sources. It does NOT skip the currency check -- doing so made every member of
 # one component force its own redundant batch -- it only says that a batch
@@ -69,7 +110,53 @@ remove_raced_path() {
     rm -f "$1"
 }
 
+#! Undoes this run's advance of the ordering token when it published nothing.
+#  Publication is all-or-nothing -- the batch touches no member stamp and writes
+#  no generation record until every object has been emitted -- so a run that did
+#  not reach it has changed nothing the token needs to dominate.
+restore_ordering_token() {
+    if [ "$token_committed" = true ] || [ -z "$saved_stamp" ]; then
+        return 0
+    fi
+    if [ "$stamp_existed" = true ]; then
+        touch -r "$saved_stamp" "$bootstrap_stamp" 2>/dev/null || true
+    else
+        remove_raced_path "$bootstrap_stamp"
+    fi
+}
+
+#! Records the ordering token's state so a run that publishes nothing can undo it.
+save_ordering_token() {
+    if [ -n "$saved_stamp" ]; then
+        return 0
+    fi
+    saved_stamp="${bootstrap_stamp}.pre.$$"
+    if [ -f "$bootstrap_stamp" ]; then
+        stamp_existed=true
+        # -p for the modification time: that timestamp IS the saved state.
+        cp -p "$bootstrap_stamp" "$saved_stamp"
+    else
+        stamp_existed=false
+        : > "$saved_stamp"
+    fi
+}
+
+#! Keeps this run's advance of the ordering token: it published or adopted a tree.
+commit_ordering_token() {
+    token_committed=true
+}
+
 cleanup() {
+    restore_ordering_token
+    if [ -n "$saved_stamp" ]; then
+        rm -f "$saved_stamp"
+    fi
+    if [ -n "$subset_keys" ]; then
+        rm -f "$subset_keys"
+    fi
+    if [ -n "${currency_file:-}" ]; then
+        rm -f "$currency_file"
+    fi
     if [ -n "$outputs_file" ]; then
         rm -f "$outputs_file"
     fi
@@ -157,12 +244,90 @@ lock_owned=true
 outputs_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-batch-outputs.XXXXXX")
 sed -n 's/^output=//p' "$context" > "$outputs_file"
 
+#! Dates a whole-group generation change, superseding every frozen edge set.
+#  Called once before the shared parse -- a parse that fails part way through has
+#  still rewritten depfiles, so a graph frozen before it must not survive either --
+#  and once after the publication, so that the coordinator's next freeze records
+#  the date the published tree actually carries.
+date_generation_change() {
+    touch "$publication_marker"
+}
+
+#! Dates a tree this run adopted rather than compiled, if nothing else has.
+#  Adoption rewrites no depfile, so it must never supersede a frozen edge set.
+#  Creating the marker when it is missing only gives a tree published before this
+#  helper knew to date it a date that later freezes can be compared against; until
+#  then no snapshot can be applied at all.
+adopt_generation() {
+    if [ ! -f "$publication_marker" ]; then
+        touch "$publication_marker"
+    fi
+}
+
 touch_member_stamps() {
     while IFS= read -r output; do
         [ -n "$output" ] || continue
         touch "$output.stamp"
     done < "$outputs_file"
 }
+
+#! Compiles the components the plan names, in one parse, and publishes them.
+#  Everything the parse does not compile is preloaded from the object directory
+#  as sibling `.qo` declarations, which is what makes a partial parse cost what
+#  the partial parse is worth rather than what the group is worth.
+run_subset_parse() {
+    subset_keys=$(mktemp "${TMPDIR:-/tmp}/qore-qo-subset-keys.XXXXXX")
+    awk -F '\t' 'NF && $1 != "" { print $1 }' "$subset_plan" | sort -u > "$subset_keys"
+    if [ ! -s "$subset_keys" ]; then
+        echo "$0: subset plan names no component: $subset_plan" >&2
+        return 1
+    fi
+    # A follower that waited for the lock may find the components it was asked
+    # for already published by the holder; the whole-group parse re-checks the
+    # same way.
+    if [ "$lock_waited" = true ]; then
+        if run_source_order --scc-current-set "$context" "$subset_keys"; then
+            return 0
+        fi
+    fi
+    subset_count=$(awk -F '\t' 'NF && $2 != ""' "$subset_plan" | wc -l | tr -d ' ')
+    group_count=$(awk 'NF' "$outputs_file" | wc -l | tr -d ' ')
+    echo "$0: compiling $subset_count of $group_count sources in one shared parse"
+    tab=$(printf '\t')
+    set --
+    while IFS="$tab" read -r subset_key subset_source subset_output; do
+        [ -n "$subset_source" ] || continue
+        set -- "$@" "$subset_source"
+    done < "$subset_plan"
+    if [ "$#" -eq 0 ]; then
+        echo "$0: subset plan names no source: $subset_plan" >&2
+        return 1
+    fi
+    if ! sh "$subset_script" "$@"; then
+        return 1
+    fi
+    # The parse rewrote every member it was given, so their stamps and their
+    # components' generation records are committed together -- the same rule the
+    # whole-group parse follows, applied to the part that was compiled.
+    while IFS="$tab" read -r subset_key subset_source subset_output; do
+        [ -n "$subset_output" ] || continue
+        touch "$subset_output.stamp"
+    done < "$subset_plan"
+    run_source_order --scc-publish-set "$context" "$subset_keys"
+}
+
+if [ -n "$subset_plan" ]; then
+    if [ ! -f "$subset_plan" ]; then
+        echo "$0: missing subset plan: $subset_plan" >&2
+        exit 1
+    fi
+    if [ -z "$subset_script" ] || [ ! -f "$subset_script" ]; then
+        echo "$0: missing subset compile script: ${subset_script:-<unset>}" >&2
+        exit 1
+    fi
+    run_subset_parse
+    exit $?
+fi
 
 # Currency is a property of every component's published generation, not of a
 # per-file sidecar sweep: the whole point of the generation record is that one
@@ -181,14 +346,30 @@ touch_member_stamps() {
 # source in the group.  The helper compares the same timestamps at full
 # resolution on every platform.
 current=false
+partial=false
 if [ "$force_batch" != 1 ] || [ "$lock_waited" = true ]; then
+    currency_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-bootstrap-currency.XXXXXX")
     if [ -f "$bootstrap_stamp" ]; then
-        if run_source_order --scc-current-all --batch-stamp "$bootstrap_stamp" \
-                "$context"; then
-            current=true
-        fi
-    elif run_source_order --scc-current-all "$context"; then
+        run_source_order --scc-stale --rebuild-closure --all-members \
+            --batch-stamp "$bootstrap_stamp" "$context" > "$currency_file"
+    else
+        run_source_order --scc-stale --rebuild-closure --all-members "$context" \
+            > "$currency_file"
+    fi
+    group_components=$(awk -F '\t' '$1 == "rebuild-closure" { print $3; exit }' \
+        "$currency_file")
+    case "$group_components" in
+        ''|*[!0-9]*)
+            group_components=0
+            ;;
+    esac
+    stale_components=$(awk -F '\t' '$1 != "rebuild-closure" && !seen[$2]++ { n++ }
+        END { print n + 0 }' "$currency_file")
+    if [ "$stale_components" -eq 0 ]; then
         current=true
+    elif [ "$group_components" -gt 0 ] \
+            && [ "$stale_components" -lt "$group_components" ]; then
+        partial=true
     fi
 fi
 
@@ -199,18 +380,62 @@ if [ "$current" = true ] && [ -f "$bootstrap_stamp" ]; then
     # member stamp remains older than the helper and Make launches the
     # standalone wrapper for every source.
     touch "$bootstrap_stamp"
+    adopt_generation
     touch_member_stamps
+    rm -f "$currency_file"
     exit 0
 fi
 
+if [ "$partial" = true ] && [ -f "$bootstrap_stamp" ]; then
+    # Part of the group is stale, and the group coordinator that runs right after
+    # this recipe is what decides how to rebuild it: one shared parse over the
+    # stale set, standalone compiles, or -- when the stale set really is the
+    # group -- the whole-group parse below.  Reaching for that parse from here
+    # instead, which is what this recipe used to do for ANY staleness, meant a
+    # module timestamp or a handful of stale components reparsed every source in
+    # the group before the coordinator was ever consulted.
+    #
+    # The stale set is handed on in the vocabulary the whole build already
+    # speaks: every member that is NOT stale gets a stamp newer than the ordering
+    # token, and every member that is keeps the older one.  That is exactly what
+    # currency means by "belongs to a previous bootstrap", so the coordinator,
+    # the object recipes and the build tool all see the same set -- including the
+    # components this pass found stale only because a build input from OUTSIDE
+    # the group moved, which the coordinator's own source-content scan cannot
+    # see.
+    touch "$bootstrap_stamp"
+    adopt_generation
+    # One pass over both lists, and one touch: a group with hundreds of members
+    # would otherwise spend more time forking than the currency scan took.
+    awk -F '\t' 'NR == FNR {
+            if ($1 != "rebuild-closure" && $5 != "") {
+                stale[$5] = 1
+            }
+            next
+        }
+        NF && !($0 in stale) { print $0 ".stamp" }' "$currency_file" "$outputs_file" \
+        | tr '\n' '\0' | xargs -0 touch
+    rm -f "$currency_file"
+    commit_ordering_token
+    exit 0
+fi
+if [ -n "${currency_file:-}" ]; then
+    rm -f "$currency_file"
+fi
+
 # The marker has to precede every member success stamp: a member whose stamp is
-# older than the marker is treated as belonging to a previous bootstrap.
+# older than the marker is treated as belonging to a previous bootstrap.  Record
+# what it was first: from here the run either publishes the whole group or must
+# put the marker back, because everything below it is now stale by that rule.
+save_ordering_token
 touch "$bootstrap_stamp"
 
 if [ "$current" = true ]; then
     # Adopt an already-current tree whose marker was missing, without rewriting
     # any object or contract content.
+    adopt_generation
     touch_member_stamps
+    commit_ordering_token
     exit 0
 fi
 
@@ -219,6 +444,7 @@ fi
 # unit" observable: several members of one component can each ask for the build,
 # but only the lock holder compiles, and the rest find the generation current.
 echo "$0: compiling the group in one shared parse"
+date_generation_change
 
 # One rebuild, never a convergence loop.  A batch can report that its inputs
 # moved only because an agent outside the build rewrote a source while qcc was
@@ -254,9 +480,11 @@ if [ "$batch_rc" -ne 0 ]; then
         exit "$batch_rc"
     fi
     echo "$0: batch bootstrap failed; falling back to per-source compilation" >&2
-    # Keep the new marker but do not advance any object stamps.  Every
-    # per-source command therefore observes an older or missing stamp and
-    # rebuilds through the established incremental path.
+    # The EXIT handler puts the ordering token back, so the per-source path finds
+    # exactly the components that were stale before this attempt.  Leaving the
+    # token advanced instead -- which is what this did while the token was also
+    # the publication marker -- made every member of the group look like it
+    # belonged to a previous bootstrap, so the fallback rebuilt all of them.
     exit 0
 fi
 
@@ -272,3 +500,8 @@ touch_member_stamps
 # is committed together.  A partial sweep would leave some component claiming a
 # generation the group no longer has.
 run_source_order --scc-publish-all "$context"
+
+# Every depfile in the group has been rewritten and every component record
+# committed, so the date the freeze after this run reads is this one.
+date_generation_change
+commit_ordering_token

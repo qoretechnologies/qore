@@ -1018,9 +1018,10 @@ qore_qcc_compile_objects(QO_OBJECTS
     BOOTSTRAP_AGGREGATE_NATIVE_REGISTERS)
 add_custom_target(qo-objects ALL DEPENDS ${QO_STAMPS})
 
-# The graph-snapshot probes below drive this helper directly, the way the build
+# The graph-snapshot probes below drive these helpers directly, the way the build
 # steps do.
 qore_qcc_helper_path(QO_SOURCE_ORDER_HELPER qore-qo-source-order)
+qore_qcc_helper_path(QO_BATCH_BOOTSTRAP_HELPER qore-qo-batch-bootstrap)
 
 qore_qcc_link_objects(QO_LINK
     OUTPUT \"${CMAKE_BINARY_DIR}/linked.qo\"
@@ -1114,7 +1115,8 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-vars.txt\"
     \"script_aggregate_index=${QO_SCRIPT_AGG_INDEX}\\n\"
     \"generation_map=${QO_GENERATION_MAP}\\n\"
     \"generation_target=${QO_GENERATION_TARGET}\\n\"
-    \"source_order_helper=${QO_SOURCE_ORDER_HELPER}\\n\")
+    \"source_order_helper=${QO_SOURCE_ORDER_HELPER}\\n\"
+    \"batch_bootstrap_helper=${QO_BATCH_BOOTSTRAP_HELPER}\\n\")
 file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
 ");
 
@@ -1376,14 +1378,25 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         assertTrue(exists frozen_batch_generation,
             "the frozen graph names the whole-group publication it was read "
                 "from: " + snapshot_text);
-        assertEq(get_duration_microseconds(mtime(bootstrap_stamp) - 1970-01-01Z),
+        # The publication sidecar dates that publication; the batch stamp beside
+        # it cannot, because the build tool also touches it for ordering.
+        string publication_marker = bootstrap_stamp + ".publication";
+        assertTrue(is_file(publication_marker),
+            "a shared parse dates the group's whole-group publication");
+        assertEq(get_duration_microseconds(mtime(publication_marker) - 1970-01-01Z),
             frozen_batch_generation.toInt(),
             "the frozen graph names the current batch publication");
-        *string source_order_helper = (read(build_dir + "/qo-vars.txt")
+        string vars_text = read(build_dir + "/qo-vars.txt");
+        *string source_order_helper = (vars_text
             =~ x/source_order_helper=(.*)/)[0];
         assertTrue(exists source_order_helper && is_file(source_order_helper),
             "the fixture exports the source-order helper: "
                 + (source_order_helper ?? "<missing>"));
+        *string batch_bootstrap_helper = (vars_text
+            =~ x/batch_bootstrap_helper=(.*)/)[0];
+        assertTrue(exists batch_bootstrap_helper && is_file(batch_bootstrap_helper),
+            "the fixture exports the batch bootstrap helper: "
+                + (batch_bootstrap_helper ?? "<missing>"));
         string graph_generation_cmd = sprintf("%s %s --scc-graph-generation %s",
             shellQuote(qore_bin), shellQuote(source_order_helper),
             shellQuote(context_path));
@@ -1405,6 +1418,38 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
             shellQuote(superseded_snapshot), graph_generation_cmd))),
             "a graph frozen from a superseded whole-group publication is "
                 "discarded for a live scan");
+
+        # The batch stamp is also the build tool's ordering token, so a bootstrap
+        # run that publishes nothing still touches it: CMake's Makefile generator
+        # duplicates the bootstrap recipe into every independent target that
+        # depends on the stamp, and in a parallel build the copy that loses the
+        # race to the group lock finds the tree the winner published current and
+        # touches the stamp so no member stays older than its dependencies.  That
+        # touch can land after the coordinator's last freeze, and dating the
+        # publication by the stamp then discarded an edge set that is still exact
+        # -- silently, on every later build.  Running the helper here against a
+        # current tree is exactly what that losing copy does.
+        date published_at = mtime(publication_marker);
+        date stamped_at = mtime(bootstrap_stamp);
+        string ordering_touch = run(sprintf("QORE_QCC_QORE_EXECUTABLE=%s %s %s %s %s %s",
+            shellQuote(qore_bin), shellQuote(batch_bootstrap_helper),
+            shellQuote(context_path), shellQuote(bootstrap_stamp),
+            shellQuote(build_dir + "/qo-scripts/qcc-batch.sh"),
+            shellQuote(source_order_helper)));
+        assertEq(-1, ordering_touch.find("compiling the group in one shared parse"),
+            "a bootstrap run behind a current tree publishes nothing: "
+                + ordering_touch);
+        assertGt(stamped_at, mtime(bootstrap_stamp),
+            "a bootstrap run behind a current tree still advances the build "
+                "tool's ordering token: " + ordering_touch);
+        assertEq(published_at, mtime(publication_marker),
+            "a bootstrap run that publishes nothing dates no new publication");
+        assertEq(snapshot_text, read(snapshot_path),
+            "an ordering touch of the batch stamp leaves the frozen graph alone");
+        assertNeq(live_graph, trim(run(sprintf("QORE_QCC_GRAPH_SNAPSHOT=%s %s",
+            shellQuote(standing_snapshot), graph_generation_cmd))),
+            "a graph frozen before an ordering touch of the batch stamp is "
+                "still applied");
         unlink(standing_snapshot);
         unlink(superseded_snapshot);
 
@@ -1438,13 +1483,26 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         }
         unlink(incremental_plan_stamp);
         string broad_recovery = run(sprintf("cmake --build %s -- -j33", build_dir));
-        assertEq(1, occurrences(broad_recovery, "broad incremental invalidation"),
-            "a broad stale closure selects one coordinated shared parse: "
-                + broad_recovery);
-        assertEq(object_paths.size(),
-            occurrences(broad_recovery, "qcc: script-context .qo"),
-            "the coordinated batch republishes each source exactly once: "
-                + broad_recovery);
+        assertEq(1, occurrences(broad_recovery, "one shared parse"),
+            "a stale set of several components is recovered by one coordinated "
+                "shared parse: " + broad_recovery);
+        # The parse covers the stale set, not the group.  Reaching for the
+        # whole-group parse here -- which is what a flat component threshold did
+        # -- reparsed every current source in the group to republish eight.
+        #
+        # An upper bound rather than an equality: this fixture's qo-objects
+        # target depends on the object stamps rather than on the group's order
+        # targets, so an object recipe may reach a stale component before the
+        # coordinator does and compile it first.  What must hold either way is
+        # that nothing outside the stale set is compiled.
+        int recovery_compiles = occurrences(broad_recovery,
+            "qcc: script-context .qo");
+        assertTrue(recovery_compiles > 0 && recovery_compiles <= 8,
+            sprintf("compiles only the components that were stale (%d): %s",
+                recovery_compiles, broad_recovery));
+        assertEq(0, occurrences(broad_recovery, "broad incremental invalidation"),
+            "a stale set this far below the group's size does not reparse the "
+                "group: " + broad_recovery);
         assertTrue(is_file(incremental_plan_stamp),
             "the successful coordinated rebuild commits its plan stamp");
 
@@ -1899,6 +1957,52 @@ file(WRITE \"${CMAKE_BINARY_DIR}/cycle-vars.txt\"
         assertEq(0, occurrences(run(sprintf("cmake --build %s -- -j33", build_dir)),
                 "qcc: script-context .qo"),
             "and the build after the recovery converges");
+
+        # A shared parse that fails must leave the incremental state exactly as it
+        # found it.  The ordering token the bootstrap advances before compiling
+        # marks the whole group stale by construction -- currency treats a member
+        # whose stamp is older than the token as belonging to a previous bootstrap
+        # -- so a parse error in one source, the ordinary case while editing,
+        # converted a one-component rebuild into a whole-group one: the next build
+        # found every member older than the token and recompiled all of them.
+        string bootstrap_stamp = build_dir + "/qo/.qcc-scc/.qcc-batch-bootstrap.stamp";
+        list<string> member_stamps = glob(build_dir + "/qo/*.qo.stamp");
+        assertEq(names.size(), member_stamps.size(),
+            "the group publishes one success stamp per member");
+        date token_before = mtime(bootstrap_stamp);
+        assertEq(0, membersOlderThan(member_stamps, token_before),
+            "a published tree leaves no member older than the ordering token");
+
+        string broken = snippets_dir + "/ring05.qc";
+        string broken_text = read(broken);
+        write(broken, broken_text + "\nthis is not valid qore source\n");
+        string failed = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertEq(1, occurrences(failed, "one shared parse"),
+            "a broken member of a multi-source component reaches the shared "
+                "parse: " + failed);
+        assertEq(token_before, mtime(bootstrap_stamp),
+            "a failed shared parse does not advance the group's ordering token: "
+                + failed);
+        assertEq(0, membersOlderThan(glob(build_dir + "/qo/*.qo.stamp"),
+                mtime(bootstrap_stamp)),
+            "and so leaves no member of the group looking stale: " + failed);
+
+        write(broken, broken_text);
+        string repaired = run(sprintf("cmake --build %s -- -j33", build_dir));
+        assertEq(0, occurrences(run(sprintf("cmake --build %s -- -j33", build_dir)),
+                "qcc: script-context .qo"),
+            "the build after the repair converges: " + repaired);
+    }
+
+    #! How many of \a stamps predate \a token, which is how many look stale.
+    private int membersOlderThan(list<string> stamps, date token) {
+        int older = 0;
+        foreach string stamp in (stamps) {
+            if (mtime(stamp) < token) {
+                ++older;
+            }
+        }
+        return older;
     }
 
     testManagedQccOutputPruning() {

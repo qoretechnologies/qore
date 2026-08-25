@@ -27123,6 +27123,298 @@ static unsigned qoreAotChooseBatchJobs(size_t num_entries) {
     return jobs;
 }
 
+//! Marks a parse as resolving against preloaded sibling declarations.
+/** Both compile paths arm this while parsing sources whose cross-file references
+    resolve against `-L` preloaded shells rather than against sources in the same
+    parse.
+*/
+struct AOTSourceParseGuard {
+    explicit AOTSourceParseGuard(bool active) : old(qore_aot_set_source_parse_active(active)) {
+    }
+    ~AOTSourceParseGuard() {
+        qore_aot_set_source_parse_active(old);
+    }
+    bool old;
+};
+
+//! Names the canonical sources whose declarations came from a preloaded `.qo`.
+struct AOTPreloadedSourceGuard {
+    explicit AOTPreloadedSourceGuard(const std::unordered_set<std::string>* labels)
+            : old(qore_aot_set_preloaded_source_labels(labels)) {
+    }
+    ~AOTPreloadedSourceGuard() {
+        qore_aot_set_preloaded_source_labels(old);
+    }
+    const std::unordered_set<std::string>* old;
+};
+
+//! Sibling `.qo` declarations preloaded from `-L` directories.
+/** Both compile paths need this.  A single-source compile preloads the rest of
+    its group so cross-file type references resolve at parse time; a batch that
+    compiles PART of a group -- one strongly connected component, or the stale
+    closure the incremental coordinator selected -- needs exactly the same thing
+    for the members it is not compiling.  Without it the only batch a build could
+    run was the whole group, so editing one member of a 35-source component
+    reparsed all 868 sources of the group.
+
+    The state outlives load(): the deserializer owns the sibling shells the parse
+    resolves against, and the labels and fast-entry records are consumed after the
+    parse commits.
+*/
+struct QoreAOTSiblingPreload {
+    //! The blob bytes the preloaded shells were built from.
+    /** They must outlive the deserializer: the symbol index, the debug metadata
+        and the source-parse IR fallbacks all read through pointers into these
+        buffers for as long as the shells are used.  Holding them in a local of
+        the function that scans the `-L` directories -- which is where this code
+        lived while only one compile path had it -- left the sibling resolution
+        reading freed memory as soon as the scan returned, which surfaces as
+        unresolvable base classes, member defaults that do not consume their
+        serialized payload, and SLOT_MAPS entries that exceed their section.
+    */
+    std::vector<QoreAOTExtractedFragment> fragments;
+    std::unique_ptr<QoreAOTBinaryMultiDeserializer> mdes;
+    //! Canonical source labels of the siblings actually preloaded.
+    std::unordered_set<std::string> source_labels;
+    std::unordered_map<std::string, QoreAOTSymbolIndexRecord> fast_entries;
+    std::unordered_set<std::string> ambiguous_fast_entries;
+
+    //! Scans @p library_paths and preloads every sibling the parse will not redeclare.
+    /** @param declared_files_canon canonical source files the parse itself
+        declares -- the targets and everything they \c %include.  A sibling
+        `.qo` for one of these would re-register the same class or hashdecl and
+        abort the parse.
+        @param skip_object_paths_canon objects this compile writes, skipped
+        before their blobs are read.
+    */
+    bool load(QoreProgram* pgm, const std::vector<std::string>& library_paths,
+            const std::unordered_set<std::string>& declared_files_canon,
+            const std::unordered_set<std::string>& skip_object_paths_canon,
+            std::string& error) {
+    // Phase 4 slice 10c: preload sibling `.qo`s from -L paths.
+    // Each path is scanned for `*.qo` files (non-recursive).  For
+    // every `.qo` whose `_fragment_blob` symbol we can read, the blob
+    // is handed to the multi-file deserializer; after every `-L`
+    // directory has been walked, resolveAll() runs one cross-blob
+    // resolution pass.  The blob bytes are kept alive by this object: the
+    // symbol index, the debug metadata and the source-parse IR fallbacks read
+    // through pointers into them for as long as the preloaded shells are used.
+    std::vector<QoreAOTExtractedFragment>& extracted_frags = fragments;
+        if (!library_paths.empty()) {
+        // Scan each -L dir.
+        for (const std::string& libdir : library_paths) {
+            ExceptionSink scan_xsink;
+            QoreString regex(".+\\.qo$");
+            QoreDir dir(&scan_xsink, QCS_DEFAULT, libdir.c_str());
+            if (scan_xsink.isException()) {
+                scan_xsink.handleExceptions();
+                error = "cannot open -L directory: " + libdir;
+                return false;
+            }
+            ReferenceHolder<QoreListNode> files(
+                dir.list(&scan_xsink, S_IFREG, &regex), &scan_xsink);
+            if (scan_xsink.isException()) {
+                scan_xsink.handleExceptions();
+                error = "cannot list -L directory: " + libdir;
+                return false;
+            }
+            if (!files) {
+                continue;
+            }
+            for (size_t i = 0; i < files->size(); ++i) {
+                QoreValue fn_val = files->retrieveEntry(i);
+                if (fn_val.getType() != NT_STRING) {
+                    continue;
+                }
+                QoreStringValueHelper fn(fn_val);
+                std::string qo_path = libdir + "/" + fn->c_str();
+                if (!skip_object_paths_canon.empty()) {
+                    char* qo_real = realpath(qo_path.c_str(), nullptr);
+                    if (qo_real) {
+                        bool skip = skip_object_paths_canon.count(qo_real) != 0;
+                        qo_path = qo_real;
+                        free(qo_real);
+                        if (skip) {
+                            continue;
+                        }
+                    }
+                }
+                if (!readQoFragmentBlobs(qo_path, extracted_frags, error)) {
+                    return false;
+                }
+            }
+        }
+
+        // Drop siblings whose source file the target parse already
+        // declared (the target plus its `%include`d files).  Their
+        // declarations already exist in the program from the parse
+        // above; preloading the corresponding `.qo` shells would
+        // re-register the same hashdecl/class and abort the parse.  The
+        // target's own bootstrap `.qo` is dropped here too (its label is
+        // target_canon), so a stale self-`.qo` in the `-L` dir cannot
+        // shadow the freshly parsed declarations.
+        if (!extracted_frags.empty()) {
+            std::vector<QoreAOTExtractedFragment> kept;
+            kept.reserve(extracted_frags.size());
+            size_t frag_i = 0;
+            for (auto& frag : extracted_frags) {
+                if (frag_i && !(frag_i % 100)
+                        && qore_check_cancel(nullptr, "AOT sibling label collection")) {
+                    error = "operation cancelled during AOT sibling label collection";
+                    return false;
+                }
+                std::string label;
+                {
+                    QoreAOTBinaryReader lbl_reader;
+                    std::string lbl_err;
+                    if (lbl_reader.open(frag.bytes.data(),
+                            static_cast<uint32_t>(frag.bytes.size()), lbl_err)) {
+                        const char* l = lbl_reader.getLabel();
+                        if (l) {
+                            label = l;
+                        }
+                    }
+                }
+                bool skip = false;
+                if (!label.empty()) {
+                    char* rp = realpath(label.c_str(), nullptr);
+                    const std::string key = rp ? std::string(rp) : label;
+                    if (rp) {
+                        free(rp);
+                    }
+                    skip = declared_files_canon.count(key) != 0;
+                    if (!skip) {
+                        // Remember the canonical source label of every PRELOADED
+                        // sibling so the dependency sink (which records the
+                        // source file of every declaration the target resolves)
+                        // can be narrowed to just these siblings for the depfile.
+                        source_labels.insert(key);
+                    }
+                }
+                if (!skip) {
+                    kept.push_back(std::move(frag));
+                }
+                ++frag_i;
+            }
+            extracted_frags = std::move(kept);
+        }
+
+        for (const auto& frag : extracted_frags) {
+            QoreAOTBinaryReader index_reader;
+            std::string index_error;
+            if (!index_reader.open(frag.bytes.data(),
+                    static_cast<uint32_t>(frag.bytes.size()), index_error)) {
+                continue;
+            }
+            // Fast-entry metadata describes the sibling's LOWERED BODY, so a
+            // sibling whose source has changed since its `.qo` was written
+            // describes a body that no longer exists: the entry may be gone (a
+            // hidden `_fast` symbol this object would then require but nothing
+            // defines) or its effect summary may have changed.  Importing it
+            // would make the outcome depend on the order in which the build
+            // rebuilds the two objects.  Skip the import instead — the ordinary
+            // name-resolved call path is always correct — and let the recorded
+            // build dependency rebuild this object once the sibling is current.
+            if (aotFragmentSourceIsStale(index_reader)) {
+                continue;
+            }
+            QoreAOTSymbolIndex index;
+            if (!readSymbolIndex(index_reader, index, index_error)) {
+                error = "cannot read sibling fast-entry metadata from '"
+                    + frag.symbol_name + "': " + index_error;
+                return false;
+            }
+            size_t native_i = 0;
+            for (const QoreAOTSymbolIndexRecord& rec : index.native) {
+                if (native_i && !(native_i % 100)
+                        && qore_check_cancel(nullptr,
+                            "AOT sibling fast-entry metadata collection")) {
+                    error = "operation cancelled during AOT sibling fast-entry metadata collection";
+                    return false;
+                }
+                ++native_i;
+                if ((rec.abi_kind != "qore_fast_v1"
+                        && rec.abi_kind != "qore_summary_v1")
+                        || rec.qore_path.empty()
+                        || ambiguous_fast_entries.count(rec.qore_path)) {
+                    continue;
+                }
+                auto [it, inserted] = fast_entries.emplace(rec.qore_path, rec);
+                if (!inserted) {
+                    fast_entries.erase(it);
+                    ambiguous_fast_entries.insert(rec.qore_path);
+                }
+            }
+        }
+
+        // Phase 1 via multi-deserializer.  Only create sibling shells here.
+        // The target source is parsed before Phase 2 below so siblings that
+        // depend on target declarations can resolve cleanly during the later
+        // cross-blob pass.
+        if (!extracted_frags.empty()) {
+            // Defensive: pre-load each sibling fragment's module dependencies
+            // through the normal parse-time loader before the blob preload
+            // below injects their module-contributed namespaces.  AOT blob
+            // deserialization adds namespaces such as "Json" (from the json
+            // module) directly; if the contributing module is not also
+            // registered with the program's feature tracker, a later load of
+            // the same module -- the target source's own `%requires`, or a
+            // defensive load_module() -- takes the slow path and tries to
+            // re-inject the namespace, raising
+            // "Namespace 'X' already exists in '::Qore'".  parseLoadModule()
+            // is idempotent (an already-loaded module is a no-op), so loading
+            // the deps here keeps the feature tracker consistent and prevents
+            // that collision even if a later phase aborts and the bootstrap is
+            // retried.  Mirrors the runtime batch path
+            // (QoreAOTRuntime.cpp qore_aot_script_end_batch).  Best-effort:
+            // deps that cannot be resolved here are left to the normal target
+            // parse to load and report.
+            for (auto& frag : extracted_frags) {
+                std::vector<std::string> deps;
+                std::string dep_error;
+                if (!readDependencies(frag.bytes.data(),
+                        static_cast<uint32_t>(frag.bytes.size()), deps, dep_error)) {
+                    continue;
+                }
+                for (const std::string& dep : deps) {
+                    SimpleRefHolder<QoreStringNode> derr(
+                        MM.parseLoadModule(dep.c_str(), pgm));
+                }
+            }
+
+            ExceptionSink pch_xsink;
+            ProgramRuntimeParseContextHelper pch(&pch_xsink, pgm);
+            if (pch_xsink.isException()) {
+                pch_xsink.handleExceptions();
+                error = "failed to set parse context for sibling preload";
+                return false;
+            }
+            auto mdes = std::make_unique<QoreAOTBinaryMultiDeserializer>(pgm);
+            bool preload_failed = false;
+            std::string deser_error;
+            for (auto& frag : extracted_frags) {
+                if (!mdes->addBlob(frag.bytes.data(),
+                        static_cast<uint32_t>(frag.bytes.size()),
+                        deser_error)) {
+                    error = "preload of '" + frag.symbol_name + "' failed: "
+                        + deser_error;
+                    preload_failed = true;
+                    break;
+                }
+            }
+            if (!preload_failed) {
+                mdes->rebuildShellIndexes();
+                this->mdes = std::move(mdes);
+            }
+            if (preload_failed) {
+                return false;
+            }
+        }
+    }
+        return true;
+    }
+};
+
 bool QoreAOT::compileScriptFilesBatch(
         const std::vector<std::string>& target_files,
         const std::string& output_dir,
@@ -27143,7 +27435,8 @@ bool QoreAOT::compileScriptFilesBatch(
         const std::string* script_aggregate_symbol,
         bool script_aggregate_native_registers,
         int* script_aggregate_compiled_count_out,
-        std::vector<QoreAOTSourceFingerprint>* source_fingerprints) {
+        std::vector<QoreAOTSourceFingerprint>* source_fingerprints,
+        const std::vector<std::string>& library_paths) {
     const bool trace_timing = getenv("QORE_AOT_BATCH_TIMING") != nullptr;
     const auto batch_start = std::chrono::steady_clock::now();
     auto input_done = batch_start;
@@ -27328,6 +27621,36 @@ bool QoreAOT::compileScriptFilesBatch(
         bool old;
     } resolved_source_import_guard;
 
+    // Preload the group members this batch is NOT compiling.
+    //
+    // A batch used to be the whole group, so there was nothing to preload: every
+    // declaration a target referenced was in the same parse.  A batch over part
+    // of a group -- one strongly connected component, or the stale closure the
+    // coordinator selected -- resolves its remaining cross-member references
+    // against the sibling `.qo` shells instead, exactly as a single-source
+    // compile does.  %include directives are stripped from batch sources, so the
+    // declarations a target contributes are its own: the target set is the whole
+    // exclusion set, and no probe parse is needed to discover it.
+    QoreAOTSiblingPreload sibling_preload;
+    if (!library_paths.empty()) {
+        std::unordered_set<std::string> skip_objects;
+        skip_objects.reserve(entries.size());
+        for (const SrcEntry& e : entries) {
+            char* r = realpath(e.out_path.c_str(), nullptr);
+            if (r) {
+                skip_objects.insert(r);
+                free(r);
+            } else {
+                skip_objects.insert(e.out_path);
+            }
+        }
+        if (!sibling_preload.load(*qpgm, library_paths, batch_target_set,
+                skip_objects, error)) {
+            return false;
+        }
+    }
+    const bool sibling_parse = !library_paths.empty();
+
     qore_program_private* batch_pp = qore_program_private::get(**qpgm);
     for (size_t i = 0; i < entries.size(); ++i) {
         if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT batch source parsing")) {
@@ -27341,6 +27664,9 @@ bool QoreAOT::compileScriptFilesBatch(
         e.module_cmd_begin = i == 0 ? 0 : batch_pp->module_parse_commands.size();
         {
             AOTBatchDepConsumerGuard consumer_guard(e.canon.c_str());
+            AOTSourceParseGuard source_guard(sibling_parse);
+            AOTPreloadedSourceGuard preloaded_source_guard(
+                &sibling_preload.source_labels);
             qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
                 &xsink, &wsink, QP_WARN_DEFAULT);
         }
@@ -27351,11 +27677,53 @@ bool QoreAOT::compileScriptFilesBatch(
         }
         e.module_cmd_end = batch_pp->module_parse_commands.size();
     }
-    qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+    // Resolve the preloaded siblings far enough that one parseCommit() can
+    // commit the combined source/sibling program, then finalize them after it --
+    // the same two-phase handoff the single-source path performs.
+    if (sibling_preload.mdes) {
+        ExceptionSink pch_xsink;
+        ProgramRuntimeParseContextHelper pch(&pch_xsink, *qpgm);
+        if (pch_xsink.isException()) {
+            pch_xsink.handleExceptions();
+            error = "failed to set parse context for sibling preload";
+            return false;
+        }
+        AOTSourceParseGuard source_guard(sibling_parse);
+        AOTPreloadedSourceGuard preloaded_source_guard(
+            &sibling_preload.source_labels);
+        std::string resolve_error;
+        if (!sibling_preload.mdes->resolveForSourceParse(resolve_error)) {
+            error = "sibling .qo cross-resolution failed: " + resolve_error;
+            return false;
+        }
+    }
+    {
+        AOTSourceParseGuard source_guard(sibling_parse);
+        AOTPreloadedSourceGuard preloaded_source_guard(
+            &sibling_preload.source_labels);
+        qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
+    }
     if (xsink.isException()) {
         xsink.handleExceptions();
         error = "parse commit failed in batch compile";
         return false;
+    }
+    if (sibling_preload.mdes) {
+        ExceptionSink pch_xsink;
+        ProgramRuntimeParseContextHelper pch(&pch_xsink, *qpgm);
+        if (pch_xsink.isException()) {
+            pch_xsink.handleExceptions();
+            error = "failed to set parse context for sibling preload";
+            return false;
+        }
+        AOTSourceParseGuard source_guard(sibling_parse);
+        AOTPreloadedSourceGuard preloaded_source_guard(
+            &sibling_preload.source_labels);
+        std::string resolve_error;
+        if (!sibling_preload.mdes->finalizeAfterSourceParse(resolve_error)) {
+            error = "sibling .qo finalization failed: " + resolve_error;
+            return false;
+        }
     }
     if (qoreAotHandleWarnings(wsink, error, "batch script parsing")) {
         return false;
@@ -27455,6 +27823,21 @@ bool QoreAOT::compileScriptFilesBatch(
     // source filter still emits only that file's definitions.
     std::unordered_map<const AbstractQoreFunctionVariant*, BatchCalleeInfo>
         shared_batch_callees;
+    // A batch over part of a group calls into members it did not compile, and
+    // those callees' fast-entry ABIs come from the preloaded `.qo`s rather than
+    // from this parse.  Importing them is what lets a partial parse lower the
+    // same cross-file call the whole-group parse lowers, instead of falling back
+    // to name resolution -- which would publish a different body, and so a
+    // different compile contract, for a source nothing about which changed.
+    if (!sibling_preload.fast_entries.empty()
+            && std::getenv("QORE_DISABLE_AOT_CROSS_FILE_FAST_ENTRIES") == nullptr) {
+        qore_ns_private* preload_root_ns = qore_ns_private::get(*batch_pp->RootNS);
+        if (!addAOTPreloadedFastEntries(preload_root_ns,
+                sibling_preload.fast_entries, shared_batch_callees)) {
+            error = "operation cancelled during preloaded AOT fast-entry import";
+            return false;
+        }
+    }
     if (entries.size() > 1
             && std::getenv("QORE_DISABLE_AOT_CROSS_FILE_FAST_ENTRIES") == nullptr) {
         std::unordered_set<std::string> batch_target_files;
@@ -28436,9 +28819,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
 
     // Canonical source labels of the siblings actually preloaded below (filled
     // by the `-L` scan).  Used to narrow the dependency sink to true siblings.
-    std::unordered_set<std::string> sibling_source_labels;
-    std::unordered_map<std::string, QoreAOTSymbolIndexRecord> sibling_fast_entries;
-    std::unordered_set<std::string> ambiguous_sibling_fast_entries;
+    // Filled by the `-L` preload below; declared here because the depfile
+    // narrowing at the end of this function reads the labels.
 
     // AOT incremental dependency sink: collects the source file of every
     // declaration the TARGET resolves while it is parsed and committed —
@@ -28461,14 +28843,6 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             qore_aot_set_dep_sink(nullptr);
         }
     };
-    struct AOTSourceParseGuard {
-        explicit AOTSourceParseGuard(bool active) : old(qore_aot_set_source_parse_active(active)) {
-        }
-        ~AOTSourceParseGuard() {
-            qore_aot_set_source_parse_active(old);
-        }
-        bool old;
-    };
     struct AOTSourceSymbolGuard {
         explicit AOTSourceSymbolGuard(const QoreAOTSourceSymbolManifest* manifest)
                 : old(qore_aot_set_source_symbol_manifest(manifest)) {
@@ -28478,239 +28852,25 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         }
         const QoreAOTSourceSymbolManifest* old;
     };
-    struct AOTPreloadedSourceGuard {
-        explicit AOTPreloadedSourceGuard(const std::unordered_set<std::string>* labels)
-                : old(qore_aot_set_preloaded_source_labels(labels)) {
-        }
-        ~AOTPreloadedSourceGuard() {
-            qore_aot_set_preloaded_source_labels(old);
-        }
-        const std::unordered_set<std::string>* old;
-    };
     const bool source_symbol_parse = source_symbols && !source_symbols->empty();
 
-    // Phase 4 slice 10c: preload sibling `.qo`s from -L paths.
-    // Each path is scanned for `*.qo` files (non-recursive).  For
-    // every `.qo` whose `_fragment_blob` symbol we can read, the blob
-    // is handed to the multi-file deserializer; after every `-L`
-    // directory has been walked, resolveAll() runs one cross-blob
-    // resolution pass.  Memory note: the blob bytes are copied into
-    // the deserializer's internal reader (std::vector copy on
-    // QoreAOTBinaryReader::open), so extracted_frags can go out of
-    // scope after resolveAll returns.
-    std::vector<QoreAOTExtractedFragment> extracted_frags;
-    std::unique_ptr<QoreAOTBinaryMultiDeserializer> sibling_mdes;
-    if (!library_paths.empty()) {
-        // Scan each -L dir.
-        for (const std::string& libdir : library_paths) {
-            ExceptionSink scan_xsink;
-            QoreString regex(".+\\.qo$");
-            QoreDir dir(&scan_xsink, QCS_DEFAULT, libdir.c_str());
-            if (scan_xsink.isException()) {
-                scan_xsink.handleExceptions();
-                error = "cannot open -L directory: " + libdir;
-                return false;
-            }
-            ReferenceHolder<QoreListNode> files(
-                dir.list(&scan_xsink, S_IFREG, &regex), &scan_xsink);
-            if (scan_xsink.isException()) {
-                scan_xsink.handleExceptions();
-                error = "cannot list -L directory: " + libdir;
-                return false;
-            }
-            if (!files) {
-                continue;
-            }
-            for (size_t i = 0; i < files->size(); ++i) {
-                QoreValue fn_val = files->retrieveEntry(i);
-                if (fn_val.getType() != NT_STRING) {
-                    continue;
-                }
-                QoreStringValueHelper fn(fn_val);
-                std::string qo_path = libdir + "/" + fn->c_str();
-                if (!output_canon.empty()) {
-                    char* qo_real = realpath(qo_path.c_str(), nullptr);
-                    if (qo_real) {
-                        bool skip = output_canon == qo_real;
-                        qo_path = qo_real;
-                        free(qo_real);
-                        if (skip) {
-                            continue;
-                        }
-                    }
-                }
-                if (!readQoFragmentBlobs(qo_path, extracted_frags, error)) {
-                    return false;
-                }
-            }
+    // Preload the siblings this compile is not producing, so cross-file type
+    // references in the target resolve at parse time.
+    QoreAOTSiblingPreload sibling_preload;
+    {
+        std::unordered_set<std::string> skip_objects;
+        if (!output_canon.empty()) {
+            skip_objects.insert(output_canon);
         }
-
-        // Drop siblings whose source file the target parse already
-        // declared (the target plus its `%include`d files).  Their
-        // declarations already exist in the program from the parse
-        // above; preloading the corresponding `.qo` shells would
-        // re-register the same hashdecl/class and abort the parse.  The
-        // target's own bootstrap `.qo` is dropped here too (its label is
-        // target_canon), so a stale self-`.qo` in the `-L` dir cannot
-        // shadow the freshly parsed declarations.
-        if (!extracted_frags.empty()) {
-            std::vector<QoreAOTExtractedFragment> kept;
-            kept.reserve(extracted_frags.size());
-            size_t frag_i = 0;
-            for (auto& frag : extracted_frags) {
-                if (frag_i && !(frag_i % 100)
-                        && qore_check_cancel(nullptr, "AOT sibling label collection")) {
-                    error = "operation cancelled during AOT sibling label collection";
-                    return false;
-                }
-                std::string label;
-                {
-                    QoreAOTBinaryReader lbl_reader;
-                    std::string lbl_err;
-                    if (lbl_reader.open(frag.bytes.data(),
-                            static_cast<uint32_t>(frag.bytes.size()), lbl_err)) {
-                        const char* l = lbl_reader.getLabel();
-                        if (l) {
-                            label = l;
-                        }
-                    }
-                }
-                bool skip = false;
-                if (!label.empty()) {
-                    char* rp = realpath(label.c_str(), nullptr);
-                    const std::string key = rp ? std::string(rp) : label;
-                    if (rp) {
-                        free(rp);
-                    }
-                    skip = parsed_decl_files_canon.count(key) != 0;
-                    if (!skip) {
-                        // Remember the canonical source label of every PRELOADED
-                        // sibling so the dependency sink (which records the
-                        // source file of every declaration the target resolves)
-                        // can be narrowed to just these siblings for the depfile.
-                        sibling_source_labels.insert(key);
-                    }
-                }
-                if (!skip) {
-                    kept.push_back(std::move(frag));
-                }
-                ++frag_i;
-            }
-            extracted_frags = std::move(kept);
-        }
-
-        for (const auto& frag : extracted_frags) {
-            QoreAOTBinaryReader index_reader;
-            std::string index_error;
-            if (!index_reader.open(frag.bytes.data(),
-                    static_cast<uint32_t>(frag.bytes.size()), index_error)) {
-                continue;
-            }
-            // Fast-entry metadata describes the sibling's LOWERED BODY, so a
-            // sibling whose source has changed since its `.qo` was written
-            // describes a body that no longer exists: the entry may be gone (a
-            // hidden `_fast` symbol this object would then require but nothing
-            // defines) or its effect summary may have changed.  Importing it
-            // would make the outcome depend on the order in which the build
-            // rebuilds the two objects.  Skip the import instead — the ordinary
-            // name-resolved call path is always correct — and let the recorded
-            // build dependency rebuild this object once the sibling is current.
-            if (aotFragmentSourceIsStale(index_reader)) {
-                continue;
-            }
-            QoreAOTSymbolIndex index;
-            if (!readSymbolIndex(index_reader, index, index_error)) {
-                error = "cannot read sibling fast-entry metadata from '"
-                    + frag.symbol_name + "': " + index_error;
-                return false;
-            }
-            size_t native_i = 0;
-            for (const QoreAOTSymbolIndexRecord& rec : index.native) {
-                if (native_i && !(native_i % 100)
-                        && qore_check_cancel(nullptr,
-                            "AOT sibling fast-entry metadata collection")) {
-                    error = "operation cancelled during AOT sibling fast-entry metadata collection";
-                    return false;
-                }
-                ++native_i;
-                if ((rec.abi_kind != "qore_fast_v1"
-                        && rec.abi_kind != "qore_summary_v1")
-                        || rec.qore_path.empty()
-                        || ambiguous_sibling_fast_entries.count(rec.qore_path)) {
-                    continue;
-                }
-                auto [it, inserted] = sibling_fast_entries.emplace(rec.qore_path, rec);
-                if (!inserted) {
-                    sibling_fast_entries.erase(it);
-                    ambiguous_sibling_fast_entries.insert(rec.qore_path);
-                }
-            }
-        }
-
-        // Phase 1 via multi-deserializer.  Only create sibling shells here.
-        // The target source is parsed before Phase 2 below so siblings that
-        // depend on target declarations can resolve cleanly during the later
-        // cross-blob pass.
-        if (!extracted_frags.empty()) {
-            // Defensive: pre-load each sibling fragment's module dependencies
-            // through the normal parse-time loader before the blob preload
-            // below injects their module-contributed namespaces.  AOT blob
-            // deserialization adds namespaces such as "Json" (from the json
-            // module) directly; if the contributing module is not also
-            // registered with the program's feature tracker, a later load of
-            // the same module -- the target source's own `%requires`, or a
-            // defensive load_module() -- takes the slow path and tries to
-            // re-inject the namespace, raising
-            // "Namespace 'X' already exists in '::Qore'".  parseLoadModule()
-            // is idempotent (an already-loaded module is a no-op), so loading
-            // the deps here keeps the feature tracker consistent and prevents
-            // that collision even if a later phase aborts and the bootstrap is
-            // retried.  Mirrors the runtime batch path
-            // (QoreAOTRuntime.cpp qore_aot_script_end_batch).  Best-effort:
-            // deps that cannot be resolved here are left to the normal target
-            // parse to load and report.
-            for (auto& frag : extracted_frags) {
-                std::vector<std::string> deps;
-                std::string dep_error;
-                if (!readDependencies(frag.bytes.data(),
-                        static_cast<uint32_t>(frag.bytes.size()), deps, dep_error)) {
-                    continue;
-                }
-                for (const std::string& dep : deps) {
-                    SimpleRefHolder<QoreStringNode> derr(
-                        MM.parseLoadModule(dep.c_str(), *qpgm));
-                }
-            }
-
-            ExceptionSink pch_xsink;
-            ProgramRuntimeParseContextHelper pch(&pch_xsink, *qpgm);
-            if (pch_xsink.isException()) {
-                pch_xsink.handleExceptions();
-                error = "failed to set parse context for sibling preload";
-                return false;
-            }
-            auto mdes = std::make_unique<QoreAOTBinaryMultiDeserializer>(*qpgm);
-            bool preload_failed = false;
-            std::string deser_error;
-            for (auto& frag : extracted_frags) {
-                if (!mdes->addBlob(frag.bytes.data(),
-                        static_cast<uint32_t>(frag.bytes.size()),
-                        deser_error)) {
-                    error = "preload of '" + frag.symbol_name + "' failed: "
-                        + deser_error;
-                    preload_failed = true;
-                    break;
-                }
-            }
-            if (!preload_failed) {
-                mdes->rebuildShellIndexes();
-                sibling_mdes = std::move(mdes);
-            }
-            if (preload_failed) {
-                return false;
-            }
+        if (!sibling_preload.load(*qpgm, library_paths, parsed_decl_files_canon,
+                skip_objects, error)) {
+            return false;
         }
     }
+    std::unique_ptr<QoreAOTBinaryMultiDeserializer>& sibling_mdes = sibling_preload.mdes;
+    std::unordered_set<std::string>& sibling_source_labels = sibling_preload.source_labels;
+    std::unordered_map<std::string, QoreAOTSymbolIndexRecord>& sibling_fast_entries =
+        sibling_preload.fast_entries;
 
     // Parse the target source.  With siblings preloaded (minus the ones
     // for the target's own `%include`d files, which were filtered out of

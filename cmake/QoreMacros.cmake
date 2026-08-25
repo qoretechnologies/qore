@@ -852,6 +852,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     endif ()
     set(_qore_qcc_bootstrap_stamp)
     set(_qore_qcc_bootstrap_target)
+    set(_qore_qcc_subset_script)
     # CMake 3.28+ can tell Unix Makefiles that these recipes are jobserver
     # clients. This is essential with older GNU make (including Apple's 3.81),
     # whose pipe descriptors are closed for ordinary recipes. GNU make 4.4's
@@ -901,7 +902,42 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         string(APPEND _qore_qcc_batch_cmd "\n")
         QORE_WRITE_IF_CHANGED("${_qore_qcc_batch_script}" "${_qore_qcc_batch_cmd}")
 
+        # One shared parse over PART of the group: the sources named on the
+        # command line are compiled together, and the members the caller did not
+        # name are preloaded from the object directory as sibling `.qo` decls.
+        #
+        # Without this the only shared parse a build could run was the whole
+        # group, and the coordinator had to choose between compiling components
+        # one at a time and reparsing every source in the group.  For a group
+        # whose components are mostly singletons that made one edit to a member
+        # of a 35-source component -- or to a source with a handful of consumers
+        # -- reparse hundreds of sources that were already current.
+        #
+        # It deliberately writes no group-level artifacts: the batch stamp
+        # depfile and the bootstrap aggregate describe the WHOLE group, and a
+        # partial parse cannot honestly rewrite either.
+        set(_qore_qcc_subset_script "${_QORE_QCO_SCRIPT_DIR}/qcc-subset.sh")
+        set(_qore_qcc_subset_cmd "#!/bin/sh\nset -e\nQORE_INCLUDE_DIR='${_QORE_QCO_INCLUDE_DIR}' QORE_MODULE_DIR='${_QORE_QCO_MODULE_DIR}' exec '${_qore_qcc_command}'")
+        foreach(_qore_qcc_arg
+                ${_qore_qcc_warning_flags}
+                ${_qore_qcc_stub_flags}
+                ${_qore_qcc_load_flags}
+                ${_qore_qcc_define_flags}
+                ${_qore_qcc_parse_option_flags}
+                ${_qore_qcc_source_symbol_flags}
+                ${_qore_qcc_metadata_compression_flags}
+                ${_qore_qcc_manifest_input_flags})
+            set(_qore_qcc_subset_cmd "${_qore_qcc_subset_cmd} '${_qore_qcc_arg}'")
+        endforeach()
+        set(_qore_qcc_subset_cmd "${_qore_qcc_subset_cmd} -c -L '${_QORE_QCO_OUTPUT_DIR}' --batch-build-sidecars --depfile-compile-contract-stamps --depfile-source-content-map='${_qore_qcc_source_content_map}' --output-dir='${_QORE_QCO_OUTPUT_DIR}' --depfile-dir='${_QORE_QCO_OUTPUT_DIR}' \"$@\"\n")
+        QORE_WRITE_IF_CHANGED("${_qore_qcc_subset_script}" "${_qore_qcc_subset_cmd}")
+
         add_custom_command(OUTPUT ${_qore_qcc_bootstrap_stamp}
+            # Dates the group's last whole-group publication for the frozen
+            # dependency graph.  It cannot be the stamp above: that one is also
+            # the build tool's ordering token, so this recipe touches it even
+            # when it publishes nothing.
+            BYPRODUCTS ${_qore_qcc_bootstrap_stamp}.publication
             COMMAND ${CMAKE_COMMAND} -E make_directory ${_QORE_QCO_OUTPUT_DIR}
             COMMAND ${CMAKE_COMMAND} -E make_directory
                 ${_qore_qcc_bootstrap_aggregate_dir}
@@ -958,6 +994,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             COMMAND ${CMAKE_COMMAND} -E env
                 "QORE_QCC_QORE_EXECUTABLE=${QORE_EXECUTABLE}"
                 "QORE_QCC_GRAPH_SNAPSHOT=${_qore_qcc_graph_snapshot}"
+                "QORE_QCC_SUBSET_SCRIPT=${_qore_qcc_subset_script}"
                 ${_qore_qcc_incremental_plan_helper}
                     ${_qore_qcc_context_path}
                     ${_qore_qcc_incremental_plan_stamp}
@@ -973,6 +1010,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                 ${_qore_qcc_bootstrap_stamp}
                 ${_qore_qcc_context_path}
                 ${_qore_qcc_batch_script}
+                ${_qore_qcc_subset_script}
                 ${_qore_qcc_single_script}
                 ${_qore_qcc_incremental_plan_helper}
                 ${_qore_qcc_incremental_helper}
@@ -1116,6 +1154,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                 COMMAND ${CMAKE_COMMAND} -E make_directory ${_QORE_QCO_OUTPUT_DIR}
                 COMMAND ${CMAKE_COMMAND} -E env
                     "QORE_QCC_BATCH_BOOTSTRAP_STAMP=${_qore_qcc_bootstrap_stamp}"
+                    "QORE_QCC_SUBSET_SCRIPT=${_qore_qcc_subset_script}"
                     "QORE_QCC_PREREQUISITES_ORDERED=1"
                     "QORE_QCC_QORE_EXECUTABLE=${QORE_EXECUTABLE}"
                     "QORE_QCC_GRAPH_SNAPSHOT=${_qore_qcc_graph_snapshot}"
@@ -1235,8 +1274,12 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
     if (_qore_qcc_batch_script)
         list(APPEND _qore_qcc_managed_files
             "${_qore_qcc_batch_script}"
+            "${_qore_qcc_subset_script}"
             "${_qore_qcc_bootstrap_stamp}"
-            "${_qore_qcc_bootstrap_stamp}.d")
+            "${_qore_qcc_bootstrap_stamp}.d"
+            # Dates the group's last shared parse for the frozen dependency
+            # graph; see the batch bootstrap helper.
+            "${_qore_qcc_bootstrap_stamp}.publication")
     endif ()
     if (_qore_qcc_incremental_plan_stamp)
         list(APPEND _qore_qcc_managed_files

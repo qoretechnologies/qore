@@ -955,7 +955,8 @@ public:
             const std::string* script_aggregate_symbol = nullptr,
             bool script_aggregate_native_registers = false,
             int* script_aggregate_compiled_count_out = nullptr,
-            std::vector<QoreAOTSourceFingerprint>* source_fingerprints = nullptr);
+            std::vector<QoreAOTSourceFingerprint>* source_fingerprints = nullptr,
+            const std::vector<std::string>& library_paths = {});
 
     //! True when a script aggregate carries declarations only and lowers no Qore code bodies.
     /**

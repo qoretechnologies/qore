@@ -9196,7 +9196,14 @@ int main(int argc, char** argv) {
     // application from overwriting each other.  This avoids
     // compileScriptFile's O(N^2) sibling-preload cost when the build
     // system invokes qcc per-file.
-    if (compile_only && !context_dir && (optind + 1 < argc)) {
+    // Batch mode is also how a build compiles ONE source with the batch's
+    // sidecar and depfile conventions: a shared parse over part of a group can
+    // legitimately have a single member, and routing it through the per-file
+    // path instead would reject the batch-only flags it was given.
+    if (compile_only && !context_dir
+            && (optind + 1 < argc
+                || (batch_output_dir && optind < argc
+                    && (batch_build_sidecars || depfile_dir)))) {
         if (!batch_output_dir) {
             fprintf(stderr, "error: multiple source files require "
                 "--output-dir=<dir> (batch-compile mode)\n");
@@ -9205,11 +9212,6 @@ int main(int argc, char** argv) {
         if (output_path) {
             fprintf(stderr, "error: -o <file> is single-output; use "
                 "--output-dir=<dir> with multiple sources\n");
-            return 1;
-        }
-        if (!script_lib_dirs.empty()) {
-            fprintf(stderr, "error: -L <dir> is per-file-compile only; "
-                "not needed in batch mode (sources share one parse)\n");
             return 1;
         }
         if (qcc_single_output_sidecars_requested()
@@ -9294,7 +9296,11 @@ int main(int argc, char** argv) {
             batch_script_aggregate_symbol ? &aggregate_symbol_arg : nullptr,
             script_aggregate_native_registers,
             batch_script_aggregate_output ? &aggregate_compiled_count : nullptr,
-            &observed_source_fingerprints);
+            &observed_source_fingerprints,
+            // A batch over PART of a group resolves its remaining cross-member
+            // references against these; a whole-group batch is given none,
+            // because every declaration it needs is in the same parse.
+            script_lib_dirs);
         qore_aot_set_module_dep_sink(nullptr);
         if (!ok) {
             fprintf(stderr, "error: %s\n", error.c_str());

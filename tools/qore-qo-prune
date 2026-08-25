@@ -37,6 +37,10 @@ const QO_SUFFIXES = (
 const SCRIPT_FILES = (
     ".qcc-batch-bootstrap.stamp": True,
     ".qcc-batch-bootstrap.stamp.d": True,
+    # Dates the group's last shared parse for the frozen dependency graph. It is
+    # a separate file because the stamp beside it is also the build tool's
+    # ordering token, which recipes that publish nothing touch.
+    ".qcc-batch-bootstrap.stamp.publication": True,
     ".qcc-incremental-plan.stamp": True,
     ".qcc-bootstrap.stamp": True,
     ".qcc-generation.map": True,
@@ -46,6 +50,7 @@ const SCRIPT_FILES = (
     "build-deps.cmake": True,
     "direct-deps.cmake": True,
     "qcc-batch.sh": True,
+    "qcc-subset.sh": True,
     "qcc-bootstrap.sh": True,
     "qcc-single.sh": True,
     "scc-map.cmake": True,
@@ -168,6 +173,11 @@ bool sub is_owned_file_name(string path, string name) {
     # recursive make can leave either regular file behind; both are helper-owned
     # and must be recoverable at the next configure.
     if (name =~ /^\.qcc-(batch-)?bootstrap\.stamp\.lock(\.[0-9]+)?$/) {
+        return True;
+    }
+    # The pre-image qore-qo-batch-bootstrap keeps while a shared parse runs, so a
+    # parse that fails can put the ordering token back.  A SIGKILL leaves it.
+    if (name =~ /^\.qcc-(batch-)?bootstrap\.stamp\.pre\.[0-9]+$/) {
         return True;
     }
     # emitObjectFile() atomically publishes .qo files through a
