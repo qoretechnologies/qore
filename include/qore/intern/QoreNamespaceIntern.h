@@ -1074,18 +1074,25 @@ public:
 
 class NamespaceDepthListIterator {
     NamespaceDepthList::nsdmap_t::iterator i, e;
+    // the iterator is positioned before the first element until next() is called for the first time
+    bool start = true;
+
 public:
     DLLLOCAL NamespaceDepthListIterator(NamespaceDepthList& m) : i(m.nsdmap.begin()), e(m.nsdmap.end()) {
     }
 
     DLLLOCAL bool next() {
-        if (i == e)
-            return false;
-        ++i;
+        if (start) {
+            start = false;
+        } else if (i != e) {
+            ++i;
+        }
         return i != e;
     }
 
     DLLLOCAL qore_ns_private* get() const {
+        assert(!start);
+        assert(i != e);
         assert(i->second);
         return i->second;
     }

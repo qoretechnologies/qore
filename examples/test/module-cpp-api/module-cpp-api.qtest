@@ -64,6 +64,7 @@ class ModuleCppApiTest inherits QUnit::Test {
         addTestCase("calls through the resolved struct", \callTest());
         addTestCase("opaque handles", \handleTest());
         addTestCase("on-demand loading", \loadTest());
+        addTestCase("namespace class handler", \classHandlerTest());
         set_return_value(main());
     }
 
@@ -185,5 +186,30 @@ class ModuleCppApiTest inherits QUnit::Test {
         list<string> features = p.getFeatureList();
         assertTrue(features.contains("cppapiuser"), "the required consumer is a feature");
         assertFalse(features.contains("cppapitest"), "the resolved producer is not a feature");
+    }
+
+    #! a namespace class handler is consulted when a class cannot be resolved by any other means
+    /** cppapiuser registers its handler on the root namespace, which is the shallowest entry in
+        the root namespace's depth list.  That position is what makes this a regression test: an
+        off-by-one in NamespaceDepthListIterator that advanced before its first dereference dropped
+        exactly the shallowest entry, so the handler was never consulted and the class could not be
+        resolved at all.
+    */
+    classHandlerTest() {
+        # a single parse resolves the class twice: the first reference goes through the handler,
+        # the second finds the class the handler added to the namespace
+        Program p(PO_MODERN);
+        p.loadModule("cppapiuser");
+        p.parse("string sub f() { return CppApiHandledClass::marker(); }\n"
+            "string sub g() { return CppApiHandledClass::marker(); }", "class-handler");
+        assertEq("handled", p.callFunction("f"), "handler-provided class resolves and runs");
+        assertEq("handled", p.callFunction("g"), "the class the handler added is reusable");
+
+        # the handler declines every other name, so normal resolution failures are unaffected
+        Program p2(PO_MODERN);
+        p2.loadModule("cppapiuser");
+        assertThrows("PARSE-EXCEPTION", "NoSuchHandledClass",
+            \p2.parse(), ("string sub h() { return NoSuchHandledClass::marker(); }",
+                "class-handler-negative"));
     }
 }

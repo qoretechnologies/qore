@@ -38,7 +38,7 @@ on a match:
 | 1 | the `::Qore` subtree, shallowest match wins | `parseFindQore*Intern()`, gated on `!useBrokenNamespaceResolutionParse()` |
 | 2 | the namespace currently being parsed, own symbols only | `parse_get_ns()` + a `parseFindLocal*()` / list `find()` call |
 | 3 | the whole tree, shallowest match wins | the root index (`clmap`, `fmap`, `cnmap`, …) |
-| 4 | namespaces with a class handler, by increasing depth | `NamespaceDepthListIterator` over `nshlist` — classes only |
+| 4 | every namespace by increasing depth, consulting any class handler | `NamespaceDepthListIterator` over `nshlist` — classes only |
 
 Two lookups happen *before* step 1 where the context provides them, and they are not part of
 namespace resolution proper:
@@ -167,25 +167,26 @@ on; `%strict-warnings` or naming it explicitly does.
 The re-walk is O(namespaces) per call site, which is why it is off by default and behind
 `%require-types` rather than being folded into the resolution path itself.
 
-## Known defects
+## The depth list
 
-`NamespaceDepthListIterator::next()` advances before its first dereference:
+Step 4 iterates `nshlist`, a `multimap<depth, ns>` whose name and comment ("root namespace with
+handler map") suggest it holds only namespaces with a class handler. It does not:
+`rebuildIndexes()` adds **every** namespace unconditionally, and `rebuildAllIndexes()` — which
+`commitModule()` calls on every binary-module load — clears and repopulates it with the whole tree.
+`setClassHandler()` adds an entry too, but that entry does not survive the next rebuild; what
+survives is the `class_handler` member on the namespace itself, which is what `findLoadClass()`
+actually consults.
 
-```cpp
-DLLLOCAL NamespaceDepthListIterator(NamespaceDepthList& m) : i(m.nsdmap.begin()), e(m.nsdmap.end()) {
-}
+So step 4 is a depth-ordered walk of every namespace that calls `findLoadClass()` on each, and it
+only adds anything beyond step 3 for a namespace with a handler installed. The shallowest entry is
+the root namespace at depth 0.
 
-DLLLOCAL bool next() {
-    if (i == e) {
-        return false;
-    }
-    ++i;
-    return i != e;
-}
-```
-
-so the shallowest namespace in `nshlist` is never visited, and a program with exactly one namespace
-carrying a class handler never consults that handler at all. `NamespaceMapIterator::next()` in the
-same header shows the correct idiom (start at `end()`, wrap to `begin()` on the first call). Nothing
-in this repository calls `QoreNamespace::setClassHandler()`, so the defect is only reachable from
-out-of-tree binary modules, which is why it has gone unnoticed.
+That last detail is why `NamespaceDepthListIterator::next()` incrementing before its first
+dereference was a real defect rather than a cosmetic one: it dropped exactly the depth-0 entry, so a
+class handler registered on the root namespace was never consulted and the classes it provides could
+not be resolved at all. The iterator now stays positioned before the first element until the first
+`next()` call, matching `NamespaceMapIterator::next()` in the same header.
+`examples/test/module-cpp-api/module-cpp-api.qtest` covers it: the `cppapiuser` test module
+registers a handler on the root namespace, and the test fails with
+`cannot resolve call 'CppApiHandledClass::marker()' to any reachable and callable object` if the
+off-by-one returns.
