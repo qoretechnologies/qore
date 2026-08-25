@@ -17,6 +17,7 @@
     @endcode
 
     @par List of All Warnings
+    - @ref ambiguous-call-resolution
     - @ref warning-broken-logic-precedence broken-logic-precedence
     - @ref call-with-type-errors
     - @ref deprecated-warning
@@ -28,6 +29,7 @@
     - @ref invalid-catch
     - @ref invalid-operation
     - @ref module-only
+    - @ref non-exhaustive-switch
     - @ref non-existent-method-call
     - @ref return-value-ignored
     - @ref undeclared-var
@@ -35,6 +37,36 @@
     - @ref unreachable-code
     - @ref unreferenced-variable
     - @ref warning-mask-unchanged
+
+    <hr>
+    @section ambiguous-call-resolution ambiguous-call-resolution
+    Raised when a @ref qore_functions "function" is called with no @ref namespace_paths "namespace path" and functions with that name exist in more than one namespace, so that the call could resolve differently if unrelated code or modules were loaded.  See @ref ambiguous_symbol_resolution "ambiguous resolution" for the resolution rules that make the call ambiguous.\n\n
+    This is a strict warning: it is not included in @ref enable-all-warnings "%enable-all-warnings" and must be enabled explicitly, either by name or with @ref strict-warnings "%strict-warnings".  It additionally requires @ref require-types "%require-types" (implied by @ref modern "%modern").  It is never raised in a @ref user_modules "user module", nor for a call that resolves to the @ref Qore "Qore" namespace or to the namespace currently being parsed.
+
+    For example:
+
+    @code{.py}
+%require-types
+%enable-warning ambiguous-call-resolution
+
+namespace A {
+    int sub f() { return 1; }
+}
+namespace B {
+    int sub f() { return 2; }
+}
+
+f();
+    @endcode
+
+    produces:
+
+    @verbatim
+AMBIGUOUS-CALL-RESOLUTION: call to function 'f()' is ambiguous; matches: 'A::f()', 'B::f()'; resolved to 'B::f()'; use a fully-qualified namespace path in the call or rename the object to remove ambiguity
+    @endverbatim
+
+    Note that which of the two candidates wins is unspecified, which is precisely what the warning reports.  Silence it by giving the call an explicit @ref namespace_paths "namespace path" (<tt>A::f()</tt>) or by renaming one of the functions.
+    @since %Qore 3.0
 
     <hr>
     @section warning-broken-logic-precedence broken-logic-precedence

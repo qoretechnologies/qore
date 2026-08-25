@@ -25,13 +25,60 @@
 
     @anchor namespace_resolution
     @par Namespace Resolution
-    Namespaces can either be resolved by giving a path to the constant, class, function, global variable, or namespace desired, or by leaving out the namespace path and allowing the system to search for the constant, class, function, global variable, or namespace. In either case, a depth-first search of the namespace tree is made for a match.\n\n
-    If a namespace path is included, then the tree is searched for the first namespace match, and, if the rest of the declaration cannot be matched, the search continues in the entire namespace tree until a complete match is found.
+    Symbols (@ref constants "constants", @ref qore_classes "classes", @ref qore_functions "functions", @ref our "global variables", @ref hashdecl "hashdecls", @ref enums "enums", and namespaces themselves) can be resolved either by giving an explicit @ref namespace_paths "namespace path" to the symbol desired, or by leaving out the namespace path and allowing the system to search for the symbol.  The two cases use different algorithms, described in the following sections.\n\n
+    Both algorithms are ordered by <b>namespace depth</b>.  The depth of a namespace is the number of namespaces between it and the root namespace, so a namespace declared directly in the root namespace has a depth of 1, a namespace declared inside that namespace has a depth of 2, and so on.  When more than one namespace can provide a match, <b>the match in the shallowest namespace wins</b>.
+
+    @anchor unqualified_symbol_resolution
+    @par Unqualified Symbol Resolution
+    When a symbol is used with no namespace path, the following steps are made in order; the first step that produces a match determines the result:
+    |!Step|!Search|!Description
+    |1|@ref Qore "Qore" namespace|The @ref Qore "Qore" namespace and all of its subnamespaces are searched, and the match in the shallowest namespace wins.  This step is skipped if @ref broken-namespace-resolution "%broken-namespace-resolution" is set.
+    |2|Current namespace|The namespace currently being parsed is searched, but only for symbols declared directly in that namespace; its subnamespaces are not searched in this step.
+    |3|All namespaces|Every namespace in the tree is searched, and the match in the shallowest namespace wins.
+    |4|Class handlers|Namespaces with a class handler installed by a binary module are queried in order of increasing depth.  This step applies to classes only.
+
+    Step 1 means that a user-defined symbol can never shadow a symbol in the @ref Qore "Qore" namespace when the symbol is used without a namespace path; use an explicit @ref namespace_paths "namespace path" to reach a user-defined symbol whose name collides with a built-in symbol.\n\n
+    Two additional lookups are made before the steps above when the context allows it:
+    - when resolving a @ref constants "constant" or a bareword inside a class, the class's own constants (including those inherited from base classes) are searched first
+    - when resolving a @ref qore_functions "function" call inside a class, the class's methods are searched first
+
+    @anchor qualified_symbol_resolution
+    @par Qualified Symbol Resolution
+    When a symbol is given with a @ref namespace_paths "namespace path" such as <tt>A::B::sym</tt>, every namespace <b>named</b> \c A is a candidate, no matter where in the namespace tree it appears; the leading component of a namespace path is a namespace <i>name</i>, not a path from the root namespace.  Candidates are tried in order of increasing depth, and for each candidate the remaining components of the path (here <tt>B::sym</tt>) must match relative to that candidate.  If the rest of the path cannot be matched under one candidate, the search continues with the next candidate until a complete match is found.\n\n
+    The @ref Qore "Qore"-namespace preference described under @ref unqualified_symbol_resolution "unqualified symbol resolution" does <b>not</b> apply here: a namespace path is matched purely by name and depth.\n\n
+    When no complete match is found, the parse error identifies the deepest path component that could be matched, which distinguishes a misspelled namespace from a missing symbol:
+    @code{.py}
+namespace A {
+    namespace B {
+        const MyConst = 1;
+    }
+}
+
+# PARSE-EXCEPTION: cannot find any namespace or class 'C' in 'A::C::MyConst' providing a constant or
+# static class variable 'MyConst'
+A::C::MyConst;
+
+# PARSE-EXCEPTION: cannot resolve bareword 'MyOtherConst' to any reachable object in any namespace or
+# class 'A::B'
+A::B::MyOtherConst;
+    @endcode
+
+    @anchor ambiguous_symbol_resolution
+    @par Ambiguous Resolution
+    When two namespaces at the same depth both provide a match in step 3 above, which one wins is unspecified and can change when unrelated code or modules are loaded.  To make this visible, %Qore raises the @ref ambiguous-call-resolution "ambiguous-call-resolution" warning when an unqualified function call matches functions in more than one namespace; the warning requires @ref require-types "%require-types" and is not raised for calls resolved to the @ref Qore "Qore" namespace or to the namespace currently being parsed.  Resolve the ambiguity by using an explicit @ref namespace_paths "namespace path" in the call or by renaming one of the functions.
+
+    @anchor legacy_namespace_resolution
+    @par Legacy Resolution
+    Before %Qore 3.0, step 1 above did not exist, and a user-defined symbol declared in a shallower namespace than its built-in counterpart would silently shadow the built-in symbol.  Set @ref broken-namespace-resolution "%broken-namespace-resolution" (or @ref Qore::PO_BROKEN_NAMESPACE_RESOLUTION "PO_BROKEN_NAMESPACE_RESOLUTION" when setting up a @ref Qore::Program "Program" object) to restore the old behavior for legacy code; @ref correct-namespace-resolution "%correct-namespace-resolution" reverts it again.
 
     @anchor namespace_paths
     @par Namespace Paths
     Namespace paths look like the following:\n
     - <em>starting_namespace::[sub_namespace(s)s::]constant|class|namespace</em>
+    - <tt>::</tt><em>root_namespace::[sub_namespace(s)::]constant|class|namespace</em>
+
+    The first form is <b>relative</b>: <em>starting_namespace</em> is a namespace <i>name</i>, and any namespace with that name matches, no matter how deeply it is nested (see @ref qualified_symbol_resolution "qualified symbol resolution").  The second form, with a leading <tt>::</tt>, is <b>anchored</b> to the root namespace, so <em>root_namespace</em> must be a namespace declared directly in the root namespace.\n\n
+    For example, given a namespace \c Inner declared inside \c Outer, the path <tt>Inner::MyConst</tt> resolves, while <tt>::Inner::MyConst</tt> does not, because \c Inner is not a root-level namespace.
 
     @par Example
     @code{.py}
