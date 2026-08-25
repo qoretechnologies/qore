@@ -167,8 +167,9 @@ public class AbstractDataField inherits Qore::Serializable {
 
             Compared in lower case.
 
-            @note This list is English-specific; use the \c extra_acronyms argument to
-            @ref getDisplayName() to override the classification of any word
+            @note This list is English-specific and is the one used when @ref getDisplayName() is called
+            without a language; with one, that language's function words are used instead.  Use the
+            \c extra_acronyms argument to @ref getDisplayName() to override the classification of any word
 
             @since DataProvider 3.8
         */
@@ -932,12 +933,14 @@ public class AbstractDataField inherits Qore::Serializable {
 
         @return the display name corresponding to the technical name
 
-        @note Case conversions use locale-independent Unicode case mappings, with the exception that the final
-        form of the Greek sigma is used at the end of a word; language-specific mappings (ex: the Turkish
-        dotless \c i) are not applied
+        @note Without \a locale, case conversions use the locale-independent Unicode case mappings, with the
+        exception that the final form of the Greek sigma is used at the end of a word; language-specific
+        mappings (ex: the Turkish dotted and dotless \c i) are applied only when \a locale is given
 
-        @note The @ref FunctionWords rule and the English title-case convention it implements are
-        English-specific; use the \c extra_acronyms argument to override the classification of any word
+        @note Without \a locale the @ref FunctionWords rule and the English title-case convention it
+        implements are applied whatever language the technical name is in; give \a locale to render with
+        that language's own capitalization convention and function words.  The \c extra_acronyms argument
+        overrides the classification of any word in either case
 
         @since DataProvider 3.6 words in upper case are case-folded, and case handling is Unicode-aware in all
         scripts
