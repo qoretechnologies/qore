@@ -121,6 +121,8 @@ class QoreApiMetadataTest inherits QUnit::Test {
         addTestCase("doxygen: DocCommentParser @par handling", \testDocCommentParserPar());
         addTestCase("doxygen: integration pipeline", \testDoxygenIntegrationPipeline());
         addTestCase("doxygen: all text fields converted", \testDoxygenAllFieldsConverted());
+        addTestCase("doc comment deferred past namespaces", \testDocCommentDeferredPastNamespaces());
+        addTestCase("doc comment not deferred across content", \testDocCommentNotDeferredAcrossContent());
         set_return_value(main());
     }
 
@@ -2092,6 +2094,61 @@ class QoreApiMetadataTest inherits QUnit::Test {
         input = "first" + "\\" + "n" + "second";
         result = QoreApiMetadata::DoxygenToMarkdown::convert(input);
         assertEq("first\nsecond", result);
+    }
+
+    #! A class wrapped in namespace blocks still gets the doc comment written above them
+    /** The parser attaches such a comment to the OUTERMOST namespace, so the class
+        itself reports no docComment.  Qore's own convention writes base classes this
+        way -- and so does Qorus, where it left `QorusService`, `QorusWorkflow`,
+        `QorusJob` and every step base class with no description in the generated API
+        metadata, and therefore an IDE hover showing nothing but the name already under
+        the cursor.
+    */
+    testDocCommentDeferredPastNamespaces() {
+        string source = "%new-style\n"
+            "#! The base class for services\n"
+            "/** Constructors take no arguments.\n"
+            "*/\n"
+            "public namespace Outer {\n"
+            "public namespace Inner {\n"
+            "public class Wrapped {\n"
+            "}\n"
+            "}\n"
+            "}\n";
+
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::AstMetadataExtractor::extractFromString(source);
+
+        # the extractor returns namespaces keyed by the DECLARING namespace, so the
+        # class lands under "Inner" rather than under a nested Outer -> Inner chain
+        *hash<auto> inner = result.namespaces[0];
+        assertEq("Inner", inner.name);
+        assertEq(1, inner.classes.size());
+        hash<QoreApiMetadata::ClassInfo> ci = inner.classes[0];
+        assertEq("Wrapped", ci.name);
+        assertEq("The base class for services\n\nConstructors take no arguments.",
+            ci.description);
+    }
+
+    #! A comment is claimed only when nothing but namespace openings separate it
+    testDocCommentNotDeferredAcrossContent() {
+        # the namespace has its own documented content before the class, so the comment
+        # documents the NAMESPACE and must not be stolen by the class
+        string source = "%new-style\n"
+            "#! Documents the namespace itself\n"
+            "public namespace Outer {\n"
+            "    const Unrelated = 1;\n"
+            "    public class Undocumented {\n"
+            "    }\n"
+            "}\n";
+
+        hash<QoreApiMetadata::NamespaceInfo> result =
+            QoreApiMetadata::AstMetadataExtractor::extractFromString(source);
+
+        *hash<auto> outer = result.namespaces[0];
+        assertEq("Outer", outer.name);
+        assertEq(1, outer.classes.size());
+        assertEq(NOTHING, outer.classes[0].description);
     }
 
     testDocCommentParserBugFix() {

@@ -143,12 +143,22 @@ public class AstMetadataExtractor {
             if (exists sym.docComment) {
                 doc = string(sym.docComment);
             }
+
+            int line = int(sym.location.range.start.line);
+
+            # A declaration wrapped in namespace blocks does not receive the doc
+            # comment written above it -- the parser gives it to the outermost
+            # NAMESPACE -- so recover it from the source.  See
+            # findDeferredDocComment().
+            if (!exists doc || !doc.length()) {
+                doc = AstMetadataExtractor::findDeferredDocComment(source_lines, line);
+            }
+
             *hash<auto> parsed_doc;
             if (exists doc && doc.length()) {
                 parsed_doc = DocCommentParser::parse(doc);
             }
 
-            int line = int(sym.location.range.start.line);
             *string ns_path = AstMetadataExtractor::namespacePath(name);
             string ns_key = ns_path ?? "";
 
@@ -843,6 +853,99 @@ public class AstMetadataExtractor {
     }
 
     #! Extract exact source text for a CST node location
+    #! A doc comment separated from its declaration only by namespace declarations
+    /** Qore's own convention wraps a documented declaration in one or more namespace
+        blocks, with the comment written above the whole group:
+
+        @code
+        #! The base class for Qorus services
+        /** ... *<!-- -->/
+        public namespace OMQ {
+        public namespace UserApi {
+        public namespace Service {
+        public class QorusService inherits ServiceApi {
+        @endcode
+
+        The parser attaches that comment to the OUTERMOST namespace, so the class
+        reports no \c docComment of its own and reached the metadata with no
+        description at all.  That is why hovering a Qorus base class -- \c QorusService,
+        \c QorusWorkflow, \c QorusJob, every step base class, and the \c ServiceApi /
+        \c JobApi / \c WorkflowApi trio -- showed nothing but the name the reader
+        already had under the cursor.
+
+        Qorus's doxygen filter defers doc comments past namespace declarations for
+        exactly this reason, so the generated API documentation has always shown these
+        descriptions; only the metadata was missing them.  This applies the same rule,
+        which is what makes the two agree.
+
+        The comment is claimed only when the chain is unbroken -- the comment, then
+        nothing but namespace openings (blank lines aside), then the declaration -- so a
+        namespace carrying its own documentation ahead of other content is unaffected,
+        and only the FIRST declaration inside a namespace group can claim one.
+
+        @param source_lines the declaration's source file, split into lines
+        @param line the 0-based line the declaration starts on
+
+        @return the raw comment text, in the same form the parser supplies, or
+            @ref nothing if there is no such comment
+    */
+    private static *string findDeferredDocComment(*list<string> source_lines, int line) {
+        if (!exists source_lines || line <= 0 || line >= source_lines.size()) {
+            return NOTHING;
+        }
+
+        # walk back over the namespace openings; at least one must be present, or the
+        # declaration simply has no comment and there is nothing to recover
+        int i = line - 1;
+        bool saw_namespace = False;
+        while (i >= 0) {
+            string txt = trim(source_lines[i]);
+            if (!txt.val()) {
+                --i;
+                continue;
+            }
+            if (txt.regex("^(public[[:space:]]+)?namespace[[:space:]]+[A-Za-z_]")) {
+                saw_namespace = True;
+                --i;
+                continue;
+            }
+            break;
+        }
+        if (!saw_namespace || i < 0) {
+            return NOTHING;
+        }
+
+        # `i` must now be the last line of a comment block
+        int end = i;
+        int start = i;
+        if (source_lines[start].find("*/") >= 0) {
+            while (start >= 0 && source_lines[start].find("/**") < 0) {
+                --start;
+            }
+            if (start < 0) {
+                return NOTHING;
+            }
+        }
+        # take any contiguous "#" comment lines above the block as part of it
+        int c = start - 1;
+        while (c >= 0 && trim(source_lines[c]).regex("^#")) {
+            --c;
+        }
+        start = c + 1;
+
+        # only a DOC comment counts; a plain remark above a namespace is not one
+        string first = trim(source_lines[start]);
+        if (!first.regex("^(#!|/\\*\\*)")) {
+            return NOTHING;
+        }
+
+        string rv = source_lines[start];
+        for (int k = start + 1; k <= end; ++k) {
+            rv += "\n" + source_lines[k];
+        }
+        return rv;
+    }
+
     private static *string sourceText(hash<auto> node, *list<string> source_lines) {
         if (!exists source_lines || !exists node.loc) {
             return NOTHING;
