@@ -313,7 +313,7 @@
         },
         "app.RWRpZmFjdA.action.cmVhZA.short_desc": {
           "source": "Read EDIFACT message data from a specific file location",
-          "message": "Lire les données de message EDIFACT à partir d'un emplacement de fichier spécifique"
+          "message": "Lit les données de message EDIFACT depuis un emplacement de fichier spécifique"
         },
         "app.RWRpZmFjdA.action.d3JpdGU.desc": {
           "source": "Write EDIFACT message data to a specific file location",

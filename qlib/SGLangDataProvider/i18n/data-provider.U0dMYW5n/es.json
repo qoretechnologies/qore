@@ -165,7 +165,7 @@
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.short_desc": {
           "source": "Sample only from the K most likely next tokens (SGLang extension)",
-          "message": "Muestrear solo a partir de los K siguientes tokens más probables (extensión de SGLang)"
+          "message": "Muestrear solo los K tokens siguientes más probables (ext. SGLang)"
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.desc": {
           "source": "Nucleus sampling — restrict sampling to tokens whose cumulative probability exceeds this threshold.  Range `0.0` to `1.0`.  Usually left at `1.0` and varied only in combination with `top_k` or lower `temperature`.",
@@ -189,7 +189,7 @@
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dGVtcGVyYXR1cmU.short_desc": {
           "source": "Sampling temperature (0-2); higher values give more varied output",
-          "message": "Temperatura de muestreo (0-2); los valores más altos proporcionan una salida más variada"
+          "message": "Temperatura de muestreo (0-2); valores mayores dan salidas más variadas"
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dXNlcg.desc": {
           "source": "Opaque identifier representing the end user.  Logged server-side for abuse tracking and usage attribution; does not affect generation.",
@@ -329,7 +329,7 @@
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.option.bG9ncHJvYl9zdGFydF9sZW4.short_desc": {
           "source": "Token offset at which log-probability reporting begins",
-          "message": "Desplazamiento de token en el que comienza el reporte de probabilidades logarítmicas"
+          "message": "Desplazamiento de token donde inicia el informe de log-probabilidad"
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.option.bWF4X25ld190b2tlbnM.desc": {
           "source": "Convenience field merged into `sampling_params.max_new_tokens`.  Maximum number of tokens to generate.  Increase for long-form output; decrease to cap cost.",
@@ -441,7 +441,7 @@
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.short_desc": {
           "source": "Generate text with schema/regex/grammar-enforced output structure",
-          "message": "Generar texto con estructura de salida forzada por esquema/expresión regular/gramática"
+          "message": "Genera texto con estructura forzada por esquema, regex o gramática"
         },
         "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.desc": {
           "source": "Instructs the SGLang server to flush its KV cache.  Useful after switching workloads or for freeing memory.  Safe to call at any time; does not interrupt in-flight requests.",
@@ -497,7 +497,7 @@
         },
         "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+          "message": "Paso directo; usa serialización de conexión y deja decidir al cliente REST"
         },
         "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -747,6 +747,10 @@
           "source": "URI Path",
           "message": "Ruta URI"
         },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión"
+        },
         "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
@@ -785,7 +789,7 @@
         },
         "app.U0dMYW5n.action.c2VydmVyLWluZm8.short_desc": {
           "source": "Retrieve SGLang server configuration and runtime metadata",
-          "message": "Recuperar la configuración del servidor SGLang y los metadatos de tiempo de ejecución"
+          "message": "Obtiene la configuración y metadatos de ejecución del servidor SGLang"
         },
         "app.U0dMYW5n.desc": {
           "source": "Provides access to [SGLang](https://github.com/sgl-project/sglang) — a fast serving framework for large language models and vision language models.\n\nSGLang exposes both OpenAI-compatible endpoints (`/v1/chat/completions`, `/v1/embeddings`) and SGLang-native endpoints including `/generate` with constrained decoding (JSON schema, regex, EBNF grammars) for reliable structured extraction without retry loops.\n\n**Common use cases**:\n- **Local LLM chat and completions** with no per-token cost and data residency control\n- **Structured extraction** using constrained decoding — the model is guaranteed to emit output matching a JSON schema, regex, or grammar, eliminating output-parsing retries\n- **Embeddings generation** for RAG pipelines using the same backend that serves chat\n- **Edge / on-prem inference** where data must not leave the organization",
@@ -797,7 +801,7 @@
         },
         "app.U0dMYW5n.short_desc": {
           "source": "SGLang model server for local LLM inference with constrained decoding",
-          "message": "Servidor de modelos SGLang para inferencia de LLM local con decodificación restringida"
+          "message": "Servidor de modelos SGLang para inferencia LLM local con decodificación"
         }
       }
     }

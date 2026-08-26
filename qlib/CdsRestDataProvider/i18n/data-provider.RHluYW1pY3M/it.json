@@ -141,7 +141,7 @@
         },
         "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+          "message": "Pass-through: usa serializzazione connessione e lascia decidere al client REST"
         },
         "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -273,7 +273,7 @@
         },
         "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
           "source": "Include request/timing/size debug info in the response",
-          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+          "message": "Includi info di debug su richiesta/tempi/dimensioni nella risposta"
         },
         "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
           "source": "HTTP `OPTIONS`",
@@ -391,6 +391,10 @@
           "source": "URI Path",
           "message": "Percorso URI"
         },
+        "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione"
+        },
         "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash dei valori sostituiti nei segnaposto `{name}` nel percorso URI. Esempio: con `path = /users/{id}` e `path_vars = {id: 123}` il framework invia `/users/123`. I valori sono codificati in URL."
@@ -418,6 +422,102 @@
         "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.short_desc": {
           "source": "Make a custom API call to Microsoft Dynamics 365",
           "message": "Esegui una chiamata API personalizzata a Microsoft Dynamics 365"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.desc": {
+          "source": "Fires for each contact created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "Si attiva per ogni contatto creato nell'organizzazione e, quando la condizione è `updated`, a ogni modifica successiva."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.display_name": {
+          "source": "New or Updated Contact",
+          "message": "Contatto nuovo o aggiornato"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.short_desc": {
+          "source": "Fires when a contact is created or changed",
+          "message": "Si attiva quando viene creato o modificato un contatto"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.desc": {
+          "source": "Fires for each case created in the organisation, and, when the condition is `updated`, again on every subsequent change.\n\nDataverse calls this table `incident`.",
+          "message": "Si attiva per ogni caso creato nell'organizzazione e, quando la condizione è `updated`, a ogni modifica successiva.\n\nDataverse chiama questa tabella `incident`."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.display_name": {
+          "source": "New or Updated Case",
+          "message": "Caso nuovo o aggiornato"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.short_desc": {
+          "source": "Fires when a case is created or changed",
+          "message": "Si attiva quando un caso viene creato o modificato"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.desc": {
+          "source": "Fires for each account created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "Si attiva per ogni account creato nell'organizzazione e, quando la condizione è `updated`, a ogni modifica successiva."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.display_name": {
+          "source": "New or Updated Account",
+          "message": "Account nuovo o aggiornato"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.short_desc": {
+          "source": "Fires when an account is created or changed",
+          "message": "Si attiva quando un account viene creato o modificato"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.desc": {
+          "source": "Fires for each invoice created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "Si attiva per ogni fattura creata nell'organizzazione e, quando la condizione è `updated`, a ogni modifica successiva."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.display_name": {
+          "source": "New or Updated Invoice",
+          "message": "Fattura nuova o aggiornata"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.short_desc": {
+          "source": "Fires when an invoice is created or changed",
+          "message": "Si attiva quando una fattura viene creata o modificata"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.desc": {
+          "source": "Fires for each opportunity created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "Si attiva per ogni opportunità creata nell'organizzazione e, quando la condizione è `updated`, a ogni modifica successiva."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.display_name": {
+          "source": "New or Updated Opportunity",
+          "message": "Opportunità nuova o aggiornata"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.short_desc": {
+          "source": "Fires when an opportunity is created or changed",
+          "message": "Si attiva quando un'opportunità viene creata o modificata"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.desc": {
+          "source": "Fires for each order created in the organisation, and, when the condition is `updated`, again on every subsequent change.\n\nDataverse calls this table `salesorder`.",
+          "message": "Si attiva per ogni ordine creato nell'organizzazione e, quando la condizione è `updated`, a ogni modifica successiva.\n\nDataverse chiama questa tabella `salesorder`."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.display_name": {
+          "source": "New or Updated Order",
+          "message": "Ordine nuovo o aggiornato"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.short_desc": {
+          "source": "Fires when an order is created or changed",
+          "message": "Si attiva quando un ordine viene creato o modificato"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.desc": {
+          "source": "Fires for each lead created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "Si attiva per ogni lead creato nell'organizzazione e, quando la condizione è `updated`, a ogni modifica successiva."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.display_name": {
+          "source": "New or Updated Lead",
+          "message": "Lead nuovo o aggiornato"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.short_desc": {
+          "source": "Fires when a lead is created or changed",
+          "message": "Si attiva quando un lead viene creato o modificato"
+        },
+        "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.desc": {
+          "source": "Fires for each record created or changed in a Dataverse table named when the subscription is created.\n\nThe table is given by its logical name, ex: `account`; its entity set and primary key are read from the organisation's entity definition, so a custom table whose set name is not simply its logical name pluralised works unchanged.",
+          "message": "Si attiva per ogni record creato o modificato in una tabella Dataverse indicata al momento della creazione della sottoscrizione.\n\nLa tabella è indicata dal suo nome logico, es: `account`; il relativo set di entità e la chiave primaria vengono letti dalla definizione dell'entità dell'organizzazione, quindi una tabella personalizzata il cui nome di set non sia semplicemente il plurale del nome logico funziona invariata."
+        },
+        "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.display_name": {
+          "source": "New or Updated Custom Entity",
+          "message": "Entità personalizzata nuova o aggiornata"
+        },
+        "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.short_desc": {
+          "source": "Fires for each record created or changed in any Dataverse table",
+          "message": "Si attiva per ogni record creato o modificato in qualsiasi tabella Dataverse"
         },
         "app.RHluYW1pY3M.action.dXBkYXRlLXJlY29yZHM.desc": {
           "source": "Update records in a Dynamics table using the Dynamics REST API",

@@ -21,7 +21,7 @@
         },
         "app.RlRQ.action.Z2V0LWZpbGU.option.ZW5jb2Rpbmc.short_desc": {
           "source": "The string encoding to use if 'text' = 'True' (default: 'UTF-8')",
-          "message": "La codificación de caracteres a utilizar si 'text' = 'True' (por defecto: 'UTF-8')"
+          "message": "Codificación de cadena si 'text' = 'True' (predeterminado: 'UTF-8')"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.option.cGF0aA.desc": {
           "source": "The path on the FTP server",
@@ -42,6 +42,10 @@
         "app.RlRQ.action.Z2V0LWZpbGU.option.dGV4dA.display_name": {
           "source": "Text",
           "message": "Texto"
+        },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "Si es 'True', el archivo se devuelve como cadena; si es 'False', como…"
         },
         "app.RlRQ.action.Z2V0LWZpbGU.short_desc": {
           "source": "Get a file from an FTP server",
@@ -89,7 +93,7 @@
         },
         "app.RlRQ.action.c2VuZC1maWxl.option.ZW5jb2Rpbmc.short_desc": {
           "source": "The string encoding to use if 'text' = 'True' (default: 'UTF-8')",
-          "message": "La codificación de caracteres a utilizar si 'text' = 'True' (por defecto: 'UTF-8')"
+          "message": "Codificación de cadena si 'text' = 'True' (predeterminado: 'UTF-8')"
         },
         "app.RlRQ.action.c2VuZC1maWxl.option.cGF0aA.desc": {
           "source": "The path on the FTP server",
@@ -110,6 +114,10 @@
         "app.RlRQ.action.c2VuZC1maWxl.option.dGV4dA.display_name": {
           "source": "Text",
           "message": "Texto"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "Si es 'True', el archivo se devuelve como cadena; si es 'False', como…"
         },
         "app.RlRQ.action.c2VuZC1maWxl.short_desc": {
           "source": "Sends a file to an FTP server",

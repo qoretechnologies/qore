@@ -229,7 +229,7 @@
         },
         "app.Q29oZXJl.action.Y2xhc3NpZnk.short_desc": {
           "source": "Classify text inputs into labeled categories using Cohere Classify",
-          "message": "Classifier les entrées de texte en catégories étiquetées à l'aide de Cohere Classify"
+          "message": "Classifier des entrées de texte en catégories avec Cohere Classify"
         },
         "app.Q29oZXJl.action.ZW1iZWQ.desc": {
           "source": "Converts text inputs into embedding vectors via Cohere's `/v2/embed` endpoint with task-aware `input_type` selection.",
@@ -361,7 +361,7 @@
         },
         "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+          "message": "Pass-through ; utiliser la sérialisation, laisser le client REST décider"
         },
         "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -385,7 +385,7 @@
         },
         "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
           "source": "Serialize body as application/x-www-form-urlencoded form fields",
-          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+          "message": "Sérialiser le corps en champs application/x-www-form-urlencoded"
         },
         "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
           "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
@@ -611,6 +611,10 @@
           "source": "URI Path",
           "message": "Chemin URI"
         },
+        "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Chemin d'URI relatif à l'URL de base de l'API de la connexion"
+        },
         "app.Q29oZXJl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hachage des valeurs substituées dans les espaces réservés `{name}` dans le chemin URI. Exemple : avec `path = /users/{id}` et `path_vars = {id: 123}`, le framework envoie `/users/123`. Les valeurs sont encodées en URL."
@@ -681,7 +685,7 @@
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.bWF4X2NodW5rc19wZXJfZG9j.short_desc": {
           "source": "Maximum chunks per document for long-document rerank",
-          "message": "Nombre maximal de morceaux par document pour le réordonnancement de longs documents"
+          "message": "Nombre maximal de blocs par document pour le reclassement de longs documents"
         },
         "app.Q29oZXJl.action.cmVyYW5r.option.cXVlcnk.desc": {
           "source": "Free-form user query.",
@@ -721,7 +725,7 @@
         },
         "app.Q29oZXJl.action.cmVyYW5r.short_desc": {
           "source": "Rerank candidate documents against a query using Cohere Rerank",
-          "message": "Réordonner les documents candidats par rapport à une requête à l'aide de Cohere Rerank"
+          "message": "Reclasser des documents candidats selon une requête avec Cohere Rerank"
         },
         "app.Q29oZXJl.desc": {
           "source": "Provides access to [Cohere](https://cohere.com) — enterprise-grade chat with Command R / R+, multilingual embeddings, and best-in-class reranking.\n\n**Common use cases**:\n- **Tool-calling chat agents** with Command R+\n- **Multilingual RAG embeddings** with embed-multilingual-v3.0\n- **Production rerank** with rerank-v3.5 — pairs naturally with any embedder\n- **Text classification** via the dedicated /classify endpoint",

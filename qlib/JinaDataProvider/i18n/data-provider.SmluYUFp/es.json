@@ -45,7 +45,7 @@
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.desc": {
           "source": "Text input(s) to convert to embedding vectors.  Single string or list of strings.",
-          "message": "Entrada(s) de texto a convertir en vectores de incrustación (embeddings). Cadena única o lista de cadenas."
+          "message": "Texto o lista de textos de entrada para convertir en vectores de incrustación. Cadena individual o lista de cadenas."
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.display_name": {
           "source": "Input",
@@ -53,7 +53,7 @@
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.short_desc": {
           "source": "Text(s) to embed",
-          "message": "Texto(s) a incrustar"
+          "message": "Textos para generar incrustaciones"
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bGF0ZV9jaHVua2luZw.desc": {
           "source": "When `True`, applies Jina's late-chunking algorithm — embeds the full passage first, then chunks afterward.  Improves cross-chunk context retention for RAG.",
@@ -113,7 +113,7 @@
         },
         "app.SmluYUFp.action.Y3JlYXRlLWVtYmVkZGluZ3M.short_desc": {
           "source": "Generate embedding vectors from a Jina AI embedding model",
-          "message": "Generar vectores de incrustación a partir de un modelo de incrustación de Jina AI"
+          "message": "Generar vectores de incrustación a partir de un modelo de Jina AI"
         },
         "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.desc": {
           "source": "Make a custom HTTP / REST API call to **Jina AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
@@ -157,7 +157,7 @@
         },
         "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+          "message": "Paso directo; usa serialización de conexión y deja decidir al cliente REST"
         },
         "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -407,6 +407,10 @@
           "source": "URI Path",
           "message": "Ruta URI"
         },
+        "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión"
+        },
         "app.SmluYUFp.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
@@ -505,7 +509,7 @@
         },
         "app.SmluYUFp.action.cmVyYW5r.short_desc": {
           "source": "Rerank candidate documents against a query for RAG retrieval",
-          "message": "Reclasificar documentos candidatos frente a una consulta para la recuperación de RAG"
+          "message": "Reordenar documentos candidatos frente a una consulta para RAG"
         },
         "app.SmluYUFp.desc": {
           "source": "Provides access to [Jina AI](https://jina.ai) embedding and reranking services for production semantic search and RAG.\n\n**Common use cases**:\n- **Multilingual embeddings** with `jina-embeddings-v3` (89+ languages)\n- **Cross-encoder reranking** with `jina-reranker-v2-base-multilingual` or late-interaction `jina-colbert-v2`\n- **Closes the cloud-reranker gap** alongside Voyage in `QoreRagUtils`",

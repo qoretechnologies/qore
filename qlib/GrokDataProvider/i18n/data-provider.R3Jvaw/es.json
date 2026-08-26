@@ -81,7 +81,7 @@
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bG9ncHJvYnM.short_desc": {
           "source": "Whether to return log probabilities of output tokens",
-          "message": "Indica si se deben devolver las probabilidades logarítmicas de los tokens de salida"
+          "message": "Indica si se devuelven las probabilidades logarítmicas de tokens de salida"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.bW9kZWw.desc": {
           "source": "The Grok model to use (e.g., `grok-3`, `grok-4`)",
@@ -237,7 +237,7 @@
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
           "source": "A key for caching prompts to optimize cache hit rates",
-          "message": "Una clave para almacenar en caché prompts con el fin de optimizar las tasas de aciertos de caché"
+          "message": "Clave para cachear prompts y optimizar la tasa de aciertos de caché"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
           "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
@@ -489,7 +489,7 @@
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bG9ncHJvYnM.short_desc": {
           "source": "Whether to return log probabilities of output tokens",
-          "message": "Indica si se deben devolver las probabilidades logarítmicas de los tokens de salida"
+          "message": "Indica si se devuelven las probabilidades logarítmicas de tokens de salida"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.bW9kZWw.desc": {
           "source": "Model to use for the response (e.g., `grok-3`, `grok-4`)",
@@ -645,7 +645,7 @@
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
           "source": "A key for caching prompts to optimize cache hit rates",
-          "message": "Una clave para almacenar en caché prompts con el fin de optimizar las tasas de aciertos de caché"
+          "message": "Clave para cachear prompts y optimizar la tasa de aciertos de caché"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cmVhc29uaW5n.desc": {
           "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
@@ -957,7 +957,7 @@
         },
         "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+          "message": "Paso directo; usa serialización de conexión y deja decidir al cliente REST"
         },
         "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -1207,6 +1207,10 @@
           "source": "URI Path",
           "message": "Ruta URI"
         },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión"
+        },
         "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
@@ -1289,7 +1293,7 @@
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bG9ncHJvYnM.short_desc": {
           "source": "Whether to return log probabilities of output tokens",
-          "message": "Indica si se deben devolver las probabilidades logarítmicas de los tokens de salida"
+          "message": "Indica si se devuelven las probabilidades logarítmicas de tokens de salida"
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bW9kZWw.desc": {
           "source": "Model to use to create the response (e.g., `grok-3`, `grok-4`)",
@@ -1605,7 +1609,7 @@
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.short_desc": {
           "source": "Chat with Grok using multiple messages with multi-reply support",
-          "message": "Chatee con Grok mediante múltiples mensajes con compatibilidad para varias respuestas"
+          "message": "Chatea con Grok usando múltiples mensajes con soporte para multirrespuesta"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.desc": {
           "source": "Chat with Grok by sending a single message and receiving a single reply",
@@ -1673,7 +1677,7 @@
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bG9ncHJvYnM.short_desc": {
           "source": "Whether to return log probabilities of output tokens",
-          "message": "Indica si se deben devolver las probabilidades logarítmicas de los tokens de salida"
+          "message": "Indica si se devuelven las probabilidades logarítmicas de tokens de salida"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bW9kZWw.desc": {
           "source": "Model to use to create the response (e.g., `grok-3`, `grok-4`)",
@@ -2105,7 +2109,7 @@
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bG9ncHJvYnM.short_desc": {
           "source": "Whether to return log probabilities of output tokens",
-          "message": "Indica si se deben devolver las probabilidades logarítmicas de los tokens de salida"
+          "message": "Indica si se devuelven las probabilidades logarítmicas de tokens de salida"
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.bW9kZWw.desc": {
           "source": "The Grok model to use (e.g., `grok-3`, `grok-4`)",
@@ -2261,7 +2265,7 @@
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
           "source": "A key for caching prompts to optimize cache hit rates",
-          "message": "Una clave para almacenar en caché prompts con el fin de optimizar las tasas de aciertos de caché"
+          "message": "Clave para cachear prompts y optimizar la tasa de aciertos de caché"
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
           "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",

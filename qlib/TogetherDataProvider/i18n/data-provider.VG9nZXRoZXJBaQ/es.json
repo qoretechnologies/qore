@@ -237,7 +237,7 @@
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.desc": {
           "source": "Text input(s) to convert to embedding vectors.  Can be a single string or a list of strings for batch embedding.",
-          "message": "Entrada(s) de texto para convertir en vectores de incrustación. Puede ser una sola cadena o una lista de cadenas para incrustación por lotes."
+          "message": "Entradas de texto a convertir en vectores incrustados. Puede ser una sola cadena o una lista de cadenas para incrustación por lotes."
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.display_name": {
           "source": "Input",
@@ -245,7 +245,7 @@
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.short_desc": {
           "source": "Text(s) to embed — single string or list of strings",
-          "message": "Texto(s) para incrustar: una sola cadena o una lista de cadenas"
+          "message": "Texto o textos para incrustar — cadena individual o lista de cadenas"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.desc": {
           "source": "Together embedding model identifier, e.g. `BAAI/bge-base-en-v1.5`, `BAAI/bge-large-en-v1.5`, `togethercomputer/m2-bert-80M-32k-retrieval`.",
@@ -401,7 +401,7 @@
         },
         "app.VG9nZXRoZXJBaQ.action.Z2VuZXJhdGUtaW1hZ2U.short_desc": {
           "source": "Generate an image from a text prompt using FLUX or Stable Diffusion",
-          "message": "Generar una imagen a partir de un prompt de texto mediante FLUX o Stable Diffusion"
+          "message": "Genera una imagen a partir de un texto con FLUX o Stable Diffusion"
         },
         "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.desc": {
           "source": "Make a custom HTTP / REST API call to **Together AI** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
@@ -445,7 +445,7 @@
         },
         "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+          "message": "Paso directo; usa serialización de conexión y deja decidir al cliente REST"
         },
         "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -695,6 +695,10 @@
           "source": "URI Path",
           "message": "Ruta URI"
         },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión"
+        },
         "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
@@ -733,7 +737,7 @@
         },
         "app.VG9nZXRoZXJBaQ.short_desc": {
           "source": "Together AI hosted open-weight LLMs, embeddings, and image generation",
-          "message": "LLM de pesos abiertos, incrustaciones (embeddings) y generación de imágenes alojados en Together AI"
+          "message": "LLM de código abierto, embeddings y generación de imágenes en Together AI"
         }
       }
     }

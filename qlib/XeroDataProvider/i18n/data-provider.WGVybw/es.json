@@ -63,6 +63,10 @@
           "source": "Summarize Errors",
           "message": "Resumir errores"
         },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "Si es false devuelve 200 OK y mezcla de objetos creados y con…"
+        },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.short_desc": {
           "source": "Apply a credit note to an invoice",
           "message": "Aplicar una nota de crédito a una factura"
@@ -115,6 +119,10 @@
           "source": "Code",
           "message": "Código"
         },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q29kZQ.short_desc": {
+          "source": "Code of account you are using to make the payment e.g. 001…",
+          "message": "Código de cuenta que usa para realizar el pago, p. ej., 001…"
+        },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZQ.display_name": {
           "source": "Credit Note",
           "message": "Nota de crédito"
@@ -130,6 +138,10 @@
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZU51bWJlcg.display_name": {
           "source": "Credit Note Number",
           "message": "Número de nota de crédito"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZU51bWJlcg.short_desc": {
+          "source": "Number of invoice or credit note you are applying payment to e.g. INV-4003",
+          "message": "Número de factura o nota de crédito a la que aplica el pago, p. ej., INV-4003"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3VycmVuY3lSYXRl.desc": {
           "source": "Exchange rate when payment is received. Only used for non base currency invoices and credit notes e.g. 0.7500",
@@ -211,6 +223,10 @@
           "source": "Date",
           "message": "Fecha"
         },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGF0ZQ.short_desc": {
+          "source": "Date the payment is being made (YYYY-MM-DD) e.g. 2009-09-06",
+          "message": "Fecha en la que se realiza el pago (AAAA-MM-DD), p. ej., 2009-09-06"
+        },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGV0YWlscw.desc": {
           "source": "The information to appear on the supplier's bank account",
           "message": "La información que aparecerá en la cuenta bancaria del proveedor"
@@ -238,6 +254,10 @@
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZU51bWJlcg.display_name": {
           "source": "Invoice Number",
           "message": "Número de factura"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZU51bWJlcg.short_desc": {
+          "source": "Number of invoice or credit note you are applying payment to e.g.INV-4003",
+          "message": "Número de factura o nota de crédito a la que se aplica el pago, p. ej., INV-4003"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SXNSZWNvbmNpbGVk.desc": {
           "source": "An optional parameter for the payment. A boolean indicating whether you would like the payment to be created as reconciled when using PUT, or whether a payment has been reconciled when using GET",
@@ -282,6 +302,10 @@
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudElE.display_name": {
           "source": "Payment ID",
           "message": "ID de pago"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudElE.short_desc": {
+          "source": "The Xero identifier for an Payment e.g. 297c2dc5-cc47-4afd-8ec8-74990b8761e9",
+          "message": "Identificador de Xero para un pago, p. ej., 297c2dc5-cc47-4afd-8ec8-74990b8761e9"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFDQ1BBWVBBWU1FTlQ.display_name": {
           "source": "ACCPAYPAYMENT",
@@ -350,6 +374,10 @@
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UmVmZXJlbmNl.display_name": {
           "source": "Reference",
           "message": "Referencia"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UmVmZXJlbmNl.short_desc": {
+          "source": "An optional description for the payment e.g. Direct Debit",
+          "message": "Una descripción opcional para el pago, p. ej., Débito directo"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.short_desc": {
           "source": "Record a payment against an invoice",
@@ -523,6 +551,10 @@
           "source": "Include Archived",
           "message": "Incluir archivados"
         },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.aW5jbHVkZUFyY2hpdmVk.short_desc": {
+          "source": "e.g. includeArchived=true - Contacts with a status of ARCHIVED will be…",
+          "message": "P. ej., includeArchived=true: los contactos con estado ARCHIVED se…"
+        },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.b3JkZXI.desc": {
           "source": "Order by an any element",
           "message": "Ordenar por cualquier elemento"
@@ -543,6 +575,10 @@
           "source": "Search Term",
           "message": "Término de búsqueda"
         },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c2VhcmNoVGVybQ.short_desc": {
+          "source": "Search parameter that performs a case-insensitive text search across the Name,…",
+          "message": "Parámetro de búsqueda de texto sin distinción de mayúsculas en Name,…"
+        },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.desc": {
           "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object. This returns only lightweight fields, excluding computation-heavy fields from the response, making the API calls quick and efficient.",
           "message": "Utilice summaryOnly=true en el extremo GET Contacts e Invoices para recuperar una versión más reducida del objeto de respuesta. Esto devuelve únicamente campos ligeros, excluyendo de la respuesta los campos que requieren un procesamiento intensivo, haciendo que las llamadas a la API sean rápidas y eficientes."
@@ -550,6 +586,10 @@
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.display_name": {
           "source": "Summary Only",
           "message": "Solo resumen"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.short_desc": {
+          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a…",
+          "message": "Use summaryOnly=true en GET Contacts e Invoices para obtener un…"
         },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZQ.desc": {
           "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
@@ -666,6 +706,10 @@
         "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.dW5pdGRw.short_desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "P. ej., unitdp=4 (decimales unitarios). Puede optar por cuatro decimales…"
         },
         "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.short_desc": {
           "source": "List the credit notes in the organisation",
@@ -807,6 +851,10 @@
           "source": "Unitdp",
           "message": "Unitdp"
         },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.dW5pdGRw.short_desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "P. ej., unitdp=4 (decimales unitarios). Puede optar por cuatro decimales…"
+        },
         "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.short_desc": {
           "source": "List the bank transactions in the organisation",
           "message": "Listar las transacciones bancarias de la organización"
@@ -925,7 +973,7 @@
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.Y3JlYXRlZEJ5TXlBcHA.short_desc": {
           "source": "When set to true you'll only retrieve Invoices created by your app",
-          "message": "Cuando se establece en true, solo recuperará las facturas creadas por su aplicación"
+          "message": "Si es true, solo obtendrá las facturas creadas por su aplicación"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.aW5jbHVkZUFyY2hpdmVk.desc": {
           "source": "e.g. includeArchived=true - Contacts with a status of ARCHIVED will be included in the response",
@@ -934,6 +982,10 @@
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.aW5jbHVkZUFyY2hpdmVk.display_name": {
           "source": "Include Archived",
           "message": "Incluir archivados"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.aW5jbHVkZUFyY2hpdmVk.short_desc": {
+          "source": "e.g. includeArchived=true - Contacts with a status of ARCHIVED will be…",
+          "message": "P. ej., includeArchived=true: los contactos con estado ARCHIVED se…"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.b3JkZXI.desc": {
           "source": "Order by an any element",
@@ -955,6 +1007,10 @@
           "source": "Search Term",
           "message": "Término de búsqueda"
         },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c2VhcmNoVGVybQ.short_desc": {
+          "source": "Search parameter that performs a case-insensitive text search across the Name,…",
+          "message": "Parámetro de búsqueda de texto sin distinción de mayúsculas en Name,…"
+        },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.desc": {
           "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object. This returns only lightweight fields, excluding computation-heavy fields from the response, making the API calls quick and efficient.",
           "message": "Utilice summaryOnly=true en el extremo GET Contacts e Invoices para recuperar una versión más reducida del objeto de respuesta. Esto devuelve únicamente campos ligeros, excluyendo de la respuesta los campos que requieren un procesamiento intensivo, haciendo que las llamadas a la API sean rápidas y eficientes."
@@ -962,6 +1018,10 @@
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.display_name": {
           "source": "Summary Only",
           "message": "Solo resumen"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.short_desc": {
+          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a…",
+          "message": "Use summaryOnly=true en GET Contacts e Invoices para obtener un…"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZQ.desc": {
           "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
@@ -1006,6 +1066,10 @@
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.dW5pdGRw.short_desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "P. ej., unitdp=4 (decimales unitarios). Puede optar por cuatro decimales…"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.short_desc": {
           "source": "List invoices and bills",
@@ -1062,6 +1126,10 @@
         "app.WGVybw.action.Z2V0SXRlbXM.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.dW5pdGRw.short_desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "P. ej., unitdp=4 (decimales unitarios). Puede optar por cuatro decimales…"
         },
         "app.WGVybw.action.Z2V0SXRlbXM.short_desc": {
           "source": "List the items in the organisation",
@@ -1475,6 +1543,10 @@
           "source": "Task Ids",
           "message": "ID de tareas"
         },
+        "app.WGVybw.action.Z2V0VGFza3M.option.dGFza0lkcw.short_desc": {
+          "source": "Search for all tasks that match a comma separated list of taskIds, i.e. GET…",
+          "message": "Busca tareas que coincidan con una lista de taskIds por comas, p. ej., GET…"
+        },
         "app.WGVybw.action.Z2V0VGFza3M.short_desc": {
           "source": "List the tasks in a project",
           "message": "Listar las tareas de un proyecto"
@@ -1557,7 +1629,7 @@
         },
         "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+          "message": "Paso directo; usa serialización de conexión y deja decidir al cliente REST"
         },
         "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -1807,6 +1879,10 @@
           "source": "URI Path",
           "message": "Ruta URI"
         },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión"
+        },
         "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
@@ -2015,6 +2091,10 @@
           "source": "Summarize Errors",
           "message": "Resumir errores"
         },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "Si es false devuelve 200 OK y mezcla de objetos creados y con…"
+        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.desc": {
           "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
           "message": "p. ej. unitdp=4 – (Posiciones decimales por unidad) Puede optar por utilizar cuatro posiciones decimales para los importes unitarios"
@@ -2022,6 +2102,10 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.short_desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "P. ej., unitdp=4 (decimales unitarios). Puede optar por cuatro decimales…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.short_desc": {
           "source": "Record money spent or received against a bank account",
@@ -2050,6 +2134,10 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
           "source": "Summarize Errors",
           "message": "Resumir errores"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "Si es false devuelve 200 OK y mezcla de objetos creados y con…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.short_desc": {
           "source": "Create contacts, or update them by ID",
@@ -2091,6 +2179,10 @@
           "source": "Allow Backorders",
           "message": "Permitir pedidos pendientes"
         },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.YWxsb3dCYWNrb3JkZXJz.short_desc": {
+          "source": "Allows an invoice to be created even when one or more line items contain…",
+          "message": "Permite crear una factura incluso si una o más líneas contienen…"
+        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
           "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
           "message": "Si es false, devuelve 200 OK y una combinación de objetos creados correctamente y aquellos con errores de validación"
@@ -2099,6 +2191,10 @@
           "source": "Summarize Errors",
           "message": "Resumir errores"
         },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "Si es false devuelve 200 OK y mezcla de objetos creados y con…"
+        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.desc": {
           "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
           "message": "p. ej. unitdp=4 – (Posiciones decimales por unidad) Puede optar por utilizar cuatro posiciones decimales para los importes unitarios"
@@ -2106,6 +2202,10 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.short_desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "P. ej., unitdp=4 (decimales unitarios). Puede optar por cuatro decimales…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.short_desc": {
           "source": "Create invoices or bills, or update them by ID",
@@ -2135,6 +2235,10 @@
           "source": "Summarize Errors",
           "message": "Resumir errores"
         },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "Si es false devuelve 200 OK y mezcla de objetos creados y con…"
+        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.desc": {
           "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
           "message": "p. ej. unitdp=4 – (Posiciones decimales por unidad) Puede optar por utilizar cuatro posiciones decimales para los importes unitarios"
@@ -2142,6 +2246,10 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.short_desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "P. ej., unitdp=4 (decimales unitarios). Puede optar por cuatro decimales…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.short_desc": {
           "source": "Create items, or update them by ID",
@@ -2171,6 +2279,10 @@
           "source": "Summarize Errors",
           "message": "Resumir errores"
         },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "Si es false devuelve 200 OK y mezcla de objetos creados y con…"
+        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.short_desc": {
           "source": "Create quotes, or update them by ID",
           "message": "Crear presupuestos o actualizarlos por ID"
@@ -2198,6 +2310,10 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
           "source": "Summarize Errors",
           "message": "Resumir errores"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "Si es false devuelve 200 OK y mezcla de objetos creados y con…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.short_desc": {
           "source": "Set up an invoice that repeats on a schedule",

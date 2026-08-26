@@ -121,7 +121,7 @@
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.short_desc": {
           "source": "Read fixed-length file data from a specific file location",
-          "message": "Lire les données d'un fichier à longueur fixe à partir d'un emplacement de fichier spécifique"
+          "message": "Lit les données d'un fichier à longueur fixe depuis un emplacement spécifique"
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.desc": {
           "source": "Write fixed-length file data to a specific file location",
@@ -157,7 +157,7 @@
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW9s.desc": {
           "source": "The end of line / record character(s); if not present, the current platform standard will be used",
-          "message": "Le(s) caractère(s) de fin de ligne / d'enregistrement ; s'il(s) n'est/ne sont pas présent(s), la valeur par défaut de la plateforme actuelle sera utilisée"
+          "message": "Caractères de fin de ligne ou d'enregistrement ; par défaut selon la plateforme"
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -253,7 +253,7 @@
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.short_desc": {
           "source": "Write fixed-length file data to a specific file location",
-          "message": "Écrire les données d'un fichier à longueur fixe vers un emplacement de fichier spécifique"
+          "message": "Écrit des données de fichier à longueur fixe vers un emplacement spécifique"
         },
         "app.Rml4ZWRMZW5ndGg.desc": {
           "source": "Read and write fixed-length file data",

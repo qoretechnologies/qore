@@ -441,7 +441,7 @@
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dGF4X2NhdGVnb3J5.short_desc": {
           "source": "How Paddle charges tax; cannot be changed later",
-          "message": "Mode de facturation de la taxe par Paddle ; ne peut pas être modifié ultérieurement"
+          "message": "Mode de calcul des taxes par Paddle ; non modifiable ultérieurement"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3Byb2R1Y3Q.option.dHlwZQ.allowed-value.c3RyaW5nOmN1c3RvbQ.display_name": {
           "source": "custom",
@@ -587,6 +587,10 @@
           "source": "Address ID",
           "message": "Address Id"
         },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YWRkcmVzc19pZA.short_desc": {
+          "source": "Paddle ID of the address that this transaction is for, prefixed with 'add_'.…",
+          "message": "ID Paddle de l'adresse liée à cette transaction, préfixé par 'add_'.…"
+        },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.desc": {
           "source": "RFC 3339 datetime string of when this transaction was marked as `billed`. `null` for transactions that aren't `billed` or `completed`. Set automatically by Paddle.",
           "message": "Chaîne de date et heure au format RFC 3339 indiquant le moment où cette transaction a été marquée comme `billed`. `null` pour les transactions qui ne sont pas `billed` ou `completed`. Définie automatiquement par Paddle."
@@ -594,6 +598,10 @@
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.display_name": {
           "source": "Billed At",
           "message": "Facturé le"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGVkX2F0.short_desc": {
+          "source": "RFC 3339 datetime string of when this transaction was marked as 'billed'",
+          "message": "Date-heure RFC 3339 marquant cette transaction comme facturée"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YmlsbGluZ19kZXRhaWxz.desc": {
           "source": "Details for invoicing. Required if `collection_mode` is `manual`.",
@@ -627,6 +635,10 @@
           "source": "Business ID",
           "message": "ID d'entreprise"
         },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.YnVzaW5lc3NfaWQ.short_desc": {
+          "source": "Paddle ID of the business that this transaction is for, prefixed with 'biz_'.…",
+          "message": "ID Paddle de l'entreprise liée à cette transaction, préfixé 'biz_'.…"
+        },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGV0YWlscw.desc": {
           "source": "Calculated totals for a transaction, including proration, discounts, tax, and currency conversion. Considered the source of truth for totals on a transaction.",
           "message": "Totaux calculés pour une transaction, incluant le prorata, les réductions, les taxes et la conversion de devise. Considéré comme la source de référence pour les totaux d'une transaction."
@@ -634,6 +646,10 @@
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGV0YWlscw.display_name": {
           "source": "Details",
           "message": "Détails"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGV0YWlscw.short_desc": {
+          "source": "Calculated totals for a transaction, including proration, discounts, tax, and…",
+          "message": "Totaux calculés d'une transaction : prorata, remises, taxes, etc.…"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnQ.desc": {
           "source": "Apply a non-catalog discount to a transaction. Send one of `discount_id` or `discount`.",
@@ -657,7 +673,7 @@
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.ZGlzY291bnRfaWQ.short_desc": {
           "source": "Paddle ID of the discount to apply to this transaction, prefixed with 'dsc_'",
-          "message": "Identifiant Paddle de la réduction à appliquer à cette transaction, préfixé par 'dsc_'"
+          "message": "ID Paddle de la remise à appliquer, avec le préfixe 'dsc_'"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.desc": {
           "source": "Paddle ID of the invoice that this transaction is related to, prefixed with `inv_`. Used for compatibility with the Paddle Invoice API, which is now deprecated. This field is scheduled to be removed in the next version of the Paddle API.",
@@ -666,6 +682,10 @@
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.display_name": {
           "source": "Invoice ID",
           "message": "ID de facture"
+        },
+        "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9pZA.short_desc": {
+          "source": "Paddle ID of the invoice that this transaction is related to, prefixed with…",
+          "message": "ID Paddle de la facture liée à cette transaction, préfixé par…"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.aW52b2ljZV9udW1iZXI.desc": {
           "source": "Invoice number for this transaction. Automatically generated by Paddle when you mark a transaction as `billed` where `collection_mode` is `manual`.",
@@ -801,7 +821,7 @@
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.c3Vic2NyaXB0aW9uX2lk.short_desc": {
           "source": "Paddle ID of the subscription that this transaction is for, prefixed with 'sub_'",
-          "message": "Identifiant Paddle de l'abonnement auquel cette transaction est destinée, préfixé par 'sub_'"
+          "message": "ID Paddle de l'abonnement lié à cette transaction, préfixé par 'sub_'"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.cGF5bWVudHM.desc": {
           "source": "List of payment attempts for this transaction, including successful payments. Sorted by `created_at` in descending order, so most recent attempts are returned first.",
@@ -813,7 +833,7 @@
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.cGF5bWVudHM.short_desc": {
           "source": "List of payment attempts for this transaction, including successful payments",
-          "message": "Liste des tentatives de paiement pour cette transaction, y compris les paiements réussis"
+          "message": "Liste des tentatives de paiement liées, y compris celles réussies"
         },
         "app.UGFkZGxl.action.Y3JlYXRlX3RyYW5zYWN0aW9u.option.dXBkYXRlZF9hdA.desc": {
           "source": "RFC 3339 datetime string of when this entity was updated. Set automatically by Paddle.",
@@ -911,6 +931,10 @@
           "source": "Customer",
           "message": "Client"
         },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this…",
+          "message": "ID Paddle du client à traiter : ID Paddle unique pour ceci…"
+        },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVy.short_desc": {
           "source": "Retrieve one customer",
           "message": "Récupérer un client"
@@ -930,6 +954,10 @@
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.option.Y3VzdG9tZXJfaWQ.display_name": {
           "source": "Customer",
           "message": "Client"
+        },
+        "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this…",
+          "message": "ID Paddle du client à traiter : ID Paddle unique pour ceci…"
         },
         "app.UGFkZGxl.action.Z2V0X2N1c3RvbWVyX2F1dGhfdG9rZW4.short_desc": {
           "source": "Generate a short-lived token identifying a customer to Paddle.js",
@@ -1151,6 +1179,10 @@
           "source": "Collection Mode",
           "message": "Mode de collecte"
         },
+        "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y29sbGVjdGlvbl9tb2Rl.short_desc": {
+          "source": "Return entities that match the specified collection mode.: How payment is…",
+          "message": "Renvoie selon le mode de recouvrement spécifié : Mode de paiement…"
+        },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.Y3JlYXRlZF9hdA.desc": {
           "source": "Return entities created at a specific time. Pass an RFC 3339 datetime string, or use `[LT]` (less than), `[LTE]` (less than or equal to), `[GT]` (greater than), or `[GTE]` (greater than or equal to) operators. For example, `created_at=2023-04-18T17:03:26` or `created_at[LT]=2023-04-18T17:03:26`.",
           "message": "Renvoie les entités créées à un moment précis. Transmettez une chaîne date-heure RFC 3339, ou utilisez les opérateurs `[LT]` (inférieur à), `[LTE]` (inférieur ou égal à), `[GT]` (supérieur à) ou `[GTE]` (supérieur ou égal à). Par exemple, `created_at=2023-04-18T17:03:26` ou `created_at[LT]=2023-04-18T17:03:26`."
@@ -1197,7 +1229,7 @@
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.YmlsbGVkX2F0.short_desc": {
           "source": "Filter on when the transaction was billed; takes an operator suffix",
-          "message": "Filtrer sur la date de facturation de la transaction ; accepte un suffixe d'opérateur"
+          "message": "Filtre la date de facturation ; accepte un suffixe d'opérateur"
         },
         "app.UGFkZGxl.action.bGlzdF90cmFuc2FjdGlvbnM.option.aW52b2ljZV9udW1iZXI.desc": {
           "source": "Return entities that match the invoice number. Use a comma-separated list to specify multiple invoice numbers.",
@@ -1350,6 +1382,10 @@
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VzdG9tZXJfaWQ.display_name": {
           "source": "Customer",
           "message": "Client"
+        },
+        "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this…",
+          "message": "ID Paddle du client à traiter : ID Paddle unique pour ceci…"
         },
         "app.UGFkZGxl.action.bGlzdF9jdXN0b21lcl9jcmVkaXRfYmFsYW5jZXM.short_desc": {
           "source": "List a customer's credit balances, by currency",
@@ -1583,6 +1619,10 @@
           "source": "Type",
           "message": "Type"
         },
+        "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.option.dHlwZQ.short_desc": {
+          "source": "Return items that match the specified type.: Type of item",
+          "message": "Renvoie les éléments correspondant au type spécifié : Type d'élément"
+        },
         "app.UGFkZGxl.action.bGlzdF9wcm9kdWN0cw.short_desc": {
           "source": "List the products in the catalog",
           "message": "Lister les produits du catalogue"
@@ -1617,7 +1657,7 @@
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5mcmVxdWVuY3k.short_desc": {
           "source": "Return entities where the price billing cycle frequency matches this value",
-          "message": "Renvoie les entités dont la fréquence du cycle de facturation du prix correspond à cette valeur"
+          "message": "Renvoie les entités dont la fréquence du cycle de prix correspond"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.allowed-value.c3RyaW5nOm1vbnRo.display_name": {
           "source": "month",
@@ -1645,7 +1685,7 @@
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.YmlsbGluZ19jeWNsZS5pbnRlcnZhbA.short_desc": {
           "source": "Return entities where the price billing cycle interval matches this value",
-          "message": "Renvoie les entités dont l'intervalle du cycle de facturation du prix correspond à cette valeur"
+          "message": "Renvoie les entités dont l'intervalle du cycle de prix correspond"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.aW5jbHVkZQ.desc": {
           "source": "Include related entities in the response.",
@@ -1758,6 +1798,10 @@
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.dHlwZQ.display_name": {
           "source": "Type",
           "message": "Type"
+        },
+        "app.UGFkZGxl.action.bGlzdF9wcmljZXM.option.dHlwZQ.short_desc": {
+          "source": "Return items that match the specified type.: Type of item",
+          "message": "Renvoie les éléments correspondant au type spécifié : Type d'élément"
         },
         "app.UGFkZGxl.action.bGlzdF9wcmljZXM.short_desc": {
           "source": "List the prices in the catalog",
@@ -1933,7 +1977,7 @@
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.bmV4dF9iaWxsZWRfYXQ.short_desc": {
           "source": "Return entities next billed at a specific time",
-          "message": "Renvoie les entités dont la prochaine facturation est prévue à une heure spécifique"
+          "message": "Renvoie les entités dont la prochaine facturation est à cette date"
         },
         "app.UGFkZGxl.action.bGlzdF9zdWJzY3JpcHRpb25z.option.c2NoZWR1bGVkX2NoYW5nZV9hY3Rpb24.desc": {
           "source": "Return subscriptions that have a scheduled change. Use a comma-separated list to specify multiple scheduled change actions.",
@@ -2041,7 +2085,7 @@
         },
         "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+          "message": "Pass-through ; utiliser la sérialisation, laisser le client REST décider"
         },
         "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -2065,7 +2109,7 @@
         },
         "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
           "source": "Serialize body as application/x-www-form-urlencoded form fields",
-          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+          "message": "Sérialiser le corps en champs application/x-www-form-urlencoded"
         },
         "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
           "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
@@ -2290,6 +2334,10 @@
         "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "Chemin URI"
+        },
+        "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Chemin d'URI relatif à l'URL de base de l'API de la connexion"
         },
         "app.UGFkZGxl.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
@@ -2586,6 +2634,10 @@
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.display_name": {
           "source": "Customer",
           "message": "Client"
+        },
+        "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.Y3VzdG9tZXJfaWQ.short_desc": {
+          "source": "Paddle ID of the customer entity to work with.: Unique Paddle ID for this…",
+          "message": "ID Paddle du client à traiter : ID Paddle unique pour ceci…"
         },
         "app.UGFkZGxl.action.dXBkYXRlX2N1c3RvbWVy.option.ZW1haWw.desc": {
           "source": "Email address for this customer.",

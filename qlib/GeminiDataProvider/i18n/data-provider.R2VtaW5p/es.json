@@ -205,7 +205,7 @@
         },
         "app.R2VtaW5p.action.YmF0Y2gtZW1iZWQ.short_desc": {
           "source": "Generate embeddings for multiple content items in a single request",
-          "message": "Generar incrustaciones para múltiples elementos de contenido en una sola solicitud"
+          "message": "Genera incrustaciones para múltiples contenidos en una sola solicitud"
         },
         "app.R2VtaW5p.action.Z2VuZXJhdGUtY29udGVudA.desc": {
           "source": "Generate content with a Gemini model. Use the `prompt` field for simple text requests, or the `contents` field for multi-turn conversations and multimodal input. Supports system instructions, generation configuration, and safety settings",
@@ -589,7 +589,7 @@
         },
         "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+          "message": "Paso directo; usa serialización de conexión y deja decidir al cliente REST"
         },
         "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -839,6 +839,10 @@
           "source": "URI Path",
           "message": "Ruta URI"
         },
+        "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión"
+        },
         "app.R2VtaW5p.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash de valores sustituidos en los marcadores de posición `{name}` en la ruta URI. Ejemplo: con `path = /users/{id}` y `path_vars = {id: 123}`, el framework envía `/users/123`. Los valores están codificados en URL."
@@ -971,6 +975,10 @@
           "source": "Controls randomness in generation",
           "message": "Controla la aleatoriedad en la generación"
         },
+        "app.R2VtaW5p.action.c2ltcGxlLWNoYXQ.short_desc": {
+          "source": "Chat by sending one message",
+          "message": "Chatea enviando un solo mensaje"
+        },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.desc": {
           "source": "Stream content generation from a Gemini model via Server-Sent Events (SSE). Provides incremental responses as the model generates content",
           "message": "Transmita la generación de contenido desde un modelo de Gemini mediante Server-Sent Events (SSE). Proporciona respuestas incrementales a medida que el modelo genera contenido"
@@ -1065,7 +1073,7 @@
         },
         "app.R2VtaW5p.action.c3RyZWFtLWNvbnRlbnQ.short_desc": {
           "source": "Stream content generation from a Gemini model via Server-Sent Events",
-          "message": "Transmitir la generación de contenido desde un modelo de Gemini mediante Server-Sent Events"
+          "message": "Transmite generación de Gemini mediante Server-Sent Events"
         },
         "app.R2VtaW5p.action.dXBkYXRlLWNhY2hlZC1jb250ZW50.desc": {
           "source": "Update the expiration time or TTL of existing cached content",

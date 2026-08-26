@@ -145,7 +145,7 @@
         },
         "app.UW9yZQ.action.YW5vbWFseS1kZXRlY3Rpb24.short_desc": {
           "source": "Detect anomalous values using z-score analysis per record",
-          "message": "Détecter les valeurs anormales à l'aide de l'analyse du z-score par enregistrement"
+          "message": "Détecte les anomalies via l'analyse du score Z pour chaque enregistrement"
         },
         "app.UW9yZQ.action.Z3JvdXAtYnk.desc": {
           "source": "Group records by one or more field values and compute aggregate functions per group; emits one output record per group on flush with the group field values and computed aggregates.\n\nSupported aggregate functions: `count()`, `sum(field)`, `avg(field)`, `min(field)`, `max(field)`, `first(field)`, `last(field)`",
@@ -181,7 +181,7 @@
         },
         "app.UW9yZQ.action.Z3JvdXAtYnk.short_desc": {
           "source": "Group records by field values and compute aggregates per group",
-          "message": "Regrouper les enregistrements par valeurs de champs et calculer les agrégats par groupe"
+          "message": "Groupe les enregistrements par champ et calcule des agrégats par groupe"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.desc": {
           "source": "Monitors a process using an Exponentially Weighted Moving Average (EWMA) control chart to detect when values drift outside the normal operating range. The EWMA smooths out noise while detecting sustained shifts. Each record is classified as `normal`, `upper_violation`, or `lower_violation`.\n\nFor example, it can detect when a server's average response time gradually drifts upward beyond its normal range.",
@@ -249,7 +249,7 @@
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.dGFyZ2V0.short_desc": {
           "source": "Center line target value (omit for auto from window mean)",
-          "message": "Valeur cible de ligne centrale (omettre pour détection auto depuis la moyenne de la fenêtre)"
+          "message": "Valeur cible centrale (omettre pour calcul automatique via moyenne glissante)"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {
           "source": "Detects when values drift outside normal operating range",
@@ -545,7 +545,7 @@
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX011bHRpTGluZQ.short_desc": {
           "source": "Makes start-of-line '^' or end-of-line '$' match after or before any newline in the subject string",
-          "message": "Permet au début de ligne '^' ou à la fin de ligne '$' de correspondre après ou avant tout saut de ligne dans la chaîne cible"
+          "message": "'^' ou '$' correspondent après ou avant tout saut de ligne du texte cible"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0Nhc2VsZXNz.desc": {
           "source": "Ignore case when matching",
@@ -605,7 +605,7 @@
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX1VuaWNvZGU.short_desc": {
           "source": "Character matches match the full Unicode character set",
-          "message": "Les correspondances de caractères prennent en charge l'ensemble complet des caractères Unicode"
+          "message": "La correspondance de caractères prend en charge l'ensemble du jeu Unicode"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.desc": {
           "source": "A list of regular expression option names to apply when performing regex matching (e.g. `RE_Global`, `RE_Caseless`)",
@@ -837,7 +837,7 @@
         },
         "app.UW9yZQ.action.cnVubmluZy1zdGF0cw.short_desc": {
           "source": "Compute running statistics over windows of numeric records",
-          "message": "Calculer des statistiques glissantes sur des fenêtres d'enregistrements numériques"
+          "message": "Calcule des statistiques glissantes sur des fenêtres numériques"
         },
         "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.desc": {
           "source": "Compute linear regression trend analysis (`slope`, `intercept`, `r_squared`, `direction`) over a window of records for each configured numeric field; emits one analytics event per field when each window is full with the trend direction (`rising`, `falling`, or `flat`)",
@@ -885,7 +885,7 @@
         },
         "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.short_desc": {
           "source": "Detect trends using linear regression over windows of records",
-          "message": "Détecter les tendances à l'aide de la régression linéaire sur des fenêtres d'enregistrements"
+          "message": "Détecte des tendances par régression linéaire sur des fenêtres de données"
         },
         "app.UW9yZQ.desc": {
           "source": "Built-in Qore data pipeline processors for filtering, transforming, and manipulating records in data pipelines",

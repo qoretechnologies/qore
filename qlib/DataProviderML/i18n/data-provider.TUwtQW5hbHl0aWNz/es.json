@@ -249,7 +249,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2h1bmstdGV4dA.short_desc": {
           "source": "Breaks documents into overlapping pieces sized for AI search",
-          "message": "Divide documentos en fragmentos superpuestos con el tamaño adecuado para búsquedas con IA"
+          "message": "Divide documentos en fragmentos superpuestos aptos para búsqueda con IA"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2x1c3RlcmluZy1tZXRyaWNz.desc": {
           "source": "Measures whether the groups in your data are clearly separated or overlap too much. For example, after segmenting customers into \"budget\", \"regular\", and \"premium\" groups, this tells you whether the groups are genuinely distinct or whether many customers sit on the boundary between groups.\n\n**What you get**:\n- `silhouette_score` — ranges from `-1.0` (groups overlap badly) to `1.0` (perfectly separated); above `0.5` is generally good\n- `davies_bouldin_score` — measures how much groups bleed into each other; lower is better (`0.0` = no overlap at all)\n- `calinski_harabasz_score` — measures how tight each group is compared to how far apart the groups are; higher is better\n\nRecords accumulate in a batch; when full, a single scorecard is emitted.",
@@ -705,7 +705,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLWZpbHRlcg.short_desc": {
           "source": "Drops records that contain PII, prompt injections, or policy violations",
-          "message": "Descarta registros que contienen PII, inyecciones de prompts o infracciones de directivas"
+          "message": "Descarta registros con PII, inyecciones de prompt o infracciones"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLXRyYW5zZm9ybQ.desc": {
           "source": "Evaluates each record's text field against configured guardrail rules and enriches the record with results. Records always pass through (unlike the filter processor).\n\nEach record gets:\n- `_guardrail_passed` — whether the text passed all rules\n- `_guardrail_violations` — list of violations found\n\nIf PII redaction is configured, the text field is replaced with the redacted version.",
@@ -741,7 +741,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLXRyYW5zZm9ybQ.short_desc": {
           "source": "Enriches records with guardrail results and optionally redacts PII",
-          "message": "Enriquece los registros con los resultados de protección y opcionalmente redacta PII"
+          "message": "Enriquece registros con guardrails y redacta PII opcionalmente"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.desc": {
           "source": "Extracts text from any document format your users might upload — PDF files, photos of documents, scanned images, screenshots, and more.\n\nThe processor automatically detects the file type and applies the best extraction strategy:\n- **PDFs**: extracts the digital text layer (fast); scanned pages are automatically rasterized and OCR'd\n- **Images** (PNG, JPEG, TIFF, BMP, GIF, WebP): runs OCR directly\n- **SVG files**: renders to image first, then OCR\n\nEach record is enriched with:\n- `document_text` — the full extracted text\n- `document_format` — detected format (e.g., `PDF`, `JPEG`, `TIFF`)\n- `document_pages` — number of pages\n- `document_ocr_pages` — how many pages required OCR\n- `document_confidence` — average OCR confidence (0.0 to 1.0)\n\n**Optional modules:** `pdf` (for PDFs), `imagemagick` (for WebP, HEIC, and 100+ other formats), `cairo` (for SVGs).",
@@ -801,7 +801,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.option.bGFuZ3VhZ2U.desc": {
           "source": "Tesseract language code(s) for OCR. Use `+` to combine languages (e.g., `eng+deu` for English and German). Default: `eng`.",
-          "message": "Código(s) de idioma de Tesseract para OCR. Utilice `+` para combinar idiomas (p. ej., `eng+deu` para inglés y alemán). Predeterminado: `eng`."
+          "message": "Códigos de idioma de Tesseract para OCR. Use `+` para combinar idiomas (ej., `eng+deu` para inglés y alemán). Predeterminado: `eng`."
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.option.bGFuZ3VhZ2U.display_name": {
           "source": "OCR Language",
@@ -873,7 +873,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGF0YS1wcm9maWxl.short_desc": {
           "source": "Profiles data quality for specified fields in a batch of records",
-          "message": "Genera el perfil de calidad de datos para los campos especificados en un lote de registros"
+          "message": "Evalúa la calidad de datos en campos indicados para un lote de registros"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGJzY2FuLWNsdXN0ZXJpbmc.desc": {
           "source": "Discovers delivery zones, support ticket themes, or network traffic hotspots by automatically finding natural groups in data — without needing to specify how many groups exist. For example, given GPS coordinates of 5,000 deliveries, it might find 12 distinct delivery zones of varying shapes, plus label scattered outlier locations as noise.\n\nRecords accumulate in a window; when full, all are clustered. Each record receives:\n- `cluster` — group number, or `-1` for noise\n- `is_noise` — `True` if the record doesn't belong to any group",
@@ -1461,7 +1461,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.ZW1iZWQtdGV4dA.short_desc": {
           "source": "Turns text into numeric vectors for AI-powered similarity search",
-          "message": "Convierte texto en vectores numéricos para búsquedas por similitud impulsadas por IA"
+          "message": "Convierte texto en vectores numéricos para búsqueda de similitud con IA"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXdtYQ.desc": {
           "source": "Smooths noisy signals and tracks trends by computing exponential weighted moving averages (EWMA) for specified numeric fields. Unlike a simple moving average, EWMA gives more weight to recent values, making it more responsive to changes while still filtering out noise.\n\n**Use cases**:\n- Smooth CPU usage readings to distinguish real load spikes from noise\n- Track the trend in response times to detect gradual degradation\n- Create a baseline for anomaly detection by comparing raw values to their EWMA\n\nEach record passes through enriched with `{field}_ewma` fields (e.g., `temperature_ewma`, `cpu_usage_ewma`)",
@@ -2193,7 +2193,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.aG9sdC13aW50ZXJz.short_desc": {
           "source": "Predicts future values accounting for trends and seasonal patterns",
-          "message": "Predice valores futuros teniendo en cuenta las tendencias y los patrones estacionales"
+          "message": "Predice valores futuros considerando tendencias y patrones estacionales"
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.desc": {
           "source": "Automatically fills in missing values in your data so downstream analysis and ML steps can process complete records. For example, if 5%% of your sensor readings are missing due to connectivity issues, this processor fills them in with reasonable values based on the available data.\n\n**Strategies**:\n- **Average**: fill with the typical value (best for normally distributed data like temperatures)\n- **Middle value**: fill with the median (better when outliers are present, e.g., transaction amounts)\n- **Most common**: fill with the most frequently seen value (best for categorical-like data such as status codes)\n- **Fixed value**: fill with a specific number you choose (e.g., `0` or `-1` as a sentinel)\n\nRecords accumulate in a window. The first window learns the fill values from non-missing data; subsequent windows apply the same fill values. Each record receives:\n- `imputed_values` — the complete record with gaps filled in\n- `missing_count` — how many fields were missing in this record\n- `record_values` — the original values (with gaps) for comparison",
@@ -2285,7 +2285,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.short_desc": {
           "source": "Automatically fills gaps in your data using smart defaults",
-          "message": "Rellena automáticamente los huecos en sus datos utilizando valores predeterminados inteligentes"
+          "message": "Rellena automáticamente vacíos en sus datos con valores predeterminados"
         },
         "app.TUwtQW5hbHl0aWNz.action.aXNvbGF0aW9uLWZvcmVzdA.desc": {
           "source": "Catches fraudulent transactions, sensor malfunctions, and security intrusions by flagging records that stand out from normal data. For example, a $50,000 transaction when most are under $500 scores near `1.0` (highly anomalous), while a typical $45 purchase scores near `0.0`.\n\nRecords accumulate in a window; when full, all are scored together. Each record receives:\n- `anomaly_score` — `0.0` (normal) to `1.0` (highly unusual)\n- `is_anomaly` — `True`/`False` based on the threshold",
@@ -2845,7 +2845,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.bGluZWFyLXJlZ3Jlc3Npb24.short_desc": {
           "source": "Learns a formula to predict a target value from input fields",
-          "message": "Aprende una fórmula para predecir un valor objetivo a partir de campos de entrada"
+          "message": "Aprende una fórmula para predecir un valor objetivo a partir de entradas"
         },
         "app.TUwtQW5hbHl0aWNz.action.bWluLW1heC1zY2FsZXI.desc": {
           "source": "Converts field values to fit within a specific range (default `0.0` to `1.0`). For example, temperatures ranging from -20°C to 45°C become `0.0` to `1.0`, making them easy to compare with humidity (0%%–100%%) or wind speed (0–150 km/h).\n\n**When to use**: preparing data for scoring models, heat maps, or progress bars where you need values between fixed bounds. Also useful before feeding data into pre-trained ONNX models that expect normalized input.\n\n**Example**: normalizing `price`, `quantity`, and `weight` to `0`–`1` before displaying a product similarity score.\n\nRecords accumulate in a window. The first window learns the minimum and maximum of each field; subsequent windows apply the same normalization. Each record receives:\n- `scaled_values` — field values converted to the target range\n- `record_values` — the original values for comparison\n\nSet `output_mode` to `dataframe` to return flat `scaled_<field>` columns for DataFrame analytics pipelines instead of nested event hashes.",
@@ -2995,6 +2995,10 @@
           "source": "Schema defining validation rules for each field",
           "message": "Esquema que define las reglas de validación para cada campo"
         },
+        "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.short_desc": {
+          "source": "Validates each record against a schema",
+          "message": "Valida cada registro contra un esquema"
+        },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.desc": {
           "source": "Answers 'is this increase real growth or just a seasonal spike?' by separating a time series into its component parts. For example, monthly sales of $120K might decompose into $100K trend + $25K seasonal holiday boost - $5K random dip.\n\nRecords accumulate per field in a window; when full, all values are decomposed. Each record receives:\n- `trend` — long-term direction\n- `seasonal` — cyclical pattern (e.g., holiday shopping cycles)\n- `residual` — random noise remaining after removing trend and seasonal",
           "message": "Responde a '¿este aumento es crecimiento real o solo un pico estacional?' separando una serie temporal en sus partes componentes. Por ejemplo, unas ventas mensuales de $120K podrían descomponerse en $100K de tendencia + $25K de impulso navideño estacional - $5K de caída aleatoria.\n\nLos registros se acumulan por campo en una ventana; cuando está llena, se descomponen todos los valores. Cada registro recibe:\n- `trend` — dirección a largo plazo\n- `seasonal` — patrón cíclico (p. ej., ciclos de compras navideñas)\n- `residual` — ruido aleatorio restante tras eliminar la tendencia y la estacionalidad"
@@ -3069,7 +3073,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.short_desc": {
           "source": "Breaks time series data into trend, seasonal, and leftover parts",
-          "message": "Divide los datos de series temporales en componentes de tendencia, estacionales y residuales"
+          "message": "Divide series temporales en componentes de tendencia, estacional y residual"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2VtYW50aWMtY2h1bmstdGV4dA.desc": {
           "source": "Splits text into chunks at semantic boundaries rather than arbitrary token counts. Groups related sentences together by comparing embedding similarity between consecutive segments — when similarity drops below a threshold, a new chunk begins.\n\nEach input record produces one or more output records with:\n- `chunk_text` — the text of the semantic chunk\n- `chunk_index` — zero-based index of the chunk\n- `chunk_token_count` — number of tokens in the chunk\n\nBest for narrative documents (articles, reports, transcripts) where meaning flows across sentences. For structured documents with clear headings, use the standard `chunk-text` processor instead.",
@@ -3373,7 +3377,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.c2VtYW50aWMtY2h1bmstdGV4dA.short_desc": {
           "source": "Chunks text where topics change instead of at fixed token counts",
-          "message": "Divide el texto donde cambian los temas en lugar de hacerlo por recuentos fijos de tokens"
+          "message": "Divide texto donde cambian los temas en vez de usar un conteo fijo de tokens"
         },
         "app.TUwtQW5hbHl0aWNz.action.c3RhbmRhcmQtc2NhbGVy.desc": {
           "source": "Makes fields with different ranges directly comparable. For example, if \"age\" ranges from 18–65 and \"income\" ranges from 20,000–200,000, comparing them directly would let income dominate. This processor adjusts each field so they all center around `0` with similar spread.\n\n**When to use**: before clustering (Find Natural Groups), anomaly detection (Detect Unusual Data Points), or dimensionality reduction (Reduce Data Complexity) — any time your fields have different units or ranges.\n\n**Example**: standardizing `age`, `income`, and `credit_score` before customer segmentation ensures each factor contributes equally.\n\nRecords accumulate in a window. The first window learns the typical values for each field; subsequent windows apply the same adjustment. Each record receives:\n- `scaled_values` — the adjusted field values (centered around `0`)\n- `record_values` — the original values for comparison",
@@ -3821,7 +3825,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1yZWdyZXNzaW9u.short_desc": {
           "source": "Combines many decision trees for more accurate numeric predictions",
-          "message": "Combina varios árboles de decisión para obtener predicciones numéricas más precisas"
+          "message": "Combina árboles de decisión para predicciones numéricas más precisas"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVnaXN0cnktbW9kZWw.desc": {
           "source": "Loads a trained ML model from the model registry by name and runs inference on each batch of records. Supports any model type registered in the registry (KMeans, LinearRegression, IsolationForest, etc.). The model is loaded once and reused for all subsequent batches. Specify `tag` to load a specific tagged version (e.g., 'production') or `version` for a specific version ID. For registry-backed ONNX models, use `output_names` to materialize only selected output tensors.",

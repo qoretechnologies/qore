@@ -33,7 +33,7 @@
         },
         "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.option.ZGF0YQ.short_desc": {
           "source": "The data to send; will be serialized according to the serialization option",
-          "message": "Die zu sendenden Daten; werden entsprechend der Serialisierungsoption serialisiert"
+          "message": "Zu sendende Daten; werden gemäß der Serialisierungsoption serialisiert"
         },
         "app.V2ViU29ja2V0cw.action.c2VuZC1tc2ctZGF0YQ.short_desc": {
           "source": "Send a WebSocket data message",

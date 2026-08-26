@@ -225,7 +225,7 @@
         },
         "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+          "message": "Pass-through ; utiliser la sérialisation, laisser le client REST décider"
         },
         "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -249,7 +249,7 @@
         },
         "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
           "source": "Serialize body as application/x-www-form-urlencoded form fields",
-          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+          "message": "Sérialiser le corps en champs application/x-www-form-urlencoded"
         },
         "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
           "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
@@ -474,6 +474,10 @@
         "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "Chemin URI"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Chemin d'URI relatif à l'URL de base de l'API de la connexion"
         },
         "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
@@ -761,7 +765,7 @@
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.option.dXNlcm5hbWU.short_desc": {
           "source": "The team name; teams are Bitbucket's superseded name for workspaces",
-          "message": "Le nom de l'équipe ; les équipes sont l'ancienne appellation de Bitbucket pour les espaces de travail"
+          "message": "Nom d'équipe ; terme remplacé dans Bitbucket par les espaces de travail"
         },
         "app.Qml0YnVja2V0.action.c2VhcmNoVGVhbQ.short_desc": {
           "source": "Search the code in a team's repositories (deprecated by Bitbucket)",
@@ -2033,7 +2037,7 @@
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.short_desc": {
           "source": "A boolean flag indicating if merging the pull request closes the source branch",
-          "message": "Un indicateur booléen spécifiant si la fusion de la pull request ferme la branche source"
+          "message": "Indicateur booléen fermant la branche source lors de la fusion de la PR"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZGVzdGluYXRpb24.desc": {
           "source": "The branch the changes are merged into; the repository's main branch when unset.\n\nBitbucket declares this as a nested object; it is presented here as the branch name alone and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's nested branch reference, `{\"branch\": {\"name\": …}}`.",
@@ -2165,7 +2169,7 @@
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.short_desc": {
           "source": "A boolean flag indicating if merging the pull request closes the source branch",
-          "message": "Un indicateur booléen spécifiant si la fusion de la pull request ferme la branche source"
+          "message": "Indicateur booléen fermant la branche source lors de la fusion de la PR"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZGVzdGluYXRpb24.desc": {
           "source": "The branch the changes are merged into; the repository's main branch when unset.\n\nBitbucket declares this as a nested object; it is presented here as the branch name alone and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's nested branch reference, `{\"branch\": {\"name\": …}}`.",
@@ -2565,7 +2569,7 @@
         },
         "app.Qml0YnVja2V0.short_desc": {
           "source": "Work with Bitbucket Cloud repositories, pull requests and deployments",
-          "message": "Travailler avec les dépôts, les pull requests et les déploiements Bitbucket Cloud"
+          "message": "Travailler avec les dépôts, pull requests et déploiements Bitbucket Cloud"
         }
       }
     }

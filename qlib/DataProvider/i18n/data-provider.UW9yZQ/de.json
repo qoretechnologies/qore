@@ -545,7 +545,7 @@
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX011bHRpTGluZQ.short_desc": {
           "source": "Makes start-of-line '^' or end-of-line '$' match after or before any newline in the subject string",
-          "message": "Bewirkt, dass Zeilenanfang '^' oder Zeilenende '$' nach bzw. vor jedem Zeilenumbruch in der Zielzeichenfolge übereinstimmt"
+          "message": "Lässt '^' und '$' auf Zeilenanfänge und -enden an jedem Zeilenumbruch passen"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0Nhc2VsZXNz.desc": {
           "source": "Ignore case when matching",

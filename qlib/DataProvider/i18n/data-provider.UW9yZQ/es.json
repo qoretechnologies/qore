@@ -249,7 +249,7 @@
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.dGFyZ2V0.short_desc": {
           "source": "Center line target value (omit for auto from window mean)",
-          "message": "Valor objetivo de la línea central (omitir para auto a partir de la media de la ventana)"
+          "message": "Valor objetivo de la línea central (omitir para calcular de la ventana)"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {
           "source": "Detects when values drift outside normal operating range",
@@ -545,7 +545,7 @@
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX011bHRpTGluZQ.short_desc": {
           "source": "Makes start-of-line '^' or end-of-line '$' match after or before any newline in the subject string",
-          "message": "Hace que el inicio de línea '^' o el fin de línea '$' coincidan después o antes de cualquier salto de línea en la cadena evaluada"
+          "message": "Hace que '^' o '$' coincidan tras o antes de cualquier salto de línea"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0Nhc2VsZXNz.desc": {
           "source": "Ignore case when matching",
@@ -581,7 +581,7 @@
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0V4dGVuZGVk.short_desc": {
           "source": "Ignores whitespace characters and enables comments prefixed by '#'",
-          "message": "Ignora los caracteres de espacio en blanco y permite comentarios con el prefijo '#'"
+          "message": "Ignora espacios en blanco y habilita comentarios con prefijo '#'"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0dsb2JhbA.desc": {
           "source": "Match all occurrences, not just the first",
@@ -605,7 +605,7 @@
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX1VuaWNvZGU.short_desc": {
           "source": "Character matches match the full Unicode character set",
-          "message": "Las coincidencias de caracteres corresponden a todo el conjunto de caracteres Unicode"
+          "message": "Las coincidencias abarcan el juego completo de caracteres Unicode"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.desc": {
           "source": "A list of regular expression option names to apply when performing regex matching (e.g. `RE_Global`, `RE_Caseless`)",

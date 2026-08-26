@@ -297,7 +297,7 @@
         },
         "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.short_desc": {
           "source": "Custom text sequences that will cause the model to stop generating",
-          "message": "Benutzerdefinierte Textsequenzen, die dazu führen, dass das Modell die Generierung stoppt"
+          "message": "Benutzerdefinierte Textsequenzen, die die Modellgenerierung stoppen"
         },
         "app.QW50aHJvcGlj.action.Y3JlYXRlLW1lc3NhZ2U.option.c3lzdGVt.desc": {
           "source": "System prompt providing context and instructions. Can be a string or a list of content blocks for cache control",
@@ -901,7 +901,7 @@
         },
         "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Durchreichen; Verbindungsserialisierung verwenden und den REST-Client entscheiden lassen"
+          "message": "Durchreichen; Verbindungsserialisierung nutzen, REST-Client entscheiden lassen"
         },
         "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -1151,6 +1151,10 @@
           "source": "URI Path",
           "message": "URI-Pfad"
         },
+        "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung"
+        },
         "app.QW50aHJvcGlj.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash von Werten, die in `{name}`-Platzhalter im URI-Pfad eingesetzt werden. Beispiel: Bei `path = /users/{id}` und `path_vars = {id: 123}` sendet das Framework `/users/123`. Werte werden URL-codiert."
@@ -1353,7 +1357,7 @@
         },
         "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3RvcF9zZXF1ZW5jZXM.short_desc": {
           "source": "Custom text sequences that will cause the model to stop generating",
-          "message": "Benutzerdefinierte Textsequenzen, die dazu führen, dass das Modell die Generierung stoppt"
+          "message": "Benutzerdefinierte Textsequenzen, die die Modellgenerierung stoppen"
         },
         "app.QW50aHJvcGlj.action.c3RyZWFtLW1lc3NhZ2U.option.c3lzdGVt.desc": {
           "source": "System prompt providing context and instructions. Can be a string or a list of content blocks for cache control",

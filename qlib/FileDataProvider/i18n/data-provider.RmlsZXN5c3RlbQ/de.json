@@ -163,6 +163,10 @@
           "source": "Text",
           "message": "Text"
         },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "Wenn 'True', wird die Datei als String geliefert, bei 'False' (Standard) als…"
+        },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
           "source": "Get a file on the server filesystem",
           "message": "Eine Datei im Server-Dateisystem abrufen"
@@ -213,7 +217,7 @@
         },
         "app.RmlsZXN5c3RlbQ.action.bGlzdA.short_desc": {
           "source": "List files and subdirectories in a folder on the server filesystem",
-          "message": "Dateien und Unterverzeichnisse in einem Ordner auf dem Server-Dateisystem auflisten"
+          "message": "Dateien und Unterverzeichnisse in einem Serverordner auflisten"
         },
         "app.RmlsZXN5c3RlbQ.action.bW92ZQ.desc": {
           "source": "Move a file or directory on the server filesystem",
@@ -314,6 +318,10 @@
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.display_name": {
           "source": "Symlink",
           "message": "Symlink"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.short_desc": {
+          "source": "If 'True', then if the target path is a symbolic link, information about the…",
+          "message": "Wenn 'True' und Zielpfad ein Symlink ist, werden Informationen über den…"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.desc": {
           "source": "The file path",

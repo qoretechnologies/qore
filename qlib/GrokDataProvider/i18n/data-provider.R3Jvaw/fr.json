@@ -237,7 +237,7 @@
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
           "source": "A key for caching prompts to optimize cache hit rates",
-          "message": "Une clé pour mettre en cache les prompts afin d'optimiser le taux de réussite du cache"
+          "message": "Clé de mise en cache des prompts pour optimiser le taux de succès du cache"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
           "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
@@ -645,7 +645,7 @@
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
           "source": "A key for caching prompts to optimize cache hit rates",
-          "message": "Une clé pour mettre en cache les prompts afin d'optimiser le taux de réussite du cache"
+          "message": "Clé de mise en cache des prompts pour optimiser le taux de succès du cache"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cmVhc29uaW5n.desc": {
           "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
@@ -957,7 +957,7 @@
         },
         "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+          "message": "Pass-through ; utiliser la sérialisation, laisser le client REST décider"
         },
         "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -981,7 +981,7 @@
         },
         "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
           "source": "Serialize body as application/x-www-form-urlencoded form fields",
-          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+          "message": "Sérialiser le corps en champs application/x-www-form-urlencoded"
         },
         "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
           "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
@@ -1207,6 +1207,10 @@
           "source": "URI Path",
           "message": "Chemin URI"
         },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Chemin d'URI relatif à l'URL de base de l'API de la connexion"
+        },
         "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hachage des valeurs substituées dans les espaces réservés `{name}` dans le chemin URI. Exemple : avec `path = /users/{id}` et `path_vars = {id: 123}`, le framework envoie `/users/123`. Les valeurs sont encodées en URL."
@@ -1325,7 +1329,7 @@
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.short_desc": {
           "source": "The maximum number of tokens to generate (deprecated; use max_completion_tokens)",
-          "message": "Le nombre maximum de jetons à générer (déprécié ; utilisez max_completion_tokens)"
+          "message": "Nombre max de tokens à générer (obsolète ; utiliser max_completion_tokens)"
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.desc": {
           "source": "A list of messages comprising the conversation so far",
@@ -1433,7 +1437,7 @@
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
           "source": "Penalizes new tokens based on appearance in text (-2.0 to 2.0)",
-          "message": "Pénalise les nouveaux jetons en fonction de leur présence dans le texte (-2,0 à 2,0)"
+          "message": "Pénalise les nouveaux tokens selon leur présence dans le texte (-2,0 à 2,0)"
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.cmVhc29uaW5nX2VmZm9ydA.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
           "source": "Medium reasoning effort",
@@ -1605,7 +1609,7 @@
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.short_desc": {
           "source": "Chat with Grok using multiple messages with multi-reply support",
-          "message": "Discuter avec Grok en utilisant plusieurs messages avec prise en charge des réponses multiples"
+          "message": "Discuter avec Grok par messages multiples avec gestion multi-réponses"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.desc": {
           "source": "Chat with Grok by sending a single message and receiving a single reply",
@@ -1709,7 +1713,7 @@
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.short_desc": {
           "source": "The maximum number of tokens to generate (deprecated; use max_completion_tokens)",
-          "message": "Le nombre maximum de jetons à générer (déprécié ; utilisez max_completion_tokens)"
+          "message": "Nombre max de tokens à générer (obsolète ; utiliser max_completion_tokens)"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bmFtZQ.desc": {
           "source": "An optional name for the participant",
@@ -1805,7 +1809,7 @@
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
           "source": "Penalizes new tokens based on appearance in text (-2.0 to 2.0)",
-          "message": "Pénalise les nouveaux jetons en fonction de leur présence dans le texte (-2,0 à 2,0)"
+          "message": "Pénalise les nouveaux tokens selon leur présence dans le texte (-2,0 à 2,0)"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.desc": {
           "source": "The author is an assistant",
@@ -2261,7 +2265,7 @@
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
           "source": "A key for caching prompts to optimize cache hit rates",
-          "message": "Une clé pour mettre en cache les prompts afin d'optimiser le taux de réussite du cache"
+          "message": "Clé de mise en cache des prompts pour optimiser le taux de succès du cache"
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
           "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",

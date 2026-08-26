@@ -91,6 +91,10 @@
           "source": "Enforce Header Order",
           "message": "Header-Reihenfolge erzwingen"
         },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of headers",
+          "message": "Falls true, werden die Eingabedaten in Kopfzeilen-Reihenfolge sortiert"
+        },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVycw.desc": {
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
           "message": "Liste der Header-/Spaltennamen für die iterierten Daten; falls vorhanden, muss `header_names` `false` sein"
@@ -125,7 +129,7 @@
         },
         "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.short_desc": {
           "source": "If true, leading and trailing whitespace will be stripped from non-quoted fields",
-          "message": "Wenn true, werden führende und nachgestellte Leerzeichen aus nicht in Anführungszeichen gesetzten Feldern entfernt"
+          "message": "Wenn true, werden Leerzeichen an den Rändern nicht zitierter Felder entfernt"
         },
         "app.Q3N2.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.desc": {
           "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
@@ -209,7 +213,7 @@
         },
         "app.Q3N2.action.cmVhZA.option.dmVyaWZ5X2NvbHVtbnM.short_desc": {
           "source": "Verifies input data to ensure it has the expected structure",
-          "message": "Überprüft Eingabedaten, um sicherzustellen, dass sie die erwartete Struktur aufweisen"
+          "message": "Überprüft Eingabedaten auf die erwartete Struktur"
         },
         "app.Q3N2.action.cmVhZA.short_desc": {
           "source": "Read CSV file data from a specific file location",
@@ -315,6 +319,10 @@
           "source": "Enforce Header Order",
           "message": "Header-Reihenfolge erzwingen"
         },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of headers",
+          "message": "Falls true, werden die Eingabedaten in Kopfzeilen-Reihenfolge sortiert"
+        },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
           "message": "Liste der Header-/Spaltennamen für die iterierten Daten; falls vorhanden, muss `header_names` `false` sein"
@@ -349,7 +357,7 @@
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.short_desc": {
           "source": "If true, leading and trailing whitespace will be stripped from non-quoted fields",
-          "message": "Wenn true, werden führende und nachgestellte Leerzeichen aus nicht in Anführungszeichen gesetzten Feldern entfernt"
+          "message": "Wenn true, werden Leerzeichen an den Rändern nicht zitierter Felder entfernt"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.bnVtYmVyX2Zvcm1hdA.desc": {
           "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
@@ -433,7 +441,7 @@
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.dmVyaWZ5X2NvbHVtbnM.short_desc": {
           "source": "Verifies input data to ensure it has the expected structure",
-          "message": "Überprüft Eingabedaten, um sicherzustellen, dass sie die erwartete Struktur aufweisen"
+          "message": "Überprüft Eingabedaten auf die erwartete Struktur"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.short_desc": {
           "source": "Read CSV inline data",
@@ -526,6 +534,10 @@
         "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
           "message": "Header-Reihenfolge erzwingen"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the output data will be reordered in the order of headers",
+          "message": "Wenn true, werden die Ausgabedaten nach der Header-Reihenfolge sortiert"
         },
         "app.Q3N2.action.d3JpdGU.option.aGVhZGVycw.desc": {
           "source": "List of field / header names for the data output",
@@ -645,7 +657,7 @@
         },
         "app.Q3N2.action.d3JpdGU.option.dmVyaWZ5X2NvbHVtbnM.short_desc": {
           "source": "Verifies input data to ensure it has the expected structure",
-          "message": "Überprüft Eingabedaten, um sicherzustellen, dass sie die erwartete Struktur aufweisen"
+          "message": "Überprüft Eingabedaten auf die erwartete Struktur"
         },
         "app.Q3N2.action.d3JpdGU.short_desc": {
           "source": "Write CSV file data to a specific file location",

@@ -537,7 +537,7 @@
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.aWdub3JlX2Nhc2U.short_desc": {
           "source": "Match the filename pattern case-insensitively?",
-          "message": "Trovare la corrispondenza del pattern del nome file senza distinguere tra maiuscole e minuscole?"
+          "message": "Trovare la corrispondenza senza distinguere maiuscole e minuscole?"
         },
         "app.SU1BUA.action.d2F0Y2gtYXR0YWNobWVudA.option.bWFpbGJveA.desc": {
           "source": "The mailbox to watch for new messages",

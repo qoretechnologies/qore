@@ -79,6 +79,10 @@
           "source": "Created Via",
           "message": "Creado mediante"
         },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3JlYXRlZF92aWE.short_desc": {
+          "source": "Identifier showing where the order originated (e.g. 'rest-api', 'checkout')",
+          "message": "Identificador del origen del pedido (p. ej., 'rest-api', 'checkout')"
+        },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.desc": {
           "source": "Three-letter ISO currency code (e.g., `USD`, `EUR`)",
           "message": "Código de moneda ISO de tres letras (p. ej., `USD`, `EUR`)"
@@ -86,6 +90,10 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.display_name": {
           "source": "Currency",
           "message": "Moneda"
+        },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.short_desc": {
+          "source": "Three-letter ISO currency code (e.g., 'USD', 'EUR')",
+          "message": "Código de moneda ISO de tres letras (p. ej., 'USD', 'EUR')"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJfaWQ.desc": {
           "source": "The customer ID for the order",
@@ -278,6 +286,10 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.cGF5bWVudF9tZXRob2Q.display_name": {
           "source": "Payment Method",
           "message": "Método de pago"
+        },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.cGF5bWVudF9tZXRob2Q.short_desc": {
+          "source": "Payment method identifier (e.g., 'bacs', 'paypal')",
+          "message": "Identificador del método de pago (p. ej., 'bacs', 'paypal')"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.cGF5bWVudF9tZXRob2RfdGl0bGU.desc": {
           "source": "Human-readable payment method title",
@@ -647,6 +659,10 @@
           "source": "Email Restrictions",
           "message": "Restricciones de correo electrónico"
         },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.option.ZW1haWxfcmVzdHJpY3Rpb25z.short_desc": {
+          "source": "List of email addresses (or domain wildcards like '*@example.com') that can…",
+          "message": "Lista de correos (o comodines de dominio como '*@example.com') que pueden…"
+        },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.option.ZXhjbHVkZV9zYWxlX2l0ZW1z.desc": {
           "source": "If `True`, the coupon will not apply to items on sale",
           "message": "Si es `True`, el cupón no se aplicará a los artículos en oferta"
@@ -935,6 +951,10 @@
           "source": "Download Expiry",
           "message": "Caducidad de la descarga"
         },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfZXhwaXJ5.short_desc": {
+          "source": "Number of days before download access expires ('-1' for never) — only used…",
+          "message": "Días hasta que expire el acceso ('-1' para nunca); solo si…"
+        },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.desc": {
           "source": "Maximum number of downloads per purchase (`-1` for unlimited) — only used when `downloadable` is `True`",
           "message": "Número máximo de descargas por compra (`-1` para ilimitadas); solo se usa cuando `downloadable` es `True`"
@@ -942,6 +962,10 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.display_name": {
           "source": "Download Limit",
           "message": "Límite de descarga"
+        },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.short_desc": {
+          "source": "Maximum number of downloads per purchase ('-1' for unlimited) — only used when…",
+          "message": "Descargas máximas por compra ('-1' para ilimitadas); solo cuando…"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRhYmxl.desc": {
           "source": "If `True`, the product is downloadable. Selecting this exposes the `downloads`, `download_limit`, and `download_expiry` fields.",
@@ -1001,7 +1025,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVmYXVsdF9hdHRyaWJ1dGVz.short_desc": {
           "source": "Default selected attribute options — only used when 'type' is 'variable'",
-          "message": "Opciones de atributos seleccionadas por defecto; solo se usa cuando 'type' es 'variable'"
+          "message": "Opciones de atributo por defecto; solo cuando 'type' es 'variable'"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
           "source": "The full product description (may contain HTML)",
@@ -1073,7 +1097,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.bG93X3N0b2NrX2Ftb3VudA.short_desc": {
           "source": "The threshold below which the product is considered low stock",
-          "message": "El umbral por debajo del cual se considera que el producto tiene pocas existencias"
+          "message": "Umbral por debajo del cual se considera que el producto tiene poco stock"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.bWFuYWdlX3N0b2Nr.desc": {
           "source": "If `True`, stock management is enabled at the product level",
@@ -1354,6 +1378,10 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGF4X2NsYXNz.display_name": {
           "source": "Tax Class",
           "message": "Clase de impuesto"
+        },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGF4X2NsYXNz.short_desc": {
+          "source": "Tax class slug (e.g. 'standard', 'reduced-rate', 'zero-rate')",
+          "message": "Slug de clase de impuesto (p. ej., 'standard', 'reduced-rate', 'zero-rate')"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGF4X3N0YXR1cw.allowed-value.c3RyaW5nOm5vbmU.desc": {
           "source": "None",
@@ -1925,7 +1953,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXdlYmhvb2s.option.c2VjcmV0.short_desc": {
           "source": "Secret key used to generate a hash of the delivered webhook for verification",
-          "message": "Clave secreta utilizada para generar un hash del webhook entregado para su verificación"
+          "message": "Clave secreta para generar un hash de verificación del webhook entregado"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXdlYmhvb2s.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
           "source": "active",
@@ -2370,6 +2398,10 @@
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.option.Z3JvdXA.display_name": {
           "source": "Group",
           "message": "Grupo"
+        },
+        "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.option.Z3JvdXA.short_desc": {
+          "source": "The settings group ID (e.g., 'general', 'products', 'tax')",
+          "message": "ID del grupo de ajustes (p. ej., 'general', 'products', 'tax')"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.option.c2V0dGluZ19pZA.desc": {
           "source": "The setting identifier within the group",
@@ -4809,7 +4841,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Paso directo; utiliza la serialización de la conexión y deja que el cliente REST decida"
+          "message": "Paso directo; usa serialización de conexión y deja decidir al cliente REST"
         },
         "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -5058,6 +5090,10 @@
         "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "Ruta URI"
+        },
+        "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "La ruta URI relativa a la URL base de la API de la conexión"
         },
         "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
@@ -6135,6 +6171,10 @@
           "source": "Download Expiry",
           "message": "Caducidad de la descarga"
         },
+        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfZXhwaXJ5.short_desc": {
+          "source": "Number of days before download access expires ('-1' for never) — only used…",
+          "message": "Días hasta que expire el acceso ('-1' para nunca); solo si…"
+        },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.desc": {
           "source": "Maximum number of downloads per purchase (`-1` for unlimited) — only used when `downloadable` is `True`",
           "message": "Número máximo de descargas por compra (`-1` para ilimitadas); solo se usa cuando `downloadable` es `True`"
@@ -6142,6 +6182,10 @@
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.display_name": {
           "source": "Download Limit",
           "message": "Límite de descarga"
+        },
+        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.short_desc": {
+          "source": "Maximum number of downloads per purchase ('-1' for unlimited) — only used when…",
+          "message": "Descargas máximas por compra ('-1' para ilimitadas); solo cuando…"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRhYmxl.desc": {
           "source": "If `True`, the product is downloadable. Selecting this exposes the `downloads`, `download_limit`, and `download_expiry` fields.",
@@ -6201,7 +6245,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVmYXVsdF9hdHRyaWJ1dGVz.short_desc": {
           "source": "Default selected attribute options — only used when 'type' is 'variable'",
-          "message": "Opciones de atributos seleccionadas por defecto; solo se usa cuando 'type' es 'variable'"
+          "message": "Opciones de atributo por defecto; solo cuando 'type' es 'variable'"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
           "source": "The full product description",
@@ -6285,7 +6329,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.bG93X3N0b2NrX2Ftb3VudA.short_desc": {
           "source": "The threshold below which the product is considered low stock",
-          "message": "El umbral por debajo del cual se considera que el producto tiene pocas existencias"
+          "message": "Umbral por debajo del cual se considera que el producto tiene poco stock"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.bWFuYWdlX3N0b2Nr.desc": {
           "source": "If `True`, stock management is enabled",
@@ -6567,6 +6611,10 @@
           "source": "Tax Class",
           "message": "Clase de impuesto"
         },
+        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGF4X2NsYXNz.short_desc": {
+          "source": "Tax class slug (e.g. 'standard', 'reduced-rate', 'zero-rate')",
+          "message": "Slug de clase de impuesto (p. ej., 'standard', 'reduced-rate', 'zero-rate')"
+        },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGF4X3N0YXR1cw.allowed-value.c3RyaW5nOm5vbmU.desc": {
           "source": "None",
           "message": "Ninguno"
@@ -6738,6 +6786,10 @@
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.option.Z3JvdXA.display_name": {
           "source": "Group",
           "message": "Grupo"
+        },
+        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.option.Z3JvdXA.short_desc": {
+          "source": "The settings group ID (e.g., 'general', 'products', 'tax')",
+          "message": "ID del grupo de ajustes (p. ej., 'general', 'products', 'tax')"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.option.c2V0dGluZ19pZA.desc": {
           "source": "The setting identifier within the group",
@@ -7370,6 +7422,10 @@
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.option.dG9waWM.display_name": {
           "source": "Topic",
           "message": "Tema"
+        },
+        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.option.dG9waWM.short_desc": {
+          "source": "The webhook topic (e.g. 'order.created', 'product.updated')",
+          "message": "Tema del webhook (p. ej., 'order.created', 'product.updated')"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
           "source": "Update an existing webhook",

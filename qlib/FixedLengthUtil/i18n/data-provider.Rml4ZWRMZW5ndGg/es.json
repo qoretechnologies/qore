@@ -253,7 +253,7 @@
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.short_desc": {
           "source": "Write fixed-length file data to a specific file location",
-          "message": "Escribir datos de archivo de longitud fija en una ubicación de archivo específica"
+          "message": "Escribe datos de longitud fija en una ubicación de archivo específica"
         },
         "app.Rml4ZWRMZW5ndGg.desc": {
           "source": "Read and write fixed-length file data",

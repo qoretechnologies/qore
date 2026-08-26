@@ -43,6 +43,10 @@
           "source": "Text",
           "message": "Texte"
         },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "Si 'True', renvoyé sous forme de chaîne ; si 'False' (défaut), en tant que…"
+        },
         "app.RlRQ.action.Z2V0LWZpbGU.short_desc": {
           "source": "Get a file from an FTP server",
           "message": "Obtenir un fichier depuis un serveur FTP"
@@ -110,6 +114,10 @@
         "app.RlRQ.action.c2VuZC1maWxl.option.dGV4dA.display_name": {
           "source": "Text",
           "message": "Texte"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "Si 'True', renvoyé sous forme de chaîne ; si 'False' (défaut), en tant que…"
         },
         "app.RlRQ.action.c2VuZC1maWxl.short_desc": {
           "source": "Sends a file to an FTP server",

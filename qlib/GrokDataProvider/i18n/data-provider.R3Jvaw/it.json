@@ -237,7 +237,7 @@
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
           "source": "A key for caching prompts to optimize cache hit rates",
-          "message": "Una chiave per la memorizzazione nella cache dei prompt per ottimizzare i tassi di successo della cache"
+          "message": "Chiave per memorizzare i prompt nella cache e ottimizzare i riscontri"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
           "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
@@ -645,7 +645,7 @@
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
           "source": "A key for caching prompts to optimize cache hit rates",
-          "message": "Una chiave per la memorizzazione nella cache dei prompt per ottimizzare i tassi di successo della cache"
+          "message": "Chiave per memorizzare i prompt nella cache e ottimizzare i riscontri"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cmVhc29uaW5n.desc": {
           "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
@@ -957,7 +957,7 @@
         },
         "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Pass-through; usa la serializzazione della connessione e lascia decidere al client REST"
+          "message": "Pass-through: usa serializzazione connessione e lascia decidere al client REST"
         },
         "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -1089,7 +1089,7 @@
         },
         "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
           "source": "Include request/timing/size debug info in the response",
-          "message": "Includi le informazioni di debug relative a richiesta/tempi/dimensioni nella risposta"
+          "message": "Includi info di debug su richiesta/tempi/dimensioni nella risposta"
         },
         "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
           "source": "HTTP `OPTIONS`",
@@ -1206,6 +1206,10 @@
         "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "Percorso URI"
+        },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Il percorso URI relativo all'URL di base dell'API della connessione"
         },
         "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
@@ -1325,7 +1329,7 @@
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.short_desc": {
           "source": "The maximum number of tokens to generate (deprecated; use max_completion_tokens)",
-          "message": "Il numero massimo di token da generare (deprecato; utilizzare max_completion_tokens)"
+          "message": "Numero max di token da generare (deprecato; usa max_completion_tokens)"
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.desc": {
           "source": "A list of messages comprising the conversation so far",
@@ -1385,7 +1389,7 @@
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RvcA.short_desc": {
           "source": "Up to 4 sequences where the API will stop generating further tokens",
-          "message": "Fino a 4 sequenze in corrispondenza delle quali l'API smetterà di generare ulteriori token"
+          "message": "Fino a 4 sequenze in corrispondenza delle quali interrompere i token"
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFt.desc": {
           "source": "If `true`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
@@ -1517,7 +1521,7 @@
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "The model can pick between generating a message or calling tools",
-          "message": "Il modello può scegliere tra la generazione di un messaggio o la chiamata di strumenti"
+          "message": "Il modello può scegliere se generare un messaggio o chiamare strumenti"
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
           "source": "The model must call one or more tools",
@@ -1709,7 +1713,7 @@
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.short_desc": {
           "source": "The maximum number of tokens to generate (deprecated; use max_completion_tokens)",
-          "message": "Il numero massimo di token da generare (deprecato; utilizzare max_completion_tokens)"
+          "message": "Numero max di token da generare (deprecato; usa max_completion_tokens)"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bmFtZQ.desc": {
           "source": "An optional name for the participant",
@@ -1757,7 +1761,7 @@
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RvcA.short_desc": {
           "source": "Up to 4 sequences where the API will stop generating further tokens",
-          "message": "Fino a 4 sequenze in corrispondenza delle quali l'API smetterà di generare ulteriori token"
+          "message": "Fino a 4 sequenze in corrispondenza delle quali interrompere i token"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.desc": {
           "source": "If `true`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
@@ -1937,7 +1941,7 @@
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "The model can pick between generating a message or calling tools",
-          "message": "Il modello può scegliere tra la generazione di un messaggio o la chiamata di strumenti"
+          "message": "Il modello può scegliere se generare un messaggio o chiamare strumenti"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
           "source": "The model must call one or more tools",
@@ -2261,7 +2265,7 @@
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
           "source": "A key for caching prompts to optimize cache hit rates",
-          "message": "Una chiave per la memorizzazione nella cache dei prompt per ottimizzare i tassi di successo della cache"
+          "message": "Chiave per memorizzare i prompt nella cache e ottimizzare i riscontri"
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
           "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",

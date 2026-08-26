@@ -21,7 +21,7 @@
         },
         "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWFzaw.short_desc": {
           "source": "The polling mask to use to match files to poll",
-          "message": "La maschera di polling da utilizzare per trovare la corrispondenza con i file di cui eseguire il polling"
+          "message": "La maschera di polling da usare per trovare i file da verificare"
         },
         "app.RmlsZXN5c3RlbQ.action.ZmlsZS1yZWNlaXZlZA.option.bWluYWdl.desc": {
           "source": "An integer giving the minimum file age in seconds before the file will be polled; this is meant to work around non-atomic file transfer operations.\n\nIf this option is necessary, set it to a value that is larger than the longest time it should take to transfer a file",

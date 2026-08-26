@@ -2,7 +2,2912 @@
   "schema_version": 1,
   "locales": {
     "de": {
-      "messages": {}
+      "messages": {
+        "app.S2xhdml5bw.action.Y3JlYXRl.desc": {
+          "source": "Creates new records in the given table",
+          "message": "Erstellt neue Datensätze in der angegebenen Tabelle"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.display_name": {
+          "source": "Create Records",
+          "message": "Datensätze erstellen"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "Die zu verwendende Tabelle: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` oder `events`"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabelle"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Der Name der zu bearbeitenden Tabelle"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.short_desc": {
+          "source": "Create new records in the given table",
+          "message": "Neue Datensätze in der angegebenen Tabelle erstellen"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.desc": {
+          "source": "Creates a profile, or updates the one already carrying the identifier given.\n\nKlaviyo matches on `id` when it is set, and otherwise on `email`, `phoneNumber` or `externalId` - so this is the action to use when the person may already be known. A custom property supplied here **replaces** the stored value; use **Update Profile** with `meta.patch_properties` to append to one instead.",
+          "message": "Erstellt ein Profil oder aktualisiert das Profil, das bereits die angegebene Kennung besitzt.\n\nKlaviyo gleicht vorrangig über `id` ab, wenn gesetzt, und ansonsten über `email`, `phoneNumber` oder `externalId` – verwenden Sie diese Aktion daher, wenn die Person möglicherweise bereits bekannt ist. Eine hier angegebene benutzerdefinierte Eigenschaft **ersetzt** den gespeicherten Wert; verwenden Sie **Update Profile** mit `meta.patch_properties`, um Werte stattdessen anzuhängen."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.display_name": {
+          "source": "Create Or Update Profile",
+          "message": "Profil erstellen oder aktualisieren"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y291bnRyeQ.desc": {
+          "source": "Country name",
+          "message": "Ländername"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Land"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "Ländername"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "Stadtname"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Stadt"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y2l0eQ.short_desc": {
+          "source": "City name",
+          "message": "Stadtname"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y3VzdG9tUHJvcGVydGllcw.desc": {
+          "source": "Your own properties to store on the profile, as name/value pairs.\n\nKlaviyo reserves property names beginning with `$`.",
+          "message": "Eigene Eigenschaften, die im Profil als Name-Wert-Paare gespeichert werden sollen.\n\nKlaviyo reserviert Eigenschaftsnamen, die mit `$` beginnen."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y3VzdG9tUHJvcGVydGllcw.display_name": {
+          "source": "Custom Properties",
+          "message": "Benutzerdefinierte Eigenschaften"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y3VzdG9tUHJvcGVydGllcw.short_desc": {
+          "source": "Your own properties to store on the profile",
+          "message": "Eigene Eigenschaften zur Speicherung im Profil"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczE.desc": {
+          "source": "First line of street address",
+          "message": "Erste Zeile der Straßenadresse"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczE.display_name": {
+          "source": "Address Line 1",
+          "message": "Adresszeile 1"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczE.short_desc": {
+          "source": "First line of street address",
+          "message": "Erste Zeile der Straßenadresse"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczI.desc": {
+          "source": "Second line of street address",
+          "message": "Zweite Zeile der Straßenadresse"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczI.display_name": {
+          "source": "Address Line 2",
+          "message": "Adresszeile 2"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczI.short_desc": {
+          "source": "Second line of street address",
+          "message": "Zweite Zeile der Straßenadresse"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZW1haWw.desc": {
+          "source": "Individual's email address",
+          "message": "E-Mail-Adresse der Person"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "E-Mail"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZW1haWw.short_desc": {
+          "source": "The profile's e-mail address",
+          "message": "Die E-Mail-Adresse des Profils"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZXh0ZXJuYWxJZA.desc": {
+          "source": "Your own identifier for this person, so that a profile can be found by the ID it has in your system rather than by e-mail",
+          "message": "Ihre eigene Kennung für diese Person, sodass ein Profil über die ID in Ihrem System statt über die E-Mail-Adresse gefunden werden kann"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZXh0ZXJuYWxJZA.display_name": {
+          "source": "External ID",
+          "message": "Externe ID"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZXh0ZXJuYWxJZA.short_desc": {
+          "source": "Your own identifier for this person",
+          "message": "Ihre eigene Kennung für diese Person"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Zmlyc3ROYW1l.desc": {
+          "source": "Individual's first name",
+          "message": "Vorname der Person"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Vorname"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Individual's first name",
+          "message": "Vorname der Person"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aW1hZ2VVcmw.desc": {
+          "source": "URL pointing to the location of a profile image",
+          "message": "URL zum Speicherort eines Profilbilds"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aW1hZ2VVcmw.display_name": {
+          "source": "Image URL",
+          "message": "Bild-URL"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aW1hZ2VVcmw.short_desc": {
+          "source": "A URL for the profile's avatar",
+          "message": "Eine URL für das Avatarbild des Profils"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aWQ.desc": {
+          "source": "The profile to update.\n\nLeave it unset to match on an identifier instead, which is the usual way to use this action.",
+          "message": "Das zu aktualisierende Profil.\n\nNicht setzen, um stattdessen über eine Kennung abzugleichen, was die übliche Verwendung dieser Aktion ist."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aWQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aWQ.short_desc": {
+          "source": "The profile to update, if it is already known",
+          "message": "Das zu aktualisierende Profil, falls bereits bekannt"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aXA.desc": {
+          "source": "IP Address",
+          "message": "IP-Adresse"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aXA.display_name": {
+          "source": "IP Address",
+          "message": "IP-Adresse"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aXA.short_desc": {
+          "source": "The IP address Klaviyo should locate the profile from",
+          "message": "Die IP-Adresse, anhand derer Klaviyo das Profil lokalisieren soll"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Name of the company or organization within the company for whom the individual works",
+          "message": "Name des Unternehmens oder der Organisation innerhalb des Unternehmens, für die die Person arbeitet"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The company the person belongs to",
+          "message": "Das Unternehmen, zu dem die Person gehört"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9jYWxl.desc": {
+          "source": "The locale of the profile, in the IETF BCP 47 language tag format like (ISO 639-1/2)-(ISO 3166 alpha-2)",
+          "message": "Das Gebietsschema des Profils im IETF-BCP-47-Sprach-Tag-Format wie (ISO 639-1/2)-(ISO 3166 alpha-2)"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Gebietsschema"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9jYWxl.short_desc": {
+          "source": "The profile's locale, ex: \"en-US\"",
+          "message": "Das Gebietsschema des Profils, z. B. „en-US“"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9uZ2l0dWRl.desc": {
+          "source": "Longitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "Längengradkoordinate. Wir empfehlen eine Genauigkeit von vier Nachkommastellen."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9uZ2l0dWRl.display_name": {
+          "source": "Longitude",
+          "message": "Längengrad"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9uZ2l0dWRl.short_desc": {
+          "source": "Longitude coordinate",
+          "message": "Längengrad-Koordinate"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGF0aXR1ZGU.desc": {
+          "source": "Latitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "Breitengrad-Koordinate. Wir empfehlen eine Genauigkeit von vier Nachkommastellen."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGF0aXR1ZGU.display_name": {
+          "source": "Latitude",
+          "message": "Breitengrad"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGF0aXR1ZGU.short_desc": {
+          "source": "Latitude coordinate",
+          "message": "Breitengrad-Koordinate"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGFzdE5hbWU.desc": {
+          "source": "Individual's last name",
+          "message": "Nachname der Person"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Nachname"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGFzdE5hbWU.short_desc": {
+          "source": "Individual's last name",
+          "message": "Nachname der Person"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bWV0YQ.desc": {
+          "source": "Append to or unset custom properties rather than replacing them.\n\n`patch_properties.append` adds a value to a list-valued property, `unappend` removes one, and `unset` deletes a property outright.",
+          "message": "Benutzerdefinierte Eigenschaften anhängen oder zurücksetzen, anstatt sie zu ersetzen.\n\n`patch_properties.append` fügt einer listenbasierten Eigenschaft einen Wert hinzu, `unappend` entfernt einen und `unset` löscht eine Eigenschaft vollständig."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bWV0YQ.display_name": {
+          "source": "Patch Operations",
+          "message": "Patch-Operationen"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bWV0YQ.short_desc": {
+          "source": "Append to or unset custom properties rather than replacing them",
+          "message": "Benutzerdefinierte Eigenschaften anfügen oder zurücksetzen statt ersetzen"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The profile's phone number in E.164 format, ex: `+15005550006`.\n\nKlaviyo rejects a number in any other format.",
+          "message": "Die Telefonnummer des Profils im E.164-Format, z. B.: `+15005550006`.\n\nKlaviyo weist Nummern in anderen Formaten zurück."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Telefonnummer"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The profile's phone number in E.164 format",
+          "message": "Telefonnummer des Profils im E.164-Format"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cmVnaW9u.desc": {
+          "source": "Region within a country, such as state or province",
+          "message": "Region innerhalb eines Landes, wie Bundesland oder Provinz"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "Region"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cmVnaW9u.short_desc": {
+          "source": "The state, province or region",
+          "message": "Bundesland, Kanton, Provinz oder Region"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGl0bGU.desc": {
+          "source": "Individual's job title",
+          "message": "Berufsbezeichnung der Person"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Titel"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGl0bGU.short_desc": {
+          "source": "The person's job title",
+          "message": "Berufsbezeichnung der Person"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGltZXpvbmU.desc": {
+          "source": "Time zone name. We recommend using time zones from the IANA Time Zone Database.",
+          "message": "Name der Zeitzone. Wir empfehlen die Verwendung von Zeitzonen aus der IANA-Zeitzonendatenbank."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGltZXpvbmU.display_name": {
+          "source": "Time Zone",
+          "message": "Zeitzone"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGltZXpvbmU.short_desc": {
+          "source": "The IANA time zone name",
+          "message": "Name der IANA-Zeitzone"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.emlw.desc": {
+          "source": "Zip code",
+          "message": "Postleitzahl"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.emlw.display_name": {
+          "source": "Postal Code",
+          "message": "Postleitzahl"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.emlw.short_desc": {
+          "source": "The postal or ZIP code",
+          "message": "Postleitzahl"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.short_desc": {
+          "source": "Creates a new profile or updates an existing one",
+          "message": "Erstellt ein neues Profil oder aktualisiert ein bestehendes"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.desc": {
+          "source": "Creates a campaign as a **draft**; it is not sent until **Send Campaign** creates a send job for it.\n\n`audiences` names the lists and segments to include and exclude, and `campaignMessages` carries the message content per channel; both are **required** and both are Klaviyo's own structures, documented with the campaigns API rather than here.",
+          "message": "Erstellt eine Kampagne als **Entwurf**; sie wird erst gesendet, wenn **Send Campaign** einen Sendeauftrag dafür erstellt.\n\n`audiences` benennt die ein- und auszuschließenden Listen sowie Segmente, und `campaignMessages` enthält den Nachrichteninhalt pro Kanal; beide sind **erforderlich** und sind Klaviyo-eigene Strukturen, die in der Campaigns-API und nicht hier dokumentiert sind."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.display_name": {
+          "source": "Create Campaign",
+          "message": "Kampagne erstellen"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.Y2FtcGFpZ25NZXNzYWdlcw.desc": {
+          "source": "The message(s) associated with the campaign",
+          "message": "Die mit der Kampagne verknüpften Nachrichten"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.Y2FtcGFpZ25NZXNzYWdlcw.display_name": {
+          "source": "Messages",
+          "message": "Nachrichten"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.Y2FtcGFpZ25NZXNzYWdlcw.short_desc": {
+          "source": "The message content, per channel",
+          "message": "Nachrichteninhalt pro Kanal"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.YXVkaWVuY2Vz.display_name": {
+          "source": "Audiences",
+          "message": "Zielgruppen"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.YXVkaWVuY2Vz.short_desc": {
+          "source": "The lists and segments to include and exclude",
+          "message": "Ein- und auszuschließende Listen und Segmente"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The campaign name",
+          "message": "Name der Kampagne"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "The name of the campaign",
+          "message": "Name der Kampagne"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.desc": {
+          "source": "Options to use when sending a campaign",
+          "message": "Optionen für das Senden einer Kampagne"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.display_name": {
+          "source": "Send Options",
+          "message": "Sendeoptionen"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.short_desc": {
+          "source": "Whether to use smart sending",
+          "message": "Gibt an, ob Smart Sending verwendet werden soll"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.desc": {
+          "source": "The send strategy the campaign will send with. Defaults to 'Immediate' send strategy.",
+          "message": "Die Sendestrategie, mit der die Kampagne versendet wird. Standardmäßig 'Immediate'."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.display_name": {
+          "source": "Send Strategy",
+          "message": "Sendestrategie"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.short_desc": {
+          "source": "When the campaign is sent, if not immediately",
+          "message": "Wann die Kampagne gesendet wird, falls nicht sofort"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.desc": {
+          "source": "The tracking options associated with the campaign",
+          "message": "Die mit der Kampagne verknüpften Tracking-Optionen"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.display_name": {
+          "source": "Tracking Options",
+          "message": "Tracking-Optionen"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.short_desc": {
+          "source": "The UTM parameters and tracking flags to apply",
+          "message": "Anzuwendende UTM-Parameter und Tracking-Flags"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.short_desc": {
+          "source": "Creates a new campaign",
+          "message": "Erstellt eine neue Kampagne"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.desc": {
+          "source": "Records that something happened, against a metric and a profile.\n\n`metric` is the **name** of the kind of event - \"Placed Order\", \"Viewed Product\" - and Klaviyo defines a metric the first time an event names one, so a name that does not exist yet is how a new metric is created.\n\nThe event has to say who it happened to: give `profile` for someone already known, or `email`, which Klaviyo creates a profile from if it has to. `customId` makes the event idempotent - Klaviyo drops a second event with the same one - and `time` records an event that happened earlier than now.\n\nThis action is hand-written rather than generated, because Klaviyo's own description nests a metric envelope and a profile envelope inside the event's attributes, which cannot be published as one flat option shape.",
+          "message": "Erfasst, dass etwas in Bezug auf eine Metrik und ein Profil geschehen ist.\n\n`metric` ist der **Name** der Art des Ereignisses – „Placed Order“, „Viewed Product“ – und Klaviyo definiert eine Metrik, sobald ein Ereignis diese zum ersten Mal nennt; ein noch nicht vorhandener Name erstellt somit eine neue Metrik.\n\nDas Ereignis muss angeben, auf wen es sich bezieht: Geben Sie `profile` für eine bereits bekannte Person an oder `email`, woraus Klaviyo bei Bedarf ein Profil erstellt. `customId` macht das Ereignis idempotent – Klaviyo verwirft ein zweites Ereignis mit derselben Kennung – und `time` erfasst ein Ereignis, das vor dem aktuellen Zeitpunkt stattgefunden hat.\n\nDiese Aktion ist manuell verfasst statt generiert, da Klaviyos eigene Beschreibung einen Metrik- und einen Profil-Umschlag in den Attributen des Ereignisses verschachtelt, was nicht als flache Optionsstruktur veröffentlicht werden kann."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.display_name": {
+          "source": "Create Event",
+          "message": "Ereignis erstellen"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tSWQ.desc": {
+          "source": "Your own unique identifier for this event.\n\nKlaviyo drops a second event carrying an ID it has already seen, which makes a retry safe.",
+          "message": "Ihre eigene eindeutige Kennung für dieses Ereignis.\n\nKlaviyo verwirft ein zweites Ereignis mit einer bereits bekannten ID, wodurch Wiederholungsversuche sicher sind."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tSWQ.display_name": {
+          "source": "Custom ID",
+          "message": "Benutzerdefinierte ID"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tSWQ.short_desc": {
+          "source": "Your own unique identifier for this event",
+          "message": "Eigene eindeutige Kennung für dieses Ereignis"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tUHJvcGVydGllcw.desc": {
+          "source": "Your own properties to record with the event, as name/value pairs",
+          "message": "Eigene Eigenschaften zur Erfassung mit dem Ereignis als Name/Wert-Paare"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tUHJvcGVydGllcw.display_name": {
+          "source": "Custom Properties",
+          "message": "Benutzerdefinierte Eigenschaften"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tUHJvcGVydGllcw.short_desc": {
+          "source": "Your own properties to record with the event",
+          "message": "Eigene mit dem Ereignis zu erfassende Eigenschaften"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.ZW1haWw.desc": {
+          "source": "The e-mail address the event happened to.\n\nKlaviyo creates a profile from it if it does not know it yet, which is how an event can be recorded for somebody who has not been seen before.",
+          "message": "Die E-Mail-Adresse, auf die sich das Ereignis bezieht.\n\nKlaviyo erstellt daraus ein Profil, falls es noch nicht bekannt ist; so kann ein Ereignis für jemanden erfasst werden, der bisher noch nicht bekannt war."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "E-Mail"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.ZW1haWw.short_desc": {
+          "source": "The e-mail address the event happened to",
+          "message": "E-Mail-Adresse, auf die sich das Ereignis bezieht"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.bWV0cmlj.desc": {
+          "source": "The name of the kind of event, ex: `Placed Order`.\n\nKlaviyo defines a metric the first time an event names one, so a name that is not in the list yet creates a new metric.",
+          "message": "Der Name des Ereignistyps, z. B.: `Placed Order`.\n\nKlaviyo definiert eine Metrik, sobald ein Ereignis diese erstmals nennt; ein Name, der noch nicht in der Liste enthalten ist, erstellt somit eine neue Metrik."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.bWV0cmlj.display_name": {
+          "source": "Metric",
+          "message": "Metrik"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.bWV0cmlj.short_desc": {
+          "source": "The name of the kind of event",
+          "message": "Name des Ereignistyps"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.cHJvZmlsZQ.desc": {
+          "source": "The profile the event happened to.\n\nGive this or `email`.",
+          "message": "Das Profil, auf das sich das Ereignis bezieht.\n\nGeben Sie dieses oder `email` an."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.cHJvZmlsZQ.short_desc": {
+          "source": "The profile the event happened to",
+          "message": "Profil, auf das sich das Ereignis bezieht"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dGltZQ.desc": {
+          "source": "When the event happened.\n\nKlaviyo uses the current time when this is unset, so set it when recording something after the fact.",
+          "message": "Wann das Ereignis stattgefunden hat.\n\nKlaviyo verwendet die aktuelle Uhrzeit, wenn dieses Feld nicht gesetzt ist; legen Sie es daher fest, wenn etwas nachträglich erfasst wird."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dGltZQ.display_name": {
+          "source": "Time",
+          "message": "Zeitpunkt"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dGltZQ.short_desc": {
+          "source": "When the event happened",
+          "message": "Wann das Ereignis aufgetreten ist"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dmFsdWU.desc": {
+          "source": "The monetary value of the event, in the account's currency.\n\nThis is what Klaviyo's revenue reporting adds up.",
+          "message": "Der Geldwert des Ereignisses in der Währung des Kontos.\n\nDies ist der Betrag, den Klaviyos Umsatzberichte aufsummieren."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "Wert"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dmFsdWU.short_desc": {
+          "source": "The monetary value of the event",
+          "message": "Geldwert des Ereignisses"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.short_desc": {
+          "source": "Creates a new event",
+          "message": "Erstellt ein neues Ereignis"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.desc": {
+          "source": "Creates a list.\n\n`optInProcess` decides whether a profile added to the list has to confirm by e-mail before it is subscribed; Klaviyo uses the account's default when it is unset.",
+          "message": "Erstellt eine Liste.\n\n`optInProcess` legt fest, ob ein zur Liste hinzugefügtes Profil vor dem Abonnieren per E-Mail bestätigen muss; Klaviyo verwendet den Standardwert des Kontos, wenn nichts festgelegt ist."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.display_name": {
+          "source": "Create List",
+          "message": "Liste erstellen"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.allowed-value.c3RyaW5nOmRvdWJsZV9vcHRfaW4.display_name": {
+          "source": "double_opt_in",
+          "message": "double_opt_in"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.allowed-value.c3RyaW5nOnNpbmdsZV9vcHRfaW4.display_name": {
+          "source": "single_opt_in",
+          "message": "single_opt_in"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.desc": {
+          "source": "The opt-in process for this list. Valid values: 'double_opt_in', 'single_opt_in'. If not provided, uses account default.",
+          "message": "Der Opt-in-Prozess für diese Liste. Gültige Werte: 'double_opt_in', 'single_opt_in'. Falls nicht angegeben, wird der Kontostandard verwendet."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.display_name": {
+          "source": "Opt-in Process",
+          "message": "Opt-in-Prozess"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.short_desc": {
+          "source": "Whether a new subscriber has to confirm by e-mail",
+          "message": "Ob neue Abonnenten per E-Mail bestätigen müssen"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.bmFtZQ.desc": {
+          "source": "A helpful name to label the list",
+          "message": "Ein aussagekräftiger Name zur Kennzeichnung der Liste"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.bmFtZQ.short_desc": {
+          "source": "The name of the list",
+          "message": "Name der Liste"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.short_desc": {
+          "source": "Creates a new list",
+          "message": "Erstellt eine neue Liste"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.desc": {
+          "source": "Creates a profile.\n\nA profile needs at least one identifier - an e-mail address, a phone number or an external ID. Klaviyo **rejects** a create whose identifier already belongs to a profile; use **Create Or Update Profile** when the person may already be known.",
+          "message": "Erstellt ein Profil.\n\nEin Profil benötigt mindestens eine Kennung – eine E-Mail-Adresse, eine Telefonnummer oder eine externe ID. Klaviyo **weist** einen Erstellvorgang **zurück**, dessen Kennung bereits zu einem Profil gehört; verwenden Sie **Create Or Update Profile**, wenn die Person möglicherweise bereits bekannt ist."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.display_name": {
+          "source": "Create Profile",
+          "message": "Profil erstellen"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.desc": {
+          "source": "Country name",
+          "message": "Ländername"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Land"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "Ländername"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "Stadtname"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Stadt"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y2l0eQ.short_desc": {
+          "source": "City name",
+          "message": "Stadtname"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.desc": {
+          "source": "Your own properties to store on the profile, as name/value pairs.\n\nKlaviyo reserves property names beginning with `$`.",
+          "message": "Eigene Eigenschaften, die im Profil als Name-Wert-Paare gespeichert werden sollen.\n\nKlaviyo reserviert Eigenschaftsnamen, die mit `$` beginnen."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.display_name": {
+          "source": "Custom Properties",
+          "message": "Benutzerdefinierte Eigenschaften"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.short_desc": {
+          "source": "Your own properties to store on the profile",
+          "message": "Eigene Eigenschaften zur Speicherung im Profil"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.desc": {
+          "source": "First line of street address",
+          "message": "Erste Zeile der Straßenadresse"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.display_name": {
+          "source": "Address Line 1",
+          "message": "Adresszeile 1"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.short_desc": {
+          "source": "First line of street address",
+          "message": "Erste Zeile der Straßenadresse"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.desc": {
+          "source": "Second line of street address",
+          "message": "Zweite Zeile der Straßenadresse"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.display_name": {
+          "source": "Address Line 2",
+          "message": "Adresszeile 2"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.short_desc": {
+          "source": "Second line of street address",
+          "message": "Zweite Zeile der Straßenadresse"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZW1haWw.desc": {
+          "source": "Individual's email address",
+          "message": "E-Mail-Adresse der Person"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "E-Mail"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZW1haWw.short_desc": {
+          "source": "The profile's e-mail address",
+          "message": "Die E-Mail-Adresse des Profils"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.desc": {
+          "source": "Your own identifier for this person, so that a profile can be found by the ID it has in your system rather than by e-mail",
+          "message": "Ihre eigene Kennung für diese Person, sodass ein Profil über die ID in Ihrem System statt über die E-Mail-Adresse gefunden werden kann"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.display_name": {
+          "source": "External ID",
+          "message": "Externe ID"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.short_desc": {
+          "source": "Your own identifier for this person",
+          "message": "Ihre eigene Kennung für diese Person"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.desc": {
+          "source": "Individual's first name",
+          "message": "Vorname der Person"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Vorname"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Individual's first name",
+          "message": "Vorname der Person"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.desc": {
+          "source": "URL pointing to the location of a profile image",
+          "message": "URL zum Speicherort eines Profilbilds"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.display_name": {
+          "source": "Image URL",
+          "message": "Bild-URL"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.short_desc": {
+          "source": "A URL for the profile's avatar",
+          "message": "Eine URL für das Avatarbild des Profils"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aXA.desc": {
+          "source": "IP Address",
+          "message": "IP-Adresse"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aXA.display_name": {
+          "source": "IP Address",
+          "message": "IP-Adresse"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aXA.short_desc": {
+          "source": "The IP address Klaviyo should locate the profile from",
+          "message": "Die IP-Adresse, anhand derer Klaviyo das Profil lokalisieren soll"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Name of the company or organization within the company for whom the individual works",
+          "message": "Name des Unternehmens oder der Organisation innerhalb des Unternehmens, für die die Person arbeitet"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The company the person belongs to",
+          "message": "Das Unternehmen, zu dem die Person gehört"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9jYWxl.desc": {
+          "source": "The locale of the profile, in the IETF BCP 47 language tag format like (ISO 639-1/2)-(ISO 3166 alpha-2)",
+          "message": "Das Gebietsschema des Profils im IETF-BCP-47-Sprach-Tag-Format wie (ISO 639-1/2)-(ISO 3166 alpha-2)"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Gebietsschema"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9jYWxl.short_desc": {
+          "source": "The profile's locale, ex: \"en-US\"",
+          "message": "Das Gebietsschema des Profils, z. B. „en-US“"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.desc": {
+          "source": "Longitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "Längengradkoordinate. Wir empfehlen eine Genauigkeit von vier Nachkommastellen."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.display_name": {
+          "source": "Longitude",
+          "message": "Längengrad"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.short_desc": {
+          "source": "Longitude coordinate",
+          "message": "Längengrad-Koordinate"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.desc": {
+          "source": "Latitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "Breitengrad-Koordinate. Wir empfehlen eine Genauigkeit von vier Nachkommastellen."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.display_name": {
+          "source": "Latitude",
+          "message": "Breitengrad"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.short_desc": {
+          "source": "Latitude coordinate",
+          "message": "Breitengrad-Koordinate"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.desc": {
+          "source": "Individual's last name",
+          "message": "Nachname der Person"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Nachname"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.short_desc": {
+          "source": "Individual's last name",
+          "message": "Nachname der Person"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The profile's phone number in E.164 format, ex: `+15005550006`.\n\nKlaviyo rejects a number in any other format.",
+          "message": "Die Telefonnummer des Profils im E.164-Format, z. B.: `+15005550006`.\n\nKlaviyo weist Nummern in anderen Formaten zurück."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Telefonnummer"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The profile's phone number in E.164 format",
+          "message": "Telefonnummer des Profils im E.164-Format"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cmVnaW9u.desc": {
+          "source": "Region within a country, such as state or province",
+          "message": "Region innerhalb eines Landes, wie Bundesland oder Provinz"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "Region"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cmVnaW9u.short_desc": {
+          "source": "The state, province or region",
+          "message": "Bundesland, Kanton, Provinz oder Region"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGl0bGU.desc": {
+          "source": "Individual's job title",
+          "message": "Berufsbezeichnung der Person"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Titel"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGl0bGU.short_desc": {
+          "source": "The person's job title",
+          "message": "Berufsbezeichnung der Person"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.desc": {
+          "source": "Time zone name. We recommend using time zones from the IANA Time Zone Database.",
+          "message": "Name der Zeitzone. Wir empfehlen die Verwendung von Zeitzonen aus der IANA-Zeitzonendatenbank."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.display_name": {
+          "source": "Time Zone",
+          "message": "Zeitzone"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.short_desc": {
+          "source": "The IANA time zone name",
+          "message": "Name der IANA-Zeitzone"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.emlw.desc": {
+          "source": "Zip code",
+          "message": "Postleitzahl"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.emlw.display_name": {
+          "source": "Postal Code",
+          "message": "Postleitzahl"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.emlw.short_desc": {
+          "source": "The postal or ZIP code",
+          "message": "Postleitzahl"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.short_desc": {
+          "source": "Creates a new profile",
+          "message": "Erstellt ein neues Profil"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.desc": {
+          "source": "Creates a segment.\n\n`definition` is the rule Klaviyo evaluates to decide who is in the segment, and it is **required**: a segment with no rule would match nobody. It is Klaviyo's own condition structure - a list of condition groups, each a list of conditions - and is documented with the segments API rather than here.",
+          "message": "Erstellt ein Segment.\n\n`definition` ist die Regel, die Klaviyo auswertet, um zu bestimmen, wer zum Segment gehört, und ist **erforderlich**: Ein Segment ohne Regel würde auf niemanden zutreffen. Es ist Klaviyos eigene Bedingungsstruktur – eine Liste von Bedingungsgruppen, jeweils eine Liste von Bedingungen – und ist in der Segments-API statt hier dokumentiert."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.display_name": {
+          "source": "Create Segment",
+          "message": "Segment erstellen"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.ZGVmaW5pdGlvbg.display_name": {
+          "source": "Definition",
+          "message": "Definition"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.ZGVmaW5pdGlvbg.short_desc": {
+          "source": "The rule deciding who is in the segment",
+          "message": "Die Regel, die bestimmt, wer zum Segment gehört"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.aXNTdGFycmVk.display_name": {
+          "source": "Starred",
+          "message": "Favorisiert"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.aXNTdGFycmVk.short_desc": {
+          "source": "Whether the segment is starred in the Klaviyo UI",
+          "message": "Gibt an, ob das Segment in der Klaviyo-Benutzeroberfläche markiert ist"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.bmFtZQ.short_desc": {
+          "source": "The name of the segment",
+          "message": "Der Name des Segments"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.short_desc": {
+          "source": "Creates a new segment",
+          "message": "Erstellt ein neues Segment"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.desc": {
+          "source": "Creates a tag.\n\nA tag groups campaigns, flows, lists and segments for reporting. Klaviyo places a new tag in the account's default tag group unless one is named in the relationships, which this action does not publish.",
+          "message": "Erstellt ein Tag.\n\nEin Tag gruppiert Kampagnen, Flows, Listen und Segmente für Berichte. Klaviyo platziert ein neues Tag in der Standard-Tag-Gruppe des Kontos, sofern in den Beziehungen keines angegeben ist, was diese Aktion nicht übermittelt."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.display_name": {
+          "source": "Create Tag",
+          "message": "Tag erstellen"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.option.bmFtZQ.desc": {
+          "source": "The Tag name",
+          "message": "Der Tag-Name"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.option.bmFtZQ.short_desc": {
+          "source": "The name of the tag",
+          "message": "Der Name des Tags"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.option.cmVsYXRpb25zaGlwcw.display_name": {
+          "source": "Relationships",
+          "message": "Beziehungen"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.short_desc": {
+          "source": "Creates a new tag",
+          "message": "Erstellt ein neues Tag"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.desc": {
+          "source": "Adds a profile that already exists to a list.\n\nThe profile is **not** subscribed by this: membership and marketing consent are separate in Klaviyo, and **Subscribe Profile** is what records consent. Adding a profile that is already a member succeeds and changes nothing.",
+          "message": "Fügt ein bereits vorhandenes Profil zu einer Liste hinzu.\n\nDas Profil wird dadurch **nicht** abonniert: Mitgliedschaft und Marketing-Einwilligung sind in Klaviyo getrennt, und **Subscribe Profile** erfasst die Einwilligung. Das Hinzufügen eines Profils, das bereits Mitglied ist, ist erfolgreich und ändert nichts."
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.display_name": {
+          "source": "Add Profile to List",
+          "message": "Profil zu Liste hinzufügen"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.bGlzdA.desc": {
+          "source": "The list to add the profile to",
+          "message": "Die Liste, zu der das Profil hinzugefügt werden soll"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "Liste"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.bGlzdA.short_desc": {
+          "source": "The list to add the profile to",
+          "message": "Die Liste, zu der das Profil hinzugefügt werden soll"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.cHJvZmlsZQ.desc": {
+          "source": "The profile to add",
+          "message": "Das hinzuzufügende Profil"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.cHJvZmlsZQ.short_desc": {
+          "source": "The profile to add",
+          "message": "Das hinzuzufügende Profil"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.short_desc": {
+          "source": "Adds an existing profile to a list",
+          "message": "Fügt ein vorhandenes Profil zu einer Liste hinzu"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.desc": {
+          "source": "Applies a tag that already exists to a list.\n\nKlaviyo does not create a tag on use; the tag has to exist, and **List Tags** shows which do.",
+          "message": "Weist einer Liste ein bereits vorhandenes Tag zu.\n\nKlaviyo erstellt bei der Verwendung kein Tag; das Tag muss bereits existieren, und **List Tags** zeigt an, welche vorhanden sind."
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.display_name": {
+          "source": "Add Tag to List",
+          "message": "Tag zu Liste hinzufügen"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.bGlzdA.desc": {
+          "source": "The list to tag",
+          "message": "Die Liste, die mit Tags versehen werden soll"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "Liste"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.bGlzdA.short_desc": {
+          "source": "The list to tag",
+          "message": "Die Liste, die mit Tags versehen werden soll"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.dGFn.desc": {
+          "source": "The tag to apply",
+          "message": "Der anzuwendende Tag"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.dGFn.short_desc": {
+          "source": "The tag to apply",
+          "message": "Der anzuwendende Tag"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.short_desc": {
+          "source": "Adds an existing tag to a list",
+          "message": "Fügt einer Liste ein vorhandenes Tag hinzu"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.desc": {
+          "source": "Applies a tag that already exists to a segment.\n\nKlaviyo does not create a tag on use; the tag has to exist, and **List Tags** shows which do.",
+          "message": "Weist einem Segment ein bereits vorhandenes Tag zu.\n\nKlaviyo erstellt bei der Verwendung kein Tag; das Tag muss bereits existieren, und **List Tags** zeigt an, welche vorhanden sind."
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.display_name": {
+          "source": "Add Tag to Segment",
+          "message": "Tag zu Segment hinzufügen"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.c2VnbWVudA.desc": {
+          "source": "The segment to tag",
+          "message": "Das Segment, das mit Tags versehen werden soll"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.c2VnbWVudA.display_name": {
+          "source": "Segment",
+          "message": "Segment"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.c2VnbWVudA.short_desc": {
+          "source": "The segment to tag",
+          "message": "Das Segment, das mit Tags versehen werden soll"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.dGFn.desc": {
+          "source": "The tag to apply",
+          "message": "Der anzuwendende Tag"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.dGFn.short_desc": {
+          "source": "The tag to apply",
+          "message": "Der anzuwendende Tag"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.short_desc": {
+          "source": "Adds an existing tag to a segment",
+          "message": "Fügt einem Segment ein vorhandenes Tag hinzu"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.desc": {
+          "source": "Retrieves one metric by its Klaviyo ID.\n\nA **metric** is the kind of an event - \"Placed Order\", \"Viewed Product\" - and Klaviyo defines one the first time an event names it.",
+          "message": "Ruft eine Metrik anhand ihrer Klaviyo-ID ab.\n\nEine **Metrik** ist die Art eines Ereignisses – „Placed Order“, „Viewed Product“ – und Klaviyo definiert sie beim ersten Mal, wenn ein Ereignis sie benennt."
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.display_name": {
+          "source": "Get Metric",
+          "message": "Metrik abrufen"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.option.aWQ.desc": {
+          "source": "Metric ID: Metric ID",
+          "message": "Metrik-ID: Metrik-ID"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.option.aWQ.display_name": {
+          "source": "Metric",
+          "message": "Metrik"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.option.aWQ.short_desc": {
+          "source": "The metric to retrieve",
+          "message": "Die abzurufende Metrik"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.short_desc": {
+          "source": "Retrieves a specific metric",
+          "message": "Ruft eine bestimmte Metrik ab"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.desc": {
+          "source": "Retrieves one campaign by its Klaviyo ID",
+          "message": "Ruft eine Kampagne anhand ihrer Klaviyo-ID ab"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.display_name": {
+          "source": "Get Campaign",
+          "message": "Kampagne abrufen"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.option.aWQ.desc": {
+          "source": "The campaign ID to be retrieved: The campaign ID to be retrieved",
+          "message": "Die abzurufende Kampagnen-ID: Die abzurufende Kampagnen-ID"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.option.aWQ.display_name": {
+          "source": "Campaign",
+          "message": "Kampagne"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.option.aWQ.short_desc": {
+          "source": "The campaign to retrieve",
+          "message": "Die abzurufende Kampagne"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.short_desc": {
+          "source": "Retrieves a specific campaign",
+          "message": "Ruft eine bestimmte Kampagne ab"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.desc": {
+          "source": "Retrieves one event by its Klaviyo ID",
+          "message": "Ruft ein Ereignis anhand seiner Klaviyo-ID ab"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.display_name": {
+          "source": "Get Event",
+          "message": "Ereignis abrufen"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.option.aWQ.desc": {
+          "source": "ID of the event: ID of the event",
+          "message": "ID des Ereignisses: ID des Ereignisses"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.option.aWQ.display_name": {
+          "source": "Event",
+          "message": "Event"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.option.aWQ.short_desc": {
+          "source": "The event to retrieve",
+          "message": "Das abzurufende Ereignis"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.short_desc": {
+          "source": "Retrieves a specific event",
+          "message": "Ruft ein bestimmtes Ereignis ab"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.desc": {
+          "source": "Retrieves one list by its Klaviyo ID.\n\n`additionalFields` adds the list's profile count, which Klaviyo does not return otherwise because counting is expensive.",
+          "message": "Ruft eine Liste anhand ihrer Klaviyo-ID ab.\n\n`additionalFields` fügt die Profilanzahl der Liste hinzu, die Klaviyo sonst nicht zurückgibt, da das Zählen aufwendig ist."
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.display_name": {
+          "source": "Get List",
+          "message": "Liste abrufen"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.YWRkaXRpb25hbEZpZWxkcw.desc": {
+          "source": "Computed blocks to include on each profile, which Klaviyo omits by default because they are expensive to produce:\n\n- `subscriptions`: the profile's consent state per channel\n- `predictive_analytics`: Klaviyo's predicted lifetime value and churn probability",
+          "message": "Berechnete Blöcke, die in jedes Profil aufgenommen werden sollen und die Klaviyo standardmäßig auslässt, da ihre Erstellung aufwendig ist:\n\n- `subscriptions`: der Einwilligungsstatus des Profils pro Kanal\n- `predictive_analytics`: Klaviyos prognostizierter Customer Lifetime Value und die Abwanderungswahrscheinlichkeit"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.YWRkaXRpb25hbEZpZWxkcw.display_name": {
+          "source": "Additional Fields",
+          "message": "Zusätzliche Felder"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.YWRkaXRpb25hbEZpZWxkcw.short_desc": {
+          "source": "Computed blocks to include on each profile",
+          "message": "Berechnete Blöcke, die in jedes Profil aufgenommen werden sollen"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.aWQ.desc": {
+          "source": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+          "message": "Primärschlüssel, der diese Liste eindeutig identifiziert. Von Klaviyo generiert."
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.aWQ.display_name": {
+          "source": "List",
+          "message": "Liste"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.aWQ.short_desc": {
+          "source": "The list to work on",
+          "message": "Die zu bearbeitende Liste"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.short_desc": {
+          "source": "Retrieves a specific list",
+          "message": "Ruft eine bestimmte Liste ab"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.desc": {
+          "source": "Retrieves one profile by its Klaviyo ID",
+          "message": "Ruft ein Profil anhand seiner Klaviyo-ID ab"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.display_name": {
+          "source": "Get Profile",
+          "message": "Profil abrufen"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.YWRkaXRpb25hbEZpZWxkcw.desc": {
+          "source": "Computed blocks to include on each profile, which Klaviyo omits by default because they are expensive to produce:\n\n- `subscriptions`: the profile's consent state per channel\n- `predictive_analytics`: Klaviyo's predicted lifetime value and churn probability",
+          "message": "Berechnete Blöcke, die in jedes Profil aufgenommen werden sollen und die Klaviyo standardmäßig auslässt, da ihre Erstellung aufwendig ist:\n\n- `subscriptions`: der Einwilligungsstatus des Profils pro Kanal\n- `predictive_analytics`: Klaviyos prognostizierter Customer Lifetime Value und die Abwanderungswahrscheinlichkeit"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.YWRkaXRpb25hbEZpZWxkcw.display_name": {
+          "source": "Additional Fields",
+          "message": "Zusätzliche Felder"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.YWRkaXRpb25hbEZpZWxkcw.short_desc": {
+          "source": "Computed blocks to include on each profile",
+          "message": "Berechnete Blöcke, die in jedes Profil aufgenommen werden sollen"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.aWQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.aWQ.short_desc": {
+          "source": "The profile to retrieve",
+          "message": "Das abzurufende Profil"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.short_desc": {
+          "source": "Retrieves a specific profile",
+          "message": "Ruft ein bestimmtes Profil ab"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.desc": {
+          "source": "Retrieves one segment by its Klaviyo ID.\n\n`additionalFields` adds the segment's profile count and its `definition` - the rule Klaviyo evaluates - neither of which is returned otherwise.",
+          "message": "Ruft ein Segment anhand seiner Klaviyo-ID ab.\n\n`additionalFields` fügt die Profilanzahl des Segments und seine `definition` hinzu – die Regel, die Klaviyo auswertet –, wovon keines sonst zurückgegeben wird."
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.display_name": {
+          "source": "Get Segment",
+          "message": "Segment abrufen"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.YWRkaXRpb25hbEZpZWxkcw.desc": {
+          "source": "Computed blocks to include on each profile, which Klaviyo omits by default because they are expensive to produce:\n\n- `subscriptions`: the profile's consent state per channel\n- `predictive_analytics`: Klaviyo's predicted lifetime value and churn probability",
+          "message": "Berechnete Blöcke, die in jedes Profil aufgenommen werden sollen und die Klaviyo standardmäßig auslässt, da ihre Erstellung aufwendig ist:\n\n- `subscriptions`: der Einwilligungsstatus des Profils pro Kanal\n- `predictive_analytics`: Klaviyos prognostizierter Customer Lifetime Value und die Abwanderungswahrscheinlichkeit"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.YWRkaXRpb25hbEZpZWxkcw.display_name": {
+          "source": "Additional Fields",
+          "message": "Zusätzliche Felder"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.YWRkaXRpb25hbEZpZWxkcw.short_desc": {
+          "source": "Computed blocks to include on each profile",
+          "message": "Berechnete Blöcke, die in jedes Profil aufgenommen werden sollen"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.aWQ.display_name": {
+          "source": "Segment",
+          "message": "Segment"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.aWQ.short_desc": {
+          "source": "The segment to work on",
+          "message": "Das zu bearbeitende Segment"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.short_desc": {
+          "source": "Retrieves a specific segment",
+          "message": "Ruft ein bestimmtes Segment ab"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.desc": {
+          "source": "Retrieves one tag by its Klaviyo ID",
+          "message": "Ruft ein Tag anhand seiner Klaviyo-ID ab"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.display_name": {
+          "source": "Get Tag",
+          "message": "Tag abrufen"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.option.aWQ.desc": {
+          "source": "The Tag ID",
+          "message": "Die Tag-ID"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.option.aWQ.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.option.aWQ.short_desc": {
+          "source": "The tag to work on",
+          "message": "Das zu bearbeitende Tag"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.short_desc": {
+          "source": "Retrieves a specific tag",
+          "message": "Ruft ein bestimmtes Tag ab"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.desc": {
+          "source": "Deletes every record in the given table matching the search criteria",
+          "message": "Löscht alle Datensätze in der angegebenen Tabelle, die den Suchkriterien entsprechen"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.display_name": {
+          "source": "Delete Records",
+          "message": "Datensätze löschen"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "Die zu verwendende Tabelle: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` oder `events`"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabelle"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Der Name der zu bearbeitenden Tabelle"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.short_desc": {
+          "source": "Delete the records matching the search criteria",
+          "message": "Datensätze löschen, die den Suchkriterien entsprechen"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.desc": {
+          "source": "Deletes a campaign.\n\nKlaviyo answers with no content. A campaign that has already been sent keeps its reporting history.",
+          "message": "Löscht eine Kampagne.\n\nKlaviyo antwortet ohne Inhalt. Eine Kampagne, die bereits gesendet wurde, behält ihren Berichtsverlauf."
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.display_name": {
+          "source": "Delete Campaign",
+          "message": "Kampagne löschen"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.option.aWQ.desc": {
+          "source": "The campaign ID to be deleted: The campaign ID to be deleted",
+          "message": "Die zu löschende Kampagnen-ID: Die zu löschende Kampagnen-ID"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.option.aWQ.display_name": {
+          "source": "Campaign",
+          "message": "Kampagne"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.option.aWQ.short_desc": {
+          "source": "The campaign to work on",
+          "message": "Die zu bearbeitende Kampagne"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.short_desc": {
+          "source": "Deletes a campaign",
+          "message": "Löscht eine Kampagne"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.desc": {
+          "source": "Deletes a list.\n\nThe profiles on it are **not** deleted; they simply stop being members. Klaviyo answers with no content.",
+          "message": "Löscht eine Liste.\n\nDie darin enthaltenen Profile werden **nicht** gelöscht; sie sind lediglich keine Mitglieder mehr. Klaviyo antwortet ohne Inhalt."
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.display_name": {
+          "source": "Delete List",
+          "message": "Liste löschen"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.option.aWQ.desc": {
+          "source": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+          "message": "Primärschlüssel, der diese Liste eindeutig identifiziert. Von Klaviyo generiert."
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.option.aWQ.display_name": {
+          "source": "List",
+          "message": "Liste"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.option.aWQ.short_desc": {
+          "source": "The list to work on",
+          "message": "Die zu bearbeitende Liste"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.short_desc": {
+          "source": "Deletes a list",
+          "message": "Löscht eine Liste"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.desc": {
+          "source": "Deletes a segment.\n\nThe profiles it matched are **not** deleted; the rule simply stops being evaluated. Klaviyo answers with no content.",
+          "message": "Löscht ein Segment.\n\nDie Profile, auf die es zutraf, werden **nicht** gelöscht; die Regel wird lediglich nicht mehr ausgewertet. Klaviyo antwortet ohne Inhalt."
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.display_name": {
+          "source": "Delete Segment",
+          "message": "Segment löschen"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.option.aWQ.display_name": {
+          "source": "Segment",
+          "message": "Segment"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.option.aWQ.short_desc": {
+          "source": "The segment to work on",
+          "message": "Das zu bearbeitende Segment"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.short_desc": {
+          "source": "Deletes a segment",
+          "message": "Löscht ein Segment"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.desc": {
+          "source": "Deletes a tag.\n\nThe campaigns, flows, lists and segments it was applied to are **not** deleted; they simply lose the tag. Klaviyo answers with no content.",
+          "message": "Löscht ein Tag.\n\nDie Kampagnen, Flows, Listen und Segmente, denen es zugewiesen war, werden **nicht** gelöscht; sie verlieren lediglich das Tag. Klaviyo antwortet ohne Inhalt."
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.display_name": {
+          "source": "Delete Tag",
+          "message": "Tag löschen"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.option.aWQ.desc": {
+          "source": "The Tag ID",
+          "message": "Die Tag-ID"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.option.aWQ.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.option.aWQ.short_desc": {
+          "source": "The tag to work on",
+          "message": "Das zu bearbeitende Tag"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.short_desc": {
+          "source": "Deletes a tag",
+          "message": "Löscht ein Tag"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.desc": {
+          "source": "Lists the account's tags.\n\nA tag groups campaigns, flows, lists and segments for reporting. Paging is by cursor.",
+          "message": "Listet die Tags des Kontos auf.\n\nEin Tag gruppiert Kampagnen, Flows, Listen und Segmente für Berichte. Die Paginierung erfolgt per Cursor."
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.display_name": {
+          "source": "List Tags",
+          "message": "Tags auflisten"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Der Cursor für die nächste Seite: Übergeben Sie den Wert aus `links.next` der vorherigen Antwort.\n\nEr ist ein opaker Wert und darf nicht manuell erstellt werden; lassen Sie ihn leer, um die erste Seite zu lesen."
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Cursor"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Der Cursor für die nächste Seite"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching tags\n\nThis value is sent as Klaviyo's filter syntax, `contains(name,…)`.",
+          "message": "Die Auflistung auf übereinstimmende Tags eingrenzen\n\nDieser Wert wird in der Filtersyntax von Klaviyo gesendet: `contains(name,…)`."
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching tags",
+          "message": "Die Auflistung auf passende Tags eingrenzen"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "Feld und Richtung für die Sortierung\n\nDieser Wert wird als Sortier-Token von Klaviyo gesendet: der Feldname mit einem vorangestellten `-` für absteigend."
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Sortierung"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "Feld und Richtung für die Sortierung"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "Wie viele Datensätze auf einer Seite zurückgegeben werden sollen.\n\nKlaviyo begrenzt dies pro Endpunkt und lehnt größere Werte ab, anstatt sie zu deckeln; das Maximum ist in der Beschreibung des Arguments angegeben."
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Seitengröße"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Wie viele Datensätze auf einer Seite zurückgegeben werden sollen"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.short_desc": {
+          "source": "Lists tags",
+          "message": "Listet Tags auf"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.desc": {
+          "source": "Lists campaigns on the given channel.\n\n**`channel` is required**: Klaviyo does not list campaigns across channels, so a listing is always of one channel's campaigns - or of both, if both are named. Paging is by cursor.",
+          "message": "Listet Kampagnen für den angegebenen Kanal auf.\n\n**`channel` ist erforderlich**: Klaviyo listet Kampagnen nicht kanalübergreifend auf; eine Auflistung enthält daher immer die Kampagnen eines Kanals – oder beider, wenn beide angegeben sind. Die Paginierung erfolgt per Cursor."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.display_name": {
+          "source": "List Campaigns",
+          "message": "Kampagnen auflisten"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.desc": {
+          "source": "E-mail campaigns",
+          "message": "E-Mail-Kampagnen"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "E-mail",
+          "message": "E-Mail"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.desc": {
+          "source": "SMS campaigns",
+          "message": "SMS-Kampagnen"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.desc": {
+          "source": "The channel whose campaigns to list.\n\nKlaviyo will not list campaigns without being told which channel to look at, and accepts only one: `messages.channel` is the one field whose only permitted operator is `equals`, measured against the live API. A listing across both channels is two calls, which is what the campaign dropdown makes.",
+          "message": "Der Kanal, dessen Kampagnen aufgelistet werden sollen.\n\nKlaviyo listet Kampagnen nur auf, wenn ein Kanal angegeben wird, und akzeptiert nur einen: `messages.channel` ist das einzige Feld, dessen einzig zulässiger Operator in der Live-API `equals` ist. Eine Auflistung über beide Kanäle erfordert zwei Aufrufe, was das Kampagnen-Dropdown-Menü übernimmt."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "Kanal"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.short_desc": {
+          "source": "The channel whose campaigns to list",
+          "message": "Kanal, dessen Kampagnen aufgelistet werden sollen"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Der Cursor für die nächste Seite: Übergeben Sie den Wert aus `links.next` der vorherigen Antwort.\n\nEr ist ein opaker Wert und darf nicht manuell erstellt werden; lassen Sie ihn leer, um die erste Seite zu lesen."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Cursor"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Der Cursor für die nächste Seite"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.bmFtZQ.desc": {
+          "source": "Return only campaigns whose name contains this text",
+          "message": "Nur Kampagnen zurückgeben, deren Name diesen Text enthält"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.bmFtZQ.short_desc": {
+          "source": "Text the campaign name must contain",
+          "message": "Text, den der Kampagnenname enthalten muss"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "Feld und Richtung für die Sortierung\n\nDieser Wert wird als Sortier-Token von Klaviyo gesendet: der Feldname mit einem vorangestellten `-` für absteigend."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Sortierung"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "Feld und Richtung für die Sortierung"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "Wie viele Datensätze auf einer Seite zurückgegeben werden sollen.\n\nKlaviyo begrenzt dies pro Endpunkt und lehnt größere Werte ab, anstatt sie zu deckeln; das Maximum ist in der Beschreibung des Arguments angegeben."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Seitengröße"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Wie viele Datensätze auf einer Seite zurückgegeben werden sollen"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.short_desc": {
+          "source": "Lists campaigns",
+          "message": "Listet Kampagnen auf"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.desc": {
+          "source": "Lists the events recorded in the account, newest first by default.\n\nThis listing is exported so that the event picker on other actions has values to offer; the superseded application had no listing action of its own.",
+          "message": "Listet die im Konto aufgezeichneten Ereignisse auf, standardmäßig die neuesten zuerst.\n\nDiese Auflistung wird exportiert, damit die Ereignisauswahl in anderen Aktionen Werte zur Auswahl bietet; die ersetzte Anwendung besaß keine eigene Auflistungsaktion."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.display_name": {
+          "source": "List Events",
+          "message": "Ereignisse auflisten"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Der Cursor für die nächste Seite: Übergeben Sie den Wert aus `links.next` der vorherigen Antwort.\n\nEr ist ein opaker Wert und darf nicht manuell erstellt werden; lassen Sie ihn leer, um die erste Seite zu lesen."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Cursor"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Der Cursor für die nächste Seite"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching events, in Klaviyo's filter syntax.\n\n`equals(metric_id,\"…\")` and `equals(profile_id,\"…\")` select one metric or one profile, and `datetime` and `timestamp` take the four range comparisons - for example `greater-or-equal(datetime,\"2026-01-01T00:00:00Z\"),less-than(datetime,\"2026-02-01T00:00:00Z\")`. Predicates are joined by commas and mean **and**; Klaviyo has no `or` here.",
+          "message": "Grenzt die Auflistung auf passende Ereignisse in der Filtersyntax von Klaviyo ein.\n\n`equals(metric_id,\"…\")` und `equals(profile_id,\"…\")` wählen eine Metrik oder ein Profil aus, und `datetime` und `timestamp` akzeptieren die vier Bereichsvergleiche – zum Beispiel `greater-or-equal(datetime,\"2026-01-01T00:00:00Z\"),less-than(datetime,\"2026-02-01T00:00:00Z\")`. Prädikate werden durch Kommas getrennt und bedeuten **und**; Klaviyo bietet hier kein `or`."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching events",
+          "message": "Die Auflistung auf passende Ereignisse eingrenzen"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "Feld und Richtung für die Sortierung\n\nDieser Wert wird als Sortier-Token von Klaviyo gesendet: der Feldname mit einem vorangestellten `-` für absteigend."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Sortierung"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "Feld und Richtung für die Sortierung"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "Wie viele Datensätze auf einer Seite zurückgegeben werden sollen.\n\nKlaviyo begrenzt dies pro Endpunkt und lehnt größere Werte ab, anstatt sie zu deckeln; das Maximum ist in der Beschreibung des Arguments angegeben."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Seitengröße"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Wie viele Datensätze auf einer Seite zurückgegeben werden sollen"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.short_desc": {
+          "source": "Lists events",
+          "message": "Listet Ereignisse auf"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.desc": {
+          "source": "Lists the account's lists.\n\nA **list** holds profiles that opted in explicitly, where a **segment** is a rule Klaviyo evaluates. Paging is by cursor.",
+          "message": "Listet die Listen des Kontos auf.\n\nEine **Liste** enthält Profile, die explizit eingewilligt haben, während ein **Segment** eine Regel ist, die von Klaviyo ausgewertet wird. Die Paginierung erfolgt per Cursor."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.display_name": {
+          "source": "List Lists",
+          "message": "Listen auflisten"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Der Cursor für die nächste Seite: Übergeben Sie den Wert aus `links.next` der vorherigen Antwort.\n\nEr ist ein opaker Wert und darf nicht manuell erstellt werden; lassen Sie ihn leer, um die erste Seite zu lesen."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Cursor"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Der Cursor für die nächste Seite"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching lists\n\nThis value is sent as Klaviyo's filter syntax, `any(name,…),any(id,…)`.",
+          "message": "Die Auflistung auf übereinstimmende Listen eingrenzen\n\nDieser Wert wird in der Filtersyntax von Klaviyo gesendet: `any(name,…),any(id,…)`."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching lists",
+          "message": "Die Auflistung auf passende Listen eingrenzen"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "Feld und Richtung für die Sortierung\n\nDieser Wert wird als Sortier-Token von Klaviyo gesendet: der Feldname mit einem vorangestellten `-` für absteigend."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Sortierung"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "Feld und Richtung für die Sortierung"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "Wie viele Datensätze auf einer Seite zurückgegeben werden sollen.\n\nKlaviyo begrenzt dies pro Endpunkt und lehnt größere Werte ab, anstatt sie zu deckeln; das Maximum ist in der Beschreibung des Arguments angegeben."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Seitengröße"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Wie viele Datensätze auf einer Seite zurückgegeben werden sollen"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.short_desc": {
+          "source": "Lists all lists",
+          "message": "Listet alle Listen auf"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.desc": {
+          "source": "Lists the metrics defined in the account.\n\nA **metric** is the kind of an event - \"Placed Order\", \"Viewed Product\" - and Klaviyo defines one the first time an event names it. This listing is exported so that the metric picker on **Create Event** and the **New Event** trigger has values to offer; the superseded application had no listing action of its own.\n\nKlaviyo declares no page size on this endpoint, only a cursor.",
+          "message": "Listet die im Konto definierten Metriken auf.\n\nEine **Metrik** ist der Typ eines Ereignisses – „Placed Order“, „Viewed Product“ – und Klaviyo definiert sie, sobald ein Ereignis sie erstmals nennt. Diese Auflistung wird exportiert, damit die Metrikauswahl in **Ereignis erstellen** und beim Trigger **Neues Ereignis** Werte bereitstellt; die ersetzte Anwendung besaß keine eigene Auflistungsaktion.\n\nKlaviyo deklariert für diesen Endpunkt keine Seitengröße, sondern nur einen Cursor."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.display_name": {
+          "source": "List Metrics",
+          "message": "Metriken auflisten"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Der Cursor für die nächste Seite: Übergeben Sie den Wert aus `links.next` der vorherigen Antwort.\n\nEr ist ein opaker Wert und darf nicht manuell erstellt werden; lassen Sie ihn leer, um die erste Seite zu lesen."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Cursor"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Der Cursor für die nächste Seite"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.short_desc": {
+          "source": "Lists metrics",
+          "message": "Listet Metriken auf"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.desc": {
+          "source": "Lists the profiles in the account, newest first by default.\n\n`filter` narrows the listing by e-mail, phone number, external ID or profile ID; each takes one or more values and matches any of them. Paging is by cursor: pass the previous response's `links.next` back as `cursor`.",
+          "message": "Listet die Profile im Konto auf, standardmäßig die neuesten zuerst.\n\n`filter` grenzt die Auflistung nach E-Mail, Telefonnummer, externer ID oder Profil-ID ein; jede Option akzeptiert einen oder mehrere Werte und gleicht jeden davon ab. Die Paginierung erfolgt per Cursor: Übergeben Sie `links.next` aus der vorherigen Antwort als `cursor` zurück."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.display_name": {
+          "source": "List Profiles",
+          "message": "Profile auflisten"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Der Cursor für die nächste Seite: Übergeben Sie den Wert aus `links.next` der vorherigen Antwort.\n\nEr ist ein opaker Wert und darf nicht manuell erstellt werden; lassen Sie ihn leer, um die erste Seite zu lesen."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Cursor"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Der Cursor für die nächste Seite"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.YWRkaXRpb25hbEZpZWxkcw.desc": {
+          "source": "Computed blocks to include on each profile, which Klaviyo omits by default because they are expensive to produce:\n\n- `subscriptions`: the profile's consent state per channel\n- `predictive_analytics`: Klaviyo's predicted lifetime value and churn probability",
+          "message": "Berechnete Blöcke, die in jedes Profil aufgenommen werden sollen und die Klaviyo standardmäßig auslässt, da ihre Erstellung aufwendig ist:\n\n- `subscriptions`: der Einwilligungsstatus des Profils pro Kanal\n- `predictive_analytics`: Klaviyos prognostizierter Customer Lifetime Value und die Abwanderungswahrscheinlichkeit"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.YWRkaXRpb25hbEZpZWxkcw.display_name": {
+          "source": "Additional Fields",
+          "message": "Zusätzliche Felder"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.YWRkaXRpb25hbEZpZWxkcw.short_desc": {
+          "source": "Computed blocks to include on each profile",
+          "message": "Berechnete Blöcke, die in jedes Profil aufgenommen werden sollen"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching profiles\n\nThis value is sent as Klaviyo's filter syntax, `any(email,…),any(phone_number,…),any(external_id,…),any(id,…)`.",
+          "message": "Die Auflistung auf übereinstimmende Profile eingrenzen\n\nDieser Wert wird in der Filtersyntax von Klaviyo gesendet: `any(email,…),any(phone_number,…),any(external_id,…),any(id,…)`."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching profiles",
+          "message": "Die Auflistung auf passende Profile eingrenzen"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "Feld und Richtung für die Sortierung\n\nDieser Wert wird als Sortier-Token von Klaviyo gesendet: der Feldname mit einem vorangestellten `-` für absteigend."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Sortierung"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "Feld und Richtung für die Sortierung"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "Wie viele Datensätze auf einer Seite zurückgegeben werden sollen.\n\nKlaviyo begrenzt dies pro Endpunkt und lehnt größere Werte ab, anstatt sie zu deckeln; das Maximum ist in der Beschreibung des Arguments angegeben."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Seitengröße"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Wie viele Datensätze auf einer Seite zurückgegeben werden sollen"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.short_desc": {
+          "source": "Lists profiles",
+          "message": "Listet Profile auf"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.desc": {
+          "source": "Lists the account's segments.\n\nA **segment** is a rule Klaviyo evaluates continuously, so its membership changes on its own; a **list** holds profiles that opted in explicitly. Paging is by cursor.",
+          "message": "Listet die Segmente des Kontos auf.\n\nEin **Segment** ist eine Regel, die Klaviyo fortlaufend auswertet, sodass sich die Mitgliedschaft automatisch ändert; eine **Liste** enthält Profile, die explizit eingewilligt haben. Die Paginierung erfolgt per Cursor."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.display_name": {
+          "source": "List Segments",
+          "message": "Segmente auflisten"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Der Cursor für die nächste Seite: Übergeben Sie den Wert aus `links.next` der vorherigen Antwort.\n\nEr ist ein opaker Wert und darf nicht manuell erstellt werden; lassen Sie ihn leer, um die erste Seite zu lesen."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Cursor"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Der Cursor für die nächste Seite"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching segments\n\nThis value is sent as Klaviyo's filter syntax, `any(name,…),any(id,…)`.",
+          "message": "Die Auflistung auf übereinstimmende Segmente eingrenzen\n\nDieser Wert wird in der Filtersyntax von Klaviyo gesendet: `any(name,…),any(id,…)`."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching segments",
+          "message": "Die Auflistung auf passende Segmente eingrenzen"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "Feld und Richtung für die Sortierung\n\nDieser Wert wird als Sortier-Token von Klaviyo gesendet: der Feldname mit einem vorangestellten `-` für absteigend."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Sortierung"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "Feld und Richtung für die Sortierung"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "Wie viele Datensätze auf einer Seite zurückgegeben werden sollen.\n\nKlaviyo begrenzt dies pro Endpunkt und lehnt größere Werte ab, anstatt sie zu deckeln; das Maximum ist in der Beschreibung des Arguments angegeben."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Seitengröße"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Wie viele Datensätze auf einer Seite zurückgegeben werden sollen"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.short_desc": {
+          "source": "Lists segments",
+          "message": "Listet Segmente auf"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Klaviyo** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Führen Sie einen benutzerdefinierten HTTP- / REST-API-Aufruf an **Klaviyo** mit der Authentifizierung der konfigurierten Verbindung aus.\n\nGeben Sie die HTTP-Methode, den URI-Pfad (relativ zur Basis-URL der Verbindung), optionale Abfrageparameter, Header und den Anfragetext an. Die Antwort wird als Hash mit Statuscode, Antwort-Headern und Antworttext zurückgegeben.\n\nVerwenden Sie diese Aktion für Endpunkte, die in dieser App noch nicht als direkte Aktionen bereitgestellt werden."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API-Aufruf ausführen"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Der Anfragen-Body. Der effektive Typ hängt von `body_type` ab: JSON/form/YAML erwarten einen Hash, XML/Text erwarten einen String, Multipart erwartet eine Dateistruktur, Binary erwartet Rohbytes."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Body"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Der Anfragen-Body"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Laden Sie eine Datei mit `multipart/form-data` hoch. Der Body muss eine @ref DataProvider::FileDataType \"FileDataType\"-Struktur sein (filename + content + mime_type). Das Framework erstellt die Multipart-Hülle und setzt den Boundary-Header."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart-Formular"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Eine Datei mit multipart/form-data hochladen"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Übergeben Sie den Body unverändert an den REST-Client; der Client entscheidet über die Serialisierung basierend auf seiner konfigurierten `data`-Option und dem Werttyp"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Durchreichen; Verbindungsserialisierung nutzen, REST-Client entscheiden lassen"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Senden Sie den Body als Rohbytes. Der Body muss ein Binärwert sein. Setzt `Content-Type: application/octet-stream`, sofern nicht durch `hdr` überschrieben."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Rohbinärdaten"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Body als Rohbytes senden"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serialisieren Sie einen Hash von Formularfeldern als `application/x-www-form-urlencoded`. Der Body muss ein Hash sein, dessen Werte Skalare sind (Strings/Zahlen/Booleans)."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formular (URL-kodiert)"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Body als application/x-www-form-urlencoded-Formularfelder serialisieren"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serialisieren Sie den Body als JSON; setzt `Content-Type: application/json`. Der Body sollte ein Hash, eine Liste oder ein Skalarwert sein."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Body als JSON serialisieren"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Senden Sie den Body als Klartext. Der Body muss ein String sein. Setzt `Content-Type: text/plain`."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Klartext"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Body als text/plain senden"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Senden Sie den Body als XML. Wenn der Body ein Hash ist, wird er zu XML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/xml`."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Body als XML senden"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Senden Sie den Body als YAML. Wenn der Body ein Hash ist, wird er zu YAML serialisiert; wenn er ein String ist, wird er wörtlich gesendet. Setzt `Content-Type: application/x-yaml`."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Body als YAML senden"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wählt den Body-Serialisierungsmodus und den entsprechenden Header `Content-Type` aus. Das Ändern dieses Feldes passt den Editor `body` an – die Auswahl von JSON zeigt einen JSON-Editor an, die Auswahl von Multipart Form zeigt eine Dateiauswahl an usw."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Body-Typ"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Wie der Body serialisiert wird und welcher Content-Type gesendet wird"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Wenn `True`, werden Nicht-2xx-HTTP-Antworten als normaler Antwort-Hash (mit dem tatsächlichen Statuscode) zurückgegeben, anstatt `REST-RESPONSE-ERROR` auszulösen. Nützlich für die Behandlung von 4xx/5xx als Daten – z. B. zum Überprüfen, ob eine Ressource existiert. Überschreibt die Einstellung `error_passthru` der Verbindung nur für diesen Aufruf."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Fehler als Daten zurückgeben"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Nicht-2xx-Antworten normal zurückgeben, anstatt eine Exception auszulösen"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Optionale Liste von HTTP-Statuscodes, die als Erfolg behandelt werden. Wenn festgelegt und der Antwortstatus nicht in dieser Liste enthalten ist, löst die Aktion `REST-STATUS-ERROR` aus. Wenn nicht festgelegt, gilt das Standardverhalten des REST-Clients (typischerweise: 2xx ist Erfolg, Nicht-2xx löst eine Exception aus)."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Erwartete Statuscodes"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Antwort-Statuscodes, die als Erfolg behandelt werden"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash benutzerdefinierter Header, die der Anfrage hinzugefügt werden. Diese überschreiben alle von `body_type` festgelegten Standard-Header (z. B. überschreibt die Angabe von `Content-Type` hier den Standard für den Body-Typ)."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Benutzerdefinierte Header"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Zusätzliche Anfrage-Header"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Wenn `True`, enthält der Antwort-Hash einen Sub-Hash `debug`, der die Anfragemethode/URL/Header (mit unkenntlich gemachten sensiblen Werten), Anfrage- und Antwortgrößen sowie die Verarbeitungsdauer enthält. Nützlich bei der Untersuchung langsamer oder fehlschlagender Aufrufe. Standardmäßig deaktiviert, um Antworten schlank zu halten."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Debug-Informationen einschließen"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Debug-Informationen zu Anfrage/Laufzeit/Größe in die Antwort einschließen"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP-Methode"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Die für die Anfrage zu verwendende HTTP-Methode"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung. Kann `{name}`-Platzhalter enthalten, die aus `path_vars` ersetzt werden. Beispiel: `/users/{id}/comments`."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI-Pfad"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash von Werten, die in `{name}`-Platzhalter im URI-Pfad eingesetzt werden. Beispiel: Bei `path = /users/{id}` und `path_vars = {id: 123}` sendet das Framework `/users/123`. Werte werden URL-codiert."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Pfadvariablen"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Werte für {name}-Platzhalter im Pfad"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash von Abfragezeichenfolgen-Parametern, die an den URI-Pfad angehängt werden sollen. Werte werden URL-codiert; Listenwerte werden mit `,` zusammengefügt."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Abfrageargumente"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Abfragezeichenfolgen-Parameter"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Klaviyo",
+          "message": "Benutzerdefinierten API-Aufruf an Klaviyo senden"
+        },
+        "app.S2xhdml5bw.action.bmV3X2V2ZW50.desc": {
+          "source": "Fires for each event recorded against the chosen metric.\n\n`metric` is required and names the metric by **ID** - a feed of every event in the account would be unusably large, and a workflow reacting to \"Placed Order\" does not want \"Viewed Product\".\n\nThe event carries the event record with its attributes beside its identity. The feed is positioned by `datetime`, which is when the event happened rather than when Klaviyo received it.",
+          "message": "Wird für jedes Ereignis ausgelöst, das für die ausgewählte Metrik erfasst wird.\n\n`metric` ist erforderlich und gibt die Metrik anhand der **ID** an – ein Feed aller Ereignisse im Konto wäre unbrauchbar groß, und ein Workflow, der auf „Placed Order“ reagiert, benötigt kein „Viewed Product“.\n\nDas Ereignis enthält den Datensatz mit seinen Attributen neben seiner Identität. Der Feed wird über `datetime` positioniert, also nach dem Zeitpunkt, zu dem das Ereignis stattfand, und nicht, wann Klaviyo es empfangen hat."
+        },
+        "app.S2xhdml5bw.action.bmV3X2V2ZW50.display_name": {
+          "source": "New Event",
+          "message": "Neues Ereignis"
+        },
+        "app.S2xhdml5bw.action.bmV3X2V2ZW50.short_desc": {
+          "source": "Triggers when a new event occurs",
+          "message": "Wird ausgelöst, wenn ein neues Ereignis auftritt"
+        },
+        "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.desc": {
+          "source": "Fires for each profile added to the chosen list.\n\nThe feed is positioned by `joined_group_at`, so this fires when the profile **joins the list** rather than when the profile itself was created - a profile that has existed for a year fires this the moment it is added.\n\nThe event carries the profile with its attributes beside its identity.",
+          "message": "Wird für jedes Profil ausgelöst, das zur ausgewählten Liste hinzugefügt wird.\n\nDer Feed wird über `joined_group_at` positioniert, sodass die Auslösung erfolgt, wenn das Profil **der Liste beitritt**, und nicht bei der Erstellung des Profils selbst – ein seit einem Jahr bestehendes Profil löst dies im Moment des Hinzufügens aus.\n\nDas Ereignis enthält das Profil mit seinen Attributen neben seiner Identität."
+        },
+        "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.display_name": {
+          "source": "Profile Added to List",
+          "message": "Profil zu Liste hinzugefügt"
+        },
+        "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.short_desc": {
+          "source": "Triggers when a profile is added to a list",
+          "message": "Wird ausgelöst, wenn ein Profil zu einer Liste hinzugefügt wird"
+        },
+        "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.desc": {
+          "source": "Fires for each profile created in the account.\n\nThe event carries the profile with its attributes beside its identity, which is the same shape **Get Profile** and **List Profiles** return.\n\nA profile that is edited later does **not** fire this again: the feed is positioned by `created`.",
+          "message": "Wird für jedes im Konto erstellte Profil ausgelöst.\n\nDas Ereignis enthält das Profil mit seinen Attributen neben seiner Identität in derselben Struktur, die auch **Profil abrufen** und **Profile auflisten** zurückgeben.\n\nEin später bearbeitetes Profil löst dies **nicht** erneut aus: Der Feed wird über `created` positioniert."
+        },
+        "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.display_name": {
+          "source": "New Profile",
+          "message": "Neues Profil"
+        },
+        "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.short_desc": {
+          "source": "Triggers when a new profile is created",
+          "message": "Wird ausgelöst, wenn ein neues Profil erstellt wird"
+        },
+        "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.desc": {
+          "source": "Fires for each profile that enters the chosen segment.\n\nA segment is a rule Klaviyo evaluates continuously, so a profile enters one by **coming to match it** - editing a profile, or an event it records, can be what does that. The feed is positioned by `joined_group_at`.\n\nThe event carries the profile with its attributes beside its identity.",
+          "message": "Wird für jedes Profil ausgelöst, das dem ausgewählten Segment beitritt.\n\nEin Segment ist eine Regel, die Klaviyo fortlaufend auswertet; ein Profil tritt einem Segment bei, indem es **die Bedingungen erfüllt** – dies kann durch das Bearbeiten eines Profils oder durch ein von ihm erfasstes Ereignis geschehen. Der Feed wird über `joined_group_at` positioniert.\n\nDas Ereignis enthält das Profil mit seinen Attributen neben seiner Identität."
+        },
+        "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.display_name": {
+          "source": "Profile Added to Segment",
+          "message": "Profil zu Segment hinzugefügt"
+        },
+        "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.short_desc": {
+          "source": "Triggers when a profile is added to a segment",
+          "message": "Wird ausgelöst, wenn ein Profil zu einem Segment hinzugefügt wird"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.desc": {
+          "source": "Returns every record in the given table matching the search criteria",
+          "message": "Gibt alle Datensätze in der angegebenen Tabelle zurück, die den Suchkriterien entsprechen"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.display_name": {
+          "source": "Search Records",
+          "message": "Datensätze suchen"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "Die zu verwendende Tabelle: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` oder `events`"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabelle"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Der Name der zu bearbeitenden Tabelle"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.short_desc": {
+          "source": "Search for matching records in the given table",
+          "message": "Nach übereinstimmenden Datensätzen in der angegebenen Tabelle suchen"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.desc": {
+          "source": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches",
+          "message": "Gibt den einen Datensatz in der angegebenen Tabelle zurück, der den Suchkriterien entspricht; es tritt ein Fehler auf, wenn mehr als ein Datensatz übereinstimmt"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.display_name": {
+          "source": "Find a Single Record",
+          "message": "Einzeldatensatz suchen"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "Die zu verwendende Tabelle: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` oder `events`"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabelle"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Der Name der zu bearbeitenden Tabelle"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
+          "source": "Search for a single matching record in the given table",
+          "message": "In der angegebenen Tabelle nach einem einzelnen passenden Datensatz suchen"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.desc": {
+          "source": "Sends a campaign immediately, by creating a send job for it.\n\nThe campaign must be complete and ready to send; Klaviyo rejects a send job for a campaign that is still a draft. The response carries the job, whose status can be read back through `make-api-call` on `/api/campaign-send-jobs/{id}`.",
+          "message": "Sendet eine Kampagne sofort, indem ein Sendeauftrag dafür erstellt wird.\n\nDie Kampagne muss vollständig und bereit zum Senden sein; Klaviyo weist einen Sendeauftrag für eine Kampagne im Entwurfsstatus ab. Die Antwort enthält den Auftrag, dessen Status über `make-api-call` auf `/api/campaign-send-jobs/{id}` ausgelesen werden kann."
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.display_name": {
+          "source": "Send Campaign",
+          "message": "Kampagne senden"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.option.aWQ.desc": {
+          "source": "The ID of the campaign to send",
+          "message": "Die ID der zu sendenden Kampagne"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.option.aWQ.display_name": {
+          "source": "Campaign",
+          "message": "Kampagne"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.option.aWQ.short_desc": {
+          "source": "The campaign to send",
+          "message": "Die zu sendende Kampagne"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.short_desc": {
+          "source": "Sends a campaign",
+          "message": "Sendet eine Kampagne"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.desc": {
+          "source": "Records marketing consent for a profile, on the e-mail channel, the SMS channel or both.\n\nIdentify the profile by `profileId`, by `email` or by `phoneNumber`. `list` subscribes the profile **through a list**, which is what makes Klaviyo apply that list's double opt-in process; without it the consent is recorded directly and no confirmation is sent.\n\nOnly record consent that was actually given - Klaviyo's terms require the caller to hold a record of it.\n\nThis action is hand-written rather than generated, because Klaviyo records consent by creating a bulk subscription job whose body nests a list of per-channel consent envelopes four levels down.",
+          "message": "Erfasst die Marketing-Einwilligung für ein Profil auf dem E-Mail-Kanal, dem SMS-Kanal oder auf beiden.\n\nIdentifizieren Sie das Profil über `profileId`, `email` oder `phoneNumber`. `list` abonniert das Profil **über eine Liste**, wodurch Klaviyo das Double-Opt-in-Verfahren dieser Liste anwendet; ohne diesen Parameter wird die Einwilligung direkt erfasst und es wird keine Bestätigung gesendet.\n\nErfassen Sie nur Einwilligungen, die tatsächlich erteilt wurden – die Nutzungsbedingungen von Klaviyo verlangen einen entsprechenden Nachweis.\n\nDiese Aktion wurde manuell erstellt, da Klaviyo Einwilligungen über einen Massenabonnement-Auftrag erfasst, dessen Text eine Liste von kanalspezifischen Einwilligungshüllen vier Ebenen tief verschachtelt."
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.display_name": {
+          "source": "Subscribe Profile",
+          "message": "Profil abonnieren"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.Y29uc2VudFRvU3Vic2NyaWJlVG9DaGFubmVs.desc": {
+          "source": "The channel or channels the consent covers",
+          "message": "Kanal oder Kanäle, für die die Einwilligung gilt"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.Y29uc2VudFRvU3Vic2NyaWJlVG9DaGFubmVs.display_name": {
+          "source": "Channel",
+          "message": "Kanal"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.Y29uc2VudFRvU3Vic2NyaWJlVG9DaGFubmVs.short_desc": {
+          "source": "The channel or channels the consent covers",
+          "message": "Kanal oder Kanäle, für die die Einwilligung gilt"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.ZW1haWw.desc": {
+          "source": "The e-mail address consenting.\n\nRequired for the e-mail channel unless `profileId` names a profile that already carries one.",
+          "message": "Die zustimmende E-Mail-Adresse.\n\nErforderlich für den E-Mail-Kanal, es sei denn, `profileId` verweist auf ein Profil, das bereits eine enthält."
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "E-Mail"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.ZW1haWw.short_desc": {
+          "source": "The e-mail address consenting",
+          "message": "Die zustimmende E-Mail-Adresse"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.bGlzdA.desc": {
+          "source": "Subscribe the profile **through this list**, which adds it to the list and applies the list's double opt-in process if it has one.\n\nWithout it the consent is recorded against the profile directly and no confirmation is sent.",
+          "message": "Das Profil **über diese Liste** abonnieren, wodurch es zur Liste hinzugefügt und das Double-Opt-in-Verfahren der Liste angewendet wird, falls vorhanden.\n\nOhne diese Angabe wird die Einwilligung direkt für das Profil erfasst und es wird keine Bestätigung gesendet."
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "Liste"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.bGlzdA.short_desc": {
+          "source": "Subscribe through this list",
+          "message": "Über diese Liste abonnieren"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.desc": {
+          "source": "Which kinds of SMS message the consent covers.\n\nKlaviyo treats marketing and transactional consent as different permissions; the default is marketing.",
+          "message": "Welche Arten von SMS-Nachrichten die Einwilligung abdeckt.\n\nKlaviyo behandelt Einwilligungen für Marketing und Transaktionen als unterschiedliche Berechtigungen; der Standardwert ist Marketing."
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.display_name": {
+          "source": "SMS Subscription Type",
+          "message": "SMS-Abonnementtyp"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.short_desc": {
+          "source": "Which kinds of SMS message this covers",
+          "message": "Welche Arten von SMS-Nachrichten dies abdeckt"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The phone number consenting, in E.164 format, ex: `+15005550006`.\n\nRequired for the SMS channel unless `profileId` names a profile that already carries one.",
+          "message": "Die zustimmende Telefonnummer im E.164-Format, z. B.: `+15005550006`.\n\nErforderlich für den SMS-Kanal, sofern `profileId` kein Profil angibt, das bereits eine enthält."
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Telefonnummer"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The phone number consenting, in E.164 format",
+          "message": "Die zustimmende Telefonnummer im E.164-Format"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cHJvZmlsZUlk.desc": {
+          "source": "The profile giving consent.\n\nGive this, `email` or `phoneNumber`.",
+          "message": "Das zustimmende Profil.\n\nGeben Sie dies, `email` oder `phoneNumber` an."
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cHJvZmlsZUlk.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cHJvZmlsZUlk.short_desc": {
+          "source": "The profile giving consent, if it is already known",
+          "message": "Das zustimmende Profil, falls es bereits bekannt ist"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.short_desc": {
+          "source": "Subscribes a profile to marketing channels",
+          "message": "Abonniert Marketingkanäle für ein Profil"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.desc": {
+          "source": "Removes a profile from a list.\n\nThe profile itself is not deleted, and its marketing consent is unchanged - use **Unsubscribe Profile** to withdraw consent. Removing a profile that is not a member succeeds and changes nothing.",
+          "message": "Entfernt ein Profil aus einer Liste.\n\nDas Profil selbst wird nicht gelöscht und seine Marketing-Einwilligung bleibt unverändert – verwenden Sie **Profil abmelden**, um die Einwilligung zu widerrufen. Das Entfernen eines Profils, das kein Mitglied ist, ist erfolgreich und ändert nichts."
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.display_name": {
+          "source": "Remove Profile from List",
+          "message": "Profil aus Liste entfernen"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.bGlzdA.desc": {
+          "source": "The list to remove the profile from",
+          "message": "Die Liste, aus der das Profil entfernt werden soll"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "Liste"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.bGlzdA.short_desc": {
+          "source": "The list to remove the profile from",
+          "message": "Die Liste, aus der das Profil entfernt werden soll"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.cHJvZmlsZQ.desc": {
+          "source": "The profile to remove",
+          "message": "Das zu entfernende Profil"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.cHJvZmlsZQ.short_desc": {
+          "source": "The profile to remove",
+          "message": "Das zu entfernende Profil"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.short_desc": {
+          "source": "Removes a profile from a list",
+          "message": "Entfernt ein Profil aus einer Liste"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.desc": {
+          "source": "Removes a tag from a list.\n\nThe tag itself is not deleted.",
+          "message": "Entfernt einen Tag aus einer Liste.\n\nDer Tag selbst wird nicht gelöscht."
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.display_name": {
+          "source": "Remove Tag from List",
+          "message": "Tag aus Liste entfernen"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.bGlzdA.desc": {
+          "source": "The list to remove the tag from",
+          "message": "Die Liste, aus der der Tag entfernt werden soll"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "Liste"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.bGlzdA.short_desc": {
+          "source": "The list to remove the tag from",
+          "message": "Die Liste, aus der der Tag entfernt werden soll"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.dGFn.desc": {
+          "source": "The tag to remove",
+          "message": "Der zu entfernende Tag"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.dGFn.short_desc": {
+          "source": "The tag to remove",
+          "message": "Der zu entfernende Tag"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.short_desc": {
+          "source": "Removes a tag from a list",
+          "message": "Entfernt einen Tag aus einer Liste"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.desc": {
+          "source": "Removes a tag from a segment.\n\nThe tag itself is not deleted.",
+          "message": "Entfernt einen Tag aus einem Segment.\n\nDer Tag selbst wird nicht gelöscht."
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.display_name": {
+          "source": "Remove Tag from Segment",
+          "message": "Tag aus Segment entfernen"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.c2VnbWVudA.desc": {
+          "source": "The segment to remove the tag from",
+          "message": "Das Segment, aus dem der Tag entfernt werden soll"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.c2VnbWVudA.display_name": {
+          "source": "Segment",
+          "message": "Segment"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.c2VnbWVudA.short_desc": {
+          "source": "The segment to remove the tag from",
+          "message": "Das Segment, aus dem der Tag entfernt werden soll"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.dGFn.desc": {
+          "source": "The tag to remove",
+          "message": "Der zu entfernende Tag"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.dGFn.short_desc": {
+          "source": "The tag to remove",
+          "message": "Der zu entfernende Tag"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.short_desc": {
+          "source": "Removes a tag from a segment",
+          "message": "Entfernt einen Tag aus einem Segment"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.desc": {
+          "source": "Withdraws marketing consent for a profile.\n\nWhich channels are withdrawn follows from what is supplied: an `email` withdraws e-mail consent, a `phoneNumber` withdraws SMS consent, and both withdraw both. At least one is required.\n\nThis withdraws **consent**, which Klaviyo honours across every list; use **Remove Profile from List** to change membership instead.\n\nThis action is hand-written rather than generated, because Klaviyo withdraws consent by creating a bulk job whose body nests a list of per-channel consent envelopes four levels down.",
+          "message": "Widerruft die Marketing-Einwilligung für ein Profil.\n\nWelche Kanäle widerrufen werden, hängt von den Angaben ab: Eine `email` widerruft die E-Mail-Einwilligung, eine `phoneNumber` widerruft die SMS-Einwilligung und beide widerrufen beides. Mindestens eine Angabe ist erforderlich.\n\nDies widerruft die **Einwilligung**, die Klaviyo listenübergreifend berücksichtigt; verwenden Sie stattdessen **Profil aus Liste entfernen**, um die Mitgliedschaft zu ändern.\n\nDiese Aktion wurde manuell erstellt und nicht generiert, da Klaviyo Einwilligungen über einen Batch-Auftrag widerruft, dessen Textkörper eine Liste von kanalbezogenen Einwilligungsumschlägen vier Ebenen tief verschachtelt."
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.display_name": {
+          "source": "Unsubscribe Profile",
+          "message": "Profil abmelden"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.ZW1haWw.desc": {
+          "source": "The e-mail address to unsubscribe.\n\nSupplying it withdraws e-mail marketing consent.",
+          "message": "Die abzumeldende E-Mail-Adresse.\n\nIhre Angabe widerruft die Marketing-Einwilligung per E-Mail."
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "E-Mail"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.ZW1haWw.short_desc": {
+          "source": "The e-mail address to unsubscribe",
+          "message": "Die abzumeldende E-Mail-Adresse"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.desc": {
+          "source": "Which kinds of SMS message to withdraw consent for.\n\nOnly meaningful together with `phoneNumber`; the default is marketing.",
+          "message": "Für welche Arten von SMS-Nachrichten die Einwilligung widerrufen werden soll.\n\nNur sinnvoll in Kombination mit `phoneNumber`; Standardwert ist Marketing."
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.display_name": {
+          "source": "SMS Subscription Type",
+          "message": "SMS-Abonnementtyp"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.short_desc": {
+          "source": "Which kinds of SMS message this covers",
+          "message": "Welche Arten von SMS-Nachrichten dies abdeckt"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The phone number to unsubscribe, in E.164 format.\n\nSupplying it withdraws SMS consent.",
+          "message": "Die abzumeldende Telefonnummer im E.164-Format.\n\nIhre Angabe widerruft die SMS-Einwilligung."
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Telefonnummer"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The phone number to unsubscribe, in E.164 format",
+          "message": "Die abzumeldende Telefonnummer im E.164-Format"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.short_desc": {
+          "source": "Unsubscribes a profile from marketing channels",
+          "message": "Meldet ein Profil von Marketingkanälen ab"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.desc": {
+          "source": "Updates every record in the given table matching the search criteria",
+          "message": "Aktualisiert jeden Datensatz in der angegebenen Tabelle, der den Suchkriterien entspricht"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "Datensätze aktualisieren"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "Die zu verwendende Tabelle: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` oder `events`"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabelle"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Der Name der zu bearbeitenden Tabelle"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria",
+          "message": "Die Datensätze aktualisieren, die den Suchkriterien entsprechen"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.desc": {
+          "source": "Updates a campaign that already exists, named by its Klaviyo ID.\n\nOnly the attributes supplied are changed. Klaviyo rejects a change to a campaign that has already been sent.",
+          "message": "Aktualisiert eine bestehende Kampagne anhand ihrer Klaviyo-ID.\n\nNur die angegebenen Attribute werden geändert. Klaviyo lehnt Änderungen an bereits versendeten Kampagnen ab."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.display_name": {
+          "source": "Update Campaign",
+          "message": "Kampagne aktualisieren"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.YXVkaWVuY2Vz.display_name": {
+          "source": "Audiences",
+          "message": "Zielgruppen"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.YXVkaWVuY2Vz.short_desc": {
+          "source": "The lists and segments to include and exclude",
+          "message": "Ein- und auszuschließende Listen und Segmente"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.aWQ.desc": {
+          "source": "The campaign ID to be retrieved: The campaign ID to be retrieved",
+          "message": "Die abzurufende Kampagnen-ID: Die abzurufende Kampagnen-ID"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.aWQ.display_name": {
+          "source": "Campaign",
+          "message": "Kampagne"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.aWQ.short_desc": {
+          "source": "The campaign to work on",
+          "message": "Die zu bearbeitende Kampagne"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The campaign name",
+          "message": "Name der Kampagne"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "The new name of the campaign",
+          "message": "Der neue Name der Kampagne"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.desc": {
+          "source": "Options to use when sending a campaign",
+          "message": "Optionen für das Senden einer Kampagne"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.display_name": {
+          "source": "Send Options",
+          "message": "Sendeoptionen"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.short_desc": {
+          "source": "Whether to use smart sending",
+          "message": "Gibt an, ob Smart Sending verwendet werden soll"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.desc": {
+          "source": "The send strategy the campaign will send with",
+          "message": "Die Versandstrategie, mit der die Kampagne versendet wird"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.display_name": {
+          "source": "Send Strategy",
+          "message": "Sendestrategie"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.short_desc": {
+          "source": "When the campaign is sent, if not immediately",
+          "message": "Wann die Kampagne gesendet wird, falls nicht sofort"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.desc": {
+          "source": "The tracking options associated with the campaign",
+          "message": "Die mit der Kampagne verknüpften Tracking-Optionen"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.display_name": {
+          "source": "Tracking Options",
+          "message": "Tracking-Optionen"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.short_desc": {
+          "source": "The UTM parameters and tracking flags to apply",
+          "message": "Anzuwendende UTM-Parameter und Tracking-Flags"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.short_desc": {
+          "source": "Updates an existing campaign",
+          "message": "Aktualisiert eine bestehende Kampagne"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.desc": {
+          "source": "Updates a list that already exists, named by its Klaviyo ID.\n\nOnly the attributes supplied are changed.",
+          "message": "Aktualisiert eine bestehende Liste anhand ihrer Klaviyo-ID.\n\nNur die angegebenen Attribute werden geändert."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.display_name": {
+          "source": "Update List",
+          "message": "Liste aktualisieren"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.aWQ.desc": {
+          "source": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+          "message": "Primärschlüssel, der diese Liste eindeutig identifiziert. Von Klaviyo generiert."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.aWQ.display_name": {
+          "source": "List",
+          "message": "Liste"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.aWQ.short_desc": {
+          "source": "The list to work on",
+          "message": "Die zu bearbeitende Liste"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.allowed-value.c3RyaW5nOmRvdWJsZV9vcHRfaW4.display_name": {
+          "source": "double_opt_in",
+          "message": "double_opt_in"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.allowed-value.c3RyaW5nOnNpbmdsZV9vcHRfaW4.display_name": {
+          "source": "single_opt_in",
+          "message": "single_opt_in"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.desc": {
+          "source": "The opt-in process for this list. Valid values: 'double_opt_in', 'single_opt_in'.",
+          "message": "Das Opt-in-Verfahren für diese Liste. Gültige Werte: 'double_opt_in', 'single_opt_in'."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.display_name": {
+          "source": "Opt-in Process",
+          "message": "Opt-in-Prozess"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.short_desc": {
+          "source": "Whether a new subscriber has to confirm by e-mail",
+          "message": "Ob neue Abonnenten per E-Mail bestätigen müssen"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.bmFtZQ.desc": {
+          "source": "A helpful name to label the list",
+          "message": "Ein aussagekräftiger Name zur Kennzeichnung der Liste"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.bmFtZQ.short_desc": {
+          "source": "The new name of the list",
+          "message": "Der neue Name der Liste"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.short_desc": {
+          "source": "Updates an existing list",
+          "message": "Aktualisiert eine bestehende Liste"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.desc": {
+          "source": "Updates a profile that already exists, named by its Klaviyo ID.\n\nOnly the attributes supplied are changed. A custom property supplied here **replaces** the stored value; `meta.patch_properties` appends to or unsets one instead.",
+          "message": "Aktualisiert ein bestehendes Profil anhand seiner Klaviyo-ID.\n\nNur die angegebenen Attribute werden geändert. Eine hier angegebene benutzerdefinierte Eigenschaft **ersetzt** den gespeicherten Wert; `meta.patch_properties` hängt stattdessen Werte an oder setzt eine Eigenschaft zurück."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.display_name": {
+          "source": "Update Profile",
+          "message": "Profil aktualisieren"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.desc": {
+          "source": "Country name",
+          "message": "Ländername"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Land"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "Ländername"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "Stadtname"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Stadt"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y2l0eQ.short_desc": {
+          "source": "City name",
+          "message": "Stadtname"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.desc": {
+          "source": "Your own properties to store on the profile, as name/value pairs.\n\nKlaviyo reserves property names beginning with `$`.",
+          "message": "Eigene Eigenschaften, die im Profil als Name-Wert-Paare gespeichert werden sollen.\n\nKlaviyo reserviert Eigenschaftsnamen, die mit `$` beginnen."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.display_name": {
+          "source": "Custom Properties",
+          "message": "Benutzerdefinierte Eigenschaften"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.short_desc": {
+          "source": "Your own properties to store on the profile",
+          "message": "Eigene Eigenschaften zur Speicherung im Profil"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.desc": {
+          "source": "First line of street address",
+          "message": "Erste Zeile der Straßenadresse"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.display_name": {
+          "source": "Address Line 1",
+          "message": "Adresszeile 1"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.short_desc": {
+          "source": "First line of street address",
+          "message": "Erste Zeile der Straßenadresse"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.desc": {
+          "source": "Second line of street address",
+          "message": "Zweite Zeile der Straßenadresse"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.display_name": {
+          "source": "Address Line 2",
+          "message": "Adresszeile 2"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.short_desc": {
+          "source": "Second line of street address",
+          "message": "Zweite Zeile der Straßenadresse"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZW1haWw.desc": {
+          "source": "Individual's email address",
+          "message": "E-Mail-Adresse der Person"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "E-Mail"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZW1haWw.short_desc": {
+          "source": "The profile's e-mail address",
+          "message": "Die E-Mail-Adresse des Profils"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.desc": {
+          "source": "Your own identifier for this person, so that a profile can be found by the ID it has in your system rather than by e-mail",
+          "message": "Ihre eigene Kennung für diese Person, sodass ein Profil über die ID in Ihrem System statt über die E-Mail-Adresse gefunden werden kann"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.display_name": {
+          "source": "External ID",
+          "message": "Externe ID"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.short_desc": {
+          "source": "Your own identifier for this person",
+          "message": "Ihre eigene Kennung für diese Person"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.desc": {
+          "source": "Individual's first name",
+          "message": "Vorname der Person"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Vorname"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Individual's first name",
+          "message": "Vorname der Person"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.desc": {
+          "source": "URL pointing to the location of a profile image",
+          "message": "URL zum Speicherort eines Profilbilds"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.display_name": {
+          "source": "Image URL",
+          "message": "Bild-URL"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.short_desc": {
+          "source": "A URL for the profile's avatar",
+          "message": "Eine URL für das Avatarbild des Profils"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aWQ.desc": {
+          "source": "Primary key that uniquely identifies this profile. Generated by Klaviyo.: Primary key that uniquely identifies this profile. Generated by Klaviyo.",
+          "message": "Primärschlüssel, der dieses Profil eindeutig identifiziert. Von Klaviyo generiert.: Primärschlüssel, der dieses Profil eindeutig identifiziert. Von Klaviyo generiert."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aWQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aWQ.short_desc": {
+          "source": "The profile to update",
+          "message": "Das zu aktualisierende Profil"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aXA.desc": {
+          "source": "IP Address",
+          "message": "IP-Adresse"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aXA.display_name": {
+          "source": "IP Address",
+          "message": "IP-Adresse"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aXA.short_desc": {
+          "source": "The IP address Klaviyo should locate the profile from",
+          "message": "Die IP-Adresse, anhand derer Klaviyo das Profil lokalisieren soll"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Name of the company or organization within the company for whom the individual works",
+          "message": "Name des Unternehmens oder der Organisation innerhalb des Unternehmens, für die die Person arbeitet"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organisation"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The company the person belongs to",
+          "message": "Das Unternehmen, zu dem die Person gehört"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9jYWxl.desc": {
+          "source": "The locale of the profile, in the IETF BCP 47 language tag format like (ISO 639-1/2)-(ISO 3166 alpha-2)",
+          "message": "Das Gebietsschema des Profils im IETF-BCP-47-Sprach-Tag-Format wie (ISO 639-1/2)-(ISO 3166 alpha-2)"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Gebietsschema"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9jYWxl.short_desc": {
+          "source": "The profile's locale, ex: \"en-US\"",
+          "message": "Das Gebietsschema des Profils, z. B. „en-US“"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.desc": {
+          "source": "Longitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "Längengradkoordinate. Wir empfehlen eine Genauigkeit von vier Nachkommastellen."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.display_name": {
+          "source": "Longitude",
+          "message": "Längengrad"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.short_desc": {
+          "source": "Longitude coordinate",
+          "message": "Längengrad-Koordinate"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.desc": {
+          "source": "Latitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "Breitengrad-Koordinate. Wir empfehlen eine Genauigkeit von vier Nachkommastellen."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.display_name": {
+          "source": "Latitude",
+          "message": "Breitengrad"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.short_desc": {
+          "source": "Latitude coordinate",
+          "message": "Breitengrad-Koordinate"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.desc": {
+          "source": "Individual's last name",
+          "message": "Nachname der Person"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Nachname"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.short_desc": {
+          "source": "Individual's last name",
+          "message": "Nachname der Person"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bWV0YQ.desc": {
+          "source": "Append to or unset custom properties rather than replacing them.\n\n`patch_properties.append` adds a value to a list-valued property, `unappend` removes one, and `unset` deletes a property outright.",
+          "message": "Benutzerdefinierte Eigenschaften anhängen oder zurücksetzen, anstatt sie zu ersetzen.\n\n`patch_properties.append` fügt einer listenbasierten Eigenschaft einen Wert hinzu, `unappend` entfernt einen und `unset` löscht eine Eigenschaft vollständig."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bWV0YQ.display_name": {
+          "source": "Patch Operations",
+          "message": "Patch-Operationen"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bWV0YQ.short_desc": {
+          "source": "Append to or unset custom properties rather than replacing them",
+          "message": "Benutzerdefinierte Eigenschaften anfügen oder zurücksetzen statt ersetzen"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The profile's phone number in E.164 format, ex: `+15005550006`.\n\nKlaviyo rejects a number in any other format.",
+          "message": "Die Telefonnummer des Profils im E.164-Format, z. B.: `+15005550006`.\n\nKlaviyo weist Nummern in anderen Formaten zurück."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Telefonnummer"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The profile's phone number in E.164 format",
+          "message": "Telefonnummer des Profils im E.164-Format"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cmVnaW9u.desc": {
+          "source": "Region within a country, such as state or province",
+          "message": "Region innerhalb eines Landes, wie Bundesland oder Provinz"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "Region"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cmVnaW9u.short_desc": {
+          "source": "The state, province or region",
+          "message": "Bundesland, Kanton, Provinz oder Region"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGl0bGU.desc": {
+          "source": "Individual's job title",
+          "message": "Berufsbezeichnung der Person"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Titel"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGl0bGU.short_desc": {
+          "source": "The person's job title",
+          "message": "Berufsbezeichnung der Person"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.desc": {
+          "source": "Time zone name. We recommend using time zones from the IANA Time Zone Database.",
+          "message": "Name der Zeitzone. Wir empfehlen die Verwendung von Zeitzonen aus der IANA-Zeitzonendatenbank."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.display_name": {
+          "source": "Time Zone",
+          "message": "Zeitzone"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.short_desc": {
+          "source": "The IANA time zone name",
+          "message": "Name der IANA-Zeitzone"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.emlw.desc": {
+          "source": "Zip code",
+          "message": "Postleitzahl"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.emlw.display_name": {
+          "source": "Postal Code",
+          "message": "Postleitzahl"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.emlw.short_desc": {
+          "source": "The postal or ZIP code",
+          "message": "Postleitzahl"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.short_desc": {
+          "source": "Updates an existing profile",
+          "message": "Aktualisiert ein bestehendes Profil"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.desc": {
+          "source": "Updates a segment that already exists, named by its Klaviyo ID.\n\nOnly the attributes supplied are changed. Replacing `definition` re-evaluates the membership, which Klaviyo does in the background.",
+          "message": "Aktualisiert ein bestehendes Segment anhand seiner Klaviyo-ID.\n\nNur die angegebenen Attribute werden geändert. Das Ersetzen von `definition` bewertet die Mitgliedschaft neu, was Klaviyo im Hintergrund durchführt."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.display_name": {
+          "source": "Update Segment",
+          "message": "Segment aktualisieren"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.ZGVmaW5pdGlvbg.display_name": {
+          "source": "Definition",
+          "message": "Definition"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.ZGVmaW5pdGlvbg.short_desc": {
+          "source": "The rule deciding who is in the segment",
+          "message": "Die Regel, die bestimmt, wer zum Segment gehört"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aWQ.display_name": {
+          "source": "Segment",
+          "message": "Segment"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aWQ.short_desc": {
+          "source": "The segment to work on",
+          "message": "Das zu bearbeitende Segment"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNBY3RpdmU.desc": {
+          "source": "Set to false to deactivate the segment. When deactivating, this must be the only attribute in the request body. Deactivation cannot be combined with other updates. Marking a segment inactive will impact campaigns, flows, ad syncs, forms, helpdesk routing, and other features that reference this segment. Set to true to reactivate a deactivated segment.",
+          "message": "Auf false setzen, um das Segment zu deaktivieren. Bei der Deaktivierung muss dies das einzige Attribut im Anfragetext sein. Eine Deaktivierung kann nicht mit anderen Aktualisierungen kombiniert werden. Das Markieren eines Segments als inaktiv wirkt sich auf Kampagnen, Flows, Werbesynchronisierungen, Formulare, Helpdesk-Routing und andere Funktionen aus, die auf dieses Segment verweisen. Auf true setzen, um ein deaktiviertes Segment zu reaktivieren."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNBY3RpdmU.display_name": {
+          "source": "Active",
+          "message": "Aktiv"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNBY3RpdmU.short_desc": {
+          "source": "Whether Klaviyo keeps the segment's membership up to date",
+          "message": "Gibt an, ob Klaviyo die Mitgliedschaft des Segments aktuell hält"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNTdGFycmVk.display_name": {
+          "source": "Starred",
+          "message": "Favorisiert"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNTdGFycmVk.short_desc": {
+          "source": "Whether the segment is starred in the Klaviyo UI",
+          "message": "Gibt an, ob das Segment in der Klaviyo-Benutzeroberfläche markiert ist"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.bmFtZQ.short_desc": {
+          "source": "The new name of the segment",
+          "message": "Der neue Name des Segments"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.short_desc": {
+          "source": "Updates an existing segment",
+          "message": "Aktualisiert ein bestehendes Segment"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.desc": {
+          "source": "Renames a tag.\n\nA tag's name is the only attribute it has, so this action changes the name and nothing else. Klaviyo answers with no content.",
+          "message": "Benennt einen Tag um.\n\nDer Name eines Tags ist sein einziges Attribut, daher ändert diese Aktion nur den Namen. Klaviyo antwortet ohne Inhalt."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.display_name": {
+          "source": "Update Tag",
+          "message": "Tag aktualisieren"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.aWQ.desc": {
+          "source": "The Tag ID",
+          "message": "Die Tag-ID"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.aWQ.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.aWQ.short_desc": {
+          "source": "The tag to work on",
+          "message": "Das zu bearbeitende Tag"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.bmFtZQ.desc": {
+          "source": "The Tag name",
+          "message": "Der Tag-Name"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Name"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.bmFtZQ.short_desc": {
+          "source": "The new name of the tag",
+          "message": "Der neue Name des Tags"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.short_desc": {
+          "source": "Renames an existing tag",
+          "message": "Benennt einen bestehenden Tag um"
+        },
+        "app.S2xhdml5bw.desc": {
+          "source": "Provides access to [Klaviyo](https://www.klaviyo.com), the e-mail and SMS marketing platform.\n\nKlaviyo holds the people a brand markets to as **profiles**, groups them into **lists** they opted in to and **segments** it evaluates continuously, records what they did as **events** against **metrics**, and sends **campaigns** to them.\n\n**Common use cases**:\n- **Profiles**: create or update someone from your own system's records, and find them again\n- **Lists and segments**: list them, create a list, and move profiles in and out\n- **Subscriptions**: record and withdraw marketing consent per channel\n- **Events**: record what somebody did, which is what triggers a flow\n- **Campaigns**: find a campaign and send it\n- **Tags**: organise lists and segments for reporting\n\nAuthentication is the OAuth2 authorization code flow against an app registered in Klaviyo's developer portal, or a private API key for an integration serving one account.\n\nKlaviyo is a trademark of Klaviyo, Inc.",
+          "message": "Bietet Zugriff auf [Klaviyo](https://www.klaviyo.com), die E-Mail- und SMS-Marketingplattform.\n\nKlaviyo verwaltet die Zielpersonen einer Marke als **Profile**, gruppiert sie in **Listen**, für die sie sich angemeldet haben, und **Segmente**, die fortlaufend ausgewertet werden, erfasst deren Aktivitäten als **Ereignisse** bezogen auf **Metriken** und sendet **Kampagnen** an sie.\n\n**Typische Anwendungsfälle**:\n- **Profile**: Personen aus den Datensätzen Ihres eigenen Systems erstellen oder aktualisieren und wiederfinden\n- **Listen und Segmente**: auflisten, Listen erstellen und Profile hinzufügen oder entfernen\n- **Abonnements**: Marketing-Einwilligungen pro Kanal erfassen und widerrufen\n- **Ereignisse**: Aktivitäten von Personen erfassen, die Flows auslösen\n- **Kampagnen**: Kampagnen suchen und versenden\n- **Tags**: Listen und Segmente für Berichte organisieren\n\nDie Authentifizierung erfolgt über den OAuth2-Autorisierungscode-Flow für eine im Entwicklerportal von Klaviyo registrierte App oder über einen privaten API-Schlüssel für eine Integration, die ein einzelnes Konto bedient.\n\nKlaviyo ist eine Marke von Klaviyo, Inc."
+        },
+        "app.S2xhdml5bw.display_name": {
+          "source": "Klaviyo",
+          "message": "Klaviyo"
+        },
+        "app.S2xhdml5bw.short_desc": {
+          "source": "Email and SMS marketing automation platform",
+          "message": "Marketing-Automatisierungsplattform für E-Mail und SMS"
+        }
+      }
     }
   }
 }

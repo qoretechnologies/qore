@@ -205,7 +205,7 @@
         },
         "app.VG9nZXRoZXJBaQ.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
           "source": "Generate a chat completion from a Together AI hosted model",
-          "message": "Eine Chat-Vervollständigung über ein von Together AI gehostetes Modell generieren"
+          "message": "Chat-Vervollständigung über ein von Together AI gehostetes Modell generieren"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.desc": {
           "source": "Converts text inputs into embedding vectors using a Together-hosted embedding model (e.g. `BAAI/bge-base-en-v1.5`) via the OpenAI-compatible `/v1/embeddings` endpoint.",
@@ -237,7 +237,7 @@
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.desc": {
           "source": "Text input(s) to convert to embedding vectors.  Can be a single string or a list of strings for batch embedding.",
-          "message": "Texteingabe(n), die in Einbettungsvektoren konvertiert werden sollen. Kann eine einzelne Zeichenfolge oder eine Liste von Zeichenfolgen für Batch-Einbettungen sein."
+          "message": "Texteingabe oder Texteingaben zur Konvertierung in Einbettungsvektoren. Kann ein einzelner String oder eine Liste von Strings für Batch-Einbettungen sein."
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.display_name": {
           "source": "Input",
@@ -245,7 +245,7 @@
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.short_desc": {
           "source": "Text(s) to embed — single string or list of strings",
-          "message": "Einzubettende(r) Text(e) – einzelne Zeichenfolge oder Liste von Zeichenfolgen"
+          "message": "Zu einbettender Text — einzelne Zeichenfolge oder Liste von Zeichenfolgen"
         },
         "app.VG9nZXRoZXJBaQ.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.desc": {
           "source": "Together embedding model identifier, e.g. `BAAI/bge-base-en-v1.5`, `BAAI/bge-large-en-v1.5`, `togethercomputer/m2-bert-80M-32k-retrieval`.",
@@ -445,7 +445,7 @@
         },
         "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Durchreichen; Verbindungsserialisierung verwenden und den REST-Client entscheiden lassen"
+          "message": "Durchreichen; Verbindungsserialisierung nutzen, REST-Client entscheiden lassen"
         },
         "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -694,6 +694,10 @@
         "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "URI-Pfad"
+        },
+        "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung"
         },
         "app.VG9nZXRoZXJBaQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",

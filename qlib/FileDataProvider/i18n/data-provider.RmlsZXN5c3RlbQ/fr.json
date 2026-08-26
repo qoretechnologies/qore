@@ -163,6 +163,10 @@
           "source": "Text",
           "message": "Texte"
         },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "Si 'True', renvoyé sous forme de chaîne ; si 'False' (défaut), en tant que…"
+        },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
           "source": "Get a file on the server filesystem",
           "message": "Obtenir un fichier sur le système de fichiers du serveur"
@@ -213,7 +217,7 @@
         },
         "app.RmlsZXN5c3RlbQ.action.bGlzdA.short_desc": {
           "source": "List files and subdirectories in a folder on the server filesystem",
-          "message": "Lister les fichiers et sous-répertoires dans un dossier sur le système de fichiers du serveur"
+          "message": "Liste les fichiers et sous-dossiers du système de fichiers du serveur"
         },
         "app.RmlsZXN5c3RlbQ.action.bW92ZQ.desc": {
           "source": "Move a file or directory on the server filesystem",
@@ -315,6 +319,10 @@
           "source": "Symlink",
           "message": "Lien symbolique"
         },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.short_desc": {
+          "source": "If 'True', then if the target path is a symbolic link, information about the…",
+          "message": "Si 'True' et si la cible est un lien symbolique, les informations sur le…"
+        },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.desc": {
           "source": "The file path",
           "message": "Le chemin du fichier"
@@ -329,7 +337,7 @@
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.short_desc": {
           "source": "Get details about a file or directory on the server filesystem",
-          "message": "Obtenir des détails sur un fichier ou un répertoire sur le système de fichiers du serveur"
+          "message": "Obtient les détails d'un fichier ou dossier sur le serveur"
         },
         "app.RmlsZXN5c3RlbQ.desc": {
           "source": "Access to the server filesystem",

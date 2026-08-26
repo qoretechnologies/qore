@@ -79,6 +79,10 @@
           "source": "Created Via",
           "message": "Créé via"
         },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3JlYXRlZF92aWE.short_desc": {
+          "source": "Identifier showing where the order originated (e.g. 'rest-api', 'checkout')",
+          "message": "Identifiant de l'origine de la commande (ex. 'rest-api', 'checkout')"
+        },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.desc": {
           "source": "Three-letter ISO currency code (e.g., `USD`, `EUR`)",
           "message": "Code de devise ISO à trois lettres (par exemple, `USD`, `EUR`)"
@@ -86,6 +90,10 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.display_name": {
           "source": "Currency",
           "message": "Devise"
+        },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.short_desc": {
+          "source": "Three-letter ISO currency code (e.g., 'USD', 'EUR')",
+          "message": "Code devise ISO à trois lettres (ex. 'USD', 'EUR')"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJfaWQ.desc": {
           "source": "The customer ID for the order",
@@ -278,6 +286,10 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.cGF5bWVudF9tZXRob2Q.display_name": {
           "source": "Payment Method",
           "message": "Mode de paiement"
+        },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.cGF5bWVudF9tZXRob2Q.short_desc": {
+          "source": "Payment method identifier (e.g., 'bacs', 'paypal')",
+          "message": "Identifiant du moyen de paiement (ex. 'bacs', 'paypal')"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.cGF5bWVudF9tZXRob2RfdGl0bGU.desc": {
           "source": "Human-readable payment method title",
@@ -647,6 +659,10 @@
           "source": "Email Restrictions",
           "message": "Restrictions d'e-mail"
         },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.option.ZW1haWxfcmVzdHJpY3Rpb25z.short_desc": {
+          "source": "List of email addresses (or domain wildcards like '*@example.com') that can…",
+          "message": "Liste d'e-mails (ou motifs de domaine comme '*@example.com') pouvant…"
+        },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.option.ZXhjbHVkZV9zYWxlX2l0ZW1z.desc": {
           "source": "If `True`, the coupon will not apply to items on sale",
           "message": "Si `True`, le code promo ne s'appliquera pas aux articles en promotion"
@@ -913,7 +929,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.YnV0dG9uX3RleHQ.short_desc": {
           "source": "External product button text — only used when 'type' is 'external'",
-          "message": "Texte du bouton de produit externe — utilisé uniquement lorsque 'type' est 'external'"
+          "message": "Texte du bouton de produit externe — utilisé si 'type' vaut 'external'"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Z3JvdXBlZF9wcm9kdWN0cw.desc": {
           "source": "List of grouped product IDs — only used when `type` is `grouped`",
@@ -925,7 +941,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Z3JvdXBlZF9wcm9kdWN0cw.short_desc": {
           "source": "List of grouped product IDs — only used when 'type' is 'grouped'",
-          "message": "Liste des identifiants de produits groupés — utilisé uniquement lorsque 'type' est 'grouped'"
+          "message": "Liste des ID de produits groupés — utilisé si 'type' vaut 'grouped'"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfZXhwaXJ5.desc": {
           "source": "Number of days before download access expires (`-1` for never) — only used when `downloadable` is `True`",
@@ -935,6 +951,10 @@
           "source": "Download Expiry",
           "message": "Expiration du téléchargement"
         },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfZXhwaXJ5.short_desc": {
+          "source": "Number of days before download access expires ('-1' for never) — only used…",
+          "message": "Jours avant expiration du téléchargement ('-1' = jamais) — utilisé si…"
+        },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.desc": {
           "source": "Maximum number of downloads per purchase (`-1` for unlimited) — only used when `downloadable` is `True`",
           "message": "Nombre maximal de téléchargements par achat (`-1` pour illimité) — utilisé uniquement lorsque `downloadable` est `True`"
@@ -942,6 +962,10 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.display_name": {
           "source": "Download Limit",
           "message": "Limite de téléchargement"
+        },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.short_desc": {
+          "source": "Maximum number of downloads per purchase ('-1' for unlimited) — only used when…",
+          "message": "Nombre max de téléchargements par achat ('-1' = illimité) — utilisé si…"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRhYmxl.desc": {
           "source": "If `True`, the product is downloadable. Selecting this exposes the `downloads`, `download_limit`, and `download_expiry` fields.",
@@ -965,7 +989,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRz.short_desc": {
           "source": "List of downloadable files — only used when 'downloadable' is 'True'",
-          "message": "Liste des fichiers téléchargeables — utilisé uniquement lorsque 'downloadable' est 'True'"
+          "message": "Liste des fichiers téléchargeables — utilisé si 'downloadable' vaut 'True'"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGF0ZV9vbl9zYWxlX2Zyb20.desc": {
           "source": "Start date of the sale price",
@@ -1001,7 +1025,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVmYXVsdF9hdHRyaWJ1dGVz.short_desc": {
           "source": "Default selected attribute options — only used when 'type' is 'variable'",
-          "message": "Options d'attributs sélectionnées par défaut — utilisé uniquement lorsque 'type' est 'variable'"
+          "message": "Options d'attributs sélectionnées par défaut — si 'type' vaut 'variable'"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
           "source": "The full product description (may contain HTML)",
@@ -1133,7 +1157,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c29sZF9pbmRpdmlkdWFsbHk.short_desc": {
           "source": "If 'True', customers can only buy one of this item per order",
-          "message": "Si 'True', les clients ne peuvent acheter qu'un seul exemplaire de cet article par commande"
+          "message": "Si 'True', les clients ne peuvent acheter qu'un seul exemplaire par commande"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.c2FsZV9wcmljZQ.desc": {
           "source": "The product sale price",
@@ -1354,6 +1378,10 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGF4X2NsYXNz.display_name": {
           "source": "Tax Class",
           "message": "Classe de taxe"
+        },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGF4X2NsYXNz.short_desc": {
+          "source": "Tax class slug (e.g. 'standard', 'reduced-rate', 'zero-rate')",
+          "message": "Slug de classe de taxe (ex. 'standard', 'reduced-rate', 'zero-rate')"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGF4X3N0YXR1cw.allowed-value.c3RyaW5nOm5vbmU.desc": {
           "source": "None",
@@ -1697,7 +1725,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRheC1yYXRl.option.cG9zdGNvZGU.short_desc": {
           "source": "Single postcode this rate applies to (use 'postcodes' for multiple)",
-          "message": "Code postal unique auquel ce taux s'applique (utiliser 'postcodes' pour plusieurs)"
+          "message": "Code postal unique visé (utiliser 'postcodes' pour plusieurs)"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXRheC1yYXRl.option.cG9zdGNvZGVz.desc": {
           "source": "List of postcodes this rate applies to",
@@ -1925,7 +1953,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXdlYmhvb2s.option.c2VjcmV0.short_desc": {
           "source": "Secret key used to generate a hash of the delivered webhook for verification",
-          "message": "Clé secrète utilisée pour générer un hachage du webhook envoyé à des fins de vérification"
+          "message": "Clé secrète pour générer le hachage du webhook délivré pour vérification"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXdlYmhvb2s.option.c3RhdHVz.allowed-value.c3RyaW5nOmFjdGl2ZQ.display_name": {
           "source": "active",
@@ -2371,6 +2399,10 @@
           "source": "Group",
           "message": "Groupe"
         },
+        "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.option.Z3JvdXA.short_desc": {
+          "source": "The settings group ID (e.g., 'general', 'products', 'tax')",
+          "message": "L'ID du groupe de paramètres (ex. 'general', 'products', 'tax')"
+        },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.option.c2V0dGluZ19pZA.desc": {
           "source": "The setting identifier within the group",
           "message": "L'identifiant du paramètre au sein du groupe"
@@ -2661,7 +2693,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNhdGVnb3J5.option.Zm9yY2U.short_desc": {
           "source": "Required to be 'True' since categories do not support trash",
-          "message": "Doit être défini sur 'True' car les catégories ne prennent pas en charge la corbeille"
+          "message": "Doit être 'True' car les catégories ne gèrent pas la corbeille"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLWNhdGVnb3J5.option.aWQ.desc": {
           "source": "The unique identifier for the category to delete",
@@ -2769,7 +2801,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRhZw.option.Zm9yY2U.short_desc": {
           "source": "Required to be 'True' since tags do not support trash",
-          "message": "Doit être défini sur 'True' car les étiquettes ne prennent pas en charge la corbeille"
+          "message": "Doit être 'True' car les étiquettes ne gèrent pas la corbeille"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRhZw.option.aWQ.desc": {
           "source": "The unique identifier for the tag to delete",
@@ -2805,7 +2837,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRheC1yYXRl.option.Zm9yY2U.short_desc": {
           "source": "Required to be 'True' since tax rates do not support trash",
-          "message": "Doit être défini sur 'True' car les taux de taxe ne prennent pas en charge la corbeille"
+          "message": "Doit être 'True' car les taux de taxe ne gèrent pas la corbeille"
         },
         "app.V29vQ29tbWVyY2U.action.ZGVsZXRlLXRheC1yYXRl.option.aWQ.desc": {
           "source": "The unique identifier for the tax rate to delete",
@@ -4809,7 +4841,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+          "message": "Pass-through ; utiliser la sérialisation, laisser le client REST décider"
         },
         "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -4833,7 +4865,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
           "source": "Serialize body as application/x-www-form-urlencoded form fields",
-          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+          "message": "Sérialiser le corps en champs application/x-www-form-urlencoded"
         },
         "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
           "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
@@ -5058,6 +5090,10 @@
         "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "Chemin URI"
+        },
+        "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Chemin d'URI relatif à l'URL de base de l'API de la connexion"
         },
         "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
@@ -6113,7 +6149,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YnV0dG9uX3RleHQ.short_desc": {
           "source": "External product button text — only used when 'type' is 'external'",
-          "message": "Texte du bouton de produit externe — utilisé uniquement lorsque 'type' est 'external'"
+          "message": "Texte du bouton de produit externe — utilisé si 'type' vaut 'external'"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Z3JvdXBlZF9wcm9kdWN0cw.desc": {
           "source": "List of grouped product IDs — only used when `type` is `grouped`",
@@ -6125,7 +6161,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Z3JvdXBlZF9wcm9kdWN0cw.short_desc": {
           "source": "List of grouped product IDs — only used when 'type' is 'grouped'",
-          "message": "Liste des identifiants de produits groupés — utilisé uniquement lorsque 'type' est 'grouped'"
+          "message": "Liste des ID de produits groupés — utilisé si 'type' vaut 'grouped'"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfZXhwaXJ5.desc": {
           "source": "Number of days before download access expires (`-1` for never) — only used when `downloadable` is `True`",
@@ -6135,6 +6171,10 @@
           "source": "Download Expiry",
           "message": "Expiration du téléchargement"
         },
+        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfZXhwaXJ5.short_desc": {
+          "source": "Number of days before download access expires ('-1' for never) — only used…",
+          "message": "Jours avant expiration du téléchargement ('-1' = jamais) — utilisé si…"
+        },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.desc": {
           "source": "Maximum number of downloads per purchase (`-1` for unlimited) — only used when `downloadable` is `True`",
           "message": "Nombre maximal de téléchargements par achat (`-1` pour illimité) — utilisé uniquement lorsque `downloadable` est `True`"
@@ -6142,6 +6182,10 @@
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.display_name": {
           "source": "Download Limit",
           "message": "Limite de téléchargement"
+        },
+        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.short_desc": {
+          "source": "Maximum number of downloads per purchase ('-1' for unlimited) — only used when…",
+          "message": "Nombre max de téléchargements par achat ('-1' = illimité) — utilisé si…"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRhYmxl.desc": {
           "source": "If `True`, the product is downloadable. Selecting this exposes the `downloads`, `download_limit`, and `download_expiry` fields.",
@@ -6165,7 +6209,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRz.short_desc": {
           "source": "List of downloadable files — only used when 'downloadable' is 'True'",
-          "message": "Liste des fichiers téléchargeables — utilisé uniquement lorsque 'downloadable' est 'True'"
+          "message": "Liste des fichiers téléchargeables — utilisé si 'downloadable' vaut 'True'"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGF0ZV9vbl9zYWxlX2Zyb20.desc": {
           "source": "Start date of the sale price",
@@ -6201,7 +6245,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVmYXVsdF9hdHRyaWJ1dGVz.short_desc": {
           "source": "Default selected attribute options — only used when 'type' is 'variable'",
-          "message": "Options d'attributs sélectionnées par défaut — utilisé uniquement lorsque 'type' est 'variable'"
+          "message": "Options d'attributs sélectionnées par défaut — si 'type' vaut 'variable'"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
           "source": "The full product description",
@@ -6345,7 +6389,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c29sZF9pbmRpdmlkdWFsbHk.short_desc": {
           "source": "If 'True', customers can only buy one of this item per order",
-          "message": "Si 'True', les clients ne peuvent acheter qu'un seul exemplaire de cet article par commande"
+          "message": "Si 'True', les clients ne peuvent acheter qu'un seul exemplaire par commande"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.c2FsZV9wcmljZQ.desc": {
           "source": "The product sale price",
@@ -6567,6 +6611,10 @@
           "source": "Tax Class",
           "message": "Classe de taxe"
         },
+        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGF4X2NsYXNz.short_desc": {
+          "source": "Tax class slug (e.g. 'standard', 'reduced-rate', 'zero-rate')",
+          "message": "Slug de classe de taxe (ex. 'standard', 'reduced-rate', 'zero-rate')"
+        },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGF4X3N0YXR1cw.allowed-value.c3RyaW5nOm5vbmU.desc": {
           "source": "None",
           "message": "Aucun"
@@ -6738,6 +6786,10 @@
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.option.Z3JvdXA.display_name": {
           "source": "Group",
           "message": "Groupe"
+        },
+        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.option.Z3JvdXA.short_desc": {
+          "source": "The settings group ID (e.g., 'general', 'products', 'tax')",
+          "message": "L'ID du groupe de paramètres (ex. 'general', 'products', 'tax')"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.option.c2V0dGluZ19pZA.desc": {
           "source": "The setting identifier within the group",
@@ -7370,6 +7422,10 @@
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.option.dG9waWM.display_name": {
           "source": "Topic",
           "message": "Topic"
+        },
+        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.option.dG9waWM.short_desc": {
+          "source": "The webhook topic (e.g. 'order.created', 'product.updated')",
+          "message": "Le sujet du webhook (ex. 'order.created', 'product.updated')"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
           "source": "Update an existing webhook",

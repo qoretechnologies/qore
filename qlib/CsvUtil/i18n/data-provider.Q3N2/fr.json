@@ -69,7 +69,7 @@
         },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVyX25hbWVz.short_desc": {
           "source": "If true then headers will be automatically detected from the first header row",
-          "message": "Si true, les en-têtes seront automatiquement détectés à partir de la première ligne d'en-tête"
+          "message": "Si vrai, les en-têtes sont détectés depuis la première ligne d'en-tête"
         },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVyX2xpbmVz.desc": {
           "source": "The number of headers lines in the file",
@@ -90,6 +90,10 @@
         "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
           "message": "Appliquer l'ordre des en-têtes"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of headers",
+          "message": "Si true, les données d'entrée sont réordonnées selon l'ordre des en-têtes"
         },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVycw.desc": {
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
@@ -125,7 +129,7 @@
         },
         "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.short_desc": {
           "source": "If true, leading and trailing whitespace will be stripped from non-quoted fields",
-          "message": "Si true, les espaces de début et de fin seront supprimés des champs non entre guillemets"
+          "message": "Si true, les espaces de début et de fin des champs non cités sont supprimés"
         },
         "app.Q3N2.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.desc": {
           "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
@@ -169,7 +173,7 @@
         },
         "app.Q3N2.action.cmVhZA.option.cXVvdGU.display_name": {
           "source": "Quote Char(s)",
-          "message": "Caractère(s) de guillemet"
+          "message": "Caractères de citation"
         },
         "app.Q3N2.action.cmVhZA.option.cXVvdGU.short_desc": {
           "source": "The quote character(s)",
@@ -213,7 +217,7 @@
         },
         "app.Q3N2.action.cmVhZA.short_desc": {
           "source": "Read CSV file data from a specific file location",
-          "message": "Lire les données d'un fichier CSV à partir d'un emplacement de fichier spécifique"
+          "message": "Lit les données d'un fichier CSV depuis un emplacement de fichier spécifique"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.desc": {
           "source": "Read CSV inline data",
@@ -293,7 +297,7 @@
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.short_desc": {
           "source": "If true then headers will be automatically detected from the first header row",
-          "message": "Si true, les en-têtes seront automatiquement détectés à partir de la première ligne d'en-tête"
+          "message": "Si vrai, les en-têtes sont détectés depuis la première ligne d'en-tête"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX2xpbmVz.desc": {
           "source": "The number of headers lines in the file",
@@ -314,6 +318,10 @@
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
           "message": "Appliquer l'ordre des en-têtes"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of headers",
+          "message": "Si true, les données d'entrée sont réordonnées selon l'ordre des en-têtes"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
@@ -349,7 +357,7 @@
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.short_desc": {
           "source": "If true, leading and trailing whitespace will be stripped from non-quoted fields",
-          "message": "Si true, les espaces de début et de fin seront supprimés des champs non entre guillemets"
+          "message": "Si true, les espaces de début et de fin des champs non cités sont supprimés"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.bnVtYmVyX2Zvcm1hdA.desc": {
           "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
@@ -393,7 +401,7 @@
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.display_name": {
           "source": "Quote Char(s)",
-          "message": "Caractère(s) de guillemet"
+          "message": "Caractères de citation"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.short_desc": {
           "source": "The quote character(s)",
@@ -497,7 +505,7 @@
         },
         "app.Q3N2.action.d3JpdGU.option.ZW9s.desc": {
           "source": "The end of line / record character(s); if not present, the current platform standard will be used",
-          "message": "Le(s) caractère(s) de fin de ligne / d'enregistrement ; s'il(s) n'est/ne sont pas présent(s), la valeur par défaut de la plateforme actuelle sera utilisée"
+          "message": "Caractères de fin de ligne ou d'enregistrement ; par défaut selon la plateforme"
         },
         "app.Q3N2.action.d3JpdGU.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -526,6 +534,10 @@
         "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
           "message": "Appliquer l'ordre des en-têtes"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the output data will be reordered in the order of headers",
+          "message": "Si true, les données de sortie sont réordonnées selon l'ordre des en-têtes"
         },
         "app.Q3N2.action.d3JpdGU.option.aGVhZGVycw.desc": {
           "source": "List of field / header names for the data output",
@@ -605,7 +617,7 @@
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGU.display_name": {
           "source": "Quote Char(s)",
-          "message": "Caractère(s) de guillemet"
+          "message": "Caractères de citation"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGU.short_desc": {
           "source": "The quote character(s)",
@@ -613,15 +625,15 @@
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.desc": {
           "source": "The escape character(s) used for `quote` (default: `\\`)",
-          "message": "Le(s) caractère(s) d'échappement utilisé(s) pour `quote` (par défaut : `\\`)"
+          "message": "Caractères d'échappement pour `quote` (défaut : `\\`)"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.display_name": {
           "source": "Quote Escape Char(s)",
-          "message": "Caractère(s) d'échappement de guillemet"
+          "message": "Caractères d'échappement de citation"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.short_desc": {
           "source": "The escape character(s) for quotes in a field",
-          "message": "Le(s) caractère(s) d'échappement pour les guillemets dans un champ"
+          "message": "Caractères d'échappement pour les guillemets dans un champ"
         },
         "app.Q3N2.action.d3JpdGU.option.d3JpdGVfaGVhZGVycw.desc": {
           "source": "Set to `false` to suppress the output of headers; the default is `true`, meaning to output headers if they are present",

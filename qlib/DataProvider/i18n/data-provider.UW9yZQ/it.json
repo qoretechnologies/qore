@@ -181,7 +181,7 @@
         },
         "app.UW9yZQ.action.Z3JvdXAtYnk.short_desc": {
           "source": "Group records by field values and compute aggregates per group",
-          "message": "Raggruppa i record in base ai valori dei campi e calcola gli aggregati per gruppo"
+          "message": "Raggruppa record per valori di campo e calcola aggregati per gruppo"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.desc": {
           "source": "Monitors a process using an Exponentially Weighted Moving Average (EWMA) control chart to detect when values drift outside the normal operating range. The EWMA smooths out noise while detecting sustained shifts. Each record is classified as `normal`, `upper_violation`, or `lower_violation`.\n\nFor example, it can detect when a server's average response time gradually drifts upward beyond its normal range.",
@@ -249,7 +249,7 @@
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.dGFyZ2V0.short_desc": {
           "source": "Center line target value (omit for auto from window mean)",
-          "message": "Valore target della linea centrale (omettere per auto dalla media della finestra)"
+          "message": "Valore target linea centrale (omettere per calcolo automatico dalla media)"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {
           "source": "Detects when values drift outside normal operating range",
@@ -545,7 +545,7 @@
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX011bHRpTGluZQ.short_desc": {
           "source": "Makes start-of-line '^' or end-of-line '$' match after or before any newline in the subject string",
-          "message": "Fa corrispondere l'inizio riga '^' o la fine riga '$' dopo o prima di qualsiasi nuova riga nella stringa di destinazione"
+          "message": "Fa corrispondere '^' o '$' dopo o prima di ogni nuova riga nel testo"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0Nhc2VsZXNz.desc": {
           "source": "Ignore case when matching",
@@ -605,7 +605,7 @@
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX1VuaWNvZGU.short_desc": {
           "source": "Character matches match the full Unicode character set",
-          "message": "Le corrispondenze dei caratteri corrispondono all'intero set di caratteri Unicode"
+          "message": "I confronti di caratteri corrispondono all'intero set di caratteri Unicode"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.desc": {
           "source": "A list of regular expression option names to apply when performing regex matching (e.g. `RE_Global`, `RE_Caseless`)",
@@ -737,7 +737,7 @@
         },
         "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.c21vb3RoaW5n.short_desc": {
           "source": "Apply simple moving average smoothing before differentiation",
-          "message": "Applica l'attenuazione tramite media mobile semplice prima della differenziazione"
+          "message": "Applica una media mobile semplice per smussare i dati prima di differenziare"
         },
         "app.UW9yZQ.action.cmF0ZS1vZi1jaGFuZ2U.option.d2luZG93X3NpemU.desc": {
           "source": "The number of records to accumulate in each analytics window; for window-level processors, an event is emitted when the window is full; for record-level processors, this controls the sliding window size.\n\n**Sizing guidance**: use `20`–`50` for real-time alerting where fast response matters, `100`–`500` for general trend and statistics analysis, or `1000`+ for high-frequency data where you need stable long-term statistics; the window must be large enough to capture at least one full cycle of any pattern you want to detect",

@@ -3013,7 +3013,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC10YXgtcmF0ZXM.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
           "source": "Only return records updated on/before this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/vor diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur bis zu diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC10YXgtcmF0ZXM.option.dXBkYXRlZF9hdF9taW4.desc": {
           "source": "Only return records updated on or after this UTC timestamp",
@@ -3025,7 +3025,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC10YXgtcmF0ZXM.option.dXBkYXRlZF9hdF9taW4.short_desc": {
           "source": "Only return records updated on/after this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/nach diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur ab diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC10YXgtcmF0ZXM.short_desc": {
           "source": "List tax rates",
@@ -3153,7 +3153,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC12YXJpYW50cw.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
           "source": "Only return records updated on/before this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/vor diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur bis zu diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC12YXJpYW50cw.option.dXBkYXRlZF9hdF9taW4.desc": {
           "source": "Only return records updated on or after this UTC timestamp",
@@ -3165,7 +3165,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC12YXJpYW50cw.option.dXBkYXRlZF9hdF9taW4.short_desc": {
           "source": "Only return records updated on/after this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/nach diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur ab diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC12YXJpYW50cw.short_desc": {
           "source": "List variants with filters and pagination",
@@ -3277,7 +3277,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC13ZWJob29rcw.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
           "source": "Only return records updated on/before this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/vor diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur bis zu diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC13ZWJob29rcw.option.dXBkYXRlZF9hdF9taW4.desc": {
           "source": "Only return records updated on or after this UTC timestamp",
@@ -3289,7 +3289,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC13ZWJob29rcw.option.dXBkYXRlZF9hdF9taW4.short_desc": {
           "source": "Only return records updated on/after this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/nach diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur ab diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC13ZWJob29rcw.short_desc": {
           "source": "List webhooks",
@@ -3409,7 +3409,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1iYXRjaC1zdG9ja3M.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
           "source": "Only return records updated on/before this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/vor diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur bis zu diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1iYXRjaC1zdG9ja3M.option.dXBkYXRlZF9hdF9taW4.desc": {
           "source": "Only return records updated on or after this UTC timestamp",
@@ -3421,7 +3421,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1iYXRjaC1zdG9ja3M.option.dXBkYXRlZF9hdF9taW4.short_desc": {
           "source": "Only return records updated on/after this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/nach diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur ab diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1iYXRjaC1zdG9ja3M.option.dmFyaWFudF9pZA.display_name": {
           "source": "Variant ID",
@@ -3557,7 +3557,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lci1hZGRyZXNzZXM.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
           "source": "Only return records updated on/before this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/vor diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur bis zu diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lci1hZGRyZXNzZXM.option.dXBkYXRlZF9hdF9taW4.desc": {
           "source": "Only return records updated on or after this UTC timestamp",
@@ -3569,7 +3569,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lci1hZGRyZXNzZXM.option.dXBkYXRlZF9hdF9taW4.short_desc": {
           "source": "Only return records updated on/after this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/nach diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur ab diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lci1hZGRyZXNzZXM.short_desc": {
           "source": "List customer addresses",
@@ -3749,7 +3749,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lcnM.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
           "source": "Only return records updated on/before this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/vor diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur bis zu diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lcnM.option.dXBkYXRlZF9hdF9taW4.desc": {
           "source": "Only return records updated on or after this UTC timestamp",
@@ -3761,7 +3761,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lcnM.option.dXBkYXRlZF9hdF9taW4.short_desc": {
           "source": "Only return records updated on/after this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/nach diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur ab diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1jdXN0b21lcnM.short_desc": {
           "source": "List customers with filters",
@@ -3873,7 +3873,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1pbnZlbnRvcnk.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
           "source": "Only return records updated on/before this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/vor diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur bis zu diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1pbnZlbnRvcnk.option.dXBkYXRlZF9hdF9taW4.desc": {
           "source": "Only return records updated on or after this UTC timestamp",
@@ -3885,7 +3885,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1pbnZlbnRvcnk.option.dXBkYXRlZF9hdF9taW4.short_desc": {
           "source": "Only return records updated on/after this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/nach diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur ab diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1pbnZlbnRvcnk.option.dmFyaWFudF9pZA.display_name": {
           "source": "Variant ID",
@@ -4005,7 +4005,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1sb2NhdGlvbnM.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
           "source": "Only return records updated on/before this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/vor diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur bis zu diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1sb2NhdGlvbnM.option.dXBkYXRlZF9hdF9taW4.desc": {
           "source": "Only return records updated on or after this UTC timestamp",
@@ -4017,7 +4017,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1sb2NhdGlvbnM.option.dXBkYXRlZF9hdF9taW4.short_desc": {
           "source": "Only return records updated on/after this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/nach diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur ab diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1sb2NhdGlvbnM.short_desc": {
           "source": "List locations with filters",
@@ -4173,7 +4173,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1tYW51ZmFjdHVyaW5nLW9yZGVycw.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
           "source": "Only return records updated on/before this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/vor diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur bis zu diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1tYW51ZmFjdHVyaW5nLW9yZGVycw.option.dXBkYXRlZF9hdF9taW4.desc": {
           "source": "Only return records updated on or after this UTC timestamp",
@@ -4185,7 +4185,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1tYW51ZmFjdHVyaW5nLW9yZGVycw.option.dXBkYXRlZF9hdF9taW4.short_desc": {
           "source": "Only return records updated on/after this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/nach diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur ab diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1tYW51ZmFjdHVyaW5nLW9yZGVycw.short_desc": {
           "source": "List manufacturing orders with filters",
@@ -4321,7 +4321,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1tYXRlcmlhbHM.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
           "source": "Only return records updated on/before this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/vor diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur bis zu diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1tYXRlcmlhbHM.option.dXBkYXRlZF9hdF9taW4.desc": {
           "source": "Only return records updated on or after this UTC timestamp",
@@ -4333,7 +4333,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1tYXRlcmlhbHM.option.dXBkYXRlZF9hdF9taW4.short_desc": {
           "source": "Only return records updated on/after this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/nach diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur ab diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1tYXRlcmlhbHM.short_desc": {
           "source": "List materials with filters and pagination",
@@ -4529,7 +4529,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1wcm9kdWN0cw.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
           "source": "Only return records updated on/before this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/vor diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur bis zu diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1wcm9kdWN0cw.option.dXBkYXRlZF9hdF9taW4.desc": {
           "source": "Only return records updated on or after this UTC timestamp",
@@ -4541,7 +4541,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1wcm9kdWN0cw.option.dXBkYXRlZF9hdF9taW4.short_desc": {
           "source": "Only return records updated on/after this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/nach diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur ab diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1wcm9kdWN0cw.short_desc": {
           "source": "List products with filters and pagination",
@@ -4653,7 +4653,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlci1yb3dz.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
           "source": "Only return records updated on/before this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/vor diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur bis zu diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlci1yb3dz.option.dXBkYXRlZF9hdF9taW4.desc": {
           "source": "Only return records updated on or after this UTC timestamp",
@@ -4665,7 +4665,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlci1yb3dz.option.dXBkYXRlZF9hdF9taW4.short_desc": {
           "source": "Only return records updated on/after this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/nach diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur ab diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlci1yb3dz.option.dmFyaWFudF9pZA.display_name": {
           "source": "Variant ID",
@@ -4837,7 +4837,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
           "source": "Only return records updated on/before this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/vor diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur bis zu diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.dXBkYXRlZF9hdF9taW4.desc": {
           "source": "Only return records updated on or after this UTC timestamp",
@@ -4849,7 +4849,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.option.dXBkYXRlZF9hdF9taW4.short_desc": {
           "source": "Only return records updated on/after this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/nach diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur ab diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1wdXJjaGFzZS1vcmRlcnM.short_desc": {
           "source": "List purchase orders with filters",
@@ -4977,7 +4977,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1hZGRyZXNzZXM.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
           "source": "Only return records updated on/before this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/vor diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur bis zu diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1hZGRyZXNzZXM.option.dXBkYXRlZF9hdF9taW4.desc": {
           "source": "Only return records updated on or after this UTC timestamp",
@@ -4989,7 +4989,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1hZGRyZXNzZXM.option.dXBkYXRlZF9hdF9taW4.short_desc": {
           "source": "Only return records updated on/after this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/nach diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur ab diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1hZGRyZXNzZXM.short_desc": {
           "source": "List sales order addresses",
@@ -5101,7 +5101,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1yb3dz.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
           "source": "Only return records updated on/before this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/vor diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur bis zu diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1yb3dz.option.dXBkYXRlZF9hdF9taW4.desc": {
           "source": "Only return records updated on or after this UTC timestamp",
@@ -5113,7 +5113,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1yb3dz.option.dXBkYXRlZF9hdF9taW4.short_desc": {
           "source": "Only return records updated on/after this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/nach diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur ab diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlci1yb3dz.option.dmFyaWFudF9pZA.display_name": {
           "source": "Variant ID",
@@ -5417,7 +5417,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlcnM.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
           "source": "Only return records updated on/before this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/vor diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur bis zu diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlcnM.option.dXBkYXRlZF9hdF9taW4.desc": {
           "source": "Only return records updated on or after this UTC timestamp",
@@ -5429,7 +5429,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlcnM.option.dXBkYXRlZF9hdF9taW4.short_desc": {
           "source": "Only return records updated on/after this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/nach diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur ab diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1zYWxlcy1vcmRlcnM.short_desc": {
           "source": "List sales orders with filters",
@@ -5549,7 +5549,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1zdG9jay1hZGp1c3RtZW50cw.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
           "source": "Only return records updated on/before this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/vor diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur bis zu diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1zdG9jay1hZGp1c3RtZW50cw.option.dXBkYXRlZF9hdF9taW4.desc": {
           "source": "Only return records updated on or after this UTC timestamp",
@@ -5561,7 +5561,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1zdG9jay1hZGp1c3RtZW50cw.option.dXBkYXRlZF9hdF9taW4.short_desc": {
           "source": "Only return records updated on/after this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/nach diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur ab diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1zdG9jay1hZGp1c3RtZW50cw.short_desc": {
           "source": "List stock adjustments with filters",
@@ -5681,7 +5681,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1zdXBwbGllcnM.option.dXBkYXRlZF9hdF9tYXg.short_desc": {
           "source": "Only return records updated on/before this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/vor diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur bis zu diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1zdXBwbGllcnM.option.dXBkYXRlZF9hdF9taW4.desc": {
           "source": "Only return records updated on or after this UTC timestamp",
@@ -5693,7 +5693,7 @@
         },
         "app.S2F0YW5h.action.bGlzdC1zdXBwbGllcnM.option.dXBkYXRlZF9hdF9taW4.short_desc": {
           "source": "Only return records updated on/after this UTC timestamp",
-          "message": "Nur Datensätze zurückgeben, die an/nach diesem UTC-Zeitstempel aktualisiert wurden"
+          "message": "Nur ab diesem UTC-Zeitstempel aktualisierte Datensätze zurückgeben"
         },
         "app.S2F0YW5h.action.bGlzdC1zdXBwbGllcnM.short_desc": {
           "source": "List suppliers with filters",
@@ -5741,7 +5741,7 @@
         },
         "app.S2F0YW5h.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Durchreichen; Verbindungsserialisierung verwenden und den REST-Client entscheiden lassen"
+          "message": "Durchreichen; Verbindungsserialisierung nutzen, REST-Client entscheiden lassen"
         },
         "app.S2F0YW5h.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -5990,6 +5990,10 @@
         "app.S2F0YW5h.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "URI-Pfad"
+        },
+        "app.S2F0YW5h.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Der URI-Pfad relativ zur API-Basis-URL der Verbindung"
         },
         "app.S2F0YW5h.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",

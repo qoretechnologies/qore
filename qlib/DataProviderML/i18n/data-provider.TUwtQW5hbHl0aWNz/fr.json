@@ -249,7 +249,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2h1bmstdGV4dA.short_desc": {
           "source": "Breaks documents into overlapping pieces sized for AI search",
-          "message": "Divise les documents en morceaux se chevauchant et dimensionnés pour la recherche IA"
+          "message": "Découpe les documents en segments adaptés pour la recherche par IA"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2x1c3RlcmluZy1tZXRyaWNz.desc": {
           "source": "Measures whether the groups in your data are clearly separated or overlap too much. For example, after segmenting customers into \"budget\", \"regular\", and \"premium\" groups, this tells you whether the groups are genuinely distinct or whether many customers sit on the boundary between groups.\n\n**What you get**:\n- `silhouette_score` — ranges from `-1.0` (groups overlap badly) to `1.0` (perfectly separated); above `0.5` is generally good\n- `davies_bouldin_score` — measures how much groups bleed into each other; lower is better (`0.0` = no overlap at all)\n- `calinski_harabasz_score` — measures how tight each group is compared to how far apart the groups are; higher is better\n\nRecords accumulate in a batch; when full, a single scorecard is emitted.",
@@ -705,7 +705,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLWZpbHRlcg.short_desc": {
           "source": "Drops records that contain PII, prompt injections, or policy violations",
-          "message": "Ignore les enregistrements contenant des données personnelles (PII), des injections de prompts ou des violations de politique"
+          "message": "Supprime les entrées contenant des PII, injections de prompt ou infractions"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLXRyYW5zZm9ybQ.desc": {
           "source": "Evaluates each record's text field against configured guardrail rules and enriches the record with results. Records always pass through (unlike the filter processor).\n\nEach record gets:\n- `_guardrail_passed` — whether the text passed all rules\n- `_guardrail_violations` — list of violations found\n\nIf PII redaction is configured, the text field is replaced with the redacted version.",
@@ -741,7 +741,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLXRyYW5zZm9ybQ.short_desc": {
           "source": "Enriches records with guardrail results and optionally redacts PII",
-          "message": "Enrichit les enregistrements avec les résultats des garde-fous et masque facultativement les PII"
+          "message": "Enrichit les données avec les garde-fous et masque facultativement les PII"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.desc": {
           "source": "Extracts text from any document format your users might upload — PDF files, photos of documents, scanned images, screenshots, and more.\n\nThe processor automatically detects the file type and applies the best extraction strategy:\n- **PDFs**: extracts the digital text layer (fast); scanned pages are automatically rasterized and OCR'd\n- **Images** (PNG, JPEG, TIFF, BMP, GIF, WebP): runs OCR directly\n- **SVG files**: renders to image first, then OCR\n\nEach record is enriched with:\n- `document_text` — the full extracted text\n- `document_format` — detected format (e.g., `PDF`, `JPEG`, `TIFF`)\n- `document_pages` — number of pages\n- `document_ocr_pages` — how many pages required OCR\n- `document_confidence` — average OCR confidence (0.0 to 1.0)\n\n**Optional modules:** `pdf` (for PDFs), `imagemagick` (for WebP, HEIC, and 100+ other formats), `cairo` (for SVGs).",
@@ -801,7 +801,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.option.bGFuZ3VhZ2U.desc": {
           "source": "Tesseract language code(s) for OCR. Use `+` to combine languages (e.g., `eng+deu` for English and German). Default: `eng`.",
-          "message": "Code(s) de langue Tesseract pour l'OCR. Utilisez `+` pour combiner les langues (ex. : `eng+deu` pour l'anglais et l'allemand). Valeur par défaut : `eng`."
+          "message": "Codes de langue Tesseract pour l'OCR. Utilisez `+` pour combiner les langues (ex. : `eng+deu` pour anglais et allemand). Valeur par défaut : `eng`."
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.option.bGFuZ3VhZ2U.display_name": {
           "source": "OCR Language",
@@ -833,7 +833,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.option.c2Nhbm5lZF90aHJlc2hvbGQ.short_desc": {
           "source": "Minimum characters for a PDF page to be considered digital",
-          "message": "Nombre minimum de caractères pour qu'une page PDF soit considérée comme numérique"
+          "message": "Nombre minimal de caractères pour qu'une page PDF soit jugée numérique"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.short_desc": {
           "source": "Reads text from PDFs, images, and scanned documents automatically",
@@ -873,7 +873,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGF0YS1wcm9maWxl.short_desc": {
           "source": "Profiles data quality for specified fields in a batch of records",
-          "message": "Profile la qualité des données pour les champs spécifiés dans un lot d'enregistrements"
+          "message": "Évalue la qualité des données des champs indiqués dans un lot d'entrées"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGJzY2FuLWNsdXN0ZXJpbmc.desc": {
           "source": "Discovers delivery zones, support ticket themes, or network traffic hotspots by automatically finding natural groups in data — without needing to specify how many groups exist. For example, given GPS coordinates of 5,000 deliveries, it might find 12 distinct delivery zones of varying shapes, plus label scattered outlier locations as noise.\n\nRecords accumulate in a window; when full, all are clustered. Each record receives:\n- `cluster` — group number, or `-1` for noise\n- `is_noise` — `True` if the record doesn't belong to any group",
@@ -969,7 +969,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGJzY2FuLWNsdXN0ZXJpbmc.short_desc": {
           "source": "Discovers groups based on data density without specifying how many",
-          "message": "Découvre des groupes en fonction de la densité des données sans en spécifier le nombre"
+          "message": "Découvre des groupes selon la densité sans spécifier leur nombre"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1jbGFzc2lmaWNhdGlvbg.desc": {
           "source": "Classifies records by learning a tree of if/then rules — for example, \"if income > 50,000 and credit score > 700 then approve the loan.\" The model is fully interpretable: you can see exactly which rules led to each decision.\n\nRecords accumulate in a window; when full, the model learns and produces predictions. Each record receives:\n- `predicted_class` — the category the rules assign\n- `confidence` — how pure the matching group is (e.g., `0.95` means 95%% of similar records had this label)",
@@ -1057,7 +1057,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1jbGFzc2lmaWNhdGlvbg.short_desc": {
           "source": "Learns if/then rules from data to categorize records",
-          "message": "Apprend des règles si/alors à partir des données pour catégoriser les enregistrements"
+          "message": "Apprend des règles si/alors à partir des données pour classer les entrées"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1yZWdyZXNzaW9u.desc": {
           "source": "Predicts numeric values by learning a tree of decision rules — for example, \"if square footage > 2000 and bedrooms >= 3 then estimate price around $450,000.\" Simple, fast, and fully interpretable.\n\nRecords accumulate in a window; when full, the model learns and produces predictions. Each record receives:\n- `prediction` — the estimated numeric value from the matching leaf node",
@@ -1117,7 +1117,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1yZWdyZXNzaW9u.short_desc": {
           "source": "Learns if/then rules from data to estimate numeric values",
-          "message": "Apprend des règles si/alors à partir des données pour estimer des valeurs numériques"
+          "message": "Apprend des règles si/alors pour estimer des valeurs numériques"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZW1iZWQtdGV4dA.desc": {
           "source": "Converts text into numeric vectors (embeddings) that capture its meaning, so similar texts end up close together in vector space. Records are batched for efficiency, and each record gets an `embedding` field with the vector.\n\nUse this after chunking to make documents searchable: store the vectors in a database like Qdrant or pgvector, then find relevant passages by comparing vectors.\n\nSupports any OpenAI-compatible embedding endpoint (SGLang, vLLM, OpenAI, Azure OpenAI) or a local ONNX model. For multi-output ONNX embedding models, `output_names` can request only the hidden-state tensor needed for pooling.",
@@ -1461,7 +1461,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.ZW1iZWQtdGV4dA.short_desc": {
           "source": "Turns text into numeric vectors for AI-powered similarity search",
-          "message": "Transforme le texte en vecteurs numériques pour la recherche par similarité optimisée par l'IA"
+          "message": "Convertit le texte en vecteurs pour la recherche de similarité par IA"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXdtYQ.desc": {
           "source": "Smooths noisy signals and tracks trends by computing exponential weighted moving averages (EWMA) for specified numeric fields. Unlike a simple moving average, EWMA gives more weight to recent values, making it more responsive to changes while still filtering out noise.\n\n**Use cases**:\n- Smooth CPU usage readings to distinguish real load spikes from noise\n- Track the trend in response times to detect gradual degradation\n- Create a baseline for anomaly detection by comparing raw values to their EWMA\n\nEach record passes through enriched with `{field}_ewma` fields (e.g., `temperature_ewma`, `cpu_usage_ewma`)",
@@ -1921,7 +1921,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLWNsYXNzaWZpY2F0aW9u.short_desc": {
           "source": "Predicts each record's category based on its nearest neighbors",
-          "message": "Prédit la catégorie de chaque enregistrement en fonction de ses plus proches voisins"
+          "message": "Prédit la catégorie de chaque entrée selon ses plus proches voisins"
         },
         "app.TUwtQW5hbHl0aWNz.action.a25uLXJlZ3Jlc3Npb24.desc": {
           "source": "Predicts a numeric value for each record by averaging the target values of the most similar records in the training data. For example, to estimate a house price, the model finds the 5 most similar houses and averages their prices.\n\nRecords accumulate in a window; when full, the model learns and produces predictions. Each record receives:\n- `prediction` — the estimated numeric value (weighted average of neighbors)",
@@ -2193,7 +2193,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.aG9sdC13aW50ZXJz.short_desc": {
           "source": "Predicts future values accounting for trends and seasonal patterns",
-          "message": "Prédit les valeurs futures en tenant compte des tendances et des motifs saisonniers"
+          "message": "Prédit les valeurs futures selon les tendances et schémas saisonniers"
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.desc": {
           "source": "Automatically fills in missing values in your data so downstream analysis and ML steps can process complete records. For example, if 5%% of your sensor readings are missing due to connectivity issues, this processor fills them in with reasonable values based on the available data.\n\n**Strategies**:\n- **Average**: fill with the typical value (best for normally distributed data like temperatures)\n- **Middle value**: fill with the median (better when outliers are present, e.g., transaction amounts)\n- **Most common**: fill with the most frequently seen value (best for categorical-like data such as status codes)\n- **Fixed value**: fill with a specific number you choose (e.g., `0` or `-1` as a sentinel)\n\nRecords accumulate in a window. The first window learns the fill values from non-missing data; subsequent windows apply the same fill values. Each record receives:\n- `imputed_values` — the complete record with gaps filled in\n- `missing_count` — how many fields were missing in this record\n- `record_values` — the original values (with gaps) for comparison",
@@ -2213,7 +2213,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.option.Y29uc3RhbnRfdmFsdWU.short_desc": {
           "source": "The specific number to use when Fill Method is Fixed Value",
-          "message": "Le nombre spécifique à utiliser lorsque la méthode de remplissage est Valeur fixe"
+          "message": "Nombre à utiliser lorsque Fill Method est Fixed Value"
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.option.ZmllbGRz.desc": {
           "source": "The numeric fields from your data that may have gaps (missing values). For example, select `temperature`, `humidity`, and `pressure` if some sensor readings are occasionally missing.\n\nAt least 1 field is required",
@@ -2285,7 +2285,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.short_desc": {
           "source": "Automatically fills gaps in your data using smart defaults",
-          "message": "Remplit automatiquement les lacunes dans vos données à l'aide de valeurs par défaut intelligentes"
+          "message": "Comble automatiquement les lacunes des données avec des valeurs par défaut"
         },
         "app.TUwtQW5hbHl0aWNz.action.aXNvbGF0aW9uLWZvcmVzdA.desc": {
           "source": "Catches fraudulent transactions, sensor malfunctions, and security intrusions by flagging records that stand out from normal data. For example, a $50,000 transaction when most are under $500 scores near `1.0` (highly anomalous), while a typical $45 purchase scores near `0.0`.\n\nRecords accumulate in a window; when full, all are scored together. Each record receives:\n- `anomaly_score` — `0.0` (normal) to `1.0` (highly unusual)\n- `is_anomaly` — `True`/`False` based on the threshold",
@@ -2357,7 +2357,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.aXNvbGF0aW9uLWZvcmVzdA.short_desc": {
           "source": "Finds anomalies by isolating unusual records from normal ones",
-          "message": "Recherche les anomalies en isolant les enregistrements inhabituels des enregistrements normaux"
+          "message": "Trouve les anomalies en isolant les entrées inhabituelles des normales"
         },
         "app.TUwtQW5hbHl0aWNz.action.b25ueC1tb2RlbA.desc": {
           "source": "Runs pre-trained neural networks, gradient-boosted models, or other complex models trained in Python or R — without needing those tools at runtime. For example, a credit scoring model trained in scikit-learn can be exported to ONNX format and deployed here for real-time scoring of loan applications. Records accumulate in a batch; when full, all are passed through the model. Output fields depend on the specific model (e.g., class probabilities, regression values, embeddings); use `output_names` to materialize only selected ONNX outputs.",
@@ -2773,7 +2773,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9naXN0aWMtcmVncmVzc2lvbg.short_desc": {
           "source": "Predicts which category each record belongs to based on its features",
-          "message": "Prédit la catégorie à laquelle chaque enregistrement appartient en fonction de ses caractéristiques"
+          "message": "Prédit la catégorie de chaque entrée en fonction de ses caractéristiques"
         },
         "app.TUwtQW5hbHl0aWNz.action.bGluZWFyLXJlZ3Jlc3Npb24.desc": {
           "source": "Predicts property prices from square footage and location, estimates delivery times from distance and package weight, or forecasts demand from advertising spend — by learning the best straight-line relationship between input fields and a target value.\n\nRecords accumulate in a window; when full, the model learns and produces predictions. Each record receives:\n- `prediction` — estimated target value\n- `r_squared` — model accuracy (e.g., `0.92` means 92%% of variance explained)\n- `coefficients` — how much each input matters",
@@ -2995,6 +2995,10 @@
           "source": "Schema defining validation rules for each field",
           "message": "Schéma définissant les règles de validation pour chaque champ"
         },
+        "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.short_desc": {
+          "source": "Validates each record against a schema",
+          "message": "Valide chaque enregistrement par rapport à un schéma"
+        },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.desc": {
           "source": "Answers 'is this increase real growth or just a seasonal spike?' by separating a time series into its component parts. For example, monthly sales of $120K might decompose into $100K trend + $25K seasonal holiday boost - $5K random dip.\n\nRecords accumulate per field in a window; when full, all values are decomposed. Each record receives:\n- `trend` — long-term direction\n- `seasonal` — cyclical pattern (e.g., holiday shopping cycles)\n- `residual` — random noise remaining after removing trend and seasonal",
           "message": "Répond à la question « cette augmentation est-elle une réelle croissance ou seulement un pic saisonnier ? » en décomposant une série temporelle en ses différentes composantes. Par exemple, des ventes mensuelles de 120 k$ peuvent se décomposer en une tendance de 100 k$ + un pic saisonnier des fêtes de 25 k$ - une baisse aléatoire de 5 k$.\n\nLes enregistrements s'accumulent par champ dans une fenêtre ; lorsqu'elle est pleine, toutes les valeurs sont décomposées. Chaque enregistrement reçoit :\n- `trend` — direction à long terme\n- `seasonal` — motif cyclique (par ex., cycles d'achats des fêtes)\n- `residual` — bruit aléatoire restant après suppression de la tendance et de la saisonnalité"
@@ -3069,7 +3073,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.short_desc": {
           "source": "Breaks time series data into trend, seasonal, and leftover parts",
-          "message": "Décompose les données de séries temporelles en tendance, composante saisonnière et résidus"
+          "message": "Décompose une série temporelle en tendance, saisonnalité et résidus"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2VtYW50aWMtY2h1bmstdGV4dA.desc": {
           "source": "Splits text into chunks at semantic boundaries rather than arbitrary token counts. Groups related sentences together by comparing embedding similarity between consecutive segments — when similarity drops below a threshold, a new chunk begins.\n\nEach input record produces one or more output records with:\n- `chunk_text` — the text of the semantic chunk\n- `chunk_index` — zero-based index of the chunk\n- `chunk_token_count` — number of tokens in the chunk\n\nBest for narrative documents (articles, reports, transcripts) where meaning flows across sentences. For structured documents with clear headings, use the standard `chunk-text` processor instead.",
@@ -3533,7 +3537,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.cGNh.short_desc": {
           "source": "Reduces many fields to fewer combined values preserving key patterns",
-          "message": "Réduit de nombreux champs en un nombre réduit de valeurs combinées en préservant les motifs clés"
+          "message": "Réduit plusieurs champs en conservant les tendances clés"
         },
         "app.TUwtQW5hbHl0aWNz.action.cm9sbGluZy1zdGF0cw.desc": {
           "source": "Monitors trends, detects anomalies, and tracks volatility in time series data by computing rolling statistics over a sliding window of recent records. For example, with `window_size=20`, each record gets the average, standard deviation, min, max, or sum of the last 20 values for each monitored field.\n\n**Use cases**:\n- Track a 20-period moving average of sensor temperature to smooth out noise\n- Detect volatility spikes by watching rolling standard deviation of stock prices\n- Monitor rolling min/max to detect new highs or lows in streaming data\n\nEach record passes through enriched with computed fields named `{field}_{stat}` (e.g., `temperature_mean`, `price_std`)",
@@ -3621,7 +3625,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.cm9sbGluZy1zdGF0cw.short_desc": {
           "source": "Enriches each record with rolling window statistics for numeric fields",
-          "message": "Enrichit chaque enregistrement avec des statistiques de fenêtre glissante pour les champs numériques"
+          "message": "Enrichit chaque entrée avec des statistiques glissantes pour champs numériques"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1jbGFzc2lmaWNhdGlvbg.desc": {
           "source": "Classifies records by growing many decision trees on random subsets of the data and combining their votes. More accurate than a single tree because individual trees' mistakes cancel out — like asking a panel of experts instead of one.\n\nRecords accumulate in a window; when full, the model learns and produces predictions. Each record receives:\n- `predicted_class` — the category most trees voted for\n- `confidence` — proportion of trees that agree (e.g., `0.85` means 85%% of trees voted the same way)",
@@ -3821,7 +3825,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1yZWdyZXNzaW9u.short_desc": {
           "source": "Combines many decision trees for more accurate numeric predictions",
-          "message": "Combine plusieurs arbres de décision pour des prédictions numériques plus précises"
+          "message": "Combine plusieurs arbres de décision pour des prédictions numériques précises"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVnaXN0cnktbW9kZWw.desc": {
           "source": "Loads a trained ML model from the model registry by name and runs inference on each batch of records. Supports any model type registered in the registry (KMeans, LinearRegression, IsolationForest, etc.). The model is loaded once and reused for all subsequent batches. Specify `tag` to load a specific tagged version (e.g., 'production') or `version` for a specific version ID. For registry-backed ONNX models, use `output_names` to materialize only selected output tensors.",
@@ -4381,7 +4385,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVyYW5rLXRleHQ.short_desc": {
           "source": "Scores and re-orders search results using a cross-encoder model",
-          "message": "Évalue et réordonne les résultats de recherche à l'aide d'un modèle cross-encoder"
+          "message": "Évalue et réordonne les résultats de recherche avec un modèle cross-encoder"
         },
         "app.TUwtQW5hbHl0aWNz.action.dG9rZW5pemU.desc": {
           "source": "Counts tokens in a text field using the same tokenizer your AI model uses. Each record passes through with a new `{field}_token_count` field.\n\nCommon uses:\n- **Cost control** — estimate API costs before sending text to an LLM\n- **Size filtering** — drop records that are too short or too long\n- **Context budgeting** — check whether a prompt fits the model's limit",
@@ -4561,7 +4565,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.dG9rZW5pemU.short_desc": {
           "source": "Measures how many tokens a text field contains for a given AI model",
-          "message": "Mesure le nombre de jetons qu'un champ de texte contient pour un modèle d'IA donné"
+          "message": "Mesure le nombre de jetons d'un champ texte pour un modèle d'IA donné"
         },
         "app.TUwtQW5hbHl0aWNz.action.dGV4dC1ub3JtYWxpemU.desc": {
           "source": "Cleans messy text before further processing — for example, stripping HTML from web-scraped content, lowercasing product descriptions for consistent search, or collapsing extra whitespace in imported data.\n\nPick one or more cleanup steps and they run in order. Each record passes through with a new `{field}_normalized` field containing the cleaned result.",
@@ -4773,7 +4777,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.dmlzaW9uLWV4dHJhY3Rpb24.short_desc": {
           "source": "Uses a vision LLM to describe images, extract tables, or read text",
-          "message": "Utilise un LLM de vision pour décrire des images, extraire des tableaux ou lire du texte"
+          "message": "Utilise un LLM de vision pour décrire des images, tableaux ou textes"
         },
         "app.TUwtQW5hbHl0aWNz.desc": {
           "source": "Catch fraud, forecast sales, segment customers, and simplify complex data — all in your data pipeline without external dependencies. Includes anomaly detection (flag unusual transactions or sensor failures), clustering (discover customer segments or geographic hotspots), forecasting (predict revenue with seasonal patterns), regression (estimate prices from features), and dimensionality reduction (compress 50 fields to 3 key values).",

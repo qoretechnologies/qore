@@ -3069,7 +3069,7 @@
         },
         "app.UGRmQ28.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Passe-plat ; utiliser la sérialisation de la connexion et laisser le client REST décider"
+          "message": "Pass-through ; utiliser la sérialisation, laisser le client REST décider"
         },
         "app.UGRmQ28.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -3093,7 +3093,7 @@
         },
         "app.UGRmQ28.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
           "source": "Serialize body as application/x-www-form-urlencoded form fields",
-          "message": "Sérialiser le corps sous forme de champs de formulaire application/x-www-form-urlencoded"
+          "message": "Sérialiser le corps en champs application/x-www-form-urlencoded"
         },
         "app.UGRmQ28.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
           "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
@@ -3319,6 +3319,10 @@
           "source": "URI Path",
           "message": "Chemin URI"
         },
+        "app.UGRmQ28.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Chemin d'URI relatif à l'URL de base de l'API de la connexion"
+        },
         "app.UGRmQ28.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hachage des valeurs substituées dans les espaces réservés `{name}` dans le chemin URI. Exemple : avec `path = /users/{id}` et `path_vars = {id: 123}`, le framework envoie `/users/123`. Les valeurs sont encodées en URL."
@@ -3521,7 +3525,7 @@
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1kZWxldGUtdGV4dA.option.TWFrZVVuc2VhcmNoYWJsZQ.short_desc": {
           "source": "Replace pages with images so deleted text cannot be recovered",
-          "message": "Remplacer les pages par des images afin que le texte supprimé ne puisse pas être récupéré"
+          "message": "Remplace les pages par des images pour rendre le texte irrécupérable"
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1kZWxldGUtdGV4dA.option.Y2FsbGJhY2s.desc": {
           "source": "Webhook URL that PDF.co will invoke when an async job completes. Only applies when `async` is set to `True`.",

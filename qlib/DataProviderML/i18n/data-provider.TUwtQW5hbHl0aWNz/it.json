@@ -2285,7 +2285,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.short_desc": {
           "source": "Automatically fills gaps in your data using smart defaults",
-          "message": "Compila automaticamente i valori mancanti nei dati utilizzando impostazioni predefinite intelligenti"
+          "message": "Riempie in automatico i vuoti nei dati usando valori predefiniti intelligenti"
         },
         "app.TUwtQW5hbHl0aWNz.action.aXNvbGF0aW9uLWZvcmVzdA.desc": {
           "source": "Catches fraudulent transactions, sensor malfunctions, and security intrusions by flagging records that stand out from normal data. For example, a $50,000 transaction when most are under $500 scores near `1.0` (highly anomalous), while a typical $45 purchase scores near `0.0`.\n\nRecords accumulate in a window; when full, all are scored together. Each record receives:\n- `anomaly_score` — `0.0` (normal) to `1.0` (highly unusual)\n- `is_anomaly` — `True`/`False` based on the threshold",
@@ -2773,7 +2773,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.bG9naXN0aWMtcmVncmVzc2lvbg.short_desc": {
           "source": "Predicts which category each record belongs to based on its features",
-          "message": "Prevede a quale categoria appartiene ciascun record in base alle sue caratteristiche"
+          "message": "Prevede a quale categoria appartiene ogni record in base alle caratteristiche"
         },
         "app.TUwtQW5hbHl0aWNz.action.bGluZWFyLXJlZ3Jlc3Npb24.desc": {
           "source": "Predicts property prices from square footage and location, estimates delivery times from distance and package weight, or forecasts demand from advertising spend — by learning the best straight-line relationship between input fields and a target value.\n\nRecords accumulate in a window; when full, the model learns and produces predictions. Each record receives:\n- `prediction` — estimated target value\n- `r_squared` — model accuracy (e.g., `0.92` means 92%% of variance explained)\n- `coefficients` — how much each input matters",
@@ -2995,6 +2995,10 @@
           "source": "Schema defining validation rules for each field",
           "message": "Schema che definisce le regole di convalida per ciascun campo"
         },
+        "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.short_desc": {
+          "source": "Validates each record against a schema",
+          "message": "Convalida ogni record rispetto a uno schema"
+        },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.desc": {
           "source": "Answers 'is this increase real growth or just a seasonal spike?' by separating a time series into its component parts. For example, monthly sales of $120K might decompose into $100K trend + $25K seasonal holiday boost - $5K random dip.\n\nRecords accumulate per field in a window; when full, all values are decomposed. Each record receives:\n- `trend` — long-term direction\n- `seasonal` — cyclical pattern (e.g., holiday shopping cycles)\n- `residual` — random noise remaining after removing trend and seasonal",
           "message": "Risponde alla domanda \"questo aumento è una crescita reale o solo un picco stagionale?\" separando una serie temporale nelle sue componenti. Ad esempio, vendite mensili di 120.000 $ potrebbero decomporsi in un trend di 100.000 $ + un incremento stagionale festivo di 25.000 $ - un calo casuale di 5.000 $.\n\nI record si accumulano per campo in una finestra; quando questa è piena, tutti i valori vengono decomposti. Ciascun record riceve:\n- `trend` — direzione a lungo termine\n- `seasonal` — pattern ciclico (es. cicli di acquisto festivi)\n- `residual` — rumore casuale rimanente dopo la rimozione del trend e della componente stagionale"
@@ -3069,7 +3073,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.short_desc": {
           "source": "Breaks time series data into trend, seasonal, and leftover parts",
-          "message": "Scompone i dati delle serie temporali in componenti di trend, stagionali e residue"
+          "message": "Scompone le serie temporali in trend, stagionalità e residui"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2VtYW50aWMtY2h1bmstdGV4dA.desc": {
           "source": "Splits text into chunks at semantic boundaries rather than arbitrary token counts. Groups related sentences together by comparing embedding similarity between consecutive segments — when similarity drops below a threshold, a new chunk begins.\n\nEach input record produces one or more output records with:\n- `chunk_text` — the text of the semantic chunk\n- `chunk_index` — zero-based index of the chunk\n- `chunk_token_count` — number of tokens in the chunk\n\nBest for narrative documents (articles, reports, transcripts) where meaning flows across sentences. For structured documents with clear headings, use the standard `chunk-text` processor instead.",
@@ -3373,7 +3377,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.c2VtYW50aWMtY2h1bmstdGV4dA.short_desc": {
           "source": "Chunks text where topics change instead of at fixed token counts",
-          "message": "Divide il testo nei punti in cui cambiano gli argomenti anziché a intervalli fissi di token"
+          "message": "Suddivide il testo ai cambi di argomento anziché a conteggi di token fissi"
         },
         "app.TUwtQW5hbHl0aWNz.action.c3RhbmRhcmQtc2NhbGVy.desc": {
           "source": "Makes fields with different ranges directly comparable. For example, if \"age\" ranges from 18–65 and \"income\" ranges from 20,000–200,000, comparing them directly would let income dominate. This processor adjusts each field so they all center around `0` with similar spread.\n\n**When to use**: before clustering (Find Natural Groups), anomaly detection (Detect Unusual Data Points), or dimensionality reduction (Reduce Data Complexity) — any time your fields have different units or ranges.\n\n**Example**: standardizing `age`, `income`, and `credit_score` before customer segmentation ensures each factor contributes equally.\n\nRecords accumulate in a window. The first window learns the typical values for each field; subsequent windows apply the same adjustment. Each record receives:\n- `scaled_values` — the adjusted field values (centered around `0`)\n- `record_values` — the original values for comparison",
@@ -3533,7 +3537,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.cGNh.short_desc": {
           "source": "Reduces many fields to fewer combined values preserving key patterns",
-          "message": "Riduce molti campi a un minor numero di valori combinati conservando i pattern chiave"
+          "message": "Riduce molti campi in meno valori combinati preservando i pattern chiave"
         },
         "app.TUwtQW5hbHl0aWNz.action.cm9sbGluZy1zdGF0cw.desc": {
           "source": "Monitors trends, detects anomalies, and tracks volatility in time series data by computing rolling statistics over a sliding window of recent records. For example, with `window_size=20`, each record gets the average, standard deviation, min, max, or sum of the last 20 values for each monitored field.\n\n**Use cases**:\n- Track a 20-period moving average of sensor temperature to smooth out noise\n- Detect volatility spikes by watching rolling standard deviation of stock prices\n- Monitor rolling min/max to detect new highs or lows in streaming data\n\nEach record passes through enriched with computed fields named `{field}_{stat}` (e.g., `temperature_mean`, `price_std`)",
@@ -3621,7 +3625,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.cm9sbGluZy1zdGF0cw.short_desc": {
           "source": "Enriches each record with rolling window statistics for numeric fields",
-          "message": "Arricchisce ciascun record con statistiche su finestra mobile per i campi numerici"
+          "message": "Arricchisce i record con statistiche a finestra mobile per campi numerici"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1jbGFzc2lmaWNhdGlvbg.desc": {
           "source": "Classifies records by growing many decision trees on random subsets of the data and combining their votes. More accurate than a single tree because individual trees' mistakes cancel out — like asking a panel of experts instead of one.\n\nRecords accumulate in a window; when full, the model learns and produces predictions. Each record receives:\n- `predicted_class` — the category most trees voted for\n- `confidence` — proportion of trees that agree (e.g., `0.85` means 85%% of trees voted the same way)",
@@ -4561,7 +4565,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.dG9rZW5pemU.short_desc": {
           "source": "Measures how many tokens a text field contains for a given AI model",
-          "message": "Misura quanti token contiene un campo di testo per un determinato modello di intelligenza artificiale"
+          "message": "Misura quanti token contiene un campo di testo per un dato modello IA"
         },
         "app.TUwtQW5hbHl0aWNz.action.dGV4dC1ub3JtYWxpemU.desc": {
           "source": "Cleans messy text before further processing — for example, stripping HTML from web-scraped content, lowercasing product descriptions for consistent search, or collapsing extra whitespace in imported data.\n\nPick one or more cleanup steps and they run in order. Each record passes through with a new `{field}_normalized` field containing the cleaned result.",
@@ -4773,7 +4777,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.dmlzaW9uLWV4dHJhY3Rpb24.short_desc": {
           "source": "Uses a vision LLM to describe images, extract tables, or read text",
-          "message": "Utilizza un LLM di visione per descrivere immagini, estrarre tabelle o leggere testo"
+          "message": "Usa un LLM visivo per descrivere immagini, estrarre tabelle o leggere testo"
         },
         "app.TUwtQW5hbHl0aWNz.desc": {
           "source": "Catch fraud, forecast sales, segment customers, and simplify complex data — all in your data pipeline without external dependencies. Includes anomaly detection (flag unusual transactions or sensor failures), clustering (discover customer segments or geographic hotspots), forecasting (predict revenue with seasonal patterns), regression (estimate prices from features), and dimensionality reduction (compress 50 fields to 3 key values).",

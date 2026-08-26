@@ -129,7 +129,7 @@
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2Rpbmc.short_desc": {
           "source": "The string encoding to use if 'text' = 'True' (default: 'UTF-8')",
-          "message": "La codificación de caracteres a utilizar si 'text' = 'True' (por defecto: 'UTF-8')"
+          "message": "Codificación de cadena si 'text' = 'True' (predeterminado: 'UTF-8')"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.desc": {
           "source": "The maximum length of the data returned in bytes",
@@ -162,6 +162,10 @@
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.display_name": {
           "source": "Text",
           "message": "Texto"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "Si es 'True', el archivo se devuelve como cadena; si es 'False', como…"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
           "source": "Get a file on the server filesystem",
@@ -213,7 +217,7 @@
         },
         "app.RmlsZXN5c3RlbQ.action.bGlzdA.short_desc": {
           "source": "List files and subdirectories in a folder on the server filesystem",
-          "message": "Listar archivos y subdirectorios en una carpeta del sistema de archivos del servidor"
+          "message": "Lista archivos y subdirectorios de una carpeta en el servidor"
         },
         "app.RmlsZXN5c3RlbQ.action.bW92ZQ.desc": {
           "source": "Move a file or directory on the server filesystem",
@@ -315,6 +319,10 @@
           "source": "Symlink",
           "message": "Enlace simbólico"
         },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.short_desc": {
+          "source": "If 'True', then if the target path is a symbolic link, information about the…",
+          "message": "Si es 'True' y la ruta es un enlace simbólico, la información sobre el…"
+        },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.desc": {
           "source": "The file path",
           "message": "La ruta del archivo"
@@ -329,7 +337,7 @@
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.short_desc": {
           "source": "Get details about a file or directory on the server filesystem",
-          "message": "Obtener detalles sobre un archivo o directorio en el sistema de archivos del servidor"
+          "message": "Obtiene detalles de un archivo o directorio en el sistema del servidor"
         },
         "app.RmlsZXN5c3RlbQ.desc": {
           "source": "Access to the server filesystem",
