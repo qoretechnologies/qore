@@ -327,6 +327,10 @@
           "source": "OAuth2 Auto Refresh",
           "message": "OAuth2 自動重新整理"
         },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.short_desc": {
+          "source": "Whether tokens are refreshed automatically",
+          "message": "權杖是否會自動重新整理"
+        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.desc": {
           "source": "Optional arguments for authentication requests for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
           "message": "`authorization_code` 授權類型的驗證請求選用引數；如果設定了 `token` 選項則會被忽略。請注意，`authorization_code` 授權類型需要外部使用者授權才能取得存取權杖"
@@ -334,6 +338,10 @@
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.display_name": {
           "source": "OAuth2 Authorization Args",
           "message": "OAuth2 授權引數"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.short_desc": {
+          "source": "Extra arguments for authorization_code token requests",
+          "message": "authorization_code 權杖請求的額外引數"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfdXJs.desc": {
           "source": "The OAuth2 authorization URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
@@ -459,6 +467,10 @@
           "source": "OAuth2 PKCE",
           "message": "OAuth2 PKCE"
         },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.short_desc": {
+          "source": "Hint to use PKCE with the authorization code flow",
+          "message": "在授權碼流程中使用 PKCE 的提示"
+        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.desc": {
           "source": "Per OAuth2 spec (RFC 6749), the state parameter should be returned by the authorization server. Some providers (like Trello) do not pass through the state parameter. Set this to False to embed the state in the redirect_uri as a workaround for non-compliant providers. Default: True (spec-compliant behavior).",
           "message": "根據 OAuth2 規格 (RFC 6749)，授權伺服器應傳回 state 參數。某些提供者（如 Trello）不會傳遞 state 參數。將此項設為 False 可將 state 嵌入 redirect_uri 中，作為不合規提供者的因應措施。預設值：True（符合規格之行為）。"
@@ -563,6 +575,10 @@
           "source": "OAuth2 Token Lifetime Hint in Minutes",
           "message": "OAuth2 權杖生命週期提示（分鐘）"
         },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.short_desc": {
+          "source": "How many minutes a token stays valid",
+          "message": "權杖維持有效的分鐘數"
+        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VybA.desc": {
           "source": "The token URL for OAuth2 flows; ignored for logins if the `token` option is set",
           "message": "OAuth2 流程的權杖 URL；若設定了 `token` 選項，登入時會忽略此項"
@@ -582,6 +598,10 @@
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.display_name": {
           "source": "OAuth2 Token Use Basic Auth?",
           "message": "OAuth2 權杖使用基本驗證？"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.short_desc": {
+          "source": "Send the client ID and secret as basic authorization",
+          "message": "以基本授權方式傳送用戶端 ID 和密鑰"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b3BlbmFwaTM.desc": {
           "source": "An OpenApi 3 schema location or file data for the REST connection",
@@ -954,6 +974,10 @@
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.display_name": {
           "source": "REST Body Auth Error Check",
           "message": "REST 主體驗證錯誤檢查"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.short_desc": {
+          "source": "Values marking a 200 OK body as an authentication error",
+          "message": "將 200 OK 主體標記為驗證錯誤的值"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW4.desc": {
           "source": "Any authorization token to use for the connection; will be passed as `Authorization: Bearer ...` (assuming that `token_type` is `Bearer`) in request headers; this option cannot be used with username and password options or authentication information in the URL; if this option is set then most OAuth2 options are ignored for logins",

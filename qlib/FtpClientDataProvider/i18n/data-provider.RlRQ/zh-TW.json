@@ -43,6 +43,10 @@
           "source": "Text",
           "message": "文字"
         },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "若為 'True' 則檔案將以字串傳回，'False' (預設) 則以…"
+        },
         "app.RlRQ.action.Z2V0LWZpbGU.short_desc": {
           "source": "Get a file from an FTP server",
           "message": "從 FTP 伺服器取得檔案"
@@ -110,6 +114,10 @@
         "app.RlRQ.action.c2VuZC1maWxl.option.dGV4dA.display_name": {
           "source": "Text",
           "message": "文字"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "若為 'True' 則檔案將以字串傳回，'False' (預設) 則以…"
         },
         "app.RlRQ.action.c2VuZC1maWxl.short_desc": {
           "source": "Sends a file to an FTP server",

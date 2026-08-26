@@ -2,7 +2,2912 @@
   "schema_version": 1,
   "locales": {
     "zh-Hant": {
-      "messages": {}
+      "messages": {
+        "app.S2xhdml5bw.action.Y3JlYXRl.desc": {
+          "source": "Creates new records in the given table",
+          "message": "在指定的資料表中建立新記錄"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.display_name": {
+          "source": "Create Records",
+          "message": "建立記錄"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "要操作的資料表：`profiles`、`lists`、`segments`、`tags`、`campaigns`、`metrics` 或 `events`"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.short_desc": {
+          "source": "Create new records in the given table",
+          "message": "在指定的資料表中建立新記錄"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.desc": {
+          "source": "Creates a profile, or updates the one already carrying the identifier given.\n\nKlaviyo matches on `id` when it is set, and otherwise on `email`, `phoneNumber` or `externalId` - so this is the action to use when the person may already be known. A custom property supplied here **replaces** the stored value; use **Update Profile** with `meta.patch_properties` to append to one instead.",
+          "message": "建立個人檔案，或更新已包含指定識別碼的個人檔案。\n\nKlaviyo 在有設定時會比對 `id`，否則會比對 `email`、`phoneNumber` 或 `externalId`——因此當該人員可能已存在時應使用此動作。此處提供的自訂屬性會**取代**儲存的值；若要附加內容，請改用帶有 `meta.patch_properties` 的 **Update Profile**。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.display_name": {
+          "source": "Create Or Update Profile",
+          "message": "建立或更新個人檔案"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y291bnRyeQ.desc": {
+          "source": "Country name",
+          "message": "國家名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "國家"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "國家名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "城市名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "城市"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y2l0eQ.short_desc": {
+          "source": "City name",
+          "message": "城市名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y3VzdG9tUHJvcGVydGllcw.desc": {
+          "source": "Your own properties to store on the profile, as name/value pairs.\n\nKlaviyo reserves property names beginning with `$`.",
+          "message": "要儲存在個人檔案上的自訂屬性（名稱/值組合）。\n\nKlaviyo 保留以 `$` 開頭的屬性名稱。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y3VzdG9tUHJvcGVydGllcw.display_name": {
+          "source": "Custom Properties",
+          "message": "自訂屬性"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y3VzdG9tUHJvcGVydGllcw.short_desc": {
+          "source": "Your own properties to store on the profile",
+          "message": "要儲存在個人檔案上的自訂屬性"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczE.desc": {
+          "source": "First line of street address",
+          "message": "街道地址第一行"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczE.display_name": {
+          "source": "Address Line 1",
+          "message": "地址行 1"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczE.short_desc": {
+          "source": "First line of street address",
+          "message": "街道地址第一行"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczI.desc": {
+          "source": "Second line of street address",
+          "message": "街道地址第二行"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczI.display_name": {
+          "source": "Address Line 2",
+          "message": "地址行 2"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczI.short_desc": {
+          "source": "Second line of street address",
+          "message": "街道地址第二行"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZW1haWw.desc": {
+          "source": "Individual's email address",
+          "message": "個人電子郵件地址"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "電子郵件"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZW1haWw.short_desc": {
+          "source": "The profile's e-mail address",
+          "message": "個人檔案的電子郵件地址"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZXh0ZXJuYWxJZA.desc": {
+          "source": "Your own identifier for this person, so that a profile can be found by the ID it has in your system rather than by e-mail",
+          "message": "您為此人設定的專屬識別碼，以便透過其在您系統中的 ID 而非電子郵件找到個人檔案"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZXh0ZXJuYWxJZA.display_name": {
+          "source": "External ID",
+          "message": "外部 ID"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZXh0ZXJuYWxJZA.short_desc": {
+          "source": "Your own identifier for this person",
+          "message": "您為此人設定的專屬識別碼"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Zmlyc3ROYW1l.desc": {
+          "source": "Individual's first name",
+          "message": "個人名字"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Individual's first name",
+          "message": "個人名字"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aW1hZ2VVcmw.desc": {
+          "source": "URL pointing to the location of a profile image",
+          "message": "指向個人檔案圖片位置的 URL"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aW1hZ2VVcmw.display_name": {
+          "source": "Image URL",
+          "message": "圖片 URL"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aW1hZ2VVcmw.short_desc": {
+          "source": "A URL for the profile's avatar",
+          "message": "個人檔案顯示圖片的 URL"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aWQ.desc": {
+          "source": "The profile to update.\n\nLeave it unset to match on an identifier instead, which is the usual way to use this action.",
+          "message": "要更新的個人檔案。\n\n若未設定，則會改依識別碼進行比對，這是使用此動作的常用方式。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aWQ.display_name": {
+          "source": "Profile",
+          "message": "Profile"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aWQ.short_desc": {
+          "source": "The profile to update, if it is already known",
+          "message": "要更新的個人檔案（若已知）"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aXA.desc": {
+          "source": "IP Address",
+          "message": "IP 位址"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aXA.display_name": {
+          "source": "IP Address",
+          "message": "IP 位址"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aXA.short_desc": {
+          "source": "The IP address Klaviyo should locate the profile from",
+          "message": "Klaviyo 應用於定位個人檔案的 IP 位址"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Name of the company or organization within the company for whom the individual works",
+          "message": "該人員任職的公司或公司內部組織名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The company the person belongs to",
+          "message": "該人員所屬的公司"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9jYWxl.desc": {
+          "source": "The locale of the profile, in the IETF BCP 47 language tag format like (ISO 639-1/2)-(ISO 3166 alpha-2)",
+          "message": "個人檔案的語言地區，採用 IETF BCP 47 語言標籤格式，例如 (ISO 639-1/2)-(ISO 3166 alpha-2)"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "地區設定"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9jYWxl.short_desc": {
+          "source": "The profile's locale, ex: \"en-US\"",
+          "message": "個人檔案的語言地區，例如：\"en-US\""
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9uZ2l0dWRl.desc": {
+          "source": "Longitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "經度座標。建議精確至小數點後四位。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9uZ2l0dWRl.display_name": {
+          "source": "Longitude",
+          "message": "經度"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9uZ2l0dWRl.short_desc": {
+          "source": "Longitude coordinate",
+          "message": "經度座標"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGF0aXR1ZGU.desc": {
+          "source": "Latitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "緯度座標。建議精確至小數點後四位。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGF0aXR1ZGU.display_name": {
+          "source": "Latitude",
+          "message": "緯度"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGF0aXR1ZGU.short_desc": {
+          "source": "Latitude coordinate",
+          "message": "緯度座標"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGFzdE5hbWU.desc": {
+          "source": "Individual's last name",
+          "message": "個人的姓氏"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGFzdE5hbWU.short_desc": {
+          "source": "Individual's last name",
+          "message": "個人的姓氏"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bWV0YQ.desc": {
+          "source": "Append to or unset custom properties rather than replacing them.\n\n`patch_properties.append` adds a value to a list-valued property, `unappend` removes one, and `unset` deletes a property outright.",
+          "message": "附加或取消設定自訂屬性，而非加以取代。\n\n`patch_properties.append` 會將值新增至清單屬性，`unappend` 會移除值，而 `unset` 則會直接刪除屬性。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bWV0YQ.display_name": {
+          "source": "Patch Operations",
+          "message": "修補操作"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bWV0YQ.short_desc": {
+          "source": "Append to or unset custom properties rather than replacing them",
+          "message": "附加或取消設定自訂屬性，而非加以取代"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The profile's phone number in E.164 format, ex: `+15005550006`.\n\nKlaviyo rejects a number in any other format.",
+          "message": "採 E.164 格式的個人檔案電話號碼，例如：`+15005550006`。\n\nKlaviyo 會拒絕任何其他格式的號碼。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "電話號碼"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The profile's phone number in E.164 format",
+          "message": "採 E.164 格式的個人檔案電話號碼"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cmVnaW9u.desc": {
+          "source": "Region within a country, such as state or province",
+          "message": "國家/地區內的區域，例如州或省"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "區域"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cmVnaW9u.short_desc": {
+          "source": "The state, province or region",
+          "message": "州、省或地區"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGl0bGU.desc": {
+          "source": "Individual's job title",
+          "message": "個人的職稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "標題"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGl0bGU.short_desc": {
+          "source": "The person's job title",
+          "message": "該人員的職稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGltZXpvbmU.desc": {
+          "source": "Time zone name. We recommend using time zones from the IANA Time Zone Database.",
+          "message": "時區名稱。建議使用來自 IANA 時區資料庫的時區。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGltZXpvbmU.display_name": {
+          "source": "Time Zone",
+          "message": "時區"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGltZXpvbmU.short_desc": {
+          "source": "The IANA time zone name",
+          "message": "IANA 時區名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.emlw.desc": {
+          "source": "Zip code",
+          "message": "郵遞區號"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.emlw.display_name": {
+          "source": "Postal Code",
+          "message": "郵遞區號"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.emlw.short_desc": {
+          "source": "The postal or ZIP code",
+          "message": "郵遞區號"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.short_desc": {
+          "source": "Creates a new profile or updates an existing one",
+          "message": "建立新的個人檔案或更新現有個人檔案"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.desc": {
+          "source": "Creates a campaign as a **draft**; it is not sent until **Send Campaign** creates a send job for it.\n\n`audiences` names the lists and segments to include and exclude, and `campaignMessages` carries the message content per channel; both are **required** and both are Klaviyo's own structures, documented with the campaigns API rather than here.",
+          "message": "將行銷活動建立為**草稿**；在 **Send Campaign** 為其建立傳送作業之前，系統不會將其送出。\n\n`audiences` 用於指定要納入和排除的名單與客群，而 `campaignMessages` 則包含各管道的訊息內容；兩者皆為**必填**，且均為 Klaviyo 自身的結構，詳見行銷活動 API 文件而非此處。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.display_name": {
+          "source": "Create Campaign",
+          "message": "建立廣告活動"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.Y2FtcGFpZ25NZXNzYWdlcw.desc": {
+          "source": "The message(s) associated with the campaign",
+          "message": "與該行銷活動關聯的訊息"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.Y2FtcGFpZ25NZXNzYWdlcw.display_name": {
+          "source": "Messages",
+          "message": "訊息"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.Y2FtcGFpZ25NZXNzYWdlcw.short_desc": {
+          "source": "The message content, per channel",
+          "message": "各個管道的訊息內容"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.YXVkaWVuY2Vz.display_name": {
+          "source": "Audiences",
+          "message": "受眾"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.YXVkaWVuY2Vz.short_desc": {
+          "source": "The lists and segments to include and exclude",
+          "message": "要納入和排除的名單與客群"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The campaign name",
+          "message": "行銷活動名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "The name of the campaign",
+          "message": "行銷活動名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.desc": {
+          "source": "Options to use when sending a campaign",
+          "message": "傳送行銷活動時使用的選項"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.display_name": {
+          "source": "Send Options",
+          "message": "傳送選項"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.short_desc": {
+          "source": "Whether to use smart sending",
+          "message": "是否使用智慧傳送"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.desc": {
+          "source": "The send strategy the campaign will send with. Defaults to 'Immediate' send strategy.",
+          "message": "行銷活動傳送時使用的傳送策略。預設為「立即」傳送策略。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.display_name": {
+          "source": "Send Strategy",
+          "message": "傳送策略"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.short_desc": {
+          "source": "When the campaign is sent, if not immediately",
+          "message": "行銷活動的傳送時間（若非立即傳送）"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.desc": {
+          "source": "The tracking options associated with the campaign",
+          "message": "與行銷活動關聯的追蹤選項"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.display_name": {
+          "source": "Tracking Options",
+          "message": "追蹤選項"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.short_desc": {
+          "source": "The UTM parameters and tracking flags to apply",
+          "message": "要套用的 UTM 參數與追蹤旗標"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.short_desc": {
+          "source": "Creates a new campaign",
+          "message": "建立新的行銷活動"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.desc": {
+          "source": "Records that something happened, against a metric and a profile.\n\n`metric` is the **name** of the kind of event - \"Placed Order\", \"Viewed Product\" - and Klaviyo defines a metric the first time an event names one, so a name that does not exist yet is how a new metric is created.\n\nThe event has to say who it happened to: give `profile` for someone already known, or `email`, which Klaviyo creates a profile from if it has to. `customId` makes the event idempotent - Klaviyo drops a second event with the same one - and `time` records an event that happened earlier than now.\n\nThis action is hand-written rather than generated, because Klaviyo's own description nests a metric envelope and a profile envelope inside the event's attributes, which cannot be published as one flat option shape.",
+          "message": "針對指標和個人檔案記錄發生的事件。\n\n`metric` 是事件類型的**名稱**（例如「Placed Order」、「Viewed Product」），且 Klaviyo 會在事件首次指定某指標時定義該指標，因此使用尚不存在的名稱即可建立新指標。\n\n該事件必須說明發生在誰身上：針對已知人員提供 `profile`，或提供 `email`（Klaviyo 會視需要從中建立個人檔案）。`customId` 使事件具備等冪性（Klaviyo 會捨棄具有相同 ID 的第二個事件），而 `time` 則用於記錄早於目前時間發生的事件。\n\n此動作為手動撰寫而非自動產生，因為 Klaviyo 自身的說明將指標封裝與個人檔案封裝巢狀放置在事件屬性內，無法發佈為單一扁平的選項形式。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.display_name": {
+          "source": "Create Event",
+          "message": "建立事件"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tSWQ.desc": {
+          "source": "Your own unique identifier for this event.\n\nKlaviyo drops a second event carrying an ID it has already seen, which makes a retry safe.",
+          "message": "您為此事件設定的專屬識別碼。\n\nKlaviyo 會捨棄帶有已處理過 ID 的第二個事件，以確保重試安全。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tSWQ.display_name": {
+          "source": "Custom ID",
+          "message": "自訂 ID"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tSWQ.short_desc": {
+          "source": "Your own unique identifier for this event",
+          "message": "此事件專屬的自訂識別碼"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tUHJvcGVydGllcw.desc": {
+          "source": "Your own properties to record with the event, as name/value pairs",
+          "message": "要隨事件記錄的自訂屬性（以名稱/值組合表示）"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tUHJvcGVydGllcw.display_name": {
+          "source": "Custom Properties",
+          "message": "自訂屬性"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tUHJvcGVydGllcw.short_desc": {
+          "source": "Your own properties to record with the event",
+          "message": "要隨事件記錄的自訂屬性"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.ZW1haWw.desc": {
+          "source": "The e-mail address the event happened to.\n\nKlaviyo creates a profile from it if it does not know it yet, which is how an event can be recorded for somebody who has not been seen before.",
+          "message": "發生該事件的電子郵件地址。\n\n若 Klaviyo 尚未認識該地址，將會從中建立個人檔案，這也是為未曾出現過的人員記錄事件的方式。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "電子郵件"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.ZW1haWw.short_desc": {
+          "source": "The e-mail address the event happened to",
+          "message": "發生該事件的電子郵件地址"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.bWV0cmlj.desc": {
+          "source": "The name of the kind of event, ex: `Placed Order`.\n\nKlaviyo defines a metric the first time an event names one, so a name that is not in the list yet creates a new metric.",
+          "message": "事件類型的名稱，例如：`Placed Order`。\n\nKlaviyo 會在事件首次指定某指標時定義該指標，因此尚未列出的名稱將會建立新指標。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.bWV0cmlj.display_name": {
+          "source": "Metric",
+          "message": "指標"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.bWV0cmlj.short_desc": {
+          "source": "The name of the kind of event",
+          "message": "事件類型的名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.cHJvZmlsZQ.desc": {
+          "source": "The profile the event happened to.\n\nGive this or `email`.",
+          "message": "發生該事件的個人檔案。\n\n請提供此項或 `email`。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profile"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.cHJvZmlsZQ.short_desc": {
+          "source": "The profile the event happened to",
+          "message": "發生該事件的個人檔案"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dGltZQ.desc": {
+          "source": "When the event happened.\n\nKlaviyo uses the current time when this is unset, so set it when recording something after the fact.",
+          "message": "事件發生的時間。\n\n未設定此項時，Klaviyo 會使用目前時間，因此事後記錄事件時請務必設定。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dGltZQ.display_name": {
+          "source": "Time",
+          "message": "時間"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dGltZQ.short_desc": {
+          "source": "When the event happened",
+          "message": "事件發生的時間"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dmFsdWU.desc": {
+          "source": "The monetary value of the event, in the account's currency.\n\nThis is what Klaviyo's revenue reporting adds up.",
+          "message": "事件的金錢價值（以該帳戶的貨幣計）。\n\n這是 Klaviyo 營收報表累加的數值。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "值"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dmFsdWU.short_desc": {
+          "source": "The monetary value of the event",
+          "message": "事件的金錢價值"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.short_desc": {
+          "source": "Creates a new event",
+          "message": "建立新事件"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.desc": {
+          "source": "Creates a list.\n\n`optInProcess` decides whether a profile added to the list has to confirm by e-mail before it is subscribed; Klaviyo uses the account's default when it is unset.",
+          "message": "建立名單。\n\n`optInProcess` 決定新增至名單的個人檔案是否必須透過電子郵件確認才算完成訂閱；未設定時，Klaviyo 會使用帳戶預設值。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.display_name": {
+          "source": "Create List",
+          "message": "建立清單"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.allowed-value.c3RyaW5nOmRvdWJsZV9vcHRfaW4.display_name": {
+          "source": "double_opt_in",
+          "message": "double_opt_in"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.allowed-value.c3RyaW5nOnNpbmdsZV9vcHRfaW4.display_name": {
+          "source": "single_opt_in",
+          "message": "single_opt_in"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.desc": {
+          "source": "The opt-in process for this list. Valid values: 'double_opt_in', 'single_opt_in'. If not provided, uses account default.",
+          "message": "此名單的加入訂閱流程。有效值：'double_opt_in'、'single_opt_in'。若未提供，則使用帳戶預設值。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.display_name": {
+          "source": "Opt-in Process",
+          "message": "加入訂閱流程"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.short_desc": {
+          "source": "Whether a new subscriber has to confirm by e-mail",
+          "message": "新訂閱者是否必須透過電子郵件確認"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.bmFtZQ.desc": {
+          "source": "A helpful name to label the list",
+          "message": "用於標示名單的易讀名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.bmFtZQ.short_desc": {
+          "source": "The name of the list",
+          "message": "名單名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.short_desc": {
+          "source": "Creates a new list",
+          "message": "建立新名單"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.desc": {
+          "source": "Creates a profile.\n\nA profile needs at least one identifier - an e-mail address, a phone number or an external ID. Klaviyo **rejects** a create whose identifier already belongs to a profile; use **Create Or Update Profile** when the person may already be known.",
+          "message": "建立個人檔案。\n\n個人檔案至少需要一個識別碼（電子郵件地址、電話號碼或外部 ID）。Klaviyo 會**拒絕**識別碼已屬於現有個人檔案的建立請求；若該人員可能已存在，請使用「**Create Or Update Profile**」。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.display_name": {
+          "source": "Create Profile",
+          "message": "建立個人檔案"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.desc": {
+          "source": "Country name",
+          "message": "國家名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "國家"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "國家名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "城市名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "城市"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y2l0eQ.short_desc": {
+          "source": "City name",
+          "message": "城市名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.desc": {
+          "source": "Your own properties to store on the profile, as name/value pairs.\n\nKlaviyo reserves property names beginning with `$`.",
+          "message": "要儲存在個人檔案上的自訂屬性（名稱/值組合）。\n\nKlaviyo 保留以 `$` 開頭的屬性名稱。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.display_name": {
+          "source": "Custom Properties",
+          "message": "自訂屬性"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.short_desc": {
+          "source": "Your own properties to store on the profile",
+          "message": "要儲存在個人檔案上的自訂屬性"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.desc": {
+          "source": "First line of street address",
+          "message": "街道地址第一行"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.display_name": {
+          "source": "Address Line 1",
+          "message": "地址行 1"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.short_desc": {
+          "source": "First line of street address",
+          "message": "街道地址第一行"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.desc": {
+          "source": "Second line of street address",
+          "message": "街道地址第二行"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.display_name": {
+          "source": "Address Line 2",
+          "message": "地址行 2"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.short_desc": {
+          "source": "Second line of street address",
+          "message": "街道地址第二行"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZW1haWw.desc": {
+          "source": "Individual's email address",
+          "message": "個人電子郵件地址"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "電子郵件"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZW1haWw.short_desc": {
+          "source": "The profile's e-mail address",
+          "message": "個人檔案的電子郵件地址"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.desc": {
+          "source": "Your own identifier for this person, so that a profile can be found by the ID it has in your system rather than by e-mail",
+          "message": "您為此人設定的專屬識別碼，以便透過其在您系統中的 ID 而非電子郵件找到個人檔案"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.display_name": {
+          "source": "External ID",
+          "message": "外部 ID"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.short_desc": {
+          "source": "Your own identifier for this person",
+          "message": "您為此人設定的專屬識別碼"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.desc": {
+          "source": "Individual's first name",
+          "message": "個人名字"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Individual's first name",
+          "message": "個人名字"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.desc": {
+          "source": "URL pointing to the location of a profile image",
+          "message": "指向個人檔案圖片位置的 URL"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.display_name": {
+          "source": "Image URL",
+          "message": "圖片 URL"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.short_desc": {
+          "source": "A URL for the profile's avatar",
+          "message": "個人檔案顯示圖片的 URL"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aXA.desc": {
+          "source": "IP Address",
+          "message": "IP 位址"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aXA.display_name": {
+          "source": "IP Address",
+          "message": "IP 位址"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aXA.short_desc": {
+          "source": "The IP address Klaviyo should locate the profile from",
+          "message": "Klaviyo 應用於定位個人檔案的 IP 位址"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Name of the company or organization within the company for whom the individual works",
+          "message": "該人員任職的公司或公司內部組織名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The company the person belongs to",
+          "message": "該人員所屬的公司"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9jYWxl.desc": {
+          "source": "The locale of the profile, in the IETF BCP 47 language tag format like (ISO 639-1/2)-(ISO 3166 alpha-2)",
+          "message": "個人檔案的語言地區，採用 IETF BCP 47 語言標籤格式，例如 (ISO 639-1/2)-(ISO 3166 alpha-2)"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "地區設定"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9jYWxl.short_desc": {
+          "source": "The profile's locale, ex: \"en-US\"",
+          "message": "個人檔案的語言地區，例如：\"en-US\""
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.desc": {
+          "source": "Longitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "經度座標。建議精確至小數點後四位。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.display_name": {
+          "source": "Longitude",
+          "message": "經度"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.short_desc": {
+          "source": "Longitude coordinate",
+          "message": "經度座標"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.desc": {
+          "source": "Latitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "緯度座標。建議精確至小數點後四位。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.display_name": {
+          "source": "Latitude",
+          "message": "緯度"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.short_desc": {
+          "source": "Latitude coordinate",
+          "message": "緯度座標"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.desc": {
+          "source": "Individual's last name",
+          "message": "個人的姓氏"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.short_desc": {
+          "source": "Individual's last name",
+          "message": "個人的姓氏"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The profile's phone number in E.164 format, ex: `+15005550006`.\n\nKlaviyo rejects a number in any other format.",
+          "message": "採 E.164 格式的個人檔案電話號碼，例如：`+15005550006`。\n\nKlaviyo 會拒絕任何其他格式的號碼。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "電話號碼"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The profile's phone number in E.164 format",
+          "message": "採 E.164 格式的個人檔案電話號碼"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cmVnaW9u.desc": {
+          "source": "Region within a country, such as state or province",
+          "message": "國家/地區內的區域，例如州或省"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "區域"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cmVnaW9u.short_desc": {
+          "source": "The state, province or region",
+          "message": "州、省或地區"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGl0bGU.desc": {
+          "source": "Individual's job title",
+          "message": "個人的職稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "標題"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGl0bGU.short_desc": {
+          "source": "The person's job title",
+          "message": "該人員的職稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.desc": {
+          "source": "Time zone name. We recommend using time zones from the IANA Time Zone Database.",
+          "message": "時區名稱。建議使用來自 IANA 時區資料庫的時區。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.display_name": {
+          "source": "Time Zone",
+          "message": "時區"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.short_desc": {
+          "source": "The IANA time zone name",
+          "message": "IANA 時區名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.emlw.desc": {
+          "source": "Zip code",
+          "message": "郵遞區號"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.emlw.display_name": {
+          "source": "Postal Code",
+          "message": "郵遞區號"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.emlw.short_desc": {
+          "source": "The postal or ZIP code",
+          "message": "郵遞區號"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.short_desc": {
+          "source": "Creates a new profile",
+          "message": "建立新的個人檔案"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.desc": {
+          "source": "Creates a segment.\n\n`definition` is the rule Klaviyo evaluates to decide who is in the segment, and it is **required**: a segment with no rule would match nobody. It is Klaviyo's own condition structure - a list of condition groups, each a list of conditions - and is documented with the segments API rather than here.",
+          "message": "建立客群。\n\n`definition` 是 Klaviyo 用來評估誰屬於該客群的規則，且為**必填**：沒有規則的客群將無法比對到任何人。這是 Klaviyo 自身的條件結構（由條件群組組成的清單，每個群組各為一組條件清單），詳見客群 API 文件而非此處。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.display_name": {
+          "source": "Create Segment",
+          "message": "建立客群"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.ZGVmaW5pdGlvbg.display_name": {
+          "source": "Definition",
+          "message": "定義"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.ZGVmaW5pdGlvbg.short_desc": {
+          "source": "The rule deciding who is in the segment",
+          "message": "決定誰屬於此受眾區隔的規則"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.aXNTdGFycmVk.display_name": {
+          "source": "Starred",
+          "message": "已加星標"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.aXNTdGFycmVk.short_desc": {
+          "source": "Whether the segment is starred in the Klaviyo UI",
+          "message": "此受眾區隔是否已在 Klaviyo 介面中加星號"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.bmFtZQ.short_desc": {
+          "source": "The name of the segment",
+          "message": "區隔的名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.short_desc": {
+          "source": "Creates a new segment",
+          "message": "建立新的受眾區隔"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.desc": {
+          "source": "Creates a tag.\n\nA tag groups campaigns, flows, lists and segments for reporting. Klaviyo places a new tag in the account's default tag group unless one is named in the relationships, which this action does not publish.",
+          "message": "建立標籤。\n\n標籤用於將行銷活動、流程、清單與受眾區隔分組以便製作報告。除非在關聯中指定（此動作不會發布），否則 Klaviyo 會將新標籤放置於帳戶的預設標籤群組中。"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.display_name": {
+          "source": "Create Tag",
+          "message": "建立標籤"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.option.bmFtZQ.desc": {
+          "source": "The Tag name",
+          "message": "標籤名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.option.bmFtZQ.short_desc": {
+          "source": "The name of the tag",
+          "message": "標籤的名稱"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.option.cmVsYXRpb25zaGlwcw.display_name": {
+          "source": "Relationships",
+          "message": "關聯"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.short_desc": {
+          "source": "Creates a new tag",
+          "message": "建立新標籤"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.desc": {
+          "source": "Adds a profile that already exists to a list.\n\nThe profile is **not** subscribed by this: membership and marketing consent are separate in Klaviyo, and **Subscribe Profile** is what records consent. Adding a profile that is already a member succeeds and changes nothing.",
+          "message": "將已存在的個人檔案新增至清單。\n\n此操作**不會**為該個人檔案訂閱：在 Klaviyo 中，成員資格與行銷同意是分開的，**訂閱個人檔案**才是記錄同意的途徑。新增已是成員的個人檔案會成功且不會做出任何變更。"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.display_name": {
+          "source": "Add Profile to List",
+          "message": "將個人檔案新增至清單"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.bGlzdA.desc": {
+          "source": "The list to add the profile to",
+          "message": "要新增個人檔案的清單"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "清單"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.bGlzdA.short_desc": {
+          "source": "The list to add the profile to",
+          "message": "要新增個人檔案的清單"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.cHJvZmlsZQ.desc": {
+          "source": "The profile to add",
+          "message": "要新增的個人檔案"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profile"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.cHJvZmlsZQ.short_desc": {
+          "source": "The profile to add",
+          "message": "要新增的個人檔案"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.short_desc": {
+          "source": "Adds an existing profile to a list",
+          "message": "將現有個人檔案新增至清單"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.desc": {
+          "source": "Applies a tag that already exists to a list.\n\nKlaviyo does not create a tag on use; the tag has to exist, and **List Tags** shows which do.",
+          "message": "將已存在的標籤套用至清單。\n\nKlaviyo 不會在套用時自動建立標籤；該標籤必須已存在，可透過 **列出標籤** 查看現有標籤。"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.display_name": {
+          "source": "Add Tag to List",
+          "message": "新增標籤至清單"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.bGlzdA.desc": {
+          "source": "The list to tag",
+          "message": "要標記的清單"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "清單"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.bGlzdA.short_desc": {
+          "source": "The list to tag",
+          "message": "要標記的清單"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.dGFn.desc": {
+          "source": "The tag to apply",
+          "message": "要套用的標籤"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "標籤"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.dGFn.short_desc": {
+          "source": "The tag to apply",
+          "message": "要套用的標籤"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.short_desc": {
+          "source": "Adds an existing tag to a list",
+          "message": "將現有標籤套用至清單"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.desc": {
+          "source": "Applies a tag that already exists to a segment.\n\nKlaviyo does not create a tag on use; the tag has to exist, and **List Tags** shows which do.",
+          "message": "將已存在的標籤套用至受眾區隔。\n\nKlaviyo 不會在套用時自動建立標籤；該標籤必須已存在，可透過 **列出標籤** 查看現有標籤。"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.display_name": {
+          "source": "Add Tag to Segment",
+          "message": "新增標籤至受眾區隔"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.c2VnbWVudA.desc": {
+          "source": "The segment to tag",
+          "message": "要標記的受眾區隔"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.c2VnbWVudA.display_name": {
+          "source": "Segment",
+          "message": "區隔"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.c2VnbWVudA.short_desc": {
+          "source": "The segment to tag",
+          "message": "要標記的受眾區隔"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.dGFn.desc": {
+          "source": "The tag to apply",
+          "message": "要套用的標籤"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "標籤"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.dGFn.short_desc": {
+          "source": "The tag to apply",
+          "message": "要套用的標籤"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.short_desc": {
+          "source": "Adds an existing tag to a segment",
+          "message": "將現有標籤套用至受眾區隔"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.desc": {
+          "source": "Retrieves one metric by its Klaviyo ID.\n\nA **metric** is the kind of an event - \"Placed Order\", \"Viewed Product\" - and Klaviyo defines one the first time an event names it.",
+          "message": "依 Klaviyo ID 擷取單一指標。\n\n**指標**是事件的類型（例如「Placed Order」、「Viewed Product」），Klaviyo 會在事件首次引用名稱時加以定義。"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.display_name": {
+          "source": "Get Metric",
+          "message": "取得指標"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.option.aWQ.desc": {
+          "source": "Metric ID: Metric ID",
+          "message": "指標 ID：指標 ID"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.option.aWQ.display_name": {
+          "source": "Metric",
+          "message": "指標"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.option.aWQ.short_desc": {
+          "source": "The metric to retrieve",
+          "message": "要擷取的指標"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.short_desc": {
+          "source": "Retrieves a specific metric",
+          "message": "擷取特定指標"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.desc": {
+          "source": "Retrieves one campaign by its Klaviyo ID",
+          "message": "依 Klaviyo ID 擷取單一行銷活動"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.display_name": {
+          "source": "Get Campaign",
+          "message": "取得行銷活動"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.option.aWQ.desc": {
+          "source": "The campaign ID to be retrieved: The campaign ID to be retrieved",
+          "message": "要擷取的行銷活動 ID：要擷取的行銷活動 ID"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.option.aWQ.display_name": {
+          "source": "Campaign",
+          "message": "廣告活動"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.option.aWQ.short_desc": {
+          "source": "The campaign to retrieve",
+          "message": "要擷取的行銷活動"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.short_desc": {
+          "source": "Retrieves a specific campaign",
+          "message": "擷取特定行銷活動"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.desc": {
+          "source": "Retrieves one event by its Klaviyo ID",
+          "message": "依 Klaviyo ID 擷取單一事件"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.display_name": {
+          "source": "Get Event",
+          "message": "取得活動"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.option.aWQ.desc": {
+          "source": "ID of the event: ID of the event",
+          "message": "事件 ID：事件 ID"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.option.aWQ.display_name": {
+          "source": "Event",
+          "message": "活動"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.option.aWQ.short_desc": {
+          "source": "The event to retrieve",
+          "message": "要擷取的事件"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.short_desc": {
+          "source": "Retrieves a specific event",
+          "message": "擷取特定事件"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.desc": {
+          "source": "Retrieves one list by its Klaviyo ID.\n\n`additionalFields` adds the list's profile count, which Klaviyo does not return otherwise because counting is expensive.",
+          "message": "依 Klaviyo ID 擷取單一清單。\n\n`additionalFields` 會加入清單的個人檔案計數，由於計數運算成本高昂，Klaviyo 預設不會傳回此項。"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.display_name": {
+          "source": "Get List",
+          "message": "取得清單"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.YWRkaXRpb25hbEZpZWxkcw.desc": {
+          "source": "Computed blocks to include on each profile, which Klaviyo omits by default because they are expensive to produce:\n\n- `subscriptions`: the profile's consent state per channel\n- `predictive_analytics`: Klaviyo's predicted lifetime value and churn probability",
+          "message": "要包含在每個個人檔案中的計算區塊（由於產生運算成本高，Klaviyo 預設會省略）：\n\n- `subscriptions`：個人檔案各管道的同意狀態\n- `predictive_analytics`：Klaviyo 預測的顧客終身價值與流失機率"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.YWRkaXRpb25hbEZpZWxkcw.display_name": {
+          "source": "Additional Fields",
+          "message": "其他欄位"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.YWRkaXRpb25hbEZpZWxkcw.short_desc": {
+          "source": "Computed blocks to include on each profile",
+          "message": "要包含在每個個人檔案中的計算區塊"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.aWQ.desc": {
+          "source": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+          "message": "唯一識別此清單的主鍵。由 Klaviyo 產生。"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.aWQ.display_name": {
+          "source": "List",
+          "message": "清單"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.aWQ.short_desc": {
+          "source": "The list to work on",
+          "message": "要操作的清單"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.short_desc": {
+          "source": "Retrieves a specific list",
+          "message": "擷取特定清單"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.desc": {
+          "source": "Retrieves one profile by its Klaviyo ID",
+          "message": "依 Klaviyo ID 擷取單一個人檔案"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.display_name": {
+          "source": "Get Profile",
+          "message": "取得個人檔案"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.YWRkaXRpb25hbEZpZWxkcw.desc": {
+          "source": "Computed blocks to include on each profile, which Klaviyo omits by default because they are expensive to produce:\n\n- `subscriptions`: the profile's consent state per channel\n- `predictive_analytics`: Klaviyo's predicted lifetime value and churn probability",
+          "message": "要包含在每個個人檔案中的計算區塊（由於產生運算成本高，Klaviyo 預設會省略）：\n\n- `subscriptions`：個人檔案各管道的同意狀態\n- `predictive_analytics`：Klaviyo 預測的顧客終身價值與流失機率"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.YWRkaXRpb25hbEZpZWxkcw.display_name": {
+          "source": "Additional Fields",
+          "message": "其他欄位"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.YWRkaXRpb25hbEZpZWxkcw.short_desc": {
+          "source": "Computed blocks to include on each profile",
+          "message": "要包含在每個個人檔案中的計算區塊"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.aWQ.display_name": {
+          "source": "Profile",
+          "message": "Profile"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.aWQ.short_desc": {
+          "source": "The profile to retrieve",
+          "message": "要擷取的個人檔案"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.short_desc": {
+          "source": "Retrieves a specific profile",
+          "message": "擷取特定個人檔案"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.desc": {
+          "source": "Retrieves one segment by its Klaviyo ID.\n\n`additionalFields` adds the segment's profile count and its `definition` - the rule Klaviyo evaluates - neither of which is returned otherwise.",
+          "message": "依 Klaviyo ID 擷取單一受眾區隔。\n\n`additionalFields` 會加入受眾區隔的個人檔案計數及其 `definition`（即 Klaviyo 評估的規則），這兩者在預設情況下皆不會傳回。"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.display_name": {
+          "source": "Get Segment",
+          "message": "取得區隔"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.YWRkaXRpb25hbEZpZWxkcw.desc": {
+          "source": "Computed blocks to include on each profile, which Klaviyo omits by default because they are expensive to produce:\n\n- `subscriptions`: the profile's consent state per channel\n- `predictive_analytics`: Klaviyo's predicted lifetime value and churn probability",
+          "message": "要包含在每個個人檔案中的計算區塊（由於產生運算成本高，Klaviyo 預設會省略）：\n\n- `subscriptions`：個人檔案各管道的同意狀態\n- `predictive_analytics`：Klaviyo 預測的顧客終身價值與流失機率"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.YWRkaXRpb25hbEZpZWxkcw.display_name": {
+          "source": "Additional Fields",
+          "message": "其他欄位"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.YWRkaXRpb25hbEZpZWxkcw.short_desc": {
+          "source": "Computed blocks to include on each profile",
+          "message": "要包含在每個個人檔案中的計算區塊"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.aWQ.display_name": {
+          "source": "Segment",
+          "message": "區隔"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.aWQ.short_desc": {
+          "source": "The segment to work on",
+          "message": "要操作的受眾區隔"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.short_desc": {
+          "source": "Retrieves a specific segment",
+          "message": "擷取特定受眾區隔"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.desc": {
+          "source": "Retrieves one tag by its Klaviyo ID",
+          "message": "依 Klaviyo ID 擷取單一標籤"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.display_name": {
+          "source": "Get Tag",
+          "message": "取得標籤"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.option.aWQ.desc": {
+          "source": "The Tag ID",
+          "message": "標籤 ID"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.option.aWQ.display_name": {
+          "source": "Tag",
+          "message": "標籤"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.option.aWQ.short_desc": {
+          "source": "The tag to work on",
+          "message": "要操作的標籤"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.short_desc": {
+          "source": "Retrieves a specific tag",
+          "message": "擷取特定標籤"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.desc": {
+          "source": "Deletes every record in the given table matching the search criteria",
+          "message": "刪除指定資料表中符合搜尋條件的所有記錄"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.display_name": {
+          "source": "Delete Records",
+          "message": "刪除記錄"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "要操作的資料表：`profiles`、`lists`、`segments`、`tags`、`campaigns`、`metrics` 或 `events`"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.short_desc": {
+          "source": "Delete the records matching the search criteria",
+          "message": "刪除符合搜尋條件的記錄"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.desc": {
+          "source": "Deletes a campaign.\n\nKlaviyo answers with no content. A campaign that has already been sent keeps its reporting history.",
+          "message": "刪除行銷活動。\n\nKlaviyo 會回傳無內容回應。已發送的行銷活動將保留其報告記錄。"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.display_name": {
+          "source": "Delete Campaign",
+          "message": "刪除行銷活動"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.option.aWQ.desc": {
+          "source": "The campaign ID to be deleted: The campaign ID to be deleted",
+          "message": "要刪除的行銷活動 ID：要刪除的行銷活動 ID"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.option.aWQ.display_name": {
+          "source": "Campaign",
+          "message": "廣告活動"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.option.aWQ.short_desc": {
+          "source": "The campaign to work on",
+          "message": "要操作的行銷活動"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.short_desc": {
+          "source": "Deletes a campaign",
+          "message": "刪除行銷活動"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.desc": {
+          "source": "Deletes a list.\n\nThe profiles on it are **not** deleted; they simply stop being members. Klaviyo answers with no content.",
+          "message": "刪除清單。\n\n其中的個人檔案**不會**被刪除；他們只是不再是成員。Klaviyo 會回傳無內容回應。"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.display_name": {
+          "source": "Delete List",
+          "message": "刪除清單"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.option.aWQ.desc": {
+          "source": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+          "message": "唯一識別此清單的主鍵。由 Klaviyo 產生。"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.option.aWQ.display_name": {
+          "source": "List",
+          "message": "清單"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.option.aWQ.short_desc": {
+          "source": "The list to work on",
+          "message": "要操作的清單"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.short_desc": {
+          "source": "Deletes a list",
+          "message": "刪除清單"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.desc": {
+          "source": "Deletes a segment.\n\nThe profiles it matched are **not** deleted; the rule simply stops being evaluated. Klaviyo answers with no content.",
+          "message": "刪除受眾區隔。\n\n符合條件的個人檔案**不會**被刪除；只是不再評估該規則。Klaviyo 會回傳無內容回應。"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.display_name": {
+          "source": "Delete Segment",
+          "message": "刪除受眾區隔"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.option.aWQ.display_name": {
+          "source": "Segment",
+          "message": "區隔"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.option.aWQ.short_desc": {
+          "source": "The segment to work on",
+          "message": "要操作的受眾區隔"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.short_desc": {
+          "source": "Deletes a segment",
+          "message": "刪除受眾區隔"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.desc": {
+          "source": "Deletes a tag.\n\nThe campaigns, flows, lists and segments it was applied to are **not** deleted; they simply lose the tag. Klaviyo answers with no content.",
+          "message": "刪除標籤。\n\n套用了該標籤的行銷活動、流程、清單和受眾區隔**不會**被刪除；只是會移除該標籤。Klaviyo 會回傳無內容回應。"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.display_name": {
+          "source": "Delete Tag",
+          "message": "刪除標籤"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.option.aWQ.desc": {
+          "source": "The Tag ID",
+          "message": "標籤 ID"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.option.aWQ.display_name": {
+          "source": "Tag",
+          "message": "標籤"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.option.aWQ.short_desc": {
+          "source": "The tag to work on",
+          "message": "要操作的標籤"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.short_desc": {
+          "source": "Deletes a tag",
+          "message": "刪除標籤"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.desc": {
+          "source": "Lists the account's tags.\n\nA tag groups campaigns, flows, lists and segments for reporting. Paging is by cursor.",
+          "message": "列出帳戶的標籤。\n\n標籤用於將行銷活動、流程、清單與受眾區隔分組以便製作報告。分頁採用游標機制。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.display_name": {
+          "source": "List Tags",
+          "message": "列出標籤"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "下一頁的游標：傳入前一個回應中 `links.next` 的值。\n\n此值為不透明字串，不可手動構建；若要讀取第一頁請保持未設定。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "游標"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "下一頁的游標"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching tags\n\nThis value is sent as Klaviyo's filter syntax, `contains(name,…)`.",
+          "message": "將清單縮小至相符的標籤\n\n此值會以 Klaviyo 的篩選語法傳送：`contains(name,…)`。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "濾鏡"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching tags",
+          "message": "將清單縮小至相符的標籤"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "排序所依據的欄位與方向\n\n此值會以 Klaviyo 的排序權杖傳送：欄位名稱，前方加上 `-` 表示遞減排序。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "排序"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "排序所依據的欄位與方向"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "一頁要傳回的記錄筆數。\n\nKlaviyo 會針對各端點設定上限，若傳入較大的值會直接拒絕而非限制在上限；最大值已載於該引數本身的說明中。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "單頁要傳回的記錄筆數"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.short_desc": {
+          "source": "Lists tags",
+          "message": "列出標籤"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.desc": {
+          "source": "Lists campaigns on the given channel.\n\n**`channel` is required**: Klaviyo does not list campaigns across channels, so a listing is always of one channel's campaigns - or of both, if both are named. Paging is by cursor.",
+          "message": "列出指定管道上的行銷活動。\n\n**`channel` 為必填**：Klaviyo 無法跨管道列出行銷活動，因此清單一律為單一管道的行銷活動——若兩者皆指定則包含兩者。分頁使用游標。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.display_name": {
+          "source": "List Campaigns",
+          "message": "列出行銷活動"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.desc": {
+          "source": "E-mail campaigns",
+          "message": "電子郵件行銷活動"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "E-mail",
+          "message": "電子郵件"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.desc": {
+          "source": "SMS campaigns",
+          "message": "簡訊行銷活動"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.desc": {
+          "source": "The channel whose campaigns to list.\n\nKlaviyo will not list campaigns without being told which channel to look at, and accepts only one: `messages.channel` is the one field whose only permitted operator is `equals`, measured against the live API. A listing across both channels is two calls, which is what the campaign dropdown makes.",
+          "message": "要列出行銷活動的管道。\n\nKlaviyo 必須指定要查詢的管道才會列出行銷活動，且僅接受一個管道：根據線上 API，`messages.channel` 是唯一僅允許 `equals` 運算子的欄位。跨雙管道的清單需分兩次呼叫，這正是行銷活動下拉選單的做法。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "通道"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.short_desc": {
+          "source": "The channel whose campaigns to list",
+          "message": "要列出行銷活動的管道"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "下一頁的游標：傳入前一個回應中 `links.next` 的值。\n\n此值為不透明字串，不可手動構建；若要讀取第一頁請保持未設定。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "游標"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "下一頁的游標"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.bmFtZQ.desc": {
+          "source": "Return only campaigns whose name contains this text",
+          "message": "僅傳回名稱包含此文字的行銷活動"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.bmFtZQ.short_desc": {
+          "source": "Text the campaign name must contain",
+          "message": "行銷活動名稱必須包含的文字"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "排序所依據的欄位與方向\n\n此值會以 Klaviyo 的排序權杖傳送：欄位名稱，前方加上 `-` 表示遞減排序。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "排序"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "排序所依據的欄位與方向"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "一頁要傳回的記錄筆數。\n\nKlaviyo 會針對各端點設定上限，若傳入較大的值會直接拒絕而非限制在上限；最大值已載於該引數本身的說明中。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "單頁要傳回的記錄筆數"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.short_desc": {
+          "source": "Lists campaigns",
+          "message": "列出行銷活動"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.desc": {
+          "source": "Lists the events recorded in the account, newest first by default.\n\nThis listing is exported so that the event picker on other actions has values to offer; the superseded application had no listing action of its own.",
+          "message": "列出帳戶中記錄的事件，預設為由新到舊。\n\n匯出此清單可讓其他動作上的事件選擇器提供可選值；先前被取代的應用程式本身沒有列出動作。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.display_name": {
+          "source": "List Events",
+          "message": "列出活動"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "下一頁的游標：傳入前一個回應中 `links.next` 的值。\n\n此值為不透明字串，不可手動構建；若要讀取第一頁請保持未設定。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "游標"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "下一頁的游標"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching events, in Klaviyo's filter syntax.\n\n`equals(metric_id,\"…\")` and `equals(profile_id,\"…\")` select one metric or one profile, and `datetime` and `timestamp` take the four range comparisons - for example `greater-or-equal(datetime,\"2026-01-01T00:00:00Z\"),less-than(datetime,\"2026-02-01T00:00:00Z\")`. Predicates are joined by commas and mean **and**; Klaviyo has no `or` here.",
+          "message": "使用 Klaviyo 的篩選語法將清單縮小至相符的事件。\n\n`equals(metric_id,\"…\")` 和 `equals(profile_id,\"…\")` 可選取單一指標或單一個人檔案，而 `datetime` 與 `timestamp` 接受四種範圍比較（例如 `greater-or-equal(datetime,\"2026-01-01T00:00:00Z\"),less-than(datetime,\"2026-02-01T00:00:00Z\")`）。述詞以逗號連接，表示 **and**；Klaviyo 在此處不提供 `or`。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "濾鏡"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching events",
+          "message": "將清單縮小至相符的事件"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "排序所依據的欄位與方向\n\n此值會以 Klaviyo 的排序權杖傳送：欄位名稱，前方加上 `-` 表示遞減排序。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "排序"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "排序所依據的欄位與方向"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "一頁要傳回的記錄筆數。\n\nKlaviyo 會針對各端點設定上限，若傳入較大的值會直接拒絕而非限制在上限；最大值已載於該引數本身的說明中。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "單頁要傳回的記錄筆數"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.short_desc": {
+          "source": "Lists events",
+          "message": "列出事件"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.desc": {
+          "source": "Lists the account's lists.\n\nA **list** holds profiles that opted in explicitly, where a **segment** is a rule Klaviyo evaluates. Paging is by cursor.",
+          "message": "列出帳戶的名單。\n\n**名單**存放明確加入的使用者個人檔案，而**區隔**則是 Klaviyo 持續評估的規則。分頁使用游標。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.display_name": {
+          "source": "List Lists",
+          "message": "列出清單"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "下一頁的游標：傳入前一個回應中 `links.next` 的值。\n\n此值為不透明字串，不可手動構建；若要讀取第一頁請保持未設定。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "游標"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "下一頁的游標"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching lists\n\nThis value is sent as Klaviyo's filter syntax, `any(name,…),any(id,…)`.",
+          "message": "將清單縮小至相符的名單\n\n此值會以 Klaviyo 的篩選語法傳送：`any(name,…),any(id,…)`。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "濾鏡"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching lists",
+          "message": "將清單縮小至相符的名單"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "排序所依據的欄位與方向\n\n此值會以 Klaviyo 的排序權杖傳送：欄位名稱，前方加上 `-` 表示遞減排序。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "排序"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "排序所依據的欄位與方向"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "一頁要傳回的記錄筆數。\n\nKlaviyo 會針對各端點設定上限，若傳入較大的值會直接拒絕而非限制在上限；最大值已載於該引數本身的說明中。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "單頁要傳回的記錄筆數"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.short_desc": {
+          "source": "Lists all lists",
+          "message": "列出所有名單"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.desc": {
+          "source": "Lists the metrics defined in the account.\n\nA **metric** is the kind of an event - \"Placed Order\", \"Viewed Product\" - and Klaviyo defines one the first time an event names it. This listing is exported so that the metric picker on **Create Event** and the **New Event** trigger has values to offer; the superseded application had no listing action of its own.\n\nKlaviyo declares no page size on this endpoint, only a cursor.",
+          "message": "列出帳戶中定義的指標。\n\n**指標**是事件的類型（例如「Placed Order」、「Viewed Product」），Klaviyo 會在事件首次提及該名稱時進行定義。匯出此清單可讓 **Create Event** 與 **New Event** 觸發條件上的指標選擇器提供可選值；先前被取代的應用程式本身沒有列出動作。\n\nKlaviyo 在此端點上未宣告分頁大小，僅提供游標。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.display_name": {
+          "source": "List Metrics",
+          "message": "列出指標"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "下一頁的游標：傳入前一個回應中 `links.next` 的值。\n\n此值為不透明字串，不可手動構建；若要讀取第一頁請保持未設定。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "游標"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "下一頁的游標"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.short_desc": {
+          "source": "Lists metrics",
+          "message": "列出指標"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.desc": {
+          "source": "Lists the profiles in the account, newest first by default.\n\n`filter` narrows the listing by e-mail, phone number, external ID or profile ID; each takes one or more values and matches any of them. Paging is by cursor: pass the previous response's `links.next` back as `cursor`.",
+          "message": "列出帳戶中的個人檔案，預設為由新到舊。\n\n`filter` 依電子郵件、電話號碼、外部 ID 或個人檔案 ID 縮小清單範圍；每個欄位可接受一或多個值並比對其中任一值。分頁使用游標：將前一個回應的 `links.next` 作為 `cursor` 傳回。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.display_name": {
+          "source": "List Profiles",
+          "message": "列出個人檔案"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "下一頁的游標：傳入前一個回應中 `links.next` 的值。\n\n此值為不透明字串，不可手動構建；若要讀取第一頁請保持未設定。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "游標"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "下一頁的游標"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.YWRkaXRpb25hbEZpZWxkcw.desc": {
+          "source": "Computed blocks to include on each profile, which Klaviyo omits by default because they are expensive to produce:\n\n- `subscriptions`: the profile's consent state per channel\n- `predictive_analytics`: Klaviyo's predicted lifetime value and churn probability",
+          "message": "要包含在每個個人檔案中的計算區塊（由於產生運算成本高，Klaviyo 預設會省略）：\n\n- `subscriptions`：個人檔案各管道的同意狀態\n- `predictive_analytics`：Klaviyo 預測的顧客終身價值與流失機率"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.YWRkaXRpb25hbEZpZWxkcw.display_name": {
+          "source": "Additional Fields",
+          "message": "其他欄位"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.YWRkaXRpb25hbEZpZWxkcw.short_desc": {
+          "source": "Computed blocks to include on each profile",
+          "message": "要包含在每個個人檔案中的計算區塊"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching profiles\n\nThis value is sent as Klaviyo's filter syntax, `any(email,…),any(phone_number,…),any(external_id,…),any(id,…)`.",
+          "message": "將清單縮小至相符的個人檔案\n\n此值會以 Klaviyo 的篩選語法傳送：`any(email,…),any(phone_number,…),any(external_id,…),any(id,…)`。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "濾鏡"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching profiles",
+          "message": "將清單縮小至相符的個人檔案"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "排序所依據的欄位與方向\n\n此值會以 Klaviyo 的排序權杖傳送：欄位名稱，前方加上 `-` 表示遞減排序。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "排序"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "排序所依據的欄位與方向"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "一頁要傳回的記錄筆數。\n\nKlaviyo 會針對各端點設定上限，若傳入較大的值會直接拒絕而非限制在上限；最大值已載於該引數本身的說明中。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "單頁要傳回的記錄筆數"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.short_desc": {
+          "source": "Lists profiles",
+          "message": "列出個人檔案"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.desc": {
+          "source": "Lists the account's segments.\n\nA **segment** is a rule Klaviyo evaluates continuously, so its membership changes on its own; a **list** holds profiles that opted in explicitly. Paging is by cursor.",
+          "message": "列出帳戶的區隔。\n\n**區隔**是 Klaviyo 持續評估的規則，因此其成員會自動變動；**名單**則存放明確加入的個人檔案。分頁使用游標。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.display_name": {
+          "source": "List Segments",
+          "message": "列出受眾區隔"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "下一頁的游標：傳入前一個回應中 `links.next` 的值。\n\n此值為不透明字串，不可手動構建；若要讀取第一頁請保持未設定。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "游標"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "下一頁的游標"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching segments\n\nThis value is sent as Klaviyo's filter syntax, `any(name,…),any(id,…)`.",
+          "message": "將清單縮小至相符的區隔\n\n此值會以 Klaviyo 的篩選語法傳送：`any(name,…),any(id,…)`。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "濾鏡"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching segments",
+          "message": "將清單縮小至相符的區隔"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "排序所依據的欄位與方向\n\n此值會以 Klaviyo 的排序權杖傳送：欄位名稱，前方加上 `-` 表示遞減排序。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "排序"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "排序所依據的欄位與方向"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "一頁要傳回的記錄筆數。\n\nKlaviyo 會針對各端點設定上限，若傳入較大的值會直接拒絕而非限制在上限；最大值已載於該引數本身的說明中。"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "單頁要傳回的記錄筆數"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.short_desc": {
+          "source": "Lists segments",
+          "message": "列出區隔"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Klaviyo** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Klaviyo** 進行自訂 HTTP / REST API 呼叫。\n\n請指定 HTTP 方法、URI 路徑（相對於連線的 API 基本 URL）、選用查詢參數、標頭與請求主體。回應會以包含狀態碼、回應標頭及回應主體的雜湊傳回。\n\n對於此應用程式尚未以第一類動作公開的端點，請使用此動作。"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "發出 API 呼叫"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/form/YAML 期望雜湊，XML/text 期望字串，multipart 期望檔案結構，binary 期望原始位元組。"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構（filename + content + mime_type）。架構會建立 multipart 封套並設定 boundary 標頭。"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "原封不動地將主體傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項和值類型來決定序列化方式"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆蓋，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量（字串/數字/布林值）的雜湊。"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式及對應的 `Content-Type` 標頭。變更此欄位會重新配置 `body` 編輯器 — 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart 表單會顯示檔案選擇器，依此類推。"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx HTTP 回應會作為正常的相應雜湊傳回（帶有實際狀態碼），而非引發 `REST-RESPONSE-ERROR`。有助於將 4xx/5xx 作為資料處理 — 例如檢查資源是否存在。僅針對本次呼叫覆蓋連線的 `error_passthru` 設定。"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料傳回"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常傳回非 2xx 回應而非拋出例外"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的 HTTP 狀態碼選擇性清單。若有設定且回應狀態不在此清單中，該動作會拋出 `REST-STATUS-ERROR`。若未設定，則套用 REST 用戶端的預設行為（通常：2xx 為成功，非 2xx 則拋出例外）。"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些標頭會覆蓋由 `body_type` 設定的任何預設標頭（例如，在此處提供 `Content-Type` 會優先於主體類型的預設值）。"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/計時/大小等除錯資訊"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基底 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "相對於連線 API 基礎 URL 的 URI 路徑"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "代入 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}`，框架會傳送 `/users/123`。值均經過 URL 編碼。"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。值均經過 URL 編碼；清單值會以 `,` 連接。"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Klaviyo",
+          "message": "對 Klaviyo 進行自訂 API 呼叫"
+        },
+        "app.S2xhdml5bw.action.bmV3X2V2ZW50.desc": {
+          "source": "Fires for each event recorded against the chosen metric.\n\n`metric` is required and names the metric by **ID** - a feed of every event in the account would be unusably large, and a workflow reacting to \"Placed Order\" does not want \"Viewed Product\".\n\nThe event carries the event record with its attributes beside its identity. The feed is positioned by `datetime`, which is when the event happened rather than when Klaviyo received it.",
+          "message": "針對所選指標記錄的每個事件觸發。\n\n`metric` 為必填，並透過 **ID** 指定指標——若傳送帳戶中每個事件的摘要將會過於龐大，且回應「Placed Order」的工作流程不需要「Viewed Product」。\n\n該事件會攜帶包含其屬性與身分識別的事件記錄。摘要依 `datetime` 定位，該時間為事件發生時間而非 Klaviyo 接收時間。"
+        },
+        "app.S2xhdml5bw.action.bmV3X2V2ZW50.display_name": {
+          "source": "New Event",
+          "message": "新事件"
+        },
+        "app.S2xhdml5bw.action.bmV3X2V2ZW50.short_desc": {
+          "source": "Triggers when a new event occurs",
+          "message": "當新事件發生時觸發"
+        },
+        "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.desc": {
+          "source": "Fires for each profile added to the chosen list.\n\nThe feed is positioned by `joined_group_at`, so this fires when the profile **joins the list** rather than when the profile itself was created - a profile that has existed for a year fires this the moment it is added.\n\nThe event carries the profile with its attributes beside its identity.",
+          "message": "針對新增至所選名單的每個個人檔案觸發。\n\n摘要依 `joined_group_at` 定位，因此會在個人檔案**加入名單**時觸發，而非個人檔案本身建立之時——已存在一年的個人檔案在加入名單的瞬間就會觸發此動作。\n\n事件會攜帶包含其屬性與身分識別的個人檔案。"
+        },
+        "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.display_name": {
+          "source": "Profile Added to List",
+          "message": "個人檔案已新增至名單"
+        },
+        "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.short_desc": {
+          "source": "Triggers when a profile is added to a list",
+          "message": "當個人檔案新增至名單時觸發"
+        },
+        "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.desc": {
+          "source": "Fires for each profile created in the account.\n\nThe event carries the profile with its attributes beside its identity, which is the same shape **Get Profile** and **List Profiles** return.\n\nA profile that is edited later does **not** fire this again: the feed is positioned by `created`.",
+          "message": "針對帳戶中建立的每個個人檔案觸發。\n\n事件會攜帶包含其屬性與身分識別的個人檔案，其格式與 **Get Profile** 和 **List Profiles** 所傳回的相同。\n\n日後編輯個人檔案時**不會**再次觸發此動作：摘要依 `created` 定位。"
+        },
+        "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.display_name": {
+          "source": "New Profile",
+          "message": "新個人檔案"
+        },
+        "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.short_desc": {
+          "source": "Triggers when a new profile is created",
+          "message": "當建立新個人檔案時觸發"
+        },
+        "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.desc": {
+          "source": "Fires for each profile that enters the chosen segment.\n\nA segment is a rule Klaviyo evaluates continuously, so a profile enters one by **coming to match it** - editing a profile, or an event it records, can be what does that. The feed is positioned by `joined_group_at`.\n\nThe event carries the profile with its attributes beside its identity.",
+          "message": "針對進入所選區隔的每個個人檔案觸發。\n\n區隔是 Klaviyo 持續評估的規則，因此個人檔案是因**符合條件**而進入——編輯個人檔案或其記錄的事件可能觸發此變動。摘要依 `joined_group_at` 定位。\n\n事件會攜帶包含其屬性與身分識別的個人檔案。"
+        },
+        "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.display_name": {
+          "source": "Profile Added to Segment",
+          "message": "個人檔案已新增至區隔"
+        },
+        "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.short_desc": {
+          "source": "Triggers when a profile is added to a segment",
+          "message": "當個人檔案加入區隔時觸發"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.desc": {
+          "source": "Returns every record in the given table matching the search criteria",
+          "message": "返回給定表格中符合搜尋條件的每筆記錄"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.display_name": {
+          "source": "Search Records",
+          "message": "搜尋記錄"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "要操作的資料表：`profiles`、`lists`、`segments`、`tags`、`campaigns`、`metrics` 或 `events`"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.short_desc": {
+          "source": "Search for matching records in the given table",
+          "message": "在給定表格中搜尋符合的記錄"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.desc": {
+          "source": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches",
+          "message": "返回給定表格中符合搜尋條件的一筆記錄；如果有多筆符合則會回報錯誤"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.display_name": {
+          "source": "Find a Single Record",
+          "message": "尋找單筆記錄"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "要操作的資料表：`profiles`、`lists`、`segments`、`tags`、`campaigns`、`metrics` 或 `events`"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
+          "source": "Search for a single matching record in the given table",
+          "message": "在給定表格中搜尋單筆符合的記錄"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.desc": {
+          "source": "Sends a campaign immediately, by creating a send job for it.\n\nThe campaign must be complete and ready to send; Klaviyo rejects a send job for a campaign that is still a draft. The response carries the job, whose status can be read back through `make-api-call` on `/api/campaign-send-jobs/{id}`.",
+          "message": "透過為行銷活動建立傳送工作來立即傳送行銷活動。\n\n行銷活動必須完整且準備好傳送；Klaviyo 會拒絕針對仍處於草稿狀態的行銷活動建立傳送工作。回應包含該工作，其狀態可透過 `/api/campaign-send-jobs/{id}` 上的 `make-api-call` 讀取。"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.display_name": {
+          "source": "Send Campaign",
+          "message": "傳送行銷活動"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.option.aWQ.desc": {
+          "source": "The ID of the campaign to send",
+          "message": "要傳送之行銷活動的 ID"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.option.aWQ.display_name": {
+          "source": "Campaign",
+          "message": "廣告活動"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.option.aWQ.short_desc": {
+          "source": "The campaign to send",
+          "message": "要傳送的行銷活動"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.short_desc": {
+          "source": "Sends a campaign",
+          "message": "傳送行銷活動"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.desc": {
+          "source": "Records marketing consent for a profile, on the e-mail channel, the SMS channel or both.\n\nIdentify the profile by `profileId`, by `email` or by `phoneNumber`. `list` subscribes the profile **through a list**, which is what makes Klaviyo apply that list's double opt-in process; without it the consent is recorded directly and no confirmation is sent.\n\nOnly record consent that was actually given - Klaviyo's terms require the caller to hold a record of it.\n\nThis action is hand-written rather than generated, because Klaviyo records consent by creating a bulk subscription job whose body nests a list of per-channel consent envelopes four levels down.",
+          "message": "在電子郵件管道、簡訊管道或兩者上為個人檔案記錄行銷同意。\n\n透過 `profileId`、`email` 或 `phoneNumber` 識別個人檔案。`list` 會**透過名單**訂閱個人檔案，這會使 Klaviyo 套用該名單的雙重確認訂閱流程；若未指定，則會直接記錄同意且不傳送確認信。\n\n請僅記錄實際獲得的同意——Klaviyo 的條款要求呼叫者保留同意記錄。\n\n此動作為手動撰寫而非自動產生，因為 Klaviyo 記錄同意的方式是建立批次訂閱工作，其主體將各管道同意信封的名單嵌套在四層之下。"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.display_name": {
+          "source": "Subscribe Profile",
+          "message": "訂閱個人檔案"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.Y29uc2VudFRvU3Vic2NyaWJlVG9DaGFubmVs.desc": {
+          "source": "The channel or channels the consent covers",
+          "message": "同意所涵蓋的一或多個管道"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.Y29uc2VudFRvU3Vic2NyaWJlVG9DaGFubmVs.display_name": {
+          "source": "Channel",
+          "message": "通道"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.Y29uc2VudFRvU3Vic2NyaWJlVG9DaGFubmVs.short_desc": {
+          "source": "The channel or channels the consent covers",
+          "message": "同意所涵蓋的一或多個管道"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.ZW1haWw.desc": {
+          "source": "The e-mail address consenting.\n\nRequired for the e-mail channel unless `profileId` names a profile that already carries one.",
+          "message": "同意訂閱的電子郵件地址。\n\n電子郵件管道必填，除非 `profileId` 指定的個人檔案已包含電子郵件地址。"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "電子郵件"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.ZW1haWw.short_desc": {
+          "source": "The e-mail address consenting",
+          "message": "同意訂閱的電子郵件地址"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.bGlzdA.desc": {
+          "source": "Subscribe the profile **through this list**, which adds it to the list and applies the list's double opt-in process if it has one.\n\nWithout it the consent is recorded against the profile directly and no confirmation is sent.",
+          "message": "**透過此名單**訂閱個人檔案，這會將其新增至該名單，並在該名單設有雙重確認訂閱流程時予以套用。\n\n若未指定，同意將直接記錄至個人檔案且不會傳送確認信。"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "清單"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.bGlzdA.short_desc": {
+          "source": "Subscribe through this list",
+          "message": "透過此名單訂閱"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.desc": {
+          "source": "Which kinds of SMS message the consent covers.\n\nKlaviyo treats marketing and transactional consent as different permissions; the default is marketing.",
+          "message": "同意所涵蓋的簡訊類型。\n\nKlaviyo 將行銷與交易同意視為不同的權限；預設為行銷。"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.display_name": {
+          "source": "SMS Subscription Type",
+          "message": "簡訊訂閱類型"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.short_desc": {
+          "source": "Which kinds of SMS message this covers",
+          "message": "此項目涵蓋的簡訊類型"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The phone number consenting, in E.164 format, ex: `+15005550006`.\n\nRequired for the SMS channel unless `profileId` names a profile that already carries one.",
+          "message": "同意接收訊息的電話號碼，採用 E.164 格式，例如：`+15005550006`。\n\nSMS 渠道的必填欄位，除非 `profileId` 指定的個人資料已包含此號碼。"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "電話號碼"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The phone number consenting, in E.164 format",
+          "message": "同意接收訊息的電話號碼，採用 E.164 格式"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cHJvZmlsZUlk.desc": {
+          "source": "The profile giving consent.\n\nGive this, `email` or `phoneNumber`.",
+          "message": "給予同意的個人資料。\n\n請提供此項目、`email` 或 `phoneNumber`。"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cHJvZmlsZUlk.display_name": {
+          "source": "Profile",
+          "message": "Profile"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cHJvZmlsZUlk.short_desc": {
+          "source": "The profile giving consent, if it is already known",
+          "message": "給予同意的個人資料（若已知）"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.short_desc": {
+          "source": "Subscribes a profile to marketing channels",
+          "message": "為個人資料訂閱行銷渠道"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.desc": {
+          "source": "Removes a profile from a list.\n\nThe profile itself is not deleted, and its marketing consent is unchanged - use **Unsubscribe Profile** to withdraw consent. Removing a profile that is not a member succeeds and changes nothing.",
+          "message": "從名單中移除個人資料。\n\n個人資料本身不會被刪除，且其行銷同意狀態保持不變 - 請使用 **Unsubscribe Profile** 撤回同意。移除未加入名單的個人資料會回傳成功且不會進行任何變更。"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.display_name": {
+          "source": "Remove Profile from List",
+          "message": "從名單移除個人資料"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.bGlzdA.desc": {
+          "source": "The list to remove the profile from",
+          "message": "要從中移除個人資料的名單"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "清單"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.bGlzdA.short_desc": {
+          "source": "The list to remove the profile from",
+          "message": "要從中移除個人資料的名單"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.cHJvZmlsZQ.desc": {
+          "source": "The profile to remove",
+          "message": "要移除的個人資料"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profile"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.cHJvZmlsZQ.short_desc": {
+          "source": "The profile to remove",
+          "message": "要移除的個人資料"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.short_desc": {
+          "source": "Removes a profile from a list",
+          "message": "從名單中移除個人資料"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.desc": {
+          "source": "Removes a tag from a list.\n\nThe tag itself is not deleted.",
+          "message": "從名單中移除標籤。\n\n標籤本身不會被刪除。"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.display_name": {
+          "source": "Remove Tag from List",
+          "message": "從名單移除標籤"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.bGlzdA.desc": {
+          "source": "The list to remove the tag from",
+          "message": "要從中移除標籤的名單"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "清單"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.bGlzdA.short_desc": {
+          "source": "The list to remove the tag from",
+          "message": "要從中移除標籤的名單"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.dGFn.desc": {
+          "source": "The tag to remove",
+          "message": "要移除的標籤"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "標籤"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.dGFn.short_desc": {
+          "source": "The tag to remove",
+          "message": "要移除的標籤"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.short_desc": {
+          "source": "Removes a tag from a list",
+          "message": "從名單中移除標籤"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.desc": {
+          "source": "Removes a tag from a segment.\n\nThe tag itself is not deleted.",
+          "message": "從受眾區隔中移除標籤。\n\n標籤本身不會被刪除。"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.display_name": {
+          "source": "Remove Tag from Segment",
+          "message": "從受眾區隔移除標籤"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.c2VnbWVudA.desc": {
+          "source": "The segment to remove the tag from",
+          "message": "要從中移除標籤的受眾區隔"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.c2VnbWVudA.display_name": {
+          "source": "Segment",
+          "message": "區隔"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.c2VnbWVudA.short_desc": {
+          "source": "The segment to remove the tag from",
+          "message": "要從中移除標籤的受眾區隔"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.dGFn.desc": {
+          "source": "The tag to remove",
+          "message": "要移除的標籤"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "標籤"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.dGFn.short_desc": {
+          "source": "The tag to remove",
+          "message": "要移除的標籤"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.short_desc": {
+          "source": "Removes a tag from a segment",
+          "message": "從受眾區隔中移除標籤"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.desc": {
+          "source": "Withdraws marketing consent for a profile.\n\nWhich channels are withdrawn follows from what is supplied: an `email` withdraws e-mail consent, a `phoneNumber` withdraws SMS consent, and both withdraw both. At least one is required.\n\nThis withdraws **consent**, which Klaviyo honours across every list; use **Remove Profile from List** to change membership instead.\n\nThis action is hand-written rather than generated, because Klaviyo withdraws consent by creating a bulk job whose body nests a list of per-channel consent envelopes four levels down.",
+          "message": "撤回個人資料的行銷同意。\n\n撤回哪些渠道取決於所提供的內容：提供 `email` 會撤回電子郵件同意，提供 `phoneNumber` 會撤回 SMS 同意，兩者皆提供則兩者皆撤回。至少需提供其中一項。\n\n這會撤回 **同意**，Klaviyo 會在所有名單中遵循此設定；若要更改成員資格，請改用 **Remove Profile from List**。\n\n此動作為手動撰寫而非自動產生，因為 Klaviyo 撤回同意的方式是建立一個批次工作，其請求主體在四層深度的結構中巢狀包含各渠道的同意封包名單。"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.display_name": {
+          "source": "Unsubscribe Profile",
+          "message": "退訂個人資料"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.ZW1haWw.desc": {
+          "source": "The e-mail address to unsubscribe.\n\nSupplying it withdraws e-mail marketing consent.",
+          "message": "要退訂的電子郵件地址。\n\n提供此項將撤回電子郵件行銷同意。"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "電子郵件"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.ZW1haWw.short_desc": {
+          "source": "The e-mail address to unsubscribe",
+          "message": "要退訂的電子郵件地址"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.desc": {
+          "source": "Which kinds of SMS message to withdraw consent for.\n\nOnly meaningful together with `phoneNumber`; the default is marketing.",
+          "message": "要撤回同意的 SMS 訊息類型。\n\n僅在與 `phoneNumber` 一起使用時才有意義；預設為行銷。"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.display_name": {
+          "source": "SMS Subscription Type",
+          "message": "簡訊訂閱類型"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.short_desc": {
+          "source": "Which kinds of SMS message this covers",
+          "message": "此項目涵蓋的簡訊類型"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The phone number to unsubscribe, in E.164 format.\n\nSupplying it withdraws SMS consent.",
+          "message": "要退訂的電話號碼，採用 E.164 格式。\n\n提供此項將撤回 SMS 同意。"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "電話號碼"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The phone number to unsubscribe, in E.164 format",
+          "message": "要退訂的電話號碼，採用 E.164 格式"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.short_desc": {
+          "source": "Unsubscribes a profile from marketing channels",
+          "message": "取消個人資料在行銷渠道的訂閱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.desc": {
+          "source": "Updates every record in the given table matching the search criteria",
+          "message": "更新指定資料表中所有符合搜尋條件的記錄"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "更新記錄"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "要操作的資料表：`profiles`、`lists`、`segments`、`tags`、`campaigns`、`metrics` 或 `events`"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria",
+          "message": "更新符合搜尋條件的記錄"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.desc": {
+          "source": "Updates a campaign that already exists, named by its Klaviyo ID.\n\nOnly the attributes supplied are changed. Klaviyo rejects a change to a campaign that has already been sent.",
+          "message": "更新已存在的行銷活動（以其 Klaviyo ID 指定）。\n\n僅會變更所提供的屬性。Klaviyo 會拒絕修改已發送的行銷活動。"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.display_name": {
+          "source": "Update Campaign",
+          "message": "更新行銷活動"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.YXVkaWVuY2Vz.display_name": {
+          "source": "Audiences",
+          "message": "受眾"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.YXVkaWVuY2Vz.short_desc": {
+          "source": "The lists and segments to include and exclude",
+          "message": "要納入和排除的名單與客群"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.aWQ.desc": {
+          "source": "The campaign ID to be retrieved: The campaign ID to be retrieved",
+          "message": "要擷取的行銷活動 ID：要擷取的行銷活動 ID"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.aWQ.display_name": {
+          "source": "Campaign",
+          "message": "廣告活動"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.aWQ.short_desc": {
+          "source": "The campaign to work on",
+          "message": "要操作的行銷活動"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The campaign name",
+          "message": "行銷活動名稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "The new name of the campaign",
+          "message": "行銷活動的新名稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.desc": {
+          "source": "Options to use when sending a campaign",
+          "message": "傳送行銷活動時使用的選項"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.display_name": {
+          "source": "Send Options",
+          "message": "傳送選項"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.short_desc": {
+          "source": "Whether to use smart sending",
+          "message": "是否使用智慧傳送"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.desc": {
+          "source": "The send strategy the campaign will send with",
+          "message": "行銷活動發送時所採用的發送策略"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.display_name": {
+          "source": "Send Strategy",
+          "message": "傳送策略"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.short_desc": {
+          "source": "When the campaign is sent, if not immediately",
+          "message": "行銷活動的傳送時間（若非立即傳送）"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.desc": {
+          "source": "The tracking options associated with the campaign",
+          "message": "與行銷活動關聯的追蹤選項"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.display_name": {
+          "source": "Tracking Options",
+          "message": "追蹤選項"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.short_desc": {
+          "source": "The UTM parameters and tracking flags to apply",
+          "message": "要套用的 UTM 參數與追蹤旗標"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.short_desc": {
+          "source": "Updates an existing campaign",
+          "message": "更新現有的行銷活動"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.desc": {
+          "source": "Updates a list that already exists, named by its Klaviyo ID.\n\nOnly the attributes supplied are changed.",
+          "message": "更新已存在的名單（以其 Klaviyo ID 指定）。\n\n僅會變更所提供的屬性。"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.display_name": {
+          "source": "Update List",
+          "message": "更新名單"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.aWQ.desc": {
+          "source": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+          "message": "唯一識別此清單的主鍵。由 Klaviyo 產生。"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.aWQ.display_name": {
+          "source": "List",
+          "message": "清單"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.aWQ.short_desc": {
+          "source": "The list to work on",
+          "message": "要操作的清單"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.allowed-value.c3RyaW5nOmRvdWJsZV9vcHRfaW4.display_name": {
+          "source": "double_opt_in",
+          "message": "double_opt_in"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.allowed-value.c3RyaW5nOnNpbmdsZV9vcHRfaW4.display_name": {
+          "source": "single_opt_in",
+          "message": "single_opt_in"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.desc": {
+          "source": "The opt-in process for this list. Valid values: 'double_opt_in', 'single_opt_in'.",
+          "message": "此名單的選擇加入流程。有效值：'double_opt_in'、'single_opt_in'。"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.display_name": {
+          "source": "Opt-in Process",
+          "message": "加入訂閱流程"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.short_desc": {
+          "source": "Whether a new subscriber has to confirm by e-mail",
+          "message": "新訂閱者是否必須透過電子郵件確認"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.bmFtZQ.desc": {
+          "source": "A helpful name to label the list",
+          "message": "用於標示名單的易讀名稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.bmFtZQ.short_desc": {
+          "source": "The new name of the list",
+          "message": "名單的新名稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.short_desc": {
+          "source": "Updates an existing list",
+          "message": "更新現有名單"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.desc": {
+          "source": "Updates a profile that already exists, named by its Klaviyo ID.\n\nOnly the attributes supplied are changed. A custom property supplied here **replaces** the stored value; `meta.patch_properties` appends to or unsets one instead.",
+          "message": "更新已存在的個人資料（以其 Klaviyo ID 指定）。\n\n僅會變更所提供的屬性。此處提供的自訂屬性將會 **取代** 儲存的值；`meta.patch_properties` 則改為附加或取消設定。"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.display_name": {
+          "source": "Update Profile",
+          "message": "更新個人資料"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.desc": {
+          "source": "Country name",
+          "message": "國家名稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "國家"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "國家名稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "城市名稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "城市"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y2l0eQ.short_desc": {
+          "source": "City name",
+          "message": "城市名稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.desc": {
+          "source": "Your own properties to store on the profile, as name/value pairs.\n\nKlaviyo reserves property names beginning with `$`.",
+          "message": "要儲存在個人檔案上的自訂屬性（名稱/值組合）。\n\nKlaviyo 保留以 `$` 開頭的屬性名稱。"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.display_name": {
+          "source": "Custom Properties",
+          "message": "自訂屬性"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.short_desc": {
+          "source": "Your own properties to store on the profile",
+          "message": "要儲存在個人檔案上的自訂屬性"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.desc": {
+          "source": "First line of street address",
+          "message": "街道地址第一行"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.display_name": {
+          "source": "Address Line 1",
+          "message": "地址行 1"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.short_desc": {
+          "source": "First line of street address",
+          "message": "街道地址第一行"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.desc": {
+          "source": "Second line of street address",
+          "message": "街道地址第二行"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.display_name": {
+          "source": "Address Line 2",
+          "message": "地址行 2"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.short_desc": {
+          "source": "Second line of street address",
+          "message": "街道地址第二行"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZW1haWw.desc": {
+          "source": "Individual's email address",
+          "message": "個人電子郵件地址"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "電子郵件"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZW1haWw.short_desc": {
+          "source": "The profile's e-mail address",
+          "message": "個人檔案的電子郵件地址"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.desc": {
+          "source": "Your own identifier for this person, so that a profile can be found by the ID it has in your system rather than by e-mail",
+          "message": "您為此人設定的專屬識別碼，以便透過其在您系統中的 ID 而非電子郵件找到個人檔案"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.display_name": {
+          "source": "External ID",
+          "message": "外部 ID"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.short_desc": {
+          "source": "Your own identifier for this person",
+          "message": "您為此人設定的專屬識別碼"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.desc": {
+          "source": "Individual's first name",
+          "message": "個人名字"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "名字"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Individual's first name",
+          "message": "個人名字"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.desc": {
+          "source": "URL pointing to the location of a profile image",
+          "message": "指向個人檔案圖片位置的 URL"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.display_name": {
+          "source": "Image URL",
+          "message": "圖片 URL"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.short_desc": {
+          "source": "A URL for the profile's avatar",
+          "message": "個人檔案顯示圖片的 URL"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aWQ.desc": {
+          "source": "Primary key that uniquely identifies this profile. Generated by Klaviyo.: Primary key that uniquely identifies this profile. Generated by Klaviyo.",
+          "message": "唯一識別此個人資料的主鍵。由 Klaviyo 產生。: 唯一識別此個人資料的主鍵。由 Klaviyo 產生。"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aWQ.display_name": {
+          "source": "Profile",
+          "message": "Profile"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aWQ.short_desc": {
+          "source": "The profile to update",
+          "message": "要更新的個人資料"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aXA.desc": {
+          "source": "IP Address",
+          "message": "IP 位址"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aXA.display_name": {
+          "source": "IP Address",
+          "message": "IP 位址"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aXA.short_desc": {
+          "source": "The IP address Klaviyo should locate the profile from",
+          "message": "Klaviyo 應用於定位個人檔案的 IP 位址"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Name of the company or organization within the company for whom the individual works",
+          "message": "該人員任職的公司或公司內部組織名稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "組織"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The company the person belongs to",
+          "message": "該人員所屬的公司"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9jYWxl.desc": {
+          "source": "The locale of the profile, in the IETF BCP 47 language tag format like (ISO 639-1/2)-(ISO 3166 alpha-2)",
+          "message": "個人檔案的語言地區，採用 IETF BCP 47 語言標籤格式，例如 (ISO 639-1/2)-(ISO 3166 alpha-2)"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "地區設定"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9jYWxl.short_desc": {
+          "source": "The profile's locale, ex: \"en-US\"",
+          "message": "個人檔案的語言地區，例如：\"en-US\""
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.desc": {
+          "source": "Longitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "經度座標。建議精確至小數點後四位。"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.display_name": {
+          "source": "Longitude",
+          "message": "經度"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.short_desc": {
+          "source": "Longitude coordinate",
+          "message": "經度座標"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.desc": {
+          "source": "Latitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "緯度座標。建議精確至小數點後四位。"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.display_name": {
+          "source": "Latitude",
+          "message": "緯度"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.short_desc": {
+          "source": "Latitude coordinate",
+          "message": "緯度座標"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.desc": {
+          "source": "Individual's last name",
+          "message": "個人的姓氏"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "姓氏"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.short_desc": {
+          "source": "Individual's last name",
+          "message": "個人的姓氏"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bWV0YQ.desc": {
+          "source": "Append to or unset custom properties rather than replacing them.\n\n`patch_properties.append` adds a value to a list-valued property, `unappend` removes one, and `unset` deletes a property outright.",
+          "message": "附加或取消設定自訂屬性，而非加以取代。\n\n`patch_properties.append` 會將值新增至清單屬性，`unappend` 會移除值，而 `unset` 則會直接刪除屬性。"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bWV0YQ.display_name": {
+          "source": "Patch Operations",
+          "message": "修補操作"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bWV0YQ.short_desc": {
+          "source": "Append to or unset custom properties rather than replacing them",
+          "message": "附加或取消設定自訂屬性，而非加以取代"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The profile's phone number in E.164 format, ex: `+15005550006`.\n\nKlaviyo rejects a number in any other format.",
+          "message": "採 E.164 格式的個人檔案電話號碼，例如：`+15005550006`。\n\nKlaviyo 會拒絕任何其他格式的號碼。"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "電話號碼"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The profile's phone number in E.164 format",
+          "message": "採 E.164 格式的個人檔案電話號碼"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cmVnaW9u.desc": {
+          "source": "Region within a country, such as state or province",
+          "message": "國家/地區內的區域，例如州或省"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "區域"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cmVnaW9u.short_desc": {
+          "source": "The state, province or region",
+          "message": "州、省或地區"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGl0bGU.desc": {
+          "source": "Individual's job title",
+          "message": "個人的職稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "標題"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGl0bGU.short_desc": {
+          "source": "The person's job title",
+          "message": "該人員的職稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.desc": {
+          "source": "Time zone name. We recommend using time zones from the IANA Time Zone Database.",
+          "message": "時區名稱。建議使用來自 IANA 時區資料庫的時區。"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.display_name": {
+          "source": "Time Zone",
+          "message": "時區"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.short_desc": {
+          "source": "The IANA time zone name",
+          "message": "IANA 時區名稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.emlw.desc": {
+          "source": "Zip code",
+          "message": "郵遞區號"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.emlw.display_name": {
+          "source": "Postal Code",
+          "message": "郵遞區號"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.emlw.short_desc": {
+          "source": "The postal or ZIP code",
+          "message": "郵遞區號"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.short_desc": {
+          "source": "Updates an existing profile",
+          "message": "更新現有的個人資料"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.desc": {
+          "source": "Updates a segment that already exists, named by its Klaviyo ID.\n\nOnly the attributes supplied are changed. Replacing `definition` re-evaluates the membership, which Klaviyo does in the background.",
+          "message": "更新已存在的受眾區隔（以其 Klaviyo ID 指定）。\n\n僅會變更所提供的屬性。取代 `definition` 會重新評估成員資格，Klaviyo 會在背景執行此操作。"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.display_name": {
+          "source": "Update Segment",
+          "message": "更新受眾區隔"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.ZGVmaW5pdGlvbg.display_name": {
+          "source": "Definition",
+          "message": "定義"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.ZGVmaW5pdGlvbg.short_desc": {
+          "source": "The rule deciding who is in the segment",
+          "message": "決定誰屬於此受眾區隔的規則"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aWQ.display_name": {
+          "source": "Segment",
+          "message": "區隔"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aWQ.short_desc": {
+          "source": "The segment to work on",
+          "message": "要操作的受眾區隔"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNBY3RpdmU.desc": {
+          "source": "Set to false to deactivate the segment. When deactivating, this must be the only attribute in the request body. Deactivation cannot be combined with other updates. Marking a segment inactive will impact campaigns, flows, ad syncs, forms, helpdesk routing, and other features that reference this segment. Set to true to reactivate a deactivated segment.",
+          "message": "設為 false 可停用受眾區隔。停用時，此屬性必須是請求主體中唯一的屬性。停用操作無法與其他更新合併進行。將受眾區隔標記為停用會影響參照此區隔的行銷活動、流程、廣告同步、表單、服務台路由及其他功能。設為 true 可重新啟用已停用的受眾區隔。"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNBY3RpdmU.display_name": {
+          "source": "Active",
+          "message": "作用中"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNBY3RpdmU.short_desc": {
+          "source": "Whether Klaviyo keeps the segment's membership up to date",
+          "message": "Klaviyo 是否保持該受眾區隔的成員名單最新狀態"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNTdGFycmVk.display_name": {
+          "source": "Starred",
+          "message": "已加星標"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNTdGFycmVk.short_desc": {
+          "source": "Whether the segment is starred in the Klaviyo UI",
+          "message": "此受眾區隔是否已在 Klaviyo 介面中加星號"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.bmFtZQ.short_desc": {
+          "source": "The new name of the segment",
+          "message": "區隔的新名稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.short_desc": {
+          "source": "Updates an existing segment",
+          "message": "更新現有的受眾區隔"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.desc": {
+          "source": "Renames a tag.\n\nA tag's name is the only attribute it has, so this action changes the name and nothing else. Klaviyo answers with no content.",
+          "message": "重新命名標籤。\n\n標籤的名稱是其唯一的屬性，因此此動作僅會變更名稱。Klaviyo 的回應將不包含任何內容。"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.display_name": {
+          "source": "Update Tag",
+          "message": "更新標籤"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.aWQ.desc": {
+          "source": "The Tag ID",
+          "message": "標籤 ID"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.aWQ.display_name": {
+          "source": "Tag",
+          "message": "標籤"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.aWQ.short_desc": {
+          "source": "The tag to work on",
+          "message": "要操作的標籤"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.bmFtZQ.desc": {
+          "source": "The Tag name",
+          "message": "標籤名稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.bmFtZQ.short_desc": {
+          "source": "The new name of the tag",
+          "message": "標籤的新名稱"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.short_desc": {
+          "source": "Renames an existing tag",
+          "message": "重新命名現有的標籤"
+        },
+        "app.S2xhdml5bw.desc": {
+          "source": "Provides access to [Klaviyo](https://www.klaviyo.com), the e-mail and SMS marketing platform.\n\nKlaviyo holds the people a brand markets to as **profiles**, groups them into **lists** they opted in to and **segments** it evaluates continuously, records what they did as **events** against **metrics**, and sends **campaigns** to them.\n\n**Common use cases**:\n- **Profiles**: create or update someone from your own system's records, and find them again\n- **Lists and segments**: list them, create a list, and move profiles in and out\n- **Subscriptions**: record and withdraw marketing consent per channel\n- **Events**: record what somebody did, which is what triggers a flow\n- **Campaigns**: find a campaign and send it\n- **Tags**: organise lists and segments for reporting\n\nAuthentication is the OAuth2 authorization code flow against an app registered in Klaviyo's developer portal, or a private API key for an integration serving one account.\n\nKlaviyo is a trademark of Klaviyo, Inc.",
+          "message": "提供對電子郵件與 SMS 行銷平台 [Klaviyo](https://www.klaviyo.com) 的存取權限。\n\nKlaviyo 將品牌的行銷對象儲存為 **個人資料**，將其分組至他們選擇加入的 **名單** 以及持續評估的 **受眾區隔** 中，將他們的行為記錄為對應於 **指標** 的 **事件**，並向他們發送 **行銷活動**。\n\n**常見使用案例**：\n- **個人資料**：從您自己系統的記錄中建立或更新聯絡人，並可再次查詢\n- **名單與受眾區隔**：列出名單與受眾區隔、建立名單，以及將個人資料移入或移出\n- **訂閱**：依渠道記錄與撤回行銷同意\n- **事件**：記錄聯絡人的操作行為（此行為會觸發流程）\n- **行銷活動**：尋找行銷活動並發送\n- **標籤**：整理名單與受眾區隔以供產生報表\n\n驗證方式是針對在 Klaviyo 開發者入口網站註冊之應用程式的 OAuth2 授權碼流程，或是用於單一帳戶整合的 private API key。\n\nKlaviyo 是 Klaviyo, Inc. 的商標。"
+        },
+        "app.S2xhdml5bw.display_name": {
+          "source": "Klaviyo",
+          "message": "Klaviyo"
+        },
+        "app.S2xhdml5bw.short_desc": {
+          "source": "Email and SMS marketing automation platform",
+          "message": "電子郵件與 SMS 行銷自動化平台"
+        }
+      }
     }
   }
 }

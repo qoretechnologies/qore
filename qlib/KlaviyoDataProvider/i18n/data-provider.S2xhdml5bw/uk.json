@@ -2,7 +2,2912 @@
   "schema_version": 1,
   "locales": {
     "uk": {
-      "messages": {}
+      "messages": {
+        "app.S2xhdml5bw.action.Y3JlYXRl.desc": {
+          "source": "Creates new records in the given table",
+          "message": "Створює нові записи у вказаній таблиці"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.display_name": {
+          "source": "Create Records",
+          "message": "Створити записи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "Таблиця для роботи: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` або `events`"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Таблиця"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Назва таблиці для роботи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.short_desc": {
+          "source": "Create new records in the given table",
+          "message": "Створити нові записи у вказаній таблиці"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.desc": {
+          "source": "Creates a profile, or updates the one already carrying the identifier given.\n\nKlaviyo matches on `id` when it is set, and otherwise on `email`, `phoneNumber` or `externalId` - so this is the action to use when the person may already be known. A custom property supplied here **replaces** the stored value; use **Update Profile** with `meta.patch_properties` to append to one instead.",
+          "message": "Створює профіль або оновлює той, що вже містить наданий ідентифікатор.\n\nKlaviyo зіставляє за `id`, якщо його встановлено, або за `email`, `phoneNumber` чи `externalId` — тому використовуйте цю дію, коли особа вже може бути відомою. Надана тут користувацька властивість **замінює** збережене значення; використовуйте **Update Profile** з `meta.patch_properties`, щоб натомість додати значення."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.display_name": {
+          "source": "Create Or Update Profile",
+          "message": "Створити або оновити профіль"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y291bnRyeQ.desc": {
+          "source": "Country name",
+          "message": "Назва країни"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Країна"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "Назва країни"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "Назва міста"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Місто"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y2l0eQ.short_desc": {
+          "source": "City name",
+          "message": "Назва міста"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y3VzdG9tUHJvcGVydGllcw.desc": {
+          "source": "Your own properties to store on the profile, as name/value pairs.\n\nKlaviyo reserves property names beginning with `$`.",
+          "message": "Ваші власні властивості для збереження в профілі у вигляді пар ім'я/значення.\n\nKlaviyo резервує назви властивостей, що починаються з `$`."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y3VzdG9tUHJvcGVydGllcw.display_name": {
+          "source": "Custom Properties",
+          "message": "Настроювані властивості"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y3VzdG9tUHJvcGVydGllcw.short_desc": {
+          "source": "Your own properties to store on the profile",
+          "message": "Ваші власні властивості для збереження в профілі"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczE.desc": {
+          "source": "First line of street address",
+          "message": "Перший рядок адреси"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczE.display_name": {
+          "source": "Address Line 1",
+          "message": "Рядок адреси 1"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczE.short_desc": {
+          "source": "First line of street address",
+          "message": "Перший рядок адреси"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczI.desc": {
+          "source": "Second line of street address",
+          "message": "Другий рядок адреси"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczI.display_name": {
+          "source": "Address Line 2",
+          "message": "Рядок адреси 2"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczI.short_desc": {
+          "source": "Second line of street address",
+          "message": "Другий рядок адреси"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZW1haWw.desc": {
+          "source": "Individual's email address",
+          "message": "Електронна адреса особи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "Електронна пошта"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZW1haWw.short_desc": {
+          "source": "The profile's e-mail address",
+          "message": "Електронна адреса профілю"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZXh0ZXJuYWxJZA.desc": {
+          "source": "Your own identifier for this person, so that a profile can be found by the ID it has in your system rather than by e-mail",
+          "message": "Ваш власний ідентифікатор цієї особи, щоб профіль можна було знайти за його ID у вашій системі, а не за електронною поштою"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZXh0ZXJuYWxJZA.display_name": {
+          "source": "External ID",
+          "message": "Зовнішній ID"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZXh0ZXJuYWxJZA.short_desc": {
+          "source": "Your own identifier for this person",
+          "message": "Ваш власний ідентифікатор для цієї особи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Zmlyc3ROYW1l.desc": {
+          "source": "Individual's first name",
+          "message": "Ім'я особи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Individual's first name",
+          "message": "Ім'я особи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aW1hZ2VVcmw.desc": {
+          "source": "URL pointing to the location of a profile image",
+          "message": "URL-адреса, що вказує на розташування зображення профілю"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aW1hZ2VVcmw.display_name": {
+          "source": "Image URL",
+          "message": "URL-адреса зображення"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aW1hZ2VVcmw.short_desc": {
+          "source": "A URL for the profile's avatar",
+          "message": "URL-адреса для аватара профілю"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aWQ.desc": {
+          "source": "The profile to update.\n\nLeave it unset to match on an identifier instead, which is the usual way to use this action.",
+          "message": "Профіль для оновлення.\n\nЗалиште поле порожнім, щоб виконати зіставлення за ідентифікатором, що є звичним способом використання цієї дії."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aWQ.display_name": {
+          "source": "Profile",
+          "message": "Профіль"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aWQ.short_desc": {
+          "source": "The profile to update, if it is already known",
+          "message": "Профіль для оновлення, якщо він уже відомий"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aXA.desc": {
+          "source": "IP Address",
+          "message": "IP-адреса"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aXA.display_name": {
+          "source": "IP Address",
+          "message": "IP-адреса"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aXA.short_desc": {
+          "source": "The IP address Klaviyo should locate the profile from",
+          "message": "IP-адреса, за якою Klaviyo має визначити місцезнаходження профілю"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Name of the company or organization within the company for whom the individual works",
+          "message": "Назва компанії або організації всередині компанії, де працює особа"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The company the person belongs to",
+          "message": "Компанія, до якої належить особа"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9jYWxl.desc": {
+          "source": "The locale of the profile, in the IETF BCP 47 language tag format like (ISO 639-1/2)-(ISO 3166 alpha-2)",
+          "message": "Локаль профілю у форматі мовного тегу IETF BCP 47, наприклад (ISO 639-1/2)-(ISO 3166 alpha-2)"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Локаль"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9jYWxl.short_desc": {
+          "source": "The profile's locale, ex: \"en-US\"",
+          "message": "Локаль профілю, наприклад: \"en-US\""
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9uZ2l0dWRl.desc": {
+          "source": "Longitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "Координата довготи. Рекомендуємо вказувати з точністю до чотирьох знаків після коми."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9uZ2l0dWRl.display_name": {
+          "source": "Longitude",
+          "message": "Довгота"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9uZ2l0dWRl.short_desc": {
+          "source": "Longitude coordinate",
+          "message": "Координата довготи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGF0aXR1ZGU.desc": {
+          "source": "Latitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "Координата широти. Рекомендуємо вказувати з точністю до чотирьох знаків після коми."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGF0aXR1ZGU.display_name": {
+          "source": "Latitude",
+          "message": "Широта"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGF0aXR1ZGU.short_desc": {
+          "source": "Latitude coordinate",
+          "message": "Координата широти"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGFzdE5hbWU.desc": {
+          "source": "Individual's last name",
+          "message": "Прізвище особи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGFzdE5hbWU.short_desc": {
+          "source": "Individual's last name",
+          "message": "Прізвище особи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bWV0YQ.desc": {
+          "source": "Append to or unset custom properties rather than replacing them.\n\n`patch_properties.append` adds a value to a list-valued property, `unappend` removes one, and `unset` deletes a property outright.",
+          "message": "Додавання або скидання настроюваних властивостей замість їх заміни.\n\n`patch_properties.append` додає значення до спискової властивості, `unappend` видаляє його, а `unset` видаляє властивість повністю."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bWV0YQ.display_name": {
+          "source": "Patch Operations",
+          "message": "Операції оновлення (Patch)"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bWV0YQ.short_desc": {
+          "source": "Append to or unset custom properties rather than replacing them",
+          "message": "Додавання або скидання настроюваних властивостей замість їх заміни"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The profile's phone number in E.164 format, ex: `+15005550006`.\n\nKlaviyo rejects a number in any other format.",
+          "message": "Номер телефону профілю у форматі E.164, наприклад: `+15005550006`.\n\nKlaviyo відхиляє номер у будь-якому іншому форматі."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Номер телефону"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The profile's phone number in E.164 format",
+          "message": "Номер телефону профілю у форматі E.164"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cmVnaW9u.desc": {
+          "source": "Region within a country, such as state or province",
+          "message": "Регіон у межах країни, наприклад штат або область"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "Регіон"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cmVnaW9u.short_desc": {
+          "source": "The state, province or region",
+          "message": "Штат, область або регіон"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGl0bGU.desc": {
+          "source": "Individual's job title",
+          "message": "Посада особи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Заголовок"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGl0bGU.short_desc": {
+          "source": "The person's job title",
+          "message": "Посада особи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGltZXpvbmU.desc": {
+          "source": "Time zone name. We recommend using time zones from the IANA Time Zone Database.",
+          "message": "Назва часового поясу. Рекомендовано використовувати часові пояси з бази даних IANA."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGltZXpvbmU.display_name": {
+          "source": "Time Zone",
+          "message": "Часовий пояс"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGltZXpvbmU.short_desc": {
+          "source": "The IANA time zone name",
+          "message": "Назва часового поясу IANA"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.emlw.desc": {
+          "source": "Zip code",
+          "message": "Поштовий індекс"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.emlw.display_name": {
+          "source": "Postal Code",
+          "message": "Поштовий індекс"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.emlw.short_desc": {
+          "source": "The postal or ZIP code",
+          "message": "Поштовий індекс"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.short_desc": {
+          "source": "Creates a new profile or updates an existing one",
+          "message": "Створює новий профіль або оновлює наявний"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.desc": {
+          "source": "Creates a campaign as a **draft**; it is not sent until **Send Campaign** creates a send job for it.\n\n`audiences` names the lists and segments to include and exclude, and `campaignMessages` carries the message content per channel; both are **required** and both are Klaviyo's own structures, documented with the campaigns API rather than here.",
+          "message": "Створює кампанію як **чернетку**; вона не надсилається, доки дія **Send Campaign** не створить завдання надсилання.\n\n`audiences` вказує списки та сегменти для включення й виключення, а `campaignMessages` містить вміст повідомлення для кожного каналу; обидва параметри є **обов'язковими** та мають власні структури Klaviyo, описані в документації API кампаній."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.display_name": {
+          "source": "Create Campaign",
+          "message": "Створити кампанію"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.Y2FtcGFpZ25NZXNzYWdlcw.desc": {
+          "source": "The message(s) associated with the campaign",
+          "message": "Повідомлення, пов'язані з кампанією"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.Y2FtcGFpZ25NZXNzYWdlcw.display_name": {
+          "source": "Messages",
+          "message": "Повідомлення"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.Y2FtcGFpZ25NZXNzYWdlcw.short_desc": {
+          "source": "The message content, per channel",
+          "message": "Вміст повідомлення для кожного каналу"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.YXVkaWVuY2Vz.display_name": {
+          "source": "Audiences",
+          "message": "Аудиторії"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.YXVkaWVuY2Vz.short_desc": {
+          "source": "The lists and segments to include and exclude",
+          "message": "Списки та сегменти для включення й виключення"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The campaign name",
+          "message": "Назва кампанії"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "The name of the campaign",
+          "message": "Назва кампанії"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.desc": {
+          "source": "Options to use when sending a campaign",
+          "message": "Параметри, що використовуються під час надсилання кампанії"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.display_name": {
+          "source": "Send Options",
+          "message": "Параметри надсилання"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.short_desc": {
+          "source": "Whether to use smart sending",
+          "message": "Чи використовувати розумне надсилання"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.desc": {
+          "source": "The send strategy the campaign will send with. Defaults to 'Immediate' send strategy.",
+          "message": "Стратегія надсилання кампанії. За замовчуванням використовується стратегія «Immediate» (негайно)."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.display_name": {
+          "source": "Send Strategy",
+          "message": "Стратегія надсилання"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.short_desc": {
+          "source": "When the campaign is sent, if not immediately",
+          "message": "Час надсилання кампанії, якщо не негайно"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.desc": {
+          "source": "The tracking options associated with the campaign",
+          "message": "Параметри відстеження, пов'язані з кампанією"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.display_name": {
+          "source": "Tracking Options",
+          "message": "Параметри відстеження"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.short_desc": {
+          "source": "The UTM parameters and tracking flags to apply",
+          "message": "Параметри UTM та прапорці відстеження для застосування"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.short_desc": {
+          "source": "Creates a new campaign",
+          "message": "Створює нову кампанію"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.desc": {
+          "source": "Records that something happened, against a metric and a profile.\n\n`metric` is the **name** of the kind of event - \"Placed Order\", \"Viewed Product\" - and Klaviyo defines a metric the first time an event names one, so a name that does not exist yet is how a new metric is created.\n\nThe event has to say who it happened to: give `profile` for someone already known, or `email`, which Klaviyo creates a profile from if it has to. `customId` makes the event idempotent - Klaviyo drops a second event with the same one - and `time` records an event that happened earlier than now.\n\nThis action is hand-written rather than generated, because Klaviyo's own description nests a metric envelope and a profile envelope inside the event's attributes, which cannot be published as one flat option shape.",
+          "message": "Записує подію, що відбулася, із прив'язкою до метрики та профілю.\n\n`metric` — це **назва** типу події (наприклад, «Placed Order», «Viewed Product»). Klaviyo створює метрику під час першого використання її назви в події, тому нова назва призводить до створення нової метрики.\n\nПодія повинна містити інформацію про те, для кого вона відбулася: вкажіть `profile` для вже відомого користувача або `email`, на основі якого Klaviyo створить профіль за потреби. `customId` забезпечує ідемпотентність події (Klaviyo відхиляє повторну подію з таким самим ідентифікатором), а `time` записує подію, яка сталася раніше поточного часу.\n\nЦя дія створена вручну, а не згенерована автоматично, оскільки опис Klaviyo містить вкладені структури метрики та профілю в атрибутах події, які не можна представити у вигляді плаского набору параметрів."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.display_name": {
+          "source": "Create Event",
+          "message": "Створити подію"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tSWQ.desc": {
+          "source": "Your own unique identifier for this event.\n\nKlaviyo drops a second event carrying an ID it has already seen, which makes a retry safe.",
+          "message": "Власний унікальний ідентифікатор цієї події.\n\nKlaviyo відхиляє повторну подію з уже відомим ID, що робить повторні спроби безпечними."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tSWQ.display_name": {
+          "source": "Custom ID",
+          "message": "Власний ID"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tSWQ.short_desc": {
+          "source": "Your own unique identifier for this event",
+          "message": "Власний унікальний ідентифікатор цієї події"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tUHJvcGVydGllcw.desc": {
+          "source": "Your own properties to record with the event, as name/value pairs",
+          "message": "Власні властивості для запису разом із подією у вигляді пар ім'я/значення"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tUHJvcGVydGllcw.display_name": {
+          "source": "Custom Properties",
+          "message": "Настроювані властивості"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tUHJvcGVydGllcw.short_desc": {
+          "source": "Your own properties to record with the event",
+          "message": "Власні властивості для запису разом із подією"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.ZW1haWw.desc": {
+          "source": "The e-mail address the event happened to.\n\nKlaviyo creates a profile from it if it does not know it yet, which is how an event can be recorded for somebody who has not been seen before.",
+          "message": "Адреса електронної пошти, для якої відбулася подія.\n\nKlaviyo створить профіль на її основі, якщо вона ще невідома, що дозволяє фіксувати події для нових користувачів."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "Електронна пошта"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.ZW1haWw.short_desc": {
+          "source": "The e-mail address the event happened to",
+          "message": "Адреса електронної пошти, для якої відбулася подія"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.bWV0cmlj.desc": {
+          "source": "The name of the kind of event, ex: `Placed Order`.\n\nKlaviyo defines a metric the first time an event names one, so a name that is not in the list yet creates a new metric.",
+          "message": "Назва типу події, наприклад: `Placed Order`.\n\nKlaviyo визначає метрику під час першого використання її назви в події, тому нова назва створить нову метрику."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.bWV0cmlj.display_name": {
+          "source": "Metric",
+          "message": "Метрика"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.bWV0cmlj.short_desc": {
+          "source": "The name of the kind of event",
+          "message": "Назва типу події"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.cHJvZmlsZQ.desc": {
+          "source": "The profile the event happened to.\n\nGive this or `email`.",
+          "message": "Профіль, для якого відбулася подія.\n\nВкажіть це поле або `email`."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Профіль"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.cHJvZmlsZQ.short_desc": {
+          "source": "The profile the event happened to",
+          "message": "Профіль, для якого відбулася подія"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dGltZQ.desc": {
+          "source": "When the event happened.\n\nKlaviyo uses the current time when this is unset, so set it when recording something after the fact.",
+          "message": "Час, коли відбулася подія.\n\nЯкщо не вказано, Klaviyo використовує поточний час. Встановлюйте це значення для запису подій минулим часом."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dGltZQ.display_name": {
+          "source": "Time",
+          "message": "Час"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dGltZQ.short_desc": {
+          "source": "When the event happened",
+          "message": "Час, коли сталася подія"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dmFsdWU.desc": {
+          "source": "The monetary value of the event, in the account's currency.\n\nThis is what Klaviyo's revenue reporting adds up.",
+          "message": "Грошова вартість події у валюті облікового запису.\n\nЦе значення підсумовується у звітах про доходи Klaviyo."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "Значення"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dmFsdWU.short_desc": {
+          "source": "The monetary value of the event",
+          "message": "Грошова вартість події"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.short_desc": {
+          "source": "Creates a new event",
+          "message": "Створює нову подію"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.desc": {
+          "source": "Creates a list.\n\n`optInProcess` decides whether a profile added to the list has to confirm by e-mail before it is subscribed; Klaviyo uses the account's default when it is unset.",
+          "message": "Створює список.\n\n`optInProcess` визначає, чи повинен доданий до списку профіль підтвердити підписку електронною поштою; якщо не вказано, Klaviyo використовує значення за замовчуванням для облікового запису."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.display_name": {
+          "source": "Create List",
+          "message": "Створити список"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.allowed-value.c3RyaW5nOmRvdWJsZV9vcHRfaW4.display_name": {
+          "source": "double_opt_in",
+          "message": "double_opt_in"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.allowed-value.c3RyaW5nOnNpbmdsZV9vcHRfaW4.display_name": {
+          "source": "single_opt_in",
+          "message": "single_opt_in"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.desc": {
+          "source": "The opt-in process for this list. Valid values: 'double_opt_in', 'single_opt_in'. If not provided, uses account default.",
+          "message": "Процес підтвердження підписки для цього списку. Допустимі значення: 'double_opt_in', 'single_opt_in'. Якщо не вказано, використовується значення за замовчуванням для облікового запису."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.display_name": {
+          "source": "Opt-in Process",
+          "message": "Процес підтвердження підписки"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.short_desc": {
+          "source": "Whether a new subscriber has to confirm by e-mail",
+          "message": "Чи повинен новий підписник підтверджувати підписку поштою"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.bmFtZQ.desc": {
+          "source": "A helpful name to label the list",
+          "message": "Зрозуміла назва для списку"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.bmFtZQ.short_desc": {
+          "source": "The name of the list",
+          "message": "Назва списку"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.short_desc": {
+          "source": "Creates a new list",
+          "message": "Створює новий список"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.desc": {
+          "source": "Creates a profile.\n\nA profile needs at least one identifier - an e-mail address, a phone number or an external ID. Klaviyo **rejects** a create whose identifier already belongs to a profile; use **Create Or Update Profile** when the person may already be known.",
+          "message": "Створює профіль.\n\nДля профілю потрібен принаймні один ідентифікатор: адреса електронної пошти, номер телефону або зовнішній ID. Klaviyo **відхиляє** створення, якщо ідентифікатор уже належить іншому профілю; використовуйте **Create Or Update Profile**, якщо особа вже може бути відома."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.display_name": {
+          "source": "Create Profile",
+          "message": "Створити профіль"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.desc": {
+          "source": "Country name",
+          "message": "Назва країни"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Країна"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "Назва країни"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "Назва міста"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Місто"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y2l0eQ.short_desc": {
+          "source": "City name",
+          "message": "Назва міста"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.desc": {
+          "source": "Your own properties to store on the profile, as name/value pairs.\n\nKlaviyo reserves property names beginning with `$`.",
+          "message": "Ваші власні властивості для збереження в профілі у вигляді пар ім'я/значення.\n\nKlaviyo резервує назви властивостей, що починаються з `$`."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.display_name": {
+          "source": "Custom Properties",
+          "message": "Настроювані властивості"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.short_desc": {
+          "source": "Your own properties to store on the profile",
+          "message": "Ваші власні властивості для збереження в профілі"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.desc": {
+          "source": "First line of street address",
+          "message": "Перший рядок адреси"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.display_name": {
+          "source": "Address Line 1",
+          "message": "Рядок адреси 1"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.short_desc": {
+          "source": "First line of street address",
+          "message": "Перший рядок адреси"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.desc": {
+          "source": "Second line of street address",
+          "message": "Другий рядок адреси"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.display_name": {
+          "source": "Address Line 2",
+          "message": "Рядок адреси 2"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.short_desc": {
+          "source": "Second line of street address",
+          "message": "Другий рядок адреси"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZW1haWw.desc": {
+          "source": "Individual's email address",
+          "message": "Електронна адреса особи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "Електронна пошта"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZW1haWw.short_desc": {
+          "source": "The profile's e-mail address",
+          "message": "Електронна адреса профілю"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.desc": {
+          "source": "Your own identifier for this person, so that a profile can be found by the ID it has in your system rather than by e-mail",
+          "message": "Ваш власний ідентифікатор цієї особи, щоб профіль можна було знайти за його ID у вашій системі, а не за електронною поштою"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.display_name": {
+          "source": "External ID",
+          "message": "Зовнішній ID"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.short_desc": {
+          "source": "Your own identifier for this person",
+          "message": "Ваш власний ідентифікатор для цієї особи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.desc": {
+          "source": "Individual's first name",
+          "message": "Ім'я особи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Individual's first name",
+          "message": "Ім'я особи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.desc": {
+          "source": "URL pointing to the location of a profile image",
+          "message": "URL-адреса, що вказує на розташування зображення профілю"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.display_name": {
+          "source": "Image URL",
+          "message": "URL-адреса зображення"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.short_desc": {
+          "source": "A URL for the profile's avatar",
+          "message": "URL-адреса для аватара профілю"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aXA.desc": {
+          "source": "IP Address",
+          "message": "IP-адреса"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aXA.display_name": {
+          "source": "IP Address",
+          "message": "IP-адреса"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aXA.short_desc": {
+          "source": "The IP address Klaviyo should locate the profile from",
+          "message": "IP-адреса, за якою Klaviyo має визначити місцезнаходження профілю"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Name of the company or organization within the company for whom the individual works",
+          "message": "Назва компанії або організації всередині компанії, де працює особа"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The company the person belongs to",
+          "message": "Компанія, до якої належить особа"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9jYWxl.desc": {
+          "source": "The locale of the profile, in the IETF BCP 47 language tag format like (ISO 639-1/2)-(ISO 3166 alpha-2)",
+          "message": "Локаль профілю у форматі мовного тегу IETF BCP 47, наприклад (ISO 639-1/2)-(ISO 3166 alpha-2)"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Локаль"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9jYWxl.short_desc": {
+          "source": "The profile's locale, ex: \"en-US\"",
+          "message": "Локаль профілю, наприклад: \"en-US\""
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.desc": {
+          "source": "Longitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "Координата довготи. Рекомендуємо вказувати з точністю до чотирьох знаків після коми."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.display_name": {
+          "source": "Longitude",
+          "message": "Довгота"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.short_desc": {
+          "source": "Longitude coordinate",
+          "message": "Координата довготи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.desc": {
+          "source": "Latitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "Координата широти. Рекомендуємо вказувати з точністю до чотирьох знаків після коми."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.display_name": {
+          "source": "Latitude",
+          "message": "Широта"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.short_desc": {
+          "source": "Latitude coordinate",
+          "message": "Координата широти"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.desc": {
+          "source": "Individual's last name",
+          "message": "Прізвище особи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.short_desc": {
+          "source": "Individual's last name",
+          "message": "Прізвище особи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The profile's phone number in E.164 format, ex: `+15005550006`.\n\nKlaviyo rejects a number in any other format.",
+          "message": "Номер телефону профілю у форматі E.164, наприклад: `+15005550006`.\n\nKlaviyo відхиляє номер у будь-якому іншому форматі."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Номер телефону"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The profile's phone number in E.164 format",
+          "message": "Номер телефону профілю у форматі E.164"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cmVnaW9u.desc": {
+          "source": "Region within a country, such as state or province",
+          "message": "Регіон у межах країни, наприклад штат або область"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "Регіон"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cmVnaW9u.short_desc": {
+          "source": "The state, province or region",
+          "message": "Штат, область або регіон"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGl0bGU.desc": {
+          "source": "Individual's job title",
+          "message": "Посада особи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Заголовок"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGl0bGU.short_desc": {
+          "source": "The person's job title",
+          "message": "Посада особи"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.desc": {
+          "source": "Time zone name. We recommend using time zones from the IANA Time Zone Database.",
+          "message": "Назва часового поясу. Рекомендовано використовувати часові пояси з бази даних IANA."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.display_name": {
+          "source": "Time Zone",
+          "message": "Часовий пояс"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.short_desc": {
+          "source": "The IANA time zone name",
+          "message": "Назва часового поясу IANA"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.emlw.desc": {
+          "source": "Zip code",
+          "message": "Поштовий індекс"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.emlw.display_name": {
+          "source": "Postal Code",
+          "message": "Поштовий індекс"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.emlw.short_desc": {
+          "source": "The postal or ZIP code",
+          "message": "Поштовий індекс"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.short_desc": {
+          "source": "Creates a new profile",
+          "message": "Створює новий профіль"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.desc": {
+          "source": "Creates a segment.\n\n`definition` is the rule Klaviyo evaluates to decide who is in the segment, and it is **required**: a segment with no rule would match nobody. It is Klaviyo's own condition structure - a list of condition groups, each a list of conditions - and is documented with the segments API rather than here.",
+          "message": "Створює сегмент.\n\n`definition` — це правило, яке Klaviyo оцінює для визначення учасників сегмента, і воно є **обов'язковим**: сегмент без правила нікому не відповідатиме. Це власна структура умов Klaviyo (список груп умов, кожна з яких є списком умов), описана в документації API сегментів."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.display_name": {
+          "source": "Create Segment",
+          "message": "Створити сегмент"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.ZGVmaW5pdGlvbg.display_name": {
+          "source": "Definition",
+          "message": "Визначення"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.ZGVmaW5pdGlvbg.short_desc": {
+          "source": "The rule deciding who is in the segment",
+          "message": "Правило, що визначає склад сегмента"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.aXNTdGFycmVk.display_name": {
+          "source": "Starred",
+          "message": "Позначені зірочкою"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.aXNTdGFycmVk.short_desc": {
+          "source": "Whether the segment is starred in the Klaviyo UI",
+          "message": "Чи позначено сегмент зірочкою в інтерфейсі Klaviyo"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.bmFtZQ.short_desc": {
+          "source": "The name of the segment",
+          "message": "Назва сегмента"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.short_desc": {
+          "source": "Creates a new segment",
+          "message": "Створює новий сегмент"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.desc": {
+          "source": "Creates a tag.\n\nA tag groups campaigns, flows, lists and segments for reporting. Klaviyo places a new tag in the account's default tag group unless one is named in the relationships, which this action does not publish.",
+          "message": "Створює тег.\n\nТег групує кампанії, ланцюжки повідомлень, списки та сегменти для звітності. Klaviyo розміщує новий тег у групі тегів за замовчуванням облікового запису, якщо групу не вказано у зв'язках, які ця дія не публікує."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.display_name": {
+          "source": "Create Tag",
+          "message": "Створити тег"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.option.bmFtZQ.desc": {
+          "source": "The Tag name",
+          "message": "Назва тегу"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.option.bmFtZQ.short_desc": {
+          "source": "The name of the tag",
+          "message": "Назва тегу"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.option.cmVsYXRpb25zaGlwcw.display_name": {
+          "source": "Relationships",
+          "message": "Зв'язки"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.short_desc": {
+          "source": "Creates a new tag",
+          "message": "Створює новий тег"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.desc": {
+          "source": "Adds a profile that already exists to a list.\n\nThe profile is **not** subscribed by this: membership and marketing consent are separate in Klaviyo, and **Subscribe Profile** is what records consent. Adding a profile that is already a member succeeds and changes nothing.",
+          "message": "Додає наявний профіль до списку.\n\nЦе **не** підписує профіль: членство та маркетингова згода в Klaviyo розділені, і саме дія **Subscribe Profile** реєструє згоду. Додавання профілю, який уже є учасником списку, завершується успішно й нічого не змінює."
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.display_name": {
+          "source": "Add Profile to List",
+          "message": "Додати профіль до списку"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.bGlzdA.desc": {
+          "source": "The list to add the profile to",
+          "message": "Список, до якого слід додати профіль"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "Список"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.bGlzdA.short_desc": {
+          "source": "The list to add the profile to",
+          "message": "Список, до якого слід додати профіль"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.cHJvZmlsZQ.desc": {
+          "source": "The profile to add",
+          "message": "Профіль для додавання"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Профіль"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.cHJvZmlsZQ.short_desc": {
+          "source": "The profile to add",
+          "message": "Профіль для додавання"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.short_desc": {
+          "source": "Adds an existing profile to a list",
+          "message": "Додає наявний профіль до списку"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.desc": {
+          "source": "Applies a tag that already exists to a list.\n\nKlaviyo does not create a tag on use; the tag has to exist, and **List Tags** shows which do.",
+          "message": "Застосовує наявний тег до списку.\n\nKlaviyo не створює тег під час використання; тег має вже існувати, а дія **List Tags** показує наявні теги."
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.display_name": {
+          "source": "Add Tag to List",
+          "message": "Додати тег до списку"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.bGlzdA.desc": {
+          "source": "The list to tag",
+          "message": "Список, до якого слід застосувати тег"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "Список"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.bGlzdA.short_desc": {
+          "source": "The list to tag",
+          "message": "Список, до якого слід застосувати тег"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.dGFn.desc": {
+          "source": "The tag to apply",
+          "message": "Тег для застосування"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Тег"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.dGFn.short_desc": {
+          "source": "The tag to apply",
+          "message": "Тег для застосування"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.short_desc": {
+          "source": "Adds an existing tag to a list",
+          "message": "Додає наявний тег до списку"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.desc": {
+          "source": "Applies a tag that already exists to a segment.\n\nKlaviyo does not create a tag on use; the tag has to exist, and **List Tags** shows which do.",
+          "message": "Застосовує наявний тег до сегмента.\n\nKlaviyo не створює тег під час використання; тег має вже існувати, а дія **List Tags** показує наявні теги."
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.display_name": {
+          "source": "Add Tag to Segment",
+          "message": "Додати тег до сегмента"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.c2VnbWVudA.desc": {
+          "source": "The segment to tag",
+          "message": "Сегмент, до якого слід застосувати тег"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.c2VnbWVudA.display_name": {
+          "source": "Segment",
+          "message": "Сегмент"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.c2VnbWVudA.short_desc": {
+          "source": "The segment to tag",
+          "message": "Сегмент, до якого слід застосувати тег"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.dGFn.desc": {
+          "source": "The tag to apply",
+          "message": "Тег для застосування"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Тег"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.dGFn.short_desc": {
+          "source": "The tag to apply",
+          "message": "Тег для застосування"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.short_desc": {
+          "source": "Adds an existing tag to a segment",
+          "message": "Додає наявний тег до сегмента"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.desc": {
+          "source": "Retrieves one metric by its Klaviyo ID.\n\nA **metric** is the kind of an event - \"Placed Order\", \"Viewed Product\" - and Klaviyo defines one the first time an event names it.",
+          "message": "Отримує одну метрику за її ідентифікатором Klaviyo.\n\n**Метрика** — це тип події (\"Placed Order\", \"Viewed Product\"), і Klaviyo визначає її під час першої появи відповідної назви в події."
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.display_name": {
+          "source": "Get Metric",
+          "message": "Отримати метрику"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.option.aWQ.desc": {
+          "source": "Metric ID: Metric ID",
+          "message": "ID метрики: ID метрики"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.option.aWQ.display_name": {
+          "source": "Metric",
+          "message": "Метрика"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.option.aWQ.short_desc": {
+          "source": "The metric to retrieve",
+          "message": "Метрика для отримання"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.short_desc": {
+          "source": "Retrieves a specific metric",
+          "message": "Отримує вказану метрику"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.desc": {
+          "source": "Retrieves one campaign by its Klaviyo ID",
+          "message": "Отримує одну кампанію за її ідентифікатором Klaviyo"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.display_name": {
+          "source": "Get Campaign",
+          "message": "Отримати кампанію"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.option.aWQ.desc": {
+          "source": "The campaign ID to be retrieved: The campaign ID to be retrieved",
+          "message": "ID кампанії для отримання: ID кампанії для отримання"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.option.aWQ.display_name": {
+          "source": "Campaign",
+          "message": "Кампанія"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.option.aWQ.short_desc": {
+          "source": "The campaign to retrieve",
+          "message": "Кампанія для отримання"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.short_desc": {
+          "source": "Retrieves a specific campaign",
+          "message": "Отримує вказану кампанію"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.desc": {
+          "source": "Retrieves one event by its Klaviyo ID",
+          "message": "Отримує одну подію за її ідентифікатором Klaviyo"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.display_name": {
+          "source": "Get Event",
+          "message": "Отримати подію"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.option.aWQ.desc": {
+          "source": "ID of the event: ID of the event",
+          "message": "ID події: ID події"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.option.aWQ.display_name": {
+          "source": "Event",
+          "message": "Подія"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.option.aWQ.short_desc": {
+          "source": "The event to retrieve",
+          "message": "Подія для отримання"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.short_desc": {
+          "source": "Retrieves a specific event",
+          "message": "Отримує вказану подію"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.desc": {
+          "source": "Retrieves one list by its Klaviyo ID.\n\n`additionalFields` adds the list's profile count, which Klaviyo does not return otherwise because counting is expensive.",
+          "message": "Отримує один список за його ідентифікатором Klaviyo.\n\n`additionalFields` додає кількість профілів у списку, яку Klaviyo за замовчуванням не повертає через високу вартість підрахунку."
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.display_name": {
+          "source": "Get List",
+          "message": "Отримати список"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.YWRkaXRpb25hbEZpZWxkcw.desc": {
+          "source": "Computed blocks to include on each profile, which Klaviyo omits by default because they are expensive to produce:\n\n- `subscriptions`: the profile's consent state per channel\n- `predictive_analytics`: Klaviyo's predicted lifetime value and churn probability",
+          "message": "Обчислювані блоки для включення в кожен профіль, які Klaviyo пропускає за замовчуванням через високу вартість генерації:\n\n- `subscriptions`: стан згоди профілю для кожного каналу\n- `predictive_analytics`: прогнозована Klaviyo пожиттєва цінність та ймовірність відтоку"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.YWRkaXRpb25hbEZpZWxkcw.display_name": {
+          "source": "Additional Fields",
+          "message": "Додаткові поля"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.YWRkaXRpb25hbEZpZWxkcw.short_desc": {
+          "source": "Computed blocks to include on each profile",
+          "message": "Обчислювані блоки для включення в кожен профіль"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.aWQ.desc": {
+          "source": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+          "message": "Первинний ключ, що однозначно ідентифікує цей список. Згенеровано Klaviyo."
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.aWQ.display_name": {
+          "source": "List",
+          "message": "Список"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.aWQ.short_desc": {
+          "source": "The list to work on",
+          "message": "Список для обробки"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.short_desc": {
+          "source": "Retrieves a specific list",
+          "message": "Отримує вказаний список"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.desc": {
+          "source": "Retrieves one profile by its Klaviyo ID",
+          "message": "Отримує один профіль за його ідентифікатором Klaviyo"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.display_name": {
+          "source": "Get Profile",
+          "message": "Отримати профіль"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.YWRkaXRpb25hbEZpZWxkcw.desc": {
+          "source": "Computed blocks to include on each profile, which Klaviyo omits by default because they are expensive to produce:\n\n- `subscriptions`: the profile's consent state per channel\n- `predictive_analytics`: Klaviyo's predicted lifetime value and churn probability",
+          "message": "Обчислювані блоки для включення в кожен профіль, які Klaviyo пропускає за замовчуванням через високу вартість генерації:\n\n- `subscriptions`: стан згоди профілю для кожного каналу\n- `predictive_analytics`: прогнозована Klaviyo пожиттєва цінність та ймовірність відтоку"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.YWRkaXRpb25hbEZpZWxkcw.display_name": {
+          "source": "Additional Fields",
+          "message": "Додаткові поля"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.YWRkaXRpb25hbEZpZWxkcw.short_desc": {
+          "source": "Computed blocks to include on each profile",
+          "message": "Обчислювані блоки для включення в кожен профіль"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.aWQ.display_name": {
+          "source": "Profile",
+          "message": "Профіль"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.aWQ.short_desc": {
+          "source": "The profile to retrieve",
+          "message": "Профіль для отримання"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.short_desc": {
+          "source": "Retrieves a specific profile",
+          "message": "Отримує вказаний профіль"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.desc": {
+          "source": "Retrieves one segment by its Klaviyo ID.\n\n`additionalFields` adds the segment's profile count and its `definition` - the rule Klaviyo evaluates - neither of which is returned otherwise.",
+          "message": "Отримує один сегмент за його ідентифікатором Klaviyo.\n\n`additionalFields` додає кількість профілів у сегменті та його `definition` — правило, яке обчислює Klaviyo, жодне з яких не повертається в іншому разі."
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.display_name": {
+          "source": "Get Segment",
+          "message": "Отримати сегмент"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.YWRkaXRpb25hbEZpZWxkcw.desc": {
+          "source": "Computed blocks to include on each profile, which Klaviyo omits by default because they are expensive to produce:\n\n- `subscriptions`: the profile's consent state per channel\n- `predictive_analytics`: Klaviyo's predicted lifetime value and churn probability",
+          "message": "Обчислювані блоки для включення в кожен профіль, які Klaviyo пропускає за замовчуванням через високу вартість генерації:\n\n- `subscriptions`: стан згоди профілю для кожного каналу\n- `predictive_analytics`: прогнозована Klaviyo пожиттєва цінність та ймовірність відтоку"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.YWRkaXRpb25hbEZpZWxkcw.display_name": {
+          "source": "Additional Fields",
+          "message": "Додаткові поля"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.YWRkaXRpb25hbEZpZWxkcw.short_desc": {
+          "source": "Computed blocks to include on each profile",
+          "message": "Обчислювані блоки для включення в кожен профіль"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.aWQ.display_name": {
+          "source": "Segment",
+          "message": "Сегмент"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.aWQ.short_desc": {
+          "source": "The segment to work on",
+          "message": "Сегмент для обробки"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.short_desc": {
+          "source": "Retrieves a specific segment",
+          "message": "Отримує вказаний сегмент"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.desc": {
+          "source": "Retrieves one tag by its Klaviyo ID",
+          "message": "Отримує один тег за його ідентифікатором Klaviyo"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.display_name": {
+          "source": "Get Tag",
+          "message": "Отримати тег"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.option.aWQ.desc": {
+          "source": "The Tag ID",
+          "message": "ID тегу"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.option.aWQ.display_name": {
+          "source": "Tag",
+          "message": "Тег"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.option.aWQ.short_desc": {
+          "source": "The tag to work on",
+          "message": "Тег для обробки"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.short_desc": {
+          "source": "Retrieves a specific tag",
+          "message": "Отримує вказаний тег"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.desc": {
+          "source": "Deletes every record in the given table matching the search criteria",
+          "message": "Видаляє кожен запис у вказаній таблиці, який відповідає критеріям пошуку"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.display_name": {
+          "source": "Delete Records",
+          "message": "Видалити записи"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "Таблиця для роботи: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` або `events`"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Таблиця"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Назва таблиці для роботи"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.short_desc": {
+          "source": "Delete the records matching the search criteria",
+          "message": "Видалити записи, які відповідають критеріям пошуку"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.desc": {
+          "source": "Deletes a campaign.\n\nKlaviyo answers with no content. A campaign that has already been sent keeps its reporting history.",
+          "message": "Видаляє кампанію.\n\nKlaviyo повертає відповідь без вмісту. Кампанія, яку вже було надіслано, зберігає історію звітів."
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.display_name": {
+          "source": "Delete Campaign",
+          "message": "Видалити кампанію"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.option.aWQ.desc": {
+          "source": "The campaign ID to be deleted: The campaign ID to be deleted",
+          "message": "ID кампанії для видалення: ID кампанії для видалення"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.option.aWQ.display_name": {
+          "source": "Campaign",
+          "message": "Кампанія"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.option.aWQ.short_desc": {
+          "source": "The campaign to work on",
+          "message": "Кампанія для обробки"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.short_desc": {
+          "source": "Deletes a campaign",
+          "message": "Видаляє кампанію"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.desc": {
+          "source": "Deletes a list.\n\nThe profiles on it are **not** deleted; they simply stop being members. Klaviyo answers with no content.",
+          "message": "Видаляє список.\n\nПрофілі в ньому **не** видаляються; вони просто перестають бути його учасниками. Klaviyo повертає відповідь без вмісту."
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.display_name": {
+          "source": "Delete List",
+          "message": "Видалити список"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.option.aWQ.desc": {
+          "source": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+          "message": "Первинний ключ, що однозначно ідентифікує цей список. Згенеровано Klaviyo."
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.option.aWQ.display_name": {
+          "source": "List",
+          "message": "Список"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.option.aWQ.short_desc": {
+          "source": "The list to work on",
+          "message": "Список для обробки"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.short_desc": {
+          "source": "Deletes a list",
+          "message": "Видаляє список"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.desc": {
+          "source": "Deletes a segment.\n\nThe profiles it matched are **not** deleted; the rule simply stops being evaluated. Klaviyo answers with no content.",
+          "message": "Видаляє сегмент.\n\nПрофілі, що йому відповідали, **не** видаляються; правило просто перестає обчислюватися. Klaviyo повертає відповідь без вмісту."
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.display_name": {
+          "source": "Delete Segment",
+          "message": "Видалити сегмент"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.option.aWQ.display_name": {
+          "source": "Segment",
+          "message": "Сегмент"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.option.aWQ.short_desc": {
+          "source": "The segment to work on",
+          "message": "Сегмент для обробки"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.short_desc": {
+          "source": "Deletes a segment",
+          "message": "Видаляє сегмент"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.desc": {
+          "source": "Deletes a tag.\n\nThe campaigns, flows, lists and segments it was applied to are **not** deleted; they simply lose the tag. Klaviyo answers with no content.",
+          "message": "Видаляє тег.\n\nКампанії, ланцюжки повідомлень, списки та сегменти, до яких його було застосовано, **не** видаляються; вони просто втрачають цей тег. Klaviyo повертає відповідь без вмісту."
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.display_name": {
+          "source": "Delete Tag",
+          "message": "Видалити тег"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.option.aWQ.desc": {
+          "source": "The Tag ID",
+          "message": "ID тегу"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.option.aWQ.display_name": {
+          "source": "Tag",
+          "message": "Тег"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.option.aWQ.short_desc": {
+          "source": "The tag to work on",
+          "message": "Тег для обробки"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.short_desc": {
+          "source": "Deletes a tag",
+          "message": "Видаляє тег"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.desc": {
+          "source": "Lists the account's tags.\n\nA tag groups campaigns, flows, lists and segments for reporting. Paging is by cursor.",
+          "message": "Повертає список тегів облікового запису.\n\nТег групує кампанії, ланцюжки повідомлень, списки та сегменти для звітності. Розбиття на сторінки виконується за курсором."
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.display_name": {
+          "source": "List Tags",
+          "message": "Список тегів"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Курсор для наступної сторінки: передайте значення з `links.next` попередньої відповіді.\n\nВін є непрозорим і не повинен будуватися вручну; залиште його незаповненим, щоб прочитати першу сторінку."
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Курсор"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Курсор для наступної сторінки"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching tags\n\nThis value is sent as Klaviyo's filter syntax, `contains(name,…)`.",
+          "message": "Звузити список до відповідних тегів\n\nЦе значення надсилається у форматі синтаксису фільтра Klaviyo, `contains(name,…)`."
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Фільтр"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching tags",
+          "message": "Звузити список до відповідних тегів"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "Поле та напрямок для сортування\n\nЦе значення надсилається як токен сортування Klaviyo: назва поля з префіксом `-` для сортування за спаданням."
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Сортування"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "Поле та напрямок для сортування"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "Кількість записів для повернення на одній сторінці.\n\nKlaviyo обмежує це значення для кожної кінцевої точки та відхиляє більше значення замість його обмеження; максимум зазначено в описі самого аргументу."
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Розмір сторінки"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Кількість записів, що повертаються на одній сторінці"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.short_desc": {
+          "source": "Lists tags",
+          "message": "Повертає список тегів"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.desc": {
+          "source": "Lists campaigns on the given channel.\n\n**`channel` is required**: Klaviyo does not list campaigns across channels, so a listing is always of one channel's campaigns - or of both, if both are named. Paging is by cursor.",
+          "message": "Повертає список кампаній для вказаного каналу.\n\n**Потрібно вказати `channel`**: Klaviyo не повертає список кампаній за всіма каналами одночасно, тому список завжди містить кампанії одного каналу — або обох, якщо вказано обидва. Пагінація здійснюється за курсором."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.display_name": {
+          "source": "List Campaigns",
+          "message": "Список кампаній"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.desc": {
+          "source": "E-mail campaigns",
+          "message": "Email-кампанії"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "E-mail",
+          "message": "Електронна пошта"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.desc": {
+          "source": "SMS campaigns",
+          "message": "SMS-кампанії"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.desc": {
+          "source": "The channel whose campaigns to list.\n\nKlaviyo will not list campaigns without being told which channel to look at, and accepts only one: `messages.channel` is the one field whose only permitted operator is `equals`, measured against the live API. A listing across both channels is two calls, which is what the campaign dropdown makes.",
+          "message": "Канал, кампанії якого слід отримати.\n\nKlaviyo не повертає список кампаній без зазначення каналу і приймає лише один: `messages.channel` — це єдине поле, чиїм єдиним дозволеним оператором є `equals` у живому API. Отримання списку для обох каналів вимагає двох викликів, що й робить випадний список кампаній."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "Канал"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.short_desc": {
+          "source": "The channel whose campaigns to list",
+          "message": "Канал, кампанії якого потрібно отримати"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Курсор для наступної сторінки: передайте значення з `links.next` попередньої відповіді.\n\nВін є непрозорим і не повинен будуватися вручну; залиште його незаповненим, щоб прочитати першу сторінку."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Курсор"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Курсор для наступної сторінки"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.bmFtZQ.desc": {
+          "source": "Return only campaigns whose name contains this text",
+          "message": "Повертати лише кампанії, назва яких містить цей текст"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.bmFtZQ.short_desc": {
+          "source": "Text the campaign name must contain",
+          "message": "Текст, який має міститися в назві кампанії"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "Поле та напрямок для сортування\n\nЦе значення надсилається як токен сортування Klaviyo: назва поля з префіксом `-` для сортування за спаданням."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Сортування"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "Поле та напрямок для сортування"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "Кількість записів для повернення на одній сторінці.\n\nKlaviyo обмежує це значення для кожної кінцевої точки та відхиляє більше значення замість його обмеження; максимум зазначено в описі самого аргументу."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Розмір сторінки"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Кількість записів, що повертаються на одній сторінці"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.short_desc": {
+          "source": "Lists campaigns",
+          "message": "Повертає список кампаній"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.desc": {
+          "source": "Lists the events recorded in the account, newest first by default.\n\nThis listing is exported so that the event picker on other actions has values to offer; the superseded application had no listing action of its own.",
+          "message": "Повертає список подій, зареєстрованих в обліковому записі, за замовчуванням спочатку найновіші.\n\nЦей список експортується для того, щоб засіб вибору подій в інших діях мав значення для вибору; замінена програма не мала власної дії отримання списку."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.display_name": {
+          "source": "List Events",
+          "message": "Отримати список подій"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Курсор для наступної сторінки: передайте значення з `links.next` попередньої відповіді.\n\nВін є непрозорим і не повинен будуватися вручну; залиште його незаповненим, щоб прочитати першу сторінку."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Курсор"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Курсор для наступної сторінки"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching events, in Klaviyo's filter syntax.\n\n`equals(metric_id,\"…\")` and `equals(profile_id,\"…\")` select one metric or one profile, and `datetime` and `timestamp` take the four range comparisons - for example `greater-or-equal(datetime,\"2026-01-01T00:00:00Z\"),less-than(datetime,\"2026-02-01T00:00:00Z\")`. Predicates are joined by commas and mean **and**; Klaviyo has no `or` here.",
+          "message": "Звузити список до відповідних подій у синтаксисі фільтрів Klaviyo.\n\n`equals(metric_id,\"…\")` та `equals(profile_id,\"…\")` вибирають одну метрику або один профіль, а `datetime` та `timestamp` приймають чотири порівняння діапазонів — наприклад, `greater-or-equal(datetime,\"2026-01-01T00:00:00Z\"),less-than(datetime,\"2026-02-01T00:00:00Z\")`. Предикати розділяються комами й означають **і**; Klaviyo не підтримує тут `or`."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Фільтр"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching events",
+          "message": "Звузити список до відповідних подій"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "Поле та напрямок для сортування\n\nЦе значення надсилається як токен сортування Klaviyo: назва поля з префіксом `-` для сортування за спаданням."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Сортування"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "Поле та напрямок для сортування"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "Кількість записів для повернення на одній сторінці.\n\nKlaviyo обмежує це значення для кожної кінцевої точки та відхиляє більше значення замість його обмеження; максимум зазначено в описі самого аргументу."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Розмір сторінки"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Кількість записів, що повертаються на одній сторінці"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.short_desc": {
+          "source": "Lists events",
+          "message": "Повертає список подій"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.desc": {
+          "source": "Lists the account's lists.\n\nA **list** holds profiles that opted in explicitly, where a **segment** is a rule Klaviyo evaluates. Paging is by cursor.",
+          "message": "Повертає списки облікового запису.\n\n**Список** містить профілі, які явно підписалися, тоді як **сегмент** — це правило, яке обчислює Klaviyo. Пагінація здійснюється за курсором."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.display_name": {
+          "source": "List Lists",
+          "message": "Отримати список списків"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Курсор для наступної сторінки: передайте значення з `links.next` попередньої відповіді.\n\nВін є непрозорим і не повинен будуватися вручну; залиште його незаповненим, щоб прочитати першу сторінку."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Курсор"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Курсор для наступної сторінки"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching lists\n\nThis value is sent as Klaviyo's filter syntax, `any(name,…),any(id,…)`.",
+          "message": "Звузити список до відповідних списків\n\nЦе значення надсилається у форматі синтаксису фільтра Klaviyo, `any(name,…),any(id,…)`."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Фільтр"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching lists",
+          "message": "Звузити список до відповідних списків"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "Поле та напрямок для сортування\n\nЦе значення надсилається як токен сортування Klaviyo: назва поля з префіксом `-` для сортування за спаданням."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Сортування"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "Поле та напрямок для сортування"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "Кількість записів для повернення на одній сторінці.\n\nKlaviyo обмежує це значення для кожної кінцевої точки та відхиляє більше значення замість його обмеження; максимум зазначено в описі самого аргументу."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Розмір сторінки"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Кількість записів, що повертаються на одній сторінці"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.short_desc": {
+          "source": "Lists all lists",
+          "message": "Повертає всі списки"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.desc": {
+          "source": "Lists the metrics defined in the account.\n\nA **metric** is the kind of an event - \"Placed Order\", \"Viewed Product\" - and Klaviyo defines one the first time an event names it. This listing is exported so that the metric picker on **Create Event** and the **New Event** trigger has values to offer; the superseded application had no listing action of its own.\n\nKlaviyo declares no page size on this endpoint, only a cursor.",
+          "message": "Повертає список метрик, визначених в обліковому записі.\n\n**Метрика** — це тип події (\"Placed Order\", \"Viewed Product\"), і Klaviyo визначає її вперше, коли подія її називає. Цей список експортується, щоб засіб вибору метрик у **Create Event** та тригері **New Event** мав доступні значення; замінена програма не мала власної дії отримання списку.\n\nKlaviyo не визначає розмір сторінки для цієї кінцевої точки, лише курсор."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.display_name": {
+          "source": "List Metrics",
+          "message": "Список метрик"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Курсор для наступної сторінки: передайте значення з `links.next` попередньої відповіді.\n\nВін є непрозорим і не повинен будуватися вручну; залиште його незаповненим, щоб прочитати першу сторінку."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Курсор"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Курсор для наступної сторінки"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.short_desc": {
+          "source": "Lists metrics",
+          "message": "Повертає список метрик"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.desc": {
+          "source": "Lists the profiles in the account, newest first by default.\n\n`filter` narrows the listing by e-mail, phone number, external ID or profile ID; each takes one or more values and matches any of them. Paging is by cursor: pass the previous response's `links.next` back as `cursor`.",
+          "message": "Повертає список профілів в обліковому записі, за замовчуванням спочатку найновіші.\n\n`filter` звужує список за адресою email, номером телефону, зовнішнім ID або ID профілю; кожен з них приймає одне або кілька значень і зіставляється з будь-яким із них. Пагінація здійснюється за курсором: передайте `links.next` з попередньої відповіді як `cursor`."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.display_name": {
+          "source": "List Profiles",
+          "message": "Список профілів"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Курсор для наступної сторінки: передайте значення з `links.next` попередньої відповіді.\n\nВін є непрозорим і не повинен будуватися вручну; залиште його незаповненим, щоб прочитати першу сторінку."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Курсор"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Курсор для наступної сторінки"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.YWRkaXRpb25hbEZpZWxkcw.desc": {
+          "source": "Computed blocks to include on each profile, which Klaviyo omits by default because they are expensive to produce:\n\n- `subscriptions`: the profile's consent state per channel\n- `predictive_analytics`: Klaviyo's predicted lifetime value and churn probability",
+          "message": "Обчислювані блоки для включення в кожен профіль, які Klaviyo пропускає за замовчуванням через високу вартість генерації:\n\n- `subscriptions`: стан згоди профілю для кожного каналу\n- `predictive_analytics`: прогнозована Klaviyo пожиттєва цінність та ймовірність відтоку"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.YWRkaXRpb25hbEZpZWxkcw.display_name": {
+          "source": "Additional Fields",
+          "message": "Додаткові поля"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.YWRkaXRpb25hbEZpZWxkcw.short_desc": {
+          "source": "Computed blocks to include on each profile",
+          "message": "Обчислювані блоки для включення в кожен профіль"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching profiles\n\nThis value is sent as Klaviyo's filter syntax, `any(email,…),any(phone_number,…),any(external_id,…),any(id,…)`.",
+          "message": "Звузити список до відповідних профілів\n\nЦе значення надсилається у форматі синтаксису фільтра Klaviyo, `any(email,…),any(phone_number,…),any(external_id,…),any(id,…)`."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Фільтр"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching profiles",
+          "message": "Звузити список до відповідних профілів"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "Поле та напрямок для сортування\n\nЦе значення надсилається як токен сортування Klaviyo: назва поля з префіксом `-` для сортування за спаданням."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Сортування"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "Поле та напрямок для сортування"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "Кількість записів для повернення на одній сторінці.\n\nKlaviyo обмежує це значення для кожної кінцевої точки та відхиляє більше значення замість його обмеження; максимум зазначено в описі самого аргументу."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Розмір сторінки"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Кількість записів, що повертаються на одній сторінці"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.short_desc": {
+          "source": "Lists profiles",
+          "message": "Повертає список профілів"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.desc": {
+          "source": "Lists the account's segments.\n\nA **segment** is a rule Klaviyo evaluates continuously, so its membership changes on its own; a **list** holds profiles that opted in explicitly. Paging is by cursor.",
+          "message": "Повертає список сегментів облікового запису.\n\n**Сегмент** — це правило, яке Klaviyo обчислює безперервно, тому його склад змінюється автоматично; **список** містить профілі, які явно підписалися. Пагінація здійснюється за курсором."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.display_name": {
+          "source": "List Segments",
+          "message": "Отримати список сегментів"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Курсор для наступної сторінки: передайте значення з `links.next` попередньої відповіді.\n\nВін є непрозорим і не повинен будуватися вручну; залиште його незаповненим, щоб прочитати першу сторінку."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Курсор"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Курсор для наступної сторінки"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching segments\n\nThis value is sent as Klaviyo's filter syntax, `any(name,…),any(id,…)`.",
+          "message": "Звузити список до відповідних сегментів\n\nЦе значення надсилається у форматі синтаксису фільтра Klaviyo, `any(name,…),any(id,…)`."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Фільтр"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching segments",
+          "message": "Звузити список до відповідних сегментів"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "Поле та напрямок для сортування\n\nЦе значення надсилається як токен сортування Klaviyo: назва поля з префіксом `-` для сортування за спаданням."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Сортування"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "Поле та напрямок для сортування"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "Кількість записів для повернення на одній сторінці.\n\nKlaviyo обмежує це значення для кожної кінцевої точки та відхиляє більше значення замість його обмеження; максимум зазначено в описі самого аргументу."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Розмір сторінки"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Кількість записів, що повертаються на одній сторінці"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.short_desc": {
+          "source": "Lists segments",
+          "message": "Повертає список сегментів"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Klaviyo** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Здійснити користувацький виклик HTTP / REST API до **Klaviyo**, використовуючи автентифікацію налаштованого з'єднання.\n\nВкажіть метод HTTP, шлях URI (відносно базової URL-адреси API з'єднання), необов'язкові параметри запиту, заголовки та тіло запиту. Відповідь повертається у вигляді хешу, що містить код стану, заголовки відповіді та тіло відповіді.\n\nВикористовуйте цю дію для кінцевих точок, які ще не представлені як окремі дії в цьому додатку."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Зробити виклик API"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Тіло запиту. Ефективний тип залежить від `body_type`: JSON/form/YAML очікують хеш, XML/text очікують рядок, multipart очікує структуру файлу, binary очікує необроблені байти."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Тіло"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Тіло запиту"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Завантажити файл за допомогою `multipart/form-data`. Тіло має бути структурою @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Фреймворк створює конверт multipart і встановлює заголовок boundary."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Форма Multipart"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Завантажити файл за допомогою multipart/form-data"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Передати тіло REST-клієнту без змін; клієнт визначає серіалізацію на основі налаштованого параметра `data` та типу значення"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Авто"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Транзит; використати серіалізацію підключення, давши вибір REST-клієнту"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Надіслати тіло як необроблені байти. Тіло має бути бінарним значенням. Установлює `Content-Type: application/octet-stream`, якщо не перевизначено через `hdr`."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Необроблені бінарні дані"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Надіслати тіло як необроблені байти"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Серіалізувати хеш полів форми як `application/x-www-form-urlencoded`. Тіло має бути хешем, значеннями якого є скаляри (рядки/числа/булеві значення)."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Форма (URL-encoded)"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Серіалізувати тіло як поля форми application/x-www-form-urlencoded"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Серіалізувати тіло як JSON; встановлює `Content-Type: application/json`. Тіло має бути хешем, списком або скалярним значенням."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Серіалізувати тіло як JSON"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Надіслати тіло як простий текст. Тіло має бути рядком. Установлює `Content-Type: text/plain`."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Простий текст"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Надіслати тіло як text/plain"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Надіслати тіло як XML. Якщо тіло є хешем, воно серіалізується в XML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/xml`."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Надіслати тіло як XML"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Надіслати тіло як YAML. Якщо тіло є хешем, воно серіалізується в YAML; якщо це рядок, воно надсилається без змін. Установлює `Content-Type: application/x-yaml`."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Надіслати тіло як YAML"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Вибирає режим серіалізації тіла та відповідний заголовок `Content-Type`. Зміна цього поля змінює вигляд редактора `body` — вибір JSON відкриває редактор JSON, вибір Multipart Form відкриває вибір файлу тощо."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Тип тіла"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Як серіалізується тіло та який Content-Type надсилається"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Якщо `True`, HTTP-відповіді з кодом, відмінним від 2xx, повертаються як звичайний хеш відповіді (з фактичним кодом стану) замість генерації `REST-RESPONSE-ERROR`. Корисно для обробки 4xx/5xx як даних — наприклад, перевірки існування ресурсу. Перевизначає налаштування `error_passthru` з'єднання лише для цього виклику."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Повертати помилки як дані"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Повертати відповіді без коду 2xx у звичайному режимі замість помилки"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Необов'язковий список кодів стану HTTP, які вважаються успішними. Якщо задано і код стану відповіді відсутній у цьому списку, дія генерує `REST-STATUS-ERROR`. Якщо не задано, застосовується поведінка REST-клієнта за замовчуванням (зазвичай: 2xx — успіх, не-2xx генерує помилку)."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Очікувані коди стану"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Коди стану відповіді, які вважаються успішними"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Хеш користувацьких заголовків, доданих до запиту. Вони перевизначають будь-які заголовки за замовчуванням, встановлені `body_type` (наприклад, передання `Content-Type` тут має перевагу над замовчуваним значенням для типу тіла)."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Користувацькі заголовки"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Додаткові заголовки запиту"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Якщо `True`, хеш відповіді містить підхеш `debug`, що містить метод/URL/заголовки запиту (з відредагованими конфіденційними значеннями), розміри запиту та відповіді, а також тривалість виконання. Корисно під час дослідження повільних або невдалих викликів. Вимкнено за замовчуванням для зменшення обсягу відповідей."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Включати зневаджувальну інформацію"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Включати зневаджувальну інформацію про запит/час/розмір у відповідь"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Метод HTTP"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Метод HTTP для використання в запиті"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Шлях URI відносно базового URL API з'єднання. Може містити заповнювачі `{name}`, які замінюються з `path_vars`. Приклад: `/users/{id}/comments`."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Шлях URI"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Шлях URI відносно базової URL-адреси API підключення"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Змінні шляху"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Значення для заповнювачів {name} у шляху"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Хеш параметрів рядка запиту для додавання до шляху URI. Значення кодуються у форматі URL; значення списку об'єднуються за допомогою `,`."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Аргументи запиту"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Параметри рядка запиту"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Klaviyo",
+          "message": "Здійснити користувацький виклик API до Klaviyo"
+        },
+        "app.S2xhdml5bw.action.bmV3X2V2ZW50.desc": {
+          "source": "Fires for each event recorded against the chosen metric.\n\n`metric` is required and names the metric by **ID** - a feed of every event in the account would be unusably large, and a workflow reacting to \"Placed Order\" does not want \"Viewed Product\".\n\nThe event carries the event record with its attributes beside its identity. The feed is positioned by `datetime`, which is when the event happened rather than when Klaviyo received it.",
+          "message": "Спрацьовує для кожної події, зареєстрованої для вибраної метрики.\n\nПараметр `metric` є обов'язковим і вказує метрику за **ID** — стрічка всіх подій в обліковому записі була б надто великою, а процесу, який реагує на \"Placed Order\", не потрібен \"Viewed Product\".\n\nПодія містить запис події з її атрибутами разом з ідентифікатором. Позиція стрічки визначається за `datetime`, тобто за часом настання події, а не коли Klaviyo її отримав."
+        },
+        "app.S2xhdml5bw.action.bmV3X2V2ZW50.display_name": {
+          "source": "New Event",
+          "message": "Нова подія"
+        },
+        "app.S2xhdml5bw.action.bmV3X2V2ZW50.short_desc": {
+          "source": "Triggers when a new event occurs",
+          "message": "Спрацьовує при виникненні нової події"
+        },
+        "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.desc": {
+          "source": "Fires for each profile added to the chosen list.\n\nThe feed is positioned by `joined_group_at`, so this fires when the profile **joins the list** rather than when the profile itself was created - a profile that has existed for a year fires this the moment it is added.\n\nThe event carries the profile with its attributes beside its identity.",
+          "message": "Спрацьовує для кожного профілю, доданого до вибраного списку.\n\nПозиція стрічки визначається за `joined_group_at`, тому тригер спрацьовує, коли профіль **приєднується до списку**, а не коли сам профіль був створений — профіль, що існував рік, викличе спрацьовування в момент додавання.\n\nПодія містить профіль з його атрибутами разом з ідентифікатором."
+        },
+        "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.display_name": {
+          "source": "Profile Added to List",
+          "message": "Профіль додано до списку"
+        },
+        "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.short_desc": {
+          "source": "Triggers when a profile is added to a list",
+          "message": "Спрацьовує, коли профіль додається до списку"
+        },
+        "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.desc": {
+          "source": "Fires for each profile created in the account.\n\nThe event carries the profile with its attributes beside its identity, which is the same shape **Get Profile** and **List Profiles** return.\n\nA profile that is edited later does **not** fire this again: the feed is positioned by `created`.",
+          "message": "Спрацьовує для кожного профілю, створеного в обліковому записі.\n\nПодія містить профіль з його атрибутами разом з ідентифікатором у тій самій структурі, яку повертають дії **Get Profile** та **List Profiles**.\n\nПрофіль, який редагується пізніше, **не** викликає повторного спрацьовування: позиція стрічки визначається за `created`."
+        },
+        "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.display_name": {
+          "source": "New Profile",
+          "message": "Новий профіль"
+        },
+        "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.short_desc": {
+          "source": "Triggers when a new profile is created",
+          "message": "Спрацьовує при створенні нового профілю"
+        },
+        "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.desc": {
+          "source": "Fires for each profile that enters the chosen segment.\n\nA segment is a rule Klaviyo evaluates continuously, so a profile enters one by **coming to match it** - editing a profile, or an event it records, can be what does that. The feed is positioned by `joined_group_at`.\n\nThe event carries the profile with its attributes beside its identity.",
+          "message": "Спрацьовує для кожного профілю, який потрапляє до вибраного сегмента.\n\nСегмент — це правило, яке Klaviyo обчислює постійно, тому профіль потрапляє туди, коли **починає йому відповідати** — наприклад, у результаті редагування профілю або події, яку він реєструє. Позиція стрічки визначається за `joined_group_at`.\n\nПодія містить профіль з його атрибутами разом з ідентифікатором."
+        },
+        "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.display_name": {
+          "source": "Profile Added to Segment",
+          "message": "Профіль додано до сегмента"
+        },
+        "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.short_desc": {
+          "source": "Triggers when a profile is added to a segment",
+          "message": "Спрацьовує, коли профіль додається до сегмента"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.desc": {
+          "source": "Returns every record in the given table matching the search criteria",
+          "message": "Повертає кожен запис у вказаній таблиці, що відповідає критеріям пошуку"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.display_name": {
+          "source": "Search Records",
+          "message": "Пошук записів"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "Таблиця для роботи: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` або `events`"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Таблиця"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Назва таблиці для роботи"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.short_desc": {
+          "source": "Search for matching records in the given table",
+          "message": "Пошук відповідних записів у вказаній таблиці"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.desc": {
+          "source": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches",
+          "message": "Повертає один запис у вказаній таблиці, що відповідає критеріям пошуку; якщо збігів більше одного, виникає помилка"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.display_name": {
+          "source": "Find a Single Record",
+          "message": "Знайти один запис"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "Таблиця для роботи: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` або `events`"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Таблиця"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Назва таблиці для роботи"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
+          "source": "Search for a single matching record in the given table",
+          "message": "Пошук одного відповідного запису у вказаній таблиці"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.desc": {
+          "source": "Sends a campaign immediately, by creating a send job for it.\n\nThe campaign must be complete and ready to send; Klaviyo rejects a send job for a campaign that is still a draft. The response carries the job, whose status can be read back through `make-api-call` on `/api/campaign-send-jobs/{id}`.",
+          "message": "Надсилає кампанію негайно, створюючи для неї завдання відправки.\n\nКампанія має бути завершеною та готовою до відправки; Klaviyo відхиляє завдання відправки для кампанії, яка все ще є чернеткою. Відповідь містить завдання, статус якого можна перевірити через `make-api-call` на `/api/campaign-send-jobs/{id}`."
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.display_name": {
+          "source": "Send Campaign",
+          "message": "Надіслати кампанію"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.option.aWQ.desc": {
+          "source": "The ID of the campaign to send",
+          "message": "ID кампанії для надсилання"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.option.aWQ.display_name": {
+          "source": "Campaign",
+          "message": "Кампанія"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.option.aWQ.short_desc": {
+          "source": "The campaign to send",
+          "message": "Кампанія для надсилання"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.short_desc": {
+          "source": "Sends a campaign",
+          "message": "Надсилає кампанію"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.desc": {
+          "source": "Records marketing consent for a profile, on the e-mail channel, the SMS channel or both.\n\nIdentify the profile by `profileId`, by `email` or by `phoneNumber`. `list` subscribes the profile **through a list**, which is what makes Klaviyo apply that list's double opt-in process; without it the consent is recorded directly and no confirmation is sent.\n\nOnly record consent that was actually given - Klaviyo's terms require the caller to hold a record of it.\n\nThis action is hand-written rather than generated, because Klaviyo records consent by creating a bulk subscription job whose body nests a list of per-channel consent envelopes four levels down.",
+          "message": "Реєструє маркетингову згоду для профілю на email-каналі, SMS-каналі або обох.\n\nІдентифікуйте профіль за `profileId`, `email` або `phoneNumber`. `list` підписує профіль **через список**, що змушує Klaviyo застосувати процес подвійного підтвердження (double opt-in) цього списку; без цього згода реєструється безпосередньо і підтвердження не надсилається.\n\nРеєструйте лише ту згоду, яка дійсно була надана — умови Klaviyo вимагають, щоб викликач зберігав її підтвердження.\n\nЦя дія написана вручну, а не згенерована, оскільки Klaviyo реєструє згоду шляхом створення масового завдання підписки, тіло якого містить список конвертів згоди для кожного каналу на чотири рівні вглиб."
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.display_name": {
+          "source": "Subscribe Profile",
+          "message": "Підписати профіль"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.Y29uc2VudFRvU3Vic2NyaWJlVG9DaGFubmVs.desc": {
+          "source": "The channel or channels the consent covers",
+          "message": "Канал або канали, на які поширюється згода"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.Y29uc2VudFRvU3Vic2NyaWJlVG9DaGFubmVs.display_name": {
+          "source": "Channel",
+          "message": "Канал"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.Y29uc2VudFRvU3Vic2NyaWJlVG9DaGFubmVs.short_desc": {
+          "source": "The channel or channels the consent covers",
+          "message": "Канал або канали, на які поширюється згода"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.ZW1haWw.desc": {
+          "source": "The e-mail address consenting.\n\nRequired for the e-mail channel unless `profileId` names a profile that already carries one.",
+          "message": "Адреса email, яка дає згоду.\n\nОбов'язково для каналу email, якщо `profileId` не вказує на профіль, який вже її містить."
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "Електронна пошта"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.ZW1haWw.short_desc": {
+          "source": "The e-mail address consenting",
+          "message": "Адреса email, яка дає згоду"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.bGlzdA.desc": {
+          "source": "Subscribe the profile **through this list**, which adds it to the list and applies the list's double opt-in process if it has one.\n\nWithout it the consent is recorded against the profile directly and no confirmation is sent.",
+          "message": "Підписати профіль **через цей список**, що додає його до списку та застосовує процес подвійного підтвердження (double opt-in), якщо такий налаштовано.\n\nБез цього згода реєструється безпосередньо для профілю і підтвердження не надсилається."
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "Список"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.bGlzdA.short_desc": {
+          "source": "Subscribe through this list",
+          "message": "Підписати через цей список"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.desc": {
+          "source": "Which kinds of SMS message the consent covers.\n\nKlaviyo treats marketing and transactional consent as different permissions; the default is marketing.",
+          "message": "Які типи SMS-повідомлень покриває згода.\n\nKlaviyo розглядає згоду на маркетингові та транзакційні повідомлення як різні дозволи; за замовчуванням — маркетингові."
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.display_name": {
+          "source": "SMS Subscription Type",
+          "message": "Тип підписки на SMS"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.short_desc": {
+          "source": "Which kinds of SMS message this covers",
+          "message": "Які типи SMS-повідомлень це покриває"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The phone number consenting, in E.164 format, ex: `+15005550006`.\n\nRequired for the SMS channel unless `profileId` names a profile that already carries one.",
+          "message": "Номер телефону, для якого надається згода, у форматі E.164, наприклад: `+15005550006`.\n\nОбов’язковий для каналу SMS, якщо тільки `profileId` не вказує на профіль, який уже містить номер."
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Номер телефону"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The phone number consenting, in E.164 format",
+          "message": "Номер телефону, для якого надається згода, у форматі E.164"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cHJvZmlsZUlk.desc": {
+          "source": "The profile giving consent.\n\nGive this, `email` or `phoneNumber`.",
+          "message": "Профіль, що надає згоду.\n\nВкажіть це, `email` або `phoneNumber`."
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cHJvZmlsZUlk.display_name": {
+          "source": "Profile",
+          "message": "Профіль"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cHJvZmlsZUlk.short_desc": {
+          "source": "The profile giving consent, if it is already known",
+          "message": "Профіль, що надає згоду, якщо він уже відомий"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.short_desc": {
+          "source": "Subscribes a profile to marketing channels",
+          "message": "Підписує профіль на маркетингові канали"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.desc": {
+          "source": "Removes a profile from a list.\n\nThe profile itself is not deleted, and its marketing consent is unchanged - use **Unsubscribe Profile** to withdraw consent. Removing a profile that is not a member succeeds and changes nothing.",
+          "message": "Вилучає профіль зі списку.\n\nСам профіль не видаляється, а його маркетингова згода залишається незмінною — скористайтеся дією **Unsubscribe Profile**, щоб відкликати згоду. Вилучення профілю, який не є учасником, завершується успішно й нічого не змінює."
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.display_name": {
+          "source": "Remove Profile from List",
+          "message": "Вилучити профіль зі списку"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.bGlzdA.desc": {
+          "source": "The list to remove the profile from",
+          "message": "Список, з якого слід вилучити профіль"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "Список"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.bGlzdA.short_desc": {
+          "source": "The list to remove the profile from",
+          "message": "Список, з якого слід вилучити профіль"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.cHJvZmlsZQ.desc": {
+          "source": "The profile to remove",
+          "message": "Профіль для вилучення"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Профіль"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.cHJvZmlsZQ.short_desc": {
+          "source": "The profile to remove",
+          "message": "Профіль для вилучення"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.short_desc": {
+          "source": "Removes a profile from a list",
+          "message": "Вилучає профіль зі списку"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.desc": {
+          "source": "Removes a tag from a list.\n\nThe tag itself is not deleted.",
+          "message": "Вилучає тег зі списку.\n\nСам тег не видаляється."
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.display_name": {
+          "source": "Remove Tag from List",
+          "message": "Вилучити тег зі списку"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.bGlzdA.desc": {
+          "source": "The list to remove the tag from",
+          "message": "Список, з якого слід вилучити тег"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "Список"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.bGlzdA.short_desc": {
+          "source": "The list to remove the tag from",
+          "message": "Список, з якого слід вилучити тег"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.dGFn.desc": {
+          "source": "The tag to remove",
+          "message": "Тег для видалення"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Тег"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.dGFn.short_desc": {
+          "source": "The tag to remove",
+          "message": "Тег для видалення"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.short_desc": {
+          "source": "Removes a tag from a list",
+          "message": "Вилучає тег зі списку"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.desc": {
+          "source": "Removes a tag from a segment.\n\nThe tag itself is not deleted.",
+          "message": "Вилучає тег із сегмента.\n\nСам тег не видаляється."
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.display_name": {
+          "source": "Remove Tag from Segment",
+          "message": "Вилучити тег із сегмента"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.c2VnbWVudA.desc": {
+          "source": "The segment to remove the tag from",
+          "message": "Сегмент, з якого слід вилучити тег"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.c2VnbWVudA.display_name": {
+          "source": "Segment",
+          "message": "Сегмент"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.c2VnbWVudA.short_desc": {
+          "source": "The segment to remove the tag from",
+          "message": "Сегмент, з якого слід вилучити тег"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.dGFn.desc": {
+          "source": "The tag to remove",
+          "message": "Тег для видалення"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Тег"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.dGFn.short_desc": {
+          "source": "The tag to remove",
+          "message": "Тег для видалення"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.short_desc": {
+          "source": "Removes a tag from a segment",
+          "message": "Вилучає тег із сегмента"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.desc": {
+          "source": "Withdraws marketing consent for a profile.\n\nWhich channels are withdrawn follows from what is supplied: an `email` withdraws e-mail consent, a `phoneNumber` withdraws SMS consent, and both withdraw both. At least one is required.\n\nThis withdraws **consent**, which Klaviyo honours across every list; use **Remove Profile from List** to change membership instead.\n\nThis action is hand-written rather than generated, because Klaviyo withdraws consent by creating a bulk job whose body nests a list of per-channel consent envelopes four levels down.",
+          "message": "Відкликає маркетингову згоду для профілю.\n\nЯкі саме канали відкликаються, залежить від переданих даних: `email` відкликає згоду на email, `phoneNumber` відкликає згоду на SMS, а обидва параметри відкликають обидва канали. Потрібно вказати щонайменше один із них.\n\nЦе відкликає **згоду**, яку Klaviyo враховує для всіх списків; натомість використовуйте **Remove Profile from List**, щоб змінити членство в списках.\n\nЦю дію написано вручну, а не згенеровано, оскільки Klaviyo відкликає згоду шляхом створення масового завдання, тіло якого містить список конвертів згоди для кожного каналу на чотири рівні вглиб."
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.display_name": {
+          "source": "Unsubscribe Profile",
+          "message": "Скасувати підписку профілю"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.ZW1haWw.desc": {
+          "source": "The e-mail address to unsubscribe.\n\nSupplying it withdraws e-mail marketing consent.",
+          "message": "Адреса електронної пошти, для якої скасовується підписка.\n\nЇї передавання відкликає згоду на маркетингові розсилки електронною поштою."
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "Електронна пошта"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.ZW1haWw.short_desc": {
+          "source": "The e-mail address to unsubscribe",
+          "message": "Адреса електронної пошти, для якої скасовується підписка"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.desc": {
+          "source": "Which kinds of SMS message to withdraw consent for.\n\nOnly meaningful together with `phoneNumber`; the default is marketing.",
+          "message": "Типи SMS-повідомлень, для яких слід відкликати згоду.\n\nМає сенс лише разом із `phoneNumber`; типовим значенням є маркетингові повідомлення."
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.display_name": {
+          "source": "SMS Subscription Type",
+          "message": "Тип підписки на SMS"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.short_desc": {
+          "source": "Which kinds of SMS message this covers",
+          "message": "Які типи SMS-повідомлень це покриває"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The phone number to unsubscribe, in E.164 format.\n\nSupplying it withdraws SMS consent.",
+          "message": "Номер телефону, для якого скасовується підписка, у форматі E.164.\n\nЙого передавання відкликає згоду на SMS."
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Номер телефону"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The phone number to unsubscribe, in E.164 format",
+          "message": "Номер телефону для скасування підписки у форматі E.164"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.short_desc": {
+          "source": "Unsubscribes a profile from marketing channels",
+          "message": "Скасовує підписку профілю на маркетингові канали"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.desc": {
+          "source": "Updates every record in the given table matching the search criteria",
+          "message": "Оновлює кожен запис у вказаній таблиці, що відповідає критеріям пошуку"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "Оновити записи"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "Таблиця для роботи: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` або `events`"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Таблиця"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Назва таблиці для роботи"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria",
+          "message": "Оновити записи, що відповідають критеріям пошуку"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.desc": {
+          "source": "Updates a campaign that already exists, named by its Klaviyo ID.\n\nOnly the attributes supplied are changed. Klaviyo rejects a change to a campaign that has already been sent.",
+          "message": "Оновлює наявну кампанію, вказану за її ідентифікатором у Klaviyo.\n\nЗмінюються лише надані атрибути. Klaviyo відхиляє зміни для кампанії, яку вже було надіслано."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.display_name": {
+          "source": "Update Campaign",
+          "message": "Оновити кампанію"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.YXVkaWVuY2Vz.display_name": {
+          "source": "Audiences",
+          "message": "Аудиторії"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.YXVkaWVuY2Vz.short_desc": {
+          "source": "The lists and segments to include and exclude",
+          "message": "Списки та сегменти для включення й виключення"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.aWQ.desc": {
+          "source": "The campaign ID to be retrieved: The campaign ID to be retrieved",
+          "message": "ID кампанії для отримання: ID кампанії для отримання"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.aWQ.display_name": {
+          "source": "Campaign",
+          "message": "Кампанія"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.aWQ.short_desc": {
+          "source": "The campaign to work on",
+          "message": "Кампанія для обробки"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The campaign name",
+          "message": "Назва кампанії"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "The new name of the campaign",
+          "message": "Нова назва кампанії"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.desc": {
+          "source": "Options to use when sending a campaign",
+          "message": "Параметри, що використовуються під час надсилання кампанії"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.display_name": {
+          "source": "Send Options",
+          "message": "Параметри надсилання"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.short_desc": {
+          "source": "Whether to use smart sending",
+          "message": "Чи використовувати розумне надсилання"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.desc": {
+          "source": "The send strategy the campaign will send with",
+          "message": "Стратегія надсилання, за якою буде надіслано кампанію"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.display_name": {
+          "source": "Send Strategy",
+          "message": "Стратегія надсилання"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.short_desc": {
+          "source": "When the campaign is sent, if not immediately",
+          "message": "Час надсилання кампанії, якщо не негайно"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.desc": {
+          "source": "The tracking options associated with the campaign",
+          "message": "Параметри відстеження, пов'язані з кампанією"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.display_name": {
+          "source": "Tracking Options",
+          "message": "Параметри відстеження"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.short_desc": {
+          "source": "The UTM parameters and tracking flags to apply",
+          "message": "Параметри UTM та прапорці відстеження для застосування"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.short_desc": {
+          "source": "Updates an existing campaign",
+          "message": "Оновлює наявну кампанію"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.desc": {
+          "source": "Updates a list that already exists, named by its Klaviyo ID.\n\nOnly the attributes supplied are changed.",
+          "message": "Оновлює наявний список, вказаний за його ідентифікатором у Klaviyo.\n\nЗмінюються лише надані атрибути."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.display_name": {
+          "source": "Update List",
+          "message": "Оновити список"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.aWQ.desc": {
+          "source": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+          "message": "Первинний ключ, що однозначно ідентифікує цей список. Згенеровано Klaviyo."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.aWQ.display_name": {
+          "source": "List",
+          "message": "Список"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.aWQ.short_desc": {
+          "source": "The list to work on",
+          "message": "Список для обробки"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.allowed-value.c3RyaW5nOmRvdWJsZV9vcHRfaW4.display_name": {
+          "source": "double_opt_in",
+          "message": "double_opt_in"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.allowed-value.c3RyaW5nOnNpbmdsZV9vcHRfaW4.display_name": {
+          "source": "single_opt_in",
+          "message": "single_opt_in"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.desc": {
+          "source": "The opt-in process for this list. Valid values: 'double_opt_in', 'single_opt_in'.",
+          "message": "Процес згоди (opt-in) для цього списку. Допустимі значення: 'double_opt_in', 'single_opt_in'."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.display_name": {
+          "source": "Opt-in Process",
+          "message": "Процес підтвердження підписки"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.short_desc": {
+          "source": "Whether a new subscriber has to confirm by e-mail",
+          "message": "Чи повинен новий підписник підтверджувати підписку поштою"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.bmFtZQ.desc": {
+          "source": "A helpful name to label the list",
+          "message": "Зрозуміла назва для списку"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.bmFtZQ.short_desc": {
+          "source": "The new name of the list",
+          "message": "Нова назва списку"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.short_desc": {
+          "source": "Updates an existing list",
+          "message": "Оновлює наявний список"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.desc": {
+          "source": "Updates a profile that already exists, named by its Klaviyo ID.\n\nOnly the attributes supplied are changed. A custom property supplied here **replaces** the stored value; `meta.patch_properties` appends to or unsets one instead.",
+          "message": "Оновлює наявний профіль, вказаний за його ідентифікатором у Klaviyo.\n\nЗмінюються лише надані атрибути. Передана тут спеціальна властивість **замінює** збережене значення; натомість `meta.patch_properties` додає значення або видаляє його."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.display_name": {
+          "source": "Update Profile",
+          "message": "Оновити профіль"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.desc": {
+          "source": "Country name",
+          "message": "Назва країни"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Країна"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "Назва країни"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "Назва міста"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Місто"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y2l0eQ.short_desc": {
+          "source": "City name",
+          "message": "Назва міста"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.desc": {
+          "source": "Your own properties to store on the profile, as name/value pairs.\n\nKlaviyo reserves property names beginning with `$`.",
+          "message": "Ваші власні властивості для збереження в профілі у вигляді пар ім'я/значення.\n\nKlaviyo резервує назви властивостей, що починаються з `$`."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.display_name": {
+          "source": "Custom Properties",
+          "message": "Настроювані властивості"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.short_desc": {
+          "source": "Your own properties to store on the profile",
+          "message": "Ваші власні властивості для збереження в профілі"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.desc": {
+          "source": "First line of street address",
+          "message": "Перший рядок адреси"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.display_name": {
+          "source": "Address Line 1",
+          "message": "Рядок адреси 1"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.short_desc": {
+          "source": "First line of street address",
+          "message": "Перший рядок адреси"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.desc": {
+          "source": "Second line of street address",
+          "message": "Другий рядок адреси"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.display_name": {
+          "source": "Address Line 2",
+          "message": "Рядок адреси 2"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.short_desc": {
+          "source": "Second line of street address",
+          "message": "Другий рядок адреси"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZW1haWw.desc": {
+          "source": "Individual's email address",
+          "message": "Електронна адреса особи"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "Електронна пошта"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZW1haWw.short_desc": {
+          "source": "The profile's e-mail address",
+          "message": "Електронна адреса профілю"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.desc": {
+          "source": "Your own identifier for this person, so that a profile can be found by the ID it has in your system rather than by e-mail",
+          "message": "Ваш власний ідентифікатор цієї особи, щоб профіль можна було знайти за його ID у вашій системі, а не за електронною поштою"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.display_name": {
+          "source": "External ID",
+          "message": "Зовнішній ID"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.short_desc": {
+          "source": "Your own identifier for this person",
+          "message": "Ваш власний ідентифікатор для цієї особи"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.desc": {
+          "source": "Individual's first name",
+          "message": "Ім'я особи"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Ім'я"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Individual's first name",
+          "message": "Ім'я особи"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.desc": {
+          "source": "URL pointing to the location of a profile image",
+          "message": "URL-адреса, що вказує на розташування зображення профілю"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.display_name": {
+          "source": "Image URL",
+          "message": "URL-адреса зображення"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.short_desc": {
+          "source": "A URL for the profile's avatar",
+          "message": "URL-адреса для аватара профілю"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aWQ.desc": {
+          "source": "Primary key that uniquely identifies this profile. Generated by Klaviyo.: Primary key that uniquely identifies this profile. Generated by Klaviyo.",
+          "message": "Первинний ключ, який однозначно ідентифікує цей профіль. Згенеровано Klaviyo.: Первинний ключ, який однозначно ідентифікує цей профіль. Згенеровано Klaviyo."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aWQ.display_name": {
+          "source": "Profile",
+          "message": "Профіль"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aWQ.short_desc": {
+          "source": "The profile to update",
+          "message": "Профіль для оновлення"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aXA.desc": {
+          "source": "IP Address",
+          "message": "IP-адреса"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aXA.display_name": {
+          "source": "IP Address",
+          "message": "IP-адреса"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aXA.short_desc": {
+          "source": "The IP address Klaviyo should locate the profile from",
+          "message": "IP-адреса, за якою Klaviyo має визначити місцезнаходження профілю"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Name of the company or organization within the company for whom the individual works",
+          "message": "Назва компанії або організації всередині компанії, де працює особа"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Організація"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The company the person belongs to",
+          "message": "Компанія, до якої належить особа"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9jYWxl.desc": {
+          "source": "The locale of the profile, in the IETF BCP 47 language tag format like (ISO 639-1/2)-(ISO 3166 alpha-2)",
+          "message": "Локаль профілю у форматі мовного тегу IETF BCP 47, наприклад (ISO 639-1/2)-(ISO 3166 alpha-2)"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Локаль"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9jYWxl.short_desc": {
+          "source": "The profile's locale, ex: \"en-US\"",
+          "message": "Локаль профілю, наприклад: \"en-US\""
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.desc": {
+          "source": "Longitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "Координата довготи. Рекомендуємо вказувати з точністю до чотирьох знаків після коми."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.display_name": {
+          "source": "Longitude",
+          "message": "Довгота"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.short_desc": {
+          "source": "Longitude coordinate",
+          "message": "Координата довготи"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.desc": {
+          "source": "Latitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "Координата широти. Рекомендуємо вказувати з точністю до чотирьох знаків після коми."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.display_name": {
+          "source": "Latitude",
+          "message": "Широта"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.short_desc": {
+          "source": "Latitude coordinate",
+          "message": "Координата широти"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.desc": {
+          "source": "Individual's last name",
+          "message": "Прізвище особи"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Прізвище"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.short_desc": {
+          "source": "Individual's last name",
+          "message": "Прізвище особи"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bWV0YQ.desc": {
+          "source": "Append to or unset custom properties rather than replacing them.\n\n`patch_properties.append` adds a value to a list-valued property, `unappend` removes one, and `unset` deletes a property outright.",
+          "message": "Додавання або скидання настроюваних властивостей замість їх заміни.\n\n`patch_properties.append` додає значення до спискової властивості, `unappend` видаляє його, а `unset` видаляє властивість повністю."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bWV0YQ.display_name": {
+          "source": "Patch Operations",
+          "message": "Операції оновлення (Patch)"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bWV0YQ.short_desc": {
+          "source": "Append to or unset custom properties rather than replacing them",
+          "message": "Додавання або скидання настроюваних властивостей замість їх заміни"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The profile's phone number in E.164 format, ex: `+15005550006`.\n\nKlaviyo rejects a number in any other format.",
+          "message": "Номер телефону профілю у форматі E.164, наприклад: `+15005550006`.\n\nKlaviyo відхиляє номер у будь-якому іншому форматі."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Номер телефону"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The profile's phone number in E.164 format",
+          "message": "Номер телефону профілю у форматі E.164"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cmVnaW9u.desc": {
+          "source": "Region within a country, such as state or province",
+          "message": "Регіон у межах країни, наприклад штат або область"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "Регіон"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cmVnaW9u.short_desc": {
+          "source": "The state, province or region",
+          "message": "Штат, область або регіон"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGl0bGU.desc": {
+          "source": "Individual's job title",
+          "message": "Посада особи"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Заголовок"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGl0bGU.short_desc": {
+          "source": "The person's job title",
+          "message": "Посада особи"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.desc": {
+          "source": "Time zone name. We recommend using time zones from the IANA Time Zone Database.",
+          "message": "Назва часового поясу. Рекомендовано використовувати часові пояси з бази даних IANA."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.display_name": {
+          "source": "Time Zone",
+          "message": "Часовий пояс"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.short_desc": {
+          "source": "The IANA time zone name",
+          "message": "Назва часового поясу IANA"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.emlw.desc": {
+          "source": "Zip code",
+          "message": "Поштовий індекс"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.emlw.display_name": {
+          "source": "Postal Code",
+          "message": "Поштовий індекс"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.emlw.short_desc": {
+          "source": "The postal or ZIP code",
+          "message": "Поштовий індекс"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.short_desc": {
+          "source": "Updates an existing profile",
+          "message": "Оновлює наявний профіль"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.desc": {
+          "source": "Updates a segment that already exists, named by its Klaviyo ID.\n\nOnly the attributes supplied are changed. Replacing `definition` re-evaluates the membership, which Klaviyo does in the background.",
+          "message": "Оновлює наявний сегмент, вказаний за його ідентифікатором у Klaviyo.\n\nЗмінюються лише надані атрибути. Заміна `definition` ініціює переоцінку членства, яку Klaviyo виконує у фоновому режимі."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.display_name": {
+          "source": "Update Segment",
+          "message": "Оновити сегмент"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.ZGVmaW5pdGlvbg.display_name": {
+          "source": "Definition",
+          "message": "Визначення"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.ZGVmaW5pdGlvbg.short_desc": {
+          "source": "The rule deciding who is in the segment",
+          "message": "Правило, що визначає склад сегмента"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aWQ.display_name": {
+          "source": "Segment",
+          "message": "Сегмент"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aWQ.short_desc": {
+          "source": "The segment to work on",
+          "message": "Сегмент для обробки"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNBY3RpdmU.desc": {
+          "source": "Set to false to deactivate the segment. When deactivating, this must be the only attribute in the request body. Deactivation cannot be combined with other updates. Marking a segment inactive will impact campaigns, flows, ad syncs, forms, helpdesk routing, and other features that reference this segment. Set to true to reactivate a deactivated segment.",
+          "message": "Установіть значення false, щоб деактивувати сегмент. У разі деактивації це має бути єдиний атрибут у тілі запиту. Деактивацію не можна поєднувати з іншими оновленнями. Позначення сегмента як неактивного вплине на кампанії, потоки (flows), синхронізацію реклами, форми, маршрутизацію служби підтримки та інші функції, що посилаються на цей сегмент. Установіть true, щоб знову активувати деактивований сегмент."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNBY3RpdmU.display_name": {
+          "source": "Active",
+          "message": "Активний"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNBY3RpdmU.short_desc": {
+          "source": "Whether Klaviyo keeps the segment's membership up to date",
+          "message": "Чи підтримує Klaviyo актуальний склад учасників сегмента"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNTdGFycmVk.display_name": {
+          "source": "Starred",
+          "message": "Позначені зірочкою"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNTdGFycmVk.short_desc": {
+          "source": "Whether the segment is starred in the Klaviyo UI",
+          "message": "Чи позначено сегмент зірочкою в інтерфейсі Klaviyo"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.bmFtZQ.short_desc": {
+          "source": "The new name of the segment",
+          "message": "Нова назва сегмента"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.short_desc": {
+          "source": "Updates an existing segment",
+          "message": "Оновлює наявний сегмент"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.desc": {
+          "source": "Renames a tag.\n\nA tag's name is the only attribute it has, so this action changes the name and nothing else. Klaviyo answers with no content.",
+          "message": "Перейменовує тег.\n\nНазва тегу — це його єдиний атрибут, тому ця дія змінює лише назву й нічого більше. Klaviyo повертає порожню відповідь (no content)."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.display_name": {
+          "source": "Update Tag",
+          "message": "Оновити тег"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.aWQ.desc": {
+          "source": "The Tag ID",
+          "message": "ID тегу"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.aWQ.display_name": {
+          "source": "Tag",
+          "message": "Тег"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.aWQ.short_desc": {
+          "source": "The tag to work on",
+          "message": "Тег для обробки"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.bmFtZQ.desc": {
+          "source": "The Tag name",
+          "message": "Назва тегу"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Назва"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.bmFtZQ.short_desc": {
+          "source": "The new name of the tag",
+          "message": "Нова назва тегу"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.short_desc": {
+          "source": "Renames an existing tag",
+          "message": "Перейменовує наявний тег"
+        },
+        "app.S2xhdml5bw.desc": {
+          "source": "Provides access to [Klaviyo](https://www.klaviyo.com), the e-mail and SMS marketing platform.\n\nKlaviyo holds the people a brand markets to as **profiles**, groups them into **lists** they opted in to and **segments** it evaluates continuously, records what they did as **events** against **metrics**, and sends **campaigns** to them.\n\n**Common use cases**:\n- **Profiles**: create or update someone from your own system's records, and find them again\n- **Lists and segments**: list them, create a list, and move profiles in and out\n- **Subscriptions**: record and withdraw marketing consent per channel\n- **Events**: record what somebody did, which is what triggers a flow\n- **Campaigns**: find a campaign and send it\n- **Tags**: organise lists and segments for reporting\n\nAuthentication is the OAuth2 authorization code flow against an app registered in Klaviyo's developer portal, or a private API key for an integration serving one account.\n\nKlaviyo is a trademark of Klaviyo, Inc.",
+          "message": "Забезпечує доступ до [Klaviyo](https://www.klaviyo.com) — платформи для маркетингу електронною поштою та через SMS.\n\nKlaviyo зберігає аудиторію бренду як **профілі** (profiles), групує їх у **списки** (lists), на які користувачі підписалися, і **сегменти** (segments), що оцінюються постійно, фіксує їхні дії як **події** (events) щодо **метрик** (metrics) та надсилає їм **кампанії** (campaigns).\n\n**Поширені сценарії використання**:\n- **Профілі**: створення або оновлення записів людей із вашої системи та їхній пошук\n- **Списки й сегменти**: перегляд, створення списків і додавання/вилучення профілів\n- **Підписки**: фіксація та відкликання маркетингової згоди для кожного каналу\n- **Події**: фіксація дій користувача, що є тригером для запусків ланцюжків (flows)\n- **Кампанії**: пошук кампанії та її відправлення\n- **Теги**: організація списків і сегментів для звітності\n\nАвтентифікація виконується за схемою OAuth2 Authorization Code через додаток, зареєстрований на порталі розробників Klaviyo, або за допомогою приватного ключа API для інтеграції з одним обліковим записом.\n\nKlaviyo є торговельною маркою компанії Klaviyo, Inc."
+        },
+        "app.S2xhdml5bw.display_name": {
+          "source": "Klaviyo",
+          "message": "Klaviyo"
+        },
+        "app.S2xhdml5bw.short_desc": {
+          "source": "Email and SMS marketing automation platform",
+          "message": "Платформа автоматизації email- та SMS-маркетингу"
+        }
+      }
     }
   }
 }

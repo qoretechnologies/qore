@@ -895,6 +895,10 @@
           "source": "Milestone",
           "message": "里程碑"
         },
+        "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.option.bWlsZXN0b25l.short_desc": {
+          "source": "If an 'integer' is passed, it should refer to a milestone by its 'number' field",
+          "message": "若傳入「integer」，應透過其「number」欄位參照里程碑"
+        },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.option.c29ydA.allowed-value.c3RyaW5nOmNvbW1lbnRz.display_name": {
           "source": "comments",
           "message": "comments"
@@ -1170,6 +1174,10 @@
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.display_name": {
           "source": "Duplicate Issue ID",
           "message": "重複議題 ID"
+        },
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.short_desc": {
+          "source": "The ID of the issue to mark as the canonical duplicate when 'state_reason' is…",
+          "message": "當「state_reason」為…時，標記為標準重複項目的 Issue ID"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.aXNzdWVfZmllbGRfdmFsdWVz.desc": {
           "source": "An array of issue field values to set on this issue. Each field value must include the field ID and the value to set. Only users with push access can set field values for issues",
@@ -1735,6 +1743,10 @@
           "source": "URI Path",
           "message": "URI 路徑"
         },
+        "app.R2l0aHVi.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "相對於連線 API 基礎 URL 的 URI 路徑"
+        },
         "app.R2l0aHVi.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "代入 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}`，框架會傳送 `/users/123`。值均經過 URL 編碼。"
@@ -1907,6 +1919,10 @@
           "source": "Order",
           "message": "排序"
         },
+        "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.b3JkZXI.short_desc": {
+          "source": "Determines whether the first search result returned is the highest number of…",
+          "message": "決定傳回的第一個搜尋結果是否為…數量最多者"
+        },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c29ydA.allowed-value.c3RyaW5nOmNvbW1lbnRz.display_name": {
           "source": "comments",
           "message": "comments"
@@ -1958,6 +1974,10 @@
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "排序"
+        },
+        "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c29ydA.short_desc": {
+          "source": "Sorts the results of your query by the number of 'comments', 'reactions',…",
+          "message": "依「comments」、「reactions」或…的數量排序查詢結果"
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c2VhcmNoX3R5cGU.allowed-value.c3RyaW5nOmh5YnJpZA.display_name": {
           "source": "hybrid",
@@ -2043,6 +2063,10 @@
           "source": "Order",
           "message": "排序"
         },
+        "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.b3JkZXI.short_desc": {
+          "source": "Determines whether the first search result returned is the highest number of…",
+          "message": "決定傳回的第一個搜尋結果是否為…數量最多者"
+        },
         "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.c29ydA.allowed-value.c3RyaW5nOmZvcmtz.display_name": {
           "source": "forks",
           "message": "forks"
@@ -2066,6 +2090,10 @@
         "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "排序"
+        },
+        "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.c29ydA.short_desc": {
+          "source": "Sorts the results of your query by number of 'stars', 'forks', or…",
+          "message": "依「stars」、「forks」或…的數量排序查詢結果"
         },
         "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.cGFnZQ.desc": {
           "source": "The page number of the results to fetch. For more information, see \"[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api).\"",
@@ -2230,6 +2258,10 @@
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.display_name": {
           "source": "Maintainer Can Modify",
           "message": "維護者可修改"
+        },
+        "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.short_desc": {
+          "source": "Indicates whether…",
+          "message": "指出是否…"
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.cmVwbw.desc": {
           "source": "The repository name on its own, **not** `owner/name`.\n\nFor `qoretechnologies/qorus` this is `qorus`.",
@@ -2707,6 +2739,10 @@
           "source": "Maintainer Can Modify",
           "message": "維護者可修改"
         },
+        "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.short_desc": {
+          "source": "Indicates whether…",
+          "message": "指出是否…"
+        },
         "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.option.c3RhdGU.allowed-value.c3RyaW5nOm9wZW4.display_name": {
           "source": "open",
           "message": "open"
@@ -2963,6 +2999,10 @@
           "source": "Gitignore Template",
           "message": "Gitignore 範本"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.Z2l0aWdub3JlX3RlbXBsYXRl.short_desc": {
+          "source": "The desired language or platform to apply to the .gitignore",
+          "message": "要套用至 .gitignore 的所需語言或平台"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.desc": {
           "source": "Whether to delete head branches when pull requests are merged",
           "message": "合併拉取請求時是否刪除 head 分支"
@@ -3066,6 +3106,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aXNfdGVtcGxhdGU.display_name": {
           "source": "Is Template",
           "message": "為範本"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aXNfdGVtcGxhdGU.short_desc": {
+          "source": "Whether this repository acts as a template that can be used to generate new…",
+          "message": "此存放庫是否做為可用於產生新…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.bGljZW5zZV90ZW1wbGF0ZQ.desc": {
           "source": "The license keyword of the open source license for this repository.",
@@ -3235,6 +3279,10 @@
           "source": "Allow Auto Merge",
           "message": "允許自動合併"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfYXV0b19tZXJnZQ.short_desc": {
+          "source": "Either 'true' to allow auto-merge on pull requests, or 'false' to disallow…",
+          "message": "設為 'true' 允許 PR 自動合併，或設為 'false' 禁止…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfbWVyZ2VfY29tbWl0.desc": {
           "source": "Either `true` to allow merging pull requests with a merge commit, or `false` to prevent merging pull requests with merge commits.",
           "message": "傳入 `true` 以允許使用合併提交合併 Pull Request，或傳入 `false` 以防止使用合併提交合併 Pull Request。"
@@ -3242,6 +3290,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfbWVyZ2VfY29tbWl0.display_name": {
           "source": "Allow Merge Commit",
           "message": "允許合併提交"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfbWVyZ2VfY29tbWl0.short_desc": {
+          "source": "Either 'true' to allow merging pull requests with a merge commit, or 'false'…",
+          "message": "設為 'true' 允許使用合併提交合併 PR，或設為 'false'…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfc3F1YXNoX21lcmdl.desc": {
           "source": "Either `true` to allow squash-merging pull requests, or `false` to prevent squash-merging.",
@@ -3251,6 +3303,10 @@
           "source": "Allow Squash Merge",
           "message": "允許 Squash 合併"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfc3F1YXNoX21lcmdl.short_desc": {
+          "source": "Either 'true' to allow squash-merging pull requests, or 'false' to prevent…",
+          "message": "設為 'true' 允許壓縮合併 PR，或設為 'false' 禁止…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfcmViYXNlX21lcmdl.desc": {
           "source": "Either `true` to allow rebase-merging pull requests, or `false` to prevent rebase-merging.",
           "message": "傳入 `true` 以允許變基合併 Pull Request，或傳入 `false` 以防止變基合併。"
@@ -3258,6 +3314,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfcmViYXNlX21lcmdl.display_name": {
           "source": "Allow Rebase Merge",
           "message": "允許 Rebase 合併"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfcmViYXNlX21lcmdl.short_desc": {
+          "source": "Either 'true' to allow rebase-merging pull requests, or 'false' to prevent…",
+          "message": "設為 'true' 允許變基合併 PR，或設為 'false' 禁止…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YXV0b19pbml0.desc": {
           "source": "Pass `true` to create an initial commit with empty README.",
@@ -3279,6 +3339,10 @@
           "source": "Gitignore Template",
           "message": "Gitignore 範本"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.Z2l0aWdub3JlX3RlbXBsYXRl.short_desc": {
+          "source": "Desired language or platform…",
+          "message": "所需的語言或平台…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.desc": {
           "source": "Either `true` to allow automatically deleting head branches when pull requests are merged, or `false` to prevent automatic deletion. **The authenticated user must be an organization owner to set this property to `true`.**",
           "message": "傳入 `true` 以允許在合併 Pull Request 時自動刪除 head 分支，或傳入 `false` 以防止自動刪除。**已驗證的使用者必須是組織擁有者才能將此屬性設定為 `true`。**"
@@ -3286,6 +3350,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
           "source": "Delete Branch on Merge",
           "message": "合併時刪除分支"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
+          "source": "Either 'true' to allow automatically deleting head branches when pull requests…",
+          "message": "設為 'true' 允許在合併 PR 時自動刪除來源分支…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVzY3JpcHRpb24.desc": {
           "source": "A short description of the repository.",
@@ -3343,6 +3411,10 @@
           "source": "Has Projects",
           "message": "具有專案"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3Byb2plY3Rz.short_desc": {
+          "source": "Either 'true' to enable projects for this repository or 'false' to disable them",
+          "message": "設為 'true' 啟用此存放庫的專案，或設為 'false' 停用"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3dpa2k.desc": {
           "source": "Either `true` to enable the wiki for this repository or `false` to disable it.",
           "message": "傳入 `true` 以啟用此存放庫的 Wiki，或傳入 `false` 以停用它。"
@@ -3363,6 +3435,10 @@
           "source": "Is Template",
           "message": "為範本"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aXNfdGVtcGxhdGU.short_desc": {
+          "source": "Either 'true' to make this repo available as a template repository or 'false'…",
+          "message": "設為 'true' 將此存放庫設為範本存放庫，或設為 'false'…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.b3Jn.desc": {
           "source": "The organization name. The name is not case sensitive.",
           "message": "組織名稱。名稱不區分大小寫。"
@@ -3382,6 +3458,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bGljZW5zZV90ZW1wbGF0ZQ.display_name": {
           "source": "License Template",
           "message": "授權範本"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bGljZW5zZV90ZW1wbGF0ZQ.short_desc": {
+          "source": "Choose an [open source license template](https://choosealicense.com/) that…",
+          "message": "選擇一個[開放原始碼授權條款範本](https://choosealicense.com/)…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bWVyZ2VfY29tbWl0X21lc3NhZ2U.allowed-value.c3RyaW5nOkJMQU5L.display_name": {
           "source": "BLANK",
@@ -3515,6 +3595,10 @@
           "source": "Use Squash PR Title as Default",
           "message": "預設使用壓縮 PR 標題"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.short_desc": {
+          "source": "Either 'true' to allow squash-merge commits to use pull request title, or…",
+          "message": "設為 'true' 允許壓縮合併提交使用 PR 標題，或…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
           "source": "public",
           "message": "公開"
@@ -3579,6 +3663,10 @@
           "source": "Discussion Category Name",
           "message": "討論類別名稱"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZGlzY3Vzc2lvbl9jYXRlZ29yeV9uYW1l.short_desc": {
+          "source": "If specified, a discussion of the specified category is created and linked to…",
+          "message": "若指定，將建立指定類別的討論並連結至…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZHJhZnQ.desc": {
           "source": "`true` to create a draft (unpublished) release, `false` to create a published one.",
           "message": "傳入 `true` 建立草稿（未發布）版本，傳入 `false` 建立已發布版本。"
@@ -3586,6 +3674,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZHJhZnQ.display_name": {
           "source": "Draft",
           "message": "草稿"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZHJhZnQ.short_desc": {
+          "source": "'true' to create a draft (unpublished) release, 'false' to create a published…",
+          "message": "'true' 建立草稿（未發布）版本，'false' 建立已發布…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.b3duZXI.desc": {
           "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
@@ -3619,6 +3711,10 @@
           "source": "Make Latest",
           "message": "設為最新版本"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.bWFrZV9sYXRlc3Q.short_desc": {
+          "source": "Specifies whether this release should be set as the latest release for the…",
+          "message": "指定是否應將此版本設為存放庫的最新版本…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.bmFtZQ.desc": {
           "source": "The name of the release.",
           "message": "發行版本的名稱。"
@@ -3638,6 +3734,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.cHJlcmVsZWFzZQ.display_name": {
           "source": "Prerelease",
           "message": "預發行版本"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.cHJlcmVsZWFzZQ.short_desc": {
+          "source": "'true' to identify the release as a prerelease",
+          "message": "'true' 表示將此版本標記為預先發布版本"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.cmVwbw.desc": {
           "source": "The repository name on its own, **not** `owner/name`.\n\nFor `qoretechnologies/qorus` this is `qorus`.",
@@ -4018,6 +4118,10 @@
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1icmFuY2hlcw.option.cHJvdGVjdGVk.display_name": {
           "source": "Protected",
           "message": "受保護"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtbGlzdC1icmFuY2hlcw.option.cHJvdGVjdGVk.short_desc": {
+          "source": "Setting to 'true' returns only branches protected by branch protections or…",
+          "message": "設為 'true' 僅傳回受分支保護規則或…"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1icmFuY2hlcw.option.cmVwbw.desc": {
           "source": "The repository name on its own, **not** `owner/name`.\n\nFor `qoretechnologies/qorus` this is `qorus`.",
@@ -4855,6 +4959,10 @@
           "source": "Allow Auto Merge",
           "message": "允許自動合併"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfYXV0b19tZXJnZQ.short_desc": {
+          "source": "Either 'true' to allow auto-merge on pull requests, or 'false' to disallow…",
+          "message": "設為 'true' 允許 PR 自動合併，或設為 'false' 禁止…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfZm9ya2luZw.desc": {
           "source": "Either `true` to allow private forks, or `false` to prevent private forks.",
           "message": "設為 `true` 允許私人 fork，或設為 `false` 阻止私人 fork。"
@@ -4875,6 +4983,10 @@
           "source": "Allow Merge Commit",
           "message": "允許合併提交"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfbWVyZ2VfY29tbWl0.short_desc": {
+          "source": "Either 'true' to allow merging pull requests with a merge commit, or 'false'…",
+          "message": "設為 'true' 允許使用合併提交合併 PR，或設為 'false'…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfc3F1YXNoX21lcmdl.desc": {
           "source": "Either `true` to allow squash-merging pull requests, or `false` to prevent squash-merging.",
           "message": "傳入 `true` 以允許壓縮合併 Pull Request，或傳入 `false` 以防止壓縮合併。"
@@ -4882,6 +4994,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfc3F1YXNoX21lcmdl.display_name": {
           "source": "Allow Squash Merge",
           "message": "允許 Squash 合併"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfc3F1YXNoX21lcmdl.short_desc": {
+          "source": "Either 'true' to allow squash-merging pull requests, or 'false' to prevent…",
+          "message": "設為 'true' 允許壓縮合併 PR，或設為 'false' 禁止…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfcmViYXNlX21lcmdl.desc": {
           "source": "Either `true` to allow rebase-merging pull requests, or `false` to prevent rebase-merging.",
@@ -4891,6 +5007,10 @@
           "source": "Allow Rebase Merge",
           "message": "允許 Rebase 合併"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfcmViYXNlX21lcmdl.short_desc": {
+          "source": "Either 'true' to allow rebase-merging pull requests, or 'false' to prevent…",
+          "message": "設為 'true' 允許變基合併 PR，或設為 'false' 禁止…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfdXBkYXRlX2JyYW5jaA.desc": {
           "source": "Either `true` to always allow a pull request head branch that is behind its base branch to be updated even if it is not required to be up to date before merging, or false otherwise.",
           "message": "設為 `true` 以一律允許落後於基礎分支的 Pull Request 標頭分支進行更新（即使在合併前不強制要求保持最新狀態），否則為 false。"
@@ -4898,6 +5018,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfdXBkYXRlX2JyYW5jaA.display_name": {
           "source": "Allow Update Branch",
           "message": "允許更新分支"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfdXBkYXRlX2JyYW5jaA.short_desc": {
+          "source": "Either 'true' to always allow a pull request head branch that is behind its…",
+          "message": "設為 'true' 一律允許落後於基準分支的 PR 來源分支…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YXJjaGl2ZWQ.desc": {
           "source": "Whether to archive this repository. `false` will unarchive a previously archived repository.",
@@ -4930,6 +5054,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
           "source": "Delete Branch on Merge",
           "message": "合併時刪除分支"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
+          "source": "Either 'true' to allow automatically deleting head branches when pull requests…",
+          "message": "設為 'true' 允許在合併 PR 時自動刪除來源分支…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVzY3JpcHRpb24.desc": {
           "source": "A short description of the repository.",
@@ -4975,6 +5103,10 @@
           "source": "Has Pull Requests",
           "message": "包含 Pull Request"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3B1bGxfcmVxdWVzdHM.short_desc": {
+          "source": "Either 'true' to allow pull requests for this repository or 'false' to prevent…",
+          "message": "設為 'true' 允許此存放庫的 PR，或設為 'false' 禁止…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3Byb2plY3Rz.desc": {
           "source": "Either `true` to enable projects for this repository or `false` to disable them. **Note:** If you're creating a repository in an organization that has disabled repository projects, the default is `false`, and if you pass `true`, the API returns an error.",
           "message": "傳入 `true` 以啟用此存放庫的專案，或傳入 `false` 以停用它們。**注意：**如果您在已停用存放庫專案的組織中建立存放庫，則預設值為 `false`，且如果您傳入 `true`，API 將傳回錯誤。"
@@ -4982,6 +5114,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3Byb2plY3Rz.display_name": {
           "source": "Has Projects",
           "message": "具有專案"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3Byb2plY3Rz.short_desc": {
+          "source": "Either 'true' to enable projects for this repository or 'false' to disable them",
+          "message": "設為 'true' 啟用此存放庫的專案，或設為 'false' 停用"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3dpa2k.desc": {
           "source": "Either `true` to enable the wiki for this repository or `false` to disable it.",
@@ -5002,6 +5138,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aXNfdGVtcGxhdGU.display_name": {
           "source": "Is Template",
           "message": "為範本"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aXNfdGVtcGxhdGU.short_desc": {
+          "source": "Either 'true' to make this repo available as a template repository or 'false'…",
+          "message": "設為 'true' 將此存放庫設為範本存放庫，或設為 'false'…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.b3duZXI.desc": {
           "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
@@ -5079,6 +5219,10 @@
           "source": "Security and Analysis",
           "message": "安全性與分析"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.short_desc": {
+          "source": "Specify which security and analysis features to enable or disable for the…",
+          "message": "指定要為存放庫啟用或停用的安全性與分析功能…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.allowed-value.c3RyaW5nOkNPTU1JVF9PUl9QUl9USVRMRQ.display_name": {
           "source": "COMMIT_OR_PR_TITLE",
           "message": "COMMIT_OR_PR_TITLE"
@@ -5131,6 +5275,10 @@
           "source": "Private",
           "message": "私人"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHJpdmF0ZQ.short_desc": {
+          "source": "Either 'true' to make the repository private or 'false' to make it public",
+          "message": "設為 'true' 將存放庫設為私人，或設為 'false' 設為公開"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHVsbF9yZXF1ZXN0X2NyZWF0aW9uX3BvbGljeQ.allowed-value.c3RyaW5nOmFsbA.display_name": {
           "source": "all",
           "message": "全部"
@@ -5146,6 +5294,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHVsbF9yZXF1ZXN0X2NyZWF0aW9uX3BvbGljeQ.display_name": {
           "source": "Pull Request Creation Policy",
           "message": "Pull Request 建立原則"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHVsbF9yZXF1ZXN0X2NyZWF0aW9uX3BvbGljeQ.short_desc": {
+          "source": "The policy that controls who can create pull requests for this repository:…",
+          "message": "控制誰可以為此存放庫建立 PR 的原則：…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cmVwbw.desc": {
           "source": "The repository name on its own, **not** `owner/name`.\n\nFor `qoretechnologies/qorus` this is `qorus`.",
@@ -5167,6 +5319,10 @@
           "source": "Web Commit Signoff Required",
           "message": "需要網頁修訂簽署"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.d2ViX2NvbW1pdF9zaWdub2ZmX3JlcXVpcmVk.short_desc": {
+          "source": "Either 'true' to require contributors to sign off on web-based commits, or…",
+          "message": "設為 'true' 要求貢獻者對網頁端提交簽名，或…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.desc": {
           "source": "Either `true` to allow squash-merge commits to use pull request title, or `false` to use commit message. **This property is closing down. Please use `squash_merge_commit_title` instead.",
           "message": "傳入 `true` 以允許壓縮合併提交使用 Pull Request 標題，或傳入 `false` 以使用提交訊息。**此屬性即將停用。請改用 `squash_merge_commit_title`。"
@@ -5174,6 +5330,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
           "source": "Use Squash PR Title as Default",
           "message": "預設使用壓縮 PR 標題"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.short_desc": {
+          "source": "Either 'true' to allow squash-merge commits to use pull request title, or…",
+          "message": "設為 'true' 允許壓縮合併提交使用 PR 標題，或…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
           "source": "public",

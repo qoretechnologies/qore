@@ -225,7 +225,7 @@
         },
         "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+          "message": "Транзит; використати серіалізацію підключення, давши вибір REST-клієнту"
         },
         "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -321,7 +321,7 @@
         },
         "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
           "source": "Return non-2xx responses normally instead of throwing",
-          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+          "message": "Повертати відповіді без коду 2xx у звичайному режимі замість помилки"
         },
         "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
           "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
@@ -474,6 +474,10 @@
         "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "Шлях URI"
+        },
+        "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Шлях URI відносно базової URL-адреси API підключення"
         },
         "app.Qml0YnVja2V0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
@@ -1289,7 +1293,7 @@
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVkaXJlY3RfdG8.short_desc": {
           "source": "If a repository has been moved to a new location, use this parameter to",
-          "message": "Якщо репозиторій було переміщено до нового розташування, використовуйте цей параметр для"
+          "message": "Якщо репозиторій переміщено в інше місце, використовуйте цей параметр для"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfZGVsZXRl.option.cmVwb19zbHVn.desc": {
           "source": "The repository to work on, given as its slug or as its UUID in braces.\n\nEverything else scoped by a repository - commits, branches, pull requests - is listed from this repository, so changing it re-reads them.",
@@ -2033,7 +2037,7 @@
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.short_desc": {
           "source": "A boolean flag indicating if merging the pull request closes the source branch",
-          "message": "Булевий прапорець, який вказує, чи закривається вихідна гілка після злиття пул-реквесту"
+          "message": "Булевий прапорець: чи закриває злиття пул-реквесту вихідну гілку"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3B1bGxfcmVxdWVzdF9pZF9wdXQ.option.ZGVzdGluYXRpb24.desc": {
           "source": "The branch the changes are merged into; the repository's main branch when unset.\n\nBitbucket declares this as a nested object; it is presented here as the branch name alone and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's nested branch reference, `{\"branch\": {\"name\": …}}`.",
@@ -2165,7 +2169,7 @@
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.Y2xvc2Vfc291cmNlX2JyYW5jaA.short_desc": {
           "source": "A boolean flag indicating if merging the pull request closes the source branch",
-          "message": "Булевий прапорець, який вказує, чи закривається вихідна гілка після злиття пул-реквесту"
+          "message": "Булевий прапорець: чи закриває злиття пул-реквесту вихідну гілку"
         },
         "app.Qml0YnVja2V0.action.cmVwb3NpdG9yaWVzX3dvcmtzcGFjZV9yZXBvX3NsdWdfcHVsbHJlcXVlc3RzX3Bvc3Q.option.ZGVzdGluYXRpb24.desc": {
           "source": "The branch the changes are merged into; the repository's main branch when unset.\n\nBitbucket declares this as a nested object; it is presented here as the branch name alone and sent in the shape the API expects.\n\nThis value is sent as Bitbucket's nested branch reference, `{\"branch\": {\"name\": …}}`.",

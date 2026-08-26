@@ -91,6 +91,10 @@
           "source": "Enforce Header Order",
           "message": "Застосовувати порядок заголовків"
         },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of headers",
+          "message": "Якщо true, вхідні дані буде впорядковано відповідно до заголовків"
+        },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVycw.desc": {
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
           "message": "Список імен заголовків / стовпців для ітерованих даних; якщо він присутній, `header_names` має бути `false`"
@@ -315,6 +319,10 @@
           "source": "Enforce Header Order",
           "message": "Застосовувати порядок заголовків"
         },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of headers",
+          "message": "Якщо true, вхідні дані буде впорядковано відповідно до заголовків"
+        },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
           "message": "Список імен заголовків / стовпців для ітерованих даних; якщо він присутній, `header_names` має бути `false`"
@@ -526,6 +534,10 @@
         "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
           "message": "Застосовувати порядок заголовків"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the output data will be reordered in the order of headers",
+          "message": "Якщо true, вихідні дані буде впорядковано відповідно до заголовків"
         },
         "app.Q3N2.action.d3JpdGU.option.aGVhZGVycw.desc": {
           "source": "List of field / header names for the data output",

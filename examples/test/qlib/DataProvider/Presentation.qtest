@@ -740,8 +740,9 @@ class DataProviderPresentationTest inherits QUnit::Test {
                 root + DirSep + "qlib"),
             "recursive catalog validation covers every Qore provider without an app or locale list");
         assertEq(0, runSourceCatalogTreeCheck(root, qore_bin,
-                root + DirSep + "qlib", (), True),
-            "source-tree validation infers and verifies every Qore provider owner module and standard locale");
+                root + DirSep + "qlib", (), True, True),
+            "source-tree validation infers and verifies every Qore provider "
+                "owner module with complete standard locales");
     }
 
     sourceCatalogTranslationCheckTest() {

@@ -2,7 +2,2524 @@
   "schema_version": 1,
   "locales": {
     "zh-Hant": {
-      "messages": {}
+      "messages": {
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.desc": {
+          "source": "Deletes a contact.\n\nThis is a hard delete and is not reversible. To keep the record and stop messaging the person instead, archive the contact.",
+          "message": "刪除聯絡人。\n\n此為永久刪除且無法復原。若要保留記錄並停止向該對象傳送訊息，請封存聯絡人。"
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.display_name": {
+          "source": "Delete Contact",
+          "message": "刪除聯絡人"
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "由 Intercom 給予的聯絡人專屬識別碼"
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "此操作適用的聯絡人"
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.short_desc": {
+          "source": "Delete a contact",
+          "message": "刪除聯絡人"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.desc": {
+          "source": "Lists contacts, newest first.\n\nThis is exported so that the contact dropdowns have an action to call; **Search Contacts** is the one to reach for when the contacts wanted are a subset.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
+          "message": "列出聯絡人，最新的排在最前面。\n\n匯出此項是為了讓聯絡人下拉式選單有可呼叫的操作；當需要取得特定子集的聯絡人時，請使用 **Search Contacts**。\n\n儘管 Intercom 的回應為分頁封裝格式，但其描述並未宣告此操作的分頁引數；`per_page` 與 `starting_after` 是在匯入結構描述時新增的。請參閱 @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\"。"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.display_name": {
+          "source": "List Contacts",
+          "message": "列出聯絡人"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
+          "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
+          "message": "傳入 `true` 以在回應中的每個聯絡人包含 `merge_history` 陣列。僅針對角色為 `user` 的聯絡人傳回。"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
+          "source": "Include Merge History",
+          "message": "包含合併歷史記錄"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "傳入 'true' 以在回應中的每個聯絡人包含 'merge_history' 陣列"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "分頁游標：從上一個回應中取得 `pages.next.starting_after` 並在此處傳入。\n\n此為不透明值，不可手動建構。當集合遍歷完畢時，`pages` 將不存在，這表示沒有下一頁。"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "開始於此之後"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "下一頁的游標"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one page. Intercom documents cursor pagination for every listing that answers a \"pages\" object, but declares this parameter on only some of them.",
+          "message": "一頁要傳回的記錄筆數。Intercom 為每個回應 \"pages\" 物件的清單都記錄了游標分頁，但僅在部分清單中宣告了此參數。"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "單頁要傳回的記錄筆數"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.short_desc": {
+          "source": "List the contacts in the workspace",
+          "message": "列出工作區中的聯絡人"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.desc": {
+          "source": "Searches the workspace's contacts.\n\n`query` is either a single filter - `{field, operator, value}` - or a boolean combination, `{operator: \"AND\", value: [ ... ]}`, nested as deeply as needed. A field Intercom does not define on a contact is searched by naming it `custom_attributes.<name>`.\n\nTimestamps in a query are counts of seconds since the epoch, so `created_at > 1755000000` reads as \"created after that instant\".\n\nThe result is paged with `starting_after`: pass back the `pages.next.starting_after` value from the previous response.",
+          "message": "搜尋工作區的聯絡人。\n\n`query` 可以是單一篩選條件（`{field, operator, value}`）或布林組合（`{operator: \"AND\", value: [ ... ]}`），可依需要多層巢狀。若要搜尋 Intercom 未在聯絡人上定義的欄位，請將其指定為 `custom_attributes.<name>`。\n\n查詢中的時間戳記為自 Unix 紀元以來的秒數，因此 `created_at > 1755000000` 解讀為「在該時刻之後建立」。\n\n結果會使用 `starting_after` 進行分頁：請傳回上一個回應中的 `pages.next.starting_after` 值。"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.display_name": {
+          "source": "Search Contacts",
+          "message": "搜尋聯絡人"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
+          "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
+          "message": "傳入 `true` 以在回應中的每個聯絡人包含 `merge_history` 陣列。僅針對角色為 `user` 的聯絡人傳回。"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
+          "source": "Include Merge History",
+          "message": "包含合併歷史記錄"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "傳入 'true' 以在回應中的每個聯絡人包含 'merge_history' 陣列"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c29ydA.desc": {
+          "source": "An optional object to sort the results by.",
+          "message": "用於對結果排序的選填物件。"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "排序"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c29ydA.short_desc": {
+          "source": "An optional object to sort the results by",
+          "message": "用於對結果排序的選填物件"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "分頁游標：從上一個回應中取得 `pages.next.starting_after` 並在此處傳入。\n\n此為不透明值，不可手動建構。當集合遍歷完畢時，`pages` 將不存在，這表示沒有下一頁。"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "開始於此之後"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "下一頁的游標"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cGVyX3BhZ2U.desc": {
+          "source": "The number of results to fetch per page.",
+          "message": "每頁要擷取的結果筆數。"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "單頁要傳回的記錄筆數"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "查詢"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.short_desc": {
+          "source": "Find contacts matching a query",
+          "message": "尋找符合查詢條件的聯絡人"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.desc": {
+          "source": "Retrieves one contact by the identity Intercom gave it.\n\nTo find a contact by your own identifier instead, search for it: `{field: \"external_id\", operator: \"=\", value: \"...\"}`.",
+          "message": "依 Intercom 給予的識別碼擷取單一聯絡人。\n\n若要改用您自己的識別碼尋找聯絡人，請進行搜尋：`{field: \"external_id\", operator: \"=\", value: \"...\"}`。"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "取得聯絡人"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "由 Intercom 給予的聯絡人專屬識別碼"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "此操作適用的聯絡人"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
+          "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
+          "message": "傳入 `true` 以在回應中的每個聯絡人包含 `merge_history` 陣列。僅針對角色為 `user` 的聯絡人傳回。"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
+          "source": "Include Merge History",
+          "message": "包含合併歷史記錄"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "傳入 'true' 以在回應中的每個聯絡人包含 'merge_history' 陣列"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.short_desc": {
+          "source": "Retrieve a contact by its identity",
+          "message": "依識別碼擷取聯絡人"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.desc": {
+          "source": "Retrieves one company by the identity Intercom gave it.\n\nTo find a company by your own identifier instead, use **Create Or Update Company**, which matches on `company_id`.",
+          "message": "依 Intercom 給予的識別碼擷取單一公司。\n\n若要改用您自己的識別碼尋找公司，請使用 **Create Or Update Company**，其會根據 `company_id` 進行比對。"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.display_name": {
+          "source": "Get Company",
+          "message": "取得公司"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.option.Y29tcGFueV9pZA.desc": {
+          "source": "The unique identifier for the company which is given by Intercom",
+          "message": "由 Intercom 給予的公司專屬識別碼"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company",
+          "message": "公司"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company to retrieve",
+          "message": "要擷取的公司"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.short_desc": {
+          "source": "Retrieve a company by its identity",
+          "message": "依識別碼擷取公司"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.desc": {
+          "source": "Updates a company that already exists, named by the identity **Intercom** gave it.\n\nThis is not the same thing as **Create Or Update Company**, which matches on the `company_id` **you** gave it and creates one when nothing matches. Where the intent is to change a company that is already known, this is the action that cannot create a second one by accident.",
+          "message": "依 **Intercom** 給予的識別碼更新已存在的公司。\n\n這與 **Create Or Update Company** 不同，後者會根據**您**給予的 `company_id` 進行比對，且在未比對到任何項目時建立新公司。若目的只是變更已知存在的公司，使用此操作可避免意外建立重複公司。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.display_name": {
+          "source": "Update Company",
+          "message": "更新公司"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.desc": {
+          "source": "The unique identifier for the company which is given by Intercom",
+          "message": "由 Intercom 給予的公司專屬識別碼"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company",
+          "message": "公司"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company to update",
+          "message": "要更新的公司"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "A hash of key/value pairs containing any other data about the company you want Intercom to store.",
+          "message": "包含您希望 Intercom 儲存之公司其他資料的鍵值組雜湊。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "自訂屬性"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "A hash of key/value pairs containing any other data about the company you want…",
+          "message": "包含您希望 Intercom 儲存之公司其他資料的鍵值組雜湊…"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.aW5kdXN0cnk.desc": {
+          "source": "The industry that this company operates in.",
+          "message": "此公司所屬的產業。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.aW5kdXN0cnk.display_name": {
+          "source": "Industry",
+          "message": "行業"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.aW5kdXN0cnk.short_desc": {
+          "source": "The industry that this company operates in",
+          "message": "此公司所屬的產業"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.desc": {
+          "source": "How much revenue the company generates for your business. Note that this will truncate floats. i.e. it only allow for whole integers, 155.98 will be truncated to 155. Note that this has an upper limit of 2**31-1 or 2147483647..",
+          "message": "該公司為您的業務帶來的營收。請注意，這將截斷浮點數，即僅允許整數，155.98 將被截斷為 155。請注意，上限為 2**31-1 或 2147483647。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.display_name": {
+          "source": "Monthly Spend",
+          "message": "每月支出"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.short_desc": {
+          "source": "How much revenue the company generates for your business",
+          "message": "該公司為您的業務帶來的營收"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bmFtZQ.desc": {
+          "source": "The name of the Company",
+          "message": "公司名稱"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bmFtZQ.short_desc": {
+          "source": "The name of the Company",
+          "message": "公司名稱"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.c2l6ZQ.desc": {
+          "source": "The number of employees in this company.",
+          "message": "此公司的員工數量。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.c2l6ZQ.display_name": {
+          "source": "Size",
+          "message": "大小"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.c2l6ZQ.short_desc": {
+          "source": "The number of employees in this company",
+          "message": "此公司的員工數量"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.cGxhbg.desc": {
+          "source": "The name of the plan you have associated with the company.",
+          "message": "您與該公司建立關聯的方案名稱。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.cGxhbg.display_name": {
+          "source": "Plan",
+          "message": "方案"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.cGxhbg.short_desc": {
+          "source": "The name of the plan you have associated with the company",
+          "message": "您與該公司建立關聯的方案名稱"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.d2Vic2l0ZQ.desc": {
+          "source": "The URL for this company's website. Please note that the value specified here is not validated. Accepts any string.",
+          "message": "此公司網站的 URL。請注意，此處指定的值不會進行驗證。可接受任何字串。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "網站"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "The URL for this company's website",
+          "message": "此公司網站的 URL"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.short_desc": {
+          "source": "Update an existing company by its identity",
+          "message": "依識別碼更新現有公司"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.desc": {
+          "source": "Updates a contact that already exists, named by the identity Intercom gave it.\n\nOnly the attributes supplied are changed. A field Intercom does not define on a contact is written by naming it under `custom_attributes`.",
+          "message": "依 Intercom 給予的識別碼更新已存在的聯絡人。\n\n僅會變更所提供的屬性。若要寫入 Intercom 未在聯絡人上定義的欄位，請將其指定在 `custom_attributes` 底下。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.display_name": {
+          "source": "Update Contact",
+          "message": "更新聯絡人"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "由 Intercom 給予的聯絡人專屬識別碼"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "此操作適用的聯絡人"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "The custom attributes which are set for the contact",
+          "message": "為聯絡人設定的自訂屬性"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "自訂屬性"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "The custom attributes which are set for the contact",
+          "message": "為聯絡人設定的自訂屬性"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.YXZhdGFy.desc": {
+          "source": "An image URL containing the avatar of a contact",
+          "message": "包含聯絡人頭像的圖片 URL"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.YXZhdGFy.display_name": {
+          "source": "Avatar",
+          "message": "顯示圖片"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.YXZhdGFy.short_desc": {
+          "source": "An image URL containing the avatar of a contact",
+          "message": "包含聯絡人頭像的圖片 URL"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWw.desc": {
+          "source": "The contacts email",
+          "message": "聯絡人的電子郵件"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "電子郵件"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWw.short_desc": {
+          "source": "The contacts email",
+          "message": "聯絡人的電子郵件"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.desc": {
+          "source": "Whether the contact's email address has been verified. Set to true to indicate you have verified the contact owns this email address, or false to mark it as unverified. Must be supplied together with an email in the same request; sending it without an email returns a 400.",
+          "message": "聯絡人的電子郵件地址是否已驗證。設為 true 表示您已驗證該聯絡人擁有此電子郵件地址，設為 false 則標記為未驗證。必須在同一個請求中與電子郵件一起提供；若未包含電子郵件即傳送將傳回 400。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.display_name": {
+          "source": "Email Verified",
+          "message": "電子郵件已驗證"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.short_desc": {
+          "source": "Whether the contact's email address has been verified",
+          "message": "聯絡人的電子郵件地址是否已驗證"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "A unique identifier for the contact which is given to Intercom",
+          "message": "提供給 Intercom 的聯絡人專屬識別碼"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "外部 ID"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "A unique identifier for the contact which is given to Intercom",
+          "message": "提供給 Intercom 的聯絡人專屬識別碼"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
+          "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
+          "message": "傳入 `true` 以在回應中的每個聯絡人包含 `merge_history` 陣列。僅針對角色為 `user` 的聯絡人傳回。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
+          "source": "Include Merge History",
+          "message": "包含合併歷史記錄"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "傳入 'true' 以在回應中的每個聯絡人包含 'merge_history' 陣列"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.b3duZXJfaWQ.desc": {
+          "source": "The id of an admin that has been assigned account ownership of the contact",
+          "message": "指派為該聯絡人帳戶負責人的管理員 ID"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "擁有者 ID"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.b3duZXJfaWQ.short_desc": {
+          "source": "The id of an admin that has been assigned account ownership of the contact",
+          "message": "指派為該聯絡人帳戶負責人的管理員 ID"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.desc": {
+          "source": "(Unix timestamp in seconds) The time when the contact was last seen (either where the Intercom Messenger was installed or when specified manually).\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "(Unix 秒級時間戳記) 聯絡人最後上線的時間（安裝 Intercom Messenger 的位置或手動指定的時間）。\n\n此值以自 1970-01-01Z 起算之整數秒數傳送。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.display_name": {
+          "source": "Last Seen At",
+          "message": "最後上線時間"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.short_desc": {
+          "source": "(Unix timestamp in seconds) The time when the contact was last seen…",
+          "message": "(Unix 秒級時間戳記) 聯絡人最後上線的時間…"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bmFtZQ.desc": {
+          "source": "The contacts name",
+          "message": "聯絡人姓名"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bmFtZQ.short_desc": {
+          "source": "The contacts name",
+          "message": "聯絡人姓名"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.desc": {
+          "source": "(Unix timestamp in seconds) The time specified for when a contact signed up.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "(Unix 秒級時間戳記) 聯絡人註冊的指定時間。\n\n此值以自 1970-01-01Z 起算之整數秒數傳送。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.display_name": {
+          "source": "Signed Up At",
+          "message": "註冊時間"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.short_desc": {
+          "source": "(Unix timestamp in seconds) The time specified for when a contact signed up",
+          "message": "(Unix 秒級時間戳記) 聯絡人註冊的指定時間"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cGhvbmU.desc": {
+          "source": "The contacts phone",
+          "message": "聯絡人的電話"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cGhvbmU.short_desc": {
+          "source": "The contacts phone",
+          "message": "聯絡人的電話"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cm9sZQ.desc": {
+          "source": "The role of the contact.",
+          "message": "聯絡人的角色。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "角色"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cm9sZQ.short_desc": {
+          "source": "The role of the contact",
+          "message": "聯絡人的角色"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.desc": {
+          "source": "Whether the contact is unsubscribed from emails",
+          "message": "聯絡人是否已取消訂閱電子郵件"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.display_name": {
+          "source": "Unsubscribed from Emails",
+          "message": "已取消訂閱電子郵件"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.short_desc": {
+          "source": "Whether the contact is unsubscribed from emails",
+          "message": "聯絡人是否已取消訂閱電子郵件"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.short_desc": {
+          "source": "Update an existing contact",
+          "message": "更新現有聯絡人"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.desc": {
+          "source": "Creates new records in the given table",
+          "message": "在指定的資料表中建立新記錄"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.display_name": {
+          "source": "Create Records",
+          "message": "建立記錄"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "要使用的資料表：`contacts`、`conversations`、`companies`、`articles`、`collections`、`tags` 或 `teammates`"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.short_desc": {
+          "source": "Create new records in the given table",
+          "message": "在指定的資料表中建立新記錄"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.desc": {
+          "source": "Starts a conversation **from a contact** - as though the contact had written in.\n\nThis is not the way to message somebody: a conversation created here is attributed to the contact, so it appears in the inbox as an incoming message. Use **Create Message** to send something from a teammate.",
+          "message": "**以聯絡人身分**發起對話——如同聯絡人主動發送訊息。\n\n這不是向對方傳送訊息的方式：在此建立的對話會歸屬給該聯絡人，因此會作為收件訊息顯示於收件匣中。若要由團隊成員傳送訊息，請使用「**Create Message**」。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.display_name": {
+          "source": "Create Conversation",
+          "message": "建立對話"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "The time the conversation was created as a UTC Unix timestamp. If not provided, the current time will be used. This field is only recommneded for migrating past conversations from another source into Intercom.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "對話建立的時間（UTC Unix 時間戳記）。若未提供，將使用目前時間。此欄位僅建議用於將過往對話從其他來源遷移至 Intercom。\n\n此值以自 1970-01-01Z 起算的整數秒數發送。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "建立時間"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "The time the conversation was created as a UTC Unix timestamp",
+          "message": "對話建立的時間（UTC Unix 時間戳記）"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.desc": {
+          "source": "A list of image URLs that will be added as attachments. You can include up to 10 URLs.",
+          "message": "要作為附件新增的圖片 URL 清單。最多可包含 10 個 URL。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.display_name": {
+          "source": "Attachment Urls",
+          "message": "附件 URL"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.short_desc": {
+          "source": "A list of image URLs that will be added as attachments",
+          "message": "要作為附件新增的圖片 URL 清單"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Ym9keQ.desc": {
+          "source": "The content of the message. HTML is not supported.",
+          "message": "訊息內容。不支援 HTML。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Ym9keQ.display_name": {
+          "source": "Message",
+          "message": "訊息"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Ym9keQ.short_desc": {
+          "source": "The first message in the conversation",
+          "message": "對話中的第一則訊息"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YnJhbmRfaWQ.desc": {
+          "source": "The unique identifier of the brand to associate with this conversation.",
+          "message": "要與此對話建立關聯的品牌唯一識別碼。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YnJhbmRfaWQ.display_name": {
+          "source": "Brand ID",
+          "message": "品牌 ID"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YnJhbmRfaWQ.short_desc": {
+          "source": "The unique identifier of the brand to associate with this conversation",
+          "message": "要與此對話建立關聯的品牌唯一識別碼"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "寄件者"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.ZnJvbQ.short_desc": {
+          "source": "The contact the conversation comes from",
+          "message": "發起對話的聯絡人"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.c3ViamVjdA.desc": {
+          "source": "The title of the email. Only applicable if the message type is email.",
+          "message": "電子郵件標題。僅在訊息類型為電子郵件時適用。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "主旨"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.c3ViamVjdA.short_desc": {
+          "source": "The title of the email",
+          "message": "電子郵件標題"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.short_desc": {
+          "source": "Start a conversation as a contact",
+          "message": "以聯絡人身分發起對話"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.desc": {
+          "source": "Creates a help center article.\n\n`author_id` has to be a teammate on the help center's workspace. `state` decides whether it is published or left as a draft - Intercom defaults it to `draft`.\n\n`parent_id` files the article under a collection. Earlier API versions also allowed a *section*; Intercom removed sections at version 2.10 and returns what used to be one as a nested collection, so `collection` is the only parent type left.",
+          "message": "建立說明中心文章。\n\n`author_id` 必須是說明中心工作區的團隊成員。`state` 決定將其發佈或保留為草稿——Intercom 預設為 `draft`。\n\n`parent_id` 會將文章歸檔在合集下。先前的 API 版本也允許 *section*；Intercom 在 2.10 版本移除了 section，並將原有的 section 作為巢狀合集傳回，因此 `collection` 是僅存的父項類型。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.display_name": {
+          "source": "Create Article",
+          "message": "建立文章"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
+          "source": "Whether the article should be available for AI Copilot. For multilingual articles, this sets the default language's availability.",
+          "message": "文章是否應對 AI Copilot 可用。對於多語言文章，這會設定預設語言的可用性。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
+          "source": "AI Copilot Availability",
+          "message": "AI Copilot 可用性"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
+          "source": "Whether the article should be available for AI Copilot",
+          "message": "文章是否應對 AI Copilot 可用"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
+          "source": "Whether the article should be available for AI Chatbot (Fin). For multilingual articles, this sets the default language's availability.",
+          "message": "文章是否應對 AI 聊天機器人 (Fin) 可用。對於多語言文章，這會設定預設語言的可用性。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
+          "source": "AI Chatbot Availability",
+          "message": "AI 聊天機器人可用性"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
+          "source": "Whether the article should be available for AI Chatbot (Fin)",
+          "message": "文章是否應對 AI 聊天機器人 (Fin) 可用"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
+          "source": "Whether the article should be available for AI Sales Agent. For multilingual articles, this sets the default language's availability.",
+          "message": "文章是否應對 AI 銷售專員可用。對於多語言文章，這會設定預設語言的可用性。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
+          "source": "AI Sales Agent Availability",
+          "message": "AI 銷售專員可用性"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
+          "source": "Whether the article should be available for AI Sales Agent",
+          "message": "文章是否應對 AI 銷售專員可用"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.desc": {
+          "source": "The id of the author of the article. For multilingual articles, this will be the id of the author of the default language's content. Must be a teammate on the help center's workspace.",
+          "message": "文章作者的 ID。對於多語言文章，此為預設語言內容作者的 ID。必須是說明中心工作區的團隊成員。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.display_name": {
+          "source": "Author",
+          "message": "作者"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.short_desc": {
+          "source": "The teammate the article is written by",
+          "message": "撰寫文章的團隊成員"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.desc": {
+          "source": "The list of audience IDs to assign to this article for Fin AI Agent targeting. Sending a top-level `audience_ids` broadcasts the same set to every locale. For per-locale targeting, use `translated_content.<locale>.audience_ids` instead. Sending both top-level and per-locale in the same request causes top-level to win. Unknown audience IDs return a 404 error. No partial commit occurs.",
+          "message": "要指派給此文章以進行 Fin AI 代理目標設定的受眾 ID 清單。傳送頂層 `audience_ids` 會將同一組設定廣播至所有地區設定。若要依地區設定個別定位，請改用 `translated_content.<locale>.audience_ids`。在同一個請求中同時傳送頂層與個別地區設定時，將以頂層為準。未知的受眾 ID 會傳回 404 錯誤。不會執行部分提交。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.display_name": {
+          "source": "Audience Ids",
+          "message": "受眾 ID"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.short_desc": {
+          "source": "The list of audience IDs to assign to this article for Fin AI Agent targeting",
+          "message": "要指派給此文章以進行 Fin AI 代理目標設定的受眾 ID 清單"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keQ.desc": {
+          "source": "The content of the article in HTML. For multilingual articles, this will be the body of the default language's content. Mutually exclusive with `body_markdown`.",
+          "message": "HTML 格式的文章內容。對於多語言文章，此為預設語言內容的正文。與 `body_markdown` 互斥。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keQ.short_desc": {
+          "source": "The article content, in HTML",
+          "message": "HTML 格式的文章內容"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.desc": {
+          "source": "The content of the article in markdown. For multilingual articles, this will be the body of the default language's content. An alternative to `body` — you can provide content as markdown instead of HTML. Mutually exclusive with `body`.",
+          "message": "Markdown 格式的文章內容。對於多語言文章，此為預設語言內容的正文。`body` 的替代選項——您可以提供 Markdown 內容而非 HTML。與 `body` 互斥。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.display_name": {
+          "source": "Body Markdown",
+          "message": "Markdown 正文"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.short_desc": {
+          "source": "The content of the article in markdown",
+          "message": "Markdown 格式的文章內容"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the article. For multilingual articles, this will be the description of the default language's content.",
+          "message": "文章說明。對於多語言文章，此為預設語言內容的說明。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "描述"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The description of the article",
+          "message": "文章說明"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future publish of the article. When set together with `state: \"published\"`, the article is scheduled instead of published immediately. Setting `null` cancels a pending publish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Combining with `state: \"draft\"` returns 400 `parameter_invalid`. Sending in the same request as `scheduled_unpublish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`.",
+          "message": "預約未來發佈文章的 ISO 8601 時間戳記。與 `state: \"published\"` 一起設定時，文章將排程發佈而非立即發佈。設定 `null` 會取消待發佈的排程。早於或等於目前時間的時間戳記將被拒絕並傳回 400 `parameter_invalid`——該值必須為未來的時間。與 `state: \"draft\"` 同時使用會傳回 400 `parameter_invalid`。在同一個請求中與 `scheduled_unpublish_at` 一起傳送會傳回 400——每篇文章只能有一個待處理排程。空字串會傳回 400 `parameter_invalid`。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.display_name": {
+          "source": "Scheduled Publish At",
+          "message": "預約發佈時間"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.short_desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future publish of the article",
+          "message": "預約未來發佈文章的 ISO 8601 時間戳記"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future unpublish of the article. Setting `null` cancels a pending unpublish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Rejected with 400 `parameter_invalid` if the article has never been published. Sending in the same request as `scheduled_publish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`.",
+          "message": "預約未來取消發佈文章的 ISO 8601 時間戳記。設定 `null` 會取消待取消發佈的排程。早於或等於目前時間的時間戳記將被拒絕並傳回 400 `parameter_invalid`——該值必須為未來的時間。若文章從未發佈過，則會被拒絕並傳回 400 `parameter_invalid`。在同一個請求中與 `scheduled_publish_at` 一起傳送會傳回 400——每篇文章只能有一個待處理排程。空字串會傳回 400 `parameter_invalid`。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.display_name": {
+          "source": "Scheduled Unpublish At",
+          "message": "預約取消發佈時間"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.short_desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future unpublish of the article",
+          "message": "預約未來取消發佈文章的 ISO 8601 時間戳記"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "draft",
+          "message": "草稿"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "published",
+          "message": "已發佈"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.desc": {
+          "source": "Whether the article will be `published` or will be a `draft`. Defaults to draft. For multilingual articles, this will be the state of the default language's content.",
+          "message": "文章將為 `published` 或 `draft`。預設為草稿。對於多語言文章，此為預設語言內容的狀態。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "州/省"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.short_desc": {
+          "source": "Whether the article will be 'published' or will be a 'draft'",
+          "message": "文章狀態為「published」或「draft」"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.desc": {
+          "source": "The id of the article's parent collection or section. An article without this field stands alone.",
+          "message": "文章父合集或區段的 ID。未包含此欄位的文章為獨立文章。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.display_name": {
+          "source": "Collection",
+          "message": "集合"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.short_desc": {
+          "source": "The collection to file the article under",
+          "message": "要將文章歸檔的合集"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.allowed-value.c3RyaW5nOmNvbGxlY3Rpb24.display_name": {
+          "source": "collection",
+          "message": "合集"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.desc": {
+          "source": "The kind of thing `parent_id` names.\n\nOnly `collection` remains: Intercom removed help center sections at API version 2.10, and returns what used to be a section as a nested collection.",
+          "message": "`parent_id` 所指定的項目類型。\n\n僅保留 `collection`：Intercom 在 API 2.10 版本移除了說明中心區段，並將原有的區段作為巢狀合集傳回。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.display_name": {
+          "source": "Parent Type",
+          "message": "父容器類型"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.short_desc": {
+          "source": "Must be \"collection\"",
+          "message": "必須為「collection」"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dGl0bGU.desc": {
+          "source": "The title of the article.For multilingual articles, this will be the title of the default language's content.",
+          "message": "文章標題。對於多語言文章，此為預設語言內容的標題。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "標題"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dGl0bGU.short_desc": {
+          "source": "The title of the article.For multilingual articles, this will be the title of…",
+          "message": "文章標題。對於多語言文章，此為預設語言內容的標題。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.desc": {
+          "source": "The Translated Content of an Article. The keys are the locale codes and the values are the translated content of the article.",
+          "message": "文章的翻譯內容。索引鍵為地區代碼，值為文章的翻譯內容。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.display_name": {
+          "source": "Translated Content",
+          "message": "翻譯內容"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.short_desc": {
+          "source": "The Translated Content of an Article",
+          "message": "文章的翻譯內容"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.short_desc": {
+          "source": "Write a help center article",
+          "message": "撰寫說明中心文章"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.desc": {
+          "source": "Records a data event against a contact - a signup, a purchase, a feature used.\n\nThe contact is named in exactly one of three ways: `id` is Intercom's identity for them, `user_id` is the external identity your own system gave them, and `email` is their address. Supply one.\n\n`metadata` carries up to five values describing the event itself.",
+          "message": "為聯絡人記錄資料事件——註冊、購買、使用功能。\n\n聯絡人必須剛好透過以下三種方式之一指定：`id` 是 Intercom 對其的識別碼，`user_id` 是您系統賦予的外部識別碼，`email` 是其地址。請提供其中之一。\n\n`metadata` 最多可攜帶五個描述事件本身的值。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.display_name": {
+          "source": "Submit Data Event",
+          "message": "提交資料事件"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "When the event happened.\n\nIntercom requires this. Set it to the current time for an event happening now; the application this module replaces did that silently, so a workflow migrated from it has to say so explicitly.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "事件發生的時間。\n\nIntercom 必須提供此欄位。對於目前發生的事件，請將其設為目前時間；此模組所取代的應用程式先前會自動執行此操作，因此從該應用程式遷移的工作流程必須明確指定。\n\n此值以自 1970-01-01Z 起算的整數秒數發送。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Occurred At",
+          "message": "發生時間"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "When the event happened",
+          "message": "事件發生的時間"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZW1haWw.desc": {
+          "source": "An email address for your user. An email should only be used where your application uses email to uniquely identify users.",
+          "message": "使用者的電子郵件地址。僅當您的應用程式使用電子郵件來唯一識別使用者時才應使用。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "電子郵件"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZW1haWw.short_desc": {
+          "source": "The contact, by e-mail address",
+          "message": "聯絡人（依電子郵件地址）"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZXZlbnRfbmFtZQ.desc": {
+          "source": "The name of the event that occurred. This is presented to your App's admins when filtering and creating segments - a good event name is typically a past tense 'verb-noun' combination, to improve readability, for example `updated-plan`.",
+          "message": "發生的事件名稱。這會在篩選和建立客群時顯示給您應用程式的管理員——為了提高可讀性，理想的事件名稱通常是過去式的「動詞-名詞」組合，例如 `updated-plan`。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZXZlbnRfbmFtZQ.display_name": {
+          "source": "Event Name",
+          "message": "事件名稱"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZXZlbnRfbmFtZQ.short_desc": {
+          "source": "The name of the event being recorded",
+          "message": "正在記錄的事件名稱"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.aWQ.desc": {
+          "source": "The unique identifier for the contact (lead or user) which is given by Intercom.",
+          "message": "Intercom 為聯絡人（潛在客戶或使用者）指定的唯一識別碼。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.aWQ.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.aWQ.short_desc": {
+          "source": "The contact, by Intercom's identity for them",
+          "message": "聯絡人（依 Intercom 的識別碼）"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.bWV0YWRhdGE.desc": {
+          "source": "Optional metadata about the event.",
+          "message": "有關事件的選填中繼資料。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "元資料"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.bWV0YWRhdGE.short_desc": {
+          "source": "Optional metadata about the event",
+          "message": "事件的選填中繼資料"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.dXNlcl9pZA.desc": {
+          "source": "Your identifier for the user.",
+          "message": "您用於使用者的識別碼。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.dXNlcl9pZA.display_name": {
+          "source": "External ID",
+          "message": "外部 ID"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.dXNlcl9pZA.short_desc": {
+          "source": "The contact, by the identity your own system gave them",
+          "message": "聯絡人（依您系統指定的識別碼）"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.short_desc": {
+          "source": "Record that a contact did something",
+          "message": "記錄聯絡人執行的操作"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.desc": {
+          "source": "Creates a company, or updates the existing one with the same `company_id`.\n\n`company_id` is **your** identifier for the company, not Intercom's: it is what decides whether this creates or updates, and Intercom will not let it be changed afterwards. The dropdown therefore lists companies by that identifier.\n\nOnly the fields sent are changed; the rest are left as they are.",
+          "message": "建立公司，或更新具有相同 `company_id` 的現有公司。\n\n`company_id` 是**您**為公司設定的識別碼，而非 Intercom 的識別碼：它決定了此操作是建立還是更新，且 Intercom 不允許在事後更改。因此下拉選單會依該識別碼列出公司。\n\n僅會變更已傳送的欄位；其餘欄位保持不變。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.display_name": {
+          "source": "Create or Update Company",
+          "message": "建立或更新公司"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y29tcGFueV9pZA.desc": {
+          "source": "The company id you have defined for the company. Can't be updated",
+          "message": "您為公司定義的公司識別碼。無法更新"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company ID",
+          "message": "公司 ID"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "Your own identifier for the company",
+          "message": "您為公司自訂的識別碼"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "A hash of key/value pairs containing any other data about the company you want Intercom to store.",
+          "message": "包含您希望 Intercom 儲存之公司其他資料的鍵值組雜湊。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "自訂屬性"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "A hash of key/value pairs containing any other data about the company you want…",
+          "message": "包含您希望 Intercom 儲存之公司其他資料的鍵值組雜湊…"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.aW5kdXN0cnk.desc": {
+          "source": "The industry that this company operates in.",
+          "message": "此公司所屬的產業。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.aW5kdXN0cnk.display_name": {
+          "source": "Industry",
+          "message": "行業"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.aW5kdXN0cnk.short_desc": {
+          "source": "The industry that this company operates in",
+          "message": "此公司所屬的產業"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.desc": {
+          "source": "How much revenue the company generates for your business. Note that this will truncate floats. i.e. it only allow for whole integers, 155.98 will be truncated to 155. Note that this has an upper limit of 2**31-1 or 2147483647..",
+          "message": "該公司為您的業務帶來的營收。請注意，這將截斷浮點數，即僅允許整數，155.98 將被截斷為 155。請注意，上限為 2**31-1 或 2147483647。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.display_name": {
+          "source": "Monthly Spend",
+          "message": "每月支出"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.short_desc": {
+          "source": "How much revenue the company generates for your business",
+          "message": "該公司為您的業務帶來的營收"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bmFtZQ.desc": {
+          "source": "The name of the Company",
+          "message": "公司名稱"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名稱"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bmFtZQ.short_desc": {
+          "source": "The name of the Company",
+          "message": "公司名稱"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.c2l6ZQ.desc": {
+          "source": "The number of employees in this company.",
+          "message": "此公司的員工數量。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.c2l6ZQ.display_name": {
+          "source": "Size",
+          "message": "大小"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.c2l6ZQ.short_desc": {
+          "source": "The number of employees in this company",
+          "message": "此公司的員工數量"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cGxhbg.desc": {
+          "source": "The name of the plan you have associated with the company.",
+          "message": "您與該公司建立關聯的方案名稱。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cGxhbg.display_name": {
+          "source": "Plan",
+          "message": "方案"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cGxhbg.short_desc": {
+          "source": "The name of the plan you have associated with the company",
+          "message": "您與該公司建立關聯的方案名稱"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cmVtb3RlX2NyZWF0ZWRfYXQ.desc": {
+          "source": "The time the company was created by you.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "您建立該公司的時間。\n\n此值以自 1970-01-01Z 起的整數秒數形式傳送。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cmVtb3RlX2NyZWF0ZWRfYXQ.display_name": {
+          "source": "Created At",
+          "message": "建立時間"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cmVtb3RlX2NyZWF0ZWRfYXQ.short_desc": {
+          "source": "When the company was created in your own system",
+          "message": "公司在您系統中的建立時間"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.d2Vic2l0ZQ.desc": {
+          "source": "The URL for this company's website. Please note that the value specified here is not validated. Accepts any string.",
+          "message": "此公司網站的 URL。請注意，此處指定的值不會進行驗證。可接受任何字串。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "網站"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.d2Vic2l0ZQ.short_desc": {
+          "source": "The URL for this company's website",
+          "message": "此公司網站的 URL"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.desc": {
+          "source": "Set to true to update the company's last seen time to now.",
+          "message": "設定為 true 可將公司的最後活動時間更新為現在。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.display_name": {
+          "source": "Update Last Request At",
+          "message": "更新最後請求時間"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.short_desc": {
+          "source": "Set to true to update the company's last seen time to now",
+          "message": "設定為 true 可將公司的最後活動時間更新為現在"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.short_desc": {
+          "source": "Create a company, or update the one with this company ID",
+          "message": "建立公司，或更新具此公司識別碼的公司"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.desc": {
+          "source": "Sends a message to a contact **from a teammate**, starting a new conversation.\n\n`message_type` selects how it is delivered: `email` needs a `subject`, `in_app` shows it in the messenger, and `whatsapp` needs an approved `template`.\n\nUse **Reply to Conversation** to add to a conversation that already exists.",
+          "message": "**代表團隊成員**向聯絡人傳送訊息，發起新的對話。\n\n`message_type` 用於選擇傳送方式：`email` 需要 `subject`、`in_app` 會顯示在即時通訊工具中，而 `whatsapp` 需要已核准的 `template`。\n\n使用 **回覆對話** 可在現有對話中新增內容。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.display_name": {
+          "source": "Create Message",
+          "message": "建立訊息"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.display_name": {
+          "source": "Cc",
+          "message": "副本"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.desc": {
+          "source": "Whether a conversation should be opened in the inbox for the message without the contact replying. Defaults to false if not provided.",
+          "message": "是否應在聯絡人未回覆的情況下，於收件匣中為該訊息建立對話。若未提供，預設為 false。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.display_name": {
+          "source": "Create Conversation Without Contact Reply",
+          "message": "在無聯絡人回覆時建立對話"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.short_desc": {
+          "source": "Whether a conversation should be opened in the inbox for the message without…",
+          "message": "是否在無聯絡人回覆時於收件匣建立對話…"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "The time the message was created. If not provided, the current time will be used.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "訊息建立時間。若未提供，將使用目前時間。\n\n此值以自 1970-01-01Z 起的整數秒數形式傳送。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "建立時間"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "The time the message was created",
+          "message": "訊息建立時間"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Ym9keQ.desc": {
+          "source": "The content of the message. HTML and plaintext are supported.",
+          "message": "訊息內容。支援 HTML 和純文字。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Ym9keQ.display_name": {
+          "source": "Message",
+          "message": "訊息"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Ym9keQ.short_desc": {
+          "source": "The content of the message",
+          "message": "訊息內容"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.display_name": {
+          "source": "Bcc",
+          "message": "密件副本"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.ZnJvbQ.desc": {
+          "source": "The sender of the message. If not provided, the default sender will be used.",
+          "message": "訊息傳送者。若未提供，將使用預設傳送者。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "寄件者"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.ZnJvbQ.short_desc": {
+          "source": "The teammate the message is from",
+          "message": "訊息來源的團隊成員"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "email",
+          "message": "電子郵件"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.allowed-value.c3RyaW5nOmluX2FwcA.display_name": {
+          "source": "in_app",
+          "message": "應用程式內"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "whatsapp",
+          "message": "WhatsApp"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.desc": {
+          "source": "The kind of message being created. Values: `in_app`, `email` or `whatsapp`.",
+          "message": "正在建立的訊息類型。值：`in_app`、`email` 或 `whatsapp`。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.display_name": {
+          "source": "Message Type",
+          "message": "訊息類型"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.short_desc": {
+          "source": "The kind of message being created",
+          "message": "正在建立的訊息類型"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.c3ViamVjdA.desc": {
+          "source": "The title of the email.",
+          "message": "電子郵件標題。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "主旨"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.c3ViamVjdA.short_desc": {
+          "source": "The title of the email",
+          "message": "電子郵件標題"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.display_name": {
+          "source": "To",
+          "message": "收件者"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.short_desc": {
+          "source": "The contact to send the message to",
+          "message": "接收訊息的聯絡人"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dGVtcGxhdGU.desc": {
+          "source": "The style of the outgoing message. Possible values `plain` or `personal`.",
+          "message": "待傳送訊息的樣式。可能的值為 `plain` 或 `personal`。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dGVtcGxhdGU.display_name": {
+          "source": "Template",
+          "message": "範本"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dGVtcGxhdGU.short_desc": {
+          "source": "The style of the outgoing message",
+          "message": "待傳送訊息的樣式"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.short_desc": {
+          "source": "Send a message to a contact from a teammate",
+          "message": "代表團隊成員向聯絡人傳送訊息"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.desc": {
+          "source": "Adds a note to a contact.\n\nA note is internal: it is visible to teammates on the contact's record and is never shown to the contact. Use **Reply to Conversation** to say something the contact sees.\n\nWithout `admin_id` the note is attributed to no teammate.",
+          "message": "為聯絡人新增備註。\n\n備註僅供內部使用：團隊成員可在聯絡人記錄中看到，且絕不會向聯絡人顯示。使用 **回覆對話** 可傳送聯絡人可見的內容。\n\n若未指定 `admin_id`，該備註將不歸屬於任何團隊成員。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.display_name": {
+          "source": "Create Note",
+          "message": "建立備忘錄"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier of a given contact.",
+          "message": "指定聯絡人的唯一識別碼。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "此操作適用的聯絡人"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.YWRtaW5faWQ.desc": {
+          "source": "The unique identifier of a given admin.",
+          "message": "指定管理員的唯一識別碼。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.YWRtaW5faWQ.display_name": {
+          "source": "Teammate",
+          "message": "團隊成員"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.YWRtaW5faWQ.short_desc": {
+          "source": "The teammate the note is attributed to",
+          "message": "備註歸屬的團隊成員"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Ym9keQ.desc": {
+          "source": "The text of the note.",
+          "message": "備註文字。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Ym9keQ.display_name": {
+          "source": "Note",
+          "message": "備註"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Ym9keQ.short_desc": {
+          "source": "The text of the note",
+          "message": "備註文字"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.short_desc": {
+          "source": "Add a note to a contact",
+          "message": "為聯絡人新增備註"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.desc": {
+          "source": "Applies a tag to a contact.\n\nThe tag has to exist already: this attaches one, it does not create one.",
+          "message": "將標籤套用至聯絡人。\n\n標籤必須已存在：此操作會附加現有標籤，而非建立標籤。"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.display_name": {
+          "source": "Add Tag to Contact",
+          "message": "新增標籤至聯絡人"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "由 Intercom 給予的聯絡人專屬識別碼"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "此操作適用的聯絡人"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.aWQ.desc": {
+          "source": "The unique identifier for the tag which is given by Intercom",
+          "message": "Intercom 為標籤指定的唯一識別碼"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.aWQ.display_name": {
+          "source": "Tag",
+          "message": "標籤"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.aWQ.short_desc": {
+          "source": "The tag to apply",
+          "message": "要套用的標籤"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.short_desc": {
+          "source": "Apply an existing tag to a contact",
+          "message": "將現有標籤套用至聯絡人"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.desc": {
+          "source": "Removes a tag from a contact.\n\nThe tag itself is untouched; only its application to this contact is removed.\n\nThe tag dropdown lists the tags the selected contact actually has, so choose the contact first.",
+          "message": "從聯絡人移除標籤。\n\n標籤本身不會被修改；僅會移除其在該聯絡人身上的套用。\n\n標籤下拉選單會列出所選聯絡人實際擁有的標籤，因此請先選擇聯絡人。"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.display_name": {
+          "source": "Remove Tag from Contact",
+          "message": "從聯絡人移除標籤"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "由 Intercom 給予的聯絡人專屬識別碼"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "此操作適用的聯絡人"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.dGFnX2lk.desc": {
+          "source": "The unique identifier for the tag which is given by Intercom",
+          "message": "Intercom 為標籤指定的唯一識別碼"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.dGFnX2lk.display_name": {
+          "source": "Tag",
+          "message": "標籤"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.dGFnX2lk.short_desc": {
+          "source": "The tag to remove from this contact",
+          "message": "要從此聯絡人移除的標籤"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.short_desc": {
+          "source": "Remove a tag from a contact",
+          "message": "從聯絡人移除標籤"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.desc": {
+          "source": "Deletes every record in the given table matching the search criteria",
+          "message": "刪除指定資料表中符合搜尋條件的所有記錄"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.display_name": {
+          "source": "Delete Records",
+          "message": "刪除記錄"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "要使用的資料表：`contacts`、`conversations`、`companies`、`articles`、`collections`、`tags` 或 `teammates`"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.short_desc": {
+          "source": "Delete the records matching the search criteria",
+          "message": "刪除符合搜尋條件的記錄"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.desc": {
+          "source": "Deletes a company.\n\nThe contacts attached to it are **not** deleted; they simply stop belonging to it.",
+          "message": "刪除公司。\n\n附加至該公司的聯絡人**不會**被刪除；他們只是不再屬於該公司。"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.display_name": {
+          "source": "Delete Company",
+          "message": "刪除公司"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.desc": {
+          "source": "The unique identifier for the company which is given by Intercom",
+          "message": "由 Intercom 給予的公司專屬識別碼"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company",
+          "message": "公司"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company to delete",
+          "message": "要刪除的公司"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.short_desc": {
+          "source": "Delete a company",
+          "message": "刪除公司"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.desc": {
+          "source": "Deletes a help center article",
+          "message": "刪除說明中心文章"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.display_name": {
+          "source": "Delete Article",
+          "message": "刪除文章"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.desc": {
+          "source": "The unique identifier for the article which is given by Intercom.",
+          "message": "Intercom 為文章指定的唯一識別碼。"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.display_name": {
+          "source": "Article",
+          "message": "文章"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.short_desc": {
+          "source": "The article to delete",
+          "message": "要刪除的文章"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.short_desc": {
+          "source": "Delete a help center article",
+          "message": "刪除說明中心文章"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.desc": {
+          "source": "Deletes a tag.\n\nIntercom **refuses** to delete a tag that is still applied to any contact or company, answering 400; detach it everywhere first.",
+          "message": "刪除標籤。\n\nIntercom **拒絕**刪除仍套用於任何聯絡人或公司的標籤，並會回應 400；請先在所有位置解除關聯。"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.display_name": {
+          "source": "Delete Tag",
+          "message": "刪除標籤"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.option.dGFnX2lk.desc": {
+          "source": "The unique identifier for the tag which is given by Intercom",
+          "message": "Intercom 為標籤指定的唯一識別碼"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.option.dGFnX2lk.display_name": {
+          "source": "Tag",
+          "message": "標籤"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.option.dGFnX2lk.short_desc": {
+          "source": "The tag to apply",
+          "message": "要套用的標籤"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.short_desc": {
+          "source": "Delete a tag",
+          "message": "刪除標籤"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.desc": {
+          "source": "Retrieves one tag",
+          "message": "擷取單一標籤"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.display_name": {
+          "source": "Get Tag",
+          "message": "取得標籤"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.option.dGFnX2lk.desc": {
+          "source": "The unique identifier for the tag which is given by Intercom",
+          "message": "Intercom 為標籤指定的唯一識別碼"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag",
+          "message": "標籤"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to apply",
+          "message": "要套用的標籤"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.short_desc": {
+          "source": "Retrieve a tag by its identity",
+          "message": "依識別碼擷取標籤"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.desc": {
+          "source": "Returns a summary of the data events recorded for **one contact**.\n\nThis is not a listing of the workspace's events: `filter` names the contact - by `user_id`, `intercom_user_id` or `email` - and `type` must be `user`. What comes back is that contact's event summary, each event with its name, first and last occurrence and a count.\n\nThe action ID keeps Intercom's own spelling of `lisDataEvents`.",
+          "message": "傳回針對**單一聯絡人**記錄的資料事件摘要。\n\n這不是工作區事件的清單：`filter` 會指定聯絡人（透過 `user_id`、`intercom_user_id` 或 `email`），且 `type` 必須為 `user`。傳回的內容為該聯絡人的事件摘要，每個事件均包含其名稱、首次與最後發生時間以及次數。\n\n此動作 ID 保留了 Intercom 自有的拼寫 `lisDataEvents`。"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.display_name": {
+          "source": "List Data Events",
+          "message": "列出資料事件"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.desc": {
+          "source": "Names the contact whose events are summarised, in exactly one of three ways: `user_id` is the identity your own system gave them, `intercom_user_id` is Intercom's, and `email` is their address.",
+          "message": "以下列三種方式之一指定要彙總其事件的聯絡人：`user_id` 為您自身系統賦予的識別碼、`intercom_user_id` 為 Intercom 的識別碼，而 `email` 則是其地址。"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.short_desc": {
+          "source": "Which contact's events to summarise",
+          "message": "要彙總哪個聯絡人的事件"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.c3VtbWFyeQ.desc": {
+          "source": "summary flag",
+          "message": "摘要旗標"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.c3VtbWFyeQ.display_name": {
+          "source": "Summary",
+          "message": "摘要"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.c3VtbWFyeQ.short_desc": {
+          "source": "summary flag",
+          "message": "摘要旗標"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "user",
+          "message": "user"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.dHlwZQ.desc": {
+          "source": "The value must be user",
+          "message": "值必須為 user"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "類型"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.dHlwZQ.short_desc": {
+          "source": "Must be \"user\"",
+          "message": "必須為 \"user\""
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.short_desc": {
+          "source": "Summarise the data events recorded for one contact",
+          "message": "彙總為單一聯絡人記錄的資料事件"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.desc": {
+          "source": "Lists the teammates who have access to the workspace.\n\nThis is exported so that the teammate dropdowns have an action to call - an article's author, a note's or a reply's teammate, a message's sender.\n\nThis listing is not paged: Intercom returns them all in one response, in an `admins` array.",
+          "message": "列出有權存取工作區的團隊成員。\n\n匯出此項目是為了讓團隊成員下拉式選單有動作可呼叫——例如文章的作者、便箋或回覆的團隊成員、訊息的寄件者。\n\n此清單不分頁：Intercom 會在單一回應中的 `admins` 陣列中全部傳回。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.display_name": {
+          "source": "List Teammates",
+          "message": "列出團隊成員"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.desc": {
+          "source": "If set to true, the response will include the admin's avatar object containing the image URL. Defaults to false.",
+          "message": "若設為 true，回應將包含管理員的頭像物件（含圖片 URL）。預設為 false。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.display_name": {
+          "source": "Display Avatar",
+          "message": "顯示頭像"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.short_desc": {
+          "source": "If set to true, the response will include the admin's avatar object containing…",
+          "message": "若設為 true，回應將包含管理員的頭像物件…"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.short_desc": {
+          "source": "List the teammates with access to the workspace",
+          "message": "列出有權存取工作區的團隊成員"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.desc": {
+          "source": "Lists the help center collections articles can be filed under.\n\nThis is exported so that **Create Article**'s parent dropdown has an action to call.\n\nCollections nest: a collection with a `parent_id` sits inside another one. What earlier API versions called a *section* is returned here as a nested collection - Intercom removed sections at version 2.10.",
+          "message": "列出文章可歸類的說明中心集合。\n\n匯出此項目是為了讓 **Create Article** 的父代下拉式選單有動作可呼叫。\n\n集合支援巢狀結構：帶有 `parent_id` 的集合位於另一個集合內部。早期 API 版本稱為 *section* 的項目在此處以巢狀集合傳回——Intercom 已在 2.10 版移除了 section。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.display_name": {
+          "source": "List Collections",
+          "message": "列出集合"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "分頁游標：從上一個回應中取得 `pages.next.starting_after` 並在此處傳入。\n\n此為不透明值，不可手動建構。當集合遍歷完畢時，`pages` 將不存在，這表示沒有下一頁。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "開始於此之後"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "下一頁的游標"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one page. Intercom documents cursor pagination for every listing that answers a \"pages\" object, but declares this parameter on only some of them.",
+          "message": "一頁要傳回的記錄筆數。Intercom 為每個回應 \"pages\" 物件的清單都記錄了游標分頁，但僅在部分清單中宣告了此參數。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "單頁要傳回的記錄筆數"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.short_desc": {
+          "source": "List the help center collections",
+          "message": "列出說明中心集合"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.desc": {
+          "source": "Lists every company in the workspace.\n\nThis is the one listing Intercom pages by **page number** rather than by cursor: `pages.total_pages` says how many there are, and `page` selects one.\n\nIt is a `POST` because Intercom made it one; it sends no body.",
+          "message": "列出工作區中的每間公司。\n\n這是 Intercom 唯一依**頁碼**而非游標分頁的清單：`pages.total_pages` 指定總數量，而 `page` 則選取其中一頁。\n\n因為 Intercom 的設定，其為 `POST`；它不傳送任何主體。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.display_name": {
+          "source": "List Companies",
+          "message": "列出公司"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.b3JkZXI.desc": {
+          "source": "`asc` or `desc`. Return the companies in ascending or descending order. Defaults to desc",
+          "message": "`asc` 或 `desc`。依遞增或遞減順序傳回公司。預設為 desc"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "排序"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.b3JkZXI.short_desc": {
+          "source": "'asc' or 'desc'",
+          "message": "'asc' 或 'desc'"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGFnZQ.desc": {
+          "source": "The page of results to fetch. Defaults to first page",
+          "message": "要擷取的結果頁面。預設為第 1 頁"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "頁碼"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, starting at 1",
+          "message": "要傳回的頁面，從 1 開始"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGVyX3BhZ2U.desc": {
+          "source": "How many results to return per page. Defaults to 15",
+          "message": "每頁傳回的結果數量。預設為 15"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "單頁要傳回的記錄筆數"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.short_desc": {
+          "source": "List the companies in the workspace",
+          "message": "列出工作區中的公司"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.desc": {
+          "source": "Lists the workspace's help center articles.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
+          "message": "列出工作區的說明中心文章。\n\n即使 Intercom 回應分頁封裝，其描述也未宣告此操作的分頁引數；`per_page` 與 `starting_after` 是在匯入結構描述時加入的。請參閱 @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\"。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.display_name": {
+          "source": "List Articles",
+          "message": "列出文章"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "分頁游標：從上一個回應中取得 `pages.next.starting_after` 並在此處傳入。\n\n此為不透明值，不可手動建構。當集合遍歷完畢時，`pages` 將不存在，這表示沒有下一頁。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "開始於此之後"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "下一頁的游標"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one page. Intercom documents cursor pagination for every listing that answers a \"pages\" object, but declares this parameter on only some of them.",
+          "message": "一頁要傳回的記錄筆數。Intercom 為每個回應 \"pages\" 物件的清單都記錄了游標分頁，但僅在部分清單中宣告了此參數。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "單頁要傳回的記錄筆數"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.short_desc": {
+          "source": "List the help center articles",
+          "message": "列出說明中心文章"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3M.desc": {
+          "source": "Lists every tag defined in the workspace.\n\nThis listing is not paged: Intercom returns the whole set in one response.",
+          "message": "列出工作區中定義的每個標籤。\n\n此清單不分頁：Intercom 會在單一回應中傳回整組資料。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3M.display_name": {
+          "source": "List Tags",
+          "message": "列出標籤"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3M.short_desc": {
+          "source": "List the tags defined in the workspace",
+          "message": "列出工作區中定義的標籤"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.desc": {
+          "source": "Lists the tags applied to a contact.\n\nThis is exported so that **Remove Tag from Contact** can offer the tags that contact actually has, rather than every tag in the workspace - almost all of which would fail.\n\nThis listing is not paged.",
+          "message": "列出套用至聯絡人的標籤。\n\n匯出此項目是為了讓 **Remove Tag from Contact** 能夠提供該聯絡人實際擁有的標籤，而非工作區中的所有標籤——因為後者幾乎全都會失敗。\n\n此清單不分頁。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.display_name": {
+          "source": "List Tags on Contact",
+          "message": "列出聯絡人上的標籤"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "由 Intercom 給予的聯絡人專屬識別碼"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "聯絡人"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "此操作適用的聯絡人"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.short_desc": {
+          "source": "List the tags applied to one contact",
+          "message": "列出套用至單一聯絡人的標籤"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Intercom** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "使用已設定連線的驗證向 **Intercom** 發出自訂 HTTP / REST API 呼叫。\n\n指定 HTTP 方法、URI 路徑（相對於連線的 API 基礎 URL）、選用查詢參數、標頭以及請求主體。回應將以包含狀態碼、回應標頭和回應主體的雜湊形式傳回。\n\n對於尚未在此應用程式中以一級動作形式公開的端點，請使用此動作。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "發出 API 呼叫"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "請求主體。有效類型取決於 `body_type`：JSON/form/YAML 期望雜湊，XML/text 期望字串，multipart 期望檔案結構，binary 期望原始位元組。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "請求主體"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "使用 `multipart/form-data` 上傳檔案。主體必須是 @ref DataProvider::FileDataType \"FileDataType\" 結構（filename + content + mime_type）。架構會建立 multipart 封套並設定 boundary 標頭。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart 表單"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "使用 multipart/form-data 上傳檔案"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "原封不動地將主體傳遞給 REST 用戶端；用戶端會根據其設定的 `data` 選項和值類型來決定序列化方式"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "透傳；使用連線序列化並由 REST 用戶端決定"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "將主體作為原始位元組傳送。主體必須是二進位值。除非被 `hdr` 覆蓋，否則會設定 `Content-Type: application/octet-stream`。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "原始二進位"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "將主體作為原始位元組傳送"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "將表單欄位的雜湊序列化為 `application/x-www-form-urlencoded`。主體必須是值為純量（字串/數字/布林值）的雜湊。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "表單 (URL 編碼)"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "將主體序列化為 application/x-www-form-urlencoded 表單欄位"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "將主體序列化為 JSON；設定 `Content-Type: application/json`。主體應為雜湊、清單或純量值。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "將主體序列化為 JSON"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "將主體作為純文字傳送。主體必須是字串。設定 `Content-Type: text/plain`。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "純文字"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "將主體作為 text/plain 傳送"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "將主體作為 XML 傳送。若主體為雜湊，則會序列化為 XML；若為字串，則原樣傳送。設定 `Content-Type: application/xml`。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "將主體作為 XML 傳送"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "將主體作為 YAML 傳送。若主體為雜湊，則會序列化為 YAML；若為字串，則原樣傳送。設定 `Content-Type: application/x-yaml`。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "將主體作為 YAML 傳送"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "選擇主體序列化模式及對應的 `Content-Type` 標頭。變更此欄位會重新配置 `body` 編輯器 — 選擇 JSON 會顯示 JSON 編輯器，選擇 Multipart 表單會顯示檔案選擇器，依此類推。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "主體類型"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "主體如何序列化以及傳送何種 Content-Type"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "若為 `True`，非 2xx HTTP 回應會作為正常的相應雜湊傳回（帶有實際狀態碼），而非引發 `REST-RESPONSE-ERROR`。有助於將 4xx/5xx 作為資料處理 — 例如檢查資源是否存在。僅針對本次呼叫覆蓋連線的 `error_passthru` 設定。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "將錯誤作為資料傳回"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "正常傳回非 2xx 回應而非拋出例外"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "視為成功的 HTTP 狀態碼選擇性清單。若有設定且回應狀態不在此清單中，該動作會拋出 `REST-STATUS-ERROR`。若未設定，則套用 REST 用戶端的預設行為（通常：2xx 為成功，非 2xx 則拋出例外）。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "預期的狀態碼"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "視為成功的回應狀態碼"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "新增至請求的自訂標頭雜湊。這些標頭會覆蓋由 `body_type` 設定的任何預設標頭（例如，在此處提供 `Content-Type` 會優先於主體類型的預設值）。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "自訂標頭"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "額外的請求標頭"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "若為 `True`，回應雜湊包含 `debug` 子雜湊，其中含有請求方法/URL/標頭（敏感值已被隱藏）、請求與回應大小以及來回時間。在調查過慢或失敗的呼叫時很有用。預設為關閉以保持回應精簡。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "包含除錯資訊"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "在回應中包含請求/計時/大小等除錯資訊"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTP 方法"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "用於請求的 HTTP 方法"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "相於連線 API 基底 URL 的 URI 路徑。可能包含從 `path_vars` 替換的 `{name}` 預留位置。範例：`/users/{id}/comments`。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URI 路徑"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "相對於連線 API 基礎 URL 的 URI 路徑"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "代入 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}`，框架會傳送 `/users/123`。值均經過 URL 編碼。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "路徑變數"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "路徑中 {name} 預留位置的值"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "要附加至 URI 路徑的查詢字串參數 Hash。值均經過 URL 編碼；清單值會以 `,` 連接。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "查詢引數"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "查詢字串參數"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Intercom",
+          "message": "向 Intercom 發出自訂 API 呼叫"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Fires for each contact created in the workspace.\n\n`role` narrows the feed to users (a contact who has signed up) or to leads (one who has not); left unset, both are reported. The event carries the contact record Intercom returns.\n\nA contact that is edited later does **not** fire this again: the feed is positioned by `created_at`.",
+          "message": "為工作區中建立的每個聯絡人觸發。\n\n`role` 可將動態摘要縮小為使用者（已註冊的聯絡人）或潛在客戶（未註冊的聯絡人）；若未設定，兩者皆會回報。該事件包含 Intercom 傳回的聯絡人記錄。\n\n稍後編輯聯絡人**不會**再次觸發：摘要動態是依據 `created_at` 定位的。"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "新聯絡人"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Fires when a contact is created",
+          "message": "在聯絡人建立時觸發"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.desc": {
+          "source": "Fires for each conversation created in the workspace.\n\nThe event carries the conversation record Intercom returns, which includes its source - who started it and what they said.\n\nA reply to an existing conversation does **not** fire this: the feed is positioned by `created_at`, so a conversation is reported once, when it starts.",
+          "message": "為工作區中建立的每個對話觸發。\n\n該事件包含 Intercom 傳回的對話記錄，其中包含其來源——誰發起了對話以及他們說了什麼。\n\n回覆現有對話**不會**觸發此事件：摘要動態是依據 `created_at` 定位的，因此對話僅在其開始時回報一次。"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.display_name": {
+          "source": "New Conversation",
+          "message": "新增對話"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.short_desc": {
+          "source": "Fires when a conversation is created",
+          "message": "建立對話時觸發"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.desc": {
+          "source": "Returns every record in the given table matching the search criteria",
+          "message": "返回給定表格中符合搜尋條件的每筆記錄"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.display_name": {
+          "source": "Search Records",
+          "message": "搜尋記錄"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "要使用的資料表：`contacts`、`conversations`、`companies`、`articles`、`collections`、`tags` 或 `teammates`"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.short_desc": {
+          "source": "Search for matching records in the given table",
+          "message": "在給定表格中搜尋符合的記錄"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.desc": {
+          "source": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches",
+          "message": "返回給定表格中符合搜尋條件的一筆記錄；如果有多筆符合則會回報錯誤"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.display_name": {
+          "source": "Find a Single Record",
+          "message": "尋找單筆記錄"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "要使用的資料表：`contacts`、`conversations`、`companies`、`articles`、`collections`、`tags` 或 `teammates`"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
+          "source": "Search for a single matching record in the given table",
+          "message": "在給定表格中搜尋單筆符合的記錄"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.desc": {
+          "source": "Searches the workspace's conversations.\n\n`query` takes the same shape as **Search Contacts**: a single `{field, operator, value}` filter, or `{operator: \"AND\", value: [ ... ]}` combining several.\n\nTimestamps in a query are counts of seconds since the epoch.",
+          "message": "搜尋工作區的對話。\n\n`query` 的格式與 **Search Contacts** 相同：單一 `{field, operator, value}` 篩選條件，或組合多個條件的 `{operator: \"AND\", value: [ ... ]}`。\n\n查詢中的時間戳記為自 Unix 紀元以來的秒數。"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.display_name": {
+          "source": "Search Conversations",
+          "message": "搜尋對話"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.desc": {
+          "source": "If set to true, the response will include a `monitor_evaluations` array on each conversation with any QA monitor results that flagged it.",
+          "message": "若設為 true，回應將在每個對話中包含 `monitor_evaluations` 陣列，其中包含標記該對話的任何 QA 監控結果。"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.display_name": {
+          "source": "Include Monitors",
+          "message": "包含監控結果"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.short_desc": {
+          "source": "If set to true, the response will include a 'monitor_evaluations' array on…",
+          "message": "若設為 true，回應將包含 'monitor_evaluations' 陣列…"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.desc": {
+          "source": "If set to true, the response will include a `scorecards` array on each conversation with any QA scorecard results.",
+          "message": "若設為 true，回應將在每個對話中包含 `scorecards` 陣列，其中包含任何 QA 計分卡結果。"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.display_name": {
+          "source": "Include Scorecards",
+          "message": "包含計分卡"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.short_desc": {
+          "source": "If set to true, the response will include a 'scorecards' array on each…",
+          "message": "若設為 true，回應將在各項中包含 'scorecards' 陣列…"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "分頁游標：從上一個回應中取得 `pages.next.starting_after` 並在此處傳入。\n\n此為不透明值，不可手動建構。當集合遍歷完畢時，`pages` 將不存在，這表示沒有下一頁。"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "開始於此之後"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "下一頁的游標"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cGVyX3BhZ2U.desc": {
+          "source": "The number of results to fetch per page.",
+          "message": "每頁要擷取的結果筆數。"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "頁面大小"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "單頁要傳回的記錄筆數"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "查詢"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.short_desc": {
+          "source": "Find conversations matching a query",
+          "message": "尋找符合查詢條件的對話"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.desc": {
+          "source": "Retrieves one help center article",
+          "message": "擷取單一說明中心文章"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.display_name": {
+          "source": "Get Article",
+          "message": "取得文章"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.option.YXJ0aWNsZV9pZA.desc": {
+          "source": "The unique identifier for the article which is given by Intercom.",
+          "message": "Intercom 為文章指定的唯一識別碼。"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.option.YXJ0aWNsZV9pZA.display_name": {
+          "source": "Article",
+          "message": "文章"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.option.YXJ0aWNsZV9pZA.short_desc": {
+          "source": "The article to retrieve",
+          "message": "要擷取的文章"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.short_desc": {
+          "source": "Retrieve a help center article by its identity",
+          "message": "依識別碼擷取說明中心文章"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.desc": {
+          "source": "Retrieves one conversation, including its parts - the messages and notes it holds",
+          "message": "擷取單一對話，包含其各組成部分——所包含的訊息與便箋"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.display_name": {
+          "source": "Get Conversation",
+          "message": "取得對話"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.desc": {
+          "source": "The id of the conversation to target",
+          "message": "目標對話的 ID"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.display_name": {
+          "source": "Conversation",
+          "message": "對話"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.short_desc": {
+          "source": "The conversation this applies to",
+          "message": "此操作適用的對話"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.desc": {
+          "source": "Set to plaintext to retrieve conversation messages in plain text. This affects both the body and subject fields. Inline links are rendered as `label (url)`, preserving the link URL alongside the visible text.",
+          "message": "設為 plaintext 以純文字形式擷取對話訊息。這會同時影響 body 與 subject 欄位。行內連結會轉譯為 `label (url)`，同時保留可見文字與連結 URL。"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.display_name": {
+          "source": "Display As",
+          "message": "顯示方式"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.short_desc": {
+          "source": "Set to plaintext to retrieve conversation messages in plain text",
+          "message": "設為 plaintext 以純文字形式擷取對話訊息"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.desc": {
+          "source": "If set to true, conversation parts will be translated to the detected language of the conversation.",
+          "message": "若設為 true，對話內容將會翻譯為該對話所偵測到的語言。"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.display_name": {
+          "source": "Include Translations",
+          "message": "包含翻譯"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.short_desc": {
+          "source": "If set to true, conversation parts will be translated to the detected language…",
+          "message": "若設為 true，對話內容將翻譯為偵測到的語言…"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.short_desc": {
+          "source": "Retrieve a conversation by its identity",
+          "message": "依識別碼檢索對話"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.desc": {
+          "source": "Retrieves one help center collection.\n\nWhat used to be a **section** is now a collection with a parent, which is how Intercom has represented them since API version 2.10.",
+          "message": "檢索一個說明中心集合。\n\n過去的 **section** 現在是有父層的集合，這是 Intercom 自 API 版本 2.10 起所採用的表示方式。"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.display_name": {
+          "source": "Get Collection",
+          "message": "取得集合"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.option.Y29sbGVjdGlvbl9pZA.desc": {
+          "source": "The unique identifier for the collection which is given by Intercom.",
+          "message": "Intercom 所提供的集合唯一識別碼。"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.option.Y29sbGVjdGlvbl9pZA.display_name": {
+          "source": "Collection",
+          "message": "集合"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.option.Y29sbGVjdGlvbl9pZA.short_desc": {
+          "source": "The collection to retrieve",
+          "message": "要檢索的集合"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.short_desc": {
+          "source": "Retrieve a help center collection by its identity",
+          "message": "依識別碼檢索說明中心集合"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.desc": {
+          "source": "Adds a reply to an existing conversation, from a teammate.\n\n`message_type` decides who sees it: `comment` is a reply the contact sees and is notified about, `note` is an internal remark only teammates see, and `quick_reply` offers the contact a set of `reply_options` to choose from.\n\nUse **Create Conversation** to start one, and **Create Message** to write to a contact without an existing conversation.\n\nThis action is hand-written rather than generated, because Intercom's own description declares this operation's body as a union of five request contracts, which cannot be published as one option shape. It covers a teammate's reply, which is the branch Intercom declares in full; a reply attributed to the contact is reachable through `make-api-call`.",
+          "message": "由團隊成員向現有對話新增回覆。\n\n`message_type` 決定誰能看到此回覆：`comment` 是聯絡人可看見並會收到通知的回覆，`note` 是僅團隊成員可見的內部備註，而 `quick_reply` 則向聯絡人提供一組 `reply_options` 供其選擇。\n\n使用 **Create Conversation** 發起對話，使用 **Create Message** 在沒有現有對話的情況下向聯絡人發送訊息。\n\n此動作為手動編寫而非自動產生，因為 Intercom 自身的說明將此操作的請求主體宣告為五個請求協定的聯集，無法作為單一選項形式發布。它涵蓋了團隊成員的回覆（這是 Intercom 完整宣告的分支）；歸屬於聯絡人的回覆則可透過 `make-api-call` 達成。"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.display_name": {
+          "source": "Reply to Conversation",
+          "message": "回覆對話"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.desc": {
+          "source": "The conversation to reply to",
+          "message": "要回覆的對話"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.display_name": {
+          "source": "Conversation",
+          "message": "對話"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.short_desc": {
+          "source": "The conversation to reply to",
+          "message": "要回覆的對話"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "When the reply was written, if it is being recorded after the fact.\n\nSent to Intercom as a count of seconds since the epoch; Intercom uses the current time when this is not set.",
+          "message": "回覆撰寫的時間（若是事後記錄）。\n\n以自 Unix 紀元以來的秒數傳送至 Intercom；若未設定，Intercom 將使用目前時間。"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "建立時間"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "When the reply was written",
+          "message": "回覆撰寫的時間"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YWRtaW5faWQ.desc": {
+          "source": "The teammate the reply is attributed to",
+          "message": "該回覆所屬的團隊成員"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YWRtaW5faWQ.display_name": {
+          "source": "Teammate",
+          "message": "團隊成員"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YWRtaW5faWQ.short_desc": {
+          "source": "The teammate the reply is from",
+          "message": "發送該回覆的團隊成員"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YXR0YWNobWVudF91cmxz.desc": {
+          "source": "The URLs of files to attach to the reply; Intercom accepts up to five",
+          "message": "要附加至回覆的檔案 URL；Intercom 最多接受 5 個"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YXR0YWNobWVudF91cmxz.display_name": {
+          "source": "Attachment URLs",
+          "message": "附件 URL"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YXR0YWNobWVudF91cmxz.short_desc": {
+          "source": "URLs of files to attach, up to five",
+          "message": "要附加的檔案 URL，最多 5 個"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Ym9keQ.desc": {
+          "source": "The text of the reply, in HTML.\n\nIntercom does not require it for a `quick_reply`, which carries its content in `reply_options` instead.",
+          "message": "回覆的文字內容（HTML 格式）。\n\nIntercom 對於 `quick_reply` 不需要此欄位，因為其內容會包含在 `reply_options` 中。"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Ym9keQ.display_name": {
+          "source": "Message",
+          "message": "訊息"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Ym9keQ.short_desc": {
+          "source": "The text of the reply, in HTML",
+          "message": "回覆的文字內容（HTML 格式）"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.bWVzc2FnZV90eXBl.desc": {
+          "source": "Whether the reply is seen by the contact.\n\n`comment` is a reply the contact sees and is notified about, `note` is an internal remark only teammates see, and `quick_reply` offers the contact the choices in `reply_options`.\n\nA `note` here is attached to the **conversation**; **Create Note** attaches one to the contact's record instead.",
+          "message": "聯絡人是否能看見該回覆。\n\n`comment` 是聯絡人可看見並會收到通知的回覆，`note` 是僅團隊成員可見的內部備註，而 `quick_reply` 則向聯絡人提供 `reply_options` 中的選項。\n\n此處的 `note` 會附加至**對話**；**Create Note** 則是將其附加至聯絡人記錄。"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.bWVzc2FnZV90eXBl.display_name": {
+          "source": "Message Type",
+          "message": "訊息類型"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.bWVzc2FnZV90eXBl.short_desc": {
+          "source": "Whether the reply is seen by the contact",
+          "message": "聯絡人是否能看見該回覆"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.c2tpcF9ub3RpZmljYXRpb25z.desc": {
+          "source": "Add the reply without notifying the contact about it",
+          "message": "新增回覆而不通知聯絡人"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.c2tpcF9ub3RpZmljYXRpb25z.display_name": {
+          "source": "Skip Notifications",
+          "message": "跳過通知"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.c2tpcF9ub3RpZmljYXRpb25z.short_desc": {
+          "source": "Do not notify the contact about this reply",
+          "message": "不向聯絡人通知此回覆"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.cmVwbHlfb3B0aW9ucw.desc": {
+          "source": "The choices offered by a `quick_reply`, each `{text, uuid}`.\n\nOnly meaningful when `message_type` is `quick_reply`.",
+          "message": "`quick_reply` 提供的選項，各為 `{text, uuid}`。\n\n僅在 `message_type` 為 `quick_reply` 時有效。"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.cmVwbHlfb3B0aW9ucw.display_name": {
+          "source": "Reply Options",
+          "message": "回覆選項"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.cmVwbHlfb3B0aW9ucw.short_desc": {
+          "source": "The choices offered by a quick reply",
+          "message": "快速回覆所提供的選項"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.short_desc": {
+          "source": "Reply to a conversation as a teammate",
+          "message": "以團隊成員身分回覆對話"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.desc": {
+          "source": "Updates every record in the given table matching the search criteria",
+          "message": "更新指定資料表中所有符合搜尋條件的記錄"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "更新記錄"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "要使用的資料表：`contacts`、`conversations`、`companies`、`articles`、`collections`、`tags` 或 `teammates`"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表格"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "要操作的資料表名稱"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria",
+          "message": "更新符合搜尋條件的記錄"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.desc": {
+          "source": "Updates a help center article that already exists.\n\nOnly the attributes supplied are changed. An article's parent can only be a **collection**: Intercom withdrew sections at API version 2.10.",
+          "message": "更新已存在的說明中心文章。\n\n僅會變更所提供的屬性。文章的父層只能是 **collection**：Intercom 在 API 版本 2.10 移除了 section。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.display_name": {
+          "source": "Update Article",
+          "message": "更新文章"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
+          "source": "Whether the article should be available for AI Copilot. For multilingual articles, this sets the default language's availability.",
+          "message": "文章是否應對 AI Copilot 可用。對於多語言文章，這會設定預設語言的可用性。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
+          "source": "AI Copilot Availability",
+          "message": "AI Copilot 可用性"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
+          "source": "Whether the article should be available for AI Copilot",
+          "message": "文章是否應對 AI Copilot 可用"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
+          "source": "Whether the article should be available for AI Chatbot (Fin). For multilingual articles, this sets the default language's availability.",
+          "message": "文章是否應對 AI 聊天機器人 (Fin) 可用。對於多語言文章，這會設定預設語言的可用性。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
+          "source": "AI Chatbot Availability",
+          "message": "AI 聊天機器人可用性"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
+          "source": "Whether the article should be available for AI Chatbot (Fin)",
+          "message": "文章是否應對 AI 聊天機器人 (Fin) 可用"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
+          "source": "Whether the article should be available for AI Sales Agent. For multilingual articles, this sets the default language's availability.",
+          "message": "文章是否應對 AI 銷售專員可用。對於多語言文章，這會設定預設語言的可用性。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
+          "source": "AI Sales Agent Availability",
+          "message": "AI 銷售專員可用性"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
+          "source": "Whether the article should be available for AI Sales Agent",
+          "message": "文章是否應對 AI 銷售專員可用"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.desc": {
+          "source": "The unique identifier for the article which is given by Intercom.",
+          "message": "Intercom 為文章指定的唯一識別碼。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.display_name": {
+          "source": "Article",
+          "message": "文章"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.short_desc": {
+          "source": "The article to update",
+          "message": "要更新的文章"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.desc": {
+          "source": "The id of the author of the article. For multilingual articles, this will be the id of the author of the default language's content. Must be a teammate on the help center's workspace.",
+          "message": "文章作者的 ID。對於多語言文章，此為預設語言內容作者的 ID。必須是說明中心工作區的團隊成員。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.display_name": {
+          "source": "Teammate",
+          "message": "團隊成員"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.short_desc": {
+          "source": "The teammate to act as",
+          "message": "要作為其身分操作的團隊成員"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.desc": {
+          "source": "The list of audience IDs to assign to this article for Fin AI Agent targeting. Sending a top-level `audience_ids` broadcasts the same set to every locale. Sending `audience_ids: []` clears all audience memberships from every locale. For per-locale targeting, use `translated_content.<locale>.audience_ids` instead. Sending both top-level and per-locale in the same request causes top-level to win. Unknown audience IDs return a 404 error. No partial commit occurs.",
+          "message": "指派給此文章以供 Fin AI Agent 定向的受眾 ID 清單。傳送頂層 `audience_ids` 會將相同的設定廣播至所有語言地區。傳送 `audience_ids: []` 會清除所有語言地區的所有受眾成員資格。若要進行個別語言地區定向，請改用 `translated_content.<locale>.audience_ids`。在同一請求中同時傳送頂層與個別語言地區時，將以頂層為準。未知的受眾 ID 會傳回 404 錯誤。不會發生部分認可。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.display_name": {
+          "source": "Audience Ids",
+          "message": "受眾 ID"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.short_desc": {
+          "source": "The list of audience IDs to assign to this article for Fin AI Agent targeting",
+          "message": "要指派給此文章以進行 Fin AI 代理目標設定的受眾 ID 清單"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keQ.desc": {
+          "source": "The content of the article in HTML. For multilingual articles, this will be the body of the default language's content. Mutually exclusive with `body_markdown`.",
+          "message": "HTML 格式的文章內容。對於多語言文章，此為預設語言內容的正文。與 `body_markdown` 互斥。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "內文"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keQ.short_desc": {
+          "source": "The content of the article in HTML",
+          "message": "文章內容（HTML 格式）"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.desc": {
+          "source": "The content of the article in markdown. For multilingual articles, this will be the body of the default language's content. An alternative to `body` — you can provide content as markdown instead of HTML. Mutually exclusive with `body`.",
+          "message": "Markdown 格式的文章內容。對於多語言文章，此為預設語言內容的正文。`body` 的替代選項——您可以提供 Markdown 內容而非 HTML。與 `body` 互斥。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.display_name": {
+          "source": "Body Markdown",
+          "message": "Markdown 正文"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.short_desc": {
+          "source": "The content of the article in markdown",
+          "message": "Markdown 格式的文章內容"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the article. For multilingual articles, this will be the description of the default language's content.",
+          "message": "文章說明。對於多語言文章，此為預設語言內容的說明。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "描述"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The description of the article",
+          "message": "文章說明"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future publish of the article. When set together with `state: \"published\"`, the article is scheduled instead of published immediately. Setting `null` cancels a pending publish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Combining with `state: \"draft\"` returns 400 `parameter_invalid`. Sending in the same request as `scheduled_unpublish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`.",
+          "message": "預約未來發佈文章的 ISO 8601 時間戳記。與 `state: \"published\"` 一起設定時，文章將排程發佈而非立即發佈。設定 `null` 會取消待發佈的排程。早於或等於目前時間的時間戳記將被拒絕並傳回 400 `parameter_invalid`——該值必須為未來的時間。與 `state: \"draft\"` 同時使用會傳回 400 `parameter_invalid`。在同一個請求中與 `scheduled_unpublish_at` 一起傳送會傳回 400——每篇文章只能有一個待處理排程。空字串會傳回 400 `parameter_invalid`。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.display_name": {
+          "source": "Scheduled Publish At",
+          "message": "預約發佈時間"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.short_desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future publish of the article",
+          "message": "預約未來發佈文章的 ISO 8601 時間戳記"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future unpublish of the article. Setting `null` cancels a pending unpublish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Rejected with 400 `parameter_invalid` if the article has never been published. Sending in the same request as `scheduled_publish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`.",
+          "message": "預約未來取消發佈文章的 ISO 8601 時間戳記。設定 `null` 會取消待取消發佈的排程。早於或等於目前時間的時間戳記將被拒絕並傳回 400 `parameter_invalid`——該值必須為未來的時間。若文章從未發佈過，則會被拒絕並傳回 400 `parameter_invalid`。在同一個請求中與 `scheduled_publish_at` 一起傳送會傳回 400——每篇文章只能有一個待處理排程。空字串會傳回 400 `parameter_invalid`。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.display_name": {
+          "source": "Scheduled Unpublish At",
+          "message": "預約取消發佈時間"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.short_desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future unpublish of the article",
+          "message": "預約未來取消發佈文章的 ISO 8601 時間戳記"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "draft",
+          "message": "草稿"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "published",
+          "message": "已發佈"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.desc": {
+          "source": "Whether the article will be `published` or will be a `draft`. Defaults to draft. For multilingual articles, this will be the state of the default language's content.",
+          "message": "文章將為 `published` 或 `draft`。預設為草稿。對於多語言文章，此為預設語言內容的狀態。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "州/省"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.short_desc": {
+          "source": "Whether the article will be 'published' or will be a 'draft'",
+          "message": "文章狀態為「published」或「draft」"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.desc": {
+          "source": "The id of the article's parent collection or section. An article without this field stands alone.",
+          "message": "文章父合集或區段的 ID。未包含此欄位的文章為獨立文章。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent ID",
+          "message": "父容器 ID"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.short_desc": {
+          "source": "The id of the article's parent collection or section",
+          "message": "文章父層集合或區段的 ID"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.desc": {
+          "source": "The type of parent, which can either be a `collection` or `section`.",
+          "message": "父層類型，可為 `collection` 或 `section`。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.display_name": {
+          "source": "Parent Type",
+          "message": "父容器類型"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.short_desc": {
+          "source": "The type of parent, which can either be a 'collection' or 'section'",
+          "message": "父層類型，可為「collection」或「section」"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dGl0bGU.desc": {
+          "source": "The title of the article.For multilingual articles, this will be the title of the default language's content.",
+          "message": "文章標題。對於多語言文章，此為預設語言內容的標題。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "標題"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dGl0bGU.short_desc": {
+          "source": "The title of the article.For multilingual articles, this will be the title of…",
+          "message": "文章標題。對於多語言文章，此為預設語言內容的標題。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.desc": {
+          "source": "The Translated Content of an Article. The keys are the locale codes and the values are the translated content of the article.",
+          "message": "文章的翻譯內容。索引鍵為地區代碼，值為文章的翻譯內容。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.display_name": {
+          "source": "Translated Content",
+          "message": "翻譯內容"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.short_desc": {
+          "source": "The Translated Content of an Article",
+          "message": "文章的翻譯內容"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.short_desc": {
+          "source": "Update an existing help center article",
+          "message": "更新現有的說明中心文章"
+        },
+        "app.SW50ZXJjb20.desc": {
+          "source": "Provides access to [Intercom](https://www.intercom.com), the customer communications platform.\n\nIntercom holds the people who use your product - **contacts**, either `user`s who have signed up or `lead`s who have not - the **companies** they belong to, and the **conversations** you have had with them, alongside a help center of **articles**.\n\n**Common use cases**:\n- **Contacts**: find contacts, note what you know about them, and tag them\n- **Companies**: create and update companies from your own system's records\n- **Conversations**: start one, search them, and reply as a teammate\n- **Messaging**: send a contact an e-mail or an in-app message from a teammate\n- **Data events**: record what a contact did, and read a contact's event summary\n- **Help center**: list and write articles\n\nAuthentication is the OAuth2 authorization code flow. Intercom asks for no scopes: what an access token may do is set by the permissions granted to the app in Intercom's own developer hub.\n\nIntercom is a trademark of Intercom, Inc.",
+          "message": "提供對客戶溝通平台 [Intercom](https://www.intercom.com) 的存取。\n\nIntercom 保存使用您產品的人員——**聯絡人**（已註冊的 `user` 或未註冊的 `lead`）、他們所屬的**公司**，以及您與他們的**對話**，並包含提供**文章**的說明中心。\n\n**常見使用案例**：\n- **聯絡人**：尋找聯絡人、記錄您所知資訊並標記標籤\n- **公司**：從您系統的記錄中建立與更新公司\n- **對話**：發起對話、搜尋對話並以團隊成員身分回覆\n- **傳訊**：以團隊成員身分向聯絡人發送電子郵件或應用程式內訊息\n- **資料事件**：記錄聯絡人的操作並讀取聯絡人的事件摘要\n- **說明中心**：列出並撰寫文章\n\n驗證採用 OAuth2 授權碼流程。Intercom 不要求任何 scope：存取權杖可執行的操作取決於在 Intercom 開發者中心授予該應用程式的權限。\n\nIntercom 是 Intercom, Inc. 的商標。"
+        },
+        "app.SW50ZXJjb20.display_name": {
+          "source": "Intercom",
+          "message": "Intercom"
+        },
+        "app.SW50ZXJjb20.short_desc": {
+          "source": "Talk to your customers and keep what you know about them in one place",
+          "message": "與您的客戶溝通，並將他們的相關資訊集中管理"
+        }
+      }
     }
   }
 }

@@ -295,6 +295,10 @@
           "source": "URI Path",
           "message": "URI 路徑"
         },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "相對於連線 API 基礎 URL 的 URI 路徑"
+        },
         "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "代入 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}`，框架會傳送 `/users/123`。值均經過 URL 編碼。"
@@ -858,6 +862,10 @@
         "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.option.dGVtcGVyYXR1cmU.short_desc": {
           "source": "The sampling temperature to use, between 0 and 2",
           "message": "要使用的抽樣溫度，介於 0 到 2 之間"
+        },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.short_desc": {
+          "source": "Chat by sending several messages at once, with citations",
+          "message": "一次傳送多則訊息進行對話，並附帶引用來源"
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.desc": {
           "source": "Search the web using Perplexity's dedicated search API returning structured results with titles, URLs, and snippets",
@@ -1610,6 +1618,10 @@
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
           "source": "The sampling temperature to use, between 0 and 2",
           "message": "要使用的抽樣溫度，介於 0 到 2 之間"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.short_desc": {
+          "source": "Chat by sending one message, with citations",
+          "message": "傳送單則訊息進行對話，並附帶引用來源"
         },
         "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.desc": {
           "source": "Stream a chat response from Perplexity AI via Server-Sent Events with real-time token delivery",

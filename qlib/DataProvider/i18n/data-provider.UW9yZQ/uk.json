@@ -249,7 +249,7 @@
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.dGFyZ2V0.short_desc": {
           "source": "Center line target value (omit for auto from window mean)",
-          "message": "Цільове значення центральної лінії (опустіть для автовизначення із середнього вікна)"
+          "message": "Цільове значення центральної лінії (пропустіть для середнього вікна)"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {
           "source": "Detects when values drift outside normal operating range",
@@ -545,7 +545,7 @@
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX011bHRpTGluZQ.short_desc": {
           "source": "Makes start-of-line '^' or end-of-line '$' match after or before any newline in the subject string",
-          "message": "Змушує початок рядка '^' або кінець рядка '$' відповідати після або перед будь-яким символом нового рядка в цільовому рядку"
+          "message": "Зіставляє '^' та '$' з початком і кінцем кожного рядка у вихідному тексті"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0Nhc2VsZXNz.desc": {
           "source": "Ignore case when matching",

@@ -327,6 +327,10 @@
           "source": "OAuth2 Auto Refresh",
           "message": "Автооновлення OAuth2"
         },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.short_desc": {
+          "source": "Whether tokens are refreshed automatically",
+          "message": "Чи оновлюються токени автоматично"
+        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.desc": {
           "source": "Optional arguments for authentication requests for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
           "message": "Необов'язкові аргументи для запитів автентифікації для типу надання доступу `authorization_code`; ігнорується, якщо встановлено параметр `token`. Зверніть увагу, що тип надання доступу `authorization_code` вимагає зовнішньої авторизації користувача для отримання токена доступу"
@@ -334,6 +338,10 @@
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.display_name": {
           "source": "OAuth2 Authorization Args",
           "message": "Аргументи авторизації OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.short_desc": {
+          "source": "Extra arguments for authorization_code token requests",
+          "message": "Додаткові аргументи для запитів токенів authorization_code"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfdXJs.desc": {
           "source": "The OAuth2 authorization URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
@@ -345,7 +353,7 @@
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfdXJs.short_desc": {
           "source": "Sets the OAuth2 authorization URL for the authorization_code grant type",
-          "message": "Встановлює URL-адресу авторизації OAuth2 для типу надання доступу authorization_code"
+          "message": "Задає URL-адресу авторизації OAuth2 для типу надання authorization_code"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FsdF90b2tlbl91cmw.desc": {
           "source": "An alternate token URL which will be used to wrap the call to get the token; if this is set, then it takes precedence over `oauth2_token_url`",
@@ -357,7 +365,7 @@
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FsdF90b2tlbl91cmw.short_desc": {
           "source": "An alternate token URL which will be used to wrap the call to get the token",
-          "message": "Альтернативна URL-адреса токена, яка використовуватиметься для обгортання виклику отримання токена"
+          "message": "Альтернативний URL токена, який використовуватиметься для виклику отримання"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.desc": {
           "source": "Optional URL substitution info for token requests to the alternate server",
@@ -369,7 +377,7 @@
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.short_desc": {
           "source": "Optional URL substitution info for token requests to the alternate server",
-          "message": "Необов'язкова інформація для підстановки URL-адреси для запитів токенів до альтернативного сервера"
+          "message": "Необов'язкові дані заміни URL для запитів токена до альтернативного сервера"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FwcA.desc": {
           "source": "This is a hint to external programs processing OAuth2 requests to external configuration for the OAuth2 configuration",
@@ -459,6 +467,10 @@
           "source": "OAuth2 PKCE",
           "message": "OAuth2 PKCE"
         },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.short_desc": {
+          "source": "Hint to use PKCE with the authorization code flow",
+          "message": "Вказівка використовувати PKCE з потоком authorization code"
+        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.desc": {
           "source": "Per OAuth2 spec (RFC 6749), the state parameter should be returned by the authorization server. Some providers (like Trello) do not pass through the state parameter. Set this to False to embed the state in the redirect_uri as a workaround for non-compliant providers. Default: True (spec-compliant behavior).",
           "message": "Згідно зі специфікацією OAuth2 (RFC 6749), параметр state має повертатися сервером авторизації. Деякі провайдери (як-от Trello) не передають параметр state наскрізно. Встановіть значення False, щоб вбудувати state у redirect_uri як обхідний шлях для несумісних провайдерів. За замовчуванням: True (поведінка відповідно до специфікації)."
@@ -529,7 +541,7 @@
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.short_desc": {
           "source": "Use basic authorization with the client secret only when making token requests",
-          "message": "Використовувати базову автентифікацію лише з секретом клієнта під час виконання запитів на отримання токена"
+          "message": "Використовувати базову авторизацію лише із секретом клієнта для запитів токена"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2FyZ3M.desc": {
           "source": "Optional extra arguments for token refresh requests; if this option is set as well as `oauth2_alt_token_url`, then the `oauth2_token_url` value will be added to this as well when the request is made to the `oauth2_alt_token_url`",
@@ -563,6 +575,10 @@
           "source": "OAuth2 Token Lifetime Hint in Minutes",
           "message": "Підказка щодо часу життя токена OAuth2 у хвилинах"
         },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.short_desc": {
+          "source": "How many minutes a token stays valid",
+          "message": "Скільки хвилин токен залишається дійсним"
+        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VybA.desc": {
           "source": "The token URL for OAuth2 flows; ignored for logins if the `token` option is set",
           "message": "URL-адреса токена для потоків OAuth2; ігнорується для входів, якщо встановлено параметр `token`"
@@ -582,6 +598,10 @@
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.display_name": {
           "source": "OAuth2 Token Use Basic Auth?",
           "message": "Використовувати базову автентифікацію для токена OAuth2?"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.short_desc": {
+          "source": "Send the client ID and secret as basic authorization",
+          "message": "Надсилати клієнтський ID і секрет як базову авторизацію"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b3BlbmFwaTM.desc": {
           "source": "An OpenApi 3 schema location or file data for the REST connection",
@@ -954,6 +974,10 @@
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.display_name": {
           "source": "REST Body Auth Error Check",
           "message": "Перевірка помилок автентифікації в тілі REST"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.short_desc": {
+          "source": "Values marking a 200 OK body as an authentication error",
+          "message": "Значення, які позначають тіло 200 OK як помилку автентифікації"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW4.desc": {
           "source": "Any authorization token to use for the connection; will be passed as `Authorization: Bearer ...` (assuming that `token_type` is `Bearer`) in request headers; this option cannot be used with username and password options or authentication information in the URL; if this option is set then most OAuth2 options are ignored for logins",

@@ -391,6 +391,10 @@
           "source": "URI Path",
           "message": "URI 路徑"
         },
+        "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "相對於連線 API 基礎 URL 的 URI 路徑"
+        },
         "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "代入 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}`，框架會傳送 `/users/123`。值均經過 URL 編碼。"
@@ -418,6 +422,102 @@
         "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.short_desc": {
           "source": "Make a custom API call to Microsoft Dynamics 365",
           "message": "向 Microsoft Dynamics 365 發出自訂 API 呼叫"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.desc": {
+          "source": "Fires for each contact created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "針對組織中建立的每個聯絡人觸發；當條件為 `updated` 時，會在後續每次變更時再次觸發。"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.display_name": {
+          "source": "New or Updated Contact",
+          "message": "新增或更新的聯絡人"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.short_desc": {
+          "source": "Fires when a contact is created or changed",
+          "message": "在建立或變更聯絡人時觸發"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.desc": {
+          "source": "Fires for each case created in the organisation, and, when the condition is `updated`, again on every subsequent change.\n\nDataverse calls this table `incident`.",
+          "message": "針對組織中建立的每個案例觸發；當條件為 `updated` 時，會在後續每次變更時再次觸發。\n\nDataverse 將此資料表稱為 `incident`。"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.display_name": {
+          "source": "New or Updated Case",
+          "message": "新增或更新的案例"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.short_desc": {
+          "source": "Fires when a case is created or changed",
+          "message": "在建立或變更案例時觸發"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.desc": {
+          "source": "Fires for each account created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "針對組織中建立的每個客戶觸發；當條件為 `updated` 時，會在後續每次變更時再次觸發。"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.display_name": {
+          "source": "New or Updated Account",
+          "message": "新增或更新的客戶"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.short_desc": {
+          "source": "Fires when an account is created or changed",
+          "message": "在建立或變更客戶時觸發"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.desc": {
+          "source": "Fires for each invoice created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "針對組織中建立的每張發票觸發；當條件為 `updated` 時，會在後續每次變更時再次觸發。"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.display_name": {
+          "source": "New or Updated Invoice",
+          "message": "新增或更新的發票"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.short_desc": {
+          "source": "Fires when an invoice is created or changed",
+          "message": "在建立或變更發票時觸發"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.desc": {
+          "source": "Fires for each opportunity created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "針對組織中建立的每個商機觸發；當條件為 `updated` 時，會在後續每次變更時再次觸發。"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.display_name": {
+          "source": "New or Updated Opportunity",
+          "message": "新增或更新的商機"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.short_desc": {
+          "source": "Fires when an opportunity is created or changed",
+          "message": "在建立或變更商機時觸發"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.desc": {
+          "source": "Fires for each order created in the organisation, and, when the condition is `updated`, again on every subsequent change.\n\nDataverse calls this table `salesorder`.",
+          "message": "針對組織中建立的每筆訂單觸發；當條件為 `updated` 時，會在後續每次變更時再次觸發。\n\nDataverse 將此資料表稱為 `salesorder`。"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.display_name": {
+          "source": "New or Updated Order",
+          "message": "新增或更新的訂單"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.short_desc": {
+          "source": "Fires when an order is created or changed",
+          "message": "在建立或變更訂單時觸發"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.desc": {
+          "source": "Fires for each lead created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "針對組織中建立的每筆潛在客戶觸發；當條件為 `updated` 時，會在後續每次變更時再次觸發。"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.display_name": {
+          "source": "New or Updated Lead",
+          "message": "新增或更新的潛在客戶"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.short_desc": {
+          "source": "Fires when a lead is created or changed",
+          "message": "在建立或變更潛在客戶時觸發"
+        },
+        "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.desc": {
+          "source": "Fires for each record created or changed in a Dataverse table named when the subscription is created.\n\nThe table is given by its logical name, ex: `account`; its entity set and primary key are read from the organisation's entity definition, so a custom table whose set name is not simply its logical name pluralised works unchanged.",
+          "message": "針對建立訂閱時所指定 Dataverse 資料表中建立或變更的每筆記錄觸發。\n\n資料表是以其邏輯名稱指定（例如：`account`）；其實體集與主索引鍵是從組織的實體定義中讀取，因此即使自訂資料表的集合名稱並非單純將邏輯名稱複數化，也能正常運作。"
+        },
+        "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.display_name": {
+          "source": "New or Updated Custom Entity",
+          "message": "新增或更新的自訂實體"
+        },
+        "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.short_desc": {
+          "source": "Fires for each record created or changed in any Dataverse table",
+          "message": "在任何 Dataverse 資料表中建立或變更記錄時觸發"
         },
         "app.RHluYW1pY3M.action.dXBkYXRlLXJlY29yZHM.desc": {
           "source": "Update records in a Dynamics table using the Dynamics REST API",

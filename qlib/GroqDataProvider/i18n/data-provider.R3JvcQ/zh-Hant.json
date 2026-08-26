@@ -3,6 +3,10 @@
   "locales": {
     "zh-Hant": {
       "messages": {
+        "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.desc": {
+          "source": "Sends a list of chat messages to a Groq-hosted model using the OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated response.  See the [Groq models documentation](https://console.groq.com/docs/models) for the currently-available models.\n\n**Example use cases**:\n- Low-latency chat and conversational agents\n- Fast tool-calling agents (pass `tools` and `tool_choice` in the request)\n- Structured extraction (pass `response_format` with a JSON schema)",
+          "message": "使用相容於 OpenAI 的 `/v1/chat/completions` 端點傳送聊天訊息清單至 Groq 託管的模型，並傳回產生的回應。目前可用的模型請參閱 [Groq 模型說明文件](https://console.groq.com/docs/models)。\n\n**範例使用案例**：\n- 低延遲聊天與對話代理\n- 快速工具呼叫代理（在請求中傳遞 `tools` 與 `tool_choice`）\n- 結構化擷取（傳遞帶有 JSON 結構描述的 `response_format`）"
+        },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
           "source": "Chat Completion",
           "message": "聊天生成"
@@ -18,6 +22,10 @@
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
           "source": "Penalize repeated tokens proportional to their frequency",
           "message": "依重複權杖的出現頻率等比例施加懲罰"
+        },
+        "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.desc": {
+          "source": "ID of the Groq-hosted model to use.  See the [Groq models documentation](https://console.groq.com/docs/models) for the currently-available models; the `list-models` action returns the live list served by the API.",
+          "message": "要使用的 Groq 託管模型 ID。目前可用的模型請參閱 [Groq 模型說明文件](https://console.groq.com/docs/models)；`list-models` 動作會傳回 API 提供的即時清單。"
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.display_name": {
           "source": "Model",
@@ -186,6 +194,18 @@
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
           "source": "Generate a chat completion from a Groq-hosted open-weight model",
           "message": "從 Groq 託管的開放權重模型產生聊天完成"
+        },
+        "app.R3JvcQ.action.bGlzdC1tb2RlbHM.desc": {
+          "source": "Returns the list of models currently served by the Groq API using the `/v1/models` endpoint, including context window sizes and active flags.  See the [Groq models documentation](https://console.groq.com/docs/models) for details on each model.",
+          "message": "使用 `/v1/models` 端點傳回 Groq API 目前提供的模型清單，包括上下文視窗大小與啟用旗標。有關各模型的詳細資訊，請參閱 [Groq models documentation](https://console.groq.com/docs/models)。"
+        },
+        "app.R3JvcQ.action.bGlzdC1tb2RlbHM.display_name": {
+          "source": "List Models",
+          "message": "列出模型"
+        },
+        "app.R3JvcQ.action.bGlzdC1tb2RlbHM.short_desc": {
+          "source": "List the models currently available on the Groq API",
+          "message": "列出 Groq API 目前提供的模型"
         },
         "app.R3JvcQ.action.bWFrZS1hcGktY2FsbA.desc": {
           "source": "Make a custom HTTP / REST API call to **Groq** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
@@ -479,6 +499,10 @@
           "source": "URI Path",
           "message": "URI 路徑"
         },
+        "app.R3JvcQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "相對於連線 API 基礎 URL 的 URI 路徑"
+        },
         "app.R3JvcQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "代入 URI 路徑中 `{name}` 預留位置的值 Hash。範例：使用 `path = /users/{id}` 與 `path_vars = {id: 123}`，框架會傳送 `/users/123`。值均經過 URL 編碼。"
@@ -506,6 +530,10 @@
         "app.R3JvcQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
           "source": "Make a custom API call to Groq",
           "message": "向 Groq 發出自訂 API 呼叫"
+        },
+        "app.R3JvcQ.desc": {
+          "source": "Provides access to [Groq](https://groq.com) — LPU-accelerated inference for open-weight LLMs at exceptionally high token-per-second throughput.\n\nGroq exposes an OpenAI-compatible chat-completions API, so existing OpenAI-shape consumers (chat, tools, structured output, streaming) work unchanged.  See the [Groq models documentation](https://console.groq.com/docs/models) for the currently-available models.\n\n**Common use cases**:\n- **Low-latency chat** — Groq's LPU delivers sub-second time-to-first-token\n- **High-throughput tool-calling agents** where total response time matters\n- **Open-weight model deployments** without owning GPU infrastructure",
+          "message": "提供對 [Groq](https://groq.com) 的存取 — 透過 LPU 加速推論，為開放權重大型語言模型 (LLM) 提供極高的每秒權杖 (token) 輸送量。\n\nGroq 提供與 OpenAI 相容的 chat-completions API，因此現有的 OpenAI 格式取用端（對話、工具、結構化輸出、串流）無須修改即可運作。有關目前可用的模型，請參閱 [Groq models documentation](https://console.groq.com/docs/models)。\n\n**常見使用案例**：\n- **低延遲對話** — Groq 的 LPU 提供次秒級的首字權杖生成時間\n- **高輸送量工具呼叫代理** — 適用於重視總回應時間的場景\n- **開放權重模型部署** — 無須自建 GPU 基礎架構"
         },
         "app.R3JvcQ.display_name": {
           "source": "Groq",

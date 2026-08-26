@@ -141,7 +141,7 @@
         },
         "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+          "message": "Транзит; використати серіалізацію підключення, давши вибір REST-клієнту"
         },
         "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -237,7 +237,7 @@
         },
         "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
           "source": "Return non-2xx responses normally instead of throwing",
-          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+          "message": "Повертати відповіді без коду 2xx у звичайному режимі замість помилки"
         },
         "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
           "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
@@ -391,6 +391,10 @@
           "source": "URI Path",
           "message": "Шлях URI"
         },
+        "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Шлях URI відносно базової URL-адреси API підключення"
+        },
         "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
@@ -418,6 +422,102 @@
         "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.short_desc": {
           "source": "Make a custom API call to Microsoft Dynamics 365",
           "message": "Зробити довільний виклик API до Microsoft Dynamics 365"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.desc": {
+          "source": "Fires for each contact created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "Спрацьовує для кожного контакту, створеного в організації, і, якщо умова — `updated`, знову при кожній наступній зміні."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.display_name": {
+          "source": "New or Updated Contact",
+          "message": "Новий або оновлений контакт"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.short_desc": {
+          "source": "Fires when a contact is created or changed",
+          "message": "Спрацьовує, коли створюється або змінюється контакт"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.desc": {
+          "source": "Fires for each case created in the organisation, and, when the condition is `updated`, again on every subsequent change.\n\nDataverse calls this table `incident`.",
+          "message": "Спрацьовує для кожного звернення, створеного в організації, і, якщо умова — `updated`, знову при кожній наступній зміні.\n\nDataverse називає цю таблицю `incident`."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.display_name": {
+          "source": "New or Updated Case",
+          "message": "Нове або оновлене звернення"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.short_desc": {
+          "source": "Fires when a case is created or changed",
+          "message": "Спрацьовує під час створення або зміни звернення"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.desc": {
+          "source": "Fires for each account created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "Спрацьовує для кожного облікового запису, створеного в організації, і, якщо умова — `updated`, знову при кожній наступній зміні."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.display_name": {
+          "source": "New or Updated Account",
+          "message": "Новий або оновлений обліковий запис"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.short_desc": {
+          "source": "Fires when an account is created or changed",
+          "message": "Спрацьовує під час створення або зміни облікового запису"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.desc": {
+          "source": "Fires for each invoice created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "Спрацьовує для кожного рахунка-фактури, створеного в організації, і, якщо умова — `updated`, знову при кожній наступній зміні."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.display_name": {
+          "source": "New or Updated Invoice",
+          "message": "Новий або оновлений рахунок-фактура"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.short_desc": {
+          "source": "Fires when an invoice is created or changed",
+          "message": "Спрацьовує під час створення або зміни рахунка-фактури"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.desc": {
+          "source": "Fires for each opportunity created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "Спрацьовує для кожної потенційної угоди, створеної в організації, і, якщо умова — `updated`, знову при кожній наступній зміні."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.display_name": {
+          "source": "New or Updated Opportunity",
+          "message": "Нова або оновлена потенційна угода"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.short_desc": {
+          "source": "Fires when an opportunity is created or changed",
+          "message": "Спрацьовує під час створення або зміни потенційної угоди"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.desc": {
+          "source": "Fires for each order created in the organisation, and, when the condition is `updated`, again on every subsequent change.\n\nDataverse calls this table `salesorder`.",
+          "message": "Спрацьовує для кожного замовлення, створеного в організації, і, якщо умова — `updated`, знову при кожній наступній зміні.\n\nDataverse називає цю таблицю `salesorder`."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.display_name": {
+          "source": "New or Updated Order",
+          "message": "Нове або оновлене замовлення"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.short_desc": {
+          "source": "Fires when an order is created or changed",
+          "message": "Спрацьовує під час створення або зміни замовлення"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.desc": {
+          "source": "Fires for each lead created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "Спрацьовує для кожного ліда, створеного в організації, і, якщо умова — `updated`, знову при кожній наступній зміні."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.display_name": {
+          "source": "New or Updated Lead",
+          "message": "Новий або оновлений лід"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.short_desc": {
+          "source": "Fires when a lead is created or changed",
+          "message": "Спрацьовує під час створення або зміни ліда"
+        },
+        "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.desc": {
+          "source": "Fires for each record created or changed in a Dataverse table named when the subscription is created.\n\nThe table is given by its logical name, ex: `account`; its entity set and primary key are read from the organisation's entity definition, so a custom table whose set name is not simply its logical name pluralised works unchanged.",
+          "message": "Спрацьовує для кожного запису, створеного або зміненого в таблиці Dataverse, указаній під час створення підписки.\n\nТаблиця задається за логічним іменем, наприклад: `account`; її набір сутностей і первинний ключ зчитуються з визначення сутності організації, тому настроювана таблиця, ім'я набору якої не є просто її логічним іменем у множині, працює без змін."
+        },
+        "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.display_name": {
+          "source": "New or Updated Custom Entity",
+          "message": "Нова або оновлена настроювана сутність"
+        },
+        "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.short_desc": {
+          "source": "Fires for each record created or changed in any Dataverse table",
+          "message": "Спрацьовує для кожного запису, створеного або зміненого в таблиці Dataverse"
         },
         "app.RHluYW1pY3M.action.dXBkYXRlLXJlY29yZHM.desc": {
           "source": "Update records in a Dynamics table using the Dynamics REST API",

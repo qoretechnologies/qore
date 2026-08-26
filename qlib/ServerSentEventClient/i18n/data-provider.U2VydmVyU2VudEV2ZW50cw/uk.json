@@ -145,7 +145,7 @@
         },
         "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bGFzdF9ldmVudF9pZA.short_desc": {
           "source": "Request the server restart sending events from this ID",
-          "message": "Запит до сервера на відновлення надсилання подій починаючи з цього ідентифікатора"
+          "message": "Запит до сервера відновити надсилання подій із цього ID"
         },
         "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.bWF4X3JlZGlyZWN0cw.desc": {
           "source": "Maximum HTTP redirects to support",

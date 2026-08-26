@@ -895,6 +895,10 @@
           "source": "Milestone",
           "message": "Етап"
         },
+        "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.option.bWlsZXN0b25l.short_desc": {
+          "source": "If an 'integer' is passed, it should refer to a milestone by its 'number' field",
+          "message": "Якщо передано 'integer', він має вказувати на етап за полем 'number'"
+        },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.option.c29ydA.allowed-value.c3RyaW5nOmNvbW1lbnRz.display_name": {
           "source": "comments",
           "message": "Коментарі"
@@ -1170,6 +1174,10 @@
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.display_name": {
           "source": "Duplicate Issue ID",
           "message": "Duplicate Issue Id"
+        },
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.short_desc": {
+          "source": "The ID of the issue to mark as the canonical duplicate when 'state_reason' is…",
+          "message": "ID проблеми для позначення як канонічного дубліката, коли 'state_reason' є…"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.aXNzdWVfZmllbGRfdmFsdWVz.desc": {
           "source": "An array of issue field values to set on this issue. Each field value must include the field ID and the value to set. Only users with push access can set field values for issues",
@@ -1485,7 +1493,7 @@
         },
         "app.R2l0aHVi.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+          "message": "Транзит; використати серіалізацію підключення, давши вибір REST-клієнту"
         },
         "app.R2l0aHVi.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -1581,7 +1589,7 @@
         },
         "app.R2l0aHVi.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
           "source": "Return non-2xx responses normally instead of throwing",
-          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+          "message": "Повертати відповіді без коду 2xx у звичайному режимі замість помилки"
         },
         "app.R2l0aHVi.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
           "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
@@ -1734,6 +1742,10 @@
         "app.R2l0aHVi.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "Шлях URI"
+        },
+        "app.R2l0aHVi.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Шлях URI відносно базової URL-адреси API підключення"
         },
         "app.R2l0aHVi.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
@@ -1907,6 +1919,10 @@
           "source": "Order",
           "message": "Порядок"
         },
+        "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.b3JkZXI.short_desc": {
+          "source": "Determines whether the first search result returned is the highest number of…",
+          "message": "Визначає, чи перший повернутий результат містить найбільшу кількість…"
+        },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c29ydA.allowed-value.c3RyaW5nOmNvbW1lbnRz.display_name": {
           "source": "comments",
           "message": "Коментарі"
@@ -1958,6 +1974,10 @@
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "Сортування"
+        },
+        "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c29ydA.short_desc": {
+          "source": "Sorts the results of your query by the number of 'comments', 'reactions',…",
+          "message": "Сортує результати запиту за кількістю 'comments', 'reactions'…"
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c2VhcmNoX3R5cGU.allowed-value.c3RyaW5nOmh5YnJpZA.display_name": {
           "source": "hybrid",
@@ -2043,6 +2063,10 @@
           "source": "Order",
           "message": "Порядок"
         },
+        "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.b3JkZXI.short_desc": {
+          "source": "Determines whether the first search result returned is the highest number of…",
+          "message": "Визначає, чи перший повернутий результат містить найбільшу кількість…"
+        },
         "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.c29ydA.allowed-value.c3RyaW5nOmZvcmtz.display_name": {
           "source": "forks",
           "message": "forks"
@@ -2066,6 +2090,10 @@
         "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "Сортування"
+        },
+        "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.c29ydA.short_desc": {
+          "source": "Sorts the results of your query by number of 'stars', 'forks', or…",
+          "message": "Сортує результати запиту за кількістю 'stars', 'forks' або…"
         },
         "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.cGFnZQ.desc": {
           "source": "The page number of the results to fetch. For more information, see \"[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api).\"",
@@ -2230,6 +2258,10 @@
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.display_name": {
           "source": "Maintainer Can Modify",
           "message": "Супровідник може змінювати"
+        },
+        "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.short_desc": {
+          "source": "Indicates whether…",
+          "message": "Вказує, чи…"
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.cmVwbw.desc": {
           "source": "The repository name on its own, **not** `owner/name`.\n\nFor `qoretechnologies/qorus` this is `qorus`.",
@@ -2707,6 +2739,10 @@
           "source": "Maintainer Can Modify",
           "message": "Супровідник може змінювати"
         },
+        "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.short_desc": {
+          "source": "Indicates whether…",
+          "message": "Вказує, чи…"
+        },
         "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.option.c3RhdGU.allowed-value.c3RyaW5nOm9wZW4.display_name": {
           "source": "open",
           "message": "Відкриті"
@@ -2963,6 +2999,10 @@
           "source": "Gitignore Template",
           "message": "Шаблон Gitignore"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.Z2l0aWdub3JlX3RlbXBsYXRl.short_desc": {
+          "source": "The desired language or platform to apply to the .gitignore",
+          "message": "Потрібна мова або платформа для застосування до .gitignore"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.desc": {
           "source": "Whether to delete head branches when pull requests are merged",
           "message": "Чи видаляти вихідні гілки після злиття пул-реквестів"
@@ -3066,6 +3106,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aXNfdGVtcGxhdGU.display_name": {
           "source": "Is Template",
           "message": "Є шаблоном"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aXNfdGVtcGxhdGU.short_desc": {
+          "source": "Whether this repository acts as a template that can be used to generate new…",
+          "message": "Чи слугує цей репозиторій шаблоном для створення нових…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.bGljZW5zZV90ZW1wbGF0ZQ.desc": {
           "source": "The license keyword of the open source license for this repository.",
@@ -3235,6 +3279,10 @@
           "source": "Allow Auto Merge",
           "message": "Дозволити автоматичне злиття"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfYXV0b19tZXJnZQ.short_desc": {
+          "source": "Either 'true' to allow auto-merge on pull requests, or 'false' to disallow…",
+          "message": "'true', щоб дозволити автозлиття для pull request, або 'false', щоб заборонити…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfbWVyZ2VfY29tbWl0.desc": {
           "source": "Either `true` to allow merging pull requests with a merge commit, or `false` to prevent merging pull requests with merge commits.",
           "message": "Або `true`, щоб дозволити злиття pull requests за допомогою merge commit, або `false`, щоб запобігти злиттю за допомогою комітів злиття."
@@ -3242,6 +3290,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfbWVyZ2VfY29tbWl0.display_name": {
           "source": "Allow Merge Commit",
           "message": "Дозволити коміт злиття"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfbWVyZ2VfY29tbWl0.short_desc": {
+          "source": "Either 'true' to allow merging pull requests with a merge commit, or 'false'…",
+          "message": "'true', щоб дозволити злиття PR за допомогою merge commit, або 'false'…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfc3F1YXNoX21lcmdl.desc": {
           "source": "Either `true` to allow squash-merging pull requests, or `false` to prevent squash-merging.",
@@ -3251,6 +3303,10 @@
           "source": "Allow Squash Merge",
           "message": "Дозволити злиття зі стисканням"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfc3F1YXNoX21lcmdl.short_desc": {
+          "source": "Either 'true' to allow squash-merging pull requests, or 'false' to prevent…",
+          "message": "'true', щоб дозволити squash-злиття pull request, або 'false', щоб заборонити…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfcmViYXNlX21lcmdl.desc": {
           "source": "Either `true` to allow rebase-merging pull requests, or `false` to prevent rebase-merging.",
           "message": "Або `true`, щоб дозволити rebase-злиття pull requests, або `false`, щоб запобігти rebase-злиттю."
@@ -3258,6 +3314,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfcmViYXNlX21lcmdl.display_name": {
           "source": "Allow Rebase Merge",
           "message": "Дозволити злиття з перебазуванням"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfcmViYXNlX21lcmdl.short_desc": {
+          "source": "Either 'true' to allow rebase-merging pull requests, or 'false' to prevent…",
+          "message": "'true', щоб дозволити rebase-злиття pull request, або 'false', щоб заборонити…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YXV0b19pbml0.desc": {
           "source": "Pass `true` to create an initial commit with empty README.",
@@ -3279,6 +3339,10 @@
           "source": "Gitignore Template",
           "message": "Шаблон Gitignore"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.Z2l0aWdub3JlX3RlbXBsYXRl.short_desc": {
+          "source": "Desired language or platform…",
+          "message": "Бажана мова або платформа…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.desc": {
           "source": "Either `true` to allow automatically deleting head branches when pull requests are merged, or `false` to prevent automatic deletion. **The authenticated user must be an organization owner to set this property to `true`.**",
           "message": "Або `true`, щоб дозволити автоматичне видалення head-гілок після злиття pull requests, або `false`, щоб запобігти автоматичному видаленню. **Автентифікований користувач має бути власником організації, щоб встановити цю властивість у `true`.**"
@@ -3286,6 +3350,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
           "source": "Delete Branch on Merge",
           "message": "Видаляти гілку після злиття"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
+          "source": "Either 'true' to allow automatically deleting head branches when pull requests…",
+          "message": "'true', щоб автоматично видаляти гілки джерела після злиття pull request…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVzY3JpcHRpb24.desc": {
           "source": "A short description of the repository.",
@@ -3333,7 +3401,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX2lzc3Vlcw.short_desc": {
           "source": "Either 'true' to enable issues for this repository or 'false' to disable them",
-          "message": "Або 'true', щоб увімкнути issues для цього репозиторію, або 'false', щоб вимкнути їх"
+          "message": "'true', щоб увімкнути проблеми для цього репозиторію, або 'false', щоб вимкнути"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3Byb2plY3Rz.desc": {
           "source": "Either `true` to enable projects for this repository or `false` to disable them. **Note:** If you're creating a repository in an organization that has disabled repository projects, the default is `false`, and if you pass `true`, the API returns an error.",
@@ -3342,6 +3410,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3Byb2plY3Rz.display_name": {
           "source": "Has Projects",
           "message": "Має проєкти"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3Byb2plY3Rz.short_desc": {
+          "source": "Either 'true' to enable projects for this repository or 'false' to disable them",
+          "message": "'true', щоб увімкнути проєкти для цього репозиторію, або 'false', щоб вимкнути"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3dpa2k.desc": {
           "source": "Either `true` to enable the wiki for this repository or `false` to disable it.",
@@ -3353,7 +3425,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3dpa2k.short_desc": {
           "source": "Either 'true' to enable the wiki for this repository or 'false' to disable it",
-          "message": "Або 'true', щоб увімкнути wiki для цього репозиторію, або 'false', щоб вимкнути її"
+          "message": "'true', щоб увімкнути вікі для цього репозиторію, або 'false', щоб вимкнути її"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aXNfdGVtcGxhdGU.desc": {
           "source": "Either `true` to make this repo available as a template repository or `false` to prevent it.",
@@ -3362,6 +3434,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aXNfdGVtcGxhdGU.display_name": {
           "source": "Is Template",
           "message": "Є шаблоном"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aXNfdGVtcGxhdGU.short_desc": {
+          "source": "Either 'true' to make this repo available as a template repository or 'false'…",
+          "message": "'true', щоб зробити цей репозиторій шаблоном, або 'false'…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.b3Jn.desc": {
           "source": "The organization name. The name is not case sensitive.",
@@ -3382,6 +3458,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bGljZW5zZV90ZW1wbGF0ZQ.display_name": {
           "source": "License Template",
           "message": "Шаблон ліцензії"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bGljZW5zZV90ZW1wbGF0ZQ.short_desc": {
+          "source": "Choose an [open source license template](https://choosealicense.com/) that…",
+          "message": "Виберіть [шаблон ліцензії](https://choosealicense.com/), який…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bWVyZ2VfY29tbWl0X21lc3NhZ2U.allowed-value.c3RyaW5nOkJMQU5L.display_name": {
           "source": "BLANK",
@@ -3515,6 +3595,10 @@
           "source": "Use Squash PR Title as Default",
           "message": "Використовувати назву Squash PR за замовчуванням"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.short_desc": {
+          "source": "Either 'true' to allow squash-merge commits to use pull request title, or…",
+          "message": "'true', щоб використовувати назву PR для коміту squash-злиття, або…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
           "source": "public",
           "message": "public"
@@ -3579,6 +3663,10 @@
           "source": "Discussion Category Name",
           "message": "Назва категорії обговорення"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZGlzY3Vzc2lvbl9jYXRlZ29yeV9uYW1l.short_desc": {
+          "source": "If specified, a discussion of the specified category is created and linked to…",
+          "message": "Якщо вказано, створюється обговорення зазначеної категорії та зв'язується з…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZHJhZnQ.desc": {
           "source": "`true` to create a draft (unpublished) release, `false` to create a published one.",
           "message": "`true`, щоб створити чернетковий (неопублікований) реліз, `false`, щоб створити опублікований."
@@ -3586,6 +3674,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZHJhZnQ.display_name": {
           "source": "Draft",
           "message": "Чернетка"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZHJhZnQ.short_desc": {
+          "source": "'true' to create a draft (unpublished) release, 'false' to create a published…",
+          "message": "'true' для створення чернетки (неопублікованого) релізу, 'false' для публікації…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.b3duZXI.desc": {
           "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
@@ -3619,6 +3711,10 @@
           "source": "Make Latest",
           "message": "Зробити останнім"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.bWFrZV9sYXRlc3Q.short_desc": {
+          "source": "Specifies whether this release should be set as the latest release for the…",
+          "message": "Вказує, чи слід позначити цей реліз як найновіший для…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.bmFtZQ.desc": {
           "source": "The name of the release.",
           "message": "Назва релізу."
@@ -3638,6 +3734,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.cHJlcmVsZWFzZQ.display_name": {
           "source": "Prerelease",
           "message": "Пререліз"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.cHJlcmVsZWFzZQ.short_desc": {
+          "source": "'true' to identify the release as a prerelease",
+          "message": "'true', щоб позначити реліз як попередній випуск (prerelease)"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.cmVwbw.desc": {
           "source": "The repository name on its own, **not** `owner/name`.\n\nFor `qoretechnologies/qorus` this is `qorus`.",
@@ -4019,6 +4119,10 @@
           "source": "Protected",
           "message": "Захищено"
         },
+        "app.R2l0aHVi.action.cmVwb3MtbGlzdC1icmFuY2hlcw.option.cHJvdGVjdGVk.short_desc": {
+          "source": "Setting to 'true' returns only branches protected by branch protections or…",
+          "message": "Значення 'true' повертає лише захищені гілки за допомогою правил або…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1icmFuY2hlcw.option.cmVwbw.desc": {
           "source": "The repository name on its own, **not** `owner/name`.\n\nFor `qoretechnologies/qorus` this is `qorus`.",
           "message": "Лише назва репозиторію, **не** `owner/name`.\n\nДля `qoretechnologies/qorus` це `qorus`."
@@ -4085,7 +4189,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb21taXRz.option.c2hh.short_desc": {
           "source": "The branch, tag or commit to list from; the default branch if unset",
-          "message": "Гілка, тег або коміт, з якого формується список; якщо не вказано, стандартна гілка"
+          "message": "Гілка, тег або коміт для вибірки; якщо не вказано — типова гілка"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb21taXRz.option.c2luY2U.desc": {
           "source": "Only show repositories updated after the given time. This is a timestamp in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) format: `YYYY-MM-DDTHH:MM:SSZ`.",
@@ -4855,6 +4959,10 @@
           "source": "Allow Auto Merge",
           "message": "Дозволити автоматичне злиття"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfYXV0b19tZXJnZQ.short_desc": {
+          "source": "Either 'true' to allow auto-merge on pull requests, or 'false' to disallow…",
+          "message": "'true', щоб дозволити автозлиття для pull request, або 'false', щоб заборонити…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfZm9ya2luZw.desc": {
           "source": "Either `true` to allow private forks, or `false` to prevent private forks.",
           "message": "Або `true`, щоб дозволити приватні форки, або `false`, щоб заборонити приватні форки."
@@ -4865,7 +4973,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfZm9ya2luZw.short_desc": {
           "source": "Either 'true' to allow private forks, or 'false' to prevent private forks",
-          "message": "Або 'true', щоб дозволити приватні форки, або 'false', щоб заборонити приватні форки"
+          "message": "'true', щоб дозволити приватні форки, або 'false', щоб заборонити їх"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfbWVyZ2VfY29tbWl0.desc": {
           "source": "Either `true` to allow merging pull requests with a merge commit, or `false` to prevent merging pull requests with merge commits.",
@@ -4875,6 +4983,10 @@
           "source": "Allow Merge Commit",
           "message": "Дозволити коміт злиття"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfbWVyZ2VfY29tbWl0.short_desc": {
+          "source": "Either 'true' to allow merging pull requests with a merge commit, or 'false'…",
+          "message": "'true', щоб дозволити злиття PR за допомогою merge commit, або 'false'…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfc3F1YXNoX21lcmdl.desc": {
           "source": "Either `true` to allow squash-merging pull requests, or `false` to prevent squash-merging.",
           "message": "Або `true`, щоб дозволити squash-злиття pull requests, або `false`, щоб запобігти squash-злиттю."
@@ -4882,6 +4994,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfc3F1YXNoX21lcmdl.display_name": {
           "source": "Allow Squash Merge",
           "message": "Дозволити злиття зі стисканням"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfc3F1YXNoX21lcmdl.short_desc": {
+          "source": "Either 'true' to allow squash-merging pull requests, or 'false' to prevent…",
+          "message": "'true', щоб дозволити squash-злиття pull request, або 'false', щоб заборонити…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfcmViYXNlX21lcmdl.desc": {
           "source": "Either `true` to allow rebase-merging pull requests, or `false` to prevent rebase-merging.",
@@ -4891,6 +5007,10 @@
           "source": "Allow Rebase Merge",
           "message": "Дозволити злиття з перебазуванням"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfcmViYXNlX21lcmdl.short_desc": {
+          "source": "Either 'true' to allow rebase-merging pull requests, or 'false' to prevent…",
+          "message": "'true', щоб дозволити rebase-злиття pull request, або 'false', щоб заборонити…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfdXBkYXRlX2JyYW5jaA.desc": {
           "source": "Either `true` to always allow a pull request head branch that is behind its base branch to be updated even if it is not required to be up to date before merging, or false otherwise.",
           "message": "Або `true`, щоб завжди дозволяти оновлення гілки head запиту на злиття, яка відстає від базової гілки, навіть якщо оновлення не вимагається перед злиттям, або false у протилежному випадку."
@@ -4898,6 +5018,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfdXBkYXRlX2JyYW5jaA.display_name": {
           "source": "Allow Update Branch",
           "message": "Дозволити оновлення гілки"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfdXBkYXRlX2JyYW5jaA.short_desc": {
+          "source": "Either 'true' to always allow a pull request head branch that is behind its…",
+          "message": "'true', щоб завжди дозволяти оновлення гілки PR, яка відстає від…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YXJjaGl2ZWQ.desc": {
           "source": "Whether to archive this repository. `false` will unarchive a previously archived repository.",
@@ -4930,6 +5054,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
           "source": "Delete Branch on Merge",
           "message": "Видаляти гілку після злиття"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
+          "source": "Either 'true' to allow automatically deleting head branches when pull requests…",
+          "message": "'true', щоб автоматично видаляти гілки джерела після злиття pull request…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVzY3JpcHRpb24.desc": {
           "source": "A short description of the repository.",
@@ -4965,7 +5093,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX2lzc3Vlcw.short_desc": {
           "source": "Either 'true' to enable issues for this repository or 'false' to disable them",
-          "message": "Або 'true', щоб увімкнути issues для цього репозиторію, або 'false', щоб вимкнути їх"
+          "message": "'true', щоб увімкнути проблеми для цього репозиторію, або 'false', щоб вимкнути"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3B1bGxfcmVxdWVzdHM.desc": {
           "source": "Either `true` to allow pull requests for this repository or `false` to prevent pull requests.",
@@ -4975,6 +5103,10 @@
           "source": "Has Pull Requests",
           "message": "Має запити на злиття"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3B1bGxfcmVxdWVzdHM.short_desc": {
+          "source": "Either 'true' to allow pull requests for this repository or 'false' to prevent…",
+          "message": "'true', щоб дозволити pull request для цього репозиторію, або 'false'…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3Byb2plY3Rz.desc": {
           "source": "Either `true` to enable projects for this repository or `false` to disable them. **Note:** If you're creating a repository in an organization that has disabled repository projects, the default is `false`, and if you pass `true`, the API returns an error.",
           "message": "Або `true`, щоб увімкнути проєкти для цього репозиторію, або `false`, щоб вимкнути їх. **Примітка:** якщо ви створюєте репозиторій в організації, де вимкнено проєкти репозиторіїв, значенням за замовчуванням є `false`, і якщо ви передасте `true`, API поверне помилку."
@@ -4982,6 +5114,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3Byb2plY3Rz.display_name": {
           "source": "Has Projects",
           "message": "Має проєкти"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3Byb2plY3Rz.short_desc": {
+          "source": "Either 'true' to enable projects for this repository or 'false' to disable them",
+          "message": "'true', щоб увімкнути проєкти для цього репозиторію, або 'false', щоб вимкнути"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3dpa2k.desc": {
           "source": "Either `true` to enable the wiki for this repository or `false` to disable it.",
@@ -4993,7 +5129,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3dpa2k.short_desc": {
           "source": "Either 'true' to enable the wiki for this repository or 'false' to disable it",
-          "message": "Або 'true', щоб увімкнути wiki для цього репозиторію, або 'false', щоб вимкнути її"
+          "message": "'true', щоб увімкнути вікі для цього репозиторію, або 'false', щоб вимкнути її"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aXNfdGVtcGxhdGU.desc": {
           "source": "Either `true` to make this repo available as a template repository or `false` to prevent it.",
@@ -5002,6 +5138,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aXNfdGVtcGxhdGU.display_name": {
           "source": "Is Template",
           "message": "Є шаблоном"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aXNfdGVtcGxhdGU.short_desc": {
+          "source": "Either 'true' to make this repo available as a template repository or 'false'…",
+          "message": "'true', щоб зробити цей репозиторій шаблоном, або 'false'…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.b3duZXI.desc": {
           "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
@@ -5079,6 +5219,10 @@
           "source": "Security and Analysis",
           "message": "Безпека та аналіз"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.short_desc": {
+          "source": "Specify which security and analysis features to enable or disable for the…",
+          "message": "Вкажіть функції безпеки та аналізу, які потрібно увімкнути чи вимкнути для…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.allowed-value.c3RyaW5nOkNPTU1JVF9PUl9QUl9USVRMRQ.display_name": {
           "source": "COMMIT_OR_PR_TITLE",
           "message": "COMMIT_OR_PR_TITLE"
@@ -5131,6 +5275,10 @@
           "source": "Private",
           "message": "Приватний"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHJpdmF0ZQ.short_desc": {
+          "source": "Either 'true' to make the repository private or 'false' to make it public",
+          "message": "'true', щоб зробити репозиторій приватним, або 'false', щоб зробити публічним"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHVsbF9yZXF1ZXN0X2NyZWF0aW9uX3BvbGljeQ.allowed-value.c3RyaW5nOmFsbA.display_name": {
           "source": "all",
           "message": "all"
@@ -5146,6 +5294,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHVsbF9yZXF1ZXN0X2NyZWF0aW9uX3BvbGljeQ.display_name": {
           "source": "Pull Request Creation Policy",
           "message": "Політика створення запитів на злиття"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHVsbF9yZXF1ZXN0X2NyZWF0aW9uX3BvbGljeQ.short_desc": {
+          "source": "The policy that controls who can create pull requests for this repository:…",
+          "message": "Політика, яка визначає, хто може створювати pull request для репозиторію:…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cmVwbw.desc": {
           "source": "The repository name on its own, **not** `owner/name`.\n\nFor `qoretechnologies/qorus` this is `qorus`.",
@@ -5167,6 +5319,10 @@
           "source": "Web Commit Signoff Required",
           "message": "Вимагається підтвердження вебкомітів"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.d2ViX2NvbW1pdF9zaWdub2ZmX3JlcXVpcmVk.short_desc": {
+          "source": "Either 'true' to require contributors to sign off on web-based commits, or…",
+          "message": "'true', щоб вимагати підтвердження комітів через вебінтерфейс, або…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.desc": {
           "source": "Either `true` to allow squash-merge commits to use pull request title, or `false` to use commit message. **This property is closing down. Please use `squash_merge_commit_title` instead.",
           "message": "Або `true`, щоб дозволити комітам squash-merge використовувати заголовок pull request, або `false`, щоб використовувати повідомлення коміту. **Ця властивість застаріває. Будь ласка, використовуйте замість неї `squash_merge_commit_title`."
@@ -5174,6 +5330,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
           "source": "Use Squash PR Title as Default",
           "message": "Використовувати назву Squash PR за замовчуванням"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.short_desc": {
+          "source": "Either 'true' to allow squash-merge commits to use pull request title, or…",
+          "message": "'true', щоб використовувати назву PR для коміту squash-злиття, або…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
           "source": "public",

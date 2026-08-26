@@ -163,6 +163,10 @@
           "source": "Text",
           "message": "文字"
         },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "若為「True」，檔案將以字串形式傳回；「False」（預設值）則以…"
+        },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
           "source": "Get a file on the server filesystem",
           "message": "取得伺服器檔案系統上的檔案"
@@ -314,6 +318,10 @@
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.display_name": {
           "source": "Symlink",
           "message": "符號連結"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.short_desc": {
+          "source": "If 'True', then if the target path is a symbolic link, information about the…",
+          "message": "若為「True」，當目標路徑為符號連結時，將傳回有關…"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.desc": {
           "source": "The file path",

@@ -2995,6 +2995,10 @@
           "source": "Schema defining validation rules for each field",
           "message": "定義各欄位驗證規則的結構描述"
         },
+        "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.short_desc": {
+          "source": "Validates each record against a schema",
+          "message": "根據結構描述驗證每筆記錄"
+        },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.desc": {
           "source": "Answers 'is this increase real growth or just a seasonal spike?' by separating a time series into its component parts. For example, monthly sales of $120K might decompose into $100K trend + $25K seasonal holiday boost - $5K random dip.\n\nRecords accumulate per field in a window; when full, all values are decomposed. Each record receives:\n- `trend` — long-term direction\n- `seasonal` — cyclical pattern (e.g., holiday shopping cycles)\n- `residual` — random noise remaining after removing trend and seasonal",
           "message": "透過將時間序列分解為其組成部分，回答「此增長是實質增長還是僅為季節性高峰？」例如，每月 12 萬美元的銷售額可分解為 10 萬美元的趨勢 + 2.5 萬美元的節慶季節性提升 - 5 千美元的隨機下降。\n\n記錄會在視窗中按欄位累積；當填滿時，所有數值都會被分解。每筆記錄都會接收到：\n- `trend` — 長期趨勢方向\n- `seasonal` — 週期性模式（例如節日購物週期）\n- `residual` — 移除趨勢與季節性後剩餘的隨機雜訊"

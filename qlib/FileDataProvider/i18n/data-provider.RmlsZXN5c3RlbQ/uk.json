@@ -129,7 +129,7 @@
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.ZW5jb2Rpbmc.short_desc": {
           "source": "The string encoding to use if 'text' = 'True' (default: 'UTF-8')",
-          "message": "Кодування рядка для використання, якщо 'text' = 'True' (за замовчуванням: 'UTF-8')"
+          "message": "Кодування рядка, якщо 'text' = 'True' (за замовчуванням: 'UTF-8')"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.bWF4X2xlbg.desc": {
           "source": "The maximum length of the data returned in bytes",
@@ -162,6 +162,10 @@
         "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.display_name": {
           "source": "Text",
           "message": "Текст"
+        },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "Якщо 'True', файл повернеться як рядок, якщо 'False' (типово) — як…"
         },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
           "source": "Get a file on the server filesystem",
@@ -314,6 +318,10 @@
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.display_name": {
           "source": "Symlink",
           "message": "Символічне посилання"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.short_desc": {
+          "source": "If 'True', then if the target path is a symbolic link, information about the…",
+          "message": "Якщо 'True' і цільовий шлях є символьним посиланням, інформація про…"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.desc": {
           "source": "The file path",

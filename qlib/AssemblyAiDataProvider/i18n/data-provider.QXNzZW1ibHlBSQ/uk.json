@@ -45,7 +45,7 @@
         },
         "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Пряма передача; використовувати серіалізацію з'єднання та дозволити REST-клієнту приймати рішення"
+          "message": "Транзит; використати серіалізацію підключення, давши вибір REST-клієнту"
         },
         "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -141,7 +141,7 @@
         },
         "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
           "source": "Return non-2xx responses normally instead of throwing",
-          "message": "Повертати відповіді з кодом, відмінним від 2xx, у звичайному режимі замість генерації помилки"
+          "message": "Повертати відповіді без коду 2xx у звичайному режимі замість помилки"
         },
         "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
           "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
@@ -295,6 +295,10 @@
           "source": "URI Path",
           "message": "Шлях URI"
         },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Шлях URI відносно базової URL-адреси API підключення"
+        },
         "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Хеш значень, що підставляються замість заповнювачів `{name}` у шляху URI. Приклад: із `path = /users/{id}` та `path_vars = {id: 123}` фреймворк надсилає `/users/123`. Значення кодуються у форматі URL."
@@ -398,6 +402,10 @@
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
           "source": "Language Code",
           "message": "Код мови"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
+          "source": "BCP-47 / ISO-639-1 language code (e.g., en_us, de, fr)",
+          "message": "Код мови BCP-47 / ISO-639-1 (наприклад, en_us, de, fr)"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.desc": {
           "source": "When `True`, AssemblyAI auto-detects the spoken language and ignores `language_code`.",
@@ -522,6 +530,10 @@
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.display_name": {
           "source": "Summary Model",
           "message": "Модель підсумовування"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.short_desc": {
+          "source": "Summarization model (used with summarization)",
+          "message": "Модель сумаризації (використовується з сумаризацією)"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cG9sbF9pbnRlcnZhbA.desc": {
           "source": "Interval between job-status polls.  Defaults to `3s`.  Lower values fetch results sooner at the cost of more API calls.",
