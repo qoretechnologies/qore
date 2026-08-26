@@ -145,7 +145,7 @@
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.QWNjb3VudGluZ1N0YXRl.desc": {
           "source": "The accounting state(s) for the search; `Open`, `Closed`, `Inactive`, or `Canceled`",
-          "message": "Účetní stav(y) pro vyhledávání; `Open`, `Closed`, `Inactive` nebo `Canceled`"
+          "message": "Účetní stavy pro vyhledávání; `Open`, `Closed`, `Inactive` nebo `Canceled`"
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.QWNjb3VudGluZ1N0YXRl.display_name": {
           "source": "Accounting State",
@@ -153,7 +153,7 @@
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.QWNjb3VudGluZ1N0YXRl.short_desc": {
           "source": "The accounting state(s) for the search",
-          "message": "Účetní stav(y) pro vyhledávání"
+          "message": "Účetní stavy pro vyhledávání"
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.QmlsbElk.desc": {
           "source": "The bill ID(s) for the search",
@@ -217,7 +217,7 @@
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VHlwZQ.desc": {
           "source": "The order item type(s) for the search",
-          "message": "Typ(y) položky objednávky pro vyhledávání"
+          "message": "Typy položek objednávky pro vyhledávání"
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VHlwZQ.display_name": {
           "source": "Order Item Type",
@@ -225,7 +225,7 @@
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VHlwZQ.short_desc": {
           "source": "The order item type(s) for the search",
-          "message": "Typ(y) položky objednávky pro vyhledávání"
+          "message": "Typy položek objednávky pro vyhledávání"
         },
         "app.TWV3cw.action.Z2V0LW9yZGVyLWl0ZW1z.option.VXBkYXRlZFV0Y0VuZA.desc": {
           "source": "The upper limit of the updated date (and time) range; i.e. `UpdatedUtc` < <this date>",
@@ -457,7 +457,7 @@
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.QWNjb3VudGluZ1N0YXRl.desc": {
           "source": "The accounting state(s) for the search; `Open`, `Closed`, `Inactive`, or `Canceled`",
-          "message": "Účetní stav(y) pro vyhledávání; `Open`, `Closed`, `Inactive` nebo `Canceled`"
+          "message": "Účetní stavy pro vyhledávání; `Open`, `Closed`, `Inactive` nebo `Canceled`"
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.QWNjb3VudGluZ1N0YXRl.display_name": {
           "source": "Accounting State",
@@ -465,7 +465,7 @@
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.QWNjb3VudGluZ1N0YXRl.short_desc": {
           "source": "The accounting state(s) for the search",
-          "message": "Účetní stav(y) pro vyhledávání"
+          "message": "Účetní stavy pro vyhledávání"
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.QmlsbElk.desc": {
           "source": "The bill ID(s) for the search",
@@ -517,7 +517,7 @@
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U3RhdGU.desc": {
           "source": "The payment state(s) for the search; `Charged`, `Canceled`, `Pending`, `Failed`, or `Verifying`",
-          "message": "Stav(y) platby pro vyhledávání; `Charged`, `Canceled`, `Pending`, `Failed` nebo `Verifying`"
+          "message": "Stavy plateb pro vyhledávání; `Charged`, `Canceled`, `Pending`, `Failed` nebo `Verifying`"
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U3RhdGU.display_name": {
           "source": "Payment State",
@@ -525,7 +525,7 @@
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.U3RhdGU.short_desc": {
           "source": "The payment state(s) for the search",
-          "message": "Stav(y) platby pro vyhledávání"
+          "message": "Stavy plateb pro vyhledávání"
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.UGF5bWVudElk.desc": {
           "source": "One or more payment ID(s) for the search",
@@ -541,7 +541,7 @@
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VHlwZQ.desc": {
           "source": "The payment type(s) for the search",
-          "message": "Typ(y) platby pro vyhledávání"
+          "message": "Typy plateb pro vyhledávání"
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VHlwZQ.display_name": {
           "source": "Payment Type",
@@ -549,7 +549,7 @@
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VHlwZQ.short_desc": {
           "source": "The payment type(s) for the search",
-          "message": "Typ(y) platby pro vyhledávání"
+          "message": "Typy plateb pro vyhledávání"
         },
         "app.TWV3cw.action.Z2V0LXBheW1lbnRz.option.VXBkYXRlZFV0Y0VuZA.desc": {
           "source": "The upper limit of the updated date (and time) range; i.e. `UpdatedUtc` < <this date>",
@@ -633,7 +633,7 @@
         },
         "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+          "message": "Přímé předání; použít serializaci připojení a nechat rozhodnout REST klienta"
         },
         "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -882,6 +882,10 @@
         "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "Cesta URI"
+        },
+        "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Cesta URI relativní vůči základní URL API připojení"
         },
         "app.TWV3cw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",

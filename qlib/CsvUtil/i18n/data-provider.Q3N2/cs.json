@@ -37,7 +37,7 @@
         },
         "app.Q3N2.action.cmVhZA.option.ZW9s.desc": {
           "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
-          "message": "Znak(y) konce řádku; pokud není zadáno, znaky konce řádku budou detekovány automaticky"
+          "message": "Znaky konce řádku; pokud nejsou zadány, budou automaticky detekovány"
         },
         "app.Q3N2.action.cmVhZA.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -45,7 +45,7 @@
         },
         "app.Q3N2.action.cmVhZA.option.ZW9s.short_desc": {
           "source": "The end of line / record character(s)",
-          "message": "Znak(y) konce řádku / záznamu"
+          "message": "Znaky konce řádku nebo záznamu"
         },
         "app.Q3N2.action.cmVhZA.option.ZmllbGRz.desc": {
           "source": "A hash describing the CSV fields on input. Keys are field names as given by the `header_names` or `headers` options (if neither is used, field names are numbers starting with `0`). Values are [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) or a hash with the following keys:\n- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: for `date` types, a [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` types, a number format string: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)\n- `timezone`: for `date` types only; passed to [TimeZone::constructor()](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/class_qore_1_1_time_zone.html#ab77972801cee2c9d116a9631dfd631d9) to parse dates (overrides any default time zone; use when different columns have different time zones)\n\n**Note**: setting this value also sets `headers` if not set automatically with `header_names`. If no field type is given, the default is `*string`. Invalid field names in this option are ignored.",
@@ -69,7 +69,7 @@
         },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVyX25hbWVz.short_desc": {
           "source": "If true then headers will be automatically detected from the first header row",
-          "message": "Pokud je hodnota true, záhlaví budou automaticky detekována z prvního řádku záhlaví"
+          "message": "Pokud má hodnotu true, záhlaví se automaticky detekují z prvního řádku"
         },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVyX2xpbmVz.desc": {
           "source": "The number of headers lines in the file",
@@ -90,6 +90,10 @@
         "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
           "message": "Vynutit pořadí záhlaví"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of headers",
+          "message": "Pokud má hodnotu true, vstupní data se uspořádají podle pořadí záhlaví"
         },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVycw.desc": {
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
@@ -125,7 +129,7 @@
         },
         "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.short_desc": {
           "source": "If true, leading and trailing whitespace will be stripped from non-quoted fields",
-          "message": "Pokud je hodnota true, počáteční a koncové bílé znaky budou z neuzavřených polí odstraněny"
+          "message": "Při hodnotě true se odstraní úvodní a koncové mezery z neuvozených polí"
         },
         "app.Q3N2.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.desc": {
           "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
@@ -149,7 +153,7 @@
         },
         "app.Q3N2.action.cmVhZA.option.c2VwYXJhdG9y.short_desc": {
           "source": "The field separator character(s)",
-          "message": "Znak(y) oddělovače polí"
+          "message": "Znaky oddělovače polí"
         },
         "app.Q3N2.action.cmVhZA.option.cGF0aA.desc": {
           "source": "The location of the CSV data; conflicts with `stream` and `data`; resolved with a call to [FileLocationHandler::getBinaryStreamFromLocation()](https://qoretechnologies.com/manual/qorus/current/qore/modules/FileLocationHandler/html/class_file_location_handler_1_1_file_location_handler.html#a29c2338efc901a6b8f24542505e2a094)",
@@ -169,11 +173,11 @@
         },
         "app.Q3N2.action.cmVhZA.option.cXVvdGU.display_name": {
           "source": "Quote Char(s)",
-          "message": "Znak(y) uvozovek"
+          "message": "Uvozovací znaky"
         },
         "app.Q3N2.action.cmVhZA.option.cXVvdGU.short_desc": {
           "source": "The quote character(s)",
-          "message": "Znak(y) uvozovek"
+          "message": "Uvozovací znaky"
         },
         "app.Q3N2.action.cmVhZA.option.dG9sd3I.desc": {
           "source": "If `true` (default `false`), all header names will be converted to lower case letters",
@@ -261,7 +265,7 @@
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.desc": {
           "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
-          "message": "Znak(y) konce řádku; pokud není zadáno, znaky konce řádku budou detekovány automaticky"
+          "message": "Znaky konce řádku; pokud nejsou zadány, budou automaticky detekovány"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -269,7 +273,7 @@
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZW9s.short_desc": {
           "source": "The end of line / record character(s)",
-          "message": "Znak(y) konce řádku / záznamu"
+          "message": "Znaky konce řádku nebo záznamu"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.ZmllbGRz.desc": {
           "source": "A hash describing the CSV fields on input. Keys are field names as given by the `header_names` or `headers` options (if neither is used, field names are numbers starting with `0`). Values are [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) or a hash with the following keys:\n- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: for `date` types, a [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` types, a number format string: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)\n- `timezone`: for `date` types only; passed to [TimeZone::constructor()](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/class_qore_1_1_time_zone.html#ab77972801cee2c9d116a9631dfd631d9) to parse dates (overrides any default time zone; use when different columns have different time zones)\n\n**Note**: setting this value also sets `headers` if not set automatically with `header_names`. If no field type is given, the default is `*string`. Invalid field names in this option are ignored.",
@@ -293,7 +297,7 @@
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.short_desc": {
           "source": "If true then headers will be automatically detected from the first header row",
-          "message": "Pokud je hodnota true, záhlaví budou automaticky detekována z prvního řádku záhlaví"
+          "message": "Pokud má hodnotu true, záhlaví se automaticky detekují z prvního řádku"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX2xpbmVz.desc": {
           "source": "The number of headers lines in the file",
@@ -314,6 +318,10 @@
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
           "message": "Vynutit pořadí záhlaví"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of headers",
+          "message": "Pokud má hodnotu true, vstupní data se uspořádají podle pořadí záhlaví"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
@@ -349,7 +357,7 @@
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.short_desc": {
           "source": "If true, leading and trailing whitespace will be stripped from non-quoted fields",
-          "message": "Pokud je hodnota true, počáteční a koncové bílé znaky budou z neuzavřených polí odstraněny"
+          "message": "Při hodnotě true se odstraní úvodní a koncové mezery z neuvozených polí"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.bnVtYmVyX2Zvcm1hdA.desc": {
           "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
@@ -373,7 +381,7 @@
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.c2VwYXJhdG9y.short_desc": {
           "source": "The field separator character(s)",
-          "message": "Znak(y) oddělovače polí"
+          "message": "Znaky oddělovače polí"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.c3RyZWFt.desc": {
           "source": "An input stream for CSV data; conflicts with `path` and `data`",
@@ -393,11 +401,11 @@
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.display_name": {
           "source": "Quote Char(s)",
-          "message": "Znak(y) uvozovek"
+          "message": "Uvozovací znaky"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.cXVvdGU.short_desc": {
           "source": "The quote character(s)",
-          "message": "Znak(y) uvozovek"
+          "message": "Uvozovací znaky"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.dG9sd3I.desc": {
           "source": "If `true` (default `false`), all header names will be converted to lower case letters",
@@ -497,7 +505,7 @@
         },
         "app.Q3N2.action.d3JpdGU.option.ZW9s.desc": {
           "source": "The end of line / record character(s); if not present, the current platform standard will be used",
-          "message": "Znak(y) konce řádku / záznamu; pokud není uvedeno, použije se výchozí standard platformy"
+          "message": "Znaky konce řádku nebo záznamu; pokud nejsou zadány, použije se výchozí standard platformy"
         },
         "app.Q3N2.action.d3JpdGU.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -505,7 +513,7 @@
         },
         "app.Q3N2.action.d3JpdGU.option.ZW9s.short_desc": {
           "source": "The end of line / record character(s)",
-          "message": "Znak(y) konce řádku / záznamu"
+          "message": "Znaky konce řádku nebo záznamu"
         },
         "app.Q3N2.action.d3JpdGU.option.ZmllbGRz.desc": {
           "source": "A hash describing the CSV fields to output. Keys are field names, values are [field types](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types) or a hash with the following keys:\n- `type`: a [field type string](https://qoretechnologies.com/manual/qorus/current/qore/modules/CsvUtil/html/class_csv_util_1_1_abstract_csv_iterator.html#abstractcsviterator_option_field_types)\n- `format`: for `date` types, a [date format](https://qoretechnologies.com/manual/qorus/current/qore/lang/html/group__date__and__time__functions.html#date_formatting); for `int`, `float`, or `number` types, a number format string: *<thousands_separator>*[*<decimal_separator>*[*<decimals>*]] (e.g. `\".,3\"` = `.` thousands, `,` decimal, 3 decimal places)",
@@ -526,6 +534,10 @@
         "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
           "message": "Vynutit pořadí záhlaví"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the output data will be reordered in the order of headers",
+          "message": "Pokud má hodnotu true, výstupní data se seřadí podle pořadí záhlaví"
         },
         "app.Q3N2.action.d3JpdGU.option.aGVhZGVycw.desc": {
           "source": "List of field / header names for the data output",
@@ -573,7 +585,7 @@
         },
         "app.Q3N2.action.d3JpdGU.option.c2VwYXJhdG9y.short_desc": {
           "source": "The field separator character(s)",
-          "message": "Znak(y) oddělovače polí"
+          "message": "Znaky oddělovače polí"
         },
         "app.Q3N2.action.d3JpdGU.option.c3RyZWFt.desc": {
           "source": "An output stream for CSV data; mutually exclusive with \"path\"",
@@ -605,11 +617,11 @@
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGU.display_name": {
           "source": "Quote Char(s)",
-          "message": "Znak(y) uvozovek"
+          "message": "Uvozovací znaky"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGU.short_desc": {
           "source": "The quote character(s)",
-          "message": "Znak(y) uvozovek"
+          "message": "Uvozovací znaky"
         },
         "app.Q3N2.action.d3JpdGU.option.cXVvdGVfZXNjYXBl.desc": {
           "source": "The escape character(s) used for `quote` (default: `\\`)",

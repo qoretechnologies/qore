@@ -232,7 +232,13 @@ class QoreDataProviderI18nCmd {
         }
         foreach string domain in (sort(keys domain_roots)) {
             hash<auto> root_messages;
+            list<string> search_roots = ();
+            hash<string, bool> seen_search_roots;
             foreach hash<auto> root in (domain_roots{domain}) {
+                if (!seen_search_roots{root.search_root}) {
+                    seen_search_roots{root.search_root} = True;
+                    search_roots += root.search_root;
+                }
                 hash<auto> catalog = I18n::load_native_catalog(root.path);
                 I18n::MessageCatalog validated(catalog,
                     {"literal_messages": True});
@@ -262,7 +268,7 @@ class QoreDataProviderI18nCmd {
             hash<auto> result =
                 DataProviderPresentation::inspectTranslationCatalogs(
                     domain, root_messages,
-                    {"search_path": (domain_roots{domain}[0].search_root,)});
+                    {"search_path": search_roots});
             translation_count += result.translation_count;
             foreach hash<auto> issue in (result.issues) {
                 ++stale;
@@ -271,15 +277,11 @@ class QoreDataProviderI18nCmd {
                         ? ": " + issue.message_id : "", issue.reason);
             }
             stale += checkCompleteTranslationLocales(domain, root_messages,
-                result, domain_roots{domain}[0].search_root,
+                result, output,
                 required_locales, require_complete_locales);
-            hash<string, bool> checked_roots;
-            foreach hash<auto> root in (domain_roots{domain}) {
-                if (!checked_roots{root.search_root}) {
-                    checked_roots{root.search_root} = True;
-                    stale += checkRequiredTranslationLocales(domain,
-                        root.search_root, required_locales);
-                }
+            foreach string search_root in (search_roots) {
+                stale += checkRequiredTranslationLocales(domain,
+                    search_root, required_locales);
             }
         }
         if (stale) {

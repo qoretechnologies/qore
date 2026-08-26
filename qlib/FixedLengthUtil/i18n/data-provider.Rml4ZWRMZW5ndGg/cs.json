@@ -37,7 +37,7 @@
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW9s.desc": {
           "source": "The end of line character(s); if not specified, then the end-of-line characters will be auto detected",
-          "message": "Znak(y) konce řádku; pokud není zadáno, znaky konce řádku budou detekovány automaticky"
+          "message": "Znaky konce řádku; pokud nejsou zadány, budou automaticky detekovány"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -45,7 +45,7 @@
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.ZW9s.short_desc": {
           "source": "The end of line / record character(s)",
-          "message": "Znak(y) konce řádku / záznamu"
+          "message": "Znaky konce řádku nebo záznamu"
         },
         "app.Rml4ZWRMZW5ndGg.action.cmVhZA.option.aWdub3JlX2VtcHR5.desc": {
           "source": "If `true`, empty lines will be ignored",
@@ -157,7 +157,7 @@
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW9s.desc": {
           "source": "The end of line / record character(s); if not present, the current platform standard will be used",
-          "message": "Znak(y) konce řádku / záznamu; pokud není uvedeno, použije se výchozí standard platformy"
+          "message": "Znaky konce řádku nebo záznamu; pokud nejsou zadány, použije se výchozí standard platformy"
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW9s.display_name": {
           "source": "End Of Line Chars",
@@ -165,7 +165,7 @@
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZW9s.short_desc": {
           "source": "The end of line / record character(s)",
-          "message": "Znak(y) konce řádku / záznamu"
+          "message": "Znaky konce řádku nebo záznamu"
         },
         "app.Rml4ZWRMZW5ndGg.action.d3JpdGU.option.ZmlsZV9mbGFncw.desc": {
           "source": "Additional writer file open flags; `O_WRONLY | O_CREAT` is used by default; use `O_EXCL` to ensure not to overwrite the target or `O_TRUNC` to replace any existing file or `O_APPEND` to append to an existing file",

@@ -545,7 +545,7 @@
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX011bHRpTGluZQ.short_desc": {
           "source": "Makes start-of-line '^' or end-of-line '$' match after or before any newline in the subject string",
-          "message": "Způsobí, že začátek řádku '^' nebo konec řádku '$' odpovídá za nebo před jakýmkoli novým řádkem v cílovém řetězci"
+          "message": "Zajistí shodu ‚^‘ a ‚$‘ za nebo před každým novým řádkem v řetězci"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0Nhc2VsZXNz.desc": {
           "source": "Ignore case when matching",
@@ -857,7 +857,7 @@
         },
         "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZGlyZWN0aW9uX3RocmVzaG9sZA.short_desc": {
           "source": "Minimum absolute slope to classify as rising or falling",
-          "message": "Minimální absolutní hodnota směrnice pro klasifikaci jako rostoucí nebo klesající"
+          "message": "Minimální absolutní směrnice pro klasifikaci jako rostoucí nebo klesající"
         },
         "app.UW9yZQ.action.dHJlbmQtYW5hbHlzaXM.option.ZmllbGRz.desc": {
           "source": "A list of field names to compute analytics for; each field must contain numeric values in the input records; supports dot-notation for nested fields (e.g. `sensor.temperature`)",

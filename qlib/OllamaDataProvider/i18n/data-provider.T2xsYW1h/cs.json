@@ -153,7 +153,7 @@
         },
         "app.T2xsYW1h.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.aW5wdXQ.short_desc": {
           "source": "Text(s) to embed",
-          "message": "Text(y) k vytvoření embeddingu"
+          "message": "Text nebo texty k vložení"
         },
         "app.T2xsYW1h.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3B0aW9ucw.desc": {
           "source": "Hash of model-specific runtime options.  Ollama-specific extension; common keys include `num_ctx`, `num_thread`.",
@@ -162,6 +162,10 @@
         "app.T2xsYW1h.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3B0aW9ucw.display_name": {
           "source": "Model Options",
           "message": "Možnosti modelu"
+        },
+        "app.T2xsYW1h.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.b3B0aW9ucw.short_desc": {
+          "source": "Per-model runtime options (num_ctx, etc.)",
+          "message": "Běhové volby pro daný model (num_ctx atd.)"
         },
         "app.T2xsYW1h.action.Y3JlYXRlLWVtYmVkZGluZ3M.option.bW9kZWw.desc": {
           "source": "Name of the installed Ollama embedding model, e.g. `nomic-embed-text`, `mxbai-embed-large`, `snowflake-arctic-embed`.",
@@ -245,7 +249,7 @@
         },
         "app.T2xsYW1h.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+          "message": "Přímé předání; použít serializaci připojení a nechat rozhodnout REST klienta"
         },
         "app.T2xsYW1h.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -494,6 +498,10 @@
         "app.T2xsYW1h.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "Cesta URI"
+        },
+        "app.T2xsYW1h.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Cesta URI relativní vůči základní URL API připojení"
         },
         "app.T2xsYW1h.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",

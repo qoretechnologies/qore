@@ -165,7 +165,7 @@
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.short_desc": {
           "source": "Sample only from the K most likely next tokens (SGLang extension)",
-          "message": "Vzorkovat pouze z K nejpravděpodobnějších následujících tokenů (rozšíření SGLang)"
+          "message": "Vzorkovat pouze z K nejpravděpodobnějších tokenů (rozšíření SGLang)"
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.desc": {
           "source": "Nucleus sampling — restrict sampling to tokens whose cumulative probability exceeds this threshold.  Range `0.0` to `1.0`.  Usually left at `1.0` and varied only in combination with `top_k` or lower `temperature`.",
@@ -413,7 +413,7 @@
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dG9wX2xvZ3Byb2JzX251bQ.short_desc": {
           "source": "Number of alternative tokens to include in each logprob entry",
-          "message": "Počet alternativních tokenů k zahrnutí do každého záznamu logaritmické pravděpodobnosti"
+          "message": "Počet alternativních tokenů zahrnutých v každém záznamu logprob"
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.option.dGV4dA.desc": {
           "source": "The raw prompt(s) to send to the model.  Can be a single string or a list of strings for batch completion.\n\nUnlike the chat endpoint, `/generate` does not apply a chat template — the text is tokenized and fed directly to the model.  Include any role markers or formatting the model expects yourself.\n\n**Example**: `\"Extract the invoice number from: Invoice #INV-2026-0041 ...\"`",
@@ -441,7 +441,7 @@
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.short_desc": {
           "source": "Generate text with schema/regex/grammar-enforced output structure",
-          "message": "Generovat text se strukturou výstupu vynucenou schématem/regulárním výrazem/gramatikou"
+          "message": "Generování textu s výstupní strukturou vynucenou schématem/regexem/gramatikou"
         },
         "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.desc": {
           "source": "Instructs the SGLang server to flush its KV cache.  Useful after switching workloads or for freeing memory.  Safe to call at any time; does not interrupt in-flight requests.",
@@ -497,7 +497,7 @@
         },
         "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+          "message": "Přímé předání; použít serializaci připojení a nechat rozhodnout REST klienta"
         },
         "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -746,6 +746,10 @@
         "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "Cesta URI"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Cesta URI relativní vůči základní URL API připojení"
         },
         "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",

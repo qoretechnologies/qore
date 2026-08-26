@@ -912,6 +912,62 @@ class DataProviderPresentationTest inherits QUnit::Test {
         assertEq(2, runCatalogTreeCheck(root, qore_bin, fragment_output),
             "catalog-tree verification rejects conflicting root owner fragments");
 
+        string split_output = make_tmp_dir(
+            "data-provider-i18n-split-domain-check-");
+        on_exit remove_tree(split_output);
+        list<string> split_ids = sort(keys
+            catalogs{domain}.locales.root.messages);
+        hash<auto> first_root = {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"root": {"messages": {
+                split_ids[0]: catalogs{domain}.locales.root.messages
+                    {split_ids[0]},
+            }}},
+        };
+        hash<auto> second_root = {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"root": {"messages": {
+                split_ids[1]: catalogs{domain}.locales.root.messages
+                    {split_ids[1]},
+            }}},
+        };
+        string first_search_root = split_output + DirSep
+            + "OwnerOne/i18n";
+        string second_search_root = split_output + DirSep
+            + "OwnerTwo/i18n";
+        mkdir_ex(first_search_root + DirSep + domain, 0755, True);
+        mkdir_ex(second_search_root + DirSep + domain, 0755, True);
+        writeJson(first_search_root + DirSep + domain + DirSep
+                + "root.json", first_root);
+        writeJson(second_search_root + DirSep + domain + DirSep
+                + "root.json", second_root);
+        writeJson(first_search_root + DirSep + domain + DirSep + "cs.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"cs": {"messages": {
+                split_ids[0]: {
+                    "source": first_root.locales.root.messages
+                        {split_ids[0]}.source,
+                    "message": first_root.locales.root.messages
+                        {split_ids[0]}.source,
+                },
+            }}},
+        });
+        writeJson(second_search_root + DirSep + domain + DirSep + "cs.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"cs": {"messages": {
+                split_ids[1]: {
+                    "source": second_root.locales.root.messages
+                        {split_ids[1]}.source,
+                    "message": second_root.locales.root.messages
+                        {split_ids[1]}.source,
+                },
+            }}},
+        });
+        assertEq(0, runCatalogTreeCheck(root, qore_bin, split_output,
+                False, True),
+            "complete-locale verification merges disjoint translations from "
+                "every source owner of one domain");
+
         writeJson(output + DirSep + domain + DirSep + "cs.json", {
             "schema_version": I18n::get_catalog_schema_version(),
             "locales": {"cs": {"messages": {

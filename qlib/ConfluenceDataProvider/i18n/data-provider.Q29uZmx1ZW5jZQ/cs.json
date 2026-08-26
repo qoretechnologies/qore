@@ -87,6 +87,10 @@
           "source": "Status",
           "message": "Stav"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.c3RhdHVz.short_desc": {
+          "source": "The status of the blog post, specifies if the blog post will be created as a…",
+          "message": "Stav příspěvku blogu; určuje, zda bude příspěvek blogu vytvořen jako…"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.cHJpdmF0ZQ.desc": {
           "source": "The page will be private. Only the user who creates this page will have permission to view and edit one.",
           "message": "Stránka bude soukromá. Pouze uživatel, který tuto stránku vytvoří, bude mít oprávnění k jejímu zobrazení a úpravám."
@@ -227,6 +231,10 @@
           "source": "Root Level",
           "message": "Kořenová úroveň"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.cm9vdC1sZXZlbA.short_desc": {
+          "source": "The page will be created at the root level of the space…",
+          "message": "Stránka bude vytvořena v kořenové úrovni prostoru…"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.dGl0bGU.desc": {
           "source": "Title of the page, required if page status is not draft.",
           "message": "Název stránky, vyžadováno, pokud stav stránky není koncept."
@@ -323,6 +331,10 @@
           "source": "Sort",
           "message": "Řazení"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for attachments",
+          "message": "Slouží k řazení výsledků podle pole: Pole řazení pro přílohy"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.c3RhdHVz.desc": {
           "source": "Filter the results to attachments based on their status. By default, `current` and `archived` are used.",
           "message": "Filtruje výsledky na přílohy podle jejich stavu. Ve výchozím nastavení se používají `current` a `archived`."
@@ -383,6 +395,10 @@
           "source": "Body Format",
           "message": "Formát těla"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "Typy formátu obsahu, které se mají vrátit v poli „body“ odpovědi"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Z2V0LWRyYWZ0.desc": {
           "source": "Retrieve the draft version of this page.",
           "message": "Načíst koncept této stránky."
@@ -429,7 +445,7 @@
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.short_desc": {
           "source": "Includes web resources that can be used to render page content on a client",
-          "message": "Zahrne webové prostředky, které lze použít k vykreslení obsahu stránky na klientovi"
+          "message": "Zahrnuje webové prostředky použitelné k vykreslení obsahu stránky na klientovi"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.desc": {
           "source": "Includes collaborators on the page.",
@@ -453,7 +469,7 @@
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
           "source": "Includes whether this page has been favorited by the current user",
-          "message": "Zahrne informaci, zda byla tato stránka přidána mezi oblíbené aktuálním uživatelem"
+          "message": "Zahrnuje informaci, zda má aktuální uživatel stránku v oblíbených"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1sYWJlbHM.desc": {
           "source": "Includes labels associated with this page in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
@@ -486,6 +502,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
           "source": "Include Operations",
           "message": "Zahrnout operace"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
+          "source": "Includes operations associated with this page in the response, as defined in…",
+          "message": "Zahrne operace spojené s touto stránkou v odpovědi, jak je definováno v…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.desc": {
           "source": "Includes content properties associated with this page in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
@@ -575,6 +595,10 @@
           "source": "Body Format",
           "message": "Formát těla"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "Typy formátu obsahu, které se mají vrátit v poli „body“ odpovědi"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.aWQ.desc": {
           "source": "Filter the results based on page ids. Multiple page ids can be specified as a comma-separated list.",
           "message": "Filtrovat výsledky podle ID stránek. Více ID stránek lze zadat jako seznam oddělený čárkami."
@@ -630,6 +654,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "Řazení"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for blog posts",
+          "message": "Slouží k řazení výsledků podle pole: Pole řazení pro příspěvky blogu"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
@@ -707,6 +735,10 @@
           "source": "Body Format",
           "message": "Formát těla"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "Typy formátu obsahu, které se mají vrátit v poli „body“ odpovědi"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
           "message": "ID stránky, která se má vrátit. Pokud ID stránky neznáte, použijte Získat stránky a vyfiltrujte výsledky."
@@ -762,6 +794,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "Řazení"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for blog posts",
+          "message": "Slouží k řazení výsledků podle pole: Pole řazení pro příspěvky blogu"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.c3RhdHVz.desc": {
           "source": "Filter the results to blog posts based on their status. By default, `current` is used.",
@@ -827,6 +863,10 @@
           "source": "Body Format",
           "message": "Formát těla"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "Typy formátu obsahu, které se mají vrátit v poli „body“ odpovědi"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
           "message": "ID stránky, která se má vrátit. Pokud ID stránky neznáte, použijte Získat stránky a vyfiltrujte výsledky."
@@ -883,6 +923,10 @@
           "source": "Sort",
           "message": "Řazení"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for blog posts",
+          "message": "Slouží k řazení výsledků podle pole: Pole řazení pro příspěvky blogu"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
           "message": "Filtrovat výsledky podle ID prostorů. Více ID prostorů lze zadat jako seznam oddělený čárkami."
@@ -934,6 +978,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "Formát těla"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "Typy formátu obsahu, které se mají vrátit v poli „body“ odpovědi"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
@@ -998,6 +1046,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "Řazení"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for pages",
+          "message": "Slouží k řazení výsledků podle pole: Pole řazení pro stránky"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
@@ -1111,6 +1163,10 @@
           "source": "Description Format",
           "message": "Formát popisu"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
+          "source": "The content format type to be returned in the 'description' field of the…",
+          "message": "Typ formátu obsahu, který se má vrátit v poli „description“…"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1pY29u.desc": {
           "source": "If the icon for the space should be fetched or not.",
           "message": "Zda se má načíst ikona prostoru."
@@ -1142,6 +1198,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
           "source": "Include Operations",
           "message": "Zahrnout operace"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
+          "source": "Includes operations associated with this page in the response, as defined in…",
+          "message": "Zahrne operace spojené s touto stránkou v odpovědi, jak je definováno v…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wZXJtaXNzaW9ucw.desc": {
           "source": "Includes space permissions associated with this space in the response.\nThe number of results will be limited to 50 and sorted in the default sort order.\nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
@@ -1231,6 +1291,10 @@
           "source": "Description Format",
           "message": "Formát popisu"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
+          "source": "The content format type to be returned in the 'description' field of the…",
+          "message": "Typ formátu obsahu, který se má vrátit v poli „description“…"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZmF2b3JpdGVkLWJ5.desc": {
           "source": "Filter the results to spaces favorited by the user with the specified account ID.",
           "message": "Filtrovat výsledky na prostory přidané do oblíbených uživatelem se zadaným ID účtu."
@@ -1241,7 +1305,7 @@
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZmF2b3JpdGVkLWJ5.short_desc": {
           "source": "Filter the results to spaces favorited by the user with the specified account ID",
-          "message": "Filtrovat výsledky na prostory přidané do oblíbených uživatelem se zadaným ID účtu"
+          "message": "Filtrovat výsledky na prostory oblíbené uživatelem se zadaným ID účtu"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.a2V5cw.desc": {
           "source": "Filter the results to spaces based on their keys. Multiple keys can be specified as a comma-separated list.",
@@ -1311,6 +1375,10 @@
           "source": "Not Favorited By",
           "message": "Nemá v oblíbených"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.bm90LWZhdm9yaXRlZC1ieQ.short_desc": {
+          "source": "Filter the results to spaces NOT favorited by the user with the specified…",
+          "message": "Filtrovat výsledky na prostory NEOBLÍBENÉ uživatelem se zadaným…"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c29ydA.allowed-value.c3RyaW5nOi1pZA.display_name": {
           "source": "-id",
           "message": "-id"
@@ -1342,6 +1410,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "Řazení"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for spaces",
+          "message": "Slouží k řazení výsledků podle pole: Pole řazení pro prostory"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.display_name": {
           "source": "archived",
@@ -1451,6 +1523,10 @@
           "source": "Body Format",
           "message": "Formát těla"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "Typy formátu obsahu, které se mají vrátit v poli „body“ odpovědi"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Z2V0LWRyYWZ0.desc": {
           "source": "Retrieve the draft version of this page.",
           "message": "Načíst koncept této stránky."
@@ -1497,7 +1573,7 @@
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.short_desc": {
           "source": "Includes web resources that can be used to render page content on a client",
-          "message": "Zahrne webové prostředky, které lze použít k vykreslení obsahu stránky na klientovi"
+          "message": "Zahrnuje webové prostředky použitelné k vykreslení obsahu stránky na klientovi"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.desc": {
           "source": "Includes collaborators on the page.",
@@ -1519,6 +1595,10 @@
           "source": "Include Direct Children",
           "message": "Zahrnout přímé potomky"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1kaXJlY3QtY2hpbGRyZW4.short_desc": {
+          "source": "Includes direct children of the page, as defined in the 'ChildrenResponse'…",
+          "message": "Zahrnuje přímé podřízené stránky podle definice v „ChildrenResponse“…"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.desc": {
           "source": "Includes whether this page has been favorited by the current user.",
           "message": "Zahrne informaci, zda byla tato stránka přidána mezi oblíbené aktuálním uživatelem."
@@ -1529,7 +1609,7 @@
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.short_desc": {
           "source": "Includes whether this page has been favorited by the current user",
-          "message": "Zahrne informaci, zda byla tato stránka přidána mezi oblíbené aktuálním uživatelem"
+          "message": "Zahrnuje informaci, zda má aktuální uživatel stránku v oblíbených"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1sYWJlbHM.desc": {
           "source": "Includes labels associated with this page in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
@@ -1562,6 +1642,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
           "source": "Include Operations",
           "message": "Zahrnout operace"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
+          "source": "Includes operations associated with this page in the response, as defined in…",
+          "message": "Zahrne operace spojené s touto stránkou v odpovědi, jak je definováno v…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1wcm9wZXJ0aWVz.desc": {
           "source": "Includes content properties associated with this page in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
@@ -1651,6 +1735,10 @@
           "source": "Body Format",
           "message": "Formát těla"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "Typy formátu obsahu, které se mají vrátit v poli „body“ odpovědi"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.aWQ.desc": {
           "source": "Filter the results based on page ids. Multiple page ids can be specified as a comma-separated list.",
           "message": "Filtrovat výsledky podle ID stránek. Více ID stránek lze zadat jako seznam oddělený čárkami."
@@ -1714,6 +1802,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "Řazení"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for pages",
+          "message": "Slouží k řazení výsledků podle pole: Pole řazení pro stránky"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
@@ -1811,6 +1903,10 @@
           "source": "Body Format",
           "message": "Formát těla"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "Typy formátu obsahu, které se mají vrátit v poli „body“ odpovědi"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.ZGVwdGg.allowed-value.c3RyaW5nOmFsbA.display_name": {
           "source": "all",
           "message": "vše"
@@ -1826,6 +1922,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.ZGVwdGg.display_name": {
           "source": "Depth",
           "message": "Hloubka"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.ZGVwdGg.short_desc": {
+          "source": "Filter the results to pages at the root level of the space or to all pages in…",
+          "message": "Filtrovat výsledky na stránky v kořenu prostoru nebo na všechny stránky v…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
@@ -1891,6 +1991,10 @@
           "source": "Sort",
           "message": "Řazení"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for pages",
+          "message": "Slouží k řazení výsledků podle pole: Pole řazení pro stránky"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.c3RhdHVz.desc": {
           "source": "Filter the results to pages based on their status. By default, `current` and `archived` are used.",
           "message": "Filtrovat výsledky na stránky podle jejich stavu. Ve výchozím nastavení se používají `current` a `archived`."
@@ -1942,6 +2046,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "Formát těla"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "Typy formátu obsahu, které se mají vrátit v poli „body“ odpovědi"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
@@ -1997,7 +2105,7 @@
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWJ5.display_name": {
           "source": "Completed By",
-          "message": "Dokončil(a)"
+          "message": "Dokončil"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y29tcGxldGVkLWJ5.short_desc": {
           "source": "Filters on the Account ID of the user who completed this task",
@@ -2033,7 +2141,7 @@
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1ieQ.display_name": {
           "source": "Created By",
-          "message": "Vytvořil(a)"
+          "message": "Vytvořil"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Y3JlYXRlZC1ieQ.short_desc": {
           "source": "Filters on the Account ID of the user who created this task",
@@ -2078,6 +2186,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "Formát těla"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "Typy formátu obsahu, které se mají vrátit v poli „body“ odpovědi"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YmxvZ3Bvc3QtaWQ.desc": {
           "source": "Filters on the blog post ID of the task. Multiple IDs can be specified. Note - page and blog post filters can be used in conjunction.",
@@ -2361,7 +2473,7 @@
         },
         "app.Q29uZmx1ZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Předání bez změn; použít serializaci připojení a nechat rozhodnutí na klientovi REST"
+          "message": "Přímé předání; použít serializaci připojení a nechat rozhodnout REST klienta"
         },
         "app.Q29uZmx1ZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -2610,6 +2722,10 @@
         "app.Q29uZmx1ZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "Cesta URI"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Cesta URI relativní vůči základní URL API připojení"
         },
         "app.Q29uZmx1ZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
@@ -3049,7 +3165,7 @@
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y29tcGxldGVkQnk.display_name": {
           "source": "Completed By",
-          "message": "Dokončil(a)"
+          "message": "Dokončil"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y29tcGxldGVkQnk.short_desc": {
           "source": "Account ID of the user who completed this task",
@@ -3073,7 +3189,7 @@
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y3JlYXRlZEJ5.display_name": {
           "source": "Created By",
-          "message": "Vytvořil(a)"
+          "message": "Vytvořil"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Y3JlYXRlZEJ5.short_desc": {
           "source": "Account ID of the user who created this task",
@@ -3106,6 +3222,10 @@
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "Formát těla"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "Typy formátu obsahu, které se mají vrátit v poli „body“ odpovědi"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.desc": {
           "source": "ID of the blog post the task is in.",

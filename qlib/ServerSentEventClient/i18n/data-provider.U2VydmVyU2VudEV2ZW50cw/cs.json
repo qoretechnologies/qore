@@ -253,7 +253,7 @@
         },
         "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dGltZW91dA.short_desc": {
           "source": "Maximum time a single I/O operation can take in milliseconds",
-          "message": "Maximální doba v milisekundách, kterou může trvat jedna vstupně-výstupní (I/O) operace"
+          "message": "Maximální doba jedné I/O operace v milisekundách"
         },
         "app.U2VydmVyU2VudEV2ZW50cw.action.bXNnLXJlY2VpdmVk.option.dXJs.desc": {
           "source": "A URL for a ServerSentEvent connection; either this or the `sseclient` option must be provided",

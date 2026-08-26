@@ -43,6 +43,10 @@
           "source": "Text",
           "message": "Text"
         },
+        "app.RlRQ.action.Z2V0LWZpbGU.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "Pokud je 'True', soubor se vrátí jako řetězec, 'False' (výchozí) jako…"
+        },
         "app.RlRQ.action.Z2V0LWZpbGU.short_desc": {
           "source": "Get a file from an FTP server",
           "message": "Získat soubor z FTP serveru"
@@ -110,6 +114,10 @@
         "app.RlRQ.action.c2VuZC1maWxl.option.dGV4dA.display_name": {
           "source": "Text",
           "message": "Text"
+        },
+        "app.RlRQ.action.c2VuZC1maWxl.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "Pokud je 'True', soubor se vrátí jako řetězec, 'False' (výchozí) jako…"
         },
         "app.RlRQ.action.c2VuZC1maWxl.short_desc": {
           "source": "Sends a file to an FTP server",

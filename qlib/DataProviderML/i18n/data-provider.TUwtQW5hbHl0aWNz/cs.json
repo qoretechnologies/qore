@@ -249,7 +249,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2h1bmstdGV4dA.short_desc": {
           "source": "Breaks documents into overlapping pieces sized for AI search",
-          "message": "Rozdělí dokumenty na překrývající se části s velikostí vhodnou pro vyhledávání pomocí AI"
+          "message": "Rozdělí dokumenty na překrývající se části dimenzované pro vyhledávání AI"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2x1c3RlcmluZy1tZXRyaWNz.desc": {
           "source": "Measures whether the groups in your data are clearly separated or overlap too much. For example, after segmenting customers into \"budget\", \"regular\", and \"premium\" groups, this tells you whether the groups are genuinely distinct or whether many customers sit on the boundary between groups.\n\n**What you get**:\n- `silhouette_score` — ranges from `-1.0` (groups overlap badly) to `1.0` (perfectly separated); above `0.5` is generally good\n- `davies_bouldin_score` — measures how much groups bleed into each other; lower is better (`0.0` = no overlap at all)\n- `calinski_harabasz_score` — measures how tight each group is compared to how far apart the groups are; higher is better\n\nRecords accumulate in a batch; when full, a single scorecard is emitted.",
@@ -801,7 +801,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.option.bGFuZ3VhZ2U.desc": {
           "source": "Tesseract language code(s) for OCR. Use `+` to combine languages (e.g., `eng+deu` for English and German). Default: `eng`.",
-          "message": "Kód(y) jazyka Tesseract pro OCR. Použijte `+` ke kombinaci jazyků (např. `eng+deu` pro angličtinu a němčinu). Výchozí: `eng`."
+          "message": "Jazykové kódy Tesseract pro OCR. Pro kombinaci jazyků použijte `+` (např. `eng+deu` pro angličtinu a němčinu). Výchozí: `eng`."
         },
         "app.TUwtQW5hbHl0aWNz.action.ZG9jdW1lbnQtb2Ny.option.bGFuZ3VhZ2U.display_name": {
           "source": "OCR Language",
@@ -2213,7 +2213,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.option.Y29uc3RhbnRfdmFsdWU.short_desc": {
           "source": "The specific number to use when Fill Method is Fixed Value",
-          "message": "Konkrétní číslo, které se má použít, pokud je Metoda vyplnění nastavena na Pevná hodnota"
+          "message": "Konkrétní číslo použité, když je Fill Method nastaveno na Fixed Value"
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.option.ZmllbGRz.desc": {
           "source": "The numeric fields from your data that may have gaps (missing values). For example, select `temperature`, `humidity`, and `pressure` if some sensor readings are occasionally missing.\n\nAt least 1 field is required",
@@ -2994,6 +2994,10 @@
         "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.option.c2NoZW1h.short_desc": {
           "source": "Schema defining validation rules for each field",
           "message": "Schéma definující validační pravidla pro jednotlivá pole"
+        },
+        "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.short_desc": {
+          "source": "Validates each record against a schema",
+          "message": "Ověřuje každý záznam vůči schématu"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.desc": {
           "source": "Answers 'is this increase real growth or just a seasonal spike?' by separating a time series into its component parts. For example, monthly sales of $120K might decompose into $100K trend + $25K seasonal holiday boost - $5K random dip.\n\nRecords accumulate per field in a window; when full, all values are decomposed. Each record receives:\n- `trend` — long-term direction\n- `seasonal` — cyclical pattern (e.g., holiday shopping cycles)\n- `residual` — random noise remaining after removing trend and seasonal",
