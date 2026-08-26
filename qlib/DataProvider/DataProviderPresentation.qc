@@ -446,9 +446,11 @@ public class DataProviderPresentation {
         @param root_messages generated root-catalog message map
         @param discovery_opts options accepted by
             @ref I18n::get_catalog_search_path()
-        @return a hash with \c translation_count and an \c issues list; each
-            issue contains \c path, \c locale, \c message_id (empty for a
-            file-level issue), and \c reason
+        @return a hash with \c translation_count, an \c issues list, and
+            \c translation_message_ids_by_locale; each issue contains
+            \c path, \c locale, \c message_id (empty for a file-level issue),
+            and \c reason, while the message-id map contains the sorted union
+            of exact identities supplied by each discovered translation locale
 
         @throw I18N-CATALOG-ERROR if a catalog is malformed or its filename is
             invalid
@@ -477,6 +479,7 @@ public class DataProviderPresentation {
             *hash<auto> discovery_opts = NOTHING) {
         int translation_count = 0;
         list<hash<auto>> issues = ();
+        hash<string, hash<string, bool>> message_ids_by_locale;
         list<string> search_path =
             I18n::get_catalog_search_path(discovery_opts);
         foreach string locale in (
@@ -484,6 +487,7 @@ public class DataProviderPresentation {
             if (locale == RootLocale) {
                 continue;
             }
+            message_ids_by_locale{locale} = {};
             foreach string search_root in (search_path) {
                 list<string> paths = (
                     search_root + DirSep + domain + DirSep + locale
@@ -518,6 +522,7 @@ public class DataProviderPresentation {
                     foreach hash<auto> entry in (
                             catalog.locales{locale}.messages.pairIterator()) {
                         ++translation_count;
+                        message_ids_by_locale{locale}{entry.key} = True;
                         string reason = translationEntryProblem(entry.key,
                             entry.value, root_messages);
                         if (reason.val()) {
@@ -528,9 +533,16 @@ public class DataProviderPresentation {
                 }
             }
         }
+        hash<string, list<string>> translation_message_ids_by_locale;
+        foreach string locale in (sort(keys message_ids_by_locale)) {
+            translation_message_ids_by_locale{locale} =
+                sort(keys message_ids_by_locale{locale});
+        }
         return {
             "translation_count": translation_count,
             "issues": issues,
+            "translation_message_ids_by_locale":
+                translation_message_ids_by_locale,
         };
     }
 

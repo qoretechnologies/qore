@@ -45,6 +45,7 @@ class QoreDataProviderI18nCmd {
             "check_tree": "check-tree",
             "check_source_tree": "check-source-tree",
             "require_standard_locales": "require-standard-locales",
+            "require_complete_locales": "require-complete-locales",
             "verbose": "v,verbose:i+",
             "help":    "h,help",
         };
@@ -80,9 +81,10 @@ class QoreDataProviderI18nCmd {
     }
 
     private run(hash<auto> opt) {
-        if (opt.require_standard_locales && !opt.check
+        if ((opt.require_standard_locales || opt.require_complete_locales)
+                && !opt.check
                 && !opt.check_tree && !opt.check_source_tree) {
-            fail("--require-standard-locales requires a check mode");
+            fail("--require-standard-locales and --require-complete-locales require a check mode");
         }
         list<string> required_locales = opt.require_standard_locales
             ? DataProviderPresentation::StandardTranslationLocales : ();
@@ -93,7 +95,7 @@ class QoreDataProviderI18nCmd {
             checkSourceTree(opt.output,
                 cast<list<string>>(opt.module ?? ()),
                 cast<list<string>>(opt.owner ?? ()), required_locales,
-                opt.verbose);
+                opt.require_complete_locales ?? False, opt.verbose);
             return;
         }
 
@@ -101,7 +103,8 @@ class QoreDataProviderI18nCmd {
             if (opt.module || opt.owner || opt.app) {
                 fail("--check-tree cannot be combined with --module, --owner, or --app");
             }
-            checkTree(opt.output, required_locales, opt.verbose);
+            checkTree(opt.output, required_locales,
+                opt.require_complete_locales ?? False, opt.verbose);
             return;
         }
 
@@ -186,6 +189,8 @@ class QoreDataProviderI18nCmd {
                 }
                 stale += checkTranslations(domain,
                     catalogs{domain}.locales.root.messages, opt.output,
+                    required_locales,
+                    opt.require_complete_locales ?? False,
                     opt.verbose);
                 stale += checkRequiredTranslationLocales(domain, opt.output,
                     required_locales);
@@ -210,7 +215,7 @@ class QoreDataProviderI18nCmd {
     }
 
     private checkTree(string output, list<string> required_locales,
-            *int verbose) {
+            bool require_complete_locales, *int verbose) {
         list<hash<auto>> roots = ();
         collectRootCatalogs(output, \roots);
         if (!roots) {
@@ -265,6 +270,9 @@ class QoreDataProviderI18nCmd {
                     issue.path, issue.message_id.val()
                         ? ": " + issue.message_id : "", issue.reason);
             }
+            stale += checkCompleteTranslationLocales(domain, root_messages,
+                result, domain_roots{domain}[0].search_root,
+                required_locales, require_complete_locales);
             hash<string, bool> checked_roots;
             foreach hash<auto> root in (domain_roots{domain}) {
                 if (!checked_roots{root.search_root}) {
@@ -283,7 +291,7 @@ class QoreDataProviderI18nCmd {
 
     private checkSourceTree(string output, list<string> extra_modules,
             list<string> explicit_owners, list<string> required_locales,
-            *int verbose) {
+            bool require_complete_locales, *int verbose) {
         list<hash<auto>> roots = ();
         collectRootCatalogs(output, \roots);
         if (!roots) {
@@ -391,6 +399,10 @@ class QoreDataProviderI18nCmd {
                     issue.path, issue.message_id.val()
                         ? ": " + issue.message_id : "", issue.reason);
             }
+            stale += checkCompleteTranslationLocales(root.domain,
+                owner_catalogs{root.owner}{root.domain}.locales.root.messages,
+                result, root.search_root, required_locales,
+                require_complete_locales);
             stale += checkRequiredTranslationLocales(root.domain,
                 root.search_root, required_locales);
             if (verbose) {
@@ -628,7 +640,8 @@ class QoreDataProviderI18nCmd {
     }
 
     private int checkTranslations(string domain, hash<auto> root_messages,
-            string output, *int verbose) {
+            string output, list<string> required_locales,
+            bool require_complete_locales, *int verbose) {
         hash<auto> result =
             DataProviderPresentation::inspectTranslationCatalogs(domain,
                 root_messages, {"search_path": (output,)});
@@ -641,7 +654,48 @@ class QoreDataProviderI18nCmd {
             printf("checked %d translation(s) for %s\n",
                 result.translation_count, color.key(domain));
         }
-        return result.issues.size();
+        return result.issues.size()
+            + checkCompleteTranslationLocales(domain, root_messages, result,
+                output, required_locales, require_complete_locales);
+    }
+
+    #! Reports missing message identities in required translation locales
+    /** Partial locale catalogs remain valid by default.  This opt-in policy
+        gate is for shipped locale sets that promise complete presentation.
+        It compares exact catalog identities only and accepts translations
+        identical to their producer source, so brands and cognates are never
+        rejected because of their text.
+    */
+    private int checkCompleteTranslationLocales(string domain,
+            hash<auto> root_messages, hash<auto> inspection,
+            string search_root, list<string> required_locales,
+            bool require_complete_locales) {
+        if (!require_complete_locales) {
+            return 0;
+        }
+        list<string> locales = required_locales
+            ? required_locales
+            : sort(keys inspection.translation_message_ids_by_locale);
+        list<string> root_message_ids = sort(keys root_messages);
+        int missing = 0;
+        foreach string locale in (locales) {
+            list<string> message_ids = ();
+            if (exists
+                    inspection.translation_message_ids_by_locale{locale}) {
+                message_ids = cast<list<string>>(
+                    inspection.translation_message_ids_by_locale{locale});
+            }
+            hash<string, bool> available = map {$1: True}, message_ids;
+            foreach string message_id in (root_message_ids) {
+                if (!available{message_id}) {
+                    ++missing;
+                    stderr.printf("%s catalog domain %y locale %y below %s: message %y\n",
+                        color.error("MISSING:"), domain, locale,
+                        search_root, message_id);
+                }
+            }
+        }
+        return missing;
     }
 
     #! Reports standard translation locale files missing from one catalog
@@ -736,6 +790,8 @@ class QoreDataProviderI18nCmd {
         printf("                     Load source owners and verify roots and translations\n");
         printf("      --require-standard-locales\n");
         printf("                     Require every standard translation locale in a check\n");
+        printf("      --require-complete-locales\n");
+        printf("                     Require every checked locale to cover every root message\n");
         printf("  -v, --verbose      Show loaded modules and written files\n");
         printf("  -C, --no-color     Disable colored output\n");
         printf("  -h, --help         Show this help\n");

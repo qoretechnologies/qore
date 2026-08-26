@@ -835,6 +835,38 @@ class DataProviderPresentationTest inherits QUnit::Test {
         assertEq(0, runSourceCatalogTreeCheck(root, qore_bin, output,
                 ("DataProvider",)),
             "source-tree verification accepts identical brands and cognates");
+        hash<auto> inspection =
+            DataProviderPresentation::inspectTranslationCatalogs(domain,
+                catalogs{domain}.locales.root.messages,
+                {"search_path": (output,)});
+        assertEq((id,),
+            inspection.translation_message_ids_by_locale.cs,
+            "translation inspection reports exact source-bound identities by locale");
+        assertEq(2, runCatalogTreeCheck(root, qore_bin, output, False,
+                True),
+            "complete-locale verification rejects missing message identities");
+        assertEq(2, runSourceCatalogTreeCheck(root, qore_bin, output,
+                ("DataProvider",), False, True),
+            "source-tree complete-locale verification rejects missing identities");
+
+        hash<string, hash<auto>> complete_messages;
+        foreach hash<auto> entry in (
+                catalogs{domain}.locales.root.messages.pairIterator()) {
+            complete_messages{entry.key} = {
+                "source": entry.value.source,
+                "message": entry.value.source,
+            };
+        }
+        writeJson(output + DirSep + domain + DirSep + "cs.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"cs": {"messages": complete_messages}},
+        });
+        assertEq(0, runCatalogTreeCheck(root, qore_bin, output, False,
+                True),
+            "complete-locale verification accepts source-identical brands and cognates");
+        assertEq(0, runSourceCatalogTreeCheck(root, qore_bin, output,
+                ("DataProvider",), False, True),
+            "source-tree completeness accepts source-identical translations");
         assertEq(2, runCatalogTreeCheck(root, qore_bin, output, True),
             "catalog-tree verification detects missing standard locale files");
 
@@ -915,7 +947,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
     }
 
     private int runCatalogTreeCheck(string root, string qore_bin,
-            string output, bool require_standard_locales = False) {
+            string output, bool require_standard_locales = False,
+            bool require_complete_locales = False) {
         list<string> module_path = (
             root + DirSep + "build/modules/i18n",
             root + DirSep + "build/modules/json",
@@ -925,13 +958,15 @@ class DataProviderPresentationTest inherits QUnit::Test {
             module_path += ENV.QORE_MODULE_DIR;
         }
         return system(sprintf(
-            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check-tree -o %s %s >/dev/null",
+            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check-tree -o %s %s %s >/dev/null",
             shellQuote(module_path.join(PathSep)),
             shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
             shellQuote(qore_bin),
             shellQuote(root + DirSep + "bin/qore-data-provider-i18n"),
             shellQuote(output), require_standard_locales
-                ? "--require-standard-locales" : ""));
+                ? "--require-standard-locales" : "",
+            require_complete_locales
+                ? "--require-complete-locales" : ""));
     }
 
     private int runOwnerCatalogCheck(string root, string qore_bin,
@@ -958,7 +993,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
 
     private int runSourceCatalogTreeCheck(string root, string qore_bin,
             string output, list<string> modules,
-            bool require_standard_locales = False) {
+            bool require_standard_locales = False,
+            bool require_complete_locales = False) {
         list<string> module_path = (
             output,
             root + DirSep + "build/modules/i18n",
@@ -971,13 +1007,15 @@ class DataProviderPresentationTest inherits QUnit::Test {
         list<string> owner_args = map "--owner " + shellQuote($1),
             modules;
         return system(sprintf(
-            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check-source-tree -o %s %s %s >/dev/null",
+            "QORE_MODULE_DIR=%s LD_LIBRARY_PATH=%s %s %s -C --check-source-tree -o %s %s %s %s >/dev/null",
             shellQuote(module_path.join(PathSep)),
             shellQuote(ENV.LD_LIBRARY_PATH ?? (root + DirSep + "build")),
             shellQuote(qore_bin),
             shellQuote(root + DirSep + "bin/qore-data-provider-i18n"),
             shellQuote(output), owner_args.join(" "),
-            require_standard_locales ? "--require-standard-locales" : ""));
+            require_standard_locales ? "--require-standard-locales" : "",
+            require_complete_locales
+                ? "--require-complete-locales" : ""));
     }
 
     checkedInLocaleCatalogTest() {
