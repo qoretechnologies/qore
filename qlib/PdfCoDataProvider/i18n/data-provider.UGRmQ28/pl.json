@@ -105,7 +105,7 @@
         },
         "app.UGRmQ28.action.Y29tcHJlc3MtcGRm.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.Y29tcHJlc3MtcGRm.option.b3V0cHV0RGF0YUZvcm1hdA.allowed-value.c3RyaW5nOmJhc2U2NA.desc": {
           "source": "Return the compressed file as base64-encoded content",
@@ -269,7 +269,7 @@
         },
         "app.UGRmQ28.action.Y29udmVydC10by1wZGY.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.Y29udmVydC10by1wZGY.option.bmFtZQ.desc": {
           "source": "Output filename",
@@ -389,7 +389,7 @@
         },
         "app.UGRmQ28.action.Y29udmVydC1mcm9tLXBkZg.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.Y29udmVydC1mcm9tLXBkZg.option.aW5saW5l.desc": {
           "source": "Set to `True` to return results directly in the response body",
@@ -737,7 +737,7 @@
         },
         "app.UGRmQ28.action.Y29udmVydC1mcm9tLXBkZi10by1pbWFnZXM.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.Y29udmVydC1mcm9tLXBkZi10by1pbWFnZXM.option.b3V0cHV0X2Zvcm1hdA.allowed-value.c3RyaW5nOmpwZw.desc": {
           "source": "JPEG image format",
@@ -945,7 +945,7 @@
         },
         "app.UGRmQ28.action.Y29udmVydC1odG1sLXRvLXBkZg.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.Y29udmVydC1odG1sLXRvLXBkZg.option.aHRtbA.desc": {
           "source": "Raw HTML code to convert (requires `source_type` set to `html`)",
@@ -1329,7 +1329,7 @@
         },
         "app.UGRmQ28.action.Y29udmVydC1pbWFnZXMtdG8tcGRm.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.Y29udmVydC1pbWFnZXMtdG8tcGRm.option.bmFtZQ.desc": {
           "source": "Output filename",
@@ -1461,7 +1461,7 @@
         },
         "app.UGRmQ28.action.Y3JlYXRlLWZpbGxhYmxlLWZvcm0.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.Y3JlYXRlLWZpbGxhYmxlLWZvcm0.option.bmFtZQ.desc": {
           "source": "Output filename",
@@ -1721,7 +1721,7 @@
         },
         "app.UGRmQ28.action.YWRkLXBhc3N3b3Jk.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.YWRkLXBhc3N3b3Jk.option.b3duZXJQYXNzd29yZA.desc": {
           "source": "Owner password for full document control (editing, printing permissions)",
@@ -1917,7 +1917,7 @@
         },
         "app.UGRmQ28.action.YWRkLXRleHQtaW1hZ2Vz.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.YWRkLXRleHQtaW1hZ2Vz.option.aW1hZ2Vz.desc": {
           "source": "Images to insert into the PDF",
@@ -2073,7 +2073,7 @@
         },
         "app.UGRmQ28.action.YWktaW52b2ljZS1wYXJzZXI.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.YWktaW52b2ljZS1wYXJzZXI.option.bGluZUl0ZW1TdHJ1Y3R1cmU.desc": {
           "source": "JSON object whose keys are camelCase field names and whose values are either `\"string\"` or `\"number\"`. Each key/value pair declares one column to extract for every line item.\n\n**Example**: `{\"description\": \"string\", \"quantity\": \"number\", \"unitPrice\": \"number\", \"totalPrice\": \"number\"}`",
@@ -2181,7 +2181,7 @@
         },
         "app.UGRmQ28.action.Z2V0LXBkZi1pbmZv.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.Z2V0LXBkZi1pbmZv.option.cGFzc3dvcmQ.desc": {
           "source": "PDF file password if the document is protected",
@@ -2301,7 +2301,7 @@
         },
         "app.UGRmQ28.action.Z2VuZXJhdGUtYmFyY29kZQ.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.Z2VuZXJhdGUtYmFyY29kZQ.option.aW5saW5l.desc": {
           "source": "Set to `True` to return the barcode image inline",
@@ -2757,7 +2757,7 @@
         },
         "app.UGRmQ28.action.ZG9jdW1lbnQtY2xhc3NpZmllcg.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.ZG9jdW1lbnQtY2xhc3NpZmllcg.option.aW5saW5l.desc": {
           "source": "Set to `True` to include results directly in the response",
@@ -2937,7 +2937,7 @@
         },
         "app.UGRmQ28.action.ZmlsbC1wZGYtZm9ybQ.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.ZmlsbC1wZGYtZm9ybQ.option.bmFtZQ.desc": {
           "source": "Output filename",
@@ -3069,7 +3069,7 @@
         },
         "app.UGRmQ28.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Przekazywanie bez zmian; użyj serializacji połączenia i pozwól klientowi REST zadecydować"
+          "message": "Przekazywanie; użyj serializacji połączenia i zdaj się na klienta REST"
         },
         "app.UGRmQ28.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -3319,6 +3319,10 @@
           "source": "URI Path",
           "message": "Ścieżka URI"
         },
+        "app.UGRmQ28.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Ścieżka URI względem bazowego adresu URL API połączenia"
+        },
         "app.UGRmQ28.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
@@ -3461,7 +3465,7 @@
         },
         "app.UGRmQ28.action.bWVyZ2UtcGRm.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.bWVyZ2UtcGRm.option.bmFtZQ.desc": {
           "source": "Output filename",
@@ -3605,7 +3609,7 @@
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1kZWxldGUtdGV4dA.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1kZWxldGUtdGV4dA.option.bmFtZQ.desc": {
           "source": "Output filename",
@@ -3797,7 +3801,7 @@
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1yZXBsYWNlLXRleHQ.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1yZXBsYWNlLXRleHQ.option.bmFtZQ.desc": {
           "source": "Output filename",
@@ -4001,7 +4005,7 @@
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1yZXBsYWNlLXdpdGgtaW1hZ2U.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.c2VhcmNoLWFuZC1yZXBsYWNlLXdpdGgtaW1hZ2U.option.bmFtZQ.desc": {
           "source": "Output filename",
@@ -4193,7 +4197,7 @@
         },
         "app.UGRmQ28.action.c2VhcmNoLXRleHQ.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.c2VhcmNoLXRleHQ.option.aW5saW5l.desc": {
           "source": "Set to `True` to include results directly in the response instead of uploading them to a URL",
@@ -4421,7 +4425,7 @@
         },
         "app.UGRmQ28.action.c2VuZC1lbWFpbA.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.c2VuZC1lbWFpbA.option.c210cHBhc3N3b3Jk.desc": {
           "source": "SMTP authentication password.\n\n**Note:** This credential is sent to PDF.co servers for email delivery",
@@ -4601,7 +4605,7 @@
         },
         "app.UGRmQ28.action.c3BsaXQtcGRm.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.c3BsaXQtcGRm.option.bmFtZQ.desc": {
           "source": "Output filename",
@@ -4745,7 +4749,7 @@
         },
         "app.UGRmQ28.action.cGFyc2UtZG9jdW1lbnQ.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.cGFyc2UtZG9jdW1lbnQ.option.aW5saW5l.desc": {
           "source": "Set to `True` to include results directly in the response",
@@ -4881,7 +4885,7 @@
         },
         "app.UGRmQ28.action.cGFyc2UtZG9jdW1lbnQ.short_desc": {
           "source": "Parse a document using templates to extract structured data",
-          "message": "Przeanalizuj dokument przy użyciu szablonów w celu wyodrębnienia ustrukturyzowanych danych"
+          "message": "Przetwarza dokument za pomocą szablonów w celu wyodrębnienia danych"
         },
         "app.UGRmQ28.action.cmVhZC1iYXJjb2Rl.desc": {
           "source": "Reads and decodes barcodes from a document or image file.\n\nSupports multiple barcode types: QRCode, Code128, Code39, Datamatrix, PDF417, EAN13, EAN8, UPCA, UPCE.",
@@ -4949,7 +4953,7 @@
         },
         "app.UGRmQ28.action.cmVhZC1iYXJjb2Rl.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.cmVhZC1iYXJjb2Rl.option.cGFnZXM.desc": {
           "source": "Page indices as comma-separated values or ranges",
@@ -5405,7 +5409,7 @@
         },
         "app.UGRmQ28.action.cmVtb3ZlLXBhc3N3b3Jk.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.cmVtb3ZlLXBhc3N3b3Jk.option.bmFtZQ.desc": {
           "source": "Output filename",
@@ -5525,7 +5529,7 @@
         },
         "app.UGRmQ28.action.dXBsb2FkLWZpbGU.option.aHR0cHVzZXJuYW1l.short_desc": {
           "source": "HTTP basic-auth username for the source URL",
-          "message": "Nazwa użytkownika uwierzytelniania podstawowego HTTP (basic-auth) dla źródłowego adresu URL"
+          "message": "Nazwa użytkownika HTTP basic-auth dla źródłowego adresu URL"
         },
         "app.UGRmQ28.action.dXBsb2FkLWZpbGU.option.bmFtZQ.desc": {
           "source": "Output filename",

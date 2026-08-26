@@ -249,7 +249,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2h1bmstdGV4dA.short_desc": {
           "source": "Breaks documents into overlapping pieces sized for AI search",
-          "message": "Dzieli dokumenty na nakładające się fragmenty o rozmiarze dostosowanym do wyszukiwania AI"
+          "message": "Dzieli dokumenty na nachodzące fragmenty dopasowane do wyszukiwania AI"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2x1c3RlcmluZy1tZXRyaWNz.desc": {
           "source": "Measures whether the groups in your data are clearly separated or overlap too much. For example, after segmenting customers into \"budget\", \"regular\", and \"premium\" groups, this tells you whether the groups are genuinely distinct or whether many customers sit on the boundary between groups.\n\n**What you get**:\n- `silhouette_score` — ranges from `-1.0` (groups overlap badly) to `1.0` (perfectly separated); above `0.5` is generally good\n- `davies_bouldin_score` — measures how much groups bleed into each other; lower is better (`0.0` = no overlap at all)\n- `calinski_harabasz_score` — measures how tight each group is compared to how far apart the groups are; higher is better\n\nRecords accumulate in a batch; when full, a single scorecard is emitted.",
@@ -705,7 +705,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLWZpbHRlcg.short_desc": {
           "source": "Drops records that contain PII, prompt injections, or policy violations",
-          "message": "Odrzuca rekordy zawierające dane PII, wstrzyknięcia promptów lub naruszenia zasad"
+          "message": "Odrzuca rekordy z danymi osobowymi, wstrzyknięciami promptów lub naruszeniami"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLXRyYW5zZm9ybQ.desc": {
           "source": "Evaluates each record's text field against configured guardrail rules and enriches the record with results. Records always pass through (unlike the filter processor).\n\nEach record gets:\n- `_guardrail_passed` — whether the text passed all rules\n- `_guardrail_violations` — list of violations found\n\nIf PII redaction is configured, the text field is replaced with the redacted version.",
@@ -1461,7 +1461,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.ZW1iZWQtdGV4dA.short_desc": {
           "source": "Turns text into numeric vectors for AI-powered similarity search",
-          "message": "Przekształca tekst w wektory liczbowe na potrzeby wyszukiwania podobieństw opartego na AI"
+          "message": "Przekształca tekst w wektory liczbowe do wyszukiwania podobieństw przez AI"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZXdtYQ.desc": {
           "source": "Smooths noisy signals and tracks trends by computing exponential weighted moving averages (EWMA) for specified numeric fields. Unlike a simple moving average, EWMA gives more weight to recent values, making it more responsive to changes while still filtering out noise.\n\n**Use cases**:\n- Smooth CPU usage readings to distinguish real load spikes from noise\n- Track the trend in response times to detect gradual degradation\n- Create a baseline for anomaly detection by comparing raw values to their EWMA\n\nEach record passes through enriched with `{field}_ewma` fields (e.g., `temperature_ewma`, `cpu_usage_ewma`)",
@@ -2285,7 +2285,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.short_desc": {
           "source": "Automatically fills gaps in your data using smart defaults",
-          "message": "Automatycznie uzupełnia luki w danych przy użyciu inteligentnych wartości domyślnych"
+          "message": "Automatycznie uzupełnia braki w danych przy użyciu domyślnych wartości"
         },
         "app.TUwtQW5hbHl0aWNz.action.aXNvbGF0aW9uLWZvcmVzdA.desc": {
           "source": "Catches fraudulent transactions, sensor malfunctions, and security intrusions by flagging records that stand out from normal data. For example, a $50,000 transaction when most are under $500 scores near `1.0` (highly anomalous), while a typical $45 purchase scores near `0.0`.\n\nRecords accumulate in a window; when full, all are scored together. Each record receives:\n- `anomaly_score` — `0.0` (normal) to `1.0` (highly unusual)\n- `is_anomaly` — `True`/`False` based on the threshold",
@@ -2995,6 +2995,10 @@
           "source": "Schema defining validation rules for each field",
           "message": "Schemat definiujący reguły walidacji dla każdego pola"
         },
+        "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.short_desc": {
+          "source": "Validates each record against a schema",
+          "message": "Weryfikuje każdy rekord pod kątem zgodności ze schematem"
+        },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.desc": {
           "source": "Answers 'is this increase real growth or just a seasonal spike?' by separating a time series into its component parts. For example, monthly sales of $120K might decompose into $100K trend + $25K seasonal holiday boost - $5K random dip.\n\nRecords accumulate per field in a window; when full, all values are decomposed. Each record receives:\n- `trend` — long-term direction\n- `seasonal` — cyclical pattern (e.g., holiday shopping cycles)\n- `residual` — random noise remaining after removing trend and seasonal",
           "message": "Odpowiada na pytanie „czy ten wzrost to rzeczywisty rozwój, czy tylko skok sezonowy?”, rozdzielając szereg czasowy na jego składowe. Na przykład miesięczna sprzedaż na poziomie 120 tys. USD może zostać zdekomponowana na 100 tys. USD trendu + 25 tys. USD sezonowego wzrostu świątecznego - 5 tys. USD losowego spadku.\n\nRekordy gromadzą się w oknie dla każdego pola; po zapełnieniu wszystkie wartości są dekomponowane. Każdy rekord otrzymuje:\n- `trend` — kierunek długoterminowy\n- `seasonal` — wzorzec cykliczny (np. świąteczne cykle zakupowe)\n- `residual` — losowy szum pozostały po usunięciu trendu i sezonowości"
@@ -3533,7 +3537,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.cGNh.short_desc": {
           "source": "Reduces many fields to fewer combined values preserving key patterns",
-          "message": "Redukuje wiele pól do mniejszej liczby połączonych wartości, zachowując kluczowe wzorce"
+          "message": "Redukuje wiele pól do mniejszej liczby wartości, zachowując kluczowe wzorce"
         },
         "app.TUwtQW5hbHl0aWNz.action.cm9sbGluZy1zdGF0cw.desc": {
           "source": "Monitors trends, detects anomalies, and tracks volatility in time series data by computing rolling statistics over a sliding window of recent records. For example, with `window_size=20`, each record gets the average, standard deviation, min, max, or sum of the last 20 values for each monitored field.\n\n**Use cases**:\n- Track a 20-period moving average of sensor temperature to smooth out noise\n- Detect volatility spikes by watching rolling standard deviation of stock prices\n- Monitor rolling min/max to detect new highs or lows in streaming data\n\nEach record passes through enriched with computed fields named `{field}_{stat}` (e.g., `temperature_mean`, `price_std`)",
@@ -3821,7 +3825,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.cmFuZG9tLWZvcmVzdC1yZWdyZXNzaW9u.short_desc": {
           "source": "Combines many decision trees for more accurate numeric predictions",
-          "message": "Łączy wiele drzew decyzyjnych w celu uzyskania dokładniejszych prognoz numerycznych"
+          "message": "Łączy wiele drzew decyzyjnych dla dokładniejszych prognoz liczbowych"
         },
         "app.TUwtQW5hbHl0aWNz.action.cmVnaXN0cnktbW9kZWw.desc": {
           "source": "Loads a trained ML model from the model registry by name and runs inference on each batch of records. Supports any model type registered in the registry (KMeans, LinearRegression, IsolationForest, etc.). The model is loaded once and reused for all subsequent batches. Specify `tag` to load a specific tagged version (e.g., 'production') or `version` for a specific version ID. For registry-backed ONNX models, use `output_names` to materialize only selected output tensors.",
@@ -4773,7 +4777,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.dmlzaW9uLWV4dHJhY3Rpb24.short_desc": {
           "source": "Uses a vision LLM to describe images, extract tables, or read text",
-          "message": "Używa wizyjnego LLM do opisywania obrazów, wyodrębniania tabel lub odczytywania tekstu"
+          "message": "Używa wizyjnego LLM do opisu obrazów, ekstrakcji tabel lub odczytu tekstu"
         },
         "app.TUwtQW5hbHl0aWNz.desc": {
           "source": "Catch fraud, forecast sales, segment customers, and simplify complex data — all in your data pipeline without external dependencies. Includes anomaly detection (flag unusual transactions or sensor failures), clustering (discover customer segments or geographic hotspots), forecasting (predict revenue with seasonal patterns), regression (estimate prices from features), and dimensionality reduction (compress 50 fields to 3 key values).",

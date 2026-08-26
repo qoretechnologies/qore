@@ -981,7 +981,7 @@
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.d2VpZ2h0.desc": {
           "source": "Total weight in ounces",
-          "message": "온스(oz) 단위 총 중량"
+          "message": "온스 단위의 총 중량"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.d2VpZ2h0.display_name": {
           "source": "Weight",
@@ -989,7 +989,7 @@
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.d2VpZ2h0.short_desc": {
           "source": "Weight in ounces",
-          "message": "온스(oz) 단위 중량"
+          "message": "온스 단위 중량"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLWN1c3RvbXMtaXRlbQ.option.dmFsdWU.desc": {
           "source": "Total value of all items as a string (e.g. `\"12.50\"`)",
@@ -1373,7 +1373,7 @@
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2VpZ2h0.short_desc": {
           "source": "Weight in ounces",
-          "message": "온스(oz) 단위 중량"
+          "message": "온스 단위 중량"
         },
         "app.RWFzeVBvc3Q.action.Y3JlYXRlLXBhcmNlbA.option.d2lkdGg.desc": {
           "source": "Parcel width in inches",
@@ -3162,6 +3162,10 @@
         "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "URI 경로"
+        },
+        "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로"
         },
         "app.RWFzeVBvc3Q.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",

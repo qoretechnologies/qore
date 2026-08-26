@@ -295,6 +295,10 @@
           "source": "URI Path",
           "message": "Cesta URI"
         },
+        "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Cesta URI relatívna k základnej adrese API URL pripojenia"
+        },
         "app.QXNzZW1ibHlBSQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
@@ -398,6 +402,10 @@
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZQ.display_name": {
           "source": "Language Code",
           "message": "Kód jazyka"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfY29kZQ.short_desc": {
+          "source": "BCP-47 / ISO-639-1 language code (e.g., en_us, de, fr)",
+          "message": "Kód jazyka BCP-47 / ISO-639-1 (napr. en_us, de, fr)"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.bGFuZ3VhZ2VfZGV0ZWN0aW9u.desc": {
           "source": "When `True`, AssemblyAI auto-detects the spoken language and ignores `language_code`.",
@@ -522,6 +530,10 @@
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.display_name": {
           "source": "Summary Model",
           "message": "Model zhrnutia"
+        },
+        "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.c3VtbWFyeV9tb2RlbA.short_desc": {
+          "source": "Summarization model (used with summarization)",
+          "message": "Model sumarizácie (používa sa pri sumarizácii)"
         },
         "app.QXNzZW1ibHlBSQ.action.dHJhbnNjcmliZQ.option.cG9sbF9pbnRlcnZhbA.desc": {
           "source": "Interval between job-status polls.  Defaults to `3s`.  Lower values fetch results sooner at the cost of more API calls.",

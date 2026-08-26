@@ -295,6 +295,10 @@
           "source": "URI Path",
           "message": "URI 경로"
         },
+        "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로"
+        },
         "app.RGVlcGdyYW0.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
@@ -357,7 +361,7 @@
         },
         "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Yml0X3JhdGU.desc": {
           "source": "Output bit rate in bits/second.  Applies to compressed encodings (`mp3`, `opus`, `aac`).  Typical values: `32000`, `48000`, `64000`, `128000`.",
-          "message": "초당 비트 수(bps) 단위의 출력 비트 전송률입니다. 압축 인코딩(`mp3`, `opus`, `aac`)에 적용됩니다. 일반적인 값: `32000`, `48000`, `64000`, `128000`."
+          "message": "초당 비트 수(bits/second) 단위의 출력 비트레이트입니다. 압축된 인코딩(`mp3`, `opus`, `aac`)에 적용됩니다. 일반적인 값: `32000`, `48000`, `64000`, `128000`."
         },
         "app.RGVlcGdyYW0.action.c3ludGhlc2l6ZS1zcGVlY2g.option.Yml0X3JhdGU.display_name": {
           "source": "Bit Rate",
@@ -510,6 +514,10 @@
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bGFuZ3VhZ2U.display_name": {
           "source": "Language",
           "message": "언어"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "BCP-47 language code (e.g., en-US, de, fr)",
+          "message": "BCP-47 언어 코드(예: en-US, de, fr)"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.allowed-value.c3RyaW5nOm5vdmE.display_name": {
           "source": "Nova",

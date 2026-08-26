@@ -2,7 +2,2524 @@
   "schema_version": 1,
   "locales": {
     "pl": {
-      "messages": {}
+      "messages": {
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.desc": {
+          "source": "Deletes a contact.\n\nThis is a hard delete and is not reversible. To keep the record and stop messaging the person instead, archive the contact.",
+          "message": "Usuwa kontakt.\n\nJest to trwałe usunięcie i nie można go cofnąć. Aby zachować rekord i jedynie zaprzestać wysyłania wiadomości do tej osoby, zarchiwizuj kontakt."
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.display_name": {
+          "source": "Delete Contact",
+          "message": "Usuń kontakt"
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "Unikalny identyfikator kontaktu nadany przez Intercom"
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "Kontakt, którego to dotyczy"
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.short_desc": {
+          "source": "Delete a contact",
+          "message": "Usuń kontakt"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.desc": {
+          "source": "Lists contacts, newest first.\n\nThis is exported so that the contact dropdowns have an action to call; **Search Contacts** is the one to reach for when the contacts wanted are a subset.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
+          "message": "Zwraca listę kontaktów, od najnowszych.\n\nJest to wyeksportowane, aby listy rozwijane kontaktów miały akcję do wywołania; użyj **Search Contacts**, gdy potrzebny jest podzbiór kontaktów.\n\nOpis w Intercomie nie deklaruje argumentów stronicowania dla tej operacji, mimo że zwraca ona kopertę stronicowaną; `per_page` i `starting_after` są dodawane podczas importowania schematu. Zobacz @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\"."
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.display_name": {
+          "source": "List Contacts",
+          "message": "Lista kontaktów"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
+          "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
+          "message": "Przekaż `true`, aby dołączyć tablicę `merge_history` do każdego kontaktu w odpowiedzi. Zwracane tylko dla kontaktów z rolą `user`."
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
+          "source": "Include Merge History",
+          "message": "Dołącz historię scalania"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "Podaj „true”, aby dołączyć tablicę „merge_history” do każdego kontaktu"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "Kursor stronicowania: pobierz `pages.next.starting_after` z poprzedniej odpowiedzi i przekaż tutaj.\n\nJest nieprzejrzysty i nie wolno go tworzyć ręcznie. `pages` jest nieobecny po wyczerpaniu kolekcji, co oznacza brak kolejnej strony."
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "Rozpoczynające się po"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Kursor następnej strony"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one page. Intercom documents cursor pagination for every listing that answers a \"pages\" object, but declares this parameter on only some of them.",
+          "message": "Liczba rekordów do zwrócenia na jednej stronie. Intercom dokumentuje stronicowanie kursorowe dla każdego listowania zwracającego obiekt „pages”, ale deklaruje ten parametr tylko dla niektórych z nich."
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "Rozmiar strony"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Liczba rekordów do zwrócenia na jednej stronie"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.short_desc": {
+          "source": "List the contacts in the workspace",
+          "message": "Pobierz listę kontaktów w obszarze roboczym"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.desc": {
+          "source": "Searches the workspace's contacts.\n\n`query` is either a single filter - `{field, operator, value}` - or a boolean combination, `{operator: \"AND\", value: [ ... ]}`, nested as deeply as needed. A field Intercom does not define on a contact is searched by naming it `custom_attributes.<name>`.\n\nTimestamps in a query are counts of seconds since the epoch, so `created_at > 1755000000` reads as \"created after that instant\".\n\nThe result is paged with `starting_after`: pass back the `pages.next.starting_after` value from the previous response.",
+          "message": "Wyszukuje kontakty w obszarze roboczym.\n\n`query` to pojedynczy filtr — `{field, operator, value}` — lub kombinacja logiczna, `{operator: \"AND\", value: [ ... ]}`, zagnieżdżona tak głęboko, jak to konieczne. Pole, którego Intercom nie definiuje dla kontaktu, jest wyszukiwane przez podanie nazwy `custom_attributes.<name>`.\n\nZnaczniki czasu w zapytaniu to liczba sekund od początku epoki, więc `created_at > 1755000000` oznacza „utworzone po tym momencie”.\n\nWynik jest stronicowany za pomocą `starting_after`: przekaż z powrotem wartość `pages.next.starting_after` z poprzedniej odpowiedzi."
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.display_name": {
+          "source": "Search Contacts",
+          "message": "Wyszukaj kontakty"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
+          "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
+          "message": "Przekaż `true`, aby dołączyć tablicę `merge_history` do każdego kontaktu w odpowiedzi. Zwracane tylko dla kontaktów z rolą `user`."
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
+          "source": "Include Merge History",
+          "message": "Dołącz historię scalania"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "Podaj „true”, aby dołączyć tablicę „merge_history” do każdego kontaktu"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c29ydA.desc": {
+          "source": "An optional object to sort the results by.",
+          "message": "Opcjonalny obiekt, według którego mają być sortowane wyniki."
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Sortowanie"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c29ydA.short_desc": {
+          "source": "An optional object to sort the results by",
+          "message": "Opcjonalny obiekt do sortowania wyników"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "Kursor stronicowania: pobierz `pages.next.starting_after` z poprzedniej odpowiedzi i przekaż tutaj.\n\nJest nieprzejrzysty i nie wolno go tworzyć ręcznie. `pages` jest nieobecny po wyczerpaniu kolekcji, co oznacza brak kolejnej strony."
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "Rozpoczynające się po"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Kursor następnej strony"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cGVyX3BhZ2U.desc": {
+          "source": "The number of results to fetch per page.",
+          "message": "Liczba wyników do pobrania na stronę."
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "Rozmiar strony"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Liczba rekordów do zwrócenia na jednej stronie"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Zapytanie"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.short_desc": {
+          "source": "Find contacts matching a query",
+          "message": "Wyszukaj kontakty pasujące do zapytania"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.desc": {
+          "source": "Retrieves one contact by the identity Intercom gave it.\n\nTo find a contact by your own identifier instead, search for it: `{field: \"external_id\", operator: \"=\", value: \"...\"}`.",
+          "message": "Pobiera jeden kontakt na podstawie identyfikatora nadanego przez Intercom.\n\nAby zamiast tego znaleźć kontakt po własnym identyfikatorze, wyszukaj go: `{field: \"external_id\", operator: \"=\", value: \"...\"}`."
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "Pobierz kontakt"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "Unikalny identyfikator kontaktu nadany przez Intercom"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "Kontakt, którego to dotyczy"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
+          "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
+          "message": "Przekaż `true`, aby dołączyć tablicę `merge_history` do każdego kontaktu w odpowiedzi. Zwracane tylko dla kontaktów z rolą `user`."
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
+          "source": "Include Merge History",
+          "message": "Dołącz historię scalania"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "Podaj „true”, aby dołączyć tablicę „merge_history” do każdego kontaktu"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.short_desc": {
+          "source": "Retrieve a contact by its identity",
+          "message": "Pobierz kontakt na podstawie jego identyfikatora"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.desc": {
+          "source": "Retrieves one company by the identity Intercom gave it.\n\nTo find a company by your own identifier instead, use **Create Or Update Company**, which matches on `company_id`.",
+          "message": "Pobiera jedną firmę na podstawie identyfikatora nadanego przez Intercom.\n\nAby zamiast tego znaleźć firmę po własnym identyfikatorze, użyj akcji **Create Or Update Company**, która dopasowuje według `company_id`."
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.display_name": {
+          "source": "Get Company",
+          "message": "Pobierz firmę"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.option.Y29tcGFueV9pZA.desc": {
+          "source": "The unique identifier for the company which is given by Intercom",
+          "message": "Unikalny identyfikator firmy nadany przez Intercom"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company",
+          "message": "Firma"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company to retrieve",
+          "message": "Firma do pobrania"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.short_desc": {
+          "source": "Retrieve a company by its identity",
+          "message": "Pobierz firmę na podstawie jej identyfikatora"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.desc": {
+          "source": "Updates a company that already exists, named by the identity **Intercom** gave it.\n\nThis is not the same thing as **Create Or Update Company**, which matches on the `company_id` **you** gave it and creates one when nothing matches. Where the intent is to change a company that is already known, this is the action that cannot create a second one by accident.",
+          "message": "Aktualizuje istniejącą firmę określoną przez identyfikator nadany jej przez **Intercom**.\n\nNie jest to to samo co **Create Or Update Company**, które dopasowuje według parametru `company_id` podanego przez **Ciebie** i tworzy nową firmę, gdy nic nie pasuje. Jeśli celem jest zmiana znanej już firmy, ta akcja nie utworzy przypadkowo duplikatu."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.display_name": {
+          "source": "Update Company",
+          "message": "Zaktualizuj firmę"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.desc": {
+          "source": "The unique identifier for the company which is given by Intercom",
+          "message": "Unikalny identyfikator firmy nadany przez Intercom"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company",
+          "message": "Firma"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company to update",
+          "message": "Firma do zaktualizowania"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "A hash of key/value pairs containing any other data about the company you want Intercom to store.",
+          "message": "Tablica asocjacyjna par klucz/wartość zawierająca dowolne inne dane firmy, które Intercom ma zapisać."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "Atrybuty niestandardowe"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "A hash of key/value pairs containing any other data about the company you want…",
+          "message": "Pary klucz/wartość z dodatkowymi danymi firmy do zapisania w Intercomie…"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.aW5kdXN0cnk.desc": {
+          "source": "The industry that this company operates in.",
+          "message": "Branża, w której działa ta firma."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.aW5kdXN0cnk.display_name": {
+          "source": "Industry",
+          "message": "Branża"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.aW5kdXN0cnk.short_desc": {
+          "source": "The industry that this company operates in",
+          "message": "Branża, w której działa ta firma"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.desc": {
+          "source": "How much revenue the company generates for your business. Note that this will truncate floats. i.e. it only allow for whole integers, 155.98 will be truncated to 155. Note that this has an upper limit of 2**31-1 or 2147483647..",
+          "message": "Wartość przychodu generowanego przez firmę dla Twojej działalności. Pamiętaj, że wartości zmiennoprzecinkowe zostaną obcięte, tzn. dozwolone są tylko liczby całkowite, 155.98 zostanie obcięte do 155. Pamiętaj, że górny limit to 2**31-1, czyli 2147483647."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.display_name": {
+          "source": "Monthly Spend",
+          "message": "Miesięczne wydatki"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.short_desc": {
+          "source": "How much revenue the company generates for your business",
+          "message": "Przychód generowany przez firmę dla Twojej działalności"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bmFtZQ.desc": {
+          "source": "The name of the Company",
+          "message": "Nazwa firmy"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bmFtZQ.short_desc": {
+          "source": "The name of the Company",
+          "message": "Nazwa firmy"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.c2l6ZQ.desc": {
+          "source": "The number of employees in this company.",
+          "message": "Liczba pracowników w tej firmie."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.c2l6ZQ.display_name": {
+          "source": "Size",
+          "message": "Rozmiar"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.c2l6ZQ.short_desc": {
+          "source": "The number of employees in this company",
+          "message": "Liczba pracowników w tej firmie"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.cGxhbg.desc": {
+          "source": "The name of the plan you have associated with the company.",
+          "message": "Nazwa planu powiązanego z firmą."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.cGxhbg.display_name": {
+          "source": "Plan",
+          "message": "Plan"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.cGxhbg.short_desc": {
+          "source": "The name of the plan you have associated with the company",
+          "message": "Nazwa planu powiązanego z firmą"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.d2Vic2l0ZQ.desc": {
+          "source": "The URL for this company's website. Please note that the value specified here is not validated. Accepts any string.",
+          "message": "Adres URL witryny tej firmy. Wartość podana tutaj nie jest walidowana. Akceptuje dowolny ciąg znaków."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Witryna internetowa"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "The URL for this company's website",
+          "message": "Adres URL witryny tej firmy"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.short_desc": {
+          "source": "Update an existing company by its identity",
+          "message": "Zaktualizuj istniejącą firmę według jej identyfikatora"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.desc": {
+          "source": "Updates a contact that already exists, named by the identity Intercom gave it.\n\nOnly the attributes supplied are changed. A field Intercom does not define on a contact is written by naming it under `custom_attributes`.",
+          "message": "Aktualizuje kontakt, który już istnieje, wskazany przez identyfikator nadany mu przez Intercom.\n\nZmieniane są tylko podane atrybuty. Pole, którego Intercom nie definiuje dla kontaktu, zapisuje się, podając jego nazwę w `custom_attributes`."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.display_name": {
+          "source": "Update Contact",
+          "message": "Zaktualizuj kontakt"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "Unikalny identyfikator kontaktu nadany przez Intercom"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "Kontakt, którego to dotyczy"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "The custom attributes which are set for the contact",
+          "message": "Atrybuty niestandardowe ustawione dla kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "Atrybuty niestandardowe"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "The custom attributes which are set for the contact",
+          "message": "Atrybuty niestandardowe ustawione dla kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.YXZhdGFy.desc": {
+          "source": "An image URL containing the avatar of a contact",
+          "message": "Adres URL obrazu zawierający awatar kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.YXZhdGFy.display_name": {
+          "source": "Avatar",
+          "message": "Awatar"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.YXZhdGFy.short_desc": {
+          "source": "An image URL containing the avatar of a contact",
+          "message": "Adres URL obrazu zawierający awatar kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWw.desc": {
+          "source": "The contacts email",
+          "message": "Adres e-mail kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWw.short_desc": {
+          "source": "The contacts email",
+          "message": "Adres e-mail kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.desc": {
+          "source": "Whether the contact's email address has been verified. Set to true to indicate you have verified the contact owns this email address, or false to mark it as unverified. Must be supplied together with an email in the same request; sending it without an email returns a 400.",
+          "message": "Określa, czy adres e-mail kontaktu został zweryfikowany. Ustaw wartość true, aby wskazać, że zweryfikowano własność tego adresu e-mail przez kontakt, lub false, aby oznaczyć go jako niezweryfikowany. Wartość musi zostać przekazana razem z adresem e-mail w tym samym żądaniu; wysłanie jej bez adresu e-mail zwraca błąd 400."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.display_name": {
+          "source": "Email Verified",
+          "message": "E-mail zweryfikowany"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.short_desc": {
+          "source": "Whether the contact's email address has been verified",
+          "message": "Określa, czy adres e-mail kontaktu został zweryfikowany"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "A unique identifier for the contact which is given to Intercom",
+          "message": "Unikalny identyfikator kontaktu przekazywany do Intercom"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "Zewnętrzny ID"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "A unique identifier for the contact which is given to Intercom",
+          "message": "Unikalny identyfikator kontaktu przekazywany do Intercom"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
+          "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
+          "message": "Przekaż `true`, aby dołączyć tablicę `merge_history` do każdego kontaktu w odpowiedzi. Zwracane tylko dla kontaktów z rolą `user`."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
+          "source": "Include Merge History",
+          "message": "Dołącz historię scalania"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "Podaj „true”, aby dołączyć tablicę „merge_history” do każdego kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.b3duZXJfaWQ.desc": {
+          "source": "The id of an admin that has been assigned account ownership of the contact",
+          "message": "Identyfikator administratora przypisanego jako właściciel konta kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "Identyfikator właściciela"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.b3duZXJfaWQ.short_desc": {
+          "source": "The id of an admin that has been assigned account ownership of the contact",
+          "message": "Identyfikator administratora przypisanego jako właściciel konta kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.desc": {
+          "source": "(Unix timestamp in seconds) The time when the contact was last seen (either where the Intercom Messenger was installed or when specified manually).\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "(Znacznik czasu Unix w sekundach) Czas ostatniej aktywności kontaktu (w miejscu instalacji Intercom Messenger lub określony ręcznie).\n\nWartość ta jest wysyłana jako liczba całkowita sekund od 1970-01-01Z."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.display_name": {
+          "source": "Last Seen At",
+          "message": "Ostatnio widziano"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.short_desc": {
+          "source": "(Unix timestamp in seconds) The time when the contact was last seen…",
+          "message": "(Znacznik czasu Unix w sekundach) Czas ostatniej aktywności kontaktu…"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bmFtZQ.desc": {
+          "source": "The contacts name",
+          "message": "Imię i nazwisko lub nazwa kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bmFtZQ.short_desc": {
+          "source": "The contacts name",
+          "message": "Imię i nazwisko lub nazwa kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.desc": {
+          "source": "(Unix timestamp in seconds) The time specified for when a contact signed up.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "(Znacznik czasu Unix w sekundach) Czas rejestracji kontaktu.\n\nWartość ta jest wysyłana jako liczba całkowita sekund od 1970-01-01Z."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.display_name": {
+          "source": "Signed Up At",
+          "message": "Czas rejestracji"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.short_desc": {
+          "source": "(Unix timestamp in seconds) The time specified for when a contact signed up",
+          "message": "(Znacznik czasu Unix w sekundach) Czas rejestracji kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cGhvbmU.desc": {
+          "source": "The contacts phone",
+          "message": "Numer telefonu kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefon"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cGhvbmU.short_desc": {
+          "source": "The contacts phone",
+          "message": "Numer telefonu kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cm9sZQ.desc": {
+          "source": "The role of the contact.",
+          "message": "Rola kontaktu."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "Rola"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cm9sZQ.short_desc": {
+          "source": "The role of the contact",
+          "message": "Rola kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.desc": {
+          "source": "Whether the contact is unsubscribed from emails",
+          "message": "Określa, czy kontakt zrezygnował z subskrypcji wiadomości e-mail"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.display_name": {
+          "source": "Unsubscribed from Emails",
+          "message": "Wypisano z subskrypcji e-mail"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.short_desc": {
+          "source": "Whether the contact is unsubscribed from emails",
+          "message": "Określa, czy kontakt zrezygnował z subskrypcji wiadomości e-mail"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Zaktualizuj istniejący kontakt"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.desc": {
+          "source": "Creates new records in the given table",
+          "message": "Tworzy nowe rekordy w podanej tabeli"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.display_name": {
+          "source": "Create Records",
+          "message": "Utwórz rekordy"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "Tabela do pracy: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` lub `teammates`"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabela"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Nazwa tabeli do pracy"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.short_desc": {
+          "source": "Create new records in the given table",
+          "message": "Utwórz nowe rekordy w podanej tabeli"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.desc": {
+          "source": "Starts a conversation **from a contact** - as though the contact had written in.\n\nThis is not the way to message somebody: a conversation created here is attributed to the contact, so it appears in the inbox as an incoming message. Use **Create Message** to send something from a teammate.",
+          "message": "Rozpoczyna konwersację **od kontaktu** — tak, jakby to kontakt napisał wiadomość.\n\nNie jest to sposób na wysłanie wiadomości do kogoś: konwersacja utworzona w ten sposób jest przypisana do kontaktu, więc pojawia się w skrzynce odbiorczej jako wiadomość przychodząca. Użyj **Create Message**, aby wysłać wiadomość od członka zespołu."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.display_name": {
+          "source": "Create Conversation",
+          "message": "Utwórz konwersację"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "The time the conversation was created as a UTC Unix timestamp. If not provided, the current time will be used. This field is only recommneded for migrating past conversations from another source into Intercom.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "Czas utworzenia konwersacji jako znacznik czasu Unix w UTC. W przypadku braku wartości zostanie użyty bieżący czas. To pole jest zalecane wyłącznie do migracji wcześniejszych konwersacji z innego źródła do Intercom.\n\nWartość ta jest wysyłana jako liczba całkowita sekund od 1970-01-01Z."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "Data utworzenia"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "The time the conversation was created as a UTC Unix timestamp",
+          "message": "Czas utworzenia konwersacji jako znacznik czasu Unix w UTC"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.desc": {
+          "source": "A list of image URLs that will be added as attachments. You can include up to 10 URLs.",
+          "message": "Lista adresów URL obrazów, które zostaną dodane jako załączniki. Możesz dołączyć do 10 adresów URL."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.display_name": {
+          "source": "Attachment Urls",
+          "message": "Adresy URL załączników"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.short_desc": {
+          "source": "A list of image URLs that will be added as attachments",
+          "message": "Lista adresów URL obrazów, które zostaną dodane jako załączniki"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Ym9keQ.desc": {
+          "source": "The content of the message. HTML is not supported.",
+          "message": "Treść wiadomości. Format HTML nie jest obsługiwany."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Ym9keQ.display_name": {
+          "source": "Message",
+          "message": "Wiadomość"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Ym9keQ.short_desc": {
+          "source": "The first message in the conversation",
+          "message": "Pierwsza wiadomość w konwersacji"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YnJhbmRfaWQ.desc": {
+          "source": "The unique identifier of the brand to associate with this conversation.",
+          "message": "Unikalny identyfikator marki do powiązania z tą konwersacją."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YnJhbmRfaWQ.display_name": {
+          "source": "Brand ID",
+          "message": "Identyfikator marki"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YnJhbmRfaWQ.short_desc": {
+          "source": "The unique identifier of the brand to associate with this conversation",
+          "message": "Unikalny identyfikator marki do powiązania z tą konwersacją"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Od"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.ZnJvbQ.short_desc": {
+          "source": "The contact the conversation comes from",
+          "message": "Kontakt, od którego pochodzi konwersacja"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.c3ViamVjdA.desc": {
+          "source": "The title of the email. Only applicable if the message type is email.",
+          "message": "Tytuł wiadomości e-mail. Ma zastosowanie tylko wtedy, gdy typem wiadomości jest e-mail."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Temat"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.c3ViamVjdA.short_desc": {
+          "source": "The title of the email",
+          "message": "Tytuł wiadomości e-mail"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.short_desc": {
+          "source": "Start a conversation as a contact",
+          "message": "Rozpocznij konwersację jako kontakt"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.desc": {
+          "source": "Creates a help center article.\n\n`author_id` has to be a teammate on the help center's workspace. `state` decides whether it is published or left as a draft - Intercom defaults it to `draft`.\n\n`parent_id` files the article under a collection. Earlier API versions also allowed a *section*; Intercom removed sections at version 2.10 and returns what used to be one as a nested collection, so `collection` is the only parent type left.",
+          "message": "Tworzy artykuł w centrum pomocy.\n\n`author_id` musi być członkiem zespołu w przestrzeni roboczej centrum pomocy. `state` decyduje, czy artykuł zostanie opublikowany, czy pozostanie wersją roboczą — Intercom domyślnie ustawia wartość `draft`.\n\n`parent_id` przypisuje artykuł do kolekcji. We wcześniejszych wersjach API dozwolona była również *sekcja*; Intercom usunął sekcje w wersji 2.10 i zwraca dawną sekcję jako zagnieżdżoną kolekcję, dlatego `collection` jest jedynym pozostałym typem nadrzędnym."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.display_name": {
+          "source": "Create Article",
+          "message": "Utwórz artykuł"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
+          "source": "Whether the article should be available for AI Copilot. For multilingual articles, this sets the default language's availability.",
+          "message": "Określa, czy artykuł ma być dostępny dla AI Copilot. W przypadku artykułów wielojęzycznych ustawia to dostępność dla języka domyślnego."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
+          "source": "AI Copilot Availability",
+          "message": "Dostępność dla AI Copilot"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
+          "source": "Whether the article should be available for AI Copilot",
+          "message": "Określa, czy artykuł ma być dostępny dla AI Copilot"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
+          "source": "Whether the article should be available for AI Chatbot (Fin). For multilingual articles, this sets the default language's availability.",
+          "message": "Określa, czy artykuł ma być dostępny dla AI Chatbota (Fin). W przypadku artykułów wielojęzycznych ustawia to dostępność dla języka domyślnego."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
+          "source": "AI Chatbot Availability",
+          "message": "Dostępność dla AI Chatbota"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
+          "source": "Whether the article should be available for AI Chatbot (Fin)",
+          "message": "Określa, czy artykuł ma być dostępny dla AI Chatbota (Fin)"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
+          "source": "Whether the article should be available for AI Sales Agent. For multilingual articles, this sets the default language's availability.",
+          "message": "Określa, czy artykuł ma być dostępny dla AI Sales Agenta. W przypadku artykułów wielojęzycznych ustawia to dostępność dla języka domyślnego."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
+          "source": "AI Sales Agent Availability",
+          "message": "Dostępność dla AI Sales Agenta"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
+          "source": "Whether the article should be available for AI Sales Agent",
+          "message": "Określa, czy artykuł ma być dostępny dla AI Sales Agenta"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.desc": {
+          "source": "The id of the author of the article. For multilingual articles, this will be the id of the author of the default language's content. Must be a teammate on the help center's workspace.",
+          "message": "Identyfikator autora artykułu. W przypadku artykułów wielojęzycznych będzie to identyfikator autora treści w języku domyślnym. Musi to być członek zespołu w przestrzeni roboczej centrum pomocy."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.display_name": {
+          "source": "Author",
+          "message": "Autor"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.short_desc": {
+          "source": "The teammate the article is written by",
+          "message": "Członek zespołu, przez którego artykuł został napisany"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.desc": {
+          "source": "The list of audience IDs to assign to this article for Fin AI Agent targeting. Sending a top-level `audience_ids` broadcasts the same set to every locale. For per-locale targeting, use `translated_content.<locale>.audience_ids` instead. Sending both top-level and per-locale in the same request causes top-level to win. Unknown audience IDs return a 404 error. No partial commit occurs.",
+          "message": "Lista identyfikatorów grup odbiorców do przypisania do tego artykułu na potrzeby targetowania Fin AI Agenta. Przesłanie parametru `audience_ids` na poziomie głównym rozsyła ten sam zestaw do wszystkich ustawień regionalnych. Aby targetować według ustawień regionalnych, użyj zamiast tego `translated_content.<locale>.audience_ids`. Przesłanie parametrów na poziomie głównym i regionalnym w tym samym żądaniu sprawia, że priorytet ma poziom główny. Nieznane identyfikatory odbiorców zwracają błąd 404. Żadne częściowe zatwierdzenie nie następuje."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.display_name": {
+          "source": "Audience Ids",
+          "message": "Identyfikatory odbiorców"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.short_desc": {
+          "source": "The list of audience IDs to assign to this article for Fin AI Agent targeting",
+          "message": "Lista identyfikatorów odbiorców do targetowania Fin AI Agenta"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keQ.desc": {
+          "source": "The content of the article in HTML. For multilingual articles, this will be the body of the default language's content. Mutually exclusive with `body_markdown`.",
+          "message": "Treść artykułu w formacie HTML. W przypadku artykułów wielojęzycznych będzie to treść dla języka domyślnego. Wzajemnie wyklucza się z `body_markdown`."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Treść"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keQ.short_desc": {
+          "source": "The article content, in HTML",
+          "message": "Treść artykułu w formacie HTML"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.desc": {
+          "source": "The content of the article in markdown. For multilingual articles, this will be the body of the default language's content. An alternative to `body` — you can provide content as markdown instead of HTML. Mutually exclusive with `body`.",
+          "message": "Treść artykułu w formacie Markdown. W przypadku artykułów wielojęzycznych będzie to treść dla języka domyślnego. Alternatywa dla `body` — możesz podać treść w formacie Markdown zamiast HTML. Wzajemnie wyklucza się z `body`."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.display_name": {
+          "source": "Body Markdown",
+          "message": "Treść w Markdown"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.short_desc": {
+          "source": "The content of the article in markdown",
+          "message": "Treść artykułu w formacie Markdown"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the article. For multilingual articles, this will be the description of the default language's content.",
+          "message": "Opis artykułu. W przypadku artykułów wielojęzycznych będzie to opis treści w języku domyślnym."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Opis"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The description of the article",
+          "message": "Opis artykułu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future publish of the article. When set together with `state: \"published\"`, the article is scheduled instead of published immediately. Setting `null` cancels a pending publish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Combining with `state: \"draft\"` returns 400 `parameter_invalid`. Sending in the same request as `scheduled_unpublish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`.",
+          "message": "Znacznik czasu ISO 8601 planowanej publikacji artykułu w przyszłości. W połączeniu z `state: \"published\"` artykuł zostanie zaplanowany zamiast natychmiast opublikowany. Ustawienie `null` anuluje oczekujący harmonogram publikacji. Znaczniki czasu z przeszłości lub równe obecnemu czasowi są odrzucane z błędem 400 `parameter_invalid` — wartość musi bezwzględnie wskazywać przyszłość. Połączenie z `state: \"draft\"` zwraca 400 `parameter_invalid`. Wysłanie w tym samym żądaniu co `scheduled_unpublish_at` zwraca 400 — artykuł może mieć tylko jeden oczekujący harmonogram. Pusty ciąg znaków zwraca 400 `parameter_invalid`."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.display_name": {
+          "source": "Scheduled Publish At",
+          "message": "Zaplanowany czas publikacji"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.short_desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future publish of the article",
+          "message": "Znacznik czasu ISO 8601 zaplanowanej publikacji artykułu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future unpublish of the article. Setting `null` cancels a pending unpublish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Rejected with 400 `parameter_invalid` if the article has never been published. Sending in the same request as `scheduled_publish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`.",
+          "message": "Znacznik czasu ISO 8601 planowanego wycofania publikacji artykułu w przyszłości. Ustawienie `null` anuluje oczekujący harmonogram wycofania publikacji. Znaczniki czasu z przeszłości lub równe obecnemu czasowi są odrzucane z błędem 400 `parameter_invalid` — wartość musi bezwzględnie wskazywać przyszłość. Wartość jest odrzucana z błędem 400 `parameter_invalid`, jeśli artykuł nigdy nie był opublikowany. Wysłanie w tym samym żądaniu co `scheduled_publish_at` zwraca 400 — artykuł może mieć tylko jeden oczekujący harmonogram. Pusty ciąg znaków zwraca 400 `parameter_invalid`."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.display_name": {
+          "source": "Scheduled Unpublish At",
+          "message": "Zaplanowany czas wycofania publikacji"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.short_desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future unpublish of the article",
+          "message": "Znacznik czasu ISO 8601 zaplanowanego wycofania publikacji artykułu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "draft",
+          "message": "wersja robocza"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "published",
+          "message": "opublikowany"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.desc": {
+          "source": "Whether the article will be `published` or will be a `draft`. Defaults to draft. For multilingual articles, this will be the state of the default language's content.",
+          "message": "Określa, czy artykuł będzie mieć status `published`, czy `draft`. Domyślnie draft. W przypadku artykułów wielojęzycznych będzie to stan treści w języku domyślnym."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Stan / województwo"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.short_desc": {
+          "source": "Whether the article will be 'published' or will be a 'draft'",
+          "message": "Określa, czy artykuł ma status „published”, czy „draft”"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.desc": {
+          "source": "The id of the article's parent collection or section. An article without this field stands alone.",
+          "message": "Identyfikator nadrzędnej kolekcji lub sekcji artykułu. Artykuł bez tego pola jest samodzielny."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.display_name": {
+          "source": "Collection",
+          "message": "Kolekcja"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.short_desc": {
+          "source": "The collection to file the article under",
+          "message": "Kolekcja, do której ma należeć artykuł"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.allowed-value.c3RyaW5nOmNvbGxlY3Rpb24.display_name": {
+          "source": "collection",
+          "message": "kolekcja"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.desc": {
+          "source": "The kind of thing `parent_id` names.\n\nOnly `collection` remains: Intercom removed help center sections at API version 2.10, and returns what used to be a section as a nested collection.",
+          "message": "Typ elementu wskazywanego przez `parent_id`.\n\nPozostał tylko typ `collection`: Intercom usunął sekcje centrum pomocy w wersji API 2.10 i zwraca dawne sekcje jako zagnieżdżone kolekcje."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.display_name": {
+          "source": "Parent Type",
+          "message": "Typ nadrzędny"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.short_desc": {
+          "source": "Must be \"collection\"",
+          "message": "Wartość musi wynosić „collection”"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dGl0bGU.desc": {
+          "source": "The title of the article.For multilingual articles, this will be the title of the default language's content.",
+          "message": "Tytuł artykułu. W przypadku artykułów wielojęzycznych będzie to tytuł treści w języku domyślnym."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Tytuł"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dGl0bGU.short_desc": {
+          "source": "The title of the article.For multilingual articles, this will be the title of…",
+          "message": "Tytuł artykułu. W artykułach wielojęzycznych to tytuł w języku domyślnym."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.desc": {
+          "source": "The Translated Content of an Article. The keys are the locale codes and the values are the translated content of the article.",
+          "message": "Przetłumaczona treść artykułu. Kluczami są kody ustawień regionalnych, a wartościami przetłumaczona treść artykułu."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.display_name": {
+          "source": "Translated Content",
+          "message": "Przetłumaczona treść"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.short_desc": {
+          "source": "The Translated Content of an Article",
+          "message": "Przetłumaczona treść artykułu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.short_desc": {
+          "source": "Write a help center article",
+          "message": "Napisz artykuł centrum pomocy"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.desc": {
+          "source": "Records a data event against a contact - a signup, a purchase, a feature used.\n\nThe contact is named in exactly one of three ways: `id` is Intercom's identity for them, `user_id` is the external identity your own system gave them, and `email` is their address. Supply one.\n\n`metadata` carries up to five values describing the event itself.",
+          "message": "Rejestruje zdarzenie danych powiązane z kontaktem — rejestrację, zakup, użycie funkcji.\n\nKontakt jest określany dokładnie na jeden z trzech sposobów: `id` to jego identyfikator w Intercom, `user_id` to zewnętrzny identyfikator z Twojego systemu, a `email` to jego adres e-mail. Podaj jeden z nich.\n\n`metadata` zawiera maksymalnie pięć wartości opisujących samo zdarzenie."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.display_name": {
+          "source": "Submit Data Event",
+          "message": "Prześlij zdarzenie danych"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "When the event happened.\n\nIntercom requires this. Set it to the current time for an event happening now; the application this module replaces did that silently, so a workflow migrated from it has to say so explicitly.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "Czas wystąpienia zdarzenia.\n\nIntercom wymaga tego pola. Ustaw bieżący czas dla zdarzenia zachodzącego teraz; aplikacja zastępowana przez ten moduł robiła to automatycznie, dlatego migrowany przepływ pracy musi określać go jawnie.\n\nWartość jest przesyłana jako liczba całkowita sekund od 1970-01-01Z."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Occurred At",
+          "message": "Wystąpiło o"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "When the event happened",
+          "message": "Czas wystąpienia zdarzenia"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZW1haWw.desc": {
+          "source": "An email address for your user. An email should only be used where your application uses email to uniquely identify users.",
+          "message": "Adres e-mail użytkownika. Adres e-mail powinien być używany tylko wtedy, gdy aplikacja wykorzystuje e-mail do jednoznacznej identyfikacji użytkowników."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "E-mail"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZW1haWw.short_desc": {
+          "source": "The contact, by e-mail address",
+          "message": "Kontakt według adresu e-mail"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZXZlbnRfbmFtZQ.desc": {
+          "source": "The name of the event that occurred. This is presented to your App's admins when filtering and creating segments - a good event name is typically a past tense 'verb-noun' combination, to improve readability, for example `updated-plan`.",
+          "message": "Nazwa zdarzenia, które wystąpiło. Jest ona wyświetlana administratorom aplikacji podczas filtrowania i tworzenia segmentów — dobra nazwa zdarzenia to zwykle połączenie „czasownik w czasie przeszłym + rzeczownik” dla poprawy czytelności, na przykład `updated-plan`."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZXZlbnRfbmFtZQ.display_name": {
+          "source": "Event Name",
+          "message": "Nazwa zdarzenia"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZXZlbnRfbmFtZQ.short_desc": {
+          "source": "The name of the event being recorded",
+          "message": "Nazwa rejestrowanego zdarzenia"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.aWQ.desc": {
+          "source": "The unique identifier for the contact (lead or user) which is given by Intercom.",
+          "message": "Unikalny identyfikator kontaktu (leada lub użytkownika) nadany przez Intercom."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.aWQ.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.aWQ.short_desc": {
+          "source": "The contact, by Intercom's identity for them",
+          "message": "Kontakt według identyfikatora Intercom"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.bWV0YWRhdGE.desc": {
+          "source": "Optional metadata about the event.",
+          "message": "Opcjonalne metadane dotyczące zdarzenia."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "Metadane"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.bWV0YWRhdGE.short_desc": {
+          "source": "Optional metadata about the event",
+          "message": "Opcjonalne metadane zdarzenia"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.dXNlcl9pZA.desc": {
+          "source": "Your identifier for the user.",
+          "message": "Twój identyfikator użytkownika."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.dXNlcl9pZA.display_name": {
+          "source": "External ID",
+          "message": "Zewnętrzny ID"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.dXNlcl9pZA.short_desc": {
+          "source": "The contact, by the identity your own system gave them",
+          "message": "Kontakt według identyfikatora z własnego systemu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.short_desc": {
+          "source": "Record that a contact did something",
+          "message": "Zarejestruj działanie kontaktu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.desc": {
+          "source": "Creates a company, or updates the existing one with the same `company_id`.\n\n`company_id` is **your** identifier for the company, not Intercom's: it is what decides whether this creates or updates, and Intercom will not let it be changed afterwards. The dropdown therefore lists companies by that identifier.\n\nOnly the fields sent are changed; the rest are left as they are.",
+          "message": "Tworzy firmę lub aktualizuje istniejącą o takim samym `company_id`.\n\n`company_id` to **Twój** identyfikator firmy, a nie identyfikator Intercom: to on decyduje, czy nastąpi utworzenie, czy aktualizacja, a Intercom nie pozwala na jego późniejszą zmianę. Lista rozwijana wyświetla firmy według tego identyfikatora.\n\nModyfikowane są tylko przesłane pola; pozostałe pozostają bez zmian."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.display_name": {
+          "source": "Create or Update Company",
+          "message": "Utwórz lub zaktualizuj firmę"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y29tcGFueV9pZA.desc": {
+          "source": "The company id you have defined for the company. Can't be updated",
+          "message": "Identyfikator zdefiniowany przez Ciebie dla firmy. Nie można go zaktualizować"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company ID",
+          "message": "ID firmy"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "Your own identifier for the company",
+          "message": "Twój identyfikator firmy"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "A hash of key/value pairs containing any other data about the company you want Intercom to store.",
+          "message": "Tablica asocjacyjna par klucz/wartość zawierająca dowolne inne dane firmy, które Intercom ma zapisać."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "Atrybuty niestandardowe"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "A hash of key/value pairs containing any other data about the company you want…",
+          "message": "Pary klucz/wartość z dodatkowymi danymi firmy do zapisania w Intercomie…"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.aW5kdXN0cnk.desc": {
+          "source": "The industry that this company operates in.",
+          "message": "Branża, w której działa ta firma."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.aW5kdXN0cnk.display_name": {
+          "source": "Industry",
+          "message": "Branża"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.aW5kdXN0cnk.short_desc": {
+          "source": "The industry that this company operates in",
+          "message": "Branża, w której działa ta firma"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.desc": {
+          "source": "How much revenue the company generates for your business. Note that this will truncate floats. i.e. it only allow for whole integers, 155.98 will be truncated to 155. Note that this has an upper limit of 2**31-1 or 2147483647..",
+          "message": "Wartość przychodu generowanego przez firmę dla Twojej działalności. Pamiętaj, że wartości zmiennoprzecinkowe zostaną obcięte, tzn. dozwolone są tylko liczby całkowite, 155.98 zostanie obcięte do 155. Pamiętaj, że górny limit to 2**31-1, czyli 2147483647."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.display_name": {
+          "source": "Monthly Spend",
+          "message": "Miesięczne wydatki"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.short_desc": {
+          "source": "How much revenue the company generates for your business",
+          "message": "Przychód generowany przez firmę dla Twojej działalności"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bmFtZQ.desc": {
+          "source": "The name of the Company",
+          "message": "Nazwa firmy"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Nazwa"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bmFtZQ.short_desc": {
+          "source": "The name of the Company",
+          "message": "Nazwa firmy"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.c2l6ZQ.desc": {
+          "source": "The number of employees in this company.",
+          "message": "Liczba pracowników w tej firmie."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.c2l6ZQ.display_name": {
+          "source": "Size",
+          "message": "Rozmiar"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.c2l6ZQ.short_desc": {
+          "source": "The number of employees in this company",
+          "message": "Liczba pracowników w tej firmie"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cGxhbg.desc": {
+          "source": "The name of the plan you have associated with the company.",
+          "message": "Nazwa planu powiązanego z firmą."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cGxhbg.display_name": {
+          "source": "Plan",
+          "message": "Plan"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cGxhbg.short_desc": {
+          "source": "The name of the plan you have associated with the company",
+          "message": "Nazwa planu powiązanego z firmą"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cmVtb3RlX2NyZWF0ZWRfYXQ.desc": {
+          "source": "The time the company was created by you.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "Czas utworzenia firmy przez Ciebie.\n\nWartość jest przesyłana jako liczba całkowita sekund od 1970-01-01Z."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cmVtb3RlX2NyZWF0ZWRfYXQ.display_name": {
+          "source": "Created At",
+          "message": "Data utworzenia"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cmVtb3RlX2NyZWF0ZWRfYXQ.short_desc": {
+          "source": "When the company was created in your own system",
+          "message": "Czas utworzenia firmy we własnym systemie"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.d2Vic2l0ZQ.desc": {
+          "source": "The URL for this company's website. Please note that the value specified here is not validated. Accepts any string.",
+          "message": "Adres URL witryny tej firmy. Wartość podana tutaj nie jest walidowana. Akceptuje dowolny ciąg znaków."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Witryna internetowa"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.d2Vic2l0ZQ.short_desc": {
+          "source": "The URL for this company's website",
+          "message": "Adres URL witryny tej firmy"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.desc": {
+          "source": "Set to true to update the company's last seen time to now.",
+          "message": "Ustaw na true, aby zaktualizować czas ostatniej aktywności firmy na bieżący moment."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.display_name": {
+          "source": "Update Last Request At",
+          "message": "Zaktualizuj czas ostatniego żądania"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.short_desc": {
+          "source": "Set to true to update the company's last seen time to now",
+          "message": "Ustaw na true, aby zaktualizować czas ostatniej aktywności firmy na bieżący"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.short_desc": {
+          "source": "Create a company, or update the one with this company ID",
+          "message": "Utwórz firmę lub zaktualizuj firmę o tym identyfikatorze"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.desc": {
+          "source": "Sends a message to a contact **from a teammate**, starting a new conversation.\n\n`message_type` selects how it is delivered: `email` needs a `subject`, `in_app` shows it in the messenger, and `whatsapp` needs an approved `template`.\n\nUse **Reply to Conversation** to add to a conversation that already exists.",
+          "message": "Wysyła wiadomość do kontaktu **od członka zespołu**, rozpoczynając nową konwersację.\n\n`message_type` określa sposób dostarczenia: `email` wymaga `subject`, `in_app` wyświetla wiadomość w komunikatorze, a `whatsapp` wymaga zatwierdzonego `template`.\n\nUżyj opcji **Odpowiedz na konwersację**, aby dodać wiadomość do istniejącej konwersacji."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.display_name": {
+          "source": "Create Message",
+          "message": "Utwórz wiadomość"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.display_name": {
+          "source": "Cc",
+          "message": "DW"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.desc": {
+          "source": "Whether a conversation should be opened in the inbox for the message without the contact replying. Defaults to false if not provided.",
+          "message": "Określa, czy w skrzynce odbiorczej powinna zostać otwarta konwersacja dla wiadomości bez konieczności odpowiedzi kontaktu. Domyślnie false, jeśli nie podano."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.display_name": {
+          "source": "Create Conversation Without Contact Reply",
+          "message": "Utwórz konwersację bez odpowiedzi kontaktu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.short_desc": {
+          "source": "Whether a conversation should be opened in the inbox for the message without…",
+          "message": "Czy otworzyć konwersację w skrzynce bez odpowiedzi kontaktu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "The time the message was created. If not provided, the current time will be used.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "Czas utworzenia wiadomości. Jeśli nie zostanie podany, zostanie użyty bieżący czas.\n\nWartość jest przesyłana jako liczba całkowita sekund od 1970-01-01Z."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "Data utworzenia"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "The time the message was created",
+          "message": "Czas utworzenia wiadomości"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Ym9keQ.desc": {
+          "source": "The content of the message. HTML and plaintext are supported.",
+          "message": "Treść wiadomości. Obsługiwane są formaty HTML oraz zwykły tekst."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Ym9keQ.display_name": {
+          "source": "Message",
+          "message": "Wiadomość"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Ym9keQ.short_desc": {
+          "source": "The content of the message",
+          "message": "Treść wiadomości"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.display_name": {
+          "source": "Bcc",
+          "message": "UDW"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.ZnJvbQ.desc": {
+          "source": "The sender of the message. If not provided, the default sender will be used.",
+          "message": "Nadawca wiadomości. Jeśli nie zostanie podany, zostanie użyty domyślny nadawca."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Od"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.ZnJvbQ.short_desc": {
+          "source": "The teammate the message is from",
+          "message": "Członek zespołu będący nadawcą wiadomości"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "email",
+          "message": "e-mail"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.allowed-value.c3RyaW5nOmluX2FwcA.display_name": {
+          "source": "in_app",
+          "message": "w aplikacji"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "whatsapp",
+          "message": "whatsapp"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.desc": {
+          "source": "The kind of message being created. Values: `in_app`, `email` or `whatsapp`.",
+          "message": "Rodzaj tworzonej wiadomości. Wartości: `in_app`, `email` lub `whatsapp`."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.display_name": {
+          "source": "Message Type",
+          "message": "Typ wiadomości"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.short_desc": {
+          "source": "The kind of message being created",
+          "message": "Rodzaj tworzonej wiadomości"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.c3ViamVjdA.desc": {
+          "source": "The title of the email.",
+          "message": "Tytuł wiadomości e-mail."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Temat"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.c3ViamVjdA.short_desc": {
+          "source": "The title of the email",
+          "message": "Tytuł wiadomości e-mail"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.display_name": {
+          "source": "To",
+          "message": "Do"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.short_desc": {
+          "source": "The contact to send the message to",
+          "message": "Kontakt, do którego ma zostać wysłana wiadomość"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dGVtcGxhdGU.desc": {
+          "source": "The style of the outgoing message. Possible values `plain` or `personal`.",
+          "message": "Styl wiadomości wychodzącej. Możliwe wartości: `plain` lub `personal`."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dGVtcGxhdGU.display_name": {
+          "source": "Template",
+          "message": "Szablon"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dGVtcGxhdGU.short_desc": {
+          "source": "The style of the outgoing message",
+          "message": "Styl wiadomości wychodzącej"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.short_desc": {
+          "source": "Send a message to a contact from a teammate",
+          "message": "Wyślij wiadomość do kontaktu od członka zespołu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.desc": {
+          "source": "Adds a note to a contact.\n\nA note is internal: it is visible to teammates on the contact's record and is never shown to the contact. Use **Reply to Conversation** to say something the contact sees.\n\nWithout `admin_id` the note is attributed to no teammate.",
+          "message": "Dodaje notatkę do kontaktu.\n\nNotatka ma charakter wewnętrzny: jest widoczna dla członków zespołu na karcie kontaktu i nigdy nie jest pokazywana kontaktowi. Użyj **Reply to Conversation**, aby przekazać coś, co zobaczy kontakt.\n\nBez `admin_id` notatka nie jest przypisana do żadnego członka zespołu."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.display_name": {
+          "source": "Create Note",
+          "message": "Utwórz notatkę"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier of a given contact.",
+          "message": "Unikalny identyfikator danego kontaktu."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "Kontakt, którego to dotyczy"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.YWRtaW5faWQ.desc": {
+          "source": "The unique identifier of a given admin.",
+          "message": "Unikalny identyfikator danego administratora."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.YWRtaW5faWQ.display_name": {
+          "source": "Teammate",
+          "message": "Członek zespołu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.YWRtaW5faWQ.short_desc": {
+          "source": "The teammate the note is attributed to",
+          "message": "Członek zespołu, do którego przypisana jest notatka"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Ym9keQ.desc": {
+          "source": "The text of the note.",
+          "message": "Treść notatki."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Ym9keQ.display_name": {
+          "source": "Note",
+          "message": "Notatka"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Ym9keQ.short_desc": {
+          "source": "The text of the note",
+          "message": "Treść notatki"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.short_desc": {
+          "source": "Add a note to a contact",
+          "message": "Dodaj notatkę do kontaktu"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.desc": {
+          "source": "Applies a tag to a contact.\n\nThe tag has to exist already: this attaches one, it does not create one.",
+          "message": "Przypisuje tag do kontaktu.\n\nTag musi już istnieć: ta operacja go dołącza, a nie tworzy."
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.display_name": {
+          "source": "Add Tag to Contact",
+          "message": "Dodaj tag do kontaktu"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "Unikalny identyfikator kontaktu nadany przez Intercom"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "Kontakt, którego to dotyczy"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.aWQ.desc": {
+          "source": "The unique identifier for the tag which is given by Intercom",
+          "message": "Unikalny identyfikator tagu nadany przez Intercom"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.aWQ.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.aWQ.short_desc": {
+          "source": "The tag to apply",
+          "message": "Tag do przypisania"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.short_desc": {
+          "source": "Apply an existing tag to a contact",
+          "message": "Przypisz istniejący tag do kontaktu"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.desc": {
+          "source": "Removes a tag from a contact.\n\nThe tag itself is untouched; only its application to this contact is removed.\n\nThe tag dropdown lists the tags the selected contact actually has, so choose the contact first.",
+          "message": "Usuwa tag z kontaktu.\n\nSam tag pozostaje nienaruszony; usuwane jest jedynie jego przypisanie do tego kontaktu.\n\nLista rozwijana tagów zawiera tagi, które wybrany kontakt faktycznie posiada, więc najpierw wybierz kontakt."
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.display_name": {
+          "source": "Remove Tag from Contact",
+          "message": "Usuń tag z kontaktu"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "Unikalny identyfikator kontaktu nadany przez Intercom"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "Kontakt, którego to dotyczy"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.dGFnX2lk.desc": {
+          "source": "The unique identifier for the tag which is given by Intercom",
+          "message": "Unikalny identyfikator tagu nadany przez Intercom"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.dGFnX2lk.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.dGFnX2lk.short_desc": {
+          "source": "The tag to remove from this contact",
+          "message": "Tag do usunięcia z tego kontaktu"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.short_desc": {
+          "source": "Remove a tag from a contact",
+          "message": "Usuń tag z kontaktu"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.desc": {
+          "source": "Deletes every record in the given table matching the search criteria",
+          "message": "Usuwa wszystkie rekordy w podanej tabeli spełniające kryteria wyszukiwania"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.display_name": {
+          "source": "Delete Records",
+          "message": "Usuń rekordy"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "Tabela do pracy: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` lub `teammates`"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabela"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Nazwa tabeli do pracy"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.short_desc": {
+          "source": "Delete the records matching the search criteria",
+          "message": "Usuń rekordy spełniające kryteria wyszukiwania"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.desc": {
+          "source": "Deletes a company.\n\nThe contacts attached to it are **not** deleted; they simply stop belonging to it.",
+          "message": "Usuwa firmę.\n\nKontakty do niej przypisane **nie** są usuwane; po prostu przestają do niej należeć."
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.display_name": {
+          "source": "Delete Company",
+          "message": "Usuń firmę"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.desc": {
+          "source": "The unique identifier for the company which is given by Intercom",
+          "message": "Unikalny identyfikator firmy nadany przez Intercom"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company",
+          "message": "Firma"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company to delete",
+          "message": "Firma do usunięcia"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.short_desc": {
+          "source": "Delete a company",
+          "message": "Usuń firmę"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.desc": {
+          "source": "Deletes a help center article",
+          "message": "Usuwa artykuł z centrum pomocy"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.display_name": {
+          "source": "Delete Article",
+          "message": "Usuń artykuł"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.desc": {
+          "source": "The unique identifier for the article which is given by Intercom.",
+          "message": "Unikalny identyfikator artykułu nadany przez Intercom."
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.display_name": {
+          "source": "Article",
+          "message": "Artykuł"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.short_desc": {
+          "source": "The article to delete",
+          "message": "Artykuł do usunięcia"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.short_desc": {
+          "source": "Delete a help center article",
+          "message": "Usuń artykuł z centrum pomocy"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.desc": {
+          "source": "Deletes a tag.\n\nIntercom **refuses** to delete a tag that is still applied to any contact or company, answering 400; detach it everywhere first.",
+          "message": "Usuwa tag.\n\nIntercom **odrzuca** próbę usunięcia tagu, który jest nadal przypisany do dowolnego kontaktu lub firmy, zwracając błąd 400; najpierw odłącz go ze wszystkich miejsc."
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.display_name": {
+          "source": "Delete Tag",
+          "message": "Usuń tag"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.option.dGFnX2lk.desc": {
+          "source": "The unique identifier for the tag which is given by Intercom",
+          "message": "Unikalny identyfikator tagu nadany przez Intercom"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.option.dGFnX2lk.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.option.dGFnX2lk.short_desc": {
+          "source": "The tag to apply",
+          "message": "Tag do przypisania"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.short_desc": {
+          "source": "Delete a tag",
+          "message": "Usuń tag"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.desc": {
+          "source": "Retrieves one tag",
+          "message": "Pobiera jeden tag"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.display_name": {
+          "source": "Get Tag",
+          "message": "Pobierz tag"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.option.dGFnX2lk.desc": {
+          "source": "The unique identifier for the tag which is given by Intercom",
+          "message": "Unikalny identyfikator tagu nadany przez Intercom"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag",
+          "message": "Tag"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to apply",
+          "message": "Tag do przypisania"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.short_desc": {
+          "source": "Retrieve a tag by its identity",
+          "message": "Pobierz tag na podstawie jego identyfikatora"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.desc": {
+          "source": "Returns a summary of the data events recorded for **one contact**.\n\nThis is not a listing of the workspace's events: `filter` names the contact - by `user_id`, `intercom_user_id` or `email` - and `type` must be `user`. What comes back is that contact's event summary, each event with its name, first and last occurrence and a count.\n\nThe action ID keeps Intercom's own spelling of `lisDataEvents`.",
+          "message": "Zwraca podsumowanie zdarzeń danych zarejestrowanych dla **jednego kontaktu**.\n\nTo nie jest lista zdarzeń obszaru roboczego: `filter` określa kontakt — według `user_id`, `intercom_user_id` lub `email` — a parametr `type` musi mieć wartość `user`. Zwracane jest podsumowanie zdarzeń danego kontaktu: każde zdarzenie z nazwą, pierwszym i ostatnim wystąpieniem oraz liczbą zdarzeń.\n\nIdentyfikator akcji zachowuje pisownię Intercomu dla `lisDataEvents`."
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.display_name": {
+          "source": "List Data Events",
+          "message": "Wyświetl zdarzenia danych"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.desc": {
+          "source": "Names the contact whose events are summarised, in exactly one of three ways: `user_id` is the identity your own system gave them, `intercom_user_id` is Intercom's, and `email` is their address.",
+          "message": "Określa kontakt, którego zdarzenia są podsumowywane, na dokładnie jeden z trzech sposobów: `user_id` to identyfikator nadany przez Twój system, `intercom_user_id` to identyfikator Intercomu, a `email` to adres e-mail."
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.short_desc": {
+          "source": "Which contact's events to summarise",
+          "message": "Kontakt, którego zdarzenia mają zostać podsumowane"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.c3VtbWFyeQ.desc": {
+          "source": "summary flag",
+          "message": "flaga podsumowania"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.c3VtbWFyeQ.display_name": {
+          "source": "Summary",
+          "message": "Podsumowanie"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.c3VtbWFyeQ.short_desc": {
+          "source": "summary flag",
+          "message": "flaga podsumowania"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "user",
+          "message": "user"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.dHlwZQ.desc": {
+          "source": "The value must be user",
+          "message": "Wartość musi wynosić user"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Typ"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.dHlwZQ.short_desc": {
+          "source": "Must be \"user\"",
+          "message": "Musi mieć wartość „user”"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.short_desc": {
+          "source": "Summarise the data events recorded for one contact",
+          "message": "Podsumuj zdarzenia danych zarejestrowane dla jednego kontaktu"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.desc": {
+          "source": "Lists the teammates who have access to the workspace.\n\nThis is exported so that the teammate dropdowns have an action to call - an article's author, a note's or a reply's teammate, a message's sender.\n\nThis listing is not paged: Intercom returns them all in one response, in an `admins` array.",
+          "message": "Wyświetla listę członków zespołu mających dostęp do obszaru roboczego.\n\nJest to wyeksportowane, aby listy rozwijane członków zespołu miały akcję do wywołania — autor artykułu, autor notatki lub odpowiedzi, nadawca wiadomości.\n\nTa lista nie jest stronicowana: Intercom zwraca wszystkich w jednej odpowiedzi, w tablicy `admins`."
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.display_name": {
+          "source": "List Teammates",
+          "message": "Wyświetl listę członków zespołu"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.desc": {
+          "source": "If set to true, the response will include the admin's avatar object containing the image URL. Defaults to false.",
+          "message": "Jeśli ustawiono wartość true, odpowiedź będzie zawierać obiekt awatara administratora z adresem URL obrazu. Domyślnie false."
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.display_name": {
+          "source": "Display Avatar",
+          "message": "Wyświetl awatar"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.short_desc": {
+          "source": "If set to true, the response will include the admin's avatar object containing…",
+          "message": "Jeśli true, odpowiedź będzie zawierać obiekt awatara administratora z…"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.short_desc": {
+          "source": "List the teammates with access to the workspace",
+          "message": "Wyświetl listę członków zespołu z dostępem do obszaru roboczego"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.desc": {
+          "source": "Lists the help center collections articles can be filed under.\n\nThis is exported so that **Create Article**'s parent dropdown has an action to call.\n\nCollections nest: a collection with a `parent_id` sits inside another one. What earlier API versions called a *section* is returned here as a nested collection - Intercom removed sections at version 2.10.",
+          "message": "Wyświetla kolekcje centrum pomocy, do których można przypisywać artykuły.\n\nJest to wyeksportowane, aby lista nadrzędna w **Create Article** miała akcję do wywołania.\n\nKolekcje można zagnieżdżać: kolekcja z `parent_id` znajduje się wewnątrz innej. To, co wcześniejsze wersje API nazywały sekcją (*section*), jest tutaj zwracane jako zagnieżdżona kolekcja — Intercom usunął sekcje w wersji 2.10."
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.display_name": {
+          "source": "List Collections",
+          "message": "Lista kolekcji"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "Kursor stronicowania: pobierz `pages.next.starting_after` z poprzedniej odpowiedzi i przekaż tutaj.\n\nJest nieprzejrzysty i nie wolno go tworzyć ręcznie. `pages` jest nieobecny po wyczerpaniu kolekcji, co oznacza brak kolejnej strony."
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "Rozpoczynające się po"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Kursor następnej strony"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one page. Intercom documents cursor pagination for every listing that answers a \"pages\" object, but declares this parameter on only some of them.",
+          "message": "Liczba rekordów do zwrócenia na jednej stronie. Intercom dokumentuje stronicowanie kursorowe dla każdego listowania zwracającego obiekt „pages”, ale deklaruje ten parametr tylko dla niektórych z nich."
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "Rozmiar strony"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Liczba rekordów do zwrócenia na jednej stronie"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.short_desc": {
+          "source": "List the help center collections",
+          "message": "Wyświetl listę kolekcji centrum pomocy"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.desc": {
+          "source": "Lists every company in the workspace.\n\nThis is the one listing Intercom pages by **page number** rather than by cursor: `pages.total_pages` says how many there are, and `page` selects one.\n\nIt is a `POST` because Intercom made it one; it sends no body.",
+          "message": "Wyświetla listę wszystkich firm w obszarze roboczym.\n\nJest to jedyna lista, którą Intercom stronicuje według **numeru strony**, a nie kursora: `pages.total_pages` określa, ile ich jest, a `page` wybiera jedną.\n\nJest to `POST`, ponieważ Intercom tak to zdefiniował; nie wysyła treści żądania."
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.display_name": {
+          "source": "List Companies",
+          "message": "Lista firm"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.b3JkZXI.desc": {
+          "source": "`asc` or `desc`. Return the companies in ascending or descending order. Defaults to desc",
+          "message": "`asc` lub `desc`. Zwraca firmy w kolejności rosnącej lub malejącej. Domyślnie: desc"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Kolejność"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.b3JkZXI.short_desc": {
+          "source": "'asc' or 'desc'",
+          "message": "'asc' lub 'desc'"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGFnZQ.desc": {
+          "source": "The page of results to fetch. Defaults to first page",
+          "message": "Strona wyników do pobrania. Domyślnie pierwsza strona"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Strona"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, starting at 1",
+          "message": "Strona do zwrócenia, zaczynając od 1"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGVyX3BhZ2U.desc": {
+          "source": "How many results to return per page. Defaults to 15",
+          "message": "Liczba wyników do zwrócenia na stronę. Domyślnie 15"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "Rozmiar strony"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Liczba rekordów do zwrócenia na jednej stronie"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.short_desc": {
+          "source": "List the companies in the workspace",
+          "message": "Wyświetl listę firm w obszarze roboczym"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.desc": {
+          "source": "Lists the workspace's help center articles.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
+          "message": "Wyświetla listę artykułów centrum pomocy obszaru roboczego.\n\nOpis w Intercomie nie deklaruje argumentów stronicowania dla tej operacji, mimo że zwraca ona stronicowaną odpowiedź; argumenty `per_page` i `starting_after` są dodawane podczas importowania schematu. Zobacz @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\"."
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.display_name": {
+          "source": "List Articles",
+          "message": "Wyświetl artykuły"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "Kursor stronicowania: pobierz `pages.next.starting_after` z poprzedniej odpowiedzi i przekaż tutaj.\n\nJest nieprzejrzysty i nie wolno go tworzyć ręcznie. `pages` jest nieobecny po wyczerpaniu kolekcji, co oznacza brak kolejnej strony."
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "Rozpoczynające się po"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Kursor następnej strony"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one page. Intercom documents cursor pagination for every listing that answers a \"pages\" object, but declares this parameter on only some of them.",
+          "message": "Liczba rekordów do zwrócenia na jednej stronie. Intercom dokumentuje stronicowanie kursorowe dla każdego listowania zwracającego obiekt „pages”, ale deklaruje ten parametr tylko dla niektórych z nich."
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "Rozmiar strony"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Liczba rekordów do zwrócenia na jednej stronie"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.short_desc": {
+          "source": "List the help center articles",
+          "message": "Wyświetl listę artykułów centrum pomocy"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3M.desc": {
+          "source": "Lists every tag defined in the workspace.\n\nThis listing is not paged: Intercom returns the whole set in one response.",
+          "message": "Wyświetla listę wszystkich tagów zdefiniowanych w obszarze roboczym.\n\nTa lista nie jest stronicowana: Intercom zwraca cały zestaw w jednej odpowiedzi."
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3M.display_name": {
+          "source": "List Tags",
+          "message": "Lista tagów"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3M.short_desc": {
+          "source": "List the tags defined in the workspace",
+          "message": "Wyświetl listę tagów zdefiniowanych w obszarze roboczym"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.desc": {
+          "source": "Lists the tags applied to a contact.\n\nThis is exported so that **Remove Tag from Contact** can offer the tags that contact actually has, rather than every tag in the workspace - almost all of which would fail.\n\nThis listing is not paged.",
+          "message": "Wyświetla listę tagów przypisanych do kontaktu.\n\nJest to wyeksportowane, aby akcja **Remove Tag from Contact** mogła zaoferować tagi, które ten kontakt faktycznie posiada, zamiast wszystkich tagów w obszarze roboczym — z których niemal wszystkie zakończyłyby się błędem.\n\nTa lista nie jest stronicowana."
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.display_name": {
+          "source": "List Tags on Contact",
+          "message": "Wyświetl tagi kontaktu"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "Unikalny identyfikator kontaktu nadany przez Intercom"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "Kontakt, którego to dotyczy"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.short_desc": {
+          "source": "List the tags applied to one contact",
+          "message": "Wyświetla listę tagów przypisanych do jednego kontaktu"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Intercom** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Wykonaj niestandardowe wywołanie HTTP / REST API do **Intercom** przy użyciu uwierzytelniania skonfigurowanego połączenia.\n\nOkreśl metodę HTTP, ścieżkę URI (względem bazowego adresu URL API połączenia), opcjonalne parametry zapytania, nagłówki oraz treść żądania. Odpowiedź jest zwracana jako hash zawierający kod statusu, nagłówki odpowiedzi i treść odpowiedzi.\n\nUżyj tej akcji dla punktów końcowych, które nie są jeszcze dostępne jako bezpośrednie akcje w tej aplikacji."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Wykonaj wywołanie API"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Ciało żądania. Rzeczywisty typ zależy od `body_type`: JSON/form/YAML oczekują hasza, XML/text oczekują ciągu znaków, multipart oczekuje struktury pliku, binary oczekuje surowych bajtów."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Treść"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Ciało żądania"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Przesyłanie pliku za pomocą `multipart/form-data`. Ciało żądania musi być strukturą @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Szablon buduje kopertę multipart i ustawia nagłówek boundary."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Formularz Multipart"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Przesyłanie pliku za pomocą multipart/form-data"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Przekaż ciało żądania do klienta REST bez zmian; klient decyduje o serializacji na podstawie skonfigurowanej opcji `data` i typu wartości"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Przekazywanie; użyj serializacji połączenia i zdaj się na klienta REST"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Wyślij ciało jako surowe bajty. Ciało musi być wartością binarną. Ustawia `Content-Type: application/octet-stream`, chyba że zostanie nadpisane przez `hdr`."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surowe dane binarne"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Wyślij ciało jako surowe bajty"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializuj hasz pól formularza jako `application/x-www-form-urlencoded`. Ciało musi być haszem, którego wartości są skalarami (ciągi znaków/liczby/wartości logiczne)."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formularz (zakodowany w URL)"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializuj ciało jako pola formularza application/x-www-form-urlencoded"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializuj ciało jako JSON; ustawia `Content-Type: application/json`. Ciało powinno być haszem, listą lub wartością skalarną."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializuj ciało jako JSON"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Wyślij ciało jako zwykły tekst. Ciało musi być ciągiem znaków. Ustawia `Content-Type: text/plain`."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Czysty tekst"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Wyślij ciało jako text/plain"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Wyślij ciało jako XML. Jeśli ciało jest haszem, jest serializowane do XML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/xml`."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Wyślij ciało jako XML"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Wyślij ciało jako YAML. Jeśli ciało jest haszem, jest serializowane do YAML; jeśli jest ciągiem znaków, jest wysyłane bez zmian. Ustawia `Content-Type: application/x-yaml`."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Wyślij ciało jako YAML"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Wybiera tryb serializacji ciała i odpowiadający mu nagłówek `Content-Type`. Zmiana tego pola zmienia edytor `body` - wybór JSON udostępnia edytor JSON, wybór Multipart Form udostępnia okno wyboru pliku i tak dalej."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ ciała"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Sposób serializacji ciała i wysyłany Content-Type"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Jeśli `True`, odpowiedzi HTTP inne niż 2xx są zwracane jako zwykły hasz odpowiedzi (z rzeczywistym kodem stanu) zamiast zgłaszania `REST-RESPONSE-ERROR`. Przydatne do obsługi 4xx/5xx jako danych - np. do sprawdzania, czy zasób istnieje. Nadpisuje ustawienie połączenia `error_passthru` tylko dla tego wywołania."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Zwracaj błędy jako dane"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Zwracaj odpowiedzi inne niż 2xx normalnie zamiast zgłaszać błąd"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Opcjonalna lista kodów stanu HTTP traktowanych jako sukces. Jeśli ustawiono, a kod stanu odpowiedzi nie znajduje się na tej liście, akcja zgłasza `REST-STATUS-ERROR`. Gdy pole nie jest ustawione, stosowane jest domyślne zachowanie klienta REST (zwykle: 2xx to sukces, inne niż 2xx zgłaszają błąd)."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Oczekiwane kody stanu"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Kody stanu odpowiedzi traktowane jako sukces"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hasz niestandardowych nagłówków dodawanych do żądania. Nadpisują one wszelkie domyślne nagłówki ustawione przez `body_type` (np. podanie tutaj `Content-Type` zastępuje domyślną wartość dla typu ciała)."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Niestandardowe nagłówki"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatkowe nagłówki żądania"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Jeśli `True`, hasz odpowiedzi zawiera pod-hasz `debug` zawierający metodę/URL/nagłówki żądania (z zredagowanymi poufnymi wartościami), rozmiary żądania i odpowiedzi oraz czas trwania w obie strony. Przydatne podczas badania wolnych lub nieudanych wywołań. Domyślnie wyłączone, aby odpowiedzi były lekkie."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Dołącz informacje diagnostyczne"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Dołącz informacje diagnostyczne dotyczące żądania/czasu/rozmiaru w odpowiedzi"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metoda HTTP"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metoda HTTP do użycia w żądaniu"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Ścieżka URI względna wobec bazowego URL API połączenia. Może zawierać symbole zastępcze `{name}`, które zostaną zastąpione z `path_vars`. Przykład: `/users/{id}/comments`."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Ścieżka URI"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Ścieżka URI względem bazowego adresu URL API połączenia"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Zmienne ścieżki"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Wartości dla symboli zastępczych {name} w ścieżce"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrów zapytania do dołączenia do ścieżki URI. Wartości są kodowane w formacie URL; wartości list są łączone za pomocą `,`."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty zapytania"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametry zapytania"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Intercom",
+          "message": "Wykonaj niestandardowe wywołanie API do Intercom"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Fires for each contact created in the workspace.\n\n`role` narrows the feed to users (a contact who has signed up) or to leads (one who has not); left unset, both are reported. The event carries the contact record Intercom returns.\n\nA contact that is edited later does **not** fire this again: the feed is positioned by `created_at`.",
+          "message": "Uruchamia się dla każdego kontaktu utworzonego w obszarze roboczym.\n\n`role` zawęża strumień do użytkowników (kontakt, który się zarejestrował) lub leadów (kontakt, który tego nie zrobił); jeśli pole pozostanie puste, zgłaszane są oba typy. Zdarzenie przekazuje rekord kontaktu zwracany przez Intercom.\n\nKontakt edytowany później **nie** uruchamia tego zdarzenia ponownie: strumień jest pozycjonowany według `created_at`."
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "Nowy kontakt"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Fires when a contact is created",
+          "message": "Uruchamiane po utworzeniu kontaktu"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.desc": {
+          "source": "Fires for each conversation created in the workspace.\n\nThe event carries the conversation record Intercom returns, which includes its source - who started it and what they said.\n\nA reply to an existing conversation does **not** fire this: the feed is positioned by `created_at`, so a conversation is reported once, when it starts.",
+          "message": "Uruchamia się dla każdej konwersacji utworzonej w obszarze roboczym.\n\nZdarzenie przekazuje rekord konwersacji zwracany przez Intercom, który zawiera jej źródło — kto ją rozpoczął i co powiedział.\n\nOdpowiedź na istniejącą konwersację **nie** uruchamia tego zdarzenia: strumień jest pozycjonowany według `created_at`, więc konwersacja jest zgłaszana raz, gdy się rozpoczyna."
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.display_name": {
+          "source": "New Conversation",
+          "message": "Nowa konwersacja"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.short_desc": {
+          "source": "Fires when a conversation is created",
+          "message": "Uruchamia się po utworzeniu konwersacji"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.desc": {
+          "source": "Returns every record in the given table matching the search criteria",
+          "message": "Zwraca każdy rekord w danej tabeli spełniający kryteria wyszukiwania"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.display_name": {
+          "source": "Search Records",
+          "message": "Wyszukaj rekordy"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "Tabela do pracy: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` lub `teammates`"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabela"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Nazwa tabeli do pracy"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.short_desc": {
+          "source": "Search for matching records in the given table",
+          "message": "Wyszukaj pasujące rekordy w danej tabeli"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.desc": {
+          "source": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches",
+          "message": "Zwraca jeden rekord w danej tabeli spełniający kryteria wyszukiwania; dopasowanie więcej niż jednego rekordu stanowi błąd"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.display_name": {
+          "source": "Find a Single Record",
+          "message": "Znajdź pojedynczy rekord"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "Tabela do pracy: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` lub `teammates`"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabela"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Nazwa tabeli do pracy"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
+          "source": "Search for a single matching record in the given table",
+          "message": "Wyszukaj pojedynczy pasujący rekord w danej tabeli"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.desc": {
+          "source": "Searches the workspace's conversations.\n\n`query` takes the same shape as **Search Contacts**: a single `{field, operator, value}` filter, or `{operator: \"AND\", value: [ ... ]}` combining several.\n\nTimestamps in a query are counts of seconds since the epoch.",
+          "message": "Przeszukuje konwersacje w obszarze roboczym.\n\n`query` ma taką samą strukturę jak **Search Contacts**: pojedynczy filtr `{field, operator, value}` lub `{operator: \"AND\", value: [ ... ]}` łączący kilka filtrów.\n\nZnaczniki czasu w zapytaniu to liczba sekund od początku epoki uniksowej."
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.display_name": {
+          "source": "Search Conversations",
+          "message": "Szukaj konwersacji"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.desc": {
+          "source": "If set to true, the response will include a `monitor_evaluations` array on each conversation with any QA monitor results that flagged it.",
+          "message": "W przypadku ustawienia wartości true odpowiedź będzie zawierać tablicę `monitor_evaluations` dla każdej konwersacji z wynikami monitorów QA, które ją oznaczyły."
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.display_name": {
+          "source": "Include Monitors",
+          "message": "Dołącz monitory"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.short_desc": {
+          "source": "If set to true, the response will include a 'monitor_evaluations' array on…",
+          "message": "Jeśli true, odpowiedź będzie zawierać tablicę 'monitor_evaluations' dla…"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.desc": {
+          "source": "If set to true, the response will include a `scorecards` array on each conversation with any QA scorecard results.",
+          "message": "W przypadku ustawienia wartości true odpowiedź będzie zawierać tablicę `scorecards` dla każdej konwersacji z wynikami kart ocen QA."
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.display_name": {
+          "source": "Include Scorecards",
+          "message": "Dołącz karty ocen"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.short_desc": {
+          "source": "If set to true, the response will include a 'scorecards' array on each…",
+          "message": "Jeśli true, odpowiedź będzie zawierać tablicę 'scorecards' dla każdej…"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "Kursor stronicowania: pobierz `pages.next.starting_after` z poprzedniej odpowiedzi i przekaż tutaj.\n\nJest nieprzejrzysty i nie wolno go tworzyć ręcznie. `pages` jest nieobecny po wyczerpaniu kolekcji, co oznacza brak kolejnej strony."
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "Rozpoczynające się po"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Kursor następnej strony"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cGVyX3BhZ2U.desc": {
+          "source": "The number of results to fetch per page.",
+          "message": "Liczba wyników do pobrania na stronę."
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "Rozmiar strony"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Liczba rekordów do zwrócenia na jednej stronie"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Zapytanie"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.short_desc": {
+          "source": "Find conversations matching a query",
+          "message": "Znajdź konwersacje pasujące do zapytania"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.desc": {
+          "source": "Retrieves one help center article",
+          "message": "Pobiera jeden artykuł centrum pomocy"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.display_name": {
+          "source": "Get Article",
+          "message": "Pobierz artykuł"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.option.YXJ0aWNsZV9pZA.desc": {
+          "source": "The unique identifier for the article which is given by Intercom.",
+          "message": "Unikalny identyfikator artykułu nadany przez Intercom."
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.option.YXJ0aWNsZV9pZA.display_name": {
+          "source": "Article",
+          "message": "Artykuł"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.option.YXJ0aWNsZV9pZA.short_desc": {
+          "source": "The article to retrieve",
+          "message": "Artykuł do pobrania"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.short_desc": {
+          "source": "Retrieve a help center article by its identity",
+          "message": "Pobierz artykuł centrum pomocy na podstawie jego identyfikatora"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.desc": {
+          "source": "Retrieves one conversation, including its parts - the messages and notes it holds",
+          "message": "Pobiera jedną konwersację wraz z jej częściami — zawartymi w niej wiadomościami i notatkami"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.display_name": {
+          "source": "Get Conversation",
+          "message": "Pobierz konwersację"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.desc": {
+          "source": "The id of the conversation to target",
+          "message": "Identyfikator docelowej konwersacji"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.display_name": {
+          "source": "Conversation",
+          "message": "Konwersacja"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.short_desc": {
+          "source": "The conversation this applies to",
+          "message": "Konwersacja, której to dotyczy"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.desc": {
+          "source": "Set to plaintext to retrieve conversation messages in plain text. This affects both the body and subject fields. Inline links are rendered as `label (url)`, preserving the link URL alongside the visible text.",
+          "message": "Ustaw na plaintext, aby pobierać wiadomości konwersacji w formacie zwykłego tekstu. Wpływa to zarówno na treść, jak i temat. Linki śródliniowe są renderowane jako `label (url)`, zachowując adres URL linku obok widocznego tekstu."
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.display_name": {
+          "source": "Display As",
+          "message": "Wyświetl jako"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.short_desc": {
+          "source": "Set to plaintext to retrieve conversation messages in plain text",
+          "message": "Ustaw na plaintext, aby pobierać wiadomości w postaci zwykłego tekstu"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.desc": {
+          "source": "If set to true, conversation parts will be translated to the detected language of the conversation.",
+          "message": "W przypadku ustawienia wartości true części konwersacji zostaną przetłumaczone na wykryty język konwersacji."
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.display_name": {
+          "source": "Include Translations",
+          "message": "Dołącz tłumaczenia"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.short_desc": {
+          "source": "If set to true, conversation parts will be translated to the detected language…",
+          "message": "Jeśli true, części konwersacji będą przetłumaczone na wykryty język…"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.short_desc": {
+          "source": "Retrieve a conversation by its identity",
+          "message": "Pobierz konwersację na podstawie jej identyfikatora"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.desc": {
+          "source": "Retrieves one help center collection.\n\nWhat used to be a **section** is now a collection with a parent, which is how Intercom has represented them since API version 2.10.",
+          "message": "Pobiera jedną kolekcję centrum pomocy.\n\nTo, co wcześniej było sekcją (**section**), jest teraz kolekcją z elementem nadrzędnym — tak Intercom reprezentuje je od wersji API 2.10."
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.display_name": {
+          "source": "Get Collection",
+          "message": "Pobierz kolekcję"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.option.Y29sbGVjdGlvbl9pZA.desc": {
+          "source": "The unique identifier for the collection which is given by Intercom.",
+          "message": "Unikalny identyfikator kolekcji nadany przez Intercom."
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.option.Y29sbGVjdGlvbl9pZA.display_name": {
+          "source": "Collection",
+          "message": "Kolekcja"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.option.Y29sbGVjdGlvbl9pZA.short_desc": {
+          "source": "The collection to retrieve",
+          "message": "Kolekcja do pobrania"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.short_desc": {
+          "source": "Retrieve a help center collection by its identity",
+          "message": "Pobierz kolekcję centrum pomocy na podstawie jej identyfikatora"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.desc": {
+          "source": "Adds a reply to an existing conversation, from a teammate.\n\n`message_type` decides who sees it: `comment` is a reply the contact sees and is notified about, `note` is an internal remark only teammates see, and `quick_reply` offers the contact a set of `reply_options` to choose from.\n\nUse **Create Conversation** to start one, and **Create Message** to write to a contact without an existing conversation.\n\nThis action is hand-written rather than generated, because Intercom's own description declares this operation's body as a union of five request contracts, which cannot be published as one option shape. It covers a teammate's reply, which is the branch Intercom declares in full; a reply attributed to the contact is reachable through `make-api-call`.",
+          "message": "Dodaje odpowiedź do istniejącej konwersacji od członka zespołu.\n\n`message_type` decyduje o tym, kto ją widzi: `comment` to odpowiedź, którą kontakt widzi i otrzymuje o niej powiadomienie, `note` to uwaga wewnętrzna widoczna tylko dla członków zespołu, a `quick_reply` oferuje kontaktowi zestaw `reply_options` do wyboru.\n\nUżyj **Create Conversation**, aby rozpocząć konwersację, oraz **Create Message**, aby napisać do kontaktu bez istniejącej konwersacji.\n\nTa akcja została napisana ręcznie, a nie wygenerowana, ponieważ własny opis Intercomu deklaruje treść tej operacji jako unię pięciu kontraktów żądań, których nie można opublikować jako pojedynczej struktury opcji. Obejmuje ona odpowiedź członka zespołu, która jest w pełni zadeklarowaną przez Intercom gałęzią; odpowiedź przypisana do kontaktu jest dostępna za pośrednictwem `make-api-call`."
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.display_name": {
+          "source": "Reply to Conversation",
+          "message": "Odpowiedz na konwersację"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.desc": {
+          "source": "The conversation to reply to",
+          "message": "Konwersacja, na którą ma zostać wysłana odpowiedź"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.display_name": {
+          "source": "Conversation",
+          "message": "Konwersacja"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.short_desc": {
+          "source": "The conversation to reply to",
+          "message": "Konwersacja, na którą ma zostać wysłana odpowiedź"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "When the reply was written, if it is being recorded after the fact.\n\nSent to Intercom as a count of seconds since the epoch; Intercom uses the current time when this is not set.",
+          "message": "Czas napisania odpowiedzi, jeśli jest rejestrowana po fakcie.\n\nWysyłany do Intercomu jako liczba sekund od początku epoki uniksowej; Intercom używa bieżącego czasu, gdy pole nie jest ustawione."
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "Data utworzenia"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "When the reply was written",
+          "message": "Kiedy odpowiedź została napisana"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YWRtaW5faWQ.desc": {
+          "source": "The teammate the reply is attributed to",
+          "message": "Członek zespołu, do którego jest przypisana odpowiedź"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YWRtaW5faWQ.display_name": {
+          "source": "Teammate",
+          "message": "Członek zespołu"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YWRtaW5faWQ.short_desc": {
+          "source": "The teammate the reply is from",
+          "message": "Członek zespołu, od którego pochodzi odpowiedź"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YXR0YWNobWVudF91cmxz.desc": {
+          "source": "The URLs of files to attach to the reply; Intercom accepts up to five",
+          "message": "Adresy URL plików do załączenia do odpowiedzi; Intercom akceptuje do pięciu plików"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YXR0YWNobWVudF91cmxz.display_name": {
+          "source": "Attachment URLs",
+          "message": "Adresy URL załączników"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YXR0YWNobWVudF91cmxz.short_desc": {
+          "source": "URLs of files to attach, up to five",
+          "message": "Adresy URL załączanych plików, maksymalnie pięć"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Ym9keQ.desc": {
+          "source": "The text of the reply, in HTML.\n\nIntercom does not require it for a `quick_reply`, which carries its content in `reply_options` instead.",
+          "message": "Treść odpowiedzi w formacie HTML.\n\nIntercom nie wymaga jej dla `quick_reply`, który zamiast tego przenosi swoją treść w `reply_options`."
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Ym9keQ.display_name": {
+          "source": "Message",
+          "message": "Wiadomość"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Ym9keQ.short_desc": {
+          "source": "The text of the reply, in HTML",
+          "message": "Treść odpowiedzi w formacie HTML"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.bWVzc2FnZV90eXBl.desc": {
+          "source": "Whether the reply is seen by the contact.\n\n`comment` is a reply the contact sees and is notified about, `note` is an internal remark only teammates see, and `quick_reply` offers the contact the choices in `reply_options`.\n\nA `note` here is attached to the **conversation**; **Create Note** attaches one to the contact's record instead.",
+          "message": "Określa, czy odpowiedź jest widoczna dla kontaktu.\n\n`comment` to odpowiedź, którą kontakt widzi i otrzymuje o niej powiadomienie, `note` to uwaga wewnętrzna widoczna tylko dla członków zespołu, a `quick_reply` oferuje kontaktowi opcje z `reply_options`.\n\n`note` w tym miejscu jest dołączana do **konwersacji**; funkcja **Create Note** dołącza notatkę do rekordu kontaktu."
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.bWVzc2FnZV90eXBl.display_name": {
+          "source": "Message Type",
+          "message": "Typ wiadomości"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.bWVzc2FnZV90eXBl.short_desc": {
+          "source": "Whether the reply is seen by the contact",
+          "message": "Czy odpowiedź jest widoczna dla kontaktu"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.c2tpcF9ub3RpZmljYXRpb25z.desc": {
+          "source": "Add the reply without notifying the contact about it",
+          "message": "Dodaj odpowiedź bez powiadamiania kontaktu"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.c2tpcF9ub3RpZmljYXRpb25z.display_name": {
+          "source": "Skip Notifications",
+          "message": "Pomiń powiadomienia"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.c2tpcF9ub3RpZmljYXRpb25z.short_desc": {
+          "source": "Do not notify the contact about this reply",
+          "message": "Nie powiadamiaj kontaktu o tej odpowiedzi"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.cmVwbHlfb3B0aW9ucw.desc": {
+          "source": "The choices offered by a `quick_reply`, each `{text, uuid}`.\n\nOnly meaningful when `message_type` is `quick_reply`.",
+          "message": "Opcje oferowane przez `quick_reply`, każda `{text, uuid}`.\n\nMa znaczenie tylko wtedy, gdy `message_type` to `quick_reply`."
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.cmVwbHlfb3B0aW9ucw.display_name": {
+          "source": "Reply Options",
+          "message": "Opcje odpowiedzi"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.cmVwbHlfb3B0aW9ucw.short_desc": {
+          "source": "The choices offered by a quick reply",
+          "message": "Opcje oferowane przez szybką odpowiedź"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.short_desc": {
+          "source": "Reply to a conversation as a teammate",
+          "message": "Odpowiedz na konwersację jako członek zespołu"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.desc": {
+          "source": "Updates every record in the given table matching the search criteria",
+          "message": "Aktualizuje każdy rekord w danej tabeli spełniający kryteria wyszukiwania"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "Zaktualizuj rekordy"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "Tabela do pracy: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` lub `teammates`"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabela"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Nazwa tabeli do pracy"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria",
+          "message": "Zaktualizuj rekordy spełniające kryteria wyszukiwania"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.desc": {
+          "source": "Updates a help center article that already exists.\n\nOnly the attributes supplied are changed. An article's parent can only be a **collection**: Intercom withdrew sections at API version 2.10.",
+          "message": "Aktualizuje istniejący artykuł centrum pomocy.\n\nZmieniane są tylko podane atrybuty. Elementem nadrzędnym artykułu może być wyłącznie kolekcja (**collection**): Intercom wycofał sekcje w wersji API 2.10."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.display_name": {
+          "source": "Update Article",
+          "message": "Zaktualizuj artykuł"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
+          "source": "Whether the article should be available for AI Copilot. For multilingual articles, this sets the default language's availability.",
+          "message": "Określa, czy artykuł ma być dostępny dla AI Copilot. W przypadku artykułów wielojęzycznych ustawia to dostępność dla języka domyślnego."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
+          "source": "AI Copilot Availability",
+          "message": "Dostępność dla AI Copilot"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
+          "source": "Whether the article should be available for AI Copilot",
+          "message": "Określa, czy artykuł ma być dostępny dla AI Copilot"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
+          "source": "Whether the article should be available for AI Chatbot (Fin). For multilingual articles, this sets the default language's availability.",
+          "message": "Określa, czy artykuł ma być dostępny dla AI Chatbota (Fin). W przypadku artykułów wielojęzycznych ustawia to dostępność dla języka domyślnego."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
+          "source": "AI Chatbot Availability",
+          "message": "Dostępność dla AI Chatbota"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
+          "source": "Whether the article should be available for AI Chatbot (Fin)",
+          "message": "Określa, czy artykuł ma być dostępny dla AI Chatbota (Fin)"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
+          "source": "Whether the article should be available for AI Sales Agent. For multilingual articles, this sets the default language's availability.",
+          "message": "Określa, czy artykuł ma być dostępny dla AI Sales Agenta. W przypadku artykułów wielojęzycznych ustawia to dostępność dla języka domyślnego."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
+          "source": "AI Sales Agent Availability",
+          "message": "Dostępność dla AI Sales Agenta"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
+          "source": "Whether the article should be available for AI Sales Agent",
+          "message": "Określa, czy artykuł ma być dostępny dla AI Sales Agenta"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.desc": {
+          "source": "The unique identifier for the article which is given by Intercom.",
+          "message": "Unikalny identyfikator artykułu nadany przez Intercom."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.display_name": {
+          "source": "Article",
+          "message": "Artykuł"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.short_desc": {
+          "source": "The article to update",
+          "message": "Artykuł do zaktualizowania"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.desc": {
+          "source": "The id of the author of the article. For multilingual articles, this will be the id of the author of the default language's content. Must be a teammate on the help center's workspace.",
+          "message": "Identyfikator autora artykułu. W przypadku artykułów wielojęzycznych będzie to identyfikator autora treści w języku domyślnym. Musi to być członek zespołu w przestrzeni roboczej centrum pomocy."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.display_name": {
+          "source": "Teammate",
+          "message": "Członek zespołu"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.short_desc": {
+          "source": "The teammate to act as",
+          "message": "Członek zespołu, w imieniu którego ma być wykonana akcja"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.desc": {
+          "source": "The list of audience IDs to assign to this article for Fin AI Agent targeting. Sending a top-level `audience_ids` broadcasts the same set to every locale. Sending `audience_ids: []` clears all audience memberships from every locale. For per-locale targeting, use `translated_content.<locale>.audience_ids` instead. Sending both top-level and per-locale in the same request causes top-level to win. Unknown audience IDs return a 404 error. No partial commit occurs.",
+          "message": "Lista identyfikatorów grup odbiorców do przypisania do tego artykułu w celu targetowania Fin AI Agent. Wysłanie `audience_ids` najwyższego poziomu rozsyła ten sam zestaw do wszystkich ustawień regionalnych. Wysłanie `audience_ids: []` czyści wszystkie przypisania do grup odbiorców ze wszystkich ustawień regionalnych. Aby targetować według ustawień regionalnych, użyj zamiast tego `translated_content.<locale>.audience_ids`. Wysłanie w tym samym żądaniu parametrów najwyższego poziomu oraz per-locale powoduje nadrzędność parametrów najwyższego poziomu. Nieznane identyfikatory odbiorców zwracają błąd 404. Żadne częściowe zatwierdzenie nie ma miejsca."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.display_name": {
+          "source": "Audience Ids",
+          "message": "Identyfikatory odbiorców"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.short_desc": {
+          "source": "The list of audience IDs to assign to this article for Fin AI Agent targeting",
+          "message": "Lista identyfikatorów odbiorców do targetowania Fin AI Agenta"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keQ.desc": {
+          "source": "The content of the article in HTML. For multilingual articles, this will be the body of the default language's content. Mutually exclusive with `body_markdown`.",
+          "message": "Treść artykułu w formacie HTML. W przypadku artykułów wielojęzycznych będzie to treść dla języka domyślnego. Wzajemnie wyklucza się z `body_markdown`."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Treść"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keQ.short_desc": {
+          "source": "The content of the article in HTML",
+          "message": "Treść artykułu w formacie HTML"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.desc": {
+          "source": "The content of the article in markdown. For multilingual articles, this will be the body of the default language's content. An alternative to `body` — you can provide content as markdown instead of HTML. Mutually exclusive with `body`.",
+          "message": "Treść artykułu w formacie Markdown. W przypadku artykułów wielojęzycznych będzie to treść dla języka domyślnego. Alternatywa dla `body` — możesz podać treść w formacie Markdown zamiast HTML. Wzajemnie wyklucza się z `body`."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.display_name": {
+          "source": "Body Markdown",
+          "message": "Treść w Markdown"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.short_desc": {
+          "source": "The content of the article in markdown",
+          "message": "Treść artykułu w formacie Markdown"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the article. For multilingual articles, this will be the description of the default language's content.",
+          "message": "Opis artykułu. W przypadku artykułów wielojęzycznych będzie to opis treści w języku domyślnym."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Opis"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The description of the article",
+          "message": "Opis artykułu"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future publish of the article. When set together with `state: \"published\"`, the article is scheduled instead of published immediately. Setting `null` cancels a pending publish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Combining with `state: \"draft\"` returns 400 `parameter_invalid`. Sending in the same request as `scheduled_unpublish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`.",
+          "message": "Znacznik czasu ISO 8601 planowanej publikacji artykułu w przyszłości. W połączeniu z `state: \"published\"` artykuł zostanie zaplanowany zamiast natychmiast opublikowany. Ustawienie `null` anuluje oczekujący harmonogram publikacji. Znaczniki czasu z przeszłości lub równe obecnemu czasowi są odrzucane z błędem 400 `parameter_invalid` — wartość musi bezwzględnie wskazywać przyszłość. Połączenie z `state: \"draft\"` zwraca 400 `parameter_invalid`. Wysłanie w tym samym żądaniu co `scheduled_unpublish_at` zwraca 400 — artykuł może mieć tylko jeden oczekujący harmonogram. Pusty ciąg znaków zwraca 400 `parameter_invalid`."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.display_name": {
+          "source": "Scheduled Publish At",
+          "message": "Zaplanowany czas publikacji"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.short_desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future publish of the article",
+          "message": "Znacznik czasu ISO 8601 zaplanowanej publikacji artykułu"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future unpublish of the article. Setting `null` cancels a pending unpublish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Rejected with 400 `parameter_invalid` if the article has never been published. Sending in the same request as `scheduled_publish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`.",
+          "message": "Znacznik czasu ISO 8601 planowanego wycofania publikacji artykułu w przyszłości. Ustawienie `null` anuluje oczekujący harmonogram wycofania publikacji. Znaczniki czasu z przeszłości lub równe obecnemu czasowi są odrzucane z błędem 400 `parameter_invalid` — wartość musi bezwzględnie wskazywać przyszłość. Wartość jest odrzucana z błędem 400 `parameter_invalid`, jeśli artykuł nigdy nie był opublikowany. Wysłanie w tym samym żądaniu co `scheduled_publish_at` zwraca 400 — artykuł może mieć tylko jeden oczekujący harmonogram. Pusty ciąg znaków zwraca 400 `parameter_invalid`."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.display_name": {
+          "source": "Scheduled Unpublish At",
+          "message": "Zaplanowany czas wycofania publikacji"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.short_desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future unpublish of the article",
+          "message": "Znacznik czasu ISO 8601 zaplanowanego wycofania publikacji artykułu"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "draft",
+          "message": "wersja robocza"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "published",
+          "message": "opublikowany"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.desc": {
+          "source": "Whether the article will be `published` or will be a `draft`. Defaults to draft. For multilingual articles, this will be the state of the default language's content.",
+          "message": "Określa, czy artykuł będzie mieć status `published`, czy `draft`. Domyślnie draft. W przypadku artykułów wielojęzycznych będzie to stan treści w języku domyślnym."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Stan / województwo"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.short_desc": {
+          "source": "Whether the article will be 'published' or will be a 'draft'",
+          "message": "Określa, czy artykuł ma status „published”, czy „draft”"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.desc": {
+          "source": "The id of the article's parent collection or section. An article without this field stands alone.",
+          "message": "Identyfikator nadrzędnej kolekcji lub sekcji artykułu. Artykuł bez tego pola jest samodzielny."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent ID",
+          "message": "Identyfikator nadrzędny"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.short_desc": {
+          "source": "The id of the article's parent collection or section",
+          "message": "Identyfikator nadrzędnej kolekcji lub sekcji artykułu"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.desc": {
+          "source": "The type of parent, which can either be a `collection` or `section`.",
+          "message": "Typ elementu nadrzędnego, którym może być `collection` lub `section`."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.display_name": {
+          "source": "Parent Type",
+          "message": "Typ nadrzędny"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.short_desc": {
+          "source": "The type of parent, which can either be a 'collection' or 'section'",
+          "message": "Typ elementu nadrzędnego: 'collection' lub 'section'"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dGl0bGU.desc": {
+          "source": "The title of the article.For multilingual articles, this will be the title of the default language's content.",
+          "message": "Tytuł artykułu. W przypadku artykułów wielojęzycznych będzie to tytuł treści w języku domyślnym."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Tytuł"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dGl0bGU.short_desc": {
+          "source": "The title of the article.For multilingual articles, this will be the title of…",
+          "message": "Tytuł artykułu. W artykułach wielojęzycznych to tytuł w języku domyślnym."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.desc": {
+          "source": "The Translated Content of an Article. The keys are the locale codes and the values are the translated content of the article.",
+          "message": "Przetłumaczona treść artykułu. Kluczami są kody ustawień regionalnych, a wartościami przetłumaczona treść artykułu."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.display_name": {
+          "source": "Translated Content",
+          "message": "Przetłumaczona treść"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.short_desc": {
+          "source": "The Translated Content of an Article",
+          "message": "Przetłumaczona treść artykułu"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.short_desc": {
+          "source": "Update an existing help center article",
+          "message": "Zaktualizuj istniejący artykuł centrum pomocy"
+        },
+        "app.SW50ZXJjb20.desc": {
+          "source": "Provides access to [Intercom](https://www.intercom.com), the customer communications platform.\n\nIntercom holds the people who use your product - **contacts**, either `user`s who have signed up or `lead`s who have not - the **companies** they belong to, and the **conversations** you have had with them, alongside a help center of **articles**.\n\n**Common use cases**:\n- **Contacts**: find contacts, note what you know about them, and tag them\n- **Companies**: create and update companies from your own system's records\n- **Conversations**: start one, search them, and reply as a teammate\n- **Messaging**: send a contact an e-mail or an in-app message from a teammate\n- **Data events**: record what a contact did, and read a contact's event summary\n- **Help center**: list and write articles\n\nAuthentication is the OAuth2 authorization code flow. Intercom asks for no scopes: what an access token may do is set by the permissions granted to the app in Intercom's own developer hub.\n\nIntercom is a trademark of Intercom, Inc.",
+          "message": "Zapewnia dostęp do [Intercom](https://www.intercom.com), platformy komunikacji z klientami.\n\nIntercom przechowuje osoby korzystające z Twojego produktu – **kontakty**, zarówno `user`s, którzy się zarejestrowali, jak i `lead`s, którzy tego nie zrobili – **firmy**, do których należą, oraz **rozmowy** prowadzone z nimi, wraz z centrum pomocy zawierającym **artykuły**.\n\n**Typowe przypadki użycia**:\n- **Kontakty**: znajdowanie kontaktów, zapisywanie informacji o nich i dodawanie do nich tagów\n- **Firmy**: tworzenie i aktualizowanie firm na podstawie rekordów z Twojego systemu\n- **Rozmowy**: rozpoczynanie rozmów, przeszukiwanie ich i odpowiadanie jako członek zespołu\n- **Wiadomości**: wysyłanie do kontaktu wiadomości e-mail lub wiadomości w aplikacji od członka zespołu\n- **Zdarzenia danych**: rejestrowanie działań kontaktu i odczytywanie podsumowania zdarzeń kontaktu\n- **Centrum pomocy**: przeglądanie i pisanie artykułów\n\nUwierzytelnianie odbywa się w ramach przepływu kodu autoryzacyjnego OAuth2. Intercom nie wymaga zakresów: to, co może zrobić token dostępu, zależy od uprawnień przyznanych aplikacji w centrum deweloperskim Intercom.\n\nIntercom jest znakiem towarowym firmy Intercom, Inc."
+        },
+        "app.SW50ZXJjb20.display_name": {
+          "source": "Intercom",
+          "message": "Intercom"
+        },
+        "app.SW50ZXJjb20.short_desc": {
+          "source": "Talk to your customers and keep what you know about them in one place",
+          "message": "Rozmawiaj z klientami i przechowuj wiedzę o nich w jednym miejscu"
+        }
+      }
     }
   }
 }

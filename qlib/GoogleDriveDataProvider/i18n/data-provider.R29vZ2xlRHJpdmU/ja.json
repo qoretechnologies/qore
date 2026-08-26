@@ -489,7 +489,7 @@
         },
         "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.short_desc": {
           "source": "Files in My Drive and on every shared drive the user can reach",
-          "message": "マイドライブ内のファイルおよびユーザーがアクセス可能なすべての共有ドライブ内のファイル"
+          "message": "マイドライブおよびユーザーがアクセス可能なすべての共有ドライブ内のファイル"
         },
         "app.R29vZ2xlRHJpdmU.action.ZmluZC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.desc": {
           "source": "Files shared with the user's whole domain; requires a Google Workspace account",
@@ -669,7 +669,7 @@
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmFsbERyaXZlcw.short_desc": {
           "source": "Files in My Drive and on every shared drive the user can reach",
-          "message": "マイドライブ内のファイルおよびユーザーがアクセス可能なすべての共有ドライブ内のファイル"
+          "message": "マイドライブおよびユーザーがアクセス可能なすべての共有ドライブ内のファイル"
         },
         "app.R29vZ2xlRHJpdmU.action.bGlzdC1maWxlcw.option.Y29ycG9yYQ.allowed-value.c3RyaW5nOmRvbWFpbg.desc": {
           "source": "Files shared with the user's whole domain; requires a Google Workspace account",
@@ -1254,6 +1254,10 @@
         "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "URIパス"
+        },
+        "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "接続のAPIベースURLに対する相対URIパス"
         },
         "app.R29vZ2xlRHJpdmU.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",

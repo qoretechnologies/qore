@@ -3,6 +3,10 @@
   "locales": {
     "pl": {
       "messages": {
+        "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.desc": {
+          "source": "Sends a list of chat messages to a Groq-hosted model using the OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated response.  See the [Groq models documentation](https://console.groq.com/docs/models) for the currently-available models.\n\n**Example use cases**:\n- Low-latency chat and conversational agents\n- Fast tool-calling agents (pass `tools` and `tool_choice` in the request)\n- Structured extraction (pass `response_format` with a JSON schema)",
+          "message": "Wysyła listę wiadomości czatu do modelu hostowanego w Groq przy użyciu zgodnego z OpenAI punktu końcowego `/v1/chat/completions` i zwraca wygenerowaną odpowiedź. Zobacz [dokumentację modeli Groq](https://console.groq.com/docs/models), aby sprawdzić aktualnie dostępne modele.\n\n**Przykładowe zastosowania**:\n- Czat o niskim opóźnieniu i agenci konwersacyjni\n- Szybcy agenci wywołujący narzędzia (przekaż `tools` i `tool_choice` w żądaniu)\n- Ustrukturyzowana ekstrakcja danych (przekaż `response_format` ze schematem JSON)"
+        },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
           "source": "Chat Completion",
           "message": "Uzupełnianie czatu"
@@ -18,6 +22,10 @@
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
           "source": "Penalize repeated tokens proportional to their frequency",
           "message": "Nakładaj karę na powtarzające się tokeny proporcjonalnie do ich częstotliwości"
+        },
+        "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.desc": {
+          "source": "ID of the Groq-hosted model to use.  See the [Groq models documentation](https://console.groq.com/docs/models) for the currently-available models; the `list-models` action returns the live list served by the API.",
+          "message": "Identyfikator modelu hostowanego w Groq, którego należy użyć. Zobacz [dokumentację modeli Groq](https://console.groq.com/docs/models), aby sprawdzić aktualnie dostępne modele; akcja `list-models` zwraca aktualną listę udostępnianą przez API."
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.display_name": {
           "source": "Model",
@@ -73,7 +81,7 @@
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RvcA.short_desc": {
           "source": "String or list of strings; generation halts when emitted",
-          "message": "Ciąg znaków lub lista ciągów znaków; generowanie zatrzymuje się po ich wyemitowaniu"
+          "message": "Ciąg lub lista ciągów znaków; generowanie zatrzymuje się po ich wystąpieniu"
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.c3RyZWFt.desc": {
           "source": "When `True`, the server streams partial completions as Server-Sent Events (SSE) instead of returning a single response.  Most data provider flows expect non-streaming (`False` / omitted).",
@@ -187,6 +195,18 @@
           "source": "Generate a chat completion from a Groq-hosted open-weight model",
           "message": "Generuj uzupełnienie czatu z poziomu modelu open-weight hostowanego przez Groq"
         },
+        "app.R3JvcQ.action.bGlzdC1tb2RlbHM.desc": {
+          "source": "Returns the list of models currently served by the Groq API using the `/v1/models` endpoint, including context window sizes and active flags.  See the [Groq models documentation](https://console.groq.com/docs/models) for details on each model.",
+          "message": "Zwraca listę modeli aktualnie obsługiwanych przez Groq API przy użyciu punktu końcowego `/v1/models`, w tym rozmiary okien kontekstu i flagi aktywności. Zobacz [dokumentację modeli Groq](https://console.groq.com/docs/models), aby uzyskać szczegółowe informacje o każdym modelu."
+        },
+        "app.R3JvcQ.action.bGlzdC1tb2RlbHM.display_name": {
+          "source": "List Models",
+          "message": "Lista modeli"
+        },
+        "app.R3JvcQ.action.bGlzdC1tb2RlbHM.short_desc": {
+          "source": "List the models currently available on the Groq API",
+          "message": "Pobierz listę modeli dostępnych obecnie w Groq API"
+        },
         "app.R3JvcQ.action.bWFrZS1hcGktY2FsbA.desc": {
           "source": "Make a custom HTTP / REST API call to **Groq** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
           "message": "Wykonaj niestandardowe wywołanie HTTP / REST API do **Groq** przy użyciu uwierzytelniania skonfigurowanego połączenia.\n\nOkreśl metodę HTTP, ścieżkę URI (względem bazowego adresu URL API połączenia), opcjonalne parametry zapytania, nagłówki i treść żądania. Odpowiedź jest zwracana jako hash zawierający kod stanu, nagłówki odpowiedzi oraz treść odpowiedzi.\n\nUżyj tej akcji dla punktów końcowych, które nie są jeszcze udostępnione jako natywne akcje w tej aplikacji."
@@ -229,7 +249,7 @@
         },
         "app.R3JvcQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Przekazywanie bez zmian; użyj serializacji połączenia i pozwól klientowi REST zadecydować"
+          "message": "Przekazywanie; użyj serializacji połączenia i zdaj się na klienta REST"
         },
         "app.R3JvcQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -479,6 +499,10 @@
           "source": "URI Path",
           "message": "Ścieżka URI"
         },
+        "app.R3JvcQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Ścieżka URI względem bazowego adresu URL API połączenia"
+        },
         "app.R3JvcQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
@@ -506,6 +530,10 @@
         "app.R3JvcQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
           "source": "Make a custom API call to Groq",
           "message": "Wykonaj niestandardowe wywołanie API do Groq"
+        },
+        "app.R3JvcQ.desc": {
+          "source": "Provides access to [Groq](https://groq.com) — LPU-accelerated inference for open-weight LLMs at exceptionally high token-per-second throughput.\n\nGroq exposes an OpenAI-compatible chat-completions API, so existing OpenAI-shape consumers (chat, tools, structured output, streaming) work unchanged.  See the [Groq models documentation](https://console.groq.com/docs/models) for the currently-available models.\n\n**Common use cases**:\n- **Low-latency chat** — Groq's LPU delivers sub-second time-to-first-token\n- **High-throughput tool-calling agents** where total response time matters\n- **Open-weight model deployments** without owning GPU infrastructure",
+          "message": "Zapewnia dostęp do [Groq](https://groq.com) — akcelerowanego przez LPU wnioskowania dla modeli LLM typu open-weight przy wyjątkowo wysokiej przepustowości tokenów na sekundę.\n\nGroq udostępnia zgodne z OpenAI API chat-completions, dzięki czemu dotychczasowi klienci formatu OpenAI (czat, narzędzia, strukturyzowane dane wyjściowe, strumieniowanie) działają bez zmian. Zobacz [dokumentację modeli Groq](https://console.groq.com/docs/models), aby sprawdzić aktualnie dostępne modele.\n\n**Typowe zastosowania**:\n- **Czat o niskim opóźnieniu** — LPU Groq zapewnia czas do pierwszego tokena poniżej sekundy\n- **Wysokoprzepustowi agenci wywołujący narzędzia**, gdy kluczowy jest całkowity czas odpowiedzi\n- **Wdrażanie modeli open-weight** bez konieczności posiadania własnej infrastruktury GPU"
         },
         "app.R3JvcQ.display_name": {
           "source": "Groq",

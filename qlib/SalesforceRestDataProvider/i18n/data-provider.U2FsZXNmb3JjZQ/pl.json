@@ -141,7 +141,7 @@
         },
         "app.U2FsZXNmb3JjZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Przekazywanie bez zmian; użyj serializacji połączenia i pozwól klientowi REST zadecydować"
+          "message": "Przekazywanie; użyj serializacji połączenia i zdaj się na klienta REST"
         },
         "app.U2FsZXNmb3JjZQ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -391,6 +391,10 @@
           "source": "URI Path",
           "message": "Ścieżka URI"
         },
+        "app.U2FsZXNmb3JjZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Ścieżka URI względem bazowego adresu URL API połączenia"
+        },
         "app.U2FsZXNmb3JjZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
@@ -477,7 +481,7 @@
         },
         "app.U2FsZXNmb3JjZQ.short_desc": {
           "source": "Salesforce® cloud CRM; Salesforce is a trademark of Salesforce, Inc.",
-          "message": "System CRM w chmurze Salesforce®; Salesforce jest znakiem towarowym firmy Salesforce, Inc."
+          "message": "CRM w chmurze Salesforce®; Salesforce jest znakiem towarowym Salesforce, Inc."
         }
       }
     }

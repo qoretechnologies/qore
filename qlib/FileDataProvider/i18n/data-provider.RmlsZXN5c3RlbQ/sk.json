@@ -163,6 +163,10 @@
           "source": "Text",
           "message": "Text"
         },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "Ak je 'True', súbor sa vráti ako reťazec, ak 'False' (predvolené), ako…"
+        },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
           "source": "Get a file on the server filesystem",
           "message": "Získať súbor v súborovom systéme servera"
@@ -314,6 +318,10 @@
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.display_name": {
           "source": "Symlink",
           "message": "Symbolický odkaz"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.short_desc": {
+          "source": "If 'True', then if the target path is a symbolic link, information about the…",
+          "message": "Ak je 'True', a cieľová cesta je symbolický odkaz, informácie o…"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.desc": {
           "source": "The file path",

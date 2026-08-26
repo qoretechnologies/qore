@@ -283,6 +283,10 @@
           "source": "Background",
           "message": "Informacje ogólne"
         },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.short_desc": {
+          "source": "Background transparency, for the gpt-image-1 model",
+          "message": "Przezroczystość tła dla modelu gpt-image-1"
+        },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2NvbXByZXNzaW9u.desc": {
           "source": "The compression level (0-100%) for the generated image(s). This parameter is only supported for `gpt-image-1` with the `webp` or `jpeg` output formats, and defaults to `100`",
           "message": "Poziom kompresji (0-100%) dla wygenerowanego obrazu (obrazów). Ten parametr jest obsługiwany tylko dla `gpt-image-1` z formatami wyjściowymi `webp` lub `jpeg` i domyślnie przyjmuje wartość `100`"
@@ -507,6 +511,10 @@
           "source": "Prompt",
           "message": "Prompt"
         },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cHJvbXB0.short_desc": {
+          "source": "A text description of the desired image(s)",
+          "message": "Opis tekstowy żądanych obrazów"
+        },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
           "source": "Medium quality (`gpt-image-1` only)",
           "message": "Średnia jakość (tylko `gpt-image-1`)"
@@ -575,6 +583,10 @@
           "source": "User",
           "message": "Użytkownik"
         },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.dXNlcg.short_desc": {
+          "source": "An identifier for your end user, used for abuse detection",
+          "message": "Identyfikator użytkownika końcowego używany do wykrywania nadużyć"
+        },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.short_desc": {
           "source": "Generate an image from a prompt",
           "message": "Wygeneruj obraz na podstawie promptu"
@@ -633,7 +645,7 @@
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5wdXQ.short_desc": {
           "source": "Text, image, audio, or file inputs to the model, used to generate a response",
-          "message": "Dane wejściowe tekstowe, graficzne, dźwiękowe lub plikowe dla modelu, używane do wygenerowania odpowiedzi"
+          "message": "Dane wejściowe (tekst, obraz, audio, plik) do wygenerowania odpowiedzi"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.desc": {
           "source": "Inserts a system (or developer) message as the first item in the model's context\nWhen using along with `previous_response_id`, the instructions from a previous response will not be carried over to the next response. This makes it simple to swap out system (or developer) messages in new responses",
@@ -645,7 +657,7 @@
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.short_desc": {
           "source": "Inserts a system (or developer) message as the first item in the model's context",
-          "message": "Wstawia komunikat systemowy (lub deweloperski) jako pierwszy element w kontekście modelu"
+          "message": "Wstawia komunikat systemowy/deweloperski jako pierwszy element w kontekście"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.bW9kZWw.desc": {
           "source": "The OpenAI model to use",
@@ -749,7 +761,7 @@
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RvcmU.short_desc": {
           "source": "Whether to store the generated model response for later retrieval via API",
-          "message": "Czy przechowywać wygenerowaną odpowiedź modelu do późniejszego pobrania przez API"
+          "message": "Określa, czy zapisać odpowiedź modelu do późniejszego pobrania przez API"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.c3RyZWFt.desc": {
           "source": "If set, partial message deltas will be sent, like in ChatGPT. Tokens will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
@@ -857,7 +869,7 @@
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "The model can pick between generating a message or calling one or more tools",
-          "message": "Model może wybrać między wygenerowaniem wiadomości a wywołaniem jednego lub więcej narzędzi"
+          "message": "Model może wybrać między wygenerowaniem wiadomości a wywołaniem narzędzi"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
           "source": "The model must call one or more tools",
@@ -974,6 +986,10 @@
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.display_name": {
           "source": "User",
           "message": "Użytkownik"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.short_desc": {
+          "source": "An identifier for your end user, used for abuse detection",
+          "message": "Identyfikator użytkownika końcowego używany do wykrywania nadużyć"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
           "source": "Process a request with a model",
@@ -1261,7 +1277,7 @@
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.YWZ0ZXI.short_desc": {
           "source": "An item ID to list items after, used in pagination",
-          "message": "Identyfikator elementu, po którym mają być wyświetlane kolejne elementy, używany przy paginacji"
+          "message": "Identyfikator elementu, po którym wznawiane jest stronicowanie"
         },
         "app.T3BlbkFJ.action.bGlzdC1jb252ZXJzYXRpb24taXRlbXM.option.aW5jbHVkZQ.desc": {
           "source": "Additional fields to include in the response.\n\nSee the [include parameter](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) documentation for the supported values",
@@ -1345,7 +1361,7 @@
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.YWZ0ZXI.short_desc": {
           "source": "An item ID to list items after, used in pagination",
-          "message": "Identyfikator elementu, po którym mają być wyświetlane kolejne elementy, używany przy paginacji"
+          "message": "Identyfikator elementu, po którym wznawiane jest stronicowanie"
         },
         "app.T3BlbkFJ.action.bGlzdC1yZXNwb25zZS1pbnB1dC1pdGVtcw.option.aW5jbHVkZQ.desc": {
           "source": "Additional fields to include in the response.\n\nSee the [include parameter](https://platform.openai.com/docs/api-reference/responses/create#responses_create-include) documentation for the supported values",
@@ -1465,7 +1481,7 @@
         },
         "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Przekazywanie bez zmian; użyj serializacji połączenia i pozwól klientowi REST zadecydować"
+          "message": "Przekazywanie; użyj serializacji połączenia i zdaj się na klienta REST"
         },
         "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -1715,6 +1731,10 @@
           "source": "URI Path",
           "message": "Ścieżka URI"
         },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Ścieżka URI względem bazowego adresu URL API połączenia"
+        },
         "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
@@ -1845,7 +1865,7 @@
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.c2VlZA.short_desc": {
           "source": "A value that helps ensure repeated requests get the same response",
-          "message": "Wartość, która pomaga zapewnić, że powtarzane żądania otrzymają tę samą odpowiedź"
+          "message": "Wartość pomagająca zapewnić powtarzalność odpowiedzi dla tych samych żądań"
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.c3RvcA.desc": {
           "source": "Up to 4 sequences where the API will stop generating further tokens",
@@ -1857,7 +1877,7 @@
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.c3RvcA.short_desc": {
           "source": "Up to 4 sequences where the API will stop generating further tokens",
-          "message": "Maksymalnie 4 sekwencje, po napotkaniu których API przestanie generować kolejne tokeny"
+          "message": "Do 4 sekwencji zatrzymujących generowanie kolejnych tokenów"
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.c3RyZWFt.desc": {
           "source": "If set, partial message deltas will be sent, like in ChatGPT. Tokens will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
@@ -1893,7 +1913,7 @@
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
           "source": "Positive numbers increase the model's likelihood to talk about new topics",
-          "message": "Wartości dodatnie zwiększają prawdopodobieństwo poruszania przez model nowych tematów"
+          "message": "Dodatnie wartości zwiększają prawdopodobieństwo poruszania nowych tematów"
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.cmVzcG9uc2VfZm9ybWF0.desc": {
           "source": "An object specifying the format that the model must output. Compatible with GPT-4 Turbo and all GPT-3.5 Turbo models newer than gpt-3.5-turbo-1106.\n\nSetting to `{\"type\": \"json_object\"}` enables JSON mode, which guarantees the message the model generates is valid JSON.\n\n**Important**: when using JSON mode, you must also instruct the model to produce JSON yourself via a system or user message. Without this, the model may generate an unending stream of whitespace until the generation reaches the token limit, resulting in a long-running and seemingly \"stuck\" request. Also note that the message content may be partially cut off if `finish_reason=\"length\"`, which indicates the generation exceeded `max_tokens` or the conversation exceeded the max context length",
@@ -1929,7 +1949,7 @@
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "The model can pick between generating a message or calling one or more tools",
-          "message": "Model może wybrać między wygenerowaniem wiadomości a wywołaniem jednego lub więcej narzędzi"
+          "message": "Model może wybrać między wygenerowaniem wiadomości a wywołaniem narzędzi"
         },
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
           "source": "The model must call one or more tools",
@@ -2010,6 +2030,10 @@
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dXNlcg.short_desc": {
           "source": "A unique identifier representing your end-user",
           "message": "Unikalny identyfikator reprezentujący użytkownika końcowego"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.short_desc": {
+          "source": "Chat by sending several messages at once",
+          "message": "Czat poprzez wysłanie wielu wiadomości naraz"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.desc": {
           "source": "Chat with an AI model by sending a single message and receiving a single reply",
@@ -2113,7 +2137,7 @@
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.c2VlZA.short_desc": {
           "source": "A value that helps ensure repeated requests get the same response",
-          "message": "Wartość, która pomaga zapewnić, że powtarzane żądania otrzymają tę samą odpowiedź"
+          "message": "Wartość pomagająca zapewnić powtarzalność odpowiedzi dla tych samych żądań"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.c3RvcA.desc": {
           "source": "Up to 4 sequences where the API will stop generating further tokens",
@@ -2125,7 +2149,7 @@
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.c3RvcA.short_desc": {
           "source": "Up to 4 sequences where the API will stop generating further tokens",
-          "message": "Maksymalnie 4 sekwencje, po napotkaniu których API przestanie generować kolejne tokeny"
+          "message": "Do 4 sekwencji zatrzymujących generowanie kolejnych tokenów"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.desc": {
           "source": "If set, partial message deltas will be sent, like in ChatGPT. Tokens will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
@@ -2161,7 +2185,7 @@
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cHJlc2VuY2VfcGVuYWx0eQ.short_desc": {
           "source": "Positive numbers increase the model's likelihood to talk about new topics",
-          "message": "Wartości dodatnie zwiększają prawdopodobieństwo poruszania przez model nowych tematów"
+          "message": "Dodatnie wartości zwiększają prawdopodobieństwo poruszania nowych tematów"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.cm9sZQ.allowed-value.c3RyaW5nOmFzc2lzdGFudA.desc": {
           "source": "The author of the message is an assistant",
@@ -2269,7 +2293,7 @@
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "The model can pick between generating a message or calling one or more tools",
-          "message": "Model może wybrać między wygenerowaniem wiadomości a wywołaniem jednego lub więcej narzędzi"
+          "message": "Model może wybrać między wygenerowaniem wiadomości a wywołaniem narzędzi"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
           "source": "The model must call one or more tools",
@@ -2353,7 +2377,7 @@
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.short_desc": {
           "source": "Chat with an AI model by sending a single message and receiving a single reply",
-          "message": "Rozmawiaj z modelem AI, wysyłając pojedynczą wiadomość i otrzymując pojedynczą odpowiedź"
+          "message": "Czat z modelem AI przez wysłanie pojedynczej wiadomości i odbiór odpowiedzi"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.desc": {
           "source": "Stream a response from a model with Server-Sent Events",
@@ -2409,7 +2433,7 @@
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.aW5wdXQ.short_desc": {
           "source": "Text, image, audio, or file inputs to the model, used to generate a response",
-          "message": "Dane wejściowe tekstowe, graficzne, dźwiękowe lub plikowe dla modelu, używane do wygenerowania odpowiedzi"
+          "message": "Dane wejściowe (tekst, obraz, audio, plik) do wygenerowania odpowiedzi"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.desc": {
           "source": "Inserts a system (or developer) message as the first item in the model's context\nWhen using along with `previous_response_id`, the instructions from a previous response will not be carried over to the next response. This makes it simple to swap out system (or developer) messages in new responses",
@@ -2421,7 +2445,7 @@
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.aW5zdHJ1Y3Rpb25z.short_desc": {
           "source": "Inserts a system (or developer) message as the first item in the model's context",
-          "message": "Wstawia komunikat systemowy (lub deweloperski) jako pierwszy element w kontekście modelu"
+          "message": "Wstawia komunikat systemowy/deweloperski jako pierwszy element w kontekście"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.bW9kZWw.desc": {
           "source": "The OpenAI model to use",
@@ -2525,7 +2549,7 @@
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c3RvcmU.short_desc": {
           "source": "Whether to store the generated model response for later retrieval via API",
-          "message": "Czy przechowywać wygenerowaną odpowiedź modelu do późniejszego pobrania przez API"
+          "message": "Określa, czy zapisać odpowiedź modelu do późniejszego pobrania przez API"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.c3RyZWFt.desc": {
           "source": "If set, partial message deltas will be sent, like in ChatGPT. Tokens will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
@@ -2633,7 +2657,7 @@
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "The model can pick between generating a message or calling one or more tools",
-          "message": "Model może wybrać między wygenerowaniem wiadomości a wywołaniem jednego lub więcej narzędzi"
+          "message": "Model może wybrać między wygenerowaniem wiadomości a wywołaniem narzędzi"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dG9vbF9jaG9pY2U.allowed-value.c3RyaW5nOnJlcXVpcmVk.desc": {
           "source": "The model must call one or more tools",
@@ -2750,6 +2774,10 @@
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.display_name": {
           "source": "User",
           "message": "Użytkownik"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.short_desc": {
+          "source": "An identifier for your end user, used for abuse detection",
+          "message": "Identyfikator użytkownika końcowego używany do wykrywania nadużyć"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
           "source": "Stream a response from a model",

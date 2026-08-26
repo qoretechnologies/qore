@@ -327,6 +327,10 @@
           "source": "OAuth2 Auto Refresh",
           "message": "OAuth2 自動更新"
         },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.short_desc": {
+          "source": "Whether tokens are refreshed automatically",
+          "message": "トークンが自動的に更新されるかどうか"
+        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.desc": {
           "source": "Optional arguments for authentication requests for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
           "message": "`authorization_code` 付与タイプの認証リクエスト用のオプション引数。`token` オプションが設定されている場合は無視されます。`authorization_code` 付与タイプではアクセストークンを取得するために外部ユーザーによる認可が必要なことに注意してください"
@@ -334,6 +338,10 @@
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.display_name": {
           "source": "OAuth2 Authorization Args",
           "message": "OAuth2 認可引数"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.short_desc": {
+          "source": "Extra arguments for authorization_code token requests",
+          "message": "authorization_code トークンリクエスト用の追加引数"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfdXJs.desc": {
           "source": "The OAuth2 authorization URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
@@ -459,6 +467,10 @@
           "source": "OAuth2 PKCE",
           "message": "OAuth2 PKCE"
         },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.short_desc": {
+          "source": "Hint to use PKCE with the authorization code flow",
+          "message": "認可コードフローで PKCE を使用するためのヒント"
+        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.desc": {
           "source": "Per OAuth2 spec (RFC 6749), the state parameter should be returned by the authorization server. Some providers (like Trello) do not pass through the state parameter. Set this to False to embed the state in the redirect_uri as a workaround for non-compliant providers. Default: True (spec-compliant behavior).",
           "message": "OAuth2 仕様 (RFC 6749) では、state パラメーターは認可サーバーから返される必要があります。一部のプロバイダー (Trello など) は state パラメーターをパススルーしません。仕様に準拠していないプロバイダーの回避策として state を redirect_uri に埋め込むには、これを False に設定します。デフォルト: True (仕様準拠の動作)。"
@@ -469,7 +481,7 @@
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.short_desc": {
           "source": "If False, embed state in redirect_uri for non-compliant OAuth2 providers",
-          "message": "False の場合、非準拠の OAuth2 プロバイダー用に state を redirect_uri に埋め込みます"
+          "message": "False の場合、非準拠の OAuth2 用に state を redirect_uri に埋め込みます"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3VybA.desc": {
           "source": "The OAuth2 redirect URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token; the special value `auto` (the default) is meant to be interpreted by servers that implement OAuth2 authorization code client handling",
@@ -529,7 +541,7 @@
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.short_desc": {
           "source": "Use basic authorization with the client secret only when making token requests",
-          "message": "トークンリクエストを実行する際、クライアントシークレットのみで基本認証を使用します"
+          "message": "トークン要求時にクライアントシークレットのみで Basic 認証を使用"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2FyZ3M.desc": {
           "source": "Optional extra arguments for token refresh requests; if this option is set as well as `oauth2_alt_token_url`, then the `oauth2_token_url` value will be added to this as well when the request is made to the `oauth2_alt_token_url`",
@@ -563,6 +575,10 @@
           "source": "OAuth2 Token Lifetime Hint in Minutes",
           "message": "OAuth2 トークン有効期間のヒント (分)"
         },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.short_desc": {
+          "source": "How many minutes a token stays valid",
+          "message": "トークンが有効な分数"
+        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VybA.desc": {
           "source": "The token URL for OAuth2 flows; ignored for logins if the `token` option is set",
           "message": "OAuth2 フロー用のトークン URL。`token` オプションが設定されている場合、ログイン時は無視されます"
@@ -582,6 +598,10 @@
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.display_name": {
           "source": "OAuth2 Token Use Basic Auth?",
           "message": "OAuth2 トークンで基本認証を使用しますか？"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.short_desc": {
+          "source": "Send the client ID and secret as basic authorization",
+          "message": "クライアント ID とシークレットを Basic 認証として送信"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b3BlbmFwaTM.desc": {
           "source": "An OpenApi 3 schema location or file data for the REST connection",
@@ -954,6 +974,10 @@
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.display_name": {
           "source": "REST Body Auth Error Check",
           "message": "RESTボディ認証エラーチェック"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.short_desc": {
+          "source": "Values marking a 200 OK body as an authentication error",
+          "message": "200 OK のボディを認証エラーとして判定する値"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW4.desc": {
           "source": "Any authorization token to use for the connection; will be passed as `Authorization: Bearer ...` (assuming that `token_type` is `Bearer`) in request headers; this option cannot be used with username and password options or authentication information in the URL; if this option is set then most OAuth2 options are ignored for logins",

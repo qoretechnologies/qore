@@ -87,6 +87,10 @@
           "source": "Status",
           "message": "상태"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.c3RhdHVz.short_desc": {
+          "source": "The status of the blog post, specifies if the blog post will be created as a…",
+          "message": "블로그 게시물의 상태이며, 생성될 형태를 지정합니다:…"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.cHJpdmF0ZQ.desc": {
           "source": "The page will be private. Only the user who creates this page will have permission to view and edit one.",
           "message": "페이지가 비공개로 설정됩니다. 이 페이지를 생성한 사용자만 페이지를 보고 편집할 수 있는 권한을 가집니다."
@@ -227,6 +231,10 @@
           "source": "Root Level",
           "message": "루트 수준"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.cm9vdC1sZXZlbA.short_desc": {
+          "source": "The page will be created at the root level of the space…",
+          "message": "페이지가 공간의 루트 수준에 생성됩니다…"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.dGl0bGU.desc": {
           "source": "Title of the page, required if page status is not draft.",
           "message": "페이지 제목이며, 페이지 상태가 임시 저장이 아닌 경우 필수입니다."
@@ -323,6 +331,10 @@
           "source": "Sort",
           "message": "정렬"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for attachments",
+          "message": "특정 필드로 결과를 정렬하는 데 사용됩니다.: 첨부 파일 정렬 필드"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.c3RhdHVz.desc": {
           "source": "Filter the results to attachments based on their status. By default, `current` and `archived` are used.",
           "message": "상태를 기준으로 첨부 파일 결과를 필터링합니다. 기본적으로 `current` 및 `archived`이(가) 사용됩니다."
@@ -383,6 +395,10 @@
           "source": "Body Format",
           "message": "본문 형식"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "응답의 'body' 필드에 반환될 콘텐츠 형식 유형"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Z2V0LWRyYWZ0.desc": {
           "source": "Retrieve the draft version of this page.",
           "message": "이 페이지의 임시 저장 버전을 검색합니다."
@@ -429,7 +445,7 @@
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.short_desc": {
           "source": "Includes web resources that can be used to render page content on a client",
-          "message": "클라이언트에서 페이지 콘텐츠를 렌더링하는 데 사용할 수 있는 웹 리소스를 포함합니다"
+          "message": "클라이언트에서 페이지 콘텐츠를 렌더링하는 데 사용할 수 있는 웹 리소스 포함"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.desc": {
           "source": "Includes collaborators on the page.",
@@ -486,6 +502,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
           "source": "Include Operations",
           "message": "작업 포함"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
+          "source": "Includes operations associated with this page in the response, as defined in…",
+          "message": "다음에 정의된 대로, 응답에 이 페이지와 연결된 작업 포함:…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.desc": {
           "source": "Includes content properties associated with this page in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
@@ -575,6 +595,10 @@
           "source": "Body Format",
           "message": "본문 형식"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "응답의 'body' 필드에 반환될 콘텐츠 형식 유형"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.aWQ.desc": {
           "source": "Filter the results based on page ids. Multiple page ids can be specified as a comma-separated list.",
           "message": "페이지 ID를 기반으로 결과를 필터링합니다. 여러 페이지 ID를 쉼표로 구분된 목록으로 지정할 수 있습니다."
@@ -630,6 +654,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "정렬"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for blog posts",
+          "message": "특정 필드로 결과를 정렬하는 데 사용됩니다.: 블로그 게시물 정렬 필드"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
@@ -707,6 +735,10 @@
           "source": "Body Format",
           "message": "본문 형식"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "응답의 'body' 필드에 반환될 콘텐츠 형식 유형"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
           "message": "반환할 페이지의 ID입니다. 페이지 ID를 모르는 경우 페이지 가져오기를 사용하여 결과를 필터링하세요."
@@ -762,6 +794,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "정렬"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for blog posts",
+          "message": "특정 필드로 결과를 정렬하는 데 사용됩니다.: 블로그 게시물 정렬 필드"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.c3RhdHVz.desc": {
           "source": "Filter the results to blog posts based on their status. By default, `current` is used.",
@@ -827,6 +863,10 @@
           "source": "Body Format",
           "message": "본문 형식"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "응답의 'body' 필드에 반환될 콘텐츠 형식 유형"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
           "message": "반환할 페이지의 ID입니다. 페이지 ID를 모르는 경우 페이지 가져오기를 사용하여 결과를 필터링하세요."
@@ -883,6 +923,10 @@
           "source": "Sort",
           "message": "정렬"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for blog posts",
+          "message": "특정 필드로 결과를 정렬하는 데 사용됩니다.: 블로그 게시물 정렬 필드"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
           "message": "스페이스 ID를 기반으로 결과를 필터링합니다. 여러 스페이스 ID를 쉼표로 구분된 목록으로 지정할 수 있습니다."
@@ -934,6 +978,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "본문 형식"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "응답의 'body' 필드에 반환될 콘텐츠 형식 유형"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
@@ -998,6 +1046,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "정렬"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for pages",
+          "message": "특정 필드로 결과를 정렬하는 데 사용됩니다.: 페이지 정렬 필드"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
@@ -1111,6 +1163,10 @@
           "source": "Description Format",
           "message": "설명 형식"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
+          "source": "The content format type to be returned in the 'description' field of the…",
+          "message": "다음에 대한 'description' 필드에 반환될 콘텐츠 형식 유형:…"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1pY29u.desc": {
           "source": "If the icon for the space should be fetched or not.",
           "message": "스페이스 아이콘을 가져올지 여부입니다."
@@ -1142,6 +1198,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
           "source": "Include Operations",
           "message": "작업 포함"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
+          "source": "Includes operations associated with this page in the response, as defined in…",
+          "message": "다음에 정의된 대로, 응답에 이 페이지와 연결된 작업 포함:…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wZXJtaXNzaW9ucw.desc": {
           "source": "Includes space permissions associated with this space in the response.\nThe number of results will be limited to 50 and sorted in the default sort order.\nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
@@ -1231,6 +1291,10 @@
           "source": "Description Format",
           "message": "설명 형식"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
+          "source": "The content format type to be returned in the 'description' field of the…",
+          "message": "다음에 대한 'description' 필드에 반환될 콘텐츠 형식 유형:…"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZmF2b3JpdGVkLWJ5.desc": {
           "source": "Filter the results to spaces favorited by the user with the specified account ID.",
           "message": "지정된 계정 ID를 가진 사용자가 즐겨찾기에 추가한 공간으로 결과를 필터링합니다."
@@ -1311,6 +1375,10 @@
           "source": "Not Favorited By",
           "message": "즐겨찾기에 추가하지 않은 사용자"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.bm90LWZhdm9yaXRlZC1ieQ.short_desc": {
+          "source": "Filter the results to spaces NOT favorited by the user with the specified…",
+          "message": "지정된 사용자가 즐겨찾기에 추가하지 않은 공간으로 결과 필터링:…"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c29ydA.allowed-value.c3RyaW5nOi1pZA.display_name": {
           "source": "-id",
           "message": "-id"
@@ -1342,6 +1410,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "정렬"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for spaces",
+          "message": "특정 필드로 결과를 정렬하는 데 사용됩니다.: 공간 정렬 필드"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.display_name": {
           "source": "archived",
@@ -1451,6 +1523,10 @@
           "source": "Body Format",
           "message": "본문 형식"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "응답의 'body' 필드에 반환될 콘텐츠 형식 유형"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Z2V0LWRyYWZ0.desc": {
           "source": "Retrieve the draft version of this page.",
           "message": "이 페이지의 임시 저장 버전을 검색합니다."
@@ -1497,7 +1573,7 @@
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.short_desc": {
           "source": "Includes web resources that can be used to render page content on a client",
-          "message": "클라이언트에서 페이지 콘텐츠를 렌더링하는 데 사용할 수 있는 웹 리소스를 포함합니다"
+          "message": "클라이언트에서 페이지 콘텐츠를 렌더링하는 데 사용할 수 있는 웹 리소스 포함"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.desc": {
           "source": "Includes collaborators on the page.",
@@ -1518,6 +1594,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1kaXJlY3QtY2hpbGRyZW4.display_name": {
           "source": "Include Direct Children",
           "message": "직속 하위 항목 포함"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1kaXJlY3QtY2hpbGRyZW4.short_desc": {
+          "source": "Includes direct children of the page, as defined in the 'ChildrenResponse'…",
+          "message": "'ChildrenResponse'에 정의된 대로 페이지의 직접 하위 항목 포함:…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.desc": {
           "source": "Includes whether this page has been favorited by the current user.",
@@ -1562,6 +1642,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
           "source": "Include Operations",
           "message": "작업 포함"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
+          "source": "Includes operations associated with this page in the response, as defined in…",
+          "message": "다음에 정의된 대로, 응답에 이 페이지와 연결된 작업 포함:…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1wcm9wZXJ0aWVz.desc": {
           "source": "Includes content properties associated with this page in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
@@ -1651,6 +1735,10 @@
           "source": "Body Format",
           "message": "본문 형식"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "응답의 'body' 필드에 반환될 콘텐츠 형식 유형"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.aWQ.desc": {
           "source": "Filter the results based on page ids. Multiple page ids can be specified as a comma-separated list.",
           "message": "페이지 ID를 기반으로 결과를 필터링합니다. 여러 페이지 ID를 쉼표로 구분된 목록으로 지정할 수 있습니다."
@@ -1714,6 +1802,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "정렬"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for pages",
+          "message": "특정 필드로 결과를 정렬하는 데 사용됩니다.: 페이지 정렬 필드"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
@@ -1811,6 +1903,10 @@
           "source": "Body Format",
           "message": "본문 형식"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "응답의 'body' 필드에 반환될 콘텐츠 형식 유형"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.ZGVwdGg.allowed-value.c3RyaW5nOmFsbA.display_name": {
           "source": "all",
           "message": "all"
@@ -1826,6 +1922,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.ZGVwdGg.display_name": {
           "source": "Depth",
           "message": "깊이"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.ZGVwdGg.short_desc": {
+          "source": "Filter the results to pages at the root level of the space or to all pages in…",
+          "message": "공간의 루트 수준에 있는 페이지 또는 다음의 모든 페이지로 결과 필터링:…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
@@ -1891,6 +1991,10 @@
           "source": "Sort",
           "message": "정렬"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for pages",
+          "message": "특정 필드로 결과를 정렬하는 데 사용됩니다.: 페이지 정렬 필드"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.c3RhdHVz.desc": {
           "source": "Filter the results to pages based on their status. By default, `current` and `archived` are used.",
           "message": "상태를 기준으로 페이지 결과를 필터링합니다. 기본적으로 `current` 및 `archived`이(가) 사용됩니다."
@@ -1942,6 +2046,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "본문 형식"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "응답의 'body' 필드에 반환될 콘텐츠 형식 유형"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
@@ -2078,6 +2186,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "본문 형식"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "응답의 'body' 필드에 반환될 콘텐츠 형식 유형"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YmxvZ3Bvc3QtaWQ.desc": {
           "source": "Filters on the blog post ID of the task. Multiple IDs can be specified. Note - page and blog post filters can be used in conjunction.",
@@ -2611,6 +2723,10 @@
           "source": "URI Path",
           "message": "URI 경로"
         },
+        "app.Q29uZmx1ZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로"
+        },
         "app.Q29uZmx1ZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
@@ -3106,6 +3222,10 @@
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "본문 형식"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "응답의 'body' 필드에 반환될 콘텐츠 형식 유형"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.desc": {
           "source": "ID of the blog post the task is in.",

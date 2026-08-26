@@ -79,6 +79,10 @@
           "source": "Created Via",
           "message": "Vytvorené cez"
         },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3JlYXRlZF92aWE.short_desc": {
+          "source": "Identifier showing where the order originated (e.g. 'rest-api', 'checkout')",
+          "message": "Identifikátor pôvodu objednávky (napr. 'rest-api', 'checkout')"
+        },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.desc": {
           "source": "Three-letter ISO currency code (e.g., `USD`, `EUR`)",
           "message": "Trojmiestny ISO kód meny (napr. `USD`, `EUR`)"
@@ -86,6 +90,10 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.display_name": {
           "source": "Currency",
           "message": "Mena"
+        },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VycmVuY3k.short_desc": {
+          "source": "Three-letter ISO currency code (e.g., 'USD', 'EUR')",
+          "message": "Trojmiestny kód meny ISO (napr. 'USD', 'EUR')"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.Y3VzdG9tZXJfaWQ.desc": {
           "source": "The customer ID for the order",
@@ -278,6 +286,10 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.cGF5bWVudF9tZXRob2Q.display_name": {
           "source": "Payment Method",
           "message": "Spôsob platby"
+        },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.cGF5bWVudF9tZXRob2Q.short_desc": {
+          "source": "Payment method identifier (e.g., 'bacs', 'paypal')",
+          "message": "Identifikátor platobnej metódy (napr. 'bacs', 'paypal')"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLW9yZGVy.option.cGF5bWVudF9tZXRob2RfdGl0bGU.desc": {
           "source": "Human-readable payment method title",
@@ -647,6 +659,10 @@
           "source": "Email Restrictions",
           "message": "Obmedzenia e-mailov"
         },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.option.ZW1haWxfcmVzdHJpY3Rpb25z.short_desc": {
+          "source": "List of email addresses (or domain wildcards like '*@example.com') that can…",
+          "message": "Zoznam e-mailových adries (alebo zástupných znakov ako '*@example.com')…"
+        },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLWNvdXBvbg.option.ZXhjbHVkZV9zYWxlX2l0ZW1z.desc": {
           "source": "If `True`, the coupon will not apply to items on sale",
           "message": "Ak je `True`, kupón sa neuplatní na zľavnené položky"
@@ -913,7 +929,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.YnV0dG9uX3RleHQ.short_desc": {
           "source": "External product button text — only used when 'type' is 'external'",
-          "message": "Text tlačidla externého produktu — používa sa iba vtedy, keď má 'type' hodnotu 'external'"
+          "message": "Text tlačidla externého produktu — použije sa len pri 'type' = 'external'"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Z3JvdXBlZF9wcm9kdWN0cw.desc": {
           "source": "List of grouped product IDs — only used when `type` is `grouped`",
@@ -925,7 +941,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.Z3JvdXBlZF9wcm9kdWN0cw.short_desc": {
           "source": "List of grouped product IDs — only used when 'type' is 'grouped'",
-          "message": "Zoznam ID zoskupených produktov — používa sa iba vtedy, keď má 'type' hodnotu 'grouped'"
+          "message": "Zoznam ID zoskupených produktov — použije sa len pri 'type' = 'grouped'"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfZXhwaXJ5.desc": {
           "source": "Number of days before download access expires (`-1` for never) — only used when `downloadable` is `True`",
@@ -935,6 +951,10 @@
           "source": "Download Expiry",
           "message": "Platnosť stiahnutia"
         },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfZXhwaXJ5.short_desc": {
+          "source": "Number of days before download access expires ('-1' for never) — only used…",
+          "message": "Počet dní do vypršania prístupu k stiahnutiu ('-1' = nikdy) — len ak…"
+        },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.desc": {
           "source": "Maximum number of downloads per purchase (`-1` for unlimited) — only used when `downloadable` is `True`",
           "message": "Maximálny počet stiahnutí na nákup (`-1` pre neobmedzený počet) — používa sa iba vtedy, keď má `downloadable` hodnotu `True`"
@@ -942,6 +962,10 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.display_name": {
           "source": "Download Limit",
           "message": "Limit sťahovania"
+        },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.short_desc": {
+          "source": "Maximum number of downloads per purchase ('-1' for unlimited) — only used when…",
+          "message": "Maximálny počet stiahnutí na nákup ('-1' = neobmedzene) — len ak…"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRhYmxl.desc": {
           "source": "If `True`, the product is downloadable. Selecting this exposes the `downloads`, `download_limit`, and `download_expiry` fields.",
@@ -965,7 +989,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRz.short_desc": {
           "source": "List of downloadable files — only used when 'downloadable' is 'True'",
-          "message": "Zoznam stiahnuteľných súborov — používa sa iba vtedy, keď má 'downloadable' hodnotu 'True'"
+          "message": "Zoznam stiahnuteľných súborov — použije sa len pri 'downloadable' = 'True'"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGF0ZV9vbl9zYWxlX2Zyb20.desc": {
           "source": "Start date of the sale price",
@@ -1001,7 +1025,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVmYXVsdF9hdHRyaWJ1dGVz.short_desc": {
           "source": "Default selected attribute options — only used when 'type' is 'variable'",
-          "message": "Predvolené vybrané možnosti atribútov — používa sa iba vtedy, keď má 'type' hodnotu 'variable'"
+          "message": "Predvolené vybrané možnosti atribútov — použije sa len pri 'type' = 'variable'"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
           "source": "The full product description (may contain HTML)",
@@ -1354,6 +1378,10 @@
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGF4X2NsYXNz.display_name": {
           "source": "Tax Class",
           "message": "Daňová trieda"
+        },
+        "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGF4X2NsYXNz.short_desc": {
+          "source": "Tax class slug (e.g. 'standard', 'reduced-rate', 'zero-rate')",
+          "message": "Slug daňovej triedy (napr. 'standard', 'reduced-rate', 'zero-rate')"
         },
         "app.V29vQ29tbWVyY2U.action.Y3JlYXRlLXByb2R1Y3Q.option.dGF4X3N0YXR1cw.allowed-value.c3RyaW5nOm5vbmU.desc": {
           "source": "None",
@@ -2370,6 +2398,10 @@
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.option.Z3JvdXA.display_name": {
           "source": "Group",
           "message": "Skupina"
+        },
+        "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.option.Z3JvdXA.short_desc": {
+          "source": "The settings group ID (e.g., 'general', 'products', 'tax')",
+          "message": "ID skupiny nastavení (napr. 'general', 'products', 'tax')"
         },
         "app.V29vQ29tbWVyY2U.action.Z2V0LXNldHRpbmc.option.c2V0dGluZ19pZA.desc": {
           "source": "The setting identifier within the group",
@@ -5059,6 +5091,10 @@
           "source": "URI Path",
           "message": "Cesta URI"
         },
+        "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Cesta URI relatívna k základnej adrese API URL pripojenia"
+        },
         "app.V29vQ29tbWVyY2U.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
@@ -6113,7 +6149,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.YnV0dG9uX3RleHQ.short_desc": {
           "source": "External product button text — only used when 'type' is 'external'",
-          "message": "Text tlačidla externého produktu — používa sa iba vtedy, keď má 'type' hodnotu 'external'"
+          "message": "Text tlačidla externého produktu — použije sa len pri 'type' = 'external'"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Z3JvdXBlZF9wcm9kdWN0cw.desc": {
           "source": "List of grouped product IDs — only used when `type` is `grouped`",
@@ -6125,7 +6161,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.Z3JvdXBlZF9wcm9kdWN0cw.short_desc": {
           "source": "List of grouped product IDs — only used when 'type' is 'grouped'",
-          "message": "Zoznam ID zoskupených produktov — používa sa iba vtedy, keď má 'type' hodnotu 'grouped'"
+          "message": "Zoznam ID zoskupených produktov — použije sa len pri 'type' = 'grouped'"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfZXhwaXJ5.desc": {
           "source": "Number of days before download access expires (`-1` for never) — only used when `downloadable` is `True`",
@@ -6135,6 +6171,10 @@
           "source": "Download Expiry",
           "message": "Platnosť stiahnutia"
         },
+        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfZXhwaXJ5.short_desc": {
+          "source": "Number of days before download access expires ('-1' for never) — only used…",
+          "message": "Počet dní do vypršania prístupu k stiahnutiu ('-1' = nikdy) — len ak…"
+        },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.desc": {
           "source": "Maximum number of downloads per purchase (`-1` for unlimited) — only used when `downloadable` is `True`",
           "message": "Maximálny počet stiahnutí na nákup (`-1` pre neobmedzený počet) — používa sa iba vtedy, keď má `downloadable` hodnotu `True`"
@@ -6142,6 +6182,10 @@
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.display_name": {
           "source": "Download Limit",
           "message": "Limit sťahovania"
+        },
+        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRfbGltaXQ.short_desc": {
+          "source": "Maximum number of downloads per purchase ('-1' for unlimited) — only used when…",
+          "message": "Maximálny počet stiahnutí na nákup ('-1' = neobmedzene) — len ak…"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRhYmxl.desc": {
           "source": "If `True`, the product is downloadable. Selecting this exposes the `downloads`, `download_limit`, and `download_expiry` fields.",
@@ -6165,7 +6209,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZG93bmxvYWRz.short_desc": {
           "source": "List of downloadable files — only used when 'downloadable' is 'True'",
-          "message": "Zoznam stiahnuteľných súborov — používa sa iba vtedy, keď má 'downloadable' hodnotu 'True'"
+          "message": "Zoznam stiahnuteľných súborov — použije sa len pri 'downloadable' = 'True'"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGF0ZV9vbl9zYWxlX2Zyb20.desc": {
           "source": "Start date of the sale price",
@@ -6201,7 +6245,7 @@
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVmYXVsdF9hdHRyaWJ1dGVz.short_desc": {
           "source": "Default selected attribute options — only used when 'type' is 'variable'",
-          "message": "Predvolené vybrané možnosti atribútov — používa sa iba vtedy, keď má 'type' hodnotu 'variable'"
+          "message": "Predvolené vybrané možnosti atribútov — použije sa len pri 'type' = 'variable'"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.ZGVzY3JpcHRpb24.desc": {
           "source": "The full product description",
@@ -6567,6 +6611,10 @@
           "source": "Tax Class",
           "message": "Daňová trieda"
         },
+        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGF4X2NsYXNz.short_desc": {
+          "source": "Tax class slug (e.g. 'standard', 'reduced-rate', 'zero-rate')",
+          "message": "Slug daňovej triedy (napr. 'standard', 'reduced-rate', 'zero-rate')"
+        },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXByb2R1Y3Q.option.dGF4X3N0YXR1cw.allowed-value.c3RyaW5nOm5vbmU.desc": {
           "source": "None",
           "message": "Žiadne"
@@ -6738,6 +6786,10 @@
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.option.Z3JvdXA.display_name": {
           "source": "Group",
           "message": "Skupina"
+        },
+        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.option.Z3JvdXA.short_desc": {
+          "source": "The settings group ID (e.g., 'general', 'products', 'tax')",
+          "message": "ID skupiny nastavení (napr. 'general', 'products', 'tax')"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXNldHRpbmc.option.c2V0dGluZ19pZA.desc": {
           "source": "The setting identifier within the group",
@@ -7370,6 +7422,10 @@
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.option.dG9waWM.display_name": {
           "source": "Topic",
           "message": "Téma"
+        },
+        "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.option.dG9waWM.short_desc": {
+          "source": "The webhook topic (e.g. 'order.created', 'product.updated')",
+          "message": "Téma webhooku (napr. 'order.created', 'product.updated')"
         },
         "app.V29vQ29tbWVyY2U.action.dXBkYXRlLXdlYmhvb2s.short_desc": {
           "source": "Update an existing webhook",

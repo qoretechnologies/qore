@@ -91,6 +91,10 @@
           "source": "Enforce Header Order",
           "message": "Vynútiť poradie hlavičiek"
         },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of headers",
+          "message": "Ak je true, vstupné dáta sa preusporiadajú podľa poradia hlavičiek"
+        },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVycw.desc": {
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
           "message": "Zoznam názvov hlavičiek / stĺpcov pre iterované údaje; ak je toto prítomné, `header_names` musí byť `false`"
@@ -125,7 +129,7 @@
         },
         "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.short_desc": {
           "source": "If true, leading and trailing whitespace will be stripped from non-quoted fields",
-          "message": "Ak je true, počiatočné a koncové biele znaky budú z neuzatvorených polí v úvodzovkách odstránené"
+          "message": "Ak je true, úvodné a koncové medzery v neuzatvorených poliach sa odstránia"
         },
         "app.Q3N2.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.desc": {
           "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
@@ -315,6 +319,10 @@
           "source": "Enforce Header Order",
           "message": "Vynútiť poradie hlavičiek"
         },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of headers",
+          "message": "Ak je true, vstupné dáta sa preusporiadajú podľa poradia hlavičiek"
+        },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
           "message": "Zoznam názvov hlavičiek / stĺpcov pre iterované údaje; ak je toto prítomné, `header_names` musí byť `false`"
@@ -349,7 +357,7 @@
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.short_desc": {
           "source": "If true, leading and trailing whitespace will be stripped from non-quoted fields",
-          "message": "Ak je true, počiatočné a koncové biele znaky budú z neuzatvorených polí v úvodzovkách odstránené"
+          "message": "Ak je true, úvodné a koncové medzery v neuzatvorených poliach sa odstránia"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.bnVtYmVyX2Zvcm1hdA.desc": {
           "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
@@ -526,6 +534,10 @@
         "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
           "message": "Vynútiť poradie hlavičiek"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the output data will be reordered in the order of headers",
+          "message": "Ak je true, výstupné dáta sa preusporiadajú podľa poradia hlavičiek"
         },
         "app.Q3N2.action.d3JpdGU.option.aGVhZGVycw.desc": {
           "source": "List of field / header names for the data output",

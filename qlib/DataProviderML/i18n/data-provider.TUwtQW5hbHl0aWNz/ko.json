@@ -1061,7 +1061,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1yZWdyZXNzaW9u.desc": {
           "source": "Predicts numeric values by learning a tree of decision rules — for example, \"if square footage > 2000 and bedrooms >= 3 then estimate price around $450,000.\" Simple, fast, and fully interpretable.\n\nRecords accumulate in a window; when full, the model learns and produces predictions. Each record receives:\n- `prediction` — the estimated numeric value from the matching leaf node",
-          "message": "의사결정 규칙 트리를 학습하여 숫자 값을 예측합니다(예: \"면적(sqft) > 2000 및 침실 >= 3인 경우 약 $450,000의 가격 추정\"). 간단하고 빠르며 완벽하게 해석 가능합니다.\n\n레코드는 윈도우에 누적되며, 가득 차면 모델이 학습하고 예측을 생성합니다. 각 레코드는 다음을 받습니다:\n- `prediction` — 일치하는 리프 노드에서 추정된 숫자 값"
+          "message": "의사결정 규칙 트리를 학습하여 숫자 값을 예측합니다(예: \"면적 > 2000 및 침실 수 >= 3인 경우 가격을 약 $450,000로 추정\"). 간단하고 빠르며 완벽하게 해석 가능합니다.\n\n레코드는 윈도우에 누적되며 가득 차면 모델이 학습하고 예측을 생성합니다. 각 레코드는 다음을 받습니다:\n- `prediction` — 일치하는 리프 노드에서 추정된 숫자 값"
         },
         "app.TUwtQW5hbHl0aWNz.action.ZGVjaXNpb24tdHJlZS1yZWdyZXNzaW9u.display_name": {
           "source": "Predict Numbers with Decision Rules",
@@ -2994,6 +2994,10 @@
         "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.option.c2NoZW1h.short_desc": {
           "source": "Schema defining validation rules for each field",
           "message": "각 필드의 유효성 검사 규칙을 정의하는 스키마"
+        },
+        "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.short_desc": {
+          "source": "Validates each record against a schema",
+          "message": "스키마에 대해 각 레코드의 유효성을 검사합니다"
         },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.desc": {
           "source": "Answers 'is this increase real growth or just a seasonal spike?' by separating a time series into its component parts. For example, monthly sales of $120K might decompose into $100K trend + $25K seasonal holiday boost - $5K random dip.\n\nRecords accumulate per field in a window; when full, all values are decomposed. Each record receives:\n- `trend` — long-term direction\n- `seasonal` — cyclical pattern (e.g., holiday shopping cycles)\n- `residual` — random noise remaining after removing trend and seasonal",

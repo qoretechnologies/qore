@@ -89,7 +89,7 @@
         },
         "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.desc": {
           "source": "Add a custom back-half (slug) to an existing bitlink for branded URLs",
-          "message": "브랜드 URL을 위해 기존 bitlink에 맞춤 백하프(slug) 추가"
+          "message": "브랜드 URL 생성을 위해 기존 bitlink에 사용자 정의 백하프(슬러그) 추가"
         },
         "app.Qml0bHk.action.Y3JlYXRlLWN1c3RvbS1iaXRsaW5r.display_name": {
           "source": "Create Custom Bitlink",
@@ -1002,6 +1002,10 @@
         "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "URI 경로"
+        },
+        "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로"
         },
         "app.Qml0bHk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",

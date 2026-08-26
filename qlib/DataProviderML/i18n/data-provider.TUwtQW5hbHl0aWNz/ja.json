@@ -2995,6 +2995,10 @@
           "source": "Schema defining validation rules for each field",
           "message": "各フィールドの検証ルールを定義するスキーマ"
         },
+        "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.short_desc": {
+          "source": "Validates each record against a schema",
+          "message": "スキーマに対して各レコードを検証します"
+        },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.desc": {
           "source": "Answers 'is this increase real growth or just a seasonal spike?' by separating a time series into its component parts. For example, monthly sales of $120K might decompose into $100K trend + $25K seasonal holiday boost - $5K random dip.\n\nRecords accumulate per field in a window; when full, all values are decomposed. Each record receives:\n- `trend` — long-term direction\n- `seasonal` — cyclical pattern (e.g., holiday shopping cycles)\n- `residual` — random noise remaining after removing trend and seasonal",
           "message": "時系列を構成要素に分解することで、「この増加は実質的な成長か、それとも単なる季節的な急増か」という問いに答えます。たとえば、月間売上高12万ドルは、10万ドルのトレンド + 2万5千ドルのホリデーシーズンの押し上げ - 5千ドルのランダムな落ち込みに分解される場合があります。\n\nレコードはウィンドウ内のフィールドごとに蓄積され、いっぱいになるとすべての値が分解されます。各レコードには以下が含まれます:\n- `trend` — 長期的な方向性\n- `seasonal` — 周期的なパターン（例: ホリデーショッピングサイクル）\n- `residual` — トレンドと季節性を除去した後に残るランダムノイズ"
@@ -4773,7 +4777,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.dmlzaW9uLWV4dHJhY3Rpb24.short_desc": {
           "source": "Uses a vision LLM to describe images, extract tables, or read text",
-          "message": "ビジョン LLM を使用して画像を説明し、テーブルを抽出し、またはテキストを読み取ります"
+          "message": "ビジョンLLMを使用して画像説明、表の抽出、テキスト読取を行います"
         },
         "app.TUwtQW5hbHl0aWNz.desc": {
           "source": "Catch fraud, forecast sales, segment customers, and simplify complex data — all in your data pipeline without external dependencies. Includes anomaly detection (flag unusual transactions or sensor failures), clustering (discover customer segments or geographic hotspots), forecasting (predict revenue with seasonal patterns), regression (estimate prices from features), and dimensionality reduction (compress 50 fields to 3 key values).",

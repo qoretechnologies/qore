@@ -3,6 +3,10 @@
   "locales": {
     "ko": {
       "messages": {
+        "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.desc": {
+          "source": "Sends a list of chat messages to a Groq-hosted model using the OpenAI-compatible `/v1/chat/completions` endpoint and returns the generated response.  See the [Groq models documentation](https://console.groq.com/docs/models) for the currently-available models.\n\n**Example use cases**:\n- Low-latency chat and conversational agents\n- Fast tool-calling agents (pass `tools` and `tool_choice` in the request)\n- Structured extraction (pass `response_format` with a JSON schema)",
+          "message": "OpenAI 호환 `/v1/chat/completions` 엔드포인트를 사용하여 Groq 호스팅 모델로 대화 메시지 목록을 보내고 생성된 응답을 반환합니다. 현재 사용 가능한 모델은 [Groq 모델 문서](https://console.groq.com/docs/models)를 참조하세요.\n\n**활용 예시**:\n- 지연 시간이 짧은 채팅 및 대화형 에이전트\n- 빠른 도구 호출 에이전트(요청 시 `tools` 및 `tool_choice` 전달)\n- 구조화된 데이터 추출(JSON 스키마와 함께 `response_format` 전달)"
+        },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.display_name": {
           "source": "Chat Completion",
           "message": "채팅 완성"
@@ -18,6 +22,10 @@
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.ZnJlcXVlbmN5X3BlbmFsdHk.short_desc": {
           "source": "Penalize repeated tokens proportional to their frequency",
           "message": "반복되는 토큰의 빈도에 비례하여 페널티 부여"
+        },
+        "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.desc": {
+          "source": "ID of the Groq-hosted model to use.  See the [Groq models documentation](https://console.groq.com/docs/models) for the currently-available models; the `list-models` action returns the live list served by the API.",
+          "message": "사용할 Groq 호스팅 모델의 ID입니다. 현재 사용 가능한 모델은 [Groq 모델 문서](https://console.groq.com/docs/models)를 참조하세요. `list-models` 작업을 통해 API가 제공하는 실시간 목록을 확인할 수 있습니다."
         },
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.option.bW9kZWw.display_name": {
           "source": "Model",
@@ -186,6 +194,18 @@
         "app.R3JvcQ.action.Y2hhdC1jb21wbGV0aW9u.short_desc": {
           "source": "Generate a chat completion from a Groq-hosted open-weight model",
           "message": "Groq 호스팅 오픈 가중치 모델에서 채팅 완성 생성"
+        },
+        "app.R3JvcQ.action.bGlzdC1tb2RlbHM.desc": {
+          "source": "Returns the list of models currently served by the Groq API using the `/v1/models` endpoint, including context window sizes and active flags.  See the [Groq models documentation](https://console.groq.com/docs/models) for details on each model.",
+          "message": "`/v1/models` 엔드포인트를 사용하여 컨텍스트 윈도우 크기 및 활성 플래그를 포함해 Groq API에서 현재 제공하는 모델 목록을 반환합니다. 각 모델에 대한 자세한 내용은 [Groq 모델 문서](https://console.groq.com/docs/models)를 참조하세요."
+        },
+        "app.R3JvcQ.action.bGlzdC1tb2RlbHM.display_name": {
+          "source": "List Models",
+          "message": "모델 목록 조회"
+        },
+        "app.R3JvcQ.action.bGlzdC1tb2RlbHM.short_desc": {
+          "source": "List the models currently available on the Groq API",
+          "message": "Groq API에서 현재 사용 가능한 모델 목록 조회"
         },
         "app.R3JvcQ.action.bWFrZS1hcGktY2FsbA.desc": {
           "source": "Make a custom HTTP / REST API call to **Groq** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
@@ -479,6 +499,10 @@
           "source": "URI Path",
           "message": "URI 경로"
         },
+        "app.R3JvcQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로"
+        },
         "app.R3JvcQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
@@ -506,6 +530,10 @@
         "app.R3JvcQ.action.bWFrZS1hcGktY2FsbA.short_desc": {
           "source": "Make a custom API call to Groq",
           "message": "Groq에 커스텀 API 호출 수행"
+        },
+        "app.R3JvcQ.desc": {
+          "source": "Provides access to [Groq](https://groq.com) — LPU-accelerated inference for open-weight LLMs at exceptionally high token-per-second throughput.\n\nGroq exposes an OpenAI-compatible chat-completions API, so existing OpenAI-shape consumers (chat, tools, structured output, streaming) work unchanged.  See the [Groq models documentation](https://console.groq.com/docs/models) for the currently-available models.\n\n**Common use cases**:\n- **Low-latency chat** — Groq's LPU delivers sub-second time-to-first-token\n- **High-throughput tool-calling agents** where total response time matters\n- **Open-weight model deployments** without owning GPU infrastructure",
+          "message": "[Groq](https://groq.com)에 대한 접근을 제공합니다. 고속 초당 토큰 처리량으로 오픈 가중치 LLM을 위한 LPU 가속 추론을 지원합니다.\n\nGroq은 OpenAI 호환 chat-completions API를 제공하므로 기존 OpenAI 형식의 기능(채팅, 도구, 구조화된 출력, 스트리밍)을 그대로 사용할 수 있습니다. 현재 사용 가능한 모델은 [Groq 모델 문서](https://console.groq.com/docs/models)를 참조하세요.\n\n**주요 사용 사례**:\n- **낮은 지연 시간의 채팅** — Groq의 LPU는 1초 미만의 첫 토큰 응답 시간을 제공합니다.\n- **처리량이 높은 도구 호출 에이전트** — 전체 응답 시간이 중요한 환경에 적합합니다.\n- **오픈 가중치 모델 배포** — GPU 인프라를 직접 구축하지 않고 배포할 수 있습니다."
         },
         "app.R3JvcQ.display_name": {
           "source": "Groq",

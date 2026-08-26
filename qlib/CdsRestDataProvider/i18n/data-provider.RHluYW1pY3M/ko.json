@@ -391,6 +391,10 @@
           "source": "URI Path",
           "message": "URI 경로"
         },
+        "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로"
+        },
         "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
@@ -418,6 +422,102 @@
         "app.RHluYW1pY3M.action.bWFrZS1hcGktY2FsbA.short_desc": {
           "source": "Make a custom API call to Microsoft Dynamics 365",
           "message": "Microsoft Dynamics 365에 사용자 지정 API 호출 수행"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.desc": {
+          "source": "Fires for each contact created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "조직에서 연락처가 생성될 때마다 실행되며, 조건이 `updated`인 경우 이후 변경될 때마다 다시 실행됩니다."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.display_name": {
+          "source": "New or Updated Contact",
+          "message": "새 연락처 또는 업데이트된 연락처"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY29udGFjdA.short_desc": {
+          "source": "Fires when a contact is created or changed",
+          "message": "연락처가 생성되거나 변경될 때 트리거됨"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.desc": {
+          "source": "Fires for each case created in the organisation, and, when the condition is `updated`, again on every subsequent change.\n\nDataverse calls this table `incident`.",
+          "message": "조직에서 케이스가 생성될 때마다 실행되며, 조건이 `updated`인 경우 이후 변경될 때마다 다시 실행됩니다.\n\nDataverse에서는 이 테이블을 `incident`(으)로 지칭합니다."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.display_name": {
+          "source": "New or Updated Case",
+          "message": "새 케이스 또는 업데이트된 케이스"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtY2FzZQ.short_desc": {
+          "source": "Fires when a case is created or changed",
+          "message": "케이스가 생성되거나 변경될 때 실행됩니다"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.desc": {
+          "source": "Fires for each account created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "조직에서 거래처가 생성될 때마다 실행되며, 조건이 `updated`인 경우 이후 변경될 때마다 다시 실행됩니다."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.display_name": {
+          "source": "New or Updated Account",
+          "message": "새 거래처 또는 업데이트된 거래처"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtYWNjb3VudA.short_desc": {
+          "source": "Fires when an account is created or changed",
+          "message": "거래처가 생성되거나 변경될 때 실행됩니다"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.desc": {
+          "source": "Fires for each invoice created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "조직에서 송장이 생성될 때마다 실행되며, 조건이 `updated`인 경우 이후 변경될 때마다 다시 실행됩니다."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.display_name": {
+          "source": "New or Updated Invoice",
+          "message": "새 송장 또는 업데이트된 송장"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtaW52b2ljZQ.short_desc": {
+          "source": "Fires when an invoice is created or changed",
+          "message": "송장이 생성되거나 변경될 때 실행됩니다"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.desc": {
+          "source": "Fires for each opportunity created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "조직에서 영업 기회가 생성될 때마다 실행되며, 조건이 `updated`인 경우 이후 변경될 때마다 다시 실행됩니다."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.display_name": {
+          "source": "New or Updated Opportunity",
+          "message": "새 영업 기회 또는 업데이트된 영업 기회"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3Bwb3J0dW5pdHk.short_desc": {
+          "source": "Fires when an opportunity is created or changed",
+          "message": "영업 기회가 생성되거나 변경될 때 실행됩니다"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.desc": {
+          "source": "Fires for each order created in the organisation, and, when the condition is `updated`, again on every subsequent change.\n\nDataverse calls this table `salesorder`.",
+          "message": "조직에서 주문이 생성될 때마다 실행되며, 조건이 `updated`인 경우 이후 변경될 때마다 다시 실행됩니다.\n\nDataverse에서는 이 테이블을 `salesorder`(으)로 지칭합니다."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.display_name": {
+          "source": "New or Updated Order",
+          "message": "새 주문 또는 업데이트된 주문"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtb3JkZXI.short_desc": {
+          "source": "Fires when an order is created or changed",
+          "message": "주문이 생성되거나 변경될 때 실행됩니다"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.desc": {
+          "source": "Fires for each lead created in the organisation, and, when the condition is `updated`, again on every subsequent change.",
+          "message": "조직에서 리드가 생성될 때마다 실행되며, 조건이 `updated`인 경우 이후 변경될 때마다 다시 실행됩니다."
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.display_name": {
+          "source": "New or Updated Lead",
+          "message": "새 리드 또는 업데이트된 리드"
+        },
+        "app.RHluYW1pY3M.action.bmV3LW9yLXVwZGF0ZWQtbGVhZA.short_desc": {
+          "source": "Fires when a lead is created or changed",
+          "message": "리드가 생성되거나 변경될 때 실행됩니다"
+        },
+        "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.desc": {
+          "source": "Fires for each record created or changed in a Dataverse table named when the subscription is created.\n\nThe table is given by its logical name, ex: `account`; its entity set and primary key are read from the organisation's entity definition, so a custom table whose set name is not simply its logical name pluralised works unchanged.",
+          "message": "구독 생성 시 지정된 Dataverse 테이블에서 레코드가 생성되거나 변경될 때마다 실행됩니다.\n\n테이블은 논리적 이름(예: `account`)으로 지정되며, 엔터티 집합 및 기본 키는 조직의 엔터티 정의에서 읽어오므로 집합 이름이 단순히 논리적 이름의 복수형이 아닌 사용자 지정 테이블도 그대로 작동합니다."
+        },
+        "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.display_name": {
+          "source": "New or Updated Custom Entity",
+          "message": "새 사용자 정의 엔터티 또는 업데이트된 사용자 정의 엔터티"
+        },
+        "app.RHluYW1pY3M.action.bmV3LWN1c3RvbS1lbnRpdHk.short_desc": {
+          "source": "Fires for each record created or changed in any Dataverse table",
+          "message": "Dataverse 테이블에서 레코드가 생성되거나 변경될 때마다 실행"
         },
         "app.RHluYW1pY3M.action.dXBkYXRlLXJlY29yZHM.desc": {
           "source": "Update records in a Dynamics table using the Dynamics REST API",

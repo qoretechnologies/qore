@@ -163,6 +163,10 @@
           "source": "Text",
           "message": "텍스트"
         },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "'True'이면 파일이 문자열로 반환되고, 'False'(기본값)이면…"
+        },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
           "source": "Get a file on the server filesystem",
           "message": "서버 파일 시스템에서 파일 가져오기"
@@ -314,6 +318,10 @@
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.display_name": {
           "source": "Symlink",
           "message": "심볼릭 링크"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.short_desc": {
+          "source": "If 'True', then if the target path is a symbolic link, information about the…",
+          "message": "'True'이고 대상 경로가 심볼릭 링크인 경우 링크 자체에 대한…"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.desc": {
           "source": "The file path",

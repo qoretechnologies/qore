@@ -57,7 +57,7 @@
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.Ym9keQ.short_desc": {
           "source": "The content; set \"representation\" to say what \"value\" is written in",
-          "message": "コンテンツ。\"representation\" を設定して \"value\" がどの形式で書かれているかを指定します"
+          "message": "コンテンツ。\"representation\"で\"value\"の形式を指定します"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.c3BhY2VJZA.desc": {
           "source": "ID of the space",
@@ -86,6 +86,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.c3RhdHVz.display_name": {
           "source": "Status",
           "message": "ステータス"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.c3RhdHVz.short_desc": {
+          "source": "The status of the blog post, specifies if the blog post will be created as a…",
+          "message": "ブログ投稿のステータス。ブログ投稿の作成状態を指定します…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlQmxvZ1Bvc3Q.option.cHJpdmF0ZQ.desc": {
           "source": "The page will be private. Only the user who creates this page will have permission to view and edit one.",
@@ -133,7 +137,7 @@
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.Ym9keQ.short_desc": {
           "source": "The content; set \"representation\" to say what \"value\" is written in",
-          "message": "コンテンツ。\"representation\" を設定して \"value\" がどの形式で書かれているかを指定します"
+          "message": "コンテンツ。\"representation\"で\"value\"の形式を指定します"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.ZW1iZWRkZWQ.desc": {
           "source": "Tag the content as embedded and content will be created in NCS.",
@@ -226,6 +230,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.cm9vdC1sZXZlbA.display_name": {
           "source": "Root Level",
           "message": "ルートレベル"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.cm9vdC1sZXZlbA.short_desc": {
+          "source": "The page will be created at the root level of the space…",
+          "message": "ページはスペースのルートレベルに作成されます…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Y3JlYXRlUGFnZQ.option.dGl0bGU.desc": {
           "source": "Title of the page, required if page status is not draft.",
@@ -323,6 +331,10 @@
           "source": "Sort",
           "message": "ソート"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for attachments",
+          "message": "特定のフィールドで結果をソートします: 添付ファイルのソートフィールド"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QXR0YWNobWVudHM.option.c3RhdHVz.desc": {
           "source": "Filter the results to attachments based on their status. By default, `current` and `archived` are used.",
           "message": "ステータスに基づいて添付ファイルの結果を絞り込みます。デフォルトでは `current` と `archived` が使用されます。"
@@ -383,6 +395,10 @@
           "source": "Body Format",
           "message": "本文形式"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "レスポンスの'body'フィールドで返されるコンテンツ形式タイプ"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.Z2V0LWRyYWZ0.desc": {
           "source": "Retrieve the draft version of this page.",
           "message": "このページの下書きバージョンを取得します。"
@@ -429,7 +445,7 @@
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.short_desc": {
           "source": "Includes web resources that can be used to render page content on a client",
-          "message": "クライアント側でページコンテンツをレンダリングするために使用できる Web リソースを含めます"
+          "message": "クライアントでページを描画するために使用可能なWebリソースを含めます"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.desc": {
           "source": "Includes collaborators on the page.",
@@ -486,6 +502,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
           "source": "Include Operations",
           "message": "操作を含める"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
+          "source": "Includes operations associated with this page in the response, as defined in…",
+          "message": "レスポンスにこのページに関連付けられた操作を含めます (定義に基づく)…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RCeUlk.option.aW5jbHVkZS1wcm9wZXJ0aWVz.desc": {
           "source": "Includes content properties associated with this page in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
@@ -575,6 +595,10 @@
           "source": "Body Format",
           "message": "本文形式"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "レスポンスの'body'フィールドで返されるコンテンツ形式タイプ"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.aWQ.desc": {
           "source": "Filter the results based on page ids. Multiple page ids can be specified as a comma-separated list.",
           "message": "ページIDに基づいて結果をフィルタリングします。複数のページIDはカンマ区切りリストとして指定できます。"
@@ -630,6 +654,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "ソート"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for blog posts",
+          "message": "特定のフィールドで結果をソートします: ブログ投稿のソートフィールド"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3Rz.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
@@ -707,6 +735,10 @@
           "source": "Body Format",
           "message": "本文形式"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "レスポンスの'body'フィールドで返されるコンテンツ形式タイプ"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
           "message": "返されるページのID。ページIDがわからない場合は、「ページを取得」を使用して結果をフィルタリングしてください。"
@@ -762,6 +794,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "ソート"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for blog posts",
+          "message": "特定のフィールドで結果をソートします: ブログ投稿のソートフィールド"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0QmxvZ1Bvc3RzSW5TcGFjZQ.option.c3RhdHVz.desc": {
           "source": "Filter the results to blog posts based on their status. By default, `current` is used.",
@@ -827,6 +863,10 @@
           "source": "Body Format",
           "message": "本文形式"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "レスポンスの'body'フィールドで返されるコンテンツ形式タイプ"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
           "message": "返されるページのID。ページIDがわからない場合は、「ページを取得」を使用して結果をフィルタリングしてください。"
@@ -883,6 +923,10 @@
           "source": "Sort",
           "message": "ソート"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for blog posts",
+          "message": "特定のフィールドで結果をソートします: ブログ投稿のソートフィールド"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxCbG9nUG9zdHM.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
           "message": "スペースIDに基づいて結果をフィルタリングします。複数のスペースIDはカンマ区切りリストとして指定できます。"
@@ -934,6 +978,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "本文形式"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "レスポンスの'body'フィールドで返されるコンテンツ形式タイプ"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
@@ -998,6 +1046,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "ソート"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for pages",
+          "message": "特定のフィールドで結果をソートします: ページのソートフィールド"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0TGFiZWxQYWdlcw.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
@@ -1111,6 +1163,10 @@
           "source": "Description Format",
           "message": "説明の形式"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
+          "source": "The content format type to be returned in the 'description' field of the…",
+          "message": "レスポンスの'description'フィールドで返されるコンテンツ形式タイプ…"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1pY29u.desc": {
           "source": "If the icon for the space should be fetched or not.",
           "message": "スペースのアイコンを取得するかどうか。"
@@ -1142,6 +1198,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
           "source": "Include Operations",
           "message": "操作を含める"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
+          "source": "Includes operations associated with this page in the response, as defined in…",
+          "message": "レスポンスにこのページに関連付けられた操作を含めます (定義に基づく)…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2VCeUlk.option.aW5jbHVkZS1wZXJtaXNzaW9ucw.desc": {
           "source": "Includes space permissions associated with this space in the response.\nThe number of results will be limited to 50 and sorted in the default sort order.\nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
@@ -1231,6 +1291,10 @@
           "source": "Description Format",
           "message": "説明の形式"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZGVzY3JpcHRpb24tZm9ybWF0.short_desc": {
+          "source": "The content format type to be returned in the 'description' field of the…",
+          "message": "レスポンスの'description'フィールドで返されるコンテンツ形式タイプ…"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZmF2b3JpdGVkLWJ5.desc": {
           "source": "Filter the results to spaces favorited by the user with the specified account ID.",
           "message": "指定されたアカウントIDを持つユーザーがお気に入り登録したスペースに結果を絞り込みます。"
@@ -1241,7 +1305,7 @@
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.ZmF2b3JpdGVkLWJ5.short_desc": {
           "source": "Filter the results to spaces favorited by the user with the specified account ID",
-          "message": "指定されたアカウントIDを持つユーザーがお気に入り登録したスペースに結果を絞り込みます"
+          "message": "指定されたアカウントIDのユーザーがお気に入り登録したスペースで絞り込み"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.a2V5cw.desc": {
           "source": "Filter the results to spaces based on their keys. Multiple keys can be specified as a comma-separated list.",
@@ -1311,6 +1375,10 @@
           "source": "Not Favorited By",
           "message": "お気に入り未登録者"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.bm90LWZhdm9yaXRlZC1ieQ.short_desc": {
+          "source": "Filter the results to spaces NOT favorited by the user with the specified…",
+          "message": "指定されたユーザーがお気に入り登録していないスペースで結果を絞り込み…"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c29ydA.allowed-value.c3RyaW5nOi1pZA.display_name": {
           "source": "-id",
           "message": "-id"
@@ -1342,6 +1410,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "ソート"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for spaces",
+          "message": "特定のフィールドで結果をソートします: スペースのソートフィールド"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0U3BhY2Vz.option.c3RhdHVz.allowed-value.c3RyaW5nOmFyY2hpdmVk.display_name": {
           "source": "archived",
@@ -1451,6 +1523,10 @@
           "source": "Body Format",
           "message": "本文形式"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "レスポンスの'body'フィールドで返されるコンテンツ形式タイプ"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.Z2V0LWRyYWZ0.desc": {
           "source": "Retrieve the draft version of this page.",
           "message": "このページの下書きバージョンを取得します。"
@@ -1497,7 +1573,7 @@
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS13ZWJyZXNvdXJjZXM.short_desc": {
           "source": "Includes web resources that can be used to render page content on a client",
-          "message": "クライアント側でページコンテンツをレンダリングするために使用できる Web リソースを含めます"
+          "message": "クライアントでページを描画するために使用可能なWebリソースを含めます"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1jb2xsYWJvcmF0b3Jz.desc": {
           "source": "Includes collaborators on the page.",
@@ -1518,6 +1594,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1kaXJlY3QtY2hpbGRyZW4.display_name": {
           "source": "Include Direct Children",
           "message": "直接の子を含める"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1kaXJlY3QtY2hpbGRyZW4.short_desc": {
+          "source": "Includes direct children of the page, as defined in the 'ChildrenResponse'…",
+          "message": "'ChildrenResponse'で定義された、ページ直下の子要素を含めます…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1mYXZvcml0ZWQtYnktY3VycmVudC11c2VyLXN0YXR1cw.desc": {
           "source": "Includes whether this page has been favorited by the current user.",
@@ -1562,6 +1642,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.display_name": {
           "source": "Include Operations",
           "message": "操作を含める"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1vcGVyYXRpb25z.short_desc": {
+          "source": "Includes operations associated with this page in the response, as defined in…",
+          "message": "レスポンスにこのページに関連付けられた操作を含めます (定義に基づく)…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZUJ5SWQ.option.aW5jbHVkZS1wcm9wZXJ0aWVz.desc": {
           "source": "Includes content properties associated with this page in the response.\nThe number of results will be limited to 50 and sorted in the default sort order. \nA `meta` and `_links` property will be present to indicate if more results are available and a link to retrieve the rest of the results.",
@@ -1651,6 +1735,10 @@
           "source": "Body Format",
           "message": "本文形式"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "レスポンスの'body'フィールドで返されるコンテンツ形式タイプ"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.aWQ.desc": {
           "source": "Filter the results based on page ids. Multiple page ids can be specified as a comma-separated list.",
           "message": "ページIDに基づいて結果をフィルタリングします。複数のページIDはカンマ区切りリストとして指定できます。"
@@ -1714,6 +1802,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "ソート"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for pages",
+          "message": "特定のフィールドで結果をソートします: ページのソートフィールド"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXM.option.c3BhY2UtaWQ.desc": {
           "source": "Filter the results based on space ids. Multiple space ids can be specified as a comma-separated list.",
@@ -1811,6 +1903,10 @@
           "source": "Body Format",
           "message": "本文形式"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "レスポンスの'body'フィールドで返されるコンテンツ形式タイプ"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.ZGVwdGg.allowed-value.c3RyaW5nOmFsbA.display_name": {
           "source": "all",
           "message": "all"
@@ -1826,6 +1922,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.ZGVwdGg.display_name": {
           "source": "Depth",
           "message": "深さ"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.ZGVwdGg.short_desc": {
+          "source": "Filter the results to pages at the root level of the space or to all pages in…",
+          "message": "スペースのルートレベルのページ、またはスペース内の全ページで絞り込み…"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
@@ -1891,6 +1991,10 @@
           "source": "Sort",
           "message": "ソート"
         },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.c29ydA.short_desc": {
+          "source": "Used to sort the result by a particular field.: The sort fields for pages",
+          "message": "特定のフィールドで結果をソートします: ページのソートフィールド"
+        },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0UGFnZXNJblNwYWNl.option.c3RhdHVz.desc": {
           "source": "Filter the results to pages based on their status. By default, `current` and `archived` are used.",
           "message": "ステータスに基づいてページを絞り込みます。デフォルトでは、`current` と `archived` が使用されます。"
@@ -1942,6 +2046,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "本文形式"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "レスポンスの'body'フィールドで返されるコンテンツ形式タイプ"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza0J5SWQ.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
@@ -2078,6 +2186,10 @@
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "本文形式"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "レスポンスの'body'フィールドで返されるコンテンツ形式タイプ"
         },
         "app.Q29uZmx1ZW5jZQ.action.Z2V0VGFza3M.option.YmxvZ3Bvc3QtaWQ.desc": {
           "source": "Filters on the blog post ID of the task. Multiple IDs can be specified. Note - page and blog post filters can be used in conjunction.",
@@ -2611,6 +2723,10 @@
           "source": "URI Path",
           "message": "URIパス"
         },
+        "app.Q29uZmx1ZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "接続のAPIベースURLに対する相対URIパス"
+        },
         "app.Q29uZmx1ZW5jZQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
@@ -2777,7 +2893,7 @@
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.Ym9keQ.short_desc": {
           "source": "The content; set \"representation\" to say what \"value\" is written in",
-          "message": "コンテンツ。\"representation\" を設定して \"value\" がどの形式で書かれているかを指定します"
+          "message": "コンテンツ。\"representation\"で\"value\"の形式を指定します"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlQmxvZ1Bvc3Q.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
@@ -2869,7 +2985,7 @@
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.Ym9keQ.short_desc": {
           "source": "The content; set \"representation\" to say what \"value\" is written in",
-          "message": "コンテンツ。\"representation\" を設定して \"value\" がどの形式で書かれているかを指定します"
+          "message": "コンテンツ。\"representation\"で\"value\"の形式を指定します"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlUGFnZQ.option.aWQ.desc": {
           "source": "The ID of the page to be returned. If you don't know the page ID, use Get pages and filter the results.",
@@ -3106,6 +3222,10 @@
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.display_name": {
           "source": "Body Format",
           "message": "本文形式"
+        },
+        "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.Ym9keS1mb3JtYXQ.short_desc": {
+          "source": "The content format types to be returned in the 'body' field of the response",
+          "message": "レスポンスの'body'フィールドで返されるコンテンツ形式タイプ"
         },
         "app.Q29uZmx1ZW5jZQ.action.dXBkYXRlVGFzaw.option.YmxvZ1Bvc3RJZA.desc": {
           "source": "ID of the blog post the task is in.",

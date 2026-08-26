@@ -249,7 +249,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2h1bmstdGV4dA.short_desc": {
           "source": "Breaks documents into overlapping pieces sized for AI search",
-          "message": "Rozdelí dokumenty na prekrývajúce sa časti dimenzované pre vyhľadávanie pomocou AI"
+          "message": "Rozdeľuje dokumenty na prekrývajúce sa časti pre vyhľadávanie pomocou AI"
         },
         "app.TUwtQW5hbHl0aWNz.action.Y2x1c3RlcmluZy1tZXRyaWNz.desc": {
           "source": "Measures whether the groups in your data are clearly separated or overlap too much. For example, after segmenting customers into \"budget\", \"regular\", and \"premium\" groups, this tells you whether the groups are genuinely distinct or whether many customers sit on the boundary between groups.\n\n**What you get**:\n- `silhouette_score` — ranges from `-1.0` (groups overlap badly) to `1.0` (perfectly separated); above `0.5` is generally good\n- `davies_bouldin_score` — measures how much groups bleed into each other; lower is better (`0.0` = no overlap at all)\n- `calinski_harabasz_score` — measures how tight each group is compared to how far apart the groups are; higher is better\n\nRecords accumulate in a batch; when full, a single scorecard is emitted.",
@@ -705,7 +705,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLWZpbHRlcg.short_desc": {
           "source": "Drops records that contain PII, prompt injections, or policy violations",
-          "message": "Zahadzuje záznamy, ktoré obsahujú PII, prompt injection útoky alebo porušenia zásad"
+          "message": "Zahadzuje záznamy s PII, injekciami promptov alebo porušeniami pravidiel"
         },
         "app.TUwtQW5hbHl0aWNz.action.Z3VhcmRyYWlsLXRyYW5zZm9ybQ.desc": {
           "source": "Evaluates each record's text field against configured guardrail rules and enriches the record with results. Records always pass through (unlike the filter processor).\n\nEach record gets:\n- `_guardrail_passed` — whether the text passed all rules\n- `_guardrail_violations` — list of violations found\n\nIf PII redaction is configured, the text field is replaced with the redacted version.",
@@ -2285,7 +2285,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.aW1wdXRlcg.short_desc": {
           "source": "Automatically fills gaps in your data using smart defaults",
-          "message": "Automaticky dopĺňa medzery vo vašich dátach pomocou inteligentných predvolených hodnôt"
+          "message": "Automaticky dopĺňa medzery v dátach pomocou inteligentných predvolieb"
         },
         "app.TUwtQW5hbHl0aWNz.action.aXNvbGF0aW9uLWZvcmVzdA.desc": {
           "source": "Catches fraudulent transactions, sensor malfunctions, and security intrusions by flagging records that stand out from normal data. For example, a $50,000 transaction when most are under $500 scores near `1.0` (highly anomalous), while a typical $45 purchase scores near `0.0`.\n\nRecords accumulate in a window; when full, all are scored together. Each record receives:\n- `anomaly_score` — `0.0` (normal) to `1.0` (highly unusual)\n- `is_anomaly` — `True`/`False` based on the threshold",
@@ -2995,6 +2995,10 @@
           "source": "Schema defining validation rules for each field",
           "message": "Schéma definujúca validačné pravidlá pre každé pole"
         },
+        "app.TUwtQW5hbHl0aWNz.action.c2NoZW1hLXZhbGlkYXRpb24.short_desc": {
+          "source": "Validates each record against a schema",
+          "message": "Overuje každý záznam voči schéme"
+        },
         "app.TUwtQW5hbHl0aWNz.action.c2Vhc29uYWwtZGVjb21wb3NpdGlvbg.desc": {
           "source": "Answers 'is this increase real growth or just a seasonal spike?' by separating a time series into its component parts. For example, monthly sales of $120K might decompose into $100K trend + $25K seasonal holiday boost - $5K random dip.\n\nRecords accumulate per field in a window; when full, all values are decomposed. Each record receives:\n- `trend` — long-term direction\n- `seasonal` — cyclical pattern (e.g., holiday shopping cycles)\n- `residual` — random noise remaining after removing trend and seasonal",
           "message": "Odpovedá na otázku „je tento nárast skutočným rastom alebo len sezónnym výkyvom?“ rozložením časového radu na jeho jednotlivé zložky. Napríklad mesačný predaj 120 tis. $ sa môže rozložiť na 100 tis. $ trend + 25 tis. $ sezónny nárast počas sviatkov - 5 tis. $ náhodný pokles.\n\nZáznamy sa zhromažďujú podľa poľa v okne; po jeho naplnení sa všetky hodnoty dekomponujú. Každý záznam získa:\n- `trend` — dlhodobý smer\n- `seasonal` — cyklický vzor (napr. nákupné cykly počas sviatkov)\n- `residual` — náhodný šum zostávajúci po odstránení trendu a sezónnosti"
@@ -3533,7 +3537,7 @@
         },
         "app.TUwtQW5hbHl0aWNz.action.cGNh.short_desc": {
           "source": "Reduces many fields to fewer combined values preserving key patterns",
-          "message": "Redukuje mnoho polí na menší počet kombinovaných hodnôt so zachovaním kľúčových vzorov"
+          "message": "Zredukuje mnoho polí na menej kombinovaných hodnôt so zachovaním vzorov"
         },
         "app.TUwtQW5hbHl0aWNz.action.cm9sbGluZy1zdGF0cw.desc": {
           "source": "Monitors trends, detects anomalies, and tracks volatility in time series data by computing rolling statistics over a sliding window of recent records. For example, with `window_size=20`, each record gets the average, standard deviation, min, max, or sum of the last 20 values for each monitored field.\n\n**Use cases**:\n- Track a 20-period moving average of sensor temperature to smooth out noise\n- Detect volatility spikes by watching rolling standard deviation of stock prices\n- Monitor rolling min/max to detect new highs or lows in streaming data\n\nEach record passes through enriched with computed fields named `{field}_{stat}` (e.g., `temperature_mean`, `price_std`)",

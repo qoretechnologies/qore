@@ -283,6 +283,10 @@
           "source": "Background",
           "message": "배경 정보"
         },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.YmFja2dyb3VuZA.short_desc": {
+          "source": "Background transparency, for the gpt-image-1 model",
+          "message": "gpt-image-1 모델의 배경 투명도"
+        },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.b3V0cHV0X2NvbXByZXNzaW9u.desc": {
           "source": "The compression level (0-100%) for the generated image(s). This parameter is only supported for `gpt-image-1` with the `webp` or `jpeg` output formats, and defaults to `100`",
           "message": "생성된 이미지의 압축 수준(0-100%)입니다. 이 매개변수는 `webp` 또는 `jpeg` 출력 형식의 `gpt-image-1`에만 지원되며, 기본값은 `100`입니다."
@@ -507,6 +511,10 @@
           "source": "Prompt",
           "message": "프롬프트"
         },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cHJvbXB0.short_desc": {
+          "source": "A text description of the desired image(s)",
+          "message": "원하는 이미지에 대한 텍스트 설명"
+        },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.cXVhbGl0eQ.allowed-value.c3RyaW5nOm1lZGl1bQ.desc": {
           "source": "Medium quality (`gpt-image-1` only)",
           "message": "중간 품질(`gpt-image-1` 전용)"
@@ -574,6 +582,10 @@
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.dXNlcg.display_name": {
           "source": "User",
           "message": "사용자"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.option.dXNlcg.short_desc": {
+          "source": "An identifier for your end user, used for abuse detection",
+          "message": "남용 감지에 사용되는 최종 사용자 식별자"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLWltYWdl.short_desc": {
           "source": "Generate an image from a prompt",
@@ -974,6 +986,10 @@
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.display_name": {
           "source": "User",
           "message": "사용자"
+        },
+        "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.option.dXNlcg.short_desc": {
+          "source": "An identifier for your end user, used for abuse detection",
+          "message": "남용 감지에 사용되는 최종 사용자 식별자"
         },
         "app.T3BlbkFJ.action.Y3JlYXRlLXJlc3BvbnNl.short_desc": {
           "source": "Process a request with a model",
@@ -1715,6 +1731,10 @@
           "source": "URI Path",
           "message": "URI 경로"
         },
+        "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "연결의 API 기본 URL에 대한 상대 URI 경로"
+        },
         "app.T3BlbkFJ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "URI 경로의 `{name}` 자리 표시자에 대체되는 값의 해시입니다. 예: `path = /users/{id}` 및 `path_vars = {id: 123}`이 있으면 프레임워크가 `/users/123`을(를) 전송합니다. 값은 URL 인코딩됩니다."
@@ -2010,6 +2030,10 @@
         "app.T3BlbkFJ.action.bXVsdGktY2hhdA.option.dXNlcg.short_desc": {
           "source": "A unique identifier representing your end-user",
           "message": "최종 사용자를 나타내는 고유 식별자"
+        },
+        "app.T3BlbkFJ.action.bXVsdGktY2hhdA.short_desc": {
+          "source": "Chat by sending several messages at once",
+          "message": "한 번에 여러 메시지를 전송하여 대화"
         },
         "app.T3BlbkFJ.action.c2ltcGxlLWNoYXQ.desc": {
           "source": "Chat with an AI model by sending a single message and receiving a single reply",
@@ -2750,6 +2774,10 @@
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.display_name": {
           "source": "User",
           "message": "사용자"
+        },
+        "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.option.dXNlcg.short_desc": {
+          "source": "An identifier for your end user, used for abuse detection",
+          "message": "남용 감지에 사용되는 최종 사용자 식별자"
         },
         "app.T3BlbkFJ.action.c3RyZWFtLXJlc3BvbnNl.short_desc": {
           "source": "Stream a response from a model",

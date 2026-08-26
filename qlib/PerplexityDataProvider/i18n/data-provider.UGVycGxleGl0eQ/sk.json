@@ -295,6 +295,10 @@
           "source": "URI Path",
           "message": "Cesta URI"
         },
+        "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Cesta URI relatívna k základnej adrese API URL pripojenia"
+        },
         "app.UGVycGxleGl0eQ.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
@@ -859,6 +863,10 @@
           "source": "The sampling temperature to use, between 0 and 2",
           "message": "Teplota vzorkovania, ktorá sa má použiť, v rozsahu od 0 do 2"
         },
+        "app.UGVycGxleGl0eQ.action.bXVsdGktY2hhdA.short_desc": {
+          "source": "Chat by sending several messages at once, with citations",
+          "message": "Četujte odoslaním viacerých správ naraz, s citáciami"
+        },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.desc": {
           "source": "Search the web using Perplexity's dedicated search API returning structured results with titles, URLs, and snippets",
           "message": "Vyhľadávajte na webe pomocou vyhradeného rozhrania API pre vyhľadávanie Perplexity, ktoré vracia štruktúrované výsledky s názvami, adresami URL a úryvkami"
@@ -1025,7 +1033,7 @@
         },
         "app.UGVycGxleGl0eQ.action.c2VhcmNo.short_desc": {
           "source": "Search the web using Perplexity's dedicated search API",
-          "message": "Vyhľadávajte na webe pomocou vyhradeného rozhrania API pre vyhľadávanie Perplexity"
+          "message": "Vyhľadávajte na webe cez vyhradené rozhranie Perplexity API"
         },
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.desc": {
           "source": "Chat with a Perplexity AI model by sending a single message and receiving a single web-grounded reply with citations",
@@ -1610,6 +1618,10 @@
         "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.option.dGVtcGVyYXR1cmU.short_desc": {
           "source": "The sampling temperature to use, between 0 and 2",
           "message": "Teplota vzorkovania, ktorá sa má použiť, v rozsahu od 0 do 2"
+        },
+        "app.UGVycGxleGl0eQ.action.c2ltcGxlLWNoYXQ.short_desc": {
+          "source": "Chat by sending one message, with citations",
+          "message": "Četujte odoslaním jednej správy, s citáciami"
         },
         "app.UGVycGxleGl0eQ.action.c3RyZWFtLWNoYXQ.desc": {
           "source": "Stream a chat response from Perplexity AI via Server-Sent Events with real-time token delivery",

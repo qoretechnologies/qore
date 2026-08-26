@@ -237,7 +237,7 @@
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
           "source": "A key for caching prompts to optimize cache hit rates",
-          "message": "Klucz do buforowania promptów w celu optymalizacji wskaźnika trafień w pamięci podręcznej"
+          "message": "Klucz buforowania promptów optymalizujący wskaźnik trafień"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
           "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
@@ -645,7 +645,7 @@
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
           "source": "A key for caching prompts to optimize cache hit rates",
-          "message": "Klucz do buforowania promptów w celu optymalizacji wskaźnika trafień w pamięci podręcznej"
+          "message": "Klucz buforowania promptów optymalizujący wskaźnik trafień"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cmVhc29uaW5n.desc": {
           "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
@@ -957,7 +957,7 @@
         },
         "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
           "source": "Pass-through; use connection serialization and let the REST client decide",
-          "message": "Przekazywanie bez zmian; użyj serializacji połączenia i pozwól klientowi REST zadecydować"
+          "message": "Przekazywanie; użyj serializacji połączenia i zdaj się na klienta REST"
         },
         "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
           "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
@@ -1207,6 +1207,10 @@
           "source": "URI Path",
           "message": "Ścieżka URI"
         },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Ścieżka URI względem bazowego adresu URL API połączenia"
+        },
         "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash wartości podstawianych w miejsce symboli zastępczych `{name}` w ścieżce URI. Przykład: dla `path = /users/{id}` i `path_vars = {id: 123}` framework wysyła `/users/123`. Wartości są kodowane w formacie URL."
@@ -1325,7 +1329,7 @@
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.short_desc": {
           "source": "The maximum number of tokens to generate (deprecated; use max_completion_tokens)",
-          "message": "Maksymalna liczba tokenów do wygenerowania (przestarzałe; użyj max_completion_tokens)"
+          "message": "Maks. liczba tokenów do wygenerowania (przestarzałe; max_completion_tokens)"
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.desc": {
           "source": "A list of messages comprising the conversation so far",
@@ -1385,7 +1389,7 @@
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RvcA.short_desc": {
           "source": "Up to 4 sequences where the API will stop generating further tokens",
-          "message": "Maksymalnie 4 sekwencje, po napotkaniu których API przestanie generować kolejne tokeny"
+          "message": "Do 4 sekwencji zatrzymujących generowanie kolejnych tokenów"
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.c3RyZWFt.desc": {
           "source": "If `true`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
@@ -1709,7 +1713,7 @@
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.short_desc": {
           "source": "The maximum number of tokens to generate (deprecated; use max_completion_tokens)",
-          "message": "Maksymalna liczba tokenów do wygenerowania (przestarzałe; użyj max_completion_tokens)"
+          "message": "Maks. liczba tokenów do wygenerowania (przestarzałe; max_completion_tokens)"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bmFtZQ.desc": {
           "source": "An optional name for the participant",
@@ -1757,7 +1761,7 @@
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RvcA.short_desc": {
           "source": "Up to 4 sequences where the API will stop generating further tokens",
-          "message": "Maksymalnie 4 sekwencje, po napotkaniu których API przestanie generować kolejne tokeny"
+          "message": "Do 4 sekwencji zatrzymujących generowanie kolejnych tokenów"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.c3RyZWFt.desc": {
           "source": "If `true`, partial message deltas will be sent as data-only server-sent events as they become available, with the stream terminated by a `data: [DONE]` message",
@@ -2025,7 +2029,7 @@
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.short_desc": {
           "source": "Chat with Grok by sending a single message and receiving a single reply",
-          "message": "Czatuj z modelem Grok, wysyłając pojedynczą wiadomość i otrzymując pojedynczą odpowiedź"
+          "message": "Czatuj z Grokiem, wysyłając jedną wiadomość i odbierając odpowiedź"
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.desc": {
           "source": "Stream a response from a Grok model with Server-Sent Events for real-time token delivery",
@@ -2261,7 +2265,7 @@
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
           "source": "A key for caching prompts to optimize cache hit rates",
-          "message": "Klucz do buforowania promptów w celu optymalizacji wskaźnika trafień w pamięci podręcznej"
+          "message": "Klucz buforowania promptów optymalizujący wskaźnik trafień"
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
           "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",

@@ -91,6 +91,10 @@
           "source": "Enforce Header Order",
           "message": "헤더 순서 적용"
         },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of headers",
+          "message": "true인 경우 입력 데이터가 헤더 순서대로 재정렬됩니다"
+        },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVycw.desc": {
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
           "message": "반복 처리되는 데이터의 헤더 / 열 이름 목록입니다. 이 항목이 있는 경우 `header_names`은(는) `false`이어야 합니다."
@@ -315,6 +319,10 @@
           "source": "Enforce Header Order",
           "message": "헤더 순서 적용"
         },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of headers",
+          "message": "true인 경우 입력 데이터가 헤더 순서대로 재정렬됩니다"
+        },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
           "message": "반복 처리되는 데이터의 헤더 / 열 이름 목록입니다. 이 항목이 있는 경우 `header_names`은(는) `false`이어야 합니다."
@@ -526,6 +534,10 @@
         "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
           "message": "헤더 순서 적용"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the output data will be reordered in the order of headers",
+          "message": "true인 경우 출력 데이터가 헤더 순서대로 재정렬됩니다"
         },
         "app.Q3N2.action.d3JpdGU.option.aGVhZGVycw.desc": {
           "source": "List of field / header names for the data output",

@@ -2,7 +2,2524 @@
   "schema_version": 1,
   "locales": {
     "sk": {
-      "messages": {}
+      "messages": {
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.desc": {
+          "source": "Deletes a contact.\n\nThis is a hard delete and is not reversible. To keep the record and stop messaging the person instead, archive the contact.",
+          "message": "Odstráni kontakt.\n\nIde o trvalé odstránenie, ktoré nie je možné vrátiť späť. Ak si chcete záznam ponechať a iba danej osobe prestať posielať správy, kontakt archivujte."
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.display_name": {
+          "source": "Delete Contact",
+          "message": "Vymazať kontakt"
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "Jedinečný identifikátor kontaktu pridelený službou Intercom"
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "Kontakt, na ktorý sa to vzťahuje"
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.short_desc": {
+          "source": "Delete a contact",
+          "message": "Vymazať kontakt"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.desc": {
+          "source": "Lists contacts, newest first.\n\nThis is exported so that the contact dropdowns have an action to call; **Search Contacts** is the one to reach for when the contacts wanted are a subset.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
+          "message": "Vypíše kontakty, najnovšie ako prvé.\n\nToto je exportované, aby rozbaľovacie zoznamy kontaktov mali akciu na volanie; **Search Contacts** je akcia určená na získanie podmnožiny kontaktov.\n\nPopis v Intercome nedeklaruje pre túto operáciu žiadne parametre stránkovania, hoci vracia stránkovanú obálku; `per_page` a `starting_after` sa pridávajú pri importe schémy. Pozrite si @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\"."
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.display_name": {
+          "source": "List Contacts",
+          "message": "Zoznam kontaktov"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
+          "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
+          "message": "Odovzdajte `true` na zahrnutie poľa `merge_history` pre každý kontakt v odpovedi. Vracia sa iba pre kontakty s rolou `user`."
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
+          "source": "Include Merge History",
+          "message": "Zahrnúť históriu zlúčenia"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "Zadajte 'true' na zahrnutie poľa 'merge_history' pre každý kontakt v odpovedi"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "Kurzor stránkovania: vezmite `pages.next.starting_after` z predchádzajúcej odpovede a odovzdajte ho sem.\n\nJe nepriehľadný a nesmie sa vytvárať manuálne. Parameter `pages` chýba, keď je kolekcia vyčerpaná, čo indikuje, že už neexistuje ďalšia stránka."
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "Začínajúce po"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Kurzor pre nasledujúcu stránku"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one page. Intercom documents cursor pagination for every listing that answers a \"pages\" object, but declares this parameter on only some of them.",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke. Intercom dokumentuje kurzorovú pagináciu pre každý zoznam, ktorý vracia objekt „pages“, ale tento parameter deklaruje len pri niektorých z nich."
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.short_desc": {
+          "source": "List the contacts in the workspace",
+          "message": "Vypísať kontakty v pracovnom priestore"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.desc": {
+          "source": "Searches the workspace's contacts.\n\n`query` is either a single filter - `{field, operator, value}` - or a boolean combination, `{operator: \"AND\", value: [ ... ]}`, nested as deeply as needed. A field Intercom does not define on a contact is searched by naming it `custom_attributes.<name>`.\n\nTimestamps in a query are counts of seconds since the epoch, so `created_at > 1755000000` reads as \"created after that instant\".\n\nThe result is paged with `starting_after`: pass back the `pages.next.starting_after` value from the previous response.",
+          "message": "Vyhľadáva kontakty v pracovnom priestore.\n\n`query` je buď jeden filter – `{field, operator, value}` – alebo boolovská kombinácia, `{operator: \"AND\", value: [ ... ]}`, vnorená podľa potreby. Pole, ktoré Intercom pri kontakte nedefinuje, sa vyhľadáva uvedením ako `custom_attributes.<name>`.\n\nČasové pečiatky v dopyte predstavujú počet sekúnd od epochy, takže `created_at > 1755000000` znamená „vytvorené po tomto okamihu“.\n\nVýsledok je stránkovaný pomocou `starting_after`: odovzdajte späť hodnotu `pages.next.starting_after` z predchádzajúcej odpovede."
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.display_name": {
+          "source": "Search Contacts",
+          "message": "Vyhľadať kontakty"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
+          "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
+          "message": "Odovzdajte `true` na zahrnutie poľa `merge_history` pre každý kontakt v odpovedi. Vracia sa iba pre kontakty s rolou `user`."
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
+          "source": "Include Merge History",
+          "message": "Zahrnúť históriu zlúčenia"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "Zadajte 'true' na zahrnutie poľa 'merge_history' pre každý kontakt v odpovedi"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c29ydA.desc": {
+          "source": "An optional object to sort the results by.",
+          "message": "Voliteľný objekt, podľa ktorého sa majú zoradiť výsledky."
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Zoradiť"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c29ydA.short_desc": {
+          "source": "An optional object to sort the results by",
+          "message": "Voliteľný objekt, podľa ktorého sa majú zoradiť výsledky"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "Kurzor stránkovania: vezmite `pages.next.starting_after` z predchádzajúcej odpovede a odovzdajte ho sem.\n\nJe nepriehľadný a nesmie sa vytvárať manuálne. Parameter `pages` chýba, keď je kolekcia vyčerpaná, čo indikuje, že už neexistuje ďalšia stránka."
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "Začínajúce po"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Kurzor pre nasledujúcu stránku"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cGVyX3BhZ2U.desc": {
+          "source": "The number of results to fetch per page.",
+          "message": "Počet výsledkov, ktoré sa majú načítať na stránku."
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Dopyt"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.short_desc": {
+          "source": "Find contacts matching a query",
+          "message": "Nájsť kontakty zodpovedajúce dopytu"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.desc": {
+          "source": "Retrieves one contact by the identity Intercom gave it.\n\nTo find a contact by your own identifier instead, search for it: `{field: \"external_id\", operator: \"=\", value: \"...\"}`.",
+          "message": "Získa jeden kontakt podľa identifikátora, ktorý mu pridelil Intercom.\n\nAk chcete namiesto toho nájsť kontakt podľa vlastného identifikátora, vyhľadajte ho: `{field: \"external_id\", operator: \"=\", value: \"...\"}`."
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "Získať kontakt"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "Jedinečný identifikátor kontaktu pridelený službou Intercom"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "Kontakt, na ktorý sa to vzťahuje"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
+          "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
+          "message": "Odovzdajte `true` na zahrnutie poľa `merge_history` pre každý kontakt v odpovedi. Vracia sa iba pre kontakty s rolou `user`."
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
+          "source": "Include Merge History",
+          "message": "Zahrnúť históriu zlúčenia"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "Zadajte 'true' na zahrnutie poľa 'merge_history' pre každý kontakt v odpovedi"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.short_desc": {
+          "source": "Retrieve a contact by its identity",
+          "message": "Získať kontakt podľa jeho identity"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.desc": {
+          "source": "Retrieves one company by the identity Intercom gave it.\n\nTo find a company by your own identifier instead, use **Create Or Update Company**, which matches on `company_id`.",
+          "message": "Získa jednu spoločnosť podľa identity, ktorú jej pridelil Intercom.\n\nAk chcete namiesto toho nájsť spoločnosť podľa vlastného identifikátora, použite akciu **Create Or Update Company**, ktorá vyhľadáva podľa `company_id`."
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.display_name": {
+          "source": "Get Company",
+          "message": "Získať spoločnosť"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.option.Y29tcGFueV9pZA.desc": {
+          "source": "The unique identifier for the company which is given by Intercom",
+          "message": "Jedinečný identifikátor spoločnosti, ktorý pridelil Intercom"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company",
+          "message": "Spoločnosť"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company to retrieve",
+          "message": "Spoločnosť na získanie"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.short_desc": {
+          "source": "Retrieve a company by its identity",
+          "message": "Získať spoločnosť podľa jej identity"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.desc": {
+          "source": "Updates a company that already exists, named by the identity **Intercom** gave it.\n\nThis is not the same thing as **Create Or Update Company**, which matches on the `company_id` **you** gave it and creates one when nothing matches. Where the intent is to change a company that is already known, this is the action that cannot create a second one by accident.",
+          "message": "Aktualizuje už existujúcu spoločnosť určenú identitou, ktorú jej pridelil **Intercom**.\n\nToto nie je to isté ako **Create Or Update Company**, ktorá vyhľadáva zhodu podľa `company_id`, ktorý ste jej pridelili **vy**, a vytvorí novú, ak sa žiadna nezhoduje. Ak je cieľom upraviť už známu spoločnosť, toto je akcia, ktorá nemôže omylom vytvoriť druhú."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.display_name": {
+          "source": "Update Company",
+          "message": "Aktualizovať spoločnosť"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.desc": {
+          "source": "The unique identifier for the company which is given by Intercom",
+          "message": "Jedinečný identifikátor spoločnosti, ktorý pridelil Intercom"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company",
+          "message": "Spoločnosť"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company to update",
+          "message": "Spoločnosť, ktorá sa má aktualizovať"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "A hash of key/value pairs containing any other data about the company you want Intercom to store.",
+          "message": "Hash kľúčov a hodnôt obsahujúci akékoľvek ďalšie údaje o spoločnosti, ktoré má Intercom uložiť."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "Vlastné atribúty"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "A hash of key/value pairs containing any other data about the company you want…",
+          "message": "Hash kľúčov/hodnôt s ďalšími údajmi o spoločnosti, ktoré má Intercom uložiť…"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.aW5kdXN0cnk.desc": {
+          "source": "The industry that this company operates in.",
+          "message": "Odvetvie, v ktorom táto spoločnosť pôsobí."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.aW5kdXN0cnk.display_name": {
+          "source": "Industry",
+          "message": "Odvetvie"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.aW5kdXN0cnk.short_desc": {
+          "source": "The industry that this company operates in",
+          "message": "Odvetvie, v ktorom táto spoločnosť pôsobí"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.desc": {
+          "source": "How much revenue the company generates for your business. Note that this will truncate floats. i.e. it only allow for whole integers, 155.98 will be truncated to 155. Note that this has an upper limit of 2**31-1 or 2147483647..",
+          "message": "Aký príjem spoločnosť generuje pre vaše podnikanie. Upozorňujeme, že desatinné čísla budú orezané, t. j. povolené sú len celé čísla; 155,98 sa oreže na 155. Horný limit je 2**31-1 alebo 2147483647."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.display_name": {
+          "source": "Monthly Spend",
+          "message": "Mesačné výdavky"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.short_desc": {
+          "source": "How much revenue the company generates for your business",
+          "message": "Aký príjem spoločnosť generuje pre vaše podnikanie"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bmFtZQ.desc": {
+          "source": "The name of the Company",
+          "message": "Názov spoločnosti"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bmFtZQ.short_desc": {
+          "source": "The name of the Company",
+          "message": "Názov spoločnosti"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.c2l6ZQ.desc": {
+          "source": "The number of employees in this company.",
+          "message": "Počet zamestnancov v tejto spoločnosti."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.c2l6ZQ.display_name": {
+          "source": "Size",
+          "message": "Veľkosť"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.c2l6ZQ.short_desc": {
+          "source": "The number of employees in this company",
+          "message": "Počet zamestnancov v tejto spoločnosti"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.cGxhbg.desc": {
+          "source": "The name of the plan you have associated with the company.",
+          "message": "Názov plánu, ktorý máte priradený k spoločnosti."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.cGxhbg.display_name": {
+          "source": "Plan",
+          "message": "Plán"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.cGxhbg.short_desc": {
+          "source": "The name of the plan you have associated with the company",
+          "message": "Názov plánu, ktorý máte priradený k spoločnosti"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.d2Vic2l0ZQ.desc": {
+          "source": "The URL for this company's website. Please note that the value specified here is not validated. Accepts any string.",
+          "message": "URL webovej stránky tejto spoločnosti. Zadaná hodnota sa neoveruje. Prijíma akýkoľvek reťazec."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Webová stránka"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "The URL for this company's website",
+          "message": "URL webovej stránky tejto spoločnosti"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.short_desc": {
+          "source": "Update an existing company by its identity",
+          "message": "Aktualizovať existujúcu spoločnosť podľa jej identity"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.desc": {
+          "source": "Updates a contact that already exists, named by the identity Intercom gave it.\n\nOnly the attributes supplied are changed. A field Intercom does not define on a contact is written by naming it under `custom_attributes`.",
+          "message": "Aktualizuje už existujúci kontakt určený identitou, ktorú mu pridelil Intercom.\n\nZmenia sa iba zadané atribúty. Pole, ktoré Intercom pri kontakte nedefinuje, sa zapisuje jeho uvedením pod `custom_attributes`."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.display_name": {
+          "source": "Update Contact",
+          "message": "Aktualizovať kontakt"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "Jedinečný identifikátor kontaktu pridelený službou Intercom"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "Kontakt, na ktorý sa to vzťahuje"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "The custom attributes which are set for the contact",
+          "message": "Vlastné atribúty nastavené pre kontakt"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "Vlastné atribúty"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "The custom attributes which are set for the contact",
+          "message": "Vlastné atribúty nastavené pre kontakt"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.YXZhdGFy.desc": {
+          "source": "An image URL containing the avatar of a contact",
+          "message": "URL obrázka obsahujúca avatar kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.YXZhdGFy.display_name": {
+          "source": "Avatar",
+          "message": "Avatar"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.YXZhdGFy.short_desc": {
+          "source": "An image URL containing the avatar of a contact",
+          "message": "URL obrázka obsahujúca avatar kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWw.desc": {
+          "source": "The contacts email",
+          "message": "E-mail kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "E-mail"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWw.short_desc": {
+          "source": "The contacts email",
+          "message": "E-mail kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.desc": {
+          "source": "Whether the contact's email address has been verified. Set to true to indicate you have verified the contact owns this email address, or false to mark it as unverified. Must be supplied together with an email in the same request; sending it without an email returns a 400.",
+          "message": "Určuje, či bola e-mailová adresa kontaktu overená. Nastavte na true, ak ste overili, že kontakt vlastní túto e-mailovú adresu, alebo na false, ak ju chcete označiť ako neoverenú. Musí sa zadať spolu s e-mailom v rovnakej požiadavke; odoslanie bez e-mailu vráti kód 400."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.display_name": {
+          "source": "Email Verified",
+          "message": "E-mail overený"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.short_desc": {
+          "source": "Whether the contact's email address has been verified",
+          "message": "Či bola e-mailová adresa kontaktu overená"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "A unique identifier for the contact which is given to Intercom",
+          "message": "Jedinečný identifikátor kontaktu odovzdaný do služby Intercom"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "Externé ID"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "A unique identifier for the contact which is given to Intercom",
+          "message": "Jedinečný identifikátor kontaktu odovzdaný do služby Intercom"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
+          "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
+          "message": "Odovzdajte `true` na zahrnutie poľa `merge_history` pre každý kontakt v odpovedi. Vracia sa iba pre kontakty s rolou `user`."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
+          "source": "Include Merge History",
+          "message": "Zahrnúť históriu zlúčenia"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "Zadajte 'true' na zahrnutie poľa 'merge_history' pre každý kontakt v odpovedi"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.b3duZXJfaWQ.desc": {
+          "source": "The id of an admin that has been assigned account ownership of the contact",
+          "message": "ID správcu, ktorému bolo priradené vlastníctvo účtu daného kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "ID vlastníka"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.b3duZXJfaWQ.short_desc": {
+          "source": "The id of an admin that has been assigned account ownership of the contact",
+          "message": "ID správcu, ktorému bolo priradené vlastníctvo účtu daného kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.desc": {
+          "source": "(Unix timestamp in seconds) The time when the contact was last seen (either where the Intercom Messenger was installed or when specified manually).\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "(Časová pečiatka Unix v sekundách) Čas, kedy bol kontakt naposledy videný (buď tam, kde bol nainštalovaný Intercom Messenger, alebo pri manuálnom zadaní).\n\nTáto hodnota sa odosiela ako celé číslo sekúnd od 1970-01-01Z."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.display_name": {
+          "source": "Last Seen At",
+          "message": "Naposledy videné"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.short_desc": {
+          "source": "(Unix timestamp in seconds) The time when the contact was last seen…",
+          "message": "(Unix pečiatka v s) Čas, kedy bol kontakt naposledy videný…"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bmFtZQ.desc": {
+          "source": "The contacts name",
+          "message": "Meno kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bmFtZQ.short_desc": {
+          "source": "The contacts name",
+          "message": "Meno kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.desc": {
+          "source": "(Unix timestamp in seconds) The time specified for when a contact signed up.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "(Časová pečiatka Unix v sekundách) Čas zadaný pre registráciu kontaktu.\n\nTáto hodnota sa odosiela ako celé číslo sekúnd od 1970-01-01Z."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.display_name": {
+          "source": "Signed Up At",
+          "message": "Čas registrácie"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.short_desc": {
+          "source": "(Unix timestamp in seconds) The time specified for when a contact signed up",
+          "message": "(Časová pečiatka Unix v sekundách) Čas zadaný pre registráciu kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cGhvbmU.desc": {
+          "source": "The contacts phone",
+          "message": "Telefón kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "Telefón"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cGhvbmU.short_desc": {
+          "source": "The contacts phone",
+          "message": "Telefón kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cm9sZQ.desc": {
+          "source": "The role of the contact.",
+          "message": "Rola kontaktu."
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "Rola"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cm9sZQ.short_desc": {
+          "source": "The role of the contact",
+          "message": "Rola kontaktu"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.desc": {
+          "source": "Whether the contact is unsubscribed from emails",
+          "message": "Či je kontakt odhlásený z odberu e-mailov"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.display_name": {
+          "source": "Unsubscribed from Emails",
+          "message": "Odhlásené z odberu e-mailov"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.short_desc": {
+          "source": "Whether the contact is unsubscribed from emails",
+          "message": "Či je kontakt odhlásený z odberu e-mailov"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.short_desc": {
+          "source": "Update an existing contact",
+          "message": "Aktualizovať existujúci kontakt"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.desc": {
+          "source": "Creates new records in the given table",
+          "message": "Vytvorí nové záznamy v danej tabuľke"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.display_name": {
+          "source": "Create Records",
+          "message": "Vytvoriť záznamy"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "Tabuľka, s ktorou sa má pracovať: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` alebo `teammates`"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Názov tabuľky, s ktorou sa má pracovať"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.short_desc": {
+          "source": "Create new records in the given table",
+          "message": "Vytvoriť nové záznamy v danej tabuľke"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.desc": {
+          "source": "Starts a conversation **from a contact** - as though the contact had written in.\n\nThis is not the way to message somebody: a conversation created here is attributed to the contact, so it appears in the inbox as an incoming message. Use **Create Message** to send something from a teammate.",
+          "message": "Spustí konverzáciu **od kontaktu** – akoby správu napísal samotný kontakt.\n\nToto nie je spôsob, ako niekomu poslať správu: tu vytvorená konverzácia sa pripíše kontaktu, takže sa v doručenej pošte zobrazí ako prichádzajúca správa. Na odoslanie správy od člena tímu použite **Create Message**."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.display_name": {
+          "source": "Create Conversation",
+          "message": "Vytvoriť konverzáciu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "The time the conversation was created as a UTC Unix timestamp. If not provided, the current time will be used. This field is only recommneded for migrating past conversations from another source into Intercom.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "Čas vytvorenia konverzácie ako časová pečiatka UTC Unix. Ak nie je zadaný, použije sa aktuálny čas. Toto pole sa odporúča len pri migrácii minulých konverzácií z iného zdroja do služby Intercom.\n\nTáto hodnota sa odosiela ako celé číslo sekúnd od 1970-01-01Z."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "Vytvorené"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "The time the conversation was created as a UTC Unix timestamp",
+          "message": "Čas vytvorenia konverzácie ako časová pečiatka UTC Unix"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.desc": {
+          "source": "A list of image URLs that will be added as attachments. You can include up to 10 URLs.",
+          "message": "Zoznam adries URL obrázkov, ktoré sa pridajú ako prílohy. Môžete pridať až 10 adries URL."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.display_name": {
+          "source": "Attachment Urls",
+          "message": "Adresy URL príloh"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.short_desc": {
+          "source": "A list of image URLs that will be added as attachments",
+          "message": "Zoznam adries URL obrázkov, ktoré sa pridajú ako prílohy"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Ym9keQ.desc": {
+          "source": "The content of the message. HTML is not supported.",
+          "message": "Obsah správy. HTML nie je podporované."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Ym9keQ.display_name": {
+          "source": "Message",
+          "message": "Správa"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Ym9keQ.short_desc": {
+          "source": "The first message in the conversation",
+          "message": "Prvá správa v konverzácii"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YnJhbmRfaWQ.desc": {
+          "source": "The unique identifier of the brand to associate with this conversation.",
+          "message": "Jedinečný identifikátor značky, ktorá sa má priradiť k tejto konverzácii."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YnJhbmRfaWQ.display_name": {
+          "source": "Brand ID",
+          "message": "ID značky"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YnJhbmRfaWQ.short_desc": {
+          "source": "The unique identifier of the brand to associate with this conversation",
+          "message": "Jedinečný identifikátor značky priradenej k tejto konverzácii"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Od"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.ZnJvbQ.short_desc": {
+          "source": "The contact the conversation comes from",
+          "message": "Kontakt, od ktorého konverzácia pochádza"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.c3ViamVjdA.desc": {
+          "source": "The title of the email. Only applicable if the message type is email.",
+          "message": "Predmet e-mailu. Použije sa len vtedy, ak je typ správy e-mail."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Predmet"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.c3ViamVjdA.short_desc": {
+          "source": "The title of the email",
+          "message": "Predmet e-mailu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.short_desc": {
+          "source": "Start a conversation as a contact",
+          "message": "Začať konverzáciu ako kontakt"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.desc": {
+          "source": "Creates a help center article.\n\n`author_id` has to be a teammate on the help center's workspace. `state` decides whether it is published or left as a draft - Intercom defaults it to `draft`.\n\n`parent_id` files the article under a collection. Earlier API versions also allowed a *section*; Intercom removed sections at version 2.10 and returns what used to be one as a nested collection, so `collection` is the only parent type left.",
+          "message": "Vytvorí článok centra pomoci.\n\n`author_id` musí byť členom tímu v pracovnom priestore centra pomoci. `state` určuje, či je článok zverejnený alebo ponechaný ako koncept – Intercom predvolene nastavuje `draft`.\n\n`parent_id` zaradí článok do kolekcie. Staršie verzie API umožňovali aj *sekciu*; Intercom odstránil sekcie vo verzii 2.10 a to, čo bývalo sekciou, vracia ako vnorenú kolekciu, takže `collection` je jediný zostávajúci typ rodiča."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.display_name": {
+          "source": "Create Article",
+          "message": "Vytvoriť článok"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
+          "source": "Whether the article should be available for AI Copilot. For multilingual articles, this sets the default language's availability.",
+          "message": "Určuje, či má byť článok dostupný pre AI Copilot. Pri viacjazyčných článkoch sa týmto nastavuje dostupnosť pre predvolený jazyk."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
+          "source": "AI Copilot Availability",
+          "message": "Dostupnosť pre AI Copilot"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
+          "source": "Whether the article should be available for AI Copilot",
+          "message": "Určuje, či má byť článok dostupný pre AI Copilot"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
+          "source": "Whether the article should be available for AI Chatbot (Fin). For multilingual articles, this sets the default language's availability.",
+          "message": "Určuje, či má byť článok dostupný pre AI Chatbot (Fin). Pri viacjazyčných článkoch sa týmto nastavuje dostupnosť pre predvolený jazyk."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
+          "source": "AI Chatbot Availability",
+          "message": "Dostupnosť pre AI Chatbot"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
+          "source": "Whether the article should be available for AI Chatbot (Fin)",
+          "message": "Určuje, či má byť článok dostupný pre AI Chatbot (Fin)"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
+          "source": "Whether the article should be available for AI Sales Agent. For multilingual articles, this sets the default language's availability.",
+          "message": "Určuje, či má byť článok dostupný pre AI Sales Agent. Pri viacjazyčných článkoch sa týmto nastavuje dostupnosť pre predvolený jazyk."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
+          "source": "AI Sales Agent Availability",
+          "message": "Dostupnosť pre AI Sales Agent"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
+          "source": "Whether the article should be available for AI Sales Agent",
+          "message": "Určuje, či má byť článok dostupný pre AI Sales Agent"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.desc": {
+          "source": "The id of the author of the article. For multilingual articles, this will be the id of the author of the default language's content. Must be a teammate on the help center's workspace.",
+          "message": "ID autora článku. Pri viacjazyčných článkoch to bude ID autora obsahu v predvolenom jazyku. Musí ísť o člena tímu v pracovnom priestore centra pomoci."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.display_name": {
+          "source": "Author",
+          "message": "Autor"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.short_desc": {
+          "source": "The teammate the article is written by",
+          "message": "Člen tímu, ktorý článok napísal"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.desc": {
+          "source": "The list of audience IDs to assign to this article for Fin AI Agent targeting. Sending a top-level `audience_ids` broadcasts the same set to every locale. For per-locale targeting, use `translated_content.<locale>.audience_ids` instead. Sending both top-level and per-locale in the same request causes top-level to win. Unknown audience IDs return a 404 error. No partial commit occurs.",
+          "message": "Zoznam ID cieľových skupín, ktoré sa majú priradiť k tomuto článku pre cielenie nástroja Fin AI Agent. Odoslanie `audience_ids` na najvyššej úrovni rozšíri rovnakú množinu na všetky jazykové verzie. Pre cielenie podľa jazykovej verzie použite namiesto toho `translated_content.<locale>.audience_ids`. Ak v rovnakej požiadavke odošlete nastavenie na najvyššej úrovni aj podľa jazykovej verzie, prednosť má najvyššia úroveň. Neznáme ID cieľových skupín vrátia chybu 404. Nedôjde k žiadnemu čiastočnému uloženiu."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.display_name": {
+          "source": "Audience Ids",
+          "message": "ID cieľových skupín"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.short_desc": {
+          "source": "The list of audience IDs to assign to this article for Fin AI Agent targeting",
+          "message": "Zoznam ID cieľových skupín priradených k článku pre cielenie Fin AI Agent"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keQ.desc": {
+          "source": "The content of the article in HTML. For multilingual articles, this will be the body of the default language's content. Mutually exclusive with `body_markdown`.",
+          "message": "Obsah článku vo formáte HTML. Pri viacjazyčných článkoch to bude telo obsahu v predvolenom jazyku. Vzájomne sa vylučuje s `body_markdown`."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keQ.short_desc": {
+          "source": "The article content, in HTML",
+          "message": "Obsah článku vo formáte HTML"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.desc": {
+          "source": "The content of the article in markdown. For multilingual articles, this will be the body of the default language's content. An alternative to `body` — you can provide content as markdown instead of HTML. Mutually exclusive with `body`.",
+          "message": "Obsah článku vo formáte Markdown. Pri viacjazyčných článkoch to bude telo obsahu v predvolenom jazyku. Alternatíva k `body` – obsah môžete poskytnúť ako Markdown namiesto HTML. Vzájomne sa vylučuje s `body`."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.display_name": {
+          "source": "Body Markdown",
+          "message": "Telo v Markdown"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.short_desc": {
+          "source": "The content of the article in markdown",
+          "message": "Obsah článku vo formáte Markdown"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the article. For multilingual articles, this will be the description of the default language's content.",
+          "message": "Popis článku. Pri viacjazyčných článkoch to bude popis obsahu v predvolenom jazyku."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The description of the article",
+          "message": "Popis článku"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future publish of the article. When set together with `state: \"published\"`, the article is scheduled instead of published immediately. Setting `null` cancels a pending publish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Combining with `state: \"draft\"` returns 400 `parameter_invalid`. Sending in the same request as `scheduled_unpublish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`.",
+          "message": "Časová pečiatka ISO 8601, kedy sa má naplánovať budúce zverejnenie článku. Pri nastavení spolu s `state: \"published\"` sa článok namiesto okamžitého zverejnenia naplánuje. Nastavenie `null` zruší čakajúci plán zverejnenia. Časové pečiatky v minulosti alebo zhodné s aktuálnym časom sú odmietnuté s kódom 400 `parameter_invalid` – hodnota musí byť striktne v budúcnosti. Kombinácia s `state: \"draft\"` vráti 400 `parameter_invalid`. Odoslanie v rovnakej požiadavke ako `scheduled_unpublish_at` vráti 400 – na jeden článok je povolený iba jeden čakajúci plán. Prázdny reťazec vráti 400 `parameter_invalid`."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.display_name": {
+          "source": "Scheduled Publish At",
+          "message": "Naplánovaný čas zverejnenia"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.short_desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future publish of the article",
+          "message": "Časová pečiatka ISO 8601 pre plánované zverejnenie článku"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future unpublish of the article. Setting `null` cancels a pending unpublish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Rejected with 400 `parameter_invalid` if the article has never been published. Sending in the same request as `scheduled_publish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`.",
+          "message": "Časová pečiatka ISO 8601, kedy sa má naplánovať budúce zrušenie zverejnenia článku. Nastavenie `null` zruší čakajúci plán zrušenia zverejnenia. Časové pečiatky v minulosti alebo zhodné s aktuálnym časom sú odmietnuté s kódom 400 `parameter_invalid` – hodnota musí byť striktne v budúcnosti. Ak článok nebol nikdy zverejnený, požiadavka je odmietnutá s kódom 400 `parameter_invalid`. Odoslanie v rovnakej požiadavke ako `scheduled_publish_at` vráti 400 – na jeden článok je povolený iba jeden čakajúci plán. Prázdny reťazec vráti 400 `parameter_invalid`."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.display_name": {
+          "source": "Scheduled Unpublish At",
+          "message": "Naplánovaný čas zrušenia zverejnenia"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.short_desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future unpublish of the article",
+          "message": "Časová pečiatka ISO 8601 pre plánované zrušenie zverejnenia článku"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "draft",
+          "message": "koncept"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "published",
+          "message": "zverejnené"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.desc": {
+          "source": "Whether the article will be `published` or will be a `draft`. Defaults to draft. For multilingual articles, this will be the state of the default language's content.",
+          "message": "Určuje, či bude článok `published` alebo `draft`. Predvolená hodnota je draft. Pri viacjazyčných článkoch to bude stav obsahu v predvolenom jazyku."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Štát"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.short_desc": {
+          "source": "Whether the article will be 'published' or will be a 'draft'",
+          "message": "Určuje, či bude článok „published“ alebo „draft“"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.desc": {
+          "source": "The id of the article's parent collection or section. An article without this field stands alone.",
+          "message": "ID nadradenej kolekcie alebo sekcie článku. Článok bez tohto poľa stojí samostatne."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.display_name": {
+          "source": "Collection",
+          "message": "Kolekcia"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.short_desc": {
+          "source": "The collection to file the article under",
+          "message": "Kolekcia, do ktorej sa má článok zaradiť"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.allowed-value.c3RyaW5nOmNvbGxlY3Rpb24.display_name": {
+          "source": "collection",
+          "message": "kolekcia"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.desc": {
+          "source": "The kind of thing `parent_id` names.\n\nOnly `collection` remains: Intercom removed help center sections at API version 2.10, and returns what used to be a section as a nested collection.",
+          "message": "Typ položky, ktorú `parent_id` pomenúva.\n\nZostáva iba `collection`: Intercom odstránil sekcie centra pomoci vo verzii API 2.10 a to, čo bývalo sekciou, vracia ako vnorenú kolekciu."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.display_name": {
+          "source": "Parent Type",
+          "message": "Nadradený typ"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.short_desc": {
+          "source": "Must be \"collection\"",
+          "message": "Musí byť „collection“"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dGl0bGU.desc": {
+          "source": "The title of the article.For multilingual articles, this will be the title of the default language's content.",
+          "message": "Názov článku. Pri viacjazyčných článkoch to bude názov obsahu v predvolenom jazyku."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Názov"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dGl0bGU.short_desc": {
+          "source": "The title of the article.For multilingual articles, this will be the title of…",
+          "message": "Názov článku. Pri viacjazyčných článkoch to bude názov..."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.desc": {
+          "source": "The Translated Content of an Article. The keys are the locale codes and the values are the translated content of the article.",
+          "message": "Preložený obsah článku. Kľúče sú kódy jazykových verzií a hodnoty sú preložený obsah článku."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.display_name": {
+          "source": "Translated Content",
+          "message": "Preložený obsah"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.short_desc": {
+          "source": "The Translated Content of an Article",
+          "message": "Preložený obsah článku"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.short_desc": {
+          "source": "Write a help center article",
+          "message": "Napísať článok centra pomoci"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.desc": {
+          "source": "Records a data event against a contact - a signup, a purchase, a feature used.\n\nThe contact is named in exactly one of three ways: `id` is Intercom's identity for them, `user_id` is the external identity your own system gave them, and `email` is their address. Supply one.\n\n`metadata` carries up to five values describing the event itself.",
+          "message": "Zaznamená dátovú udalosť ku kontaktu – registráciu, nákup, použitú funkciu.\n\nKontakt sa určuje presne jedným z troch spôsobov: `id` je jeho identifikátor v Intercome, `user_id` je externý identifikátor z vášho vlastného systému a `email` je jeho adresa. Zadajte jeden z nich.\n\n`metadata` nesie až päť hodnôt popisujúcich samotnú udalosť."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.display_name": {
+          "source": "Submit Data Event",
+          "message": "Odoslať dátovú udalosť"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "When the event happened.\n\nIntercom requires this. Set it to the current time for an event happening now; the application this module replaces did that silently, so a workflow migrated from it has to say so explicitly.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "Čas, kedy k udalosti došlo.\n\nIntercom toto vyžaduje. Pre udalosť, ktorá prebieha práve teraz, nastavte aktuálny čas; aplikácia, ktorú tento modul nahrádza, to robila automaticky na pozadí, takže workflow migrovaný z nej to musí uviesť explicitne.\n\nTáto hodnota sa odosiela ako celé číslo vyjadrujúce počet sekúnd od 1970-01-01Z."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Occurred At",
+          "message": "Čas výskytu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "When the event happened",
+          "message": "Čas, kedy k udalosti došlo"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZW1haWw.desc": {
+          "source": "An email address for your user. An email should only be used where your application uses email to uniquely identify users.",
+          "message": "E-mailová adresa vášho používateľa. E-mail by sa mal používať iba vtedy, ak vaša aplikácia používa e-mail na jednoznačnú identifikáciu používateľov."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "E-mail"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZW1haWw.short_desc": {
+          "source": "The contact, by e-mail address",
+          "message": "Kontakt podľa e-mailovej adresy"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZXZlbnRfbmFtZQ.desc": {
+          "source": "The name of the event that occurred. This is presented to your App's admins when filtering and creating segments - a good event name is typically a past tense 'verb-noun' combination, to improve readability, for example `updated-plan`.",
+          "message": "Názov udalosti, ku ktorej došlo. Zobrazuje sa administrátorom vašej aplikácie pri filtrovaní a vytváraní segmentov – vhodný názov udalosti je zvyčajne kombinácia „sloveso – podstatné meno“ v minulom čase na zlepšenie čitateľnosti, napríklad `updated-plan`."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZXZlbnRfbmFtZQ.display_name": {
+          "source": "Event Name",
+          "message": "Názov udalosti"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZXZlbnRfbmFtZQ.short_desc": {
+          "source": "The name of the event being recorded",
+          "message": "Názov zaznamenávanej udalosti"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.aWQ.desc": {
+          "source": "The unique identifier for the contact (lead or user) which is given by Intercom.",
+          "message": "Jedinečný identifikátor kontaktu (potenciálneho zákazníka alebo používateľa), ktorý pridelil Intercom."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.aWQ.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.aWQ.short_desc": {
+          "source": "The contact, by Intercom's identity for them",
+          "message": "Kontakt podľa identifikátora z Intercomu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.bWV0YWRhdGE.desc": {
+          "source": "Optional metadata about the event.",
+          "message": "Voliteľné metaúdaje o udalosti."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "Metadáta"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.bWV0YWRhdGE.short_desc": {
+          "source": "Optional metadata about the event",
+          "message": "Voliteľné metaúdaje o udalosti"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.dXNlcl9pZA.desc": {
+          "source": "Your identifier for the user.",
+          "message": "Váš identifikátor používateľa."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.dXNlcl9pZA.display_name": {
+          "source": "External ID",
+          "message": "Externé ID"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.dXNlcl9pZA.short_desc": {
+          "source": "The contact, by the identity your own system gave them",
+          "message": "Kontakt podľa identifikátora z vášho vlastného systému"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.short_desc": {
+          "source": "Record that a contact did something",
+          "message": "Zaznamenať, že kontakt vykonal akciu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.desc": {
+          "source": "Creates a company, or updates the existing one with the same `company_id`.\n\n`company_id` is **your** identifier for the company, not Intercom's: it is what decides whether this creates or updates, and Intercom will not let it be changed afterwards. The dropdown therefore lists companies by that identifier.\n\nOnly the fields sent are changed; the rest are left as they are.",
+          "message": "Vytvorí spoločnosť alebo aktualizuje existujúcu s rovnakým `company_id`.\n\n`company_id` je **váš** identifikátor spoločnosti, nie Intercomu: určuje, či sa položka vytvorí alebo aktualizuje, a Intercom neumožňuje jeho neskoršiu zmenu. V rozbaľovacom zozname sú preto spoločnosti uvedené podľa tohto identifikátora.\n\nZmenia sa iba odoslané polia, ostatné zostanú nezmenené."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.display_name": {
+          "source": "Create or Update Company",
+          "message": "Vytvoriť alebo aktualizovať spoločnosť"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y29tcGFueV9pZA.desc": {
+          "source": "The company id you have defined for the company. Can't be updated",
+          "message": "ID spoločnosti, ktoré ste pre ňu definovali. Nemožno ho aktualizovať"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company ID",
+          "message": "ID firmy"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "Your own identifier for the company",
+          "message": "Váš vlastný identifikátor spoločnosti"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "A hash of key/value pairs containing any other data about the company you want Intercom to store.",
+          "message": "Hash kľúčov a hodnôt obsahujúci akékoľvek ďalšie údaje o spoločnosti, ktoré má Intercom uložiť."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "Vlastné atribúty"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "A hash of key/value pairs containing any other data about the company you want…",
+          "message": "Hash kľúčov/hodnôt s ďalšími údajmi o spoločnosti, ktoré má Intercom uložiť…"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.aW5kdXN0cnk.desc": {
+          "source": "The industry that this company operates in.",
+          "message": "Odvetvie, v ktorom táto spoločnosť pôsobí."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.aW5kdXN0cnk.display_name": {
+          "source": "Industry",
+          "message": "Odvetvie"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.aW5kdXN0cnk.short_desc": {
+          "source": "The industry that this company operates in",
+          "message": "Odvetvie, v ktorom táto spoločnosť pôsobí"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.desc": {
+          "source": "How much revenue the company generates for your business. Note that this will truncate floats. i.e. it only allow for whole integers, 155.98 will be truncated to 155. Note that this has an upper limit of 2**31-1 or 2147483647..",
+          "message": "Aký príjem spoločnosť generuje pre vaše podnikanie. Upozorňujeme, že desatinné čísla budú orezané, t. j. povolené sú len celé čísla; 155,98 sa oreže na 155. Horný limit je 2**31-1 alebo 2147483647."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.display_name": {
+          "source": "Monthly Spend",
+          "message": "Mesačné výdavky"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.short_desc": {
+          "source": "How much revenue the company generates for your business",
+          "message": "Aký príjem spoločnosť generuje pre vaše podnikanie"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bmFtZQ.desc": {
+          "source": "The name of the Company",
+          "message": "Názov spoločnosti"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bmFtZQ.short_desc": {
+          "source": "The name of the Company",
+          "message": "Názov spoločnosti"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.c2l6ZQ.desc": {
+          "source": "The number of employees in this company.",
+          "message": "Počet zamestnancov v tejto spoločnosti."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.c2l6ZQ.display_name": {
+          "source": "Size",
+          "message": "Veľkosť"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.c2l6ZQ.short_desc": {
+          "source": "The number of employees in this company",
+          "message": "Počet zamestnancov v tejto spoločnosti"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cGxhbg.desc": {
+          "source": "The name of the plan you have associated with the company.",
+          "message": "Názov plánu, ktorý máte priradený k spoločnosti."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cGxhbg.display_name": {
+          "source": "Plan",
+          "message": "Plán"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cGxhbg.short_desc": {
+          "source": "The name of the plan you have associated with the company",
+          "message": "Názov plánu, ktorý máte priradený k spoločnosti"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cmVtb3RlX2NyZWF0ZWRfYXQ.desc": {
+          "source": "The time the company was created by you.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "Čas, kedy ste spoločnosť vytvorili.\n\nTáto hodnota sa odosiela ako celé číslo vyjadrujúce počet sekúnd od 1970-01-01Z."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cmVtb3RlX2NyZWF0ZWRfYXQ.display_name": {
+          "source": "Created At",
+          "message": "Vytvorené"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cmVtb3RlX2NyZWF0ZWRfYXQ.short_desc": {
+          "source": "When the company was created in your own system",
+          "message": "Čas vytvorenia spoločnosti vo vašom vlastnom systéme"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.d2Vic2l0ZQ.desc": {
+          "source": "The URL for this company's website. Please note that the value specified here is not validated. Accepts any string.",
+          "message": "URL webovej stránky tejto spoločnosti. Zadaná hodnota sa neoveruje. Prijíma akýkoľvek reťazec."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "Webová stránka"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.d2Vic2l0ZQ.short_desc": {
+          "source": "The URL for this company's website",
+          "message": "URL webovej stránky tejto spoločnosti"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.desc": {
+          "source": "Set to true to update the company's last seen time to now.",
+          "message": "Nastavte na true na aktualizáciu času poslednej aktivity spoločnosti na aktuálny čas."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.display_name": {
+          "source": "Update Last Request At",
+          "message": "Aktualizovať čas poslednej požiadavky"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.short_desc": {
+          "source": "Set to true to update the company's last seen time to now",
+          "message": "Nastavte na true na aktualizáciu času poslednej aktivity spoločnosti"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.short_desc": {
+          "source": "Create a company, or update the one with this company ID",
+          "message": "Vytvoriť spoločnosť alebo aktualizovať tú s týmto ID spoločnosti"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.desc": {
+          "source": "Sends a message to a contact **from a teammate**, starting a new conversation.\n\n`message_type` selects how it is delivered: `email` needs a `subject`, `in_app` shows it in the messenger, and `whatsapp` needs an approved `template`.\n\nUse **Reply to Conversation** to add to a conversation that already exists.",
+          "message": "Odošle správu kontaktu **od člena tímu** a začne novú konverzáciu.\n\n`message_type` vyberá spôsob doručenia: `email` vyžaduje `subject`, `in_app` ju zobrazí v aplikácii Messenger a `whatsapp` vyžaduje schválenú `template`.\n\nNa pridanie správy do existujúcej konverzácie použite **Odpovedať na konverzáciu**."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.display_name": {
+          "source": "Create Message",
+          "message": "Vytvoriť správu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.display_name": {
+          "source": "Cc",
+          "message": "Kópia"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.desc": {
+          "source": "Whether a conversation should be opened in the inbox for the message without the contact replying. Defaults to false if not provided.",
+          "message": "Určuje, či sa má v doručenej pošte otvoriť konverzácia pre správu bez odpovede kontaktu. Ak nie je zadané, predvolená hodnota je false."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.display_name": {
+          "source": "Create Conversation Without Contact Reply",
+          "message": "Vytvoriť konverzáciu bez odpovede kontaktu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.short_desc": {
+          "source": "Whether a conversation should be opened in the inbox for the message without…",
+          "message": "Určuje, či sa má v schránke otvoriť konverzácia pre správu bez odpovede..."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "The time the message was created. If not provided, the current time will be used.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "Čas vytvorenia správy. Ak nie je zadaný, použije sa aktuálny čas.\n\nTáto hodnota sa odosiela ako celé číslo vyjadrujúce počet sekúnd od 1970-01-01Z."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "Vytvorené"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "The time the message was created",
+          "message": "Čas vytvorenia správy"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Ym9keQ.desc": {
+          "source": "The content of the message. HTML and plaintext are supported.",
+          "message": "Obsah správy. Podporované sú formáty HTML a čistý text."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Ym9keQ.display_name": {
+          "source": "Message",
+          "message": "Správa"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Ym9keQ.short_desc": {
+          "source": "The content of the message",
+          "message": "Obsah správy"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.display_name": {
+          "source": "Bcc",
+          "message": "Skrytá kópia"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.ZnJvbQ.desc": {
+          "source": "The sender of the message. If not provided, the default sender will be used.",
+          "message": "Odosielateľ správy. Ak nie je zadaný, použije sa predvolený odosielateľ."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "Od"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.ZnJvbQ.short_desc": {
+          "source": "The teammate the message is from",
+          "message": "Člen tímu, od ktorého správa pochádza"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "email",
+          "message": "email"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.allowed-value.c3RyaW5nOmluX2FwcA.display_name": {
+          "source": "in_app",
+          "message": "in_app"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "whatsapp",
+          "message": "whatsapp"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.desc": {
+          "source": "The kind of message being created. Values: `in_app`, `email` or `whatsapp`.",
+          "message": "Druh vytváranej správy. Hodnoty: `in_app`, `email` alebo `whatsapp`."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.display_name": {
+          "source": "Message Type",
+          "message": "Typ správy"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.short_desc": {
+          "source": "The kind of message being created",
+          "message": "Druh vytváranej správy"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.c3ViamVjdA.desc": {
+          "source": "The title of the email.",
+          "message": "Predmet e-mailu."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Predmet"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.c3ViamVjdA.short_desc": {
+          "source": "The title of the email",
+          "message": "Predmet e-mailu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.display_name": {
+          "source": "To",
+          "message": "Komu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.short_desc": {
+          "source": "The contact to send the message to",
+          "message": "Kontakt, ktorému sa má správa odoslať"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dGVtcGxhdGU.desc": {
+          "source": "The style of the outgoing message. Possible values `plain` or `personal`.",
+          "message": "Štýl odchádzajúcej správy. Možné hodnoty sú `plain` alebo `personal`."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dGVtcGxhdGU.display_name": {
+          "source": "Template",
+          "message": "Šablóna"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dGVtcGxhdGU.short_desc": {
+          "source": "The style of the outgoing message",
+          "message": "Štýl odchádzajúcej správy"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.short_desc": {
+          "source": "Send a message to a contact from a teammate",
+          "message": "Odoslať správu kontaktu od člena tímu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.desc": {
+          "source": "Adds a note to a contact.\n\nA note is internal: it is visible to teammates on the contact's record and is never shown to the contact. Use **Reply to Conversation** to say something the contact sees.\n\nWithout `admin_id` the note is attributed to no teammate.",
+          "message": "Pridá poznámku ku kontaktu.\n\nPoznámka je interná: členovia tímu ju vidia v zázname kontaktu a kontaktu sa nikdy nezobrazí. Ak chcete napísať niečo, čo kontakt uvidí, použite **Odpovedať na konverzáciu**.\n\nBez `admin_id` nie je poznámka priradená žiadnemu členovi tímu."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.display_name": {
+          "source": "Create Note",
+          "message": "Vytvoriť poznámku"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier of a given contact.",
+          "message": "Jedinečný identifikátor daného kontaktu."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "Kontakt, na ktorý sa to vzťahuje"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.YWRtaW5faWQ.desc": {
+          "source": "The unique identifier of a given admin.",
+          "message": "Jedinečný identifikátor daného správcu."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.YWRtaW5faWQ.display_name": {
+          "source": "Teammate",
+          "message": "Člen tímu"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.YWRtaW5faWQ.short_desc": {
+          "source": "The teammate the note is attributed to",
+          "message": "Člen tímu, ktorému je poznámka priradená"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Ym9keQ.desc": {
+          "source": "The text of the note.",
+          "message": "Text poznámky."
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Ym9keQ.display_name": {
+          "source": "Note",
+          "message": "Poznámka"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Ym9keQ.short_desc": {
+          "source": "The text of the note",
+          "message": "Text poznámky"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.short_desc": {
+          "source": "Add a note to a contact",
+          "message": "Pridať poznámku k kontaktu"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.desc": {
+          "source": "Applies a tag to a contact.\n\nThe tag has to exist already: this attaches one, it does not create one.",
+          "message": "Priradí štítok ku kontaktu.\n\nŠtítok už musí existovať: táto akcia štítok priradí, nevytvára ho."
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.display_name": {
+          "source": "Add Tag to Contact",
+          "message": "Priradiť štítok ku kontaktu"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "Jedinečný identifikátor kontaktu pridelený službou Intercom"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "Kontakt, na ktorý sa to vzťahuje"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.aWQ.desc": {
+          "source": "The unique identifier for the tag which is given by Intercom",
+          "message": "Jedinečný identifikátor štítka pridelený systémom Intercom"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.aWQ.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.aWQ.short_desc": {
+          "source": "The tag to apply",
+          "message": "Značka na priradenie"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.short_desc": {
+          "source": "Apply an existing tag to a contact",
+          "message": "Priradiť existujúci štítok ku kontaktu"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.desc": {
+          "source": "Removes a tag from a contact.\n\nThe tag itself is untouched; only its application to this contact is removed.\n\nThe tag dropdown lists the tags the selected contact actually has, so choose the contact first.",
+          "message": "Odstráni štítok z kontaktu.\n\nSamotný štítok zostane nedotknutý; odstráni sa iba jeho priradenie k tomuto kontaktu.\n\nV rozbaľovacom zozname štítkov sa zobrazujú štítky, ktoré vybratý kontakt skutočne má, preto najprv vyberte kontakt."
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.display_name": {
+          "source": "Remove Tag from Contact",
+          "message": "Odstrániť štítok z kontaktu"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "Jedinečný identifikátor kontaktu pridelený službou Intercom"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "Kontakt, na ktorý sa to vzťahuje"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.dGFnX2lk.desc": {
+          "source": "The unique identifier for the tag which is given by Intercom",
+          "message": "Jedinečný identifikátor štítka pridelený systémom Intercom"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.dGFnX2lk.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.dGFnX2lk.short_desc": {
+          "source": "The tag to remove from this contact",
+          "message": "Štítok na odstránenie z tohto kontaktu"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.short_desc": {
+          "source": "Remove a tag from a contact",
+          "message": "Odstrániť štítok z kontaktu"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.desc": {
+          "source": "Deletes every record in the given table matching the search criteria",
+          "message": "Odstráni každý záznam v danej tabuľke zodpovedajúci vyhľadávacím kritériám"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.display_name": {
+          "source": "Delete Records",
+          "message": "Odstrániť záznamy"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "Tabuľka, s ktorou sa má pracovať: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` alebo `teammates`"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Názov tabuľky, s ktorou sa má pracovať"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.short_desc": {
+          "source": "Delete the records matching the search criteria",
+          "message": "Odstrániť záznamy zodpovedajúce vyhľadávacím kritériám"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.desc": {
+          "source": "Deletes a company.\n\nThe contacts attached to it are **not** deleted; they simply stop belonging to it.",
+          "message": "Odstráni spoločnosť.\n\nKontakty priradené k spoločnosti sa **neodstránia**; jednoducho k nej prestanú patriť."
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.display_name": {
+          "source": "Delete Company",
+          "message": "Odstrániť spoločnosť"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.desc": {
+          "source": "The unique identifier for the company which is given by Intercom",
+          "message": "Jedinečný identifikátor spoločnosti, ktorý pridelil Intercom"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company",
+          "message": "Spoločnosť"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company to delete",
+          "message": "Spoločnosť na odstránenie"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.short_desc": {
+          "source": "Delete a company",
+          "message": "Odstrániť spoločnosť"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.desc": {
+          "source": "Deletes a help center article",
+          "message": "Odstráni článok centra pomoci"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.display_name": {
+          "source": "Delete Article",
+          "message": "Odstrániť článok"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.desc": {
+          "source": "The unique identifier for the article which is given by Intercom.",
+          "message": "Jedinečný identifikátor článku pridelený systémom Intercom."
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.display_name": {
+          "source": "Article",
+          "message": "Článok"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.short_desc": {
+          "source": "The article to delete",
+          "message": "Článok na odstránenie"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.short_desc": {
+          "source": "Delete a help center article",
+          "message": "Odstrániť článok centra pomoci"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.desc": {
+          "source": "Deletes a tag.\n\nIntercom **refuses** to delete a tag that is still applied to any contact or company, answering 400; detach it everywhere first.",
+          "message": "Odstráni štítok.\n\nIntercom **odmietne** odstrániť štítok, ktorý je stále priradený ku kontaktu alebo spoločnosti, a vráti kód 400; najprv ho všade odpojte."
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.display_name": {
+          "source": "Delete Tag",
+          "message": "Odstrániť značku"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.option.dGFnX2lk.desc": {
+          "source": "The unique identifier for the tag which is given by Intercom",
+          "message": "Jedinečný identifikátor štítka pridelený systémom Intercom"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.option.dGFnX2lk.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.option.dGFnX2lk.short_desc": {
+          "source": "The tag to apply",
+          "message": "Značka na priradenie"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.short_desc": {
+          "source": "Delete a tag",
+          "message": "Odstrániť značku"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.desc": {
+          "source": "Retrieves one tag",
+          "message": "Získa jeden štítok"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.display_name": {
+          "source": "Get Tag",
+          "message": "Získať značku"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.option.dGFnX2lk.desc": {
+          "source": "The unique identifier for the tag which is given by Intercom",
+          "message": "Jedinečný identifikátor štítka pridelený systémom Intercom"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to apply",
+          "message": "Značka na priradenie"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.short_desc": {
+          "source": "Retrieve a tag by its identity",
+          "message": "Získať štítok podľa jeho identifikátora"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.desc": {
+          "source": "Returns a summary of the data events recorded for **one contact**.\n\nThis is not a listing of the workspace's events: `filter` names the contact - by `user_id`, `intercom_user_id` or `email` - and `type` must be `user`. What comes back is that contact's event summary, each event with its name, first and last occurrence and a count.\n\nThe action ID keeps Intercom's own spelling of `lisDataEvents`.",
+          "message": "Vráti súhrn udalostí údajov zaznamenaných pre **jeden kontakt**.\n\nNejde o zoznam udalostí pracovného priestoru: `filter` určuje kontakt – pomocou `user_id`, `intercom_user_id` alebo `email` – a `type` musí byť `user`. Výsledkom je súhrn udalostí daného kontaktu, pričom každá udalosť obsahuje svoj názov, prvý a posledný výskyt a počet.\n\nID akcie zachováva vlastný zápis Intercomu pre `lisDataEvents`."
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.display_name": {
+          "source": "List Data Events",
+          "message": "Zoznam udalostí údajov"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.desc": {
+          "source": "Names the contact whose events are summarised, in exactly one of three ways: `user_id` is the identity your own system gave them, `intercom_user_id` is Intercom's, and `email` is their address.",
+          "message": "Určuje kontakt, ktorého udalosti sa sumarizujú, práve jedným z troch spôsobov: `user_id` je identifikátor z vášho vlastného systému, `intercom_user_id` je identifikátor Intercomu a `email` je jeho adresa."
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.short_desc": {
+          "source": "Which contact's events to summarise",
+          "message": "Kontakt, ktorého udalosti sa majú zosumarizovať"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.c3VtbWFyeQ.desc": {
+          "source": "summary flag",
+          "message": "príznak summary"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.c3VtbWFyeQ.display_name": {
+          "source": "Summary",
+          "message": "Zhrnutie"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.c3VtbWFyeQ.short_desc": {
+          "source": "summary flag",
+          "message": "príznak summary"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "user",
+          "message": "user"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.dHlwZQ.desc": {
+          "source": "The value must be user",
+          "message": "Hodnota musí byť user"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "Typ"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.dHlwZQ.short_desc": {
+          "source": "Must be \"user\"",
+          "message": "Musí byť „user“"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.short_desc": {
+          "source": "Summarise the data events recorded for one contact",
+          "message": "Zhrnúť dátové udalosti zaznamenané pre jeden kontakt"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.desc": {
+          "source": "Lists the teammates who have access to the workspace.\n\nThis is exported so that the teammate dropdowns have an action to call - an article's author, a note's or a reply's teammate, a message's sender.\n\nThis listing is not paged: Intercom returns them all in one response, in an `admins` array.",
+          "message": "Zoznam členov tímu, ktorí majú prístup do pracovného priestoru.\n\nTáto akcia je exportovaná, aby rozbaľovacie zoznamy členov tímu mali čo volať – autor článku, člen tímu pri poznámke alebo odpovedi, odosielateľ správy.\n\nTento zoznam nie je stránkovaný: Intercom ich vráti všetky v jednej odpovedi v poli `admins`."
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.display_name": {
+          "source": "List Teammates",
+          "message": "Zoznam členov tímu"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.desc": {
+          "source": "If set to true, the response will include the admin's avatar object containing the image URL. Defaults to false.",
+          "message": "Ak je nastavené na true, odpoveď bude obsahovať objekt avatara správcu s URL adresou obrázka. Predvolená hodnota je false."
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.display_name": {
+          "source": "Display Avatar",
+          "message": "Zobraziť avatar"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.short_desc": {
+          "source": "If set to true, the response will include the admin's avatar object containing…",
+          "message": "Ak je true, odpoveď bude obsahovať objekt avatara správcu obsahujúci…"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.short_desc": {
+          "source": "List the teammates with access to the workspace",
+          "message": "Zoznam členov tímu s prístupom do pracovného priestoru"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.desc": {
+          "source": "Lists the help center collections articles can be filed under.\n\nThis is exported so that **Create Article**'s parent dropdown has an action to call.\n\nCollections nest: a collection with a `parent_id` sits inside another one. What earlier API versions called a *section* is returned here as a nested collection - Intercom removed sections at version 2.10.",
+          "message": "Zoznam kolekcií centra pomoci, do ktorých možno zaradiť články.\n\nTáto akcia je exportovaná, aby rozbaľovací zoznam nadradenej položky pre **Create Article** mal čo volať.\n\nKolekcie sa vnárajú: kolekcia s `parent_id` sa nachádza vo vnútri inej. To, čo staršie verzie API nazývali *sekcia*, sa tu vracia ako vnorená kolekcia – Intercom odstránil sekcie vo verzii 2.10."
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.display_name": {
+          "source": "List Collections",
+          "message": "Zoznam kolekcií"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "Kurzor stránkovania: vezmite `pages.next.starting_after` z predchádzajúcej odpovede a odovzdajte ho sem.\n\nJe nepriehľadný a nesmie sa vytvárať manuálne. Parameter `pages` chýba, keď je kolekcia vyčerpaná, čo indikuje, že už neexistuje ďalšia stránka."
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "Začínajúce po"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Kurzor pre nasledujúcu stránku"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one page. Intercom documents cursor pagination for every listing that answers a \"pages\" object, but declares this parameter on only some of them.",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke. Intercom dokumentuje kurzorovú pagináciu pre každý zoznam, ktorý vracia objekt „pages“, ale tento parameter deklaruje len pri niektorých z nich."
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.short_desc": {
+          "source": "List the help center collections",
+          "message": "Zoznam kolekcií centra pomoci"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.desc": {
+          "source": "Lists every company in the workspace.\n\nThis is the one listing Intercom pages by **page number** rather than by cursor: `pages.total_pages` says how many there are, and `page` selects one.\n\nIt is a `POST` because Intercom made it one; it sends no body.",
+          "message": "Zoznam všetkých spoločností v pracovnom priestore.\n\nToto je jediný zoznam, ktorý Intercom stránkuje podľa **čísla strany** a nie podľa kurzora: `pages.total_pages` určuje, koľko ich je, a `page` vyberá stranu.\n\nIde o `POST`, pretože Intercom to tak nastavil; neodosiela žiadne telo."
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.display_name": {
+          "source": "List Companies",
+          "message": "Zoznam spoločností"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.b3JkZXI.desc": {
+          "source": "`asc` or `desc`. Return the companies in ascending or descending order. Defaults to desc",
+          "message": "`asc` alebo `desc`. Vráti spoločnosti vo vzostupnom alebo zostupnom poradí. Predvolené je desc"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "Poradie"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.b3JkZXI.short_desc": {
+          "source": "'asc' or 'desc'",
+          "message": "'asc' alebo 'desc'"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGFnZQ.desc": {
+          "source": "The page of results to fetch. Defaults to first page",
+          "message": "Strana výsledkov, ktorá sa má načítať. Predvolená je prvá strana"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "Stránka"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, starting at 1",
+          "message": "Ktorú stranu vrátiť, počnúc od 1"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGVyX3BhZ2U.desc": {
+          "source": "How many results to return per page. Defaults to 15",
+          "message": "Koľko výsledkov sa má vrátiť na stranu. Predvolená hodnota je 15"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.short_desc": {
+          "source": "List the companies in the workspace",
+          "message": "Zoznam spoločností v pracovnom priestore"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.desc": {
+          "source": "Lists the workspace's help center articles.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
+          "message": "Zoznam článkov centra pomoci v pracovnom priestore.\n\nPopis v Intercome pre túto operáciu nedeklaruje žiadne parametre stránkovania, aj keď vracia stránkovanú obálku; `per_page` a `starting_after` sa pridávajú pri importe schémy. Pozrite @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\"."
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.display_name": {
+          "source": "List Articles",
+          "message": "Zoznam článkov"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "Kurzor stránkovania: vezmite `pages.next.starting_after` z predchádzajúcej odpovede a odovzdajte ho sem.\n\nJe nepriehľadný a nesmie sa vytvárať manuálne. Parameter `pages` chýba, keď je kolekcia vyčerpaná, čo indikuje, že už neexistuje ďalšia stránka."
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "Začínajúce po"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Kurzor pre nasledujúcu stránku"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one page. Intercom documents cursor pagination for every listing that answers a \"pages\" object, but declares this parameter on only some of them.",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke. Intercom dokumentuje kurzorovú pagináciu pre každý zoznam, ktorý vracia objekt „pages“, ale tento parameter deklaruje len pri niektorých z nich."
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.short_desc": {
+          "source": "List the help center articles",
+          "message": "Zoznam článkov centra pomoci"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3M.desc": {
+          "source": "Lists every tag defined in the workspace.\n\nThis listing is not paged: Intercom returns the whole set in one response.",
+          "message": "Zoznam všetkých značiek definovaných v pracovnom priestore.\n\nTento zoznam nie je stránkovaný: Intercom vráti celú množinu v jednej odpovedi."
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3M.display_name": {
+          "source": "List Tags",
+          "message": "Zoznam značiek"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3M.short_desc": {
+          "source": "List the tags defined in the workspace",
+          "message": "Zoznam značiek definovaných v pracovnom priestore"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.desc": {
+          "source": "Lists the tags applied to a contact.\n\nThis is exported so that **Remove Tag from Contact** can offer the tags that contact actually has, rather than every tag in the workspace - almost all of which would fail.\n\nThis listing is not paged.",
+          "message": "Zoznam značiek priradených ku kontaktu.\n\nTáto akcia je exportovaná, aby akcia **Remove Tag from Contact** mohla ponúknuť značky, ktoré kontakt skutočne má, namiesto všetkých značiek v pracovnom priestore – z ktorých by takmer všetky zlyhali.\n\nTento zoznam nie je stránkovaný."
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.display_name": {
+          "source": "List Tags on Contact",
+          "message": "Zoznam značiek kontaktu"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "Jedinečný identifikátor kontaktu pridelený službou Intercom"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "Kontakt"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "Kontakt, na ktorý sa to vzťahuje"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.short_desc": {
+          "source": "List the tags applied to one contact",
+          "message": "Zoznam značiek priradených k jednému kontaktu"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Intercom** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonať vlastné volanie HTTP / REST API do **Intercomu** s použitím autentifikácie nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese API pripojenia), voliteľné parametre dopytu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú sprístupnené ako štandardné akcie v tejto aplikácii."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Cesta URI relatívna k základnej adrese API URL pripojenia"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Intercom",
+          "message": "Vykonať vlastné volanie API do Intercomu"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Fires for each contact created in the workspace.\n\n`role` narrows the feed to users (a contact who has signed up) or to leads (one who has not); left unset, both are reported. The event carries the contact record Intercom returns.\n\nA contact that is edited later does **not** fire this again: the feed is positioned by `created_at`.",
+          "message": "Spustí sa pre každý kontakt vytvorený v pracovnom priestore.\n\n`role` zužuje kanál na používateľov (kontakt, ktorý sa zaregistroval) alebo na potenciálnych zákazníkov (kontakt, ktorý sa nezaregistroval); ak nie je nastavené, hlásia sa obaja. Udalosť nesie záznam kontaktu, ktorý Intercom vráti.\n\nKontakt, ktorý sa neskôr upraví, túto udalosť znova **nespustí**: kanál je pozicovaný podľa `created_at`."
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "Nový kontakt"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Fires when a contact is created",
+          "message": "Spustí sa pri vytvorení kontaktu"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.desc": {
+          "source": "Fires for each conversation created in the workspace.\n\nThe event carries the conversation record Intercom returns, which includes its source - who started it and what they said.\n\nA reply to an existing conversation does **not** fire this: the feed is positioned by `created_at`, so a conversation is reported once, when it starts.",
+          "message": "Spustí sa pre každú konverzáciu vytvorenú v pracovnom priestore.\n\nUdalosť nesie záznam konverzácie, ktorý Intercom vráti vrátane jej zdroja – kto ju začal a čo povedal.\n\nOdpoveď na existujúcu konverzáciu túto udalosť **nespustí**: kanál je pozicovaný podľa `created_at`, takže konverzácia sa nahlási raz pri svojom začiatku."
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.display_name": {
+          "source": "New Conversation",
+          "message": "Nová konverzácia"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.short_desc": {
+          "source": "Fires when a conversation is created",
+          "message": "Spustí sa pri vytvorení konverzácie"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.desc": {
+          "source": "Returns every record in the given table matching the search criteria",
+          "message": "Vráti všetky záznamy v danej tabuľke, ktoré zodpovedajú kritériám vyhľadávania"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.display_name": {
+          "source": "Search Records",
+          "message": "Vyhľadať záznamy"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "Tabuľka, s ktorou sa má pracovať: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` alebo `teammates`"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Názov tabuľky, s ktorou sa má pracovať"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.short_desc": {
+          "source": "Search for matching records in the given table",
+          "message": "Vyhľadať zodpovedajúce záznamy v danej tabuľke"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.desc": {
+          "source": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches",
+          "message": "Vráti jeden záznam v danej tabuľke, ktorý zodpovedá kritériám vyhľadávania; ak ich zodpovedá viac, ide o chybu"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.display_name": {
+          "source": "Find a Single Record",
+          "message": "Nájsť jeden záznam"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "Tabuľka, s ktorou sa má pracovať: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` alebo `teammates`"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Názov tabuľky, s ktorou sa má pracovať"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
+          "source": "Search for a single matching record in the given table",
+          "message": "Vyhľadať jeden zodpovedajúci záznam v danej tabuľke"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.desc": {
+          "source": "Searches the workspace's conversations.\n\n`query` takes the same shape as **Search Contacts**: a single `{field, operator, value}` filter, or `{operator: \"AND\", value: [ ... ]}` combining several.\n\nTimestamps in a query are counts of seconds since the epoch.",
+          "message": "Vyhľadáva v konverzáciách pracovného priestoru.\n\n`query` má rovnakú štruktúru ako **Search Contacts**: jeden filter `{field, operator, value}` alebo `{operator: \"AND\", value: [ ... ]}` kombinujúci viaceré.\n\nČasové pečiatky v dopyte sú počty sekúnd od epochy."
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.display_name": {
+          "source": "Search Conversations",
+          "message": "Vyhľadať konverzácie"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.desc": {
+          "source": "If set to true, the response will include a `monitor_evaluations` array on each conversation with any QA monitor results that flagged it.",
+          "message": "Ak je nastavené na true, odpoveď bude pri každej konverzácii obsahovať pole `monitor_evaluations` so všetkými výsledkami monitorovania kvality, ktoré ju označili."
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.display_name": {
+          "source": "Include Monitors",
+          "message": "Zahrnúť monitorovania"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.short_desc": {
+          "source": "If set to true, the response will include a 'monitor_evaluations' array on…",
+          "message": "Ak je true, odpoveď bude obsahovať pole 'monitor_evaluations' pri…"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.desc": {
+          "source": "If set to true, the response will include a `scorecards` array on each conversation with any QA scorecard results.",
+          "message": "Ak je nastavené na true, odpoveď bude pri každej konverzácii obsahovať pole `scorecards` so všetkými výsledkami hodnotiacich hárkov kvality."
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.display_name": {
+          "source": "Include Scorecards",
+          "message": "Zahrnúť hodnotiace hárky"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.short_desc": {
+          "source": "If set to true, the response will include a 'scorecards' array on each…",
+          "message": "Ak je true, odpoveď bude obsahovať pole 'scorecards' pri každej…"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "Kurzor stránkovania: vezmite `pages.next.starting_after` z predchádzajúcej odpovede a odovzdajte ho sem.\n\nJe nepriehľadný a nesmie sa vytvárať manuálne. Parameter `pages` chýba, keď je kolekcia vyčerpaná, čo indikuje, že už neexistuje ďalšia stránka."
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "Začínajúce po"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Kurzor pre nasledujúcu stránku"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cGVyX3BhZ2U.desc": {
+          "source": "The number of results to fetch per page.",
+          "message": "Počet výsledkov, ktoré sa majú načítať na stránku."
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "Dopyt"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.short_desc": {
+          "source": "Find conversations matching a query",
+          "message": "Nájsť konverzácie zodpovedajúce dopytu"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.desc": {
+          "source": "Retrieves one help center article",
+          "message": "Získa jeden článok centra pomoci"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.display_name": {
+          "source": "Get Article",
+          "message": "Získať článok"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.option.YXJ0aWNsZV9pZA.desc": {
+          "source": "The unique identifier for the article which is given by Intercom.",
+          "message": "Jedinečný identifikátor článku pridelený systémom Intercom."
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.option.YXJ0aWNsZV9pZA.display_name": {
+          "source": "Article",
+          "message": "Článok"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.option.YXJ0aWNsZV9pZA.short_desc": {
+          "source": "The article to retrieve",
+          "message": "Článok, ktorý sa má získať"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.short_desc": {
+          "source": "Retrieve a help center article by its identity",
+          "message": "Získať článok centra pomoci podľa jeho identifikátora"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.desc": {
+          "source": "Retrieves one conversation, including its parts - the messages and notes it holds",
+          "message": "Získa jednu konverzáciu vrátane jej častí – správ a poznámok, ktoré obsahuje"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.display_name": {
+          "source": "Get Conversation",
+          "message": "Získať konverzáciu"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.desc": {
+          "source": "The id of the conversation to target",
+          "message": "Identifikátor cieľovej konverzácie"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.display_name": {
+          "source": "Conversation",
+          "message": "Konverzácia"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.short_desc": {
+          "source": "The conversation this applies to",
+          "message": "Konverzácia, ktorej sa to týka"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.desc": {
+          "source": "Set to plaintext to retrieve conversation messages in plain text. This affects both the body and subject fields. Inline links are rendered as `label (url)`, preserving the link URL alongside the visible text.",
+          "message": "Nastavte na plaintext na získanie správ konverzácie ako čistý text. Toto ovplyvňuje polia tela aj predmetu. Vnorené odkazy sa vykreslia ako `label (url)`, čím sa zachová URL adresa odkazu spolu s viditeľným textom."
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.display_name": {
+          "source": "Display As",
+          "message": "Zobraziť ako"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.short_desc": {
+          "source": "Set to plaintext to retrieve conversation messages in plain text",
+          "message": "Nastavte na plaintext na získanie správ konverzácie ako čistý text"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.desc": {
+          "source": "If set to true, conversation parts will be translated to the detected language of the conversation.",
+          "message": "Ak je nastavené na true, časti konverzácie sa preložia do zisteného jazyka konverzácie."
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.display_name": {
+          "source": "Include Translations",
+          "message": "Zahrnúť preklady"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.short_desc": {
+          "source": "If set to true, conversation parts will be translated to the detected language…",
+          "message": "Ak je true, časti konverzácie sa preložia do zisteného jazyka…"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.short_desc": {
+          "source": "Retrieve a conversation by its identity",
+          "message": "Získať konverzáciu podľa jej identifikátora"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.desc": {
+          "source": "Retrieves one help center collection.\n\nWhat used to be a **section** is now a collection with a parent, which is how Intercom has represented them since API version 2.10.",
+          "message": "Získa jednu kolekciu centra pomoci.\n\nTo, čo bývalo **sekciou**, je teraz kolekcia s nadradenou položkou, čo je spôsob, akým ich Intercom reprezentuje od verzie API 2.10."
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.display_name": {
+          "source": "Get Collection",
+          "message": "Získať kolekciu"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.option.Y29sbGVjdGlvbl9pZA.desc": {
+          "source": "The unique identifier for the collection which is given by Intercom.",
+          "message": "Jedinečný identifikátor kolekcie, ktorý pridelil Intercom."
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.option.Y29sbGVjdGlvbl9pZA.display_name": {
+          "source": "Collection",
+          "message": "Kolekcia"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.option.Y29sbGVjdGlvbl9pZA.short_desc": {
+          "source": "The collection to retrieve",
+          "message": "Kolekcia, ktorá sa má získať"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.short_desc": {
+          "source": "Retrieve a help center collection by its identity",
+          "message": "Získať kolekciu centra pomoci podľa jej identifikátora"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.desc": {
+          "source": "Adds a reply to an existing conversation, from a teammate.\n\n`message_type` decides who sees it: `comment` is a reply the contact sees and is notified about, `note` is an internal remark only teammates see, and `quick_reply` offers the contact a set of `reply_options` to choose from.\n\nUse **Create Conversation** to start one, and **Create Message** to write to a contact without an existing conversation.\n\nThis action is hand-written rather than generated, because Intercom's own description declares this operation's body as a union of five request contracts, which cannot be published as one option shape. It covers a teammate's reply, which is the branch Intercom declares in full; a reply attributed to the contact is reachable through `make-api-call`.",
+          "message": "Pridá do existujúcej konverzácie odpoveď od člena tímu.\n\n`message_type` určuje, kto ju uvidí: `comment` je odpoveď, ktorú kontakt vidí a dostane o nej upozornenie, `note` je interná poznámka, ktorú vidia iba členovia tímu, a `quick_reply` ponúka kontaktu sadu `reply_options` na výber.\n\nPoužite **Create Conversation** na začatie konverzácie a **Create Message** na napísanie kontaktu bez existujúcej konverzácie.\n\nTáto akcia je napísaná ručne namiesto generovania, pretože vlastný popis v Intercome deklaruje telo tejto operácie ako zjednotenie piatich kontraktov požiadaviek, ktoré nemožno publikovať ako jednu štruktúru možností. Pokrýva odpoveď člena tímu, čo je vetva, ktorú Intercom deklaruje v plnom rozsahu; odpoveď pripísaná kontaktu je dostupná cez `make-api-call`."
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.display_name": {
+          "source": "Reply to Conversation",
+          "message": "Odpovedať na konverzáciu"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.desc": {
+          "source": "The conversation to reply to",
+          "message": "Konverzácia, na ktorú sa má odpovedať"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.display_name": {
+          "source": "Conversation",
+          "message": "Konverzácia"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.short_desc": {
+          "source": "The conversation to reply to",
+          "message": "Konverzácia, na ktorú sa má odpovedať"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "When the reply was written, if it is being recorded after the fact.\n\nSent to Intercom as a count of seconds since the epoch; Intercom uses the current time when this is not set.",
+          "message": "Kedy bola odpoveď napísaná, ak sa zaznamenáva spätne.\n\nOdosiela sa do Intercomu ako počet sekúnd od začiatku epochy; ak táto hodnota nie je nastavená, Intercom použije aktuálny čas."
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "Vytvorené"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "When the reply was written",
+          "message": "Kedy bola odpoveď napísaná"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YWRtaW5faWQ.desc": {
+          "source": "The teammate the reply is attributed to",
+          "message": "Kolega, ktorému je odpoveď pripísaná"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YWRtaW5faWQ.display_name": {
+          "source": "Teammate",
+          "message": "Člen tímu"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YWRtaW5faWQ.short_desc": {
+          "source": "The teammate the reply is from",
+          "message": "Kolega, od ktorého odpoveď pochádza"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YXR0YWNobWVudF91cmxz.desc": {
+          "source": "The URLs of files to attach to the reply; Intercom accepts up to five",
+          "message": "URL adries súborov, ktoré sa majú priložiť k odpovedi; Intercom akceptuje maximálne päť"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YXR0YWNobWVudF91cmxz.display_name": {
+          "source": "Attachment URLs",
+          "message": "URL adries príloh"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YXR0YWNobWVudF91cmxz.short_desc": {
+          "source": "URLs of files to attach, up to five",
+          "message": "URL adries súborov na priloženie, maximálne päť"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Ym9keQ.desc": {
+          "source": "The text of the reply, in HTML.\n\nIntercom does not require it for a `quick_reply`, which carries its content in `reply_options` instead.",
+          "message": "Text odpovede v HTML.\n\nIntercom ho nevyžaduje pre `quick_reply`, ktorý svoj obsah nesie v `reply_options`."
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Ym9keQ.display_name": {
+          "source": "Message",
+          "message": "Správa"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Ym9keQ.short_desc": {
+          "source": "The text of the reply, in HTML",
+          "message": "Text odpovede v HTML"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.bWVzc2FnZV90eXBl.desc": {
+          "source": "Whether the reply is seen by the contact.\n\n`comment` is a reply the contact sees and is notified about, `note` is an internal remark only teammates see, and `quick_reply` offers the contact the choices in `reply_options`.\n\nA `note` here is attached to the **conversation**; **Create Note** attaches one to the contact's record instead.",
+          "message": "Určuje, či kontakt odpoveď uvidí.\n\n`comment` je odpoveď, ktorú kontakt vidí a dostane o nej upozornenie, `note` je interná poznámka viditeľná iba pre kolegov a `quick_reply` ponúka kontaktu možnosti v `reply_options`.\n\n`note` sa tu pripája ku **konverzácii**; **Create Note** ju namiesto toho pripojí k záznamu kontaktu."
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.bWVzc2FnZV90eXBl.display_name": {
+          "source": "Message Type",
+          "message": "Typ správy"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.bWVzc2FnZV90eXBl.short_desc": {
+          "source": "Whether the reply is seen by the contact",
+          "message": "Určuje, či kontakt odpoveď uvidí"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.c2tpcF9ub3RpZmljYXRpb25z.desc": {
+          "source": "Add the reply without notifying the contact about it",
+          "message": "Pridať odpoveď bez upozornenia kontaktu"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.c2tpcF9ub3RpZmljYXRpb25z.display_name": {
+          "source": "Skip Notifications",
+          "message": "Preskočiť oznámenia"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.c2tpcF9ub3RpZmljYXRpb25z.short_desc": {
+          "source": "Do not notify the contact about this reply",
+          "message": "Neupozorňovať kontakt na túto odpoveď"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.cmVwbHlfb3B0aW9ucw.desc": {
+          "source": "The choices offered by a `quick_reply`, each `{text, uuid}`.\n\nOnly meaningful when `message_type` is `quick_reply`.",
+          "message": "Možnosti ponúkané v `quick_reply`, každá `{text, uuid}`.\n\nMá zmysel iba vtedy, keď `message_type` je `quick_reply`."
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.cmVwbHlfb3B0aW9ucw.display_name": {
+          "source": "Reply Options",
+          "message": "Možnosti odpovede"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.cmVwbHlfb3B0aW9ucw.short_desc": {
+          "source": "The choices offered by a quick reply",
+          "message": "Možnosti ponúkané rýchlou odpoveďou"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.short_desc": {
+          "source": "Reply to a conversation as a teammate",
+          "message": "Odpovedať na konverzáciu ako kolega"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.desc": {
+          "source": "Updates every record in the given table matching the search criteria",
+          "message": "Aktualizuje každý záznam v danej tabuľke zodpovedajúci vyhľadávacím kritériám"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "Aktualizovať záznamy"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "Tabuľka, s ktorou sa má pracovať: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` alebo `teammates`"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Názov tabuľky, s ktorou sa má pracovať"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria",
+          "message": "Aktualizovať záznamy zodpovedajúce vyhľadávacím kritériám"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.desc": {
+          "source": "Updates a help center article that already exists.\n\nOnly the attributes supplied are changed. An article's parent can only be a **collection**: Intercom withdrew sections at API version 2.10.",
+          "message": "Aktualizuje článok v centre pomoci, ktorý už existuje.\n\nZmenia sa iba poskytnuté atribúty. Nadradenou položkou článku môže byť iba **zbierka**: Intercom zrušil sekcie vo verzii API 2.10."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.display_name": {
+          "source": "Update Article",
+          "message": "Aktualizovať článok"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
+          "source": "Whether the article should be available for AI Copilot. For multilingual articles, this sets the default language's availability.",
+          "message": "Určuje, či má byť článok dostupný pre AI Copilot. Pri viacjazyčných článkoch sa týmto nastavuje dostupnosť pre predvolený jazyk."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
+          "source": "AI Copilot Availability",
+          "message": "Dostupnosť pre AI Copilot"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
+          "source": "Whether the article should be available for AI Copilot",
+          "message": "Určuje, či má byť článok dostupný pre AI Copilot"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
+          "source": "Whether the article should be available for AI Chatbot (Fin). For multilingual articles, this sets the default language's availability.",
+          "message": "Určuje, či má byť článok dostupný pre AI Chatbot (Fin). Pri viacjazyčných článkoch sa týmto nastavuje dostupnosť pre predvolený jazyk."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
+          "source": "AI Chatbot Availability",
+          "message": "Dostupnosť pre AI Chatbot"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
+          "source": "Whether the article should be available for AI Chatbot (Fin)",
+          "message": "Určuje, či má byť článok dostupný pre AI Chatbot (Fin)"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
+          "source": "Whether the article should be available for AI Sales Agent. For multilingual articles, this sets the default language's availability.",
+          "message": "Určuje, či má byť článok dostupný pre AI Sales Agent. Pri viacjazyčných článkoch sa týmto nastavuje dostupnosť pre predvolený jazyk."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
+          "source": "AI Sales Agent Availability",
+          "message": "Dostupnosť pre AI Sales Agent"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
+          "source": "Whether the article should be available for AI Sales Agent",
+          "message": "Určuje, či má byť článok dostupný pre AI Sales Agent"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.desc": {
+          "source": "The unique identifier for the article which is given by Intercom.",
+          "message": "Jedinečný identifikátor článku pridelený systémom Intercom."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.display_name": {
+          "source": "Article",
+          "message": "Článok"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.short_desc": {
+          "source": "The article to update",
+          "message": "Článok, ktorý sa má aktualizovať"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.desc": {
+          "source": "The id of the author of the article. For multilingual articles, this will be the id of the author of the default language's content. Must be a teammate on the help center's workspace.",
+          "message": "ID autora článku. Pri viacjazyčných článkoch to bude ID autora obsahu v predvolenom jazyku. Musí ísť o člena tímu v pracovnom priestore centra pomoci."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.display_name": {
+          "source": "Teammate",
+          "message": "Člen tímu"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.short_desc": {
+          "source": "The teammate to act as",
+          "message": "Kolega, v mene ktorého sa má konať"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.desc": {
+          "source": "The list of audience IDs to assign to this article for Fin AI Agent targeting. Sending a top-level `audience_ids` broadcasts the same set to every locale. Sending `audience_ids: []` clears all audience memberships from every locale. For per-locale targeting, use `translated_content.<locale>.audience_ids` instead. Sending both top-level and per-locale in the same request causes top-level to win. Unknown audience IDs return a 404 error. No partial commit occurs.",
+          "message": "Zoznam ID publík, ktoré sa majú priradiť k tomuto článku na zacielenie agenta Fin AI. Odoslanie `audience_ids` na najvyššej úrovni rozšíri rovnakú množinu do všetkých jazykových verzií. Odoslanie `audience_ids: []` vymaže všetky členstvá v publikách zo všetkých jazykových verzií. Na zacielenie podľa konkrétnej jazykovej verzie použite namiesto toho `translated_content.<locale>.audience_ids`. Ak v rovnakej požiadavke odošlete nastavenie na najvyššej úrovni aj podľa jazykovej verzie, prednosť má najvyššia úroveň. Neznáme ID publík vrátia chybu 404. Čiastočné uloženie sa nevykoná."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.display_name": {
+          "source": "Audience Ids",
+          "message": "ID cieľových skupín"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.short_desc": {
+          "source": "The list of audience IDs to assign to this article for Fin AI Agent targeting",
+          "message": "Zoznam ID cieľových skupín priradených k článku pre cielenie Fin AI Agent"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keQ.desc": {
+          "source": "The content of the article in HTML. For multilingual articles, this will be the body of the default language's content. Mutually exclusive with `body_markdown`.",
+          "message": "Obsah článku vo formáte HTML. Pri viacjazyčných článkoch to bude telo obsahu v predvolenom jazyku. Vzájomne sa vylučuje s `body_markdown`."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keQ.short_desc": {
+          "source": "The content of the article in HTML",
+          "message": "Obsah článku v HTML"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.desc": {
+          "source": "The content of the article in markdown. For multilingual articles, this will be the body of the default language's content. An alternative to `body` — you can provide content as markdown instead of HTML. Mutually exclusive with `body`.",
+          "message": "Obsah článku vo formáte Markdown. Pri viacjazyčných článkoch to bude telo obsahu v predvolenom jazyku. Alternatíva k `body` – obsah môžete poskytnúť ako Markdown namiesto HTML. Vzájomne sa vylučuje s `body`."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.display_name": {
+          "source": "Body Markdown",
+          "message": "Telo v Markdown"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.short_desc": {
+          "source": "The content of the article in markdown",
+          "message": "Obsah článku vo formáte Markdown"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the article. For multilingual articles, this will be the description of the default language's content.",
+          "message": "Popis článku. Pri viacjazyčných článkoch to bude popis obsahu v predvolenom jazyku."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "Popis"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The description of the article",
+          "message": "Popis článku"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future publish of the article. When set together with `state: \"published\"`, the article is scheduled instead of published immediately. Setting `null` cancels a pending publish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Combining with `state: \"draft\"` returns 400 `parameter_invalid`. Sending in the same request as `scheduled_unpublish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`.",
+          "message": "Časová pečiatka ISO 8601, kedy sa má naplánovať budúce zverejnenie článku. Pri nastavení spolu s `state: \"published\"` sa článok namiesto okamžitého zverejnenia naplánuje. Nastavenie `null` zruší čakajúci plán zverejnenia. Časové pečiatky v minulosti alebo zhodné s aktuálnym časom sú odmietnuté s kódom 400 `parameter_invalid` – hodnota musí byť striktne v budúcnosti. Kombinácia s `state: \"draft\"` vráti 400 `parameter_invalid`. Odoslanie v rovnakej požiadavke ako `scheduled_unpublish_at` vráti 400 – na jeden článok je povolený iba jeden čakajúci plán. Prázdny reťazec vráti 400 `parameter_invalid`."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.display_name": {
+          "source": "Scheduled Publish At",
+          "message": "Naplánovaný čas zverejnenia"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.short_desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future publish of the article",
+          "message": "Časová pečiatka ISO 8601 pre plánované zverejnenie článku"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future unpublish of the article. Setting `null` cancels a pending unpublish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Rejected with 400 `parameter_invalid` if the article has never been published. Sending in the same request as `scheduled_publish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`.",
+          "message": "Časová pečiatka ISO 8601, kedy sa má naplánovať budúce zrušenie zverejnenia článku. Nastavenie `null` zruší čakajúci plán zrušenia zverejnenia. Časové pečiatky v minulosti alebo zhodné s aktuálnym časom sú odmietnuté s kódom 400 `parameter_invalid` – hodnota musí byť striktne v budúcnosti. Ak článok nebol nikdy zverejnený, požiadavka je odmietnutá s kódom 400 `parameter_invalid`. Odoslanie v rovnakej požiadavke ako `scheduled_publish_at` vráti 400 – na jeden článok je povolený iba jeden čakajúci plán. Prázdny reťazec vráti 400 `parameter_invalid`."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.display_name": {
+          "source": "Scheduled Unpublish At",
+          "message": "Naplánovaný čas zrušenia zverejnenia"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.short_desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future unpublish of the article",
+          "message": "Časová pečiatka ISO 8601 pre plánované zrušenie zverejnenia článku"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "draft",
+          "message": "koncept"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "published",
+          "message": "zverejnené"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.desc": {
+          "source": "Whether the article will be `published` or will be a `draft`. Defaults to draft. For multilingual articles, this will be the state of the default language's content.",
+          "message": "Určuje, či bude článok `published` alebo `draft`. Predvolená hodnota je draft. Pri viacjazyčných článkoch to bude stav obsahu v predvolenom jazyku."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "Štát"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.short_desc": {
+          "source": "Whether the article will be 'published' or will be a 'draft'",
+          "message": "Určuje, či bude článok „published“ alebo „draft“"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.desc": {
+          "source": "The id of the article's parent collection or section. An article without this field stands alone.",
+          "message": "ID nadradenej kolekcie alebo sekcie článku. Článok bez tohto poľa stojí samostatne."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent ID",
+          "message": "Nadradené ID"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.short_desc": {
+          "source": "The id of the article's parent collection or section",
+          "message": "ID nadradenej zbierky alebo sekcie článku"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.desc": {
+          "source": "The type of parent, which can either be a `collection` or `section`.",
+          "message": "Typ nadradenej položky, ktorým môže byť buď `collection`, alebo `section`."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.display_name": {
+          "source": "Parent Type",
+          "message": "Nadradený typ"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.short_desc": {
+          "source": "The type of parent, which can either be a 'collection' or 'section'",
+          "message": "Typ nadradenej položky, buď 'collection' alebo 'section'"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dGl0bGU.desc": {
+          "source": "The title of the article.For multilingual articles, this will be the title of the default language's content.",
+          "message": "Názov článku. Pri viacjazyčných článkoch to bude názov obsahu v predvolenom jazyku."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Názov"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dGl0bGU.short_desc": {
+          "source": "The title of the article.For multilingual articles, this will be the title of…",
+          "message": "Názov článku. Pri viacjazyčných článkoch to bude názov..."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.desc": {
+          "source": "The Translated Content of an Article. The keys are the locale codes and the values are the translated content of the article.",
+          "message": "Preložený obsah článku. Kľúče sú kódy jazykových verzií a hodnoty sú preložený obsah článku."
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.display_name": {
+          "source": "Translated Content",
+          "message": "Preložený obsah"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.short_desc": {
+          "source": "The Translated Content of an Article",
+          "message": "Preložený obsah článku"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.short_desc": {
+          "source": "Update an existing help center article",
+          "message": "Aktualizovať existujúci článok v centre pomoci"
+        },
+        "app.SW50ZXJjb20.desc": {
+          "source": "Provides access to [Intercom](https://www.intercom.com), the customer communications platform.\n\nIntercom holds the people who use your product - **contacts**, either `user`s who have signed up or `lead`s who have not - the **companies** they belong to, and the **conversations** you have had with them, alongside a help center of **articles**.\n\n**Common use cases**:\n- **Contacts**: find contacts, note what you know about them, and tag them\n- **Companies**: create and update companies from your own system's records\n- **Conversations**: start one, search them, and reply as a teammate\n- **Messaging**: send a contact an e-mail or an in-app message from a teammate\n- **Data events**: record what a contact did, and read a contact's event summary\n- **Help center**: list and write articles\n\nAuthentication is the OAuth2 authorization code flow. Intercom asks for no scopes: what an access token may do is set by the permissions granted to the app in Intercom's own developer hub.\n\nIntercom is a trademark of Intercom, Inc.",
+          "message": "Poskytuje prístup k platforme [Intercom](https://www.intercom.com) na komunikáciu so zákazníkmi.\n\nIntercom uchováva ľudí, ktorí používajú váš produkt – **kontakty**, či už používateľov `user`, ktorí sa zaregistrovali, alebo používateľov `lead`, ktorí tak neurobili –, **spoločnosti**, ku ktorým patria, a **konverzácie**, ktoré ste s nimi viedli, spolu s centrom pomoci s **článkami**.\n\n**Bežné prípady použitia**:\n- **Kontakty**: vyhľadávanie kontaktov, zaznamenávanie informácií o nich a ich označovanie\n- **Spoločnosti**: vytváranie a aktualizácia spoločností zo záznamov vášho vlastného systému\n- **Konverzácie**: začatie novej, ich vyhľadávanie a odpovedanie ako kolega\n- **Správy**: odoslanie e-mailu alebo správy v aplikácii kontaktu od kolegu\n- **Dátové udalosti**: zaznamenávanie aktivít kontaktu a čítanie súhrnu udalostí kontaktu\n- **Centrum pomoci**: prehliadanie a písanie článkov\n\nAutentifikácia prebieha cez OAuth2 authorization code flow. Intercom nepožaduje žiadne scopes: to, čo prístupový token môže robiť, je určené oprávneniami udelenými aplikácii priamo v portáli pre vývojárov Intercomu.\n\nIntercom je ochranná známka spoločnosti Intercom, Inc."
+        },
+        "app.SW50ZXJjb20.display_name": {
+          "source": "Intercom",
+          "message": "Intercom"
+        },
+        "app.SW50ZXJjb20.short_desc": {
+          "source": "Talk to your customers and keep what you know about them in one place",
+          "message": "Komunikujte so zákazníkmi a majte informácie o nich na jednom mieste"
+        }
+      }
     }
   }
 }

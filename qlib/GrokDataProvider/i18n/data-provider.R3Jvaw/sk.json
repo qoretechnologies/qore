@@ -237,7 +237,7 @@
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
           "source": "A key for caching prompts to optimize cache hit rates",
-          "message": "Kľúč na ukladanie výziev do vyrovnávacej pamäte na optimalizáciu miery zásahov vyrovnávacej pamäte"
+          "message": "Kľúč na cachovanie promptov na optimalizáciu úspešnosti cache"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
           "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
@@ -645,7 +645,7 @@
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
           "source": "A key for caching prompts to optimize cache hit rates",
-          "message": "Kľúč na ukladanie výziev do vyrovnávacej pamäte na optimalizáciu miery zásahov vyrovnávacej pamäte"
+          "message": "Kľúč na cachovanie promptov na optimalizáciu úspešnosti cache"
         },
         "app.R3Jvaw.action.Y3JlYXRlLXJlc3BvbnNlLWRpcmVjdA.option.cmVhc29uaW5n.desc": {
           "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",
@@ -1207,6 +1207,10 @@
           "source": "URI Path",
           "message": "Cesta URI"
         },
+        "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Cesta URI relatívna k základnej adrese API URL pripojenia"
+        },
         "app.R3Jvaw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
@@ -1325,7 +1329,7 @@
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWF4X3Rva2Vucw.short_desc": {
           "source": "The maximum number of tokens to generate (deprecated; use max_completion_tokens)",
-          "message": "Maximálny počet tokenov na vygenerovanie (zastarané; použite max_completion_tokens)"
+          "message": "Max. počet tokenov na vygenerovanie (zastarané; použite max_completion_tokens)"
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.bWVzc2FnZXM.desc": {
           "source": "A list of messages comprising the conversation so far",
@@ -1565,7 +1569,7 @@
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX2xvZ3Byb2Jz.short_desc": {
           "source": "Number of most likely tokens to return at each position (0-8)",
-          "message": "Počet najpravdepodobnejších tokenov, ktoré sa majú vrátiť na každej pozícii (0 – 8)"
+          "message": "Počet najpravdepodobnejších tokenov vrátených na každej pozícii (0 – 8)"
         },
         "app.R3Jvaw.action.bXVsdGktY2hhdA.option.dG9wX3A.desc": {
           "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass",
@@ -1709,7 +1713,7 @@
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bWF4X3Rva2Vucw.short_desc": {
           "source": "The maximum number of tokens to generate (deprecated; use max_completion_tokens)",
-          "message": "Maximálny počet tokenov na vygenerovanie (zastarané; použite max_completion_tokens)"
+          "message": "Max. počet tokenov na vygenerovanie (zastarané; použite max_completion_tokens)"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.bmFtZQ.desc": {
           "source": "An optional name for the participant",
@@ -1985,7 +1989,7 @@
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX2xvZ3Byb2Jz.short_desc": {
           "source": "Number of most likely tokens to return at each position (0-8)",
-          "message": "Počet najpravdepodobnejších tokenov, ktoré sa majú vrátiť na každej pozícii (0 – 8)"
+          "message": "Počet najpravdepodobnejších tokenov vrátených na každej pozícii (0 – 8)"
         },
         "app.R3Jvaw.action.c2ltcGxlLWNoYXQ.option.dG9wX3A.desc": {
           "source": "An alternative to sampling with temperature, called nucleus sampling, where the model considers the results of the tokens with top_p probability mass",
@@ -2261,7 +2265,7 @@
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cHJvbXB0X2NhY2hlX2tleQ.short_desc": {
           "source": "A key for caching prompts to optimize cache hit rates",
-          "message": "Kľúč na ukladanie výziev do vyrovnávacej pamäte na optimalizáciu miery zásahov vyrovnávacej pamäte"
+          "message": "Kľúč na cachovanie promptov na optimalizáciu úspešnosti cache"
         },
         "app.R3Jvaw.action.c3RyZWFtLXJlc3BvbnNl.option.cmVhc29uaW5n.desc": {
           "source": "Reasoning configuration with effort level and summary type. Only supported by reasoning-capable models (e.g., `grok-3-mini`)",

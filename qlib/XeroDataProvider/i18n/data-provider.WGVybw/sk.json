@@ -63,6 +63,10 @@
           "source": "Summarize Errors",
           "message": "Zhrnúť chyby"
         },
+        "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "Ak false, vráti 200 OK a zmes úspešne vytvorených objektov a tých s…"
+        },
         "app.WGVybw.action.Y3JlYXRlQ3JlZGl0Tm90ZUFsbG9jYXRpb24.short_desc": {
           "source": "Apply a credit note to an invoice",
           "message": "Uplatniť dobropis na faktúru"
@@ -115,6 +119,10 @@
           "source": "Code",
           "message": "Kód"
         },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q29kZQ.short_desc": {
+          "source": "Code of account you are using to make the payment e.g. 001…",
+          "message": "Kód účtu, ktorý používate na uskutočnenie platby, napr. 001…"
+        },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZQ.display_name": {
           "source": "Credit Note",
           "message": "Dobropis"
@@ -130,6 +138,10 @@
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZU51bWJlcg.display_name": {
           "source": "Credit Note Number",
           "message": "Číslo dobropisu"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3JlZGl0Tm90ZU51bWJlcg.short_desc": {
+          "source": "Number of invoice or credit note you are applying payment to e.g. INV-4003",
+          "message": "Číslo faktúry alebo dobropisu, na ktorý aplikujete platbu, napr. INV-4003"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.Q3VycmVuY3lSYXRl.desc": {
           "source": "Exchange rate when payment is received. Only used for non base currency invoices and credit notes e.g. 0.7500",
@@ -211,6 +223,10 @@
           "source": "Date",
           "message": "Dátum"
         },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGF0ZQ.short_desc": {
+          "source": "Date the payment is being made (YYYY-MM-DD) e.g. 2009-09-06",
+          "message": "Dátum uskutočnenia platby (YYYY-MM-DD), napr. 2009-09-06"
+        },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.RGV0YWlscw.desc": {
           "source": "The information to appear on the supplier's bank account",
           "message": "Informácie, ktoré sa majú zobraziť na bankovom účte dodávateľa"
@@ -238,6 +254,10 @@
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZU51bWJlcg.display_name": {
           "source": "Invoice Number",
           "message": "Číslo faktúry"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SW52b2ljZU51bWJlcg.short_desc": {
+          "source": "Number of invoice or credit note you are applying payment to e.g.INV-4003",
+          "message": "Číslo faktúry alebo dobropisu, na ktorý aplikujete platbu, napr. INV-4003"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.SXNSZWNvbmNpbGVk.desc": {
           "source": "An optional parameter for the payment. A boolean indicating whether you would like the payment to be created as reconciled when using PUT, or whether a payment has been reconciled when using GET",
@@ -282,6 +302,10 @@
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudElE.display_name": {
           "source": "Payment ID",
           "message": "ID platby"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudElE.short_desc": {
+          "source": "The Xero identifier for an Payment e.g. 297c2dc5-cc47-4afd-8ec8-74990b8761e9",
+          "message": "Identifikátor Xero pre platbu, napr. 297c2dc5-cc47-4afd-8ec8-74990b8761e9"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UGF5bWVudFR5cGU.allowed-value.c3RyaW5nOkFDQ1BBWVBBWU1FTlQ.display_name": {
           "source": "ACCPAYPAYMENT",
@@ -350,6 +374,10 @@
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UmVmZXJlbmNl.display_name": {
           "source": "Reference",
           "message": "Referencia"
+        },
+        "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.option.UmVmZXJlbmNl.short_desc": {
+          "source": "An optional description for the payment e.g. Direct Debit",
+          "message": "Voliteľný popis platby, napr. Direct Debit"
         },
         "app.WGVybw.action.Y3JlYXRlUGF5bWVudA.short_desc": {
           "source": "Record a payment against an invoice",
@@ -437,7 +465,7 @@
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.option.Y2hhcmdlVHlwZQ.short_desc": {
           "source": "Can be 'TIME', 'FIXED' or 'NON_CHARGEABLE', defines how the task will be charged",
-          "message": "Môže byť 'TIME', 'FIXED' alebo 'NON_CHARGEABLE', definuje, ako sa bude úloha účtovať"
+          "message": "Môže byť 'TIME', 'FIXED' alebo 'NON_CHARGEABLE', určuje spôsob účtovania úlohy"
         },
         "app.WGVybw.action.Y3JlYXRlVGFzaw.option.ZXN0aW1hdGVNaW51dGVz.desc": {
           "source": "An estimated time to perform the task",
@@ -523,6 +551,10 @@
           "source": "Include Archived",
           "message": "Zahrnúť archivované"
         },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.aW5jbHVkZUFyY2hpdmVk.short_desc": {
+          "source": "e.g. includeArchived=true - Contacts with a status of ARCHIVED will be…",
+          "message": "Napr. includeArchived=true – kontakty so stavom ARCHIVED budú…"
+        },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.b3JkZXI.desc": {
           "source": "Order by an any element",
           "message": "Zoradiť podľa ľubovoľného prvku"
@@ -543,6 +575,10 @@
           "source": "Search Term",
           "message": "Hľadaný výraz"
         },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c2VhcmNoVGVybQ.short_desc": {
+          "source": "Search parameter that performs a case-insensitive text search across the Name,…",
+          "message": "Parameter vyhľadávania pre textové vyhľadávanie bez ohľadu na veľkosť písmen…"
+        },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.desc": {
           "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object. This returns only lightweight fields, excluding computation-heavy fields from the response, making the API calls quick and efficient.",
           "message": "Použite summaryOnly=true v koncovom bode GET Contacts and Invoices na získanie menšej verzie objektu odpovede. Vrátia sa iba ľahké polia bez polí náročných na výpočet, vďaka čomu sú volania API rýchle a efektívne."
@@ -550,6 +586,10 @@
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.display_name": {
           "source": "Summary Only",
           "message": "Iba súhrn"
+        },
+        "app.WGVybw.action.Z2V0Q29udGFjdHM.option.c3VtbWFyeU9ubHk.short_desc": {
+          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a…",
+          "message": "Použite summaryOnly=true v koncovom bode GET Contacts a Invoices na získanie…"
         },
         "app.WGVybw.action.Z2V0Q29udGFjdHM.option.cGFnZQ.desc": {
           "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
@@ -666,6 +706,10 @@
         "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
+        },
+        "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.option.dW5pdGRw.short_desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "Napr. unitdp=4 – (Unit Decimal Places) Môžete zvoliť štyri desatinné…"
         },
         "app.WGVybw.action.Z2V0Q3JlZGl0Tm90ZXM.short_desc": {
           "source": "List the credit notes in the organisation",
@@ -807,6 +851,10 @@
           "source": "Unitdp",
           "message": "Unitdp"
         },
+        "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.option.dW5pdGRw.short_desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "Napr. unitdp=4 – (Unit Decimal Places) Môžete zvoliť štyri desatinné…"
+        },
         "app.WGVybw.action.Z2V0QmFua1RyYW5zYWN0aW9ucw.short_desc": {
           "source": "List the bank transactions in the organisation",
           "message": "Zoznam bankových transakcií v organizácii"
@@ -935,6 +983,10 @@
           "source": "Include Archived",
           "message": "Zahrnúť archivované"
         },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.aW5jbHVkZUFyY2hpdmVk.short_desc": {
+          "source": "e.g. includeArchived=true - Contacts with a status of ARCHIVED will be…",
+          "message": "Napr. includeArchived=true – kontakty so stavom ARCHIVED budú…"
+        },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.b3JkZXI.desc": {
           "source": "Order by an any element",
           "message": "Zoradiť podľa ľubovoľného prvku"
@@ -955,6 +1007,10 @@
           "source": "Search Term",
           "message": "Hľadaný výraz"
         },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c2VhcmNoVGVybQ.short_desc": {
+          "source": "Search parameter that performs a case-insensitive text search across the Name,…",
+          "message": "Parameter vyhľadávania pre textové vyhľadávanie bez ohľadu na veľkosť písmen…"
+        },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.desc": {
           "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a smaller version of the response object. This returns only lightweight fields, excluding computation-heavy fields from the response, making the API calls quick and efficient.",
           "message": "Použite summaryOnly=true v koncovom bode GET Contacts and Invoices na získanie menšej verzie objektu odpovede. Vrátia sa iba ľahké polia bez polí náročných na výpočet, vďaka čomu sú volania API rýchle a efektívne."
@@ -962,6 +1018,10 @@
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.display_name": {
           "source": "Summary Only",
           "message": "Iba súhrn"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.c3VtbWFyeU9ubHk.short_desc": {
+          "source": "Use summaryOnly=true in GET Contacts and Invoices endpoint to retrieve a…",
+          "message": "Použite summaryOnly=true v koncovom bode GET Contacts a Invoices na získanie…"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.cGFnZQ.desc": {
           "source": "e.g. page=1 - Up to 100 contacts will be returned in a single API call.",
@@ -1006,6 +1066,10 @@
         "app.WGVybw.action.Z2V0SW52b2ljZXM.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
+        },
+        "app.WGVybw.action.Z2V0SW52b2ljZXM.option.dW5pdGRw.short_desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "Napr. unitdp=4 – (Unit Decimal Places) Môžete zvoliť štyri desatinné…"
         },
         "app.WGVybw.action.Z2V0SW52b2ljZXM.short_desc": {
           "source": "List invoices and bills",
@@ -1062,6 +1126,10 @@
         "app.WGVybw.action.Z2V0SXRlbXM.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
+        },
+        "app.WGVybw.action.Z2V0SXRlbXM.option.dW5pdGRw.short_desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "Napr. unitdp=4 – (Unit Decimal Places) Môžete zvoliť štyri desatinné…"
         },
         "app.WGVybw.action.Z2V0SXRlbXM.short_desc": {
           "source": "List the items in the organisation",
@@ -1429,7 +1497,7 @@
         },
         "app.WGVybw.action.Z2V0VGFza3M.option.Y2hhcmdlVHlwZQ.short_desc": {
           "source": "Can be 'TIME', 'FIXED' or 'NON_CHARGEABLE', defines how the task will be charged",
-          "message": "Môže byť 'TIME', 'FIXED' alebo 'NON_CHARGEABLE', definuje, ako sa bude úloha účtovať"
+          "message": "Môže byť 'TIME', 'FIXED' alebo 'NON_CHARGEABLE', určuje spôsob účtovania úlohy"
         },
         "app.WGVybw.action.Z2V0VGFza3M.option.cGFnZQ.desc": {
           "source": "Set to 1 by default. The requested number of the page in paged response - Must be a number greater than 0.",
@@ -1474,6 +1542,10 @@
         "app.WGVybw.action.Z2V0VGFza3M.option.dGFza0lkcw.display_name": {
           "source": "Task Ids",
           "message": "ID úloh"
+        },
+        "app.WGVybw.action.Z2V0VGFza3M.option.dGFza0lkcw.short_desc": {
+          "source": "Search for all tasks that match a comma separated list of taskIds, i.e. GET…",
+          "message": "Vyhľadá všetky úlohy zodpovedajúce čiarkami oddelenému zoznamu taskIds, t. j.…"
         },
         "app.WGVybw.action.Z2V0VGFza3M.short_desc": {
           "source": "List the tasks in a project",
@@ -1807,6 +1879,10 @@
           "source": "URI Path",
           "message": "Cesta URI"
         },
+        "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Cesta URI relatívna k základnej adrese API URL pripojenia"
+        },
         "app.WGVybw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
@@ -2015,6 +2091,10 @@
           "source": "Summarize Errors",
           "message": "Zhrnúť chyby"
         },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "Ak false, vráti 200 OK a zmes úspešne vytvorených objektov a tých s…"
+        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.desc": {
           "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
           "message": "napr. unitdp=4 – (Unit Decimal Places) Môžete zvoliť použitie štyroch desatinných miest pre jednotkové sumy"
@@ -2022,6 +2102,10 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.option.dW5pdGRw.short_desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "Napr. unitdp=4 – (Unit Decimal Places) Môžete zvoliť štyri desatinné…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVCYW5rVHJhbnNhY3Rpb25z.short_desc": {
           "source": "Record money spent or received against a bank account",
@@ -2050,6 +2134,10 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
           "source": "Summarize Errors",
           "message": "Zhrnúť chyby"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "Ak false, vráti 200 OK a zmes úspešne vytvorených objektov a tých s…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVDb250YWN0cw.short_desc": {
           "source": "Create contacts, or update them by ID",
@@ -2091,6 +2179,10 @@
           "source": "Allow Backorders",
           "message": "Povoliť spätné objednávky"
         },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.YWxsb3dCYWNrb3JkZXJz.short_desc": {
+          "source": "Allows an invoice to be created even when one or more line items contain…",
+          "message": "Umožňuje vytvorenie faktúry aj vtedy, keď jedna alebo viac položiek obsahuje…"
+        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.desc": {
           "source": "If false return 200 OK and mix of successfully created objects and any with validation errors",
           "message": "Ak je hodnota false, vráti 200 OK a kombináciu úspešne vytvorených objektov a objektov s chybami validácie"
@@ -2099,6 +2191,10 @@
           "source": "Summarize Errors",
           "message": "Zhrnúť chyby"
         },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "Ak false, vráti 200 OK a zmes úspešne vytvorených objektov a tých s…"
+        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.desc": {
           "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
           "message": "napr. unitdp=4 – (Unit Decimal Places) Môžete zvoliť použitie štyroch desatinných miest pre jednotkové sumy"
@@ -2106,6 +2202,10 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.option.dW5pdGRw.short_desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "Napr. unitdp=4 – (Unit Decimal Places) Môžete zvoliť štyri desatinné…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJbnZvaWNlcw.short_desc": {
           "source": "Create invoices or bills, or update them by ID",
@@ -2135,6 +2235,10 @@
           "source": "Summarize Errors",
           "message": "Zhrnúť chyby"
         },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "Ak false, vráti 200 OK a zmes úspešne vytvorených objektov a tých s…"
+        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.desc": {
           "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal places for unit amounts",
           "message": "napr. unitdp=4 – (Unit Decimal Places) Môžete zvoliť použitie štyroch desatinných miest pre jednotkové sumy"
@@ -2142,6 +2246,10 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.display_name": {
           "source": "Unitdp",
           "message": "Unitdp"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.option.dW5pdGRw.short_desc": {
+          "source": "e.g. unitdp=4 – (Unit Decimal Places) You can opt in to use four decimal…",
+          "message": "Napr. unitdp=4 – (Unit Decimal Places) Môžete zvoliť štyri desatinné…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVJdGVtcw.short_desc": {
           "source": "Create items, or update them by ID",
@@ -2171,6 +2279,10 @@
           "source": "Summarize Errors",
           "message": "Zhrnúť chyby"
         },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "Ak false, vráti 200 OK a zmes úspešne vytvorených objektov a tých s…"
+        },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVRdW90ZXM.short_desc": {
           "source": "Create quotes, or update them by ID",
           "message": "Vytvárajte cenové ponuky alebo ich aktualizujte podľa ID"
@@ -2198,6 +2310,10 @@
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.display_name": {
           "source": "Summarize Errors",
           "message": "Zhrnúť chyby"
+        },
+        "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.option.c3VtbWFyaXplRXJyb3Jz.short_desc": {
+          "source": "If false return 200 OK and mix of successfully created objects and any with…",
+          "message": "Ak false, vráti 200 OK a zmes úspešne vytvorených objektov a tých s…"
         },
         "app.WGVybw.action.dXBkYXRlT3JDcmVhdGVSZXBlYXRpbmdJbnZvaWNlcw.short_desc": {
           "source": "Set up an invoice that repeats on a schedule",

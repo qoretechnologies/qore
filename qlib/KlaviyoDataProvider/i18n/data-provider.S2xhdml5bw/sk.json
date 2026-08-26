@@ -2,7 +2,2912 @@
   "schema_version": 1,
   "locales": {
     "sk": {
-      "messages": {}
+      "messages": {
+        "app.S2xhdml5bw.action.Y3JlYXRl.desc": {
+          "source": "Creates new records in the given table",
+          "message": "Vytvorí nové záznamy v danej tabuľke"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.display_name": {
+          "source": "Create Records",
+          "message": "Vytvoriť záznamy"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "Tabuľka, s ktorou sa má pracovať: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` alebo `events`"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Názov tabuľky, s ktorou sa má pracovať"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRl.short_desc": {
+          "source": "Create new records in the given table",
+          "message": "Vytvoriť nové záznamy v danej tabuľke"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.desc": {
+          "source": "Creates a profile, or updates the one already carrying the identifier given.\n\nKlaviyo matches on `id` when it is set, and otherwise on `email`, `phoneNumber` or `externalId` - so this is the action to use when the person may already be known. A custom property supplied here **replaces** the stored value; use **Update Profile** with `meta.patch_properties` to append to one instead.",
+          "message": "Vytvorí profil alebo aktualizuje ten, ktorý už obsahuje zadaný identifikátor.\n\nKlaviyo porovnáva podľa `id`, ak je nastavený, a inak podľa `email`, `phoneNumber` alebo `externalId` – ide teda o akciu, ktorú treba použiť, ak daná osoba už môže byť známa. Vlastná vlastnosť uvedená tu **nahradí** uloženú hodnotu; na pridanie k hodnote použite namiesto toho **Update Profile** s `meta.patch_properties`."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.display_name": {
+          "source": "Create Or Update Profile",
+          "message": "Vytvoriť alebo aktualizovať profil"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y291bnRyeQ.desc": {
+          "source": "Country name",
+          "message": "Názov krajiny"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Krajina"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "Názov krajiny"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "Názov mesta"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Mesto"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y2l0eQ.short_desc": {
+          "source": "City name",
+          "message": "Názov mesta"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y3VzdG9tUHJvcGVydGllcw.desc": {
+          "source": "Your own properties to store on the profile, as name/value pairs.\n\nKlaviyo reserves property names beginning with `$`.",
+          "message": "Vaše vlastné vlastnosti, ktoré sa majú uložiť do profilu, vo forme párov názov/hodnota.\n\nKlaviyo si vyhradzuje názvy vlastností začínajúce na `$`."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y3VzdG9tUHJvcGVydGllcw.display_name": {
+          "source": "Custom Properties",
+          "message": "Vlastné vlastnosti"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Y3VzdG9tUHJvcGVydGllcw.short_desc": {
+          "source": "Your own properties to store on the profile",
+          "message": "Vaše vlastné vlastnosti, ktoré sa majú uložiť do profilu"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczE.desc": {
+          "source": "First line of street address",
+          "message": "Prvý riadok adresy ulice"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczE.display_name": {
+          "source": "Address Line 1",
+          "message": "1. riadok adresy"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczE.short_desc": {
+          "source": "First line of street address",
+          "message": "Prvý riadok adresy ulice"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczI.desc": {
+          "source": "Second line of street address",
+          "message": "Druhý riadok adresy ulice"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczI.display_name": {
+          "source": "Address Line 2",
+          "message": "2. riadok adresy"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.YWRkcmVzczI.short_desc": {
+          "source": "Second line of street address",
+          "message": "Druhý riadok adresy ulice"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZW1haWw.desc": {
+          "source": "Individual's email address",
+          "message": "E-mailová adresa jednotlivca"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "E-mail"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZW1haWw.short_desc": {
+          "source": "The profile's e-mail address",
+          "message": "E-mailová adresa profilu"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZXh0ZXJuYWxJZA.desc": {
+          "source": "Your own identifier for this person, so that a profile can be found by the ID it has in your system rather than by e-mail",
+          "message": "Váš vlastný identifikátor tejto osoby, aby bolo možné nájsť profil podľa ID, ktoré má vo vašom systéme, a nie podľa e-mailu"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZXh0ZXJuYWxJZA.display_name": {
+          "source": "External ID",
+          "message": "Externé ID"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.ZXh0ZXJuYWxJZA.short_desc": {
+          "source": "Your own identifier for this person",
+          "message": "Váš vlastný identifikátor tejto osoby"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Zmlyc3ROYW1l.desc": {
+          "source": "Individual's first name",
+          "message": "Meno jednotlivca"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Meno"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Individual's first name",
+          "message": "Meno jednotlivca"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aW1hZ2VVcmw.desc": {
+          "source": "URL pointing to the location of a profile image",
+          "message": "URL adresa odkazujúca na umiestnenie profilového obrázka"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aW1hZ2VVcmw.display_name": {
+          "source": "Image URL",
+          "message": "URL obrázka"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aW1hZ2VVcmw.short_desc": {
+          "source": "A URL for the profile's avatar",
+          "message": "URL adresa avatara profilu"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aWQ.desc": {
+          "source": "The profile to update.\n\nLeave it unset to match on an identifier instead, which is the usual way to use this action.",
+          "message": "Profil, ktorý sa má aktualizovať.\n\nNechajte nevyplnené, ak chcete namiesto toho vyhľadávať podľa identifikátora, čo je obvyklý spôsob použitia tejto akcie."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aWQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aWQ.short_desc": {
+          "source": "The profile to update, if it is already known",
+          "message": "Profil, ktorý sa má aktualizovať, ak je už známy"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aXA.desc": {
+          "source": "IP Address",
+          "message": "IP adresa"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aXA.display_name": {
+          "source": "IP Address",
+          "message": "IP adresa"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.aXA.short_desc": {
+          "source": "The IP address Klaviyo should locate the profile from",
+          "message": "IP adresa, podľa ktorej by malo Klaviyo určiť polohu profilu"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Name of the company or organization within the company for whom the individual works",
+          "message": "Názov spoločnosti alebo organizácie v rámci spoločnosti, pre ktorú jednotlivec pracuje"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organizácia"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The company the person belongs to",
+          "message": "Spoločnosť, do ktorej osoba patrí"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9jYWxl.desc": {
+          "source": "The locale of the profile, in the IETF BCP 47 language tag format like (ISO 639-1/2)-(ISO 3166 alpha-2)",
+          "message": "Jazyková verzia a región profilu vo formáte jazykovej značky IETF BCP 47, napríklad (ISO 639-1/2)-(ISO 3166 alpha-2)"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Lokalizácia"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9jYWxl.short_desc": {
+          "source": "The profile's locale, ex: \"en-US\"",
+          "message": "Jazyková verzia a región profilu, napr.: \"en-US\""
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9uZ2l0dWRl.desc": {
+          "source": "Longitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "Zemepisná dĺžka. Odporúčame zadať presnosť na štyri desatinné miesta."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9uZ2l0dWRl.display_name": {
+          "source": "Longitude",
+          "message": "Zemepisná dĺžka"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bG9uZ2l0dWRl.short_desc": {
+          "source": "Longitude coordinate",
+          "message": "Súradnica zemepisnej dĺžky"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGF0aXR1ZGU.desc": {
+          "source": "Latitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "Zemepisná šírka. Odporúčame zadať presnosť na štyri desatinné miesta."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGF0aXR1ZGU.display_name": {
+          "source": "Latitude",
+          "message": "Zemepisná šírka"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGF0aXR1ZGU.short_desc": {
+          "source": "Latitude coordinate",
+          "message": "Súradnica zemepisnej šírky"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGFzdE5hbWU.desc": {
+          "source": "Individual's last name",
+          "message": "Priezvisko jednotlivca"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Priezvisko"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bGFzdE5hbWU.short_desc": {
+          "source": "Individual's last name",
+          "message": "Priezvisko jednotlivca"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bWV0YQ.desc": {
+          "source": "Append to or unset custom properties rather than replacing them.\n\n`patch_properties.append` adds a value to a list-valued property, `unappend` removes one, and `unset` deletes a property outright.",
+          "message": "Pridať k vlastným vlastnostiam alebo ich zrušiť namiesto ich nahradenia.\n\n`patch_properties.append` pridá hodnotu do vlastnosti typu zoznam, `unappend` ju odstráni a `unset` vlastnosť úplne vymaže."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bWV0YQ.display_name": {
+          "source": "Patch Operations",
+          "message": "Operácie úprav (Patch)"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.bWV0YQ.short_desc": {
+          "source": "Append to or unset custom properties rather than replacing them",
+          "message": "Pridať k vlastným vlastnostiam alebo ich zrušiť namiesto nahradenia"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The profile's phone number in E.164 format, ex: `+15005550006`.\n\nKlaviyo rejects a number in any other format.",
+          "message": "Telefónne číslo profilu vo formáte E.164, napr.: `+15005550006`.\n\nKlaviyo odmietne číslo v akomkoľvek inom formáte."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Telefónne číslo"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The profile's phone number in E.164 format",
+          "message": "Telefónne číslo profilu vo formáte E.164"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cmVnaW9u.desc": {
+          "source": "Region within a country, such as state or province",
+          "message": "Región v rámci krajiny, napríklad štát alebo provincia"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "Región"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.cmVnaW9u.short_desc": {
+          "source": "The state, province or region",
+          "message": "Štát, provincia alebo región"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGl0bGU.desc": {
+          "source": "Individual's job title",
+          "message": "Pracovná pozícia jednotlivca"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Názov"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGl0bGU.short_desc": {
+          "source": "The person's job title",
+          "message": "Pracovná pozícia osoby"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGltZXpvbmU.desc": {
+          "source": "Time zone name. We recommend using time zones from the IANA Time Zone Database.",
+          "message": "Názov časového pásma. Odporúčame použiť časové pásma z databázy časových pásiem IANA."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGltZXpvbmU.display_name": {
+          "source": "Time Zone",
+          "message": "Časové pásmo"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.dGltZXpvbmU.short_desc": {
+          "source": "The IANA time zone name",
+          "message": "Názov časového pásma podľa IANA"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.emlw.desc": {
+          "source": "Zip code",
+          "message": "PSČ"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.emlw.display_name": {
+          "source": "Postal Code",
+          "message": "Poštové smerovacie číslo"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.option.emlw.short_desc": {
+          "source": "The postal or ZIP code",
+          "message": "Poštové smerovacie číslo (PSČ)"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX29yX3VwZGF0ZV9wcm9maWxl.short_desc": {
+          "source": "Creates a new profile or updates an existing one",
+          "message": "Vytvorí nový profil alebo aktualizuje existujúci"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.desc": {
+          "source": "Creates a campaign as a **draft**; it is not sent until **Send Campaign** creates a send job for it.\n\n`audiences` names the lists and segments to include and exclude, and `campaignMessages` carries the message content per channel; both are **required** and both are Klaviyo's own structures, documented with the campaigns API rather than here.",
+          "message": "Vytvorí kampaň ako **draft** (koncept); neodošle sa, kým akcia **Send Campaign** nevytvorí úlohu odoslania.\n\n`audiences` uvádza zoznamy a segmenty na zahrnutie a vylúčenie a `campaignMessages` nesie obsah správy pre jednotlivé kanály; obe položky sú **povinné** a ide o vlastné štruktúry platformy Klaviyo, zdokumentované v rozhraní API kampaní, nie tu."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.display_name": {
+          "source": "Create Campaign",
+          "message": "Vytvoriť kampaň"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.Y2FtcGFpZ25NZXNzYWdlcw.desc": {
+          "source": "The message(s) associated with the campaign",
+          "message": "Správy priradené ku kampani"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.Y2FtcGFpZ25NZXNzYWdlcw.display_name": {
+          "source": "Messages",
+          "message": "Správy"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.Y2FtcGFpZ25NZXNzYWdlcw.short_desc": {
+          "source": "The message content, per channel",
+          "message": "Obsah správy podľa kanála"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.YXVkaWVuY2Vz.display_name": {
+          "source": "Audiences",
+          "message": "Publiká"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.YXVkaWVuY2Vz.short_desc": {
+          "source": "The lists and segments to include and exclude",
+          "message": "Zoznamy a segmenty na zahrnutie a vylúčenie"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The campaign name",
+          "message": "Názov kampane"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "The name of the campaign",
+          "message": "Názov kampane"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.desc": {
+          "source": "Options to use when sending a campaign",
+          "message": "Možnosti použité pri odosielaní kampane"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.display_name": {
+          "source": "Send Options",
+          "message": "Možnosti odoslania"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.short_desc": {
+          "source": "Whether to use smart sending",
+          "message": "Určuje, či sa má použiť inteligentné odosielanie (smart sending)"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.desc": {
+          "source": "The send strategy the campaign will send with. Defaults to 'Immediate' send strategy.",
+          "message": "Stratégia odoslania, s ktorou sa kampaň odošle. Predvolená hodnota je stratégia 'Immediate'."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.display_name": {
+          "source": "Send Strategy",
+          "message": "Stratégia odoslania"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.short_desc": {
+          "source": "When the campaign is sent, if not immediately",
+          "message": "Kedy sa kampaň odošle, ak nie okamžite"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.desc": {
+          "source": "The tracking options associated with the campaign",
+          "message": "Možnosti sledovania priradené ku kampani"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.display_name": {
+          "source": "Tracking Options",
+          "message": "Možnosti sledovania"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.short_desc": {
+          "source": "The UTM parameters and tracking flags to apply",
+          "message": "Parametre UTM a príznaky sledovania, ktoré sa majú použiť"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2NhbXBhaWdu.short_desc": {
+          "source": "Creates a new campaign",
+          "message": "Vytvorí novú kampaň"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.desc": {
+          "source": "Records that something happened, against a metric and a profile.\n\n`metric` is the **name** of the kind of event - \"Placed Order\", \"Viewed Product\" - and Klaviyo defines a metric the first time an event names one, so a name that does not exist yet is how a new metric is created.\n\nThe event has to say who it happened to: give `profile` for someone already known, or `email`, which Klaviyo creates a profile from if it has to. `customId` makes the event idempotent - Klaviyo drops a second event with the same one - and `time` records an event that happened earlier than now.\n\nThis action is hand-written rather than generated, because Klaviyo's own description nests a metric envelope and a profile envelope inside the event's attributes, which cannot be published as one flat option shape.",
+          "message": "Zaznamená, že nastala udalosť voči metrike a profilu.\n\n`metric` je **názov** druhu udalosti – „Placed Order“, „Viewed Product“ – a Klaviyo definuje metriku pri prvom uvedení daného názvu udalosti, takže názov, ktorý ešte neexistuje, vytvorí novú metriku.\n\nUdalosť musí uvádzať, komu sa stala: zadajte `profile` pre už známu osobu alebo `email`, z ktorého Klaviyo v prípade potreby vytvorí profil. `customId` zabezpečuje idempotentnosť udalosti – Klaviyo zahodí druhú udalosť s rovnakým identifikátorom – a `time` zaznamená udalosť, ktorá nastala skôr než teraz.\n\nTáto akcia je vytvorená ručne a nie generovaná, pretože vlastný popis platformy Klaviyo vnára obálku metriky a obálku profilu do atribútov udalosti, čo nie je možné publikovať ako jednu plochú štruktúru možností."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.display_name": {
+          "source": "Create Event",
+          "message": "Vytvoriť udalosť"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tSWQ.desc": {
+          "source": "Your own unique identifier for this event.\n\nKlaviyo drops a second event carrying an ID it has already seen, which makes a retry safe.",
+          "message": "Váš vlastný jedinečný identifikátor pre túto udalosť.\n\nKlaviyo zahodí druhú udalosť s ID, ktoré už videlo, vďaka čomu je opakovanie požiadavky bezpečné."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tSWQ.display_name": {
+          "source": "Custom ID",
+          "message": "Vlastné ID"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tSWQ.short_desc": {
+          "source": "Your own unique identifier for this event",
+          "message": "Váš vlastný jedinečný identifikátor pre túto udalosť"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tUHJvcGVydGllcw.desc": {
+          "source": "Your own properties to record with the event, as name/value pairs",
+          "message": "Vaše vlastné vlastnosti, ktoré sa majú zaznamenať s udalosťou ako dvojice názov/hodnota"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tUHJvcGVydGllcw.display_name": {
+          "source": "Custom Properties",
+          "message": "Vlastné vlastnosti"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.Y3VzdG9tUHJvcGVydGllcw.short_desc": {
+          "source": "Your own properties to record with the event",
+          "message": "Vaše vlastné vlastnosti na zaznamenanie s udalosťou"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.ZW1haWw.desc": {
+          "source": "The e-mail address the event happened to.\n\nKlaviyo creates a profile from it if it does not know it yet, which is how an event can be recorded for somebody who has not been seen before.",
+          "message": "E-mailová adresa, ktorej sa udalosť týka.\n\nKlaviyo z nej vytvorí profil, ak ju ešte nepozná, čo umožňuje zaznamenať udalosť pre niekoho, kto sa ešte v systéme nenachádza."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "E-mail"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.ZW1haWw.short_desc": {
+          "source": "The e-mail address the event happened to",
+          "message": "E-mailová adresa, ktorej sa udalosť týka"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.bWV0cmlj.desc": {
+          "source": "The name of the kind of event, ex: `Placed Order`.\n\nKlaviyo defines a metric the first time an event names one, so a name that is not in the list yet creates a new metric.",
+          "message": "Názov druhu udalosti, napr.: `Placed Order`.\n\nKlaviyo definuje metriku pri prvom uvedení daného názvu udalosti, takže názov, ktorý ešte nie je v zozname, vytvorí novú metriku."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.bWV0cmlj.display_name": {
+          "source": "Metric",
+          "message": "Metrika"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.bWV0cmlj.short_desc": {
+          "source": "The name of the kind of event",
+          "message": "Názov druhu udalosti"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.cHJvZmlsZQ.desc": {
+          "source": "The profile the event happened to.\n\nGive this or `email`.",
+          "message": "Profil, ktorého sa udalosť týka.\n\nZadajte toto alebo `email`."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.cHJvZmlsZQ.short_desc": {
+          "source": "The profile the event happened to",
+          "message": "Profil, ktorého sa udalosť týka"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dGltZQ.desc": {
+          "source": "When the event happened.\n\nKlaviyo uses the current time when this is unset, so set it when recording something after the fact.",
+          "message": "Kedy udalosť nastala.\n\nAk táto hodnota nie je nastavená, Klaviyo použije aktuálny čas, preto ju nastavte pri spätnom zaznamenávaní udalosti."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dGltZQ.display_name": {
+          "source": "Time",
+          "message": "Čas"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dGltZQ.short_desc": {
+          "source": "When the event happened",
+          "message": "Čas, kedy k udalosti došlo"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dmFsdWU.desc": {
+          "source": "The monetary value of the event, in the account's currency.\n\nThis is what Klaviyo's revenue reporting adds up.",
+          "message": "Peňažná hodnota udalosti v mene účtu.\n\nToto je hodnota, ktorú sčítavajú prehľady výnosov v platforme Klaviyo."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dmFsdWU.display_name": {
+          "source": "Value",
+          "message": "Hodnota"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.option.dmFsdWU.short_desc": {
+          "source": "The monetary value of the event",
+          "message": "Peňažná hodnota udalosti"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2V2ZW50.short_desc": {
+          "source": "Creates a new event",
+          "message": "Vytvorí novú udalosť"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.desc": {
+          "source": "Creates a list.\n\n`optInProcess` decides whether a profile added to the list has to confirm by e-mail before it is subscribed; Klaviyo uses the account's default when it is unset.",
+          "message": "Vytvorí zoznam.\n\n`optInProcess` určuje, či profil pridaný do zoznamu musí potvrdiť odber e-mailom pred prihlásením; ak hodnota nie je nastavená, Klaviyo použije predvolené nastavenie účtu."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.display_name": {
+          "source": "Create List",
+          "message": "Vytvoriť zoznam"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.allowed-value.c3RyaW5nOmRvdWJsZV9vcHRfaW4.display_name": {
+          "source": "double_opt_in",
+          "message": "double_opt_in"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.allowed-value.c3RyaW5nOnNpbmdsZV9vcHRfaW4.display_name": {
+          "source": "single_opt_in",
+          "message": "single_opt_in"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.desc": {
+          "source": "The opt-in process for this list. Valid values: 'double_opt_in', 'single_opt_in'. If not provided, uses account default.",
+          "message": "Proces prihlásenia (opt-in) pre tento zoznam. Platné hodnoty: 'double_opt_in', 'single_opt_in'. Ak nie je uvedené, použije sa predvolená hodnota účtu."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.display_name": {
+          "source": "Opt-in Process",
+          "message": "Proces prihlásenia (opt-in)"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.short_desc": {
+          "source": "Whether a new subscriber has to confirm by e-mail",
+          "message": "Určuje, či nový odberateľ musí potvrdiť odber e-mailom"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.bmFtZQ.desc": {
+          "source": "A helpful name to label the list",
+          "message": "Výstižný názov na označenie zoznamu"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.option.bmFtZQ.short_desc": {
+          "source": "The name of the list",
+          "message": "Názov zoznamu"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX2xpc3Q.short_desc": {
+          "source": "Creates a new list",
+          "message": "Vytvorí nový zoznam"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.desc": {
+          "source": "Creates a profile.\n\nA profile needs at least one identifier - an e-mail address, a phone number or an external ID. Klaviyo **rejects** a create whose identifier already belongs to a profile; use **Create Or Update Profile** when the person may already be known.",
+          "message": "Vytvorí profil.\n\nProfil vyžaduje aspoň jeden identifikátor – e-mailovú adresu, telefónne číslo alebo externé ID. Klaviyo **odmietne** vytvorenie, ak identifikátor už patrí nejakému profilu; ak osoba už môže existovať, použite akciu **Create Or Update Profile**."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.display_name": {
+          "source": "Create Profile",
+          "message": "Vytvoriť profil"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.desc": {
+          "source": "Country name",
+          "message": "Názov krajiny"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Krajina"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "Názov krajiny"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "Názov mesta"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Mesto"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y2l0eQ.short_desc": {
+          "source": "City name",
+          "message": "Názov mesta"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.desc": {
+          "source": "Your own properties to store on the profile, as name/value pairs.\n\nKlaviyo reserves property names beginning with `$`.",
+          "message": "Vaše vlastné vlastnosti, ktoré sa majú uložiť do profilu, vo forme párov názov/hodnota.\n\nKlaviyo si vyhradzuje názvy vlastností začínajúce na `$`."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.display_name": {
+          "source": "Custom Properties",
+          "message": "Vlastné vlastnosti"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.short_desc": {
+          "source": "Your own properties to store on the profile",
+          "message": "Vaše vlastné vlastnosti, ktoré sa majú uložiť do profilu"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.desc": {
+          "source": "First line of street address",
+          "message": "Prvý riadok adresy ulice"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.display_name": {
+          "source": "Address Line 1",
+          "message": "1. riadok adresy"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.short_desc": {
+          "source": "First line of street address",
+          "message": "Prvý riadok adresy ulice"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.desc": {
+          "source": "Second line of street address",
+          "message": "Druhý riadok adresy ulice"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.display_name": {
+          "source": "Address Line 2",
+          "message": "2. riadok adresy"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.short_desc": {
+          "source": "Second line of street address",
+          "message": "Druhý riadok adresy ulice"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZW1haWw.desc": {
+          "source": "Individual's email address",
+          "message": "E-mailová adresa jednotlivca"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "E-mail"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZW1haWw.short_desc": {
+          "source": "The profile's e-mail address",
+          "message": "E-mailová adresa profilu"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.desc": {
+          "source": "Your own identifier for this person, so that a profile can be found by the ID it has in your system rather than by e-mail",
+          "message": "Váš vlastný identifikátor tejto osoby, aby bolo možné nájsť profil podľa ID, ktoré má vo vašom systéme, a nie podľa e-mailu"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.display_name": {
+          "source": "External ID",
+          "message": "Externé ID"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.short_desc": {
+          "source": "Your own identifier for this person",
+          "message": "Váš vlastný identifikátor tejto osoby"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.desc": {
+          "source": "Individual's first name",
+          "message": "Meno jednotlivca"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Meno"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Individual's first name",
+          "message": "Meno jednotlivca"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.desc": {
+          "source": "URL pointing to the location of a profile image",
+          "message": "URL adresa odkazujúca na umiestnenie profilového obrázka"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.display_name": {
+          "source": "Image URL",
+          "message": "URL obrázka"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.short_desc": {
+          "source": "A URL for the profile's avatar",
+          "message": "URL adresa avatara profilu"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aXA.desc": {
+          "source": "IP Address",
+          "message": "IP adresa"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aXA.display_name": {
+          "source": "IP Address",
+          "message": "IP adresa"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.aXA.short_desc": {
+          "source": "The IP address Klaviyo should locate the profile from",
+          "message": "IP adresa, podľa ktorej by malo Klaviyo určiť polohu profilu"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Name of the company or organization within the company for whom the individual works",
+          "message": "Názov spoločnosti alebo organizácie v rámci spoločnosti, pre ktorú jednotlivec pracuje"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organizácia"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The company the person belongs to",
+          "message": "Spoločnosť, do ktorej osoba patrí"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9jYWxl.desc": {
+          "source": "The locale of the profile, in the IETF BCP 47 language tag format like (ISO 639-1/2)-(ISO 3166 alpha-2)",
+          "message": "Jazyková verzia a región profilu vo formáte jazykovej značky IETF BCP 47, napríklad (ISO 639-1/2)-(ISO 3166 alpha-2)"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Lokalizácia"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9jYWxl.short_desc": {
+          "source": "The profile's locale, ex: \"en-US\"",
+          "message": "Jazyková verzia a región profilu, napr.: \"en-US\""
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.desc": {
+          "source": "Longitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "Zemepisná dĺžka. Odporúčame zadať presnosť na štyri desatinné miesta."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.display_name": {
+          "source": "Longitude",
+          "message": "Zemepisná dĺžka"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.short_desc": {
+          "source": "Longitude coordinate",
+          "message": "Súradnica zemepisnej dĺžky"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.desc": {
+          "source": "Latitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "Zemepisná šírka. Odporúčame zadať presnosť na štyri desatinné miesta."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.display_name": {
+          "source": "Latitude",
+          "message": "Zemepisná šírka"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.short_desc": {
+          "source": "Latitude coordinate",
+          "message": "Súradnica zemepisnej šírky"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.desc": {
+          "source": "Individual's last name",
+          "message": "Priezvisko jednotlivca"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Priezvisko"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.short_desc": {
+          "source": "Individual's last name",
+          "message": "Priezvisko jednotlivca"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The profile's phone number in E.164 format, ex: `+15005550006`.\n\nKlaviyo rejects a number in any other format.",
+          "message": "Telefónne číslo profilu vo formáte E.164, napr.: `+15005550006`.\n\nKlaviyo odmietne číslo v akomkoľvek inom formáte."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Telefónne číslo"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The profile's phone number in E.164 format",
+          "message": "Telefónne číslo profilu vo formáte E.164"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cmVnaW9u.desc": {
+          "source": "Region within a country, such as state or province",
+          "message": "Región v rámci krajiny, napríklad štát alebo provincia"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "Región"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.cmVnaW9u.short_desc": {
+          "source": "The state, province or region",
+          "message": "Štát, provincia alebo región"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGl0bGU.desc": {
+          "source": "Individual's job title",
+          "message": "Pracovná pozícia jednotlivca"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Názov"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGl0bGU.short_desc": {
+          "source": "The person's job title",
+          "message": "Pracovná pozícia osoby"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.desc": {
+          "source": "Time zone name. We recommend using time zones from the IANA Time Zone Database.",
+          "message": "Názov časového pásma. Odporúčame použiť časové pásma z databázy časových pásiem IANA."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.display_name": {
+          "source": "Time Zone",
+          "message": "Časové pásmo"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.short_desc": {
+          "source": "The IANA time zone name",
+          "message": "Názov časového pásma podľa IANA"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.emlw.desc": {
+          "source": "Zip code",
+          "message": "PSČ"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.emlw.display_name": {
+          "source": "Postal Code",
+          "message": "Poštové smerovacie číslo"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.option.emlw.short_desc": {
+          "source": "The postal or ZIP code",
+          "message": "Poštové smerovacie číslo (PSČ)"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3Byb2ZpbGU.short_desc": {
+          "source": "Creates a new profile",
+          "message": "Vytvorí nový profil"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.desc": {
+          "source": "Creates a segment.\n\n`definition` is the rule Klaviyo evaluates to decide who is in the segment, and it is **required**: a segment with no rule would match nobody. It is Klaviyo's own condition structure - a list of condition groups, each a list of conditions - and is documented with the segments API rather than here.",
+          "message": "Vytvorí segment.\n\n`definition` je pravidlo, ktoré Klaviyo vyhodnocuje, aby určilo, kto patrí do segmentu, a je **povinné**: segment bez pravidla by nezodpovedal nikomu. Ide o vlastnú štruktúru podmienok platformy Klaviyo – zoznam skupín podmienok, z ktorých každá je zoznamom podmienok – a je zdokumentovaná v rozhraní API segmentov, nie tu."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.display_name": {
+          "source": "Create Segment",
+          "message": "Vytvoriť segment"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.ZGVmaW5pdGlvbg.display_name": {
+          "source": "Definition",
+          "message": "Definícia"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.ZGVmaW5pdGlvbg.short_desc": {
+          "source": "The rule deciding who is in the segment",
+          "message": "Pravidlo určujúce, kto patrí do segmentu"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.aXNTdGFycmVk.display_name": {
+          "source": "Starred",
+          "message": "S hviezdičkou"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.aXNTdGFycmVk.short_desc": {
+          "source": "Whether the segment is starred in the Klaviyo UI",
+          "message": "Určuje, či je segment označený hviezdičkou v rozhraní Klaviyo"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.option.bmFtZQ.short_desc": {
+          "source": "The name of the segment",
+          "message": "Názov segmentu"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3NlZ21lbnQ.short_desc": {
+          "source": "Creates a new segment",
+          "message": "Vytvorí nový segment"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.desc": {
+          "source": "Creates a tag.\n\nA tag groups campaigns, flows, lists and segments for reporting. Klaviyo places a new tag in the account's default tag group unless one is named in the relationships, which this action does not publish.",
+          "message": "Vytvorí značku (tag).\n\nZnačka zoskupuje kampane, toky (flows), zoznamy a segmenty na účely vytvárania prehľadov. Klaviyo zaradí novú značku do predvolenej skupiny značiek účtu, pokiaľ nie je určená v prepojeniach (relationships), ktoré táto akcia nepublikuje."
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.display_name": {
+          "source": "Create Tag",
+          "message": "Vytvoriť štítok"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.option.bmFtZQ.desc": {
+          "source": "The Tag name",
+          "message": "Názov značky"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.option.bmFtZQ.short_desc": {
+          "source": "The name of the tag",
+          "message": "Názov štítka"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.option.cmVsYXRpb25zaGlwcw.display_name": {
+          "source": "Relationships",
+          "message": "Prepojenia"
+        },
+        "app.S2xhdml5bw.action.Y3JlYXRlX3RhZw.short_desc": {
+          "source": "Creates a new tag",
+          "message": "Vytvorí novú značku"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.desc": {
+          "source": "Adds a profile that already exists to a list.\n\nThe profile is **not** subscribed by this: membership and marketing consent are separate in Klaviyo, and **Subscribe Profile** is what records consent. Adding a profile that is already a member succeeds and changes nothing.",
+          "message": "Pridá už existujúci profil do zoznamu.\n\nTýmto sa profil **neprihlási** na odber: členstvo a marketingový súhlas sú v platforme Klaviyo oddelené a súhlas zaznamenáva akcia **Subscribe Profile**. Pridanie profilu, ktorý už je členom, prebehne úspešne a nič nezmení."
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.display_name": {
+          "source": "Add Profile to List",
+          "message": "Pridať profil do zoznamu"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.bGlzdA.desc": {
+          "source": "The list to add the profile to",
+          "message": "Zoznam, do ktorého sa má profil pridať"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "Zoznam"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.bGlzdA.short_desc": {
+          "source": "The list to add the profile to",
+          "message": "Zoznam, do ktorého sa má profil pridať"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.cHJvZmlsZQ.desc": {
+          "source": "The profile to add",
+          "message": "Profil, ktorý sa má pridať"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.option.cHJvZmlsZQ.short_desc": {
+          "source": "The profile to add",
+          "message": "Profil, ktorý sa má pridať"
+        },
+        "app.S2xhdml5bw.action.YWRkX3Byb2ZpbGVfdG9fbGlzdA.short_desc": {
+          "source": "Adds an existing profile to a list",
+          "message": "Pridá existujúci profil do zoznamu"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.desc": {
+          "source": "Applies a tag that already exists to a list.\n\nKlaviyo does not create a tag on use; the tag has to exist, and **List Tags** shows which do.",
+          "message": "Priradí už existujúcu značku k zoznamu.\n\nKlaviyo pri použití značku nevytvára; značka musí existovať a operácia **List Tags** zobrazuje existujúce značky."
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.display_name": {
+          "source": "Add Tag to List",
+          "message": "Pridať značku do zoznamu"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.bGlzdA.desc": {
+          "source": "The list to tag",
+          "message": "Zoznam, ktorý sa má označiť"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "Zoznam"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.bGlzdA.short_desc": {
+          "source": "The list to tag",
+          "message": "Zoznam, ktorý sa má označiť"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.dGFn.desc": {
+          "source": "The tag to apply",
+          "message": "Značka na priradenie"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.option.dGFn.short_desc": {
+          "source": "The tag to apply",
+          "message": "Značka na priradenie"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19saXN0.short_desc": {
+          "source": "Adds an existing tag to a list",
+          "message": "Pridá existujúcu značku do zoznamu"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.desc": {
+          "source": "Applies a tag that already exists to a segment.\n\nKlaviyo does not create a tag on use; the tag has to exist, and **List Tags** shows which do.",
+          "message": "Priradí už existujúcu značku k segmentu.\n\nKlaviyo pri použití značku nevytvára; značka musí existovať a operácia **List Tags** zobrazuje existujúce značky."
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.display_name": {
+          "source": "Add Tag to Segment",
+          "message": "Pridať značku do segmentu"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.c2VnbWVudA.desc": {
+          "source": "The segment to tag",
+          "message": "Segment, ktorý sa má označiť"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.c2VnbWVudA.display_name": {
+          "source": "Segment",
+          "message": "Segment"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.c2VnbWVudA.short_desc": {
+          "source": "The segment to tag",
+          "message": "Segment, ktorý sa má označiť"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.dGFn.desc": {
+          "source": "The tag to apply",
+          "message": "Značka na priradenie"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.option.dGFn.short_desc": {
+          "source": "The tag to apply",
+          "message": "Značka na priradenie"
+        },
+        "app.S2xhdml5bw.action.YWRkX3RhZ190b19zZWdtZW50.short_desc": {
+          "source": "Adds an existing tag to a segment",
+          "message": "Pridá existujúcu značku do segmentu"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.desc": {
+          "source": "Retrieves one metric by its Klaviyo ID.\n\nA **metric** is the kind of an event - \"Placed Order\", \"Viewed Product\" - and Klaviyo defines one the first time an event names it.",
+          "message": "Získa jednu metriku podľa jej identifikátora Klaviyo ID.\n\n**Metrika** predstavuje typ udalosti – „Placed Order“, „Viewed Product“ – a Klaviyo ju definuje pri jej prvom výskyte v udalosti."
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.display_name": {
+          "source": "Get Metric",
+          "message": "Získať metriku"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.option.aWQ.desc": {
+          "source": "Metric ID: Metric ID",
+          "message": "ID metriky: ID metriky"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.option.aWQ.display_name": {
+          "source": "Metric",
+          "message": "Metrika"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.option.aWQ.short_desc": {
+          "source": "The metric to retrieve",
+          "message": "Metrika, ktorá sa má získať"
+        },
+        "app.S2xhdml5bw.action.Z2V0X21ldHJpYw.short_desc": {
+          "source": "Retrieves a specific metric",
+          "message": "Získa konkrétnu metriku"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.desc": {
+          "source": "Retrieves one campaign by its Klaviyo ID",
+          "message": "Získa jednu kampaň podľa jej identifikátora Klaviyo ID"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.display_name": {
+          "source": "Get Campaign",
+          "message": "Získať kampaň"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.option.aWQ.desc": {
+          "source": "The campaign ID to be retrieved: The campaign ID to be retrieved",
+          "message": "ID kampane, ktorá sa má získať: ID kampane, ktorá sa má získať"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.option.aWQ.display_name": {
+          "source": "Campaign",
+          "message": "Kampaň"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.option.aWQ.short_desc": {
+          "source": "The campaign to retrieve",
+          "message": "Kampaň, ktorá sa má získať"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2NhbXBhaWdu.short_desc": {
+          "source": "Retrieves a specific campaign",
+          "message": "Získa konkrétnu kampaň"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.desc": {
+          "source": "Retrieves one event by its Klaviyo ID",
+          "message": "Získa jednu udalosť podľa jej identifikátora Klaviyo ID"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.display_name": {
+          "source": "Get Event",
+          "message": "Získať udalosť"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.option.aWQ.desc": {
+          "source": "ID of the event: ID of the event",
+          "message": "ID udalosti: ID udalosti"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.option.aWQ.display_name": {
+          "source": "Event",
+          "message": "Udalosť"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.option.aWQ.short_desc": {
+          "source": "The event to retrieve",
+          "message": "Udalosť, ktorá sa má získať"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2V2ZW50.short_desc": {
+          "source": "Retrieves a specific event",
+          "message": "Získa konkrétnu udalosť"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.desc": {
+          "source": "Retrieves one list by its Klaviyo ID.\n\n`additionalFields` adds the list's profile count, which Klaviyo does not return otherwise because counting is expensive.",
+          "message": "Získa jeden zoznam podľa jeho identifikátora Klaviyo ID.\n\n`additionalFields` pridá počet profilov v zozname, ktorý Klaviyo inak nevracia, pretože počítanie je náročné."
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.display_name": {
+          "source": "Get List",
+          "message": "Získať zoznam"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.YWRkaXRpb25hbEZpZWxkcw.desc": {
+          "source": "Computed blocks to include on each profile, which Klaviyo omits by default because they are expensive to produce:\n\n- `subscriptions`: the profile's consent state per channel\n- `predictive_analytics`: Klaviyo's predicted lifetime value and churn probability",
+          "message": "Vypočítané bloky, ktoré sa majú zahrnúť do každého profilu, pričom Klaviyo ich predvolene vynecháva, pretože ich generovanie je náročné:\n\n- `subscriptions`: stav súhlasu profilu pre jednotlivé kanály\n- `predictive_analytics`: odhadovaná celoživotná hodnota a pravdepodobnosť odchodu podľa Klaviyo"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.YWRkaXRpb25hbEZpZWxkcw.display_name": {
+          "source": "Additional Fields",
+          "message": "Dodatočné polia"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.YWRkaXRpb25hbEZpZWxkcw.short_desc": {
+          "source": "Computed blocks to include on each profile",
+          "message": "Vypočítané bloky, ktoré sa majú zahrnúť do každého profilu"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.aWQ.desc": {
+          "source": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+          "message": "Primárny kľúč, ktorý jednoznačne identifikuje tento zoznam. Generuje ho Klaviyo."
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.aWQ.display_name": {
+          "source": "List",
+          "message": "Zoznam"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.option.aWQ.short_desc": {
+          "source": "The list to work on",
+          "message": "Zoznam, s ktorým sa má pracovať"
+        },
+        "app.S2xhdml5bw.action.Z2V0X2xpc3Q.short_desc": {
+          "source": "Retrieves a specific list",
+          "message": "Získa konkrétny zoznam"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.desc": {
+          "source": "Retrieves one profile by its Klaviyo ID",
+          "message": "Získa jeden profil podľa jeho identifikátora Klaviyo ID"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.display_name": {
+          "source": "Get Profile",
+          "message": "Získať profil"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.YWRkaXRpb25hbEZpZWxkcw.desc": {
+          "source": "Computed blocks to include on each profile, which Klaviyo omits by default because they are expensive to produce:\n\n- `subscriptions`: the profile's consent state per channel\n- `predictive_analytics`: Klaviyo's predicted lifetime value and churn probability",
+          "message": "Vypočítané bloky, ktoré sa majú zahrnúť do každého profilu, pričom Klaviyo ich predvolene vynecháva, pretože ich generovanie je náročné:\n\n- `subscriptions`: stav súhlasu profilu pre jednotlivé kanály\n- `predictive_analytics`: odhadovaná celoživotná hodnota a pravdepodobnosť odchodu podľa Klaviyo"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.YWRkaXRpb25hbEZpZWxkcw.display_name": {
+          "source": "Additional Fields",
+          "message": "Dodatočné polia"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.YWRkaXRpb25hbEZpZWxkcw.short_desc": {
+          "source": "Computed blocks to include on each profile",
+          "message": "Vypočítané bloky, ktoré sa majú zahrnúť do každého profilu"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.aWQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.option.aWQ.short_desc": {
+          "source": "The profile to retrieve",
+          "message": "Profil, ktorý sa má získať"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3Byb2ZpbGU.short_desc": {
+          "source": "Retrieves a specific profile",
+          "message": "Získa konkrétny profil"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.desc": {
+          "source": "Retrieves one segment by its Klaviyo ID.\n\n`additionalFields` adds the segment's profile count and its `definition` - the rule Klaviyo evaluates - neither of which is returned otherwise.",
+          "message": "Získa jeden segment podľa jeho identifikátora Klaviyo ID.\n\n`additionalFields` pridá počet profilov v segmente a jeho `definition` – pravidlo, ktoré Klaviyo vyhodnocuje – pričom ani jedno sa inak nevracia."
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.display_name": {
+          "source": "Get Segment",
+          "message": "Získať segment"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.YWRkaXRpb25hbEZpZWxkcw.desc": {
+          "source": "Computed blocks to include on each profile, which Klaviyo omits by default because they are expensive to produce:\n\n- `subscriptions`: the profile's consent state per channel\n- `predictive_analytics`: Klaviyo's predicted lifetime value and churn probability",
+          "message": "Vypočítané bloky, ktoré sa majú zahrnúť do každého profilu, pričom Klaviyo ich predvolene vynecháva, pretože ich generovanie je náročné:\n\n- `subscriptions`: stav súhlasu profilu pre jednotlivé kanály\n- `predictive_analytics`: odhadovaná celoživotná hodnota a pravdepodobnosť odchodu podľa Klaviyo"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.YWRkaXRpb25hbEZpZWxkcw.display_name": {
+          "source": "Additional Fields",
+          "message": "Dodatočné polia"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.YWRkaXRpb25hbEZpZWxkcw.short_desc": {
+          "source": "Computed blocks to include on each profile",
+          "message": "Vypočítané bloky, ktoré sa majú zahrnúť do každého profilu"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.aWQ.display_name": {
+          "source": "Segment",
+          "message": "Segment"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.option.aWQ.short_desc": {
+          "source": "The segment to work on",
+          "message": "Segment, s ktorým sa má pracovať"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3NlZ21lbnQ.short_desc": {
+          "source": "Retrieves a specific segment",
+          "message": "Získa konkrétny segment"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.desc": {
+          "source": "Retrieves one tag by its Klaviyo ID",
+          "message": "Získa jednu značku podľa jej identifikátora Klaviyo ID"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.display_name": {
+          "source": "Get Tag",
+          "message": "Získať značku"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.option.aWQ.desc": {
+          "source": "The Tag ID",
+          "message": "ID značky"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.option.aWQ.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.option.aWQ.short_desc": {
+          "source": "The tag to work on",
+          "message": "Značka, s ktorou sa má pracovať"
+        },
+        "app.S2xhdml5bw.action.Z2V0X3RhZw.short_desc": {
+          "source": "Retrieves a specific tag",
+          "message": "Získa konkrétnu značku"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.desc": {
+          "source": "Deletes every record in the given table matching the search criteria",
+          "message": "Odstráni každý záznam v danej tabuľke zodpovedajúci vyhľadávacím kritériám"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.display_name": {
+          "source": "Delete Records",
+          "message": "Odstrániť záznamy"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "Tabuľka, s ktorou sa má pracovať: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` alebo `events`"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Názov tabuľky, s ktorou sa má pracovať"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRl.short_desc": {
+          "source": "Delete the records matching the search criteria",
+          "message": "Odstrániť záznamy zodpovedajúce vyhľadávacím kritériám"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.desc": {
+          "source": "Deletes a campaign.\n\nKlaviyo answers with no content. A campaign that has already been sent keeps its reporting history.",
+          "message": "Odstráni kampaň.\n\nKlaviyo neodpovedá žiadnym obsahom. Kampaň, ktorá už bola odoslaná, si zachová históriu prehľadov."
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.display_name": {
+          "source": "Delete Campaign",
+          "message": "Odstrániť kampaň"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.option.aWQ.desc": {
+          "source": "The campaign ID to be deleted: The campaign ID to be deleted",
+          "message": "ID kampane, ktorá sa má odstrániť: ID kampane, ktorá sa má odstrániť"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.option.aWQ.display_name": {
+          "source": "Campaign",
+          "message": "Kampaň"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.option.aWQ.short_desc": {
+          "source": "The campaign to work on",
+          "message": "Kampaň, s ktorou sa má pracovať"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2NhbXBhaWdu.short_desc": {
+          "source": "Deletes a campaign",
+          "message": "Odstráni kampaň"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.desc": {
+          "source": "Deletes a list.\n\nThe profiles on it are **not** deleted; they simply stop being members. Klaviyo answers with no content.",
+          "message": "Odstráni zoznam.\n\nProfily v ňom **nie sú** odstránené; len prestanú byť členmi. Klaviyo neodpovedá žiadnym obsahom."
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.display_name": {
+          "source": "Delete List",
+          "message": "Vymazať zoznam"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.option.aWQ.desc": {
+          "source": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+          "message": "Primárny kľúč, ktorý jednoznačne identifikuje tento zoznam. Generuje ho Klaviyo."
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.option.aWQ.display_name": {
+          "source": "List",
+          "message": "Zoznam"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.option.aWQ.short_desc": {
+          "source": "The list to work on",
+          "message": "Zoznam, s ktorým sa má pracovať"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX2xpc3Q.short_desc": {
+          "source": "Deletes a list",
+          "message": "Odstráni zoznam"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.desc": {
+          "source": "Deletes a segment.\n\nThe profiles it matched are **not** deleted; the rule simply stops being evaluated. Klaviyo answers with no content.",
+          "message": "Odstráni segment.\n\nProfily, ktoré mu vyhovovali, **nie sú** odstránené; pravidlo sa len prestane vyhodnocovať. Klaviyo neodpovedá žiadnym obsahom."
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.display_name": {
+          "source": "Delete Segment",
+          "message": "Odstrániť segment"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.option.aWQ.display_name": {
+          "source": "Segment",
+          "message": "Segment"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.option.aWQ.short_desc": {
+          "source": "The segment to work on",
+          "message": "Segment, s ktorým sa má pracovať"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3NlZ21lbnQ.short_desc": {
+          "source": "Deletes a segment",
+          "message": "Odstráni segment"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.desc": {
+          "source": "Deletes a tag.\n\nThe campaigns, flows, lists and segments it was applied to are **not** deleted; they simply lose the tag. Klaviyo answers with no content.",
+          "message": "Odstráni značku.\n\nKampane, toky, zoznamy a segmenty, na ktoré bola aplikovaná, **nie sú** odstránené; iba stratia túto značku. Klaviyo neodpovedá žiadnym obsahom."
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.display_name": {
+          "source": "Delete Tag",
+          "message": "Odstrániť značku"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.option.aWQ.desc": {
+          "source": "The Tag ID",
+          "message": "ID značky"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.option.aWQ.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.option.aWQ.short_desc": {
+          "source": "The tag to work on",
+          "message": "Značka, s ktorou sa má pracovať"
+        },
+        "app.S2xhdml5bw.action.ZGVsZXRlX3RhZw.short_desc": {
+          "source": "Deletes a tag",
+          "message": "Odstráni značku"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.desc": {
+          "source": "Lists the account's tags.\n\nA tag groups campaigns, flows, lists and segments for reporting. Paging is by cursor.",
+          "message": "Zobrazí zoznam značiek účtu.\n\nZnačka zoskupuje kampane, toky, zoznamy a segmenty na účely prehľadov. Stránkovanie prebieha pomocou kurzora."
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.display_name": {
+          "source": "List Tags",
+          "message": "Zoznam značiek"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Kurzor pre nasledujúcu stránku: odovzdajte hodnotu z poľa `links.next` predchádzajúcej odpovede.\n\nJe nepriehľadný a nesmie sa vytvárať ručne; ak chcete načítať prvú stránku, nechajte ho nenastavený."
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Kurzor"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Kurzor pre nasledujúcu stránku"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching tags\n\nThis value is sent as Klaviyo's filter syntax, `contains(name,…)`.",
+          "message": "Zúži zoznam na zodpovedajúce značky\n\nTáto hodnota sa odosiela v syntaxi filtrovania služby Klaviyo, `contains(name,…)`."
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching tags",
+          "message": "Zúži zoznam na zodpovedajúce značky"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "Pole a smer zoradenia\n\nTáto hodnota sa odosiela ako token zoradenia Klaviyo: názov poľa s úvodným znakom `-` pre zostupné zoradenie."
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Zoradiť"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "Pole a smer zoradenia"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke.\n\nKlaviyo tento počet obmedzuje pre každý koncový bod a namiesto jeho orezania väčšiu hodnotu odmietne; maximum je uvedené v popise samotného argumentu."
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.S2xhdml5bw.action.bGlzdF90YWdz.short_desc": {
+          "source": "Lists tags",
+          "message": "Zobrazí zoznam značiek"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.desc": {
+          "source": "Lists campaigns on the given channel.\n\n**`channel` is required**: Klaviyo does not list campaigns across channels, so a listing is always of one channel's campaigns - or of both, if both are named. Paging is by cursor.",
+          "message": "Zobrazí zoznam kampaní v danom kanáli.\n\n**Pole `channel` je povinné**: Klaviyo neposkytuje zoznam kampaní naprieč kanálmi, preto výpis vždy obsahuje kampane jedného kanála – alebo oboch, ak sú uvedené oba. Stránkovanie prebieha pomocou kurzora."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.display_name": {
+          "source": "List Campaigns",
+          "message": "Zoznam kampaní"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.desc": {
+          "source": "E-mail campaigns",
+          "message": "E-mailové kampane"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "E-mail",
+          "message": "E-mail"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.desc": {
+          "source": "SMS campaigns",
+          "message": "SMS kampane"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.allowed-value.c3RyaW5nOnNtcw.display_name": {
+          "source": "SMS",
+          "message": "SMS"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.desc": {
+          "source": "The channel whose campaigns to list.\n\nKlaviyo will not list campaigns without being told which channel to look at, and accepts only one: `messages.channel` is the one field whose only permitted operator is `equals`, measured against the live API. A listing across both channels is two calls, which is what the campaign dropdown makes.",
+          "message": "Kanál, ktorého kampane sa majú zobraziť.\n\nKlaviyo nevypíše kampane bez zadania kanála a akceptuje iba jeden: `messages.channel` je jediné pole, ktorého jediným povoleným operátorom je `equals` podľa živého API. Výpis cez oba kanály predstavuje dve volania, čo je presne to, čo vykonáva rozbaľovací zoznam kampaní."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.display_name": {
+          "source": "Channel",
+          "message": "Kanál"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y2hhbm5lbA.short_desc": {
+          "source": "The channel whose campaigns to list",
+          "message": "Kanál, ktorého kampane sa majú zobraziť"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Kurzor pre nasledujúcu stránku: odovzdajte hodnotu z poľa `links.next` predchádzajúcej odpovede.\n\nJe nepriehľadný a nesmie sa vytvárať ručne; ak chcete načítať prvú stránku, nechajte ho nenastavený."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Kurzor"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Kurzor pre nasledujúcu stránku"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.bmFtZQ.desc": {
+          "source": "Return only campaigns whose name contains this text",
+          "message": "Vrátiť iba kampane, ktorých názov obsahuje tento text"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.bmFtZQ.short_desc": {
+          "source": "Text the campaign name must contain",
+          "message": "Text, ktorý musí názov kampane obsahovať"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "Pole a smer zoradenia\n\nTáto hodnota sa odosiela ako token zoradenia Klaviyo: názov poľa s úvodným znakom `-` pre zostupné zoradenie."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Zoradiť"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "Pole a smer zoradenia"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke.\n\nKlaviyo tento počet obmedzuje pre každý koncový bod a namiesto jeho orezania väčšiu hodnotu odmietne; maximum je uvedené v popise samotného argumentu."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9jYW1wYWlnbnM.short_desc": {
+          "source": "Lists campaigns",
+          "message": "Zobrazí zoznam kampaní"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.desc": {
+          "source": "Lists the events recorded in the account, newest first by default.\n\nThis listing is exported so that the event picker on other actions has values to offer; the superseded application had no listing action of its own.",
+          "message": "Zobrazí zoznam udalostí zaznamenaných v účte, predvolene od najnovších.\n\nTento výpis sa exportuje, aby mal výber udalostí v iných akciách k dispozícii hodnoty; nahradená aplikácia nemala vlastnú akciu na zobrazenie zoznamu."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.display_name": {
+          "source": "List Events",
+          "message": "Zobraziť udalosti"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Kurzor pre nasledujúcu stránku: odovzdajte hodnotu z poľa `links.next` predchádzajúcej odpovede.\n\nJe nepriehľadný a nesmie sa vytvárať ručne; ak chcete načítať prvú stránku, nechajte ho nenastavený."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Kurzor"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Kurzor pre nasledujúcu stránku"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching events, in Klaviyo's filter syntax.\n\n`equals(metric_id,\"…\")` and `equals(profile_id,\"…\")` select one metric or one profile, and `datetime` and `timestamp` take the four range comparisons - for example `greater-or-equal(datetime,\"2026-01-01T00:00:00Z\"),less-than(datetime,\"2026-02-01T00:00:00Z\")`. Predicates are joined by commas and mean **and**; Klaviyo has no `or` here.",
+          "message": "Zúžte zoznam na zodpovedajúce udalosti pomocou syntaxe filtrovania služby Klaviyo.\n\n`equals(metric_id,\"…\")` a `equals(profile_id,\"…\")` vyberajú jednu metriku alebo jeden profil a `datetime` a `timestamp` prijímajú štyri porovnania rozsahov – napríklad `greater-or-equal(datetime,\"2026-01-01T00:00:00Z\"),less-than(datetime,\"2026-02-01T00:00:00Z\")`. Predikáty sú oddelené čiarkami a znamenajú **and**; Klaviyo tu nepodporuje `or`."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching events",
+          "message": "Zúžiť zoznam na zodpovedajúce udalosti"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "Pole a smer zoradenia\n\nTáto hodnota sa odosiela ako token zoradenia Klaviyo: názov poľa s úvodným znakom `-` pre zostupné zoradenie."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Zoradiť"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "Pole a smer zoradenia"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke.\n\nKlaviyo tento počet obmedzuje pre každý koncový bod a namiesto jeho orezania väčšiu hodnotu odmietne; maximum je uvedené v popise samotného argumentu."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9ldmVudHM.short_desc": {
+          "source": "Lists events",
+          "message": "Zobrazí zoznam udalostí"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.desc": {
+          "source": "Lists the account's lists.\n\nA **list** holds profiles that opted in explicitly, where a **segment** is a rule Klaviyo evaluates. Paging is by cursor.",
+          "message": "Zobrazí zoznamy účtu.\n\n**Zoznam** obsahuje profily, ktoré sa explicitne prihlásili, zatiaľ čo **segment** je pravidlo, ktoré Klaviyo vyhodnocuje. Stránkovanie prebieha pomocou kurzora."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.display_name": {
+          "source": "List Lists",
+          "message": "Vypísať zoznamy"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Kurzor pre nasledujúcu stránku: odovzdajte hodnotu z poľa `links.next` predchádzajúcej odpovede.\n\nJe nepriehľadný a nesmie sa vytvárať ručne; ak chcete načítať prvú stránku, nechajte ho nenastavený."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Kurzor"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Kurzor pre nasledujúcu stránku"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching lists\n\nThis value is sent as Klaviyo's filter syntax, `any(name,…),any(id,…)`.",
+          "message": "Zúžte zoznam na zodpovedajúce zoznamy\n\nTáto hodnota sa odosiela v syntaxi filtrovania služby Klaviyo, `any(name,…),any(id,…)`."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching lists",
+          "message": "Zúžiť zoznam na zodpovedajúce zoznamy"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "Pole a smer zoradenia\n\nTáto hodnota sa odosiela ako token zoradenia Klaviyo: názov poľa s úvodným znakom `-` pre zostupné zoradenie."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Zoradiť"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "Pole a smer zoradenia"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke.\n\nKlaviyo tento počet obmedzuje pre každý koncový bod a namiesto jeho orezania väčšiu hodnotu odmietne; maximum je uvedené v popise samotného argumentu."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9saXN0cw.short_desc": {
+          "source": "Lists all lists",
+          "message": "Zobrazí všetky zoznamy"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.desc": {
+          "source": "Lists the metrics defined in the account.\n\nA **metric** is the kind of an event - \"Placed Order\", \"Viewed Product\" - and Klaviyo defines one the first time an event names it. This listing is exported so that the metric picker on **Create Event** and the **New Event** trigger has values to offer; the superseded application had no listing action of its own.\n\nKlaviyo declares no page size on this endpoint, only a cursor.",
+          "message": "Zobrazí metriky definované v účte.\n\n**Metrika** predstavuje typ udalosti – „Placed Order“, „Viewed Product“ – a Klaviyo ju definuje pri prvom výskyte jej názvu v udalosti. Tento výpis sa exportuje, aby mal výber metrík v akcii **Vytvoriť udalosť** a spúšťači **Nová udalosť** k dispozícii hodnoty; nahradená aplikácia nemala vlastnú akciu na zobrazenie zoznamu.\n\nKlaviyo na tomto koncovom bode nedeklaruje veľkosť stránky, iba kurzor."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.display_name": {
+          "source": "List Metrics",
+          "message": "Zoznam metrík"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Kurzor pre nasledujúcu stránku: odovzdajte hodnotu z poľa `links.next` predchádzajúcej odpovede.\n\nJe nepriehľadný a nesmie sa vytvárať ručne; ak chcete načítať prvú stránku, nechajte ho nenastavený."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Kurzor"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Kurzor pre nasledujúcu stránku"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9tZXRyaWNz.short_desc": {
+          "source": "Lists metrics",
+          "message": "Zobrazí zoznam metrík"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.desc": {
+          "source": "Lists the profiles in the account, newest first by default.\n\n`filter` narrows the listing by e-mail, phone number, external ID or profile ID; each takes one or more values and matches any of them. Paging is by cursor: pass the previous response's `links.next` back as `cursor`.",
+          "message": "Zobrazí profily v účte, predvolene od najnovších.\n\n`filter` zužuje zoznam podľa e-mailu, telefónneho čísla, externého ID alebo ID profilu; každé z nich prijíma jednu alebo viac hodnôt a vyhľadáva zhodu s ktoroukoľvek z nich. Stránkovanie prebieha pomocou kurzora: odovzdajte `links.next` z predchádzajúcej odpovede späť ako `cursor`."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.display_name": {
+          "source": "List Profiles",
+          "message": "Zoznam profilov"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Kurzor pre nasledujúcu stránku: odovzdajte hodnotu z poľa `links.next` predchádzajúcej odpovede.\n\nJe nepriehľadný a nesmie sa vytvárať ručne; ak chcete načítať prvú stránku, nechajte ho nenastavený."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Kurzor"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Kurzor pre nasledujúcu stránku"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.YWRkaXRpb25hbEZpZWxkcw.desc": {
+          "source": "Computed blocks to include on each profile, which Klaviyo omits by default because they are expensive to produce:\n\n- `subscriptions`: the profile's consent state per channel\n- `predictive_analytics`: Klaviyo's predicted lifetime value and churn probability",
+          "message": "Vypočítané bloky, ktoré sa majú zahrnúť do každého profilu, pričom Klaviyo ich predvolene vynecháva, pretože ich generovanie je náročné:\n\n- `subscriptions`: stav súhlasu profilu pre jednotlivé kanály\n- `predictive_analytics`: odhadovaná celoživotná hodnota a pravdepodobnosť odchodu podľa Klaviyo"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.YWRkaXRpb25hbEZpZWxkcw.display_name": {
+          "source": "Additional Fields",
+          "message": "Dodatočné polia"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.YWRkaXRpb25hbEZpZWxkcw.short_desc": {
+          "source": "Computed blocks to include on each profile",
+          "message": "Vypočítané bloky, ktoré sa majú zahrnúť do každého profilu"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching profiles\n\nThis value is sent as Klaviyo's filter syntax, `any(email,…),any(phone_number,…),any(external_id,…),any(id,…)`.",
+          "message": "Zúžte zoznam na zodpovedajúce profily\n\nTáto hodnota sa odosiela v syntaxi filtrovania služby Klaviyo, `any(email,…),any(phone_number,…),any(external_id,…),any(id,…)`."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching profiles",
+          "message": "Zúžiť zoznam na zodpovedajúce profily"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "Pole a smer zoradenia\n\nTáto hodnota sa odosiela ako token zoradenia Klaviyo: názov poľa s úvodným znakom `-` pre zostupné zoradenie."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Zoradiť"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "Pole a smer zoradenia"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke.\n\nKlaviyo tento počet obmedzuje pre každý koncový bod a namiesto jeho orezania väčšiu hodnotu odmietne; maximum je uvedené v popise samotného argumentu."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9wcm9maWxlcw.short_desc": {
+          "source": "Lists profiles",
+          "message": "Zobrazí zoznam profilov"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.desc": {
+          "source": "Lists the account's segments.\n\nA **segment** is a rule Klaviyo evaluates continuously, so its membership changes on its own; a **list** holds profiles that opted in explicitly. Paging is by cursor.",
+          "message": "Zobrazí segmenty účtu.\n\n**Segment** je pravidlo, ktoré Klaviyo priebežne vyhodnocuje, takže jeho členstvo sa mení automaticky; **zoznam** obsahuje profily, ktoré sa explicitne prihlásili. Stránkovanie prebieha pomocou kurzora."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.display_name": {
+          "source": "List Segments",
+          "message": "Zoznam segmentov"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.Y3Vyc29y.desc": {
+          "source": "The cursor for the next page: pass the value from the previous response's `links.next`.\n\nIt is opaque and must not be constructed by hand; leave it unset to read the first page.",
+          "message": "Kurzor pre nasledujúcu stránku: odovzdajte hodnotu z poľa `links.next` predchádzajúcej odpovede.\n\nJe nepriehľadný a nesmie sa vytvárať ručne; ak chcete načítať prvú stránku, nechajte ho nenastavený."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.Y3Vyc29y.display_name": {
+          "source": "Cursor",
+          "message": "Kurzor"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.Y3Vyc29y.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "Kurzor pre nasledujúcu stránku"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.ZmlsdGVy.desc": {
+          "source": "Narrow the listing to matching segments\n\nThis value is sent as Klaviyo's filter syntax, `any(name,…),any(id,…)`.",
+          "message": "Zúžte zoznam na zodpovedajúce segmenty\n\nTáto hodnota sa odosiela v syntaxi filtrovania služby Klaviyo, `any(name,…),any(id,…)`."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.ZmlsdGVy.display_name": {
+          "source": "Filter",
+          "message": "Filter"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.ZmlsdGVy.short_desc": {
+          "source": "Narrow the listing to matching segments",
+          "message": "Zúžiť zoznam na zodpovedajúce segmenty"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.c29ydA.desc": {
+          "source": "The field and direction to sort by\n\nThis value is sent as Klaviyo's sort token: the field name, with a leading `-` for descending.",
+          "message": "Pole a smer zoradenia\n\nTáto hodnota sa odosiela ako token zoradenia Klaviyo: názov poľa s úvodným znakom `-` pre zostupné zoradenie."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "Zoradiť"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.c29ydA.short_desc": {
+          "source": "The field and direction to sort by",
+          "message": "Pole a smer zoradenia"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.cGFnZVNpemU.desc": {
+          "source": "How many records to return in one page.\n\nKlaviyo caps this per endpoint and rejects a larger value rather than clamping it; the maximum is in the argument's own description.",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke.\n\nKlaviyo tento počet obmedzuje pre každý koncový bod a namiesto jeho orezania väčšiu hodnotu odmietne; maximum je uvedené v popise samotného argumentu."
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.cGFnZVNpemU.display_name": {
+          "source": "Page Size",
+          "message": "Veľkosť stránky"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.option.cGFnZVNpemU.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "Koľko záznamov sa má vrátiť na jednej stránke"
+        },
+        "app.S2xhdml5bw.action.bGlzdF9zZWdtZW50cw.short_desc": {
+          "source": "Lists segments",
+          "message": "Zobrazí zoznam segmentov"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Klaviyo** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "Vykonajte vlastné volanie HTTP / REST API do služby **Klaviyo** pomocou overenia nakonfigurovaného pripojenia.\n\nZadajte metódu HTTP, cestu URI (relatívnu k základnej adrese API pripojenia), voliteľné parametre dopytu, hlavičky a telo požiadavky. Odpoveď sa vráti ako hash obsahujúci stavový kód, hlavičky odpovede a telo odpovede.\n\nTúto akciu použite pre koncové body, ktoré ešte nie sú v tejto aplikácii sprístupnené ako samostatné akcie."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "Urobiť volanie API"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "Telo požiadavky. Efektívny typ závisí od `body_type`: JSON/formulár/YAML očakávajú hash, XML/text očakávajú reťazec, multipart očakáva štruktúru súboru, binárny typ očakáva neopracované bajty."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "Telo"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "Telo požiadavky"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "Odoslať súbor pomocou `multipart/form-data`. Telo musí byť štruktúra @ref DataProvider::FileDataType \"FileDataType\" (filename + content + mime_type). Rámec vytvorí obálku multipart a nastaví hlavičku boundary."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "Multipart formulár"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "Odoslať súbor pomocou multipart/form-data"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "Odovzdať telo klientovi REST bez zmeny; klient rozhodne o serializácii na základe svojej konfigurovanej možnosti `data` a typu hodnoty"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "Priamy prechod; použiť serializáciu spojenia a nechať rozhodnúť klienta REST"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "Odoslať telo ako neopracované bajty. Telo musí byť binárna hodnota. Nastavuje `Content-Type: application/octet-stream`, pokiaľ nie je prepísané pomocou `hdr`."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "Surové binárne dáta"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "Odoslať telo ako neopracované bajty"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "Serializovať hash polí formulára ako `application/x-www-form-urlencoded`. Telo musí byť hash, ktorého hodnoty sú skaláre (reťazce/čísla/booleovské hodnoty)."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "Formulár (kódovaný v URL)"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "Serializovať telo ako polia formulára application/x-www-form-urlencoded"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "Serializovať telo ako JSON; nastavuje `Content-Type: application/json`. Telo by malo byť hash, zoznam alebo skalárna hodnota."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "Serializovať telo ako JSON"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "Odoslať telo ako čistý text. Telo musí byť reťazec. Nastavuje `Content-Type: text/plain`."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Čistý text"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "Odoslať telo ako text/plain"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "Odoslať telo ako XML. Ak je telo hash, serializuje sa do XML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/xml`."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "Odoslať telo ako XML"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "Odoslať telo ako YAML. Ak je telo hash, serializuje sa do YAML; ak je to reťazec, odosiela sa doslovne. Nastavuje `Content-Type: application/x-yaml`."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "Odoslať telo ako YAML"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "Vyberie režim serializácie tela a zodpovedajúcu hlavičku `Content-Type`. Zmena tohto poľa zmení editor `body` - výber JSON zobrazí editor JSON, výber Multipart Form zobrazí výber súborov a podobne."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "Typ tela"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "Ako sa telo serializuje a aký Content-Type sa odosiela"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "Ak je `True`, odpovede HTTP iné ako 2xx sa vrátia ako normálny hash odpovede (s reálnym stavovým kódom) namiesto vyvolania `REST-RESPONSE-ERROR`. Užitočné na spracovanie 4xx/5xx ako dát – napr. kontrola, či zdroj existuje. Prepíše nastavenie `error_passthru` spojenia len pre toto volanie."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "Vrátiť chyby ako dáta"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "Vrátiť odpovede iné ako 2xx normálne namiesto vyvolania výnimky"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "Voliteľný zoznam stavových kódov HTTP považovaných za úspech. Ak je nastavený a stav odpovede nie je v tomto zozname, akcia vyvolá `REST-STATUS-ERROR`. Ak nie je nastavený, uplatní sa predvolené správanie klienta REST (zvyčajne: 2xx je úspech, iné ako 2xx vyvolá výnimku)."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "Očakávané stavové kódy"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "Stavové kódy odpovede považované za úspech"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "Hash vlastných hlavičiek pridaných k požiadavke. Tie prepíšu akékoľvek predvolené hlavičky nastavené pomocou `body_type` (napr. zadanie `Content-Type` na tomto mieste má prednosť pred predvolenou hodnotou typu tela)."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "Vlastné hlavičky"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "Dodatočné hlavičky požiadavky"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "Ak je `True`, hash odpovede obsahuje pod-hash `debug` obsahujúci metódu/URL/hlavičky požiadavky (so skrytými citlivými hodnotami), veľkosti požiadavky a odpovede a trvanie celého cyklu. Užitočné pri vyšetrovaní pomalých alebo zlyhávajúcich volaní. Predvolene vypnuté, aby odpovede zostali stručné."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "Zahrnúť ladiace informácie"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "Zahrnúť ladiace informácie o požiadavke/časovaní/veľkosti do odpovede"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "Metóda HTTP"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "Metóda HTTP, ktorá sa má použiť pre požiadavku"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "Cesta URI relatívna k základnej adrese URL API spojenia. Môže obsahovať žolíky `{name}`, ktoré sú nahradené z `path_vars`. Príklad: `/users/{id}/comments`."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "Cesta URI"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Cesta URI relatívna k základnej adrese API URL pripojenia"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "Premenné cesty"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "Hodnoty pre zastupiteľné objekty {name} v ceste"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "Hash parametrov reťazca dopytu na pripojenie k ceste URI. Hodnoty sú zakódované v URL; hodnoty zoznamu sú spojené pomocou `,`."
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "Argumenty dopytu"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "Parametre reťazca dopytu"
+        },
+        "app.S2xhdml5bw.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Klaviyo",
+          "message": "Vykonať vlastné volanie API do služby Klaviyo"
+        },
+        "app.S2xhdml5bw.action.bmV3X2V2ZW50.desc": {
+          "source": "Fires for each event recorded against the chosen metric.\n\n`metric` is required and names the metric by **ID** - a feed of every event in the account would be unusably large, and a workflow reacting to \"Placed Order\" does not want \"Viewed Product\".\n\nThe event carries the event record with its attributes beside its identity. The feed is positioned by `datetime`, which is when the event happened rather than when Klaviyo received it.",
+          "message": "Spustí sa pre každú udalosť zaznamenanú pre vybranú metriku.\n\n`metric` je povinný a určuje metriku podľa **ID** – kanál všetkých udalostí v účte by bol nepoužiteľne veľký a pracovný postup reagujúci na „Placed Order“ nepotrebuje „Viewed Product“.\n\nUdalosť obsahuje záznam udalosti s jej atribútmi popri jej identite. Kanál je poziciovaný pomocou `datetime`, čo predstavuje čas, kedy k udalosti došlo, a nie kedy ju služba Klaviyo prijala."
+        },
+        "app.S2xhdml5bw.action.bmV3X2V2ZW50.display_name": {
+          "source": "New Event",
+          "message": "Nová udalosť"
+        },
+        "app.S2xhdml5bw.action.bmV3X2V2ZW50.short_desc": {
+          "source": "Triggers when a new event occurs",
+          "message": "Spustí sa, keď nastane nová udalosť"
+        },
+        "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.desc": {
+          "source": "Fires for each profile added to the chosen list.\n\nThe feed is positioned by `joined_group_at`, so this fires when the profile **joins the list** rather than when the profile itself was created - a profile that has existed for a year fires this the moment it is added.\n\nThe event carries the profile with its attributes beside its identity.",
+          "message": "Spustí sa pre každý profil pridaný do vybraného zoznamu.\n\nKanál je poziciovaný pomocou `joined_group_at`, takže sa spustí, keď sa profil **pripojí k zoznamu**, a nie pri samotnom vytvorení profilu – profil existujúci rok toto spustí v momente jeho pridania.\n\nUdalosť obsahuje profil s jeho atribútmi popri jeho identite."
+        },
+        "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.display_name": {
+          "source": "Profile Added to List",
+          "message": "Profil pridaný do zoznamu"
+        },
+        "app.S2xhdml5bw.action.bmV3X2xpc3RfcHJvZmlsZQ.short_desc": {
+          "source": "Triggers when a profile is added to a list",
+          "message": "Spustí sa pri pridaní profilu do zoznamu"
+        },
+        "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.desc": {
+          "source": "Fires for each profile created in the account.\n\nThe event carries the profile with its attributes beside its identity, which is the same shape **Get Profile** and **List Profiles** return.\n\nA profile that is edited later does **not** fire this again: the feed is positioned by `created`.",
+          "message": "Spustí sa pre každý profil vytvorený v účte.\n\nUdalosť obsahuje profil s jeho atribútmi popri jeho identite, čo je rovnaká štruktúra, akú vracajú akcie **Získať profil** a **Zoznam profilov**.\n\nProfil upravený neskôr toto **znova nespustí**: kanál je poziciovaný pomocou `created`."
+        },
+        "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.display_name": {
+          "source": "New Profile",
+          "message": "Nový profil"
+        },
+        "app.S2xhdml5bw.action.bmV3X3Byb2ZpbGU.short_desc": {
+          "source": "Triggers when a new profile is created",
+          "message": "Spustí sa pri vytvorení nového profilu"
+        },
+        "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.desc": {
+          "source": "Fires for each profile that enters the chosen segment.\n\nA segment is a rule Klaviyo evaluates continuously, so a profile enters one by **coming to match it** - editing a profile, or an event it records, can be what does that. The feed is positioned by `joined_group_at`.\n\nThe event carries the profile with its attributes beside its identity.",
+          "message": "Spustí sa pre každý profil, ktorý vstúpi do vybraného segmentu.\n\nSegment je pravidlo, ktoré Klaviyo priebežne vyhodnocuje, takže profil doň vstúpi tým, že **začne spĺňať jeho podmienky** – môže to spôsobiť úprava profilu alebo ním zaznamenaná udalosť. Kanál je poziciovaný pomocou `joined_group_at`.\n\nUdalosť obsahuje profil s jeho atribútmi popri jeho identite."
+        },
+        "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.display_name": {
+          "source": "Profile Added to Segment",
+          "message": "Profil pridaný do segmentu"
+        },
+        "app.S2xhdml5bw.action.bmV3X3NlZ21lbnRfcHJvZmlsZQ.short_desc": {
+          "source": "Triggers when a profile is added to a segment",
+          "message": "Spustí sa pri pridaní profilu do segmentu"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.desc": {
+          "source": "Returns every record in the given table matching the search criteria",
+          "message": "Vráti všetky záznamy v danej tabuľke, ktoré zodpovedajú kritériám vyhľadávania"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.display_name": {
+          "source": "Search Records",
+          "message": "Vyhľadať záznamy"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "Tabuľka, s ktorou sa má pracovať: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` alebo `events`"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Názov tabuľky, s ktorou sa má pracovať"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNo.short_desc": {
+          "source": "Search for matching records in the given table",
+          "message": "Vyhľadať zodpovedajúce záznamy v danej tabuľke"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.desc": {
+          "source": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches",
+          "message": "Vráti jeden záznam v danej tabuľke, ktorý zodpovedá kritériám vyhľadávania; ak ich zodpovedá viac, ide o chybu"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.display_name": {
+          "source": "Find a Single Record",
+          "message": "Nájsť jeden záznam"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "Tabuľka, s ktorou sa má pracovať: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` alebo `events`"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Názov tabuľky, s ktorou sa má pracovať"
+        },
+        "app.S2xhdml5bw.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
+          "source": "Search for a single matching record in the given table",
+          "message": "Vyhľadať jeden zodpovedajúci záznam v danej tabuľke"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.desc": {
+          "source": "Sends a campaign immediately, by creating a send job for it.\n\nThe campaign must be complete and ready to send; Klaviyo rejects a send job for a campaign that is still a draft. The response carries the job, whose status can be read back through `make-api-call` on `/api/campaign-send-jobs/{id}`.",
+          "message": "Odošle kampaň okamžite vytvorením úlohy odoslania.\n\nKampaň musí byť dokončená a pripravená na odoslanie; Klaviyo odmietne úlohu odoslania pre kampaň, ktorá je stále konceptom. Odpoveď obsahuje úlohu, ktorej stav možno načítať cez `make-api-call` na `/api/campaign-send-jobs/{id}`."
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.display_name": {
+          "source": "Send Campaign",
+          "message": "Odoslať kampaň"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.option.aWQ.desc": {
+          "source": "The ID of the campaign to send",
+          "message": "ID kampane, ktorá sa má odoslať"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.option.aWQ.display_name": {
+          "source": "Campaign",
+          "message": "Kampaň"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.option.aWQ.short_desc": {
+          "source": "The campaign to send",
+          "message": "Kampaň na odoslanie"
+        },
+        "app.S2xhdml5bw.action.c2VuZF9jYW1wYWlnbg.short_desc": {
+          "source": "Sends a campaign",
+          "message": "Odošle kampaň"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.desc": {
+          "source": "Records marketing consent for a profile, on the e-mail channel, the SMS channel or both.\n\nIdentify the profile by `profileId`, by `email` or by `phoneNumber`. `list` subscribes the profile **through a list**, which is what makes Klaviyo apply that list's double opt-in process; without it the consent is recorded directly and no confirmation is sent.\n\nOnly record consent that was actually given - Klaviyo's terms require the caller to hold a record of it.\n\nThis action is hand-written rather than generated, because Klaviyo records consent by creating a bulk subscription job whose body nests a list of per-channel consent envelopes four levels down.",
+          "message": "Zaznamená marketingový súhlas pre profil pre e-mailový kanál, SMS kanál alebo oba.\n\nProfil identifikujte pomocou `profileId`, `email` alebo `phoneNumber`. `list` prihlási profil **prostredníctvom zoznamu**, vďaka čomu Klaviyo uplatní proces dvojitého potvrdenia (double opt-in) daného zoznamu; bez toho sa súhlas zaznamená priamo a neodošle sa žiadne potvrdenie.\n\nZaznamenávajte iba súhlas, ktorý bol skutočne udelený – podmienky služby Klaviyo vyžadujú, aby volajúci uchovával záznam o udelení súhlasu.\n\nTáto akcia je napísaná manuálne, pretože Klaviyo zaznamenáva súhlas vytvorením úlohy hromadného odberu, ktorej telo vnára zoznam obálok súhlasov pre jednotlivé kanály štyri úrovne hlboko."
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.display_name": {
+          "source": "Subscribe Profile",
+          "message": "Prihlásiť profil na odber"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.Y29uc2VudFRvU3Vic2NyaWJlVG9DaGFubmVs.desc": {
+          "source": "The channel or channels the consent covers",
+          "message": "Kanál alebo kanály, ktorých sa súhlas týka"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.Y29uc2VudFRvU3Vic2NyaWJlVG9DaGFubmVs.display_name": {
+          "source": "Channel",
+          "message": "Kanál"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.Y29uc2VudFRvU3Vic2NyaWJlVG9DaGFubmVs.short_desc": {
+          "source": "The channel or channels the consent covers",
+          "message": "Kanál alebo kanály, ktorých sa súhlas týka"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.ZW1haWw.desc": {
+          "source": "The e-mail address consenting.\n\nRequired for the e-mail channel unless `profileId` names a profile that already carries one.",
+          "message": "E-mailová adresa udeľujúca súhlas.\n\nPovinné pre e-mailový kanál, pokiaľ `profileId` neuvádza profil, ktorý ju už obsahuje."
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "E-mail"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.ZW1haWw.short_desc": {
+          "source": "The e-mail address consenting",
+          "message": "E-mailová adresa udeľujúca súhlas"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.bGlzdA.desc": {
+          "source": "Subscribe the profile **through this list**, which adds it to the list and applies the list's double opt-in process if it has one.\n\nWithout it the consent is recorded against the profile directly and no confirmation is sent.",
+          "message": "Prihlásiť profil na odber **prostredníctvom tohto zoznamu**, čo ho pridá do zoznamu a uplatní proces dvojitého potvrdenia (double opt-in) zoznamu, ak je nastavený.\n\nBez toho sa súhlas zaznamená priamo k profilu a neodošle sa žiadne potvrdenie."
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "Zoznam"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.bGlzdA.short_desc": {
+          "source": "Subscribe through this list",
+          "message": "Prihlásiť na odber prostredníctvom tohto zoznamu"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.desc": {
+          "source": "Which kinds of SMS message the consent covers.\n\nKlaviyo treats marketing and transactional consent as different permissions; the default is marketing.",
+          "message": "Ktoré typy SMS správ súhlas pokrýva.\n\nKlaviyo považuje marketingový a transakčný súhlas za odlišné oprávnenia; predvolená možnosť je marketing."
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.display_name": {
+          "source": "SMS Subscription Type",
+          "message": "Typ SMS odberu"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.short_desc": {
+          "source": "Which kinds of SMS message this covers",
+          "message": "Typy SMS správ, ktorých sa toto týka"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The phone number consenting, in E.164 format, ex: `+15005550006`.\n\nRequired for the SMS channel unless `profileId` names a profile that already carries one.",
+          "message": "Telefónne číslo udeľujúce súhlas vo formáte E.164, napr.: `+15005550006`.\n\nPovinné pre SMS kanál, pokiaľ `profileId` neuvádza profil, ktorý ho už obsahuje."
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Telefónne číslo"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The phone number consenting, in E.164 format",
+          "message": "Telefónne číslo udeľujúce súhlas vo formáte E.164"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cHJvZmlsZUlk.desc": {
+          "source": "The profile giving consent.\n\nGive this, `email` or `phoneNumber`.",
+          "message": "Profil udeľujúci súhlas.\n\nZadajte toto, `email` alebo `phoneNumber`."
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cHJvZmlsZUlk.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.option.cHJvZmlsZUlk.short_desc": {
+          "source": "The profile giving consent, if it is already known",
+          "message": "Profil udeľujúci súhlas, ak je už známy"
+        },
+        "app.S2xhdml5bw.action.c3Vic2NyaWJlX3Byb2ZpbGU.short_desc": {
+          "source": "Subscribes a profile to marketing channels",
+          "message": "Prihlási profil na odber marketingových kanálov"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.desc": {
+          "source": "Removes a profile from a list.\n\nThe profile itself is not deleted, and its marketing consent is unchanged - use **Unsubscribe Profile** to withdraw consent. Removing a profile that is not a member succeeds and changes nothing.",
+          "message": "Odstráni profil zo zoznamu.\n\nSamotný profil sa neodstráni a jeho marketingový súhlas zostane nezmenený – na odvolanie súhlasu použite akciu **Zrušiť odber profilu**. Odstránenie profilu, ktorý nie je členom, prebehne úspešne a nič nezmení."
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.display_name": {
+          "source": "Remove Profile from List",
+          "message": "Odstrániť profil zo zoznamu"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.bGlzdA.desc": {
+          "source": "The list to remove the profile from",
+          "message": "Zoznam, z ktorého sa má profil odstrániť"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "Zoznam"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.bGlzdA.short_desc": {
+          "source": "The list to remove the profile from",
+          "message": "Zoznam, z ktorého sa má profil odstrániť"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.cHJvZmlsZQ.desc": {
+          "source": "The profile to remove",
+          "message": "Profil, ktorý sa má odstrániť"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.cHJvZmlsZQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.option.cHJvZmlsZQ.short_desc": {
+          "source": "The profile to remove",
+          "message": "Profil, ktorý sa má odstrániť"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3Byb2ZpbGVfZnJvbV9saXN0.short_desc": {
+          "source": "Removes a profile from a list",
+          "message": "Odstráni profil zo zoznamu"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.desc": {
+          "source": "Removes a tag from a list.\n\nThe tag itself is not deleted.",
+          "message": "Odstráni menovku zo zoznamu.\n\nSamotná menovka sa neodstráni."
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.display_name": {
+          "source": "Remove Tag from List",
+          "message": "Odstrániť štítok zo zoznamu"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.bGlzdA.desc": {
+          "source": "The list to remove the tag from",
+          "message": "Zoznam, z ktorého sa má štítok odstrániť"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.bGlzdA.display_name": {
+          "source": "List",
+          "message": "Zoznam"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.bGlzdA.short_desc": {
+          "source": "The list to remove the tag from",
+          "message": "Zoznam, z ktorého sa má štítok odstrániť"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.dGFn.desc": {
+          "source": "The tag to remove",
+          "message": "Štítok na odstránenie"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.option.dGFn.short_desc": {
+          "source": "The tag to remove",
+          "message": "Štítok na odstránenie"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX2xpc3Q.short_desc": {
+          "source": "Removes a tag from a list",
+          "message": "Odstráni štítok zo zoznamu"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.desc": {
+          "source": "Removes a tag from a segment.\n\nThe tag itself is not deleted.",
+          "message": "Removes a tag from a segment.\n\nThe tag itself is not deleted."
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.display_name": {
+          "source": "Remove Tag from Segment",
+          "message": "Odstrániť štítok zo segmentu"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.c2VnbWVudA.desc": {
+          "source": "The segment to remove the tag from",
+          "message": "Segment, z ktorého sa má štítok odstrániť"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.c2VnbWVudA.display_name": {
+          "source": "Segment",
+          "message": "Segment"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.c2VnbWVudA.short_desc": {
+          "source": "The segment to remove the tag from",
+          "message": "Segment, z ktorého sa má štítok odstrániť"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.dGFn.desc": {
+          "source": "The tag to remove",
+          "message": "Štítok na odstránenie"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.dGFn.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.option.dGFn.short_desc": {
+          "source": "The tag to remove",
+          "message": "Štítok na odstránenie"
+        },
+        "app.S2xhdml5bw.action.cmVtb3ZlX3RhZ19mcm9tX3NlZ21lbnQ.short_desc": {
+          "source": "Removes a tag from a segment",
+          "message": "Odstráni štítok zo segmentu"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.desc": {
+          "source": "Withdraws marketing consent for a profile.\n\nWhich channels are withdrawn follows from what is supplied: an `email` withdraws e-mail consent, a `phoneNumber` withdraws SMS consent, and both withdraw both. At least one is required.\n\nThis withdraws **consent**, which Klaviyo honours across every list; use **Remove Profile from List** to change membership instead.\n\nThis action is hand-written rather than generated, because Klaviyo withdraws consent by creating a bulk job whose body nests a list of per-channel consent envelopes four levels down.",
+          "message": "Odvolá marketingový súhlas profilu.\n\nKtoré kanály sa odvolajú, závisí od zadaných údajov: `email` odvolá súhlas pre e-mail, `phoneNumber` odvolá súhlas pre SMS a oba odvolajú oba kanály. Vyžaduje sa aspoň jeden.\n\nTýmto sa odvoláva **súhlas**, ktorý Klaviyo rešpektuje vo všetkých zoznamoch; na zmenu členstva použite radšej **Remove Profile from List**.\n\nTáto akcia je napísaná manuálne namiesto generovania, pretože Klaviyo odvoláva súhlas vytvorením hromadnej úlohy, ktorej telo vnára zoznam obálok súhlasov pre jednotlivé kanály štyri úrovne hlboko."
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.display_name": {
+          "source": "Unsubscribe Profile",
+          "message": "Zrušiť odber profilu"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.ZW1haWw.desc": {
+          "source": "The e-mail address to unsubscribe.\n\nSupplying it withdraws e-mail marketing consent.",
+          "message": "E-mailová adresa na odhlásenie odberu.\n\nJej zadaním sa odvolá marketingový súhlas pre e-mail."
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "E-mail"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.ZW1haWw.short_desc": {
+          "source": "The e-mail address to unsubscribe",
+          "message": "E-mailová adresa na odhlásenie odberu"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.desc": {
+          "source": "Which kinds of SMS message to withdraw consent for.\n\nOnly meaningful together with `phoneNumber`; the default is marketing.",
+          "message": "Aké typy SMS správ majú mať odvolaný súhlas.\n\nMá zmysel len spolu s `phoneNumber`; predvolená hodnota je marketing."
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.display_name": {
+          "source": "SMS Subscription Type",
+          "message": "Typ SMS odberu"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.c21zU3Vic2NyaXB0aW9uVHlwZQ.short_desc": {
+          "source": "Which kinds of SMS message this covers",
+          "message": "Typy SMS správ, ktorých sa toto týka"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The phone number to unsubscribe, in E.164 format.\n\nSupplying it withdraws SMS consent.",
+          "message": "Telefónne číslo na odhlásenie odberu vo formáte E.164.\n\nJeho zadaním sa odvolá súhlas pre SMS."
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Telefónne číslo"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The phone number to unsubscribe, in E.164 format",
+          "message": "Telefónne číslo na odhlásenie odberu vo formáte E.164"
+        },
+        "app.S2xhdml5bw.action.dW5zdWJzY3JpYmVfcHJvZmlsZQ.short_desc": {
+          "source": "Unsubscribes a profile from marketing channels",
+          "message": "Odhlási profil z marketingových kanálov"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.desc": {
+          "source": "Updates every record in the given table matching the search criteria",
+          "message": "Aktualizuje každý záznam v danej tabuľke zodpovedajúci vyhľadávacím kritériám"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "Aktualizovať záznamy"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` or `events`",
+          "message": "Tabuľka, s ktorou sa má pracovať: `profiles`, `lists`, `segments`, `tags`, `campaigns`, `metrics` alebo `events`"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "Tabuľka"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "Názov tabuľky, s ktorou sa má pracovať"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria",
+          "message": "Aktualizovať záznamy zodpovedajúce vyhľadávacím kritériám"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.desc": {
+          "source": "Updates a campaign that already exists, named by its Klaviyo ID.\n\nOnly the attributes supplied are changed. Klaviyo rejects a change to a campaign that has already been sent.",
+          "message": "Aktualizuje existujúcu kampaň určenú jej Klaviyo ID.\n\nZmenia sa len zadané atribúty. Klaviyo odmietne zmenu kampane, ktorá už bola odoslaná."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.display_name": {
+          "source": "Update Campaign",
+          "message": "Aktualizovať kampaň"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.YXVkaWVuY2Vz.display_name": {
+          "source": "Audiences",
+          "message": "Publiká"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.YXVkaWVuY2Vz.short_desc": {
+          "source": "The lists and segments to include and exclude",
+          "message": "Zoznamy a segmenty na zahrnutie a vylúčenie"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.aWQ.desc": {
+          "source": "The campaign ID to be retrieved: The campaign ID to be retrieved",
+          "message": "ID kampane, ktorá sa má získať: ID kampane, ktorá sa má získať"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.aWQ.display_name": {
+          "source": "Campaign",
+          "message": "Kampaň"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.aWQ.short_desc": {
+          "source": "The campaign to work on",
+          "message": "Kampaň, s ktorou sa má pracovať"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.bmFtZQ.desc": {
+          "source": "The campaign name",
+          "message": "Názov kampane"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.bmFtZQ.short_desc": {
+          "source": "The new name of the campaign",
+          "message": "Nový názov kampane"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.desc": {
+          "source": "Options to use when sending a campaign",
+          "message": "Možnosti použité pri odosielaní kampane"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.display_name": {
+          "source": "Send Options",
+          "message": "Možnosti odoslania"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZE9wdGlvbnM.short_desc": {
+          "source": "Whether to use smart sending",
+          "message": "Určuje, či sa má použiť inteligentné odosielanie (smart sending)"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.desc": {
+          "source": "The send strategy the campaign will send with",
+          "message": "Stratégia odosielania, s ktorou sa kampaň odošle"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.display_name": {
+          "source": "Send Strategy",
+          "message": "Stratégia odoslania"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.c2VuZFN0cmF0ZWd5.short_desc": {
+          "source": "When the campaign is sent, if not immediately",
+          "message": "Kedy sa kampaň odošle, ak nie okamžite"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.desc": {
+          "source": "The tracking options associated with the campaign",
+          "message": "Možnosti sledovania priradené ku kampani"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.display_name": {
+          "source": "Tracking Options",
+          "message": "Možnosti sledovania"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.option.dHJhY2tpbmdPcHRpb25z.short_desc": {
+          "source": "The UTM parameters and tracking flags to apply",
+          "message": "Parametre UTM a príznaky sledovania, ktoré sa majú použiť"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2NhbXBhaWdu.short_desc": {
+          "source": "Updates an existing campaign",
+          "message": "Aktualizuje existujúcu kampaň"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.desc": {
+          "source": "Updates a list that already exists, named by its Klaviyo ID.\n\nOnly the attributes supplied are changed.",
+          "message": "Aktualizuje existujúci zoznam určený jeho Klaviyo ID.\n\nZmenia sa len zadané atribúty."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.display_name": {
+          "source": "Update List",
+          "message": "Aktualizovať zoznam"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.aWQ.desc": {
+          "source": "Primary key that uniquely identifies this list. Generated by Klaviyo.",
+          "message": "Primárny kľúč, ktorý jednoznačne identifikuje tento zoznam. Generuje ho Klaviyo."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.aWQ.display_name": {
+          "source": "List",
+          "message": "Zoznam"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.aWQ.short_desc": {
+          "source": "The list to work on",
+          "message": "Zoznam, s ktorým sa má pracovať"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.allowed-value.c3RyaW5nOmRvdWJsZV9vcHRfaW4.display_name": {
+          "source": "double_opt_in",
+          "message": "double_opt_in"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.allowed-value.c3RyaW5nOnNpbmdsZV9vcHRfaW4.display_name": {
+          "source": "single_opt_in",
+          "message": "single_opt_in"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.desc": {
+          "source": "The opt-in process for this list. Valid values: 'double_opt_in', 'single_opt_in'.",
+          "message": "Proces prihlásenia k odberu pre tento zoznam. Platné hodnoty: 'double_opt_in', 'single_opt_in'."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.display_name": {
+          "source": "Opt-in Process",
+          "message": "Proces prihlásenia (opt-in)"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.b3B0SW5Qcm9jZXNz.short_desc": {
+          "source": "Whether a new subscriber has to confirm by e-mail",
+          "message": "Určuje, či nový odberateľ musí potvrdiť odber e-mailom"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.bmFtZQ.desc": {
+          "source": "A helpful name to label the list",
+          "message": "Výstižný názov na označenie zoznamu"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.option.bmFtZQ.short_desc": {
+          "source": "The new name of the list",
+          "message": "Nový názov zoznamu"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX2xpc3Q.short_desc": {
+          "source": "Updates an existing list",
+          "message": "Aktualizuje existujúci zoznam"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.desc": {
+          "source": "Updates a profile that already exists, named by its Klaviyo ID.\n\nOnly the attributes supplied are changed. A custom property supplied here **replaces** the stored value; `meta.patch_properties` appends to or unsets one instead.",
+          "message": "Aktualizuje existujúci profil určený jeho Klaviyo ID.\n\nZmenia sa len zadané atribúty. Vlastná vlastnosť zadaná tu **nahradí** uloženú hodnotu; `meta.patch_properties` namiesto toho hodnotu pridá alebo zruší."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.display_name": {
+          "source": "Update Profile",
+          "message": "Aktualizovať profil"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.desc": {
+          "source": "Country name",
+          "message": "Názov krajiny"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.display_name": {
+          "source": "Country",
+          "message": "Krajina"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y291bnRyeQ.short_desc": {
+          "source": "Country name",
+          "message": "Názov krajiny"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y2l0eQ.desc": {
+          "source": "City name",
+          "message": "Názov mesta"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y2l0eQ.display_name": {
+          "source": "City",
+          "message": "Mesto"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y2l0eQ.short_desc": {
+          "source": "City name",
+          "message": "Názov mesta"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.desc": {
+          "source": "Your own properties to store on the profile, as name/value pairs.\n\nKlaviyo reserves property names beginning with `$`.",
+          "message": "Vaše vlastné vlastnosti, ktoré sa majú uložiť do profilu, vo forme párov názov/hodnota.\n\nKlaviyo si vyhradzuje názvy vlastností začínajúce na `$`."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.display_name": {
+          "source": "Custom Properties",
+          "message": "Vlastné vlastnosti"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Y3VzdG9tUHJvcGVydGllcw.short_desc": {
+          "source": "Your own properties to store on the profile",
+          "message": "Vaše vlastné vlastnosti, ktoré sa majú uložiť do profilu"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.desc": {
+          "source": "First line of street address",
+          "message": "Prvý riadok adresy ulice"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.display_name": {
+          "source": "Address Line 1",
+          "message": "1. riadok adresy"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczE.short_desc": {
+          "source": "First line of street address",
+          "message": "Prvý riadok adresy ulice"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.desc": {
+          "source": "Second line of street address",
+          "message": "Druhý riadok adresy ulice"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.display_name": {
+          "source": "Address Line 2",
+          "message": "2. riadok adresy"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.YWRkcmVzczI.short_desc": {
+          "source": "Second line of street address",
+          "message": "Druhý riadok adresy ulice"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZW1haWw.desc": {
+          "source": "Individual's email address",
+          "message": "E-mailová adresa jednotlivca"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "E-mail"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZW1haWw.short_desc": {
+          "source": "The profile's e-mail address",
+          "message": "E-mailová adresa profilu"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.desc": {
+          "source": "Your own identifier for this person, so that a profile can be found by the ID it has in your system rather than by e-mail",
+          "message": "Váš vlastný identifikátor tejto osoby, aby bolo možné nájsť profil podľa ID, ktoré má vo vašom systéme, a nie podľa e-mailu"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.display_name": {
+          "source": "External ID",
+          "message": "Externé ID"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.ZXh0ZXJuYWxJZA.short_desc": {
+          "source": "Your own identifier for this person",
+          "message": "Váš vlastný identifikátor tejto osoby"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.desc": {
+          "source": "Individual's first name",
+          "message": "Meno jednotlivca"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.display_name": {
+          "source": "First Name",
+          "message": "Meno"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.Zmlyc3ROYW1l.short_desc": {
+          "source": "Individual's first name",
+          "message": "Meno jednotlivca"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.desc": {
+          "source": "URL pointing to the location of a profile image",
+          "message": "URL adresa odkazujúca na umiestnenie profilového obrázka"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.display_name": {
+          "source": "Image URL",
+          "message": "URL obrázka"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aW1hZ2VVcmw.short_desc": {
+          "source": "A URL for the profile's avatar",
+          "message": "URL adresa avatara profilu"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aWQ.desc": {
+          "source": "Primary key that uniquely identifies this profile. Generated by Klaviyo.: Primary key that uniquely identifies this profile. Generated by Klaviyo.",
+          "message": "Primárny kľúč, ktorý jednoznačne identifikuje tento profil. Vygenerovaný službou Klaviyo.: Primárny kľúč, ktorý jednoznačne identifikuje tento profil. Vygenerovaný službou Klaviyo."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aWQ.display_name": {
+          "source": "Profile",
+          "message": "Profil"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aWQ.short_desc": {
+          "source": "The profile to update",
+          "message": "Profil na aktualizáciu"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aXA.desc": {
+          "source": "IP Address",
+          "message": "IP adresa"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aXA.display_name": {
+          "source": "IP Address",
+          "message": "IP adresa"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.aXA.short_desc": {
+          "source": "The IP address Klaviyo should locate the profile from",
+          "message": "IP adresa, podľa ktorej by malo Klaviyo určiť polohu profilu"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.desc": {
+          "source": "Name of the company or organization within the company for whom the individual works",
+          "message": "Názov spoločnosti alebo organizácie v rámci spoločnosti, pre ktorú jednotlivec pracuje"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.display_name": {
+          "source": "Organization",
+          "message": "Organizácia"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.b3JnYW5pemF0aW9u.short_desc": {
+          "source": "The company the person belongs to",
+          "message": "Spoločnosť, do ktorej osoba patrí"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9jYWxl.desc": {
+          "source": "The locale of the profile, in the IETF BCP 47 language tag format like (ISO 639-1/2)-(ISO 3166 alpha-2)",
+          "message": "Jazyková verzia a región profilu vo formáte jazykovej značky IETF BCP 47, napríklad (ISO 639-1/2)-(ISO 3166 alpha-2)"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9jYWxl.display_name": {
+          "source": "Locale",
+          "message": "Lokalizácia"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9jYWxl.short_desc": {
+          "source": "The profile's locale, ex: \"en-US\"",
+          "message": "Jazyková verzia a región profilu, napr.: \"en-US\""
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.desc": {
+          "source": "Longitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "Zemepisná dĺžka. Odporúčame zadať presnosť na štyri desatinné miesta."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.display_name": {
+          "source": "Longitude",
+          "message": "Zemepisná dĺžka"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bG9uZ2l0dWRl.short_desc": {
+          "source": "Longitude coordinate",
+          "message": "Súradnica zemepisnej dĺžky"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.desc": {
+          "source": "Latitude coordinate. We recommend providing a precision of four decimal places.",
+          "message": "Zemepisná šírka. Odporúčame zadať presnosť na štyri desatinné miesta."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.display_name": {
+          "source": "Latitude",
+          "message": "Zemepisná šírka"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGF0aXR1ZGU.short_desc": {
+          "source": "Latitude coordinate",
+          "message": "Súradnica zemepisnej šírky"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.desc": {
+          "source": "Individual's last name",
+          "message": "Priezvisko jednotlivca"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.display_name": {
+          "source": "Last Name",
+          "message": "Priezvisko"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bGFzdE5hbWU.short_desc": {
+          "source": "Individual's last name",
+          "message": "Priezvisko jednotlivca"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bWV0YQ.desc": {
+          "source": "Append to or unset custom properties rather than replacing them.\n\n`patch_properties.append` adds a value to a list-valued property, `unappend` removes one, and `unset` deletes a property outright.",
+          "message": "Pridať k vlastným vlastnostiam alebo ich zrušiť namiesto ich nahradenia.\n\n`patch_properties.append` pridá hodnotu do vlastnosti typu zoznam, `unappend` ju odstráni a `unset` vlastnosť úplne vymaže."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bWV0YQ.display_name": {
+          "source": "Patch Operations",
+          "message": "Operácie úprav (Patch)"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.bWV0YQ.short_desc": {
+          "source": "Append to or unset custom properties rather than replacing them",
+          "message": "Pridať k vlastným vlastnostiam alebo ich zrušiť namiesto nahradenia"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.desc": {
+          "source": "The profile's phone number in E.164 format, ex: `+15005550006`.\n\nKlaviyo rejects a number in any other format.",
+          "message": "Telefónne číslo profilu vo formáte E.164, napr.: `+15005550006`.\n\nKlaviyo odmietne číslo v akomkoľvek inom formáte."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.display_name": {
+          "source": "Phone Number",
+          "message": "Telefónne číslo"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cGhvbmVOdW1iZXI.short_desc": {
+          "source": "The profile's phone number in E.164 format",
+          "message": "Telefónne číslo profilu vo formáte E.164"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cmVnaW9u.desc": {
+          "source": "Region within a country, such as state or province",
+          "message": "Región v rámci krajiny, napríklad štát alebo provincia"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cmVnaW9u.display_name": {
+          "source": "Region",
+          "message": "Región"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.cmVnaW9u.short_desc": {
+          "source": "The state, province or region",
+          "message": "Štát, provincia alebo región"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGl0bGU.desc": {
+          "source": "Individual's job title",
+          "message": "Pracovná pozícia jednotlivca"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "Názov"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGl0bGU.short_desc": {
+          "source": "The person's job title",
+          "message": "Pracovná pozícia osoby"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.desc": {
+          "source": "Time zone name. We recommend using time zones from the IANA Time Zone Database.",
+          "message": "Názov časového pásma. Odporúčame použiť časové pásma z databázy časových pásiem IANA."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.display_name": {
+          "source": "Time Zone",
+          "message": "Časové pásmo"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.dGltZXpvbmU.short_desc": {
+          "source": "The IANA time zone name",
+          "message": "Názov časového pásma podľa IANA"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.emlw.desc": {
+          "source": "Zip code",
+          "message": "PSČ"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.emlw.display_name": {
+          "source": "Postal Code",
+          "message": "Poštové smerovacie číslo"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.option.emlw.short_desc": {
+          "source": "The postal or ZIP code",
+          "message": "Poštové smerovacie číslo (PSČ)"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3Byb2ZpbGU.short_desc": {
+          "source": "Updates an existing profile",
+          "message": "Aktualizuje existujúci profil"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.desc": {
+          "source": "Updates a segment that already exists, named by its Klaviyo ID.\n\nOnly the attributes supplied are changed. Replacing `definition` re-evaluates the membership, which Klaviyo does in the background.",
+          "message": "Aktualizuje existujúci segment určený jeho Klaviyo ID.\n\nZmenia sa len zadané atribúty. Nahradenie `definition` znova vyhodnotí členstvo, čo Klaviyo vykonáva na pozadí."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.display_name": {
+          "source": "Update Segment",
+          "message": "Aktualizovať segment"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.ZGVmaW5pdGlvbg.display_name": {
+          "source": "Definition",
+          "message": "Definícia"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.ZGVmaW5pdGlvbg.short_desc": {
+          "source": "The rule deciding who is in the segment",
+          "message": "Pravidlo určujúce, kto patrí do segmentu"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aWQ.display_name": {
+          "source": "Segment",
+          "message": "Segment"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aWQ.short_desc": {
+          "source": "The segment to work on",
+          "message": "Segment, s ktorým sa má pracovať"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNBY3RpdmU.desc": {
+          "source": "Set to false to deactivate the segment. When deactivating, this must be the only attribute in the request body. Deactivation cannot be combined with other updates. Marking a segment inactive will impact campaigns, flows, ad syncs, forms, helpdesk routing, and other features that reference this segment. Set to true to reactivate a deactivated segment.",
+          "message": "Nastavte na false pre deaktiváciu segmentu. Pri deaktivácii musí ísť o jediný atribút v tele požiadavky. Deaktiváciu nie je možné kombinovať s inými aktualizáciami. Označenie segmentu ako neaktívneho ovplyvní kampane, toky, synchronizácie reklám, formuláre, smerovanie helpdesku a ďalšie funkcie odkazujúce na tento segment. Nastavte na true na reaktiváciu deaktivovaného segmentu."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNBY3RpdmU.display_name": {
+          "source": "Active",
+          "message": "Aktívne"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNBY3RpdmU.short_desc": {
+          "source": "Whether Klaviyo keeps the segment's membership up to date",
+          "message": "Či Klaviyo udržiava členstvo v segmente aktuálne"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNTdGFycmVk.display_name": {
+          "source": "Starred",
+          "message": "S hviezdičkou"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.aXNTdGFycmVk.short_desc": {
+          "source": "Whether the segment is starred in the Klaviyo UI",
+          "message": "Určuje, či je segment označený hviezdičkou v rozhraní Klaviyo"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.option.bmFtZQ.short_desc": {
+          "source": "The new name of the segment",
+          "message": "Nový názov segmentu"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3NlZ21lbnQ.short_desc": {
+          "source": "Updates an existing segment",
+          "message": "Aktualizuje existujúci segment"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.desc": {
+          "source": "Renames a tag.\n\nA tag's name is the only attribute it has, so this action changes the name and nothing else. Klaviyo answers with no content.",
+          "message": "Premenuje štítok.\n\nNázov štítka je jeho jediný atribút, takže táto akcia zmení len názov a nič iné. Klaviyo odpovedá bez obsahu."
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.display_name": {
+          "source": "Update Tag",
+          "message": "Aktualizovať štítok"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.aWQ.desc": {
+          "source": "The Tag ID",
+          "message": "ID značky"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.aWQ.display_name": {
+          "source": "Tag",
+          "message": "Značka"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.aWQ.short_desc": {
+          "source": "The tag to work on",
+          "message": "Značka, s ktorou sa má pracovať"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.bmFtZQ.desc": {
+          "source": "The Tag name",
+          "message": "Názov značky"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "Názov"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.option.bmFtZQ.short_desc": {
+          "source": "The new name of the tag",
+          "message": "Nový názov značky"
+        },
+        "app.S2xhdml5bw.action.dXBkYXRlX3RhZw.short_desc": {
+          "source": "Renames an existing tag",
+          "message": "Premenuje existujúci štítok"
+        },
+        "app.S2xhdml5bw.desc": {
+          "source": "Provides access to [Klaviyo](https://www.klaviyo.com), the e-mail and SMS marketing platform.\n\nKlaviyo holds the people a brand markets to as **profiles**, groups them into **lists** they opted in to and **segments** it evaluates continuously, records what they did as **events** against **metrics**, and sends **campaigns** to them.\n\n**Common use cases**:\n- **Profiles**: create or update someone from your own system's records, and find them again\n- **Lists and segments**: list them, create a list, and move profiles in and out\n- **Subscriptions**: record and withdraw marketing consent per channel\n- **Events**: record what somebody did, which is what triggers a flow\n- **Campaigns**: find a campaign and send it\n- **Tags**: organise lists and segments for reporting\n\nAuthentication is the OAuth2 authorization code flow against an app registered in Klaviyo's developer portal, or a private API key for an integration serving one account.\n\nKlaviyo is a trademark of Klaviyo, Inc.",
+          "message": "Poskytuje prístup k platforme [Klaviyo](https://www.klaviyo.com), marketingovej platforme pre e-mail a SMS.\n\nKlaviyo spravuje ľudí, ktorým značka posiela marketingové správy, ako **profily**, zoskupuje ich do **zoznamov**, do ktorých sa prihlásili, a **segmentov**, ktoré priebežne vyhodnocuje, zaznamenáva ich aktivity ako **udalosti** voči **metrikám** a odosiela im **kampane**.\n\n**Bežné prípady použitia**:\n- **Profily**: vytvorenie alebo aktualizácia záznamu z vášho systému a jeho opätovné vyhľadanie\n- **Zoznamy a segmenty**: ich výpis, vytvorenie zoznamu a presun profilov\n- **Odbery**: zaznamenanie a odvolanie marketingového súhlasu podľa kanála\n- **Udalosti**: zaznamenanie aktivity používateľa, čo spúšťa tok (flow)\n- **Kampane**: vyhľadanie kampane a jej odoslanie\n- **Štítky**: organizácia zoznamov a segmentov pre reporting\n\nAutentifikácia prebieha cez OAuth2 authorization code flow voči aplikácii registrovanej na portáli pre vývojárov Klaviyo, alebo privátnym API kľúčom pre integráciu jedného účtu.\n\nKlaviyo je ochranná známka spoločnosti Klaviyo, Inc."
+        },
+        "app.S2xhdml5bw.display_name": {
+          "source": "Klaviyo",
+          "message": "Klaviyo"
+        },
+        "app.S2xhdml5bw.short_desc": {
+          "source": "Email and SMS marketing automation platform",
+          "message": "Platforma na automatizáciu marketingu cez e-mail a SMS"
+        }
+      }
     }
   }
 }

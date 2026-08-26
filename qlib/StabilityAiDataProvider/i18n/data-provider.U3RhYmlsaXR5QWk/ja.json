@@ -211,6 +211,10 @@
           "source": "Style Preset",
           "message": "スタイルプリセット"
         },
+        "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.c3R5bGVfcHJlc2V0.short_desc": {
+          "source": "Pre-baked style preset (core model only)",
+          "message": "事前設定されたスタイルプリセット（コアモデル専用）"
+        },
         "app.U3RhYmlsaXR5QWk.action.Z2VuZXJhdGUtaW1hZ2U.option.cHJvbXB0.desc": {
           "source": "Text prompt describing the desired image.  Be specific about subject, style, lighting, and composition for best results.",
           "message": "生成したい画像を説明するテキストプロンプト。最良の結果を得るには、被写体、スタイル、照明、構図を具体的に指定してください。"
@@ -518,6 +522,10 @@
         "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "URIパス"
+        },
+        "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "接続のAPIベースURLに対する相対URIパス"
         },
         "app.U3RhYmlsaXR5QWk.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",

@@ -249,7 +249,7 @@
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.dGFyZ2V0.short_desc": {
           "source": "Center line target value (omit for auto from window mean)",
-          "message": "Cieľová hodnota strednej čiary (vynechajte pre automatické určenie z priemeru okna)"
+          "message": "Cieľová hodnota stredovej čiary (vynechajte pre auto z priemeru okna)"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {
           "source": "Detects when values drift outside normal operating range",
@@ -545,7 +545,7 @@
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX011bHRpTGluZQ.short_desc": {
           "source": "Makes start-of-line '^' or end-of-line '$' match after or before any newline in the subject string",
-          "message": "Spôsobí, že začiatok riadka '^' alebo koniec riadka '$' sa zhoduje za alebo pred každým novým riadkom v cieľovom reťazci"
+          "message": "Zaistí zhodu '^' na začiatku a '$' na konci za/pred každým novým riadkom"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0Nhc2VsZXNz.desc": {
           "source": "Ignore case when matching",

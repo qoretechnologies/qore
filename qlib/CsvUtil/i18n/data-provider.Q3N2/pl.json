@@ -69,7 +69,7 @@
         },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVyX25hbWVz.short_desc": {
           "source": "If true then headers will be automatically detected from the first header row",
-          "message": "Jeśli wartość to true, nagłówki zostaną automatycznie wykryte z pierwszego wiersza nagłówka"
+          "message": "Jeśli prawda, nagłówki zostaną wykryte automatycznie z pierwszego wiersza"
         },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVyX2xpbmVz.desc": {
           "source": "The number of headers lines in the file",
@@ -90,6 +90,10 @@
         "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
           "message": "Wymuś kolejność nagłówków"
+        },
+        "app.Q3N2.action.cmVhZA.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of headers",
+          "message": "Jeśli prawda, dane wejściowe zostaną uporządkowane wg kolejności nagłówków"
         },
         "app.Q3N2.action.cmVhZA.option.aGVhZGVycw.desc": {
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
@@ -125,7 +129,7 @@
         },
         "app.Q3N2.action.cmVhZA.option.aWdub3JlX3doaXRlc3BhY2U.short_desc": {
           "source": "If true, leading and trailing whitespace will be stripped from non-quoted fields",
-          "message": "Jeśli wartość to true, początkowe i końcowe białe znaki zostaną usunięte z pól bez cudzysłowów"
+          "message": "Wartość true usuwa spacje z początku i końca pól bez cudzysłowów"
         },
         "app.Q3N2.action.cmVhZA.option.bnVtYmVyX2Zvcm1hdA.desc": {
           "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
@@ -293,7 +297,7 @@
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX25hbWVz.short_desc": {
           "source": "If true then headers will be automatically detected from the first header row",
-          "message": "Jeśli wartość to true, nagłówki zostaną automatycznie wykryte z pierwszego wiersza nagłówka"
+          "message": "Jeśli prawda, nagłówki zostaną wykryte automatycznie z pierwszego wiersza"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX2xpbmVz.desc": {
           "source": "The number of headers lines in the file",
@@ -314,6 +318,10 @@
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
           "message": "Wymuś kolejność nagłówków"
+        },
+        "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the input data will be reordered in the order of headers",
+          "message": "Jeśli prawda, dane wejściowe zostaną uporządkowane wg kolejności nagłówków"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aGVhZGVycw.desc": {
           "source": "List of header / column names for the data iterated; if this is present, then `header_names` must be `false`",
@@ -349,7 +357,7 @@
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.aWdub3JlX3doaXRlc3BhY2U.short_desc": {
           "source": "If true, leading and trailing whitespace will be stripped from non-quoted fields",
-          "message": "Jeśli wartość to true, początkowe i końcowe białe znaki zostaną usunięte z pól bez cudzysłowów"
+          "message": "Wartość true usuwa spacje z początku i końca pól bez cudzysłowów"
         },
         "app.Q3N2.action.cmVhZC1kYXRh.option.bnVtYmVyX2Zvcm1hdA.desc": {
           "source": "The default format for `int`, `float`, and `number` fields as a string giving the thousands separator character followed by the decimal separator character (ex: `.,` for continental-European-style numbers)",
@@ -526,6 +534,10 @@
         "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.display_name": {
           "source": "Enforce Header Order",
           "message": "Wymuś kolejność nagłówków"
+        },
+        "app.Q3N2.action.d3JpdGU.option.aGVhZGVyX3Jlb3JkZXI.short_desc": {
+          "source": "If true, then the output data will be reordered in the order of headers",
+          "message": "Jeśli prawda, dane wyjściowe zostaną uporządkowane wg kolejności nagłówków"
         },
         "app.Q3N2.action.d3JpdGU.option.aGVhZGVycw.desc": {
           "source": "List of field / header names for the data output",

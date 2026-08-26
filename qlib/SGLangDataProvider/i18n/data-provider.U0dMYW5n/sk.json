@@ -165,7 +165,7 @@
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX2s.short_desc": {
           "source": "Sample only from the K most likely next tokens (SGLang extension)",
-          "message": "Vzorkovať iba z K najpravdepodobnejších nasledujúcich tokenov (rozšírenie SGLang)"
+          "message": "Vzorkovať iba z K najpravdepodobnejších ďalších tokenov (rozšírenie SGLang)"
         },
         "app.U0dMYW5n.action.Y2hhdC1jb21wbGV0aW9u.option.dG9wX3A.desc": {
           "source": "Nucleus sampling — restrict sampling to tokens whose cumulative probability exceeds this threshold.  Range `0.0` to `1.0`.  Usually left at `1.0` and varied only in combination with `top_k` or lower `temperature`.",
@@ -441,7 +441,7 @@
         },
         "app.U0dMYW5n.action.Z2VuZXJhdGU.short_desc": {
           "source": "Generate text with schema/regex/grammar-enforced output structure",
-          "message": "Generovať text s výstupnou štruktúrou vynútenou schémou/regulárnym výrazom/gramatikou"
+          "message": "Generovať text s výstupnou štruktúrou vynútenou schémou/regexom/gramatikou"
         },
         "app.U0dMYW5n.action.Zmx1c2gtY2FjaGU.desc": {
           "source": "Instructs the SGLang server to flush its KV cache.  Useful after switching workloads or for freeing memory.  Safe to call at any time; does not interrupt in-flight requests.",
@@ -746,6 +746,10 @@
         "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
           "source": "URI Path",
           "message": "Cesta URI"
+        },
+        "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Cesta URI relatívna k základnej adrese API URL pripojenia"
         },
         "app.U0dMYW5n.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",

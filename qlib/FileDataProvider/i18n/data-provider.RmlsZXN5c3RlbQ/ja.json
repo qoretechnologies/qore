@@ -163,6 +163,10 @@
           "source": "Text",
           "message": "テキスト"
         },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "'True'の場合ファイルは文字列として返され、'False'(デフォルト)の場合…"
+        },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
           "source": "Get a file on the server filesystem",
           "message": "サーバーのファイルシステム上のファイルを取得"
@@ -314,6 +318,10 @@
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.display_name": {
           "source": "Symlink",
           "message": "シンボリックリンク"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.short_desc": {
+          "source": "If 'True', then if the target path is a symbolic link, information about the…",
+          "message": "'True'の場合、対象パスがシンボリックリンクであればリンク先の情報を…"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.desc": {
           "source": "The file path",

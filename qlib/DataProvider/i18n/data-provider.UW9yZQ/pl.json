@@ -249,7 +249,7 @@
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.option.dGFyZ2V0.short_desc": {
           "source": "Center line target value (omit for auto from window mean)",
-          "message": "Wartość docelowa linii środkowej (pomiń, aby obliczyć automatycznie ze średniej okna)"
+          "message": "Wartość docelowa linii środkowej (pomiń dla auto ze średniej okna)"
         },
         "app.UW9yZQ.action.ZXdtYS1jb250cm9sLWNoYXJ0.short_desc": {
           "source": "Detects when values drift outside normal operating range",
@@ -545,7 +545,7 @@
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX011bHRpTGluZQ.short_desc": {
           "source": "Makes start-of-line '^' or end-of-line '$' match after or before any newline in the subject string",
-          "message": "Powoduje dopasowanie początku wiersza '^' lub końca wiersza '$' po lub przed dowolnym znakiem nowego wiersza w badanym ciągu"
+          "message": "Dopasowuje '^' lub '$' po lub przed znakiem nowego wiersza w badanym ciągu"
         },
         "app.UW9yZQ.action.c2VhcmNoLXJlcGxhY2U.option.cmVnZXhfb3B0aW9ucw.allowed-value.c3RyaW5nOlJFX0Nhc2VsZXNz.desc": {
           "source": "Ignore case when matching",

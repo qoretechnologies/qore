@@ -163,6 +163,10 @@
           "source": "Text",
           "message": "Tekst"
         },
+        "app.RmlsZXN5c3RlbQ.action.Z2V0.option.dGV4dA.short_desc": {
+          "source": "If 'True' the file will be returned as a string, 'False' (the default) as…",
+          "message": "Jeśli 'True', plik zostanie zwrócony jako tekst, 'False' (domyślnie) jako…"
+        },
         "app.RmlsZXN5c3RlbQ.action.Z2V0.short_desc": {
           "source": "Get a file on the server filesystem",
           "message": "Pobierz plik z systemu plików serwera"
@@ -314,6 +318,10 @@
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.display_name": {
           "source": "Symlink",
           "message": "Dowiązanie symboliczne"
+        },
+        "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.c3ltbGluaw.short_desc": {
+          "source": "If 'True', then if the target path is a symbolic link, information about the…",
+          "message": "Jeśli 'True', a ścieżka docelowa to dowiązanie symboliczne, informacje o…"
         },
         "app.RmlsZXN5c3RlbQ.action.c3RhdA.option.cGF0aA.desc": {
           "source": "The file path",

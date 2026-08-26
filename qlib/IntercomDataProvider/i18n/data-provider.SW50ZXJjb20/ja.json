@@ -2,7 +2,2524 @@
   "schema_version": 1,
   "locales": {
     "ja": {
-      "messages": {}
+      "messages": {
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.desc": {
+          "source": "Deletes a contact.\n\nThis is a hard delete and is not reversible. To keep the record and stop messaging the person instead, archive the contact.",
+          "message": "連絡先を削除します。\n\nこれは完全削除であり、元に戻すことはできません。レコードを保持したままメッセージ送信を停止したい場合は、連絡先をアーカイブしてください。"
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.display_name": {
+          "source": "Delete Contact",
+          "message": "連絡先を削除"
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "Intercomによって割り当てられた連絡先の一意の識別子"
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "コンタクト"
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "対象となる連絡先"
+        },
+        "app.SW50ZXJjb20.action.RGVsZXRlQ29udGFjdA.short_desc": {
+          "source": "Delete a contact",
+          "message": "連絡先の削除"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.desc": {
+          "source": "Lists contacts, newest first.\n\nThis is exported so that the contact dropdowns have an action to call; **Search Contacts** is the one to reach for when the contacts wanted are a subset.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
+          "message": "連絡先を新しい順に一覧表示します。\n\n連絡先のドロップダウンが呼び出せるアクションを提供するためにエクスポートされています。連絡先を絞り込みたい場合は**連絡先の検索**を使用してください。\n\nIntercomの仕様では、ページ分割されたエンベロープを返すにもかかわらずこの操作にページネーション引数が宣言されていません。スキーマのインポート時に`per_page`と`starting_after`が追加されます。@ref IntercomDataProvider::IntercomSchema \"IntercomSchema\"を参照してください。"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.display_name": {
+          "source": "List Contacts",
+          "message": "連絡先一覧"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
+          "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
+          "message": "レスポンス内の各連絡先に`merge_history`配列を含めるには`true`を渡します。`user`ロールを持つ連絡先に対してのみ返されます。"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
+          "source": "Include Merge History",
+          "message": "統合履歴を含める"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "レスポンスの各連絡先に'merge_history'を含めるには'true'を指定"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "ページネーションカーソル: 前回のレスポンスから`pages.next.starting_after`を取得してここに渡します。\n\nこれは不透明な値であり、手動で構築してはいけません。コレクションをすべて取得し終えると`pages`は存在しなくなり、次のページがないことを示します。"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "Starting After"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "次ページのカーソル"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one page. Intercom documents cursor pagination for every listing that answers a \"pages\" object, but declares this parameter on only some of them.",
+          "message": "1ページあたりに返すレコード数。Intercomは\"pages\"オブジェクトを返すリスト操作すべてでカーソルページネーションを説明していますが、このパラメータは一部の操作でのみ宣言しています。"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "ページサイズ"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "1 ページあたりに返すレコード数"
+        },
+        "app.SW50ZXJjb20.action.TGlzdENvbnRhY3Rz.short_desc": {
+          "source": "List the contacts in the workspace",
+          "message": "ワークスペース内の連絡先を一覧表示"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.desc": {
+          "source": "Searches the workspace's contacts.\n\n`query` is either a single filter - `{field, operator, value}` - or a boolean combination, `{operator: \"AND\", value: [ ... ]}`, nested as deeply as needed. A field Intercom does not define on a contact is searched by naming it `custom_attributes.<name>`.\n\nTimestamps in a query are counts of seconds since the epoch, so `created_at > 1755000000` reads as \"created after that instant\".\n\nThe result is paged with `starting_after`: pass back the `pages.next.starting_after` value from the previous response.",
+          "message": "ワークスペースの連絡先を検索します。\n\n`query`は単一のフィルター（`{field, operator, value}`）または論理結合（`{operator: \"AND\", value: [ ... ]}`）で、必要な深さまでネストできます。Intercomが連絡先に定義していないフィールドを検索する場合は、`custom_attributes.<name>`と指定します。\n\nクエリ内のタイムスタンプはエポックからの秒数であるため、`created_at > 1755000000`は「その時点より後に作成された」と解釈されます。\n\n結果は`starting_after`でページネーションされます。前回のレスポンスの`pages.next.starting_after`の値を渡してください。"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.display_name": {
+          "source": "Search Contacts",
+          "message": "連絡先を検索"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
+          "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
+          "message": "レスポンス内の各連絡先に`merge_history`配列を含めるには`true`を渡します。`user`ロールを持つ連絡先に対してのみ返されます。"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
+          "source": "Include Merge History",
+          "message": "統合履歴を含める"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "レスポンスの各連絡先に'merge_history'を含めるには'true'を指定"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c29ydA.desc": {
+          "source": "An optional object to sort the results by.",
+          "message": "結果を並べ替えるためのオプションのオブジェクト。"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c29ydA.display_name": {
+          "source": "Sort",
+          "message": "ソート"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c29ydA.short_desc": {
+          "source": "An optional object to sort the results by",
+          "message": "結果を並べ替えるためのオプションのオブジェクト"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "ページネーションカーソル: 前回のレスポンスから`pages.next.starting_after`を取得してここに渡します。\n\nこれは不透明な値であり、手動で構築してはいけません。コレクションをすべて取得し終えると`pages`は存在しなくなり、次のページがないことを示します。"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "Starting After"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "次ページのカーソル"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cGVyX3BhZ2U.desc": {
+          "source": "The number of results to fetch per page.",
+          "message": "1ページあたりに取得する結果の件数。"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "ページサイズ"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "1 ページあたりに返すレコード数"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "クエリ"
+        },
+        "app.SW50ZXJjb20.action.U2VhcmNoQ29udGFjdHM.short_desc": {
+          "source": "Find contacts matching a query",
+          "message": "クエリに一致する連絡先を検索"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.desc": {
+          "source": "Retrieves one contact by the identity Intercom gave it.\n\nTo find a contact by your own identifier instead, search for it: `{field: \"external_id\", operator: \"=\", value: \"...\"}`.",
+          "message": "Intercomが割り当てたIDで1件の連絡先を取得します。\n\n独自の識別子で連絡先を検索するには、検索を使用してください: `{field: \"external_id\", operator: \"=\", value: \"...\"}`。"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.display_name": {
+          "source": "Get Contact",
+          "message": "連絡先の取得"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "Intercomによって割り当てられた連絡先の一意の識別子"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "コンタクト"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "対象となる連絡先"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
+          "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
+          "message": "レスポンス内の各連絡先に`merge_history`配列を含めるには`true`を渡します。`user`ロールを持つ連絡先に対してのみ返されます。"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
+          "source": "Include Merge History",
+          "message": "統合履歴を含める"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "レスポンスの各連絡先に'merge_history'を含めるには'true'を指定"
+        },
+        "app.SW50ZXJjb20.action.U2hvd0NvbnRhY3Q.short_desc": {
+          "source": "Retrieve a contact by its identity",
+          "message": "IDで連絡先を取得"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.desc": {
+          "source": "Retrieves one company by the identity Intercom gave it.\n\nTo find a company by your own identifier instead, use **Create Or Update Company**, which matches on `company_id`.",
+          "message": "Intercomが割り当てたIDで1件の会社を取得します。\n\n独自の識別子で会社を検索するには、`company_id`でマッチングを行う**会社の作成または更新**を使用してください。"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.display_name": {
+          "source": "Get Company",
+          "message": "会社を取得"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.option.Y29tcGFueV9pZA.desc": {
+          "source": "The unique identifier for the company which is given by Intercom",
+          "message": "Intercomによって割り当てられた会社の一意の識別子"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company",
+          "message": "会社"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company to retrieve",
+          "message": "取得対象の会社"
+        },
+        "app.SW50ZXJjb20.action.UmV0cmlldmVBQ29tcGFueUJ5SWQ.short_desc": {
+          "source": "Retrieve a company by its identity",
+          "message": "IDで会社を取得"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.desc": {
+          "source": "Updates a company that already exists, named by the identity **Intercom** gave it.\n\nThis is not the same thing as **Create Or Update Company**, which matches on the `company_id` **you** gave it and creates one when nothing matches. Where the intent is to change a company that is already known, this is the action that cannot create a second one by accident.",
+          "message": "**Intercom**が割り当てたIDで指定された既存の会社を更新します。\n\nこれは**ユーザー**が指定した`company_id`で照合し、一致するものがない場合に新規作成する**会社の作成または更新**とは異なります。既知の会社を変更することが目的の場合、誤って別の会社を作成してしまうことがないアクションです。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.display_name": {
+          "source": "Update Company",
+          "message": "会社を更新"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.desc": {
+          "source": "The unique identifier for the company which is given by Intercom",
+          "message": "Intercomによって割り当てられた会社の一意の識別子"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company",
+          "message": "会社"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company to update",
+          "message": "更新する会社"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "A hash of key/value pairs containing any other data about the company you want Intercom to store.",
+          "message": "Intercomに保存したい会社に関するその他のデータを含むキー/値ペアのハッシュ。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "カスタム属性"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "A hash of key/value pairs containing any other data about the company you want…",
+          "message": "Intercomに保存する会社に関するその他のデータのキー/値ハッシュ…"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.aW5kdXN0cnk.desc": {
+          "source": "The industry that this company operates in.",
+          "message": "この会社が事業を展開している業界。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.aW5kdXN0cnk.display_name": {
+          "source": "Industry",
+          "message": "業種"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.aW5kdXN0cnk.short_desc": {
+          "source": "The industry that this company operates in",
+          "message": "この会社が事業を展開している業界"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.desc": {
+          "source": "How much revenue the company generates for your business. Note that this will truncate floats. i.e. it only allow for whole integers, 155.98 will be truncated to 155. Note that this has an upper limit of 2**31-1 or 2147483647..",
+          "message": "この会社がビジネスにもたらす収益の額。浮動小数点数は切り捨てられる点に注意してください（整数のみ許可され、155.98は155に切り捨てられます）。また、上限は2**31-1または2147483647です。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.display_name": {
+          "source": "Monthly Spend",
+          "message": "月間利用額"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bW9udGhseV9zcGVuZA.short_desc": {
+          "source": "How much revenue the company generates for your business",
+          "message": "会社がビジネスにもたらす収益額"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bmFtZQ.desc": {
+          "source": "The name of the Company",
+          "message": "会社名"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.bmFtZQ.short_desc": {
+          "source": "The name of the Company",
+          "message": "会社名"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.c2l6ZQ.desc": {
+          "source": "The number of employees in this company.",
+          "message": "この会社の従業員数。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.c2l6ZQ.display_name": {
+          "source": "Size",
+          "message": "サイズ"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.c2l6ZQ.short_desc": {
+          "source": "The number of employees in this company",
+          "message": "この会社の従業員数"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.cGxhbg.desc": {
+          "source": "The name of the plan you have associated with the company.",
+          "message": "会社に関連付けたプランの名前。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.cGxhbg.display_name": {
+          "source": "Plan",
+          "message": "プラン"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.cGxhbg.short_desc": {
+          "source": "The name of the plan you have associated with the company",
+          "message": "会社に関連付けたプランの名前"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.d2Vic2l0ZQ.desc": {
+          "source": "The URL for this company's website. Please note that the value specified here is not validated. Accepts any string.",
+          "message": "この会社のウェブサイトのURL。ここで指定した値は検証されません。任意の文字列を受け入れます。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "ウェブサイト"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.option.d2Vic2l0ZQ.short_desc": {
+          "source": "The URL for this company's website",
+          "message": "この企業のWebサイトのURL"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29tcGFueQ.short_desc": {
+          "source": "Update an existing company by its identity",
+          "message": "識別子で既存の企業を更新"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.desc": {
+          "source": "Updates a contact that already exists, named by the identity Intercom gave it.\n\nOnly the attributes supplied are changed. A field Intercom does not define on a contact is written by naming it under `custom_attributes`.",
+          "message": "Intercomが付与した識別子で指定された既存の連絡先を更新します。\n\n指定された属性のみが変更されます。Intercomが連絡先に対して定義していないフィールドは、`custom_attributes` 配下に指定して書き込みます。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.display_name": {
+          "source": "Update Contact",
+          "message": "連絡先を更新"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "Intercomによって割り当てられた連絡先の一意の識別子"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "コンタクト"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "対象となる連絡先"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "The custom attributes which are set for the contact",
+          "message": "連絡先に設定されているカスタム属性"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "カスタム属性"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "The custom attributes which are set for the contact",
+          "message": "連絡先に設定されているカスタム属性"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.YXZhdGFy.desc": {
+          "source": "An image URL containing the avatar of a contact",
+          "message": "連絡先のアバターを含む画像URL"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.YXZhdGFy.display_name": {
+          "source": "Avatar",
+          "message": "アバター"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.YXZhdGFy.short_desc": {
+          "source": "An image URL containing the avatar of a contact",
+          "message": "連絡先のアバターを含む画像URL"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWw.desc": {
+          "source": "The contacts email",
+          "message": "連絡先のメールアドレス"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWw.display_name": {
+          "source": "Email",
+          "message": "メール"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWw.short_desc": {
+          "source": "The contacts email",
+          "message": "連絡先のメールアドレス"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.desc": {
+          "source": "Whether the contact's email address has been verified. Set to true to indicate you have verified the contact owns this email address, or false to mark it as unverified. Must be supplied together with an email in the same request; sending it without an email returns a 400.",
+          "message": "連絡先のメールアドレスが確認済みかどうか。連絡先がこのメールアドレスを所有していることを確認した場合は true、未確認としてマークする場合は false に設定します。同一リクエスト内で email と共に指定する必要があり、email なしで送信すると400が返されます。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.display_name": {
+          "source": "Email Verified",
+          "message": "メールアドレス確認済み"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZW1haWxfdmVyaWZpZWQ.short_desc": {
+          "source": "Whether the contact's email address has been verified",
+          "message": "連絡先のメールアドレスが確認済みかどうか"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZXh0ZXJuYWxfaWQ.desc": {
+          "source": "A unique identifier for the contact which is given to Intercom",
+          "message": "Intercomに付与された連絡先の一意の識別子"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZXh0ZXJuYWxfaWQ.display_name": {
+          "source": "External ID",
+          "message": "外部ID"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.ZXh0ZXJuYWxfaWQ.short_desc": {
+          "source": "A unique identifier for the contact which is given to Intercom",
+          "message": "Intercomに付与された連絡先の一意の識別子"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.desc": {
+          "source": "Pass `true` to include a `merge_history` array on each contact in the response. Only returned for contacts with a `user` role.",
+          "message": "レスポンス内の各連絡先に`merge_history`配列を含めるには`true`を渡します。`user`ロールを持つ連絡先に対してのみ返されます。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.display_name": {
+          "source": "Include Merge History",
+          "message": "統合履歴を含める"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.aW5jbHVkZV9tZXJnZV9oaXN0b3J5.short_desc": {
+          "source": "Pass 'true' to include a 'merge_history' array on each contact in the response",
+          "message": "レスポンスの各連絡先に'merge_history'を含めるには'true'を指定"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.b3duZXJfaWQ.desc": {
+          "source": "The id of an admin that has been assigned account ownership of the contact",
+          "message": "連絡先のアカウント所有権が割り当てられた管理者のID"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.b3duZXJfaWQ.display_name": {
+          "source": "Owner ID",
+          "message": "所有者ID"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.b3duZXJfaWQ.short_desc": {
+          "source": "The id of an admin that has been assigned account ownership of the contact",
+          "message": "連絡先のアカウント所有権が割り当てられた管理者のID"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.desc": {
+          "source": "(Unix timestamp in seconds) The time when the contact was last seen (either where the Intercom Messenger was installed or when specified manually).\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "(秒単位のUnixタイムスタンプ) 連絡先が最後に確認された日時 (Intercom Messengerがインストールされていた場所、または手動で指定された日時)。\n\nこの値は1970-01-01Z以降の秒数を表す整数として送信されます。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.display_name": {
+          "source": "Last Seen At",
+          "message": "最終確認日時"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bGFzdF9zZWVuX2F0.short_desc": {
+          "source": "(Unix timestamp in seconds) The time when the contact was last seen…",
+          "message": "(秒単位のUnixタイムスタンプ) 連絡先が最後に確認された日時…"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bmFtZQ.desc": {
+          "source": "The contacts name",
+          "message": "連絡先の氏名"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.bmFtZQ.short_desc": {
+          "source": "The contacts name",
+          "message": "連絡先の氏名"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.desc": {
+          "source": "(Unix timestamp in seconds) The time specified for when a contact signed up.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "(秒単位のUnixタイムスタンプ) 連絡先がサインアップした指定日時。\n\nこの値は1970-01-01Z以降の秒数を表す整数として送信されます。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.display_name": {
+          "source": "Signed Up At",
+          "message": "サインアップ日時"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.c2lnbmVkX3VwX2F0.short_desc": {
+          "source": "(Unix timestamp in seconds) The time specified for when a contact signed up",
+          "message": "(秒単位のUnixタイムスタンプ) 連絡先がサインアップした指定日時"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cGhvbmU.desc": {
+          "source": "The contacts phone",
+          "message": "連絡先の電話番号"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cGhvbmU.display_name": {
+          "source": "Phone",
+          "message": "電話番号"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cGhvbmU.short_desc": {
+          "source": "The contacts phone",
+          "message": "連絡先の電話番号"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cm9sZQ.desc": {
+          "source": "The role of the contact.",
+          "message": "連絡先のロール。"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cm9sZQ.display_name": {
+          "source": "Role",
+          "message": "役割"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.cm9sZQ.short_desc": {
+          "source": "The role of the contact",
+          "message": "連絡先のロール"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.desc": {
+          "source": "Whether the contact is unsubscribed from emails",
+          "message": "連絡先がメール購読を解除しているかどうか"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.display_name": {
+          "source": "Unsubscribed from Emails",
+          "message": "メール配信停止済み"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.option.dW5zdWJzY3JpYmVkX2Zyb21fZW1haWxz.short_desc": {
+          "source": "Whether the contact is unsubscribed from emails",
+          "message": "連絡先がメール購読を解除しているかどうか"
+        },
+        "app.SW50ZXJjb20.action.VXBkYXRlQ29udGFjdA.short_desc": {
+          "source": "Update an existing contact",
+          "message": "既存の連絡先を更新"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.desc": {
+          "source": "Creates new records in the given table",
+          "message": "指定されたテーブルに新しいレコードを作成します"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.display_name": {
+          "source": "Create Records",
+          "message": "レコードを作成"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "操作対象のテーブル: `contacts`、`conversations`、`companies`、`articles`、`collections`、`tags`、または `teammates`"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "操作対象のテーブル名"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRl.short_desc": {
+          "source": "Create new records in the given table",
+          "message": "指定されたテーブルに新しいレコードを作成"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.desc": {
+          "source": "Starts a conversation **from a contact** - as though the contact had written in.\n\nThis is not the way to message somebody: a conversation created here is attributed to the contact, so it appears in the inbox as an incoming message. Use **Create Message** to send something from a teammate.",
+          "message": "連絡先が問い合わせてきたかのように、**連絡先から**会話を開始します。\n\nこれは誰かにメッセージを送信する方法ではありません。ここで作成された会話は連絡先に帰属するため、受信トレイには受信メッセージとして表示されます。チームメイトから送信する場合は **Create Message** を使用してください。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.display_name": {
+          "source": "Create Conversation",
+          "message": "会話を作成"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "The time the conversation was created as a UTC Unix timestamp. If not provided, the current time will be used. This field is only recommneded for migrating past conversations from another source into Intercom.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "会話が作成された日時のUTC Unixタイムスタンプ。指定しない場合は現在時刻が使用されます。このフィールドは、他のソースからIntercomに過去の会話を移行する場合にのみ推奨されます。\n\nこの値は1970-01-01Z以降の秒数を表す整数として送信されます。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "作成日時"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "The time the conversation was created as a UTC Unix timestamp",
+          "message": "会話が作成された日時のUTC Unixタイムスタンプ"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.desc": {
+          "source": "A list of image URLs that will be added as attachments. You can include up to 10 URLs.",
+          "message": "添付ファイルとして追加される画像URLのリスト。最大10個のURLを含めることができます。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.display_name": {
+          "source": "Attachment Urls",
+          "message": "添付ファイルURL"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YXR0YWNobWVudF91cmxz.short_desc": {
+          "source": "A list of image URLs that will be added as attachments",
+          "message": "添付ファイルとして追加される画像URLのリスト"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Ym9keQ.desc": {
+          "source": "The content of the message. HTML is not supported.",
+          "message": "メッセージの内容。HTMLはサポートされていません。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Ym9keQ.display_name": {
+          "source": "Message",
+          "message": "メッセージ"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.Ym9keQ.short_desc": {
+          "source": "The first message in the conversation",
+          "message": "会話の最初のメッセージ"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YnJhbmRfaWQ.desc": {
+          "source": "The unique identifier of the brand to associate with this conversation.",
+          "message": "この会話に関連付けるブランドの一意の識別子。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YnJhbmRfaWQ.display_name": {
+          "source": "Brand ID",
+          "message": "ブランド ID"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.YnJhbmRfaWQ.short_desc": {
+          "source": "The unique identifier of the brand to associate with this conversation",
+          "message": "この会話に関連付けるブランドの一意の識別子"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "送信元"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.ZnJvbQ.short_desc": {
+          "source": "The contact the conversation comes from",
+          "message": "会話の発信元となる連絡先"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.c3ViamVjdA.desc": {
+          "source": "The title of the email. Only applicable if the message type is email.",
+          "message": "メールの件名。メッセージタイプがメールの場合にのみ適用されます。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "サブジェクト"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.option.c3ViamVjdA.short_desc": {
+          "source": "The title of the email",
+          "message": "メールの件名"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQ29udmVyc2F0aW9u.short_desc": {
+          "source": "Start a conversation as a contact",
+          "message": "連絡先として会話を開始"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.desc": {
+          "source": "Creates a help center article.\n\n`author_id` has to be a teammate on the help center's workspace. `state` decides whether it is published or left as a draft - Intercom defaults it to `draft`.\n\n`parent_id` files the article under a collection. Earlier API versions also allowed a *section*; Intercom removed sections at version 2.10 and returns what used to be one as a nested collection, so `collection` is the only parent type left.",
+          "message": "ヘルプセンター記事を作成します。\n\n`author_id` はヘルプセンターのワークスペース上のチームメイトである必要があります。`state` は公開するか下書きのままにするかを決定し、Intercomのデフォルトは `draft` です。\n\n`parent_id` は記事をコレクション配下に分類します。以前のAPIバージョンでは *セクション* も許可されていましたが、Intercomはバージョン2.10でセクションを削除し、かつてセクションだったものをネストされたコレクションとして返すため、親タイプとして残っているのは `collection` のみです。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.display_name": {
+          "source": "Create Article",
+          "message": "記事を作成"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
+          "source": "Whether the article should be available for AI Copilot. For multilingual articles, this sets the default language's availability.",
+          "message": "記事をAI Copilotで利用可能にするかどうか。多言語記事の場合、デフォルト言語の利用可否が設定されます。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
+          "source": "AI Copilot Availability",
+          "message": "AI Copilotの利用可否"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
+          "source": "Whether the article should be available for AI Copilot",
+          "message": "記事をAI Copilotで利用可能にするかどうか"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
+          "source": "Whether the article should be available for AI Chatbot (Fin). For multilingual articles, this sets the default language's availability.",
+          "message": "記事をAIチャットボット (Fin) で利用可能にするかどうか。多言語記事の場合、デフォルト言語の利用可否が設定されます。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
+          "source": "AI Chatbot Availability",
+          "message": "AIチャットボットの利用可否"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
+          "source": "Whether the article should be available for AI Chatbot (Fin)",
+          "message": "記事をAIチャットボット (Fin) で利用可能にするかどうか"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
+          "source": "Whether the article should be available for AI Sales Agent. For multilingual articles, this sets the default language's availability.",
+          "message": "記事をAIセールスエージェントで利用可能にするかどうか。多言語記事の場合、デフォルト言語の利用可否が設定されます。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
+          "source": "AI Sales Agent Availability",
+          "message": "AIセールスエージェントの利用可否"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
+          "source": "Whether the article should be available for AI Sales Agent",
+          "message": "記事をAIセールスエージェントで利用可能にするかどうか"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.desc": {
+          "source": "The id of the author of the article. For multilingual articles, this will be the id of the author of the default language's content. Must be a teammate on the help center's workspace.",
+          "message": "記事の作成者のID。多言語記事の場合、デフォルト言語のコンテンツの作成者IDになります。ヘルプセンターのワークスペース上のチームメイトである必要があります。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.display_name": {
+          "source": "Author",
+          "message": "作成者"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.short_desc": {
+          "source": "The teammate the article is written by",
+          "message": "記事を作成したチームメイト"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.desc": {
+          "source": "The list of audience IDs to assign to this article for Fin AI Agent targeting. Sending a top-level `audience_ids` broadcasts the same set to every locale. For per-locale targeting, use `translated_content.<locale>.audience_ids` instead. Sending both top-level and per-locale in the same request causes top-level to win. Unknown audience IDs return a 404 error. No partial commit occurs.",
+          "message": "Fin AI Agentのターゲティング用にこの記事に割り当てるオーディエンスIDのリスト。トップレベルの `audience_ids` を送信すると、すべてのロケールに同じセットがブロードキャストされます。ロケールごとのターゲティングには、代わりに `translated_content.<locale>.audience_ids` を使用してください。同一リクエストでトップレベルとロケールごとの両方を送信した場合、トップレベルが優先されます。不明なオーディエンスIDは404エラーを返します。部分的なコミットは行われません。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.display_name": {
+          "source": "Audience Ids",
+          "message": "オーディエンスID"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.short_desc": {
+          "source": "The list of audience IDs to assign to this article for Fin AI Agent targeting",
+          "message": "Fin AI Agentのターゲティング用にこの記事に割り当てるオーディエンスIDのリスト"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keQ.desc": {
+          "source": "The content of the article in HTML. For multilingual articles, this will be the body of the default language's content. Mutually exclusive with `body_markdown`.",
+          "message": "HTML形式の記事本文。多言語記事の場合、デフォルト言語のコンテンツ本文になります。`body_markdown` とは排他です。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keQ.short_desc": {
+          "source": "The article content, in HTML",
+          "message": "記事の本文 (HTML)"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.desc": {
+          "source": "The content of the article in markdown. For multilingual articles, this will be the body of the default language's content. An alternative to `body` — you can provide content as markdown instead of HTML. Mutually exclusive with `body`.",
+          "message": "Markdown形式の記事本文。多言語記事の場合、デフォルト言語のコンテンツ本文になります。`body` の代替手段であり、HTMLの代わりにMarkdownとしてコンテンツを提供できます。`body` とは排他です。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.display_name": {
+          "source": "Body Markdown",
+          "message": "Markdown本文"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.short_desc": {
+          "source": "The content of the article in markdown",
+          "message": "Markdown形式の記事本文"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the article. For multilingual articles, this will be the description of the default language's content.",
+          "message": "記事の説明。多言語記事の場合、デフォルト言語のコンテンツの説明になります。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The description of the article",
+          "message": "記事の説明"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future publish of the article. When set together with `state: \"published\"`, the article is scheduled instead of published immediately. Setting `null` cancels a pending publish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Combining with `state: \"draft\"` returns 400 `parameter_invalid`. Sending in the same request as `scheduled_unpublish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`.",
+          "message": "記事の将来の公開をスケジュールするISO 8601タイムスタンプ。`state: \"published\"` と一緒に設定すると、即時公開される代わりに記事の公開がスケジュールされます。`null` を設定すると、保留中の公開スケジュールがキャンセルされます。過去または現在時刻と等しいタイムスタンプは400 `parameter_invalid` で拒否されます。値は厳密に未来である必要があります。`state: \"draft\"` と組み合わせると400 `parameter_invalid` が返されます。`scheduled_unpublish_at` と同じリクエストで送信すると400が返されます (記事ごとに設定できる保留中のスケジュールは1件のみです)。空文字列は400 `parameter_invalid` を返します。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.display_name": {
+          "source": "Scheduled Publish At",
+          "message": "公開予定日時"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.short_desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future publish of the article",
+          "message": "記事の将来の公開をスケジュール設定するISO 8601形式のタイムスタンプ"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future unpublish of the article. Setting `null` cancels a pending unpublish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Rejected with 400 `parameter_invalid` if the article has never been published. Sending in the same request as `scheduled_publish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`.",
+          "message": "記事の将来の非公開化をスケジュール設定するISO 8601形式のタイムスタンプ。`null` を設定すると保留中の非公開スケジュールがキャンセルされます。過去または現在時刻と等しいタイムスタンプは 400 `parameter_invalid` で拒否されます。値は厳密に未来である必要があります。記事が一度も公開されていない場合は 400 `parameter_invalid` で拒否されます。`scheduled_publish_at` と同じリクエストで送信すると400が返されます（記事ごとに保留できるスケジュールは1つのみ）。空文字列は 400 `parameter_invalid` を返します。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.display_name": {
+          "source": "Scheduled Unpublish At",
+          "message": "非公開予定日時"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.short_desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future unpublish of the article",
+          "message": "記事の将来の非公開化をスケジュール設定するISO 8601形式のタイムスタンプ"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "draft",
+          "message": "ドラフト"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "published",
+          "message": "published"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.desc": {
+          "source": "Whether the article will be `published` or will be a `draft`. Defaults to draft. For multilingual articles, this will be the state of the default language's content.",
+          "message": "記事を `published` にするか `draft` にするか。デフォルトはドラフトです。多言語記事の場合、これはデフォルト言語のコンテンツの状態になります。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "都道府県・州"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.c3RhdGU.short_desc": {
+          "source": "Whether the article will be 'published' or will be a 'draft'",
+          "message": "記事を「published」にするか「draft」にするか"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.desc": {
+          "source": "The id of the article's parent collection or section. An article without this field stands alone.",
+          "message": "記事の親コレクションまたはセクションのID。このフィールドがない記事は単独で存在します。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.display_name": {
+          "source": "Collection",
+          "message": "コレクション"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.short_desc": {
+          "source": "The collection to file the article under",
+          "message": "記事を分類するコレクション"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.allowed-value.c3RyaW5nOmNvbGxlY3Rpb24.display_name": {
+          "source": "collection",
+          "message": "collection"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.desc": {
+          "source": "The kind of thing `parent_id` names.\n\nOnly `collection` remains: Intercom removed help center sections at API version 2.10, and returns what used to be a section as a nested collection.",
+          "message": "`parent_id` が指定する種別。\n\n`collection` のみ利用可能です: IntercomはAPIバージョン2.10でヘルプセンターのセクションを削除し、以前セクションだったものをネストされたコレクションとして返します。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.display_name": {
+          "source": "Parent Type",
+          "message": "親タイプ"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.short_desc": {
+          "source": "Must be \"collection\"",
+          "message": "\"collection\" である必要があります"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dGl0bGU.desc": {
+          "source": "The title of the article.For multilingual articles, this will be the title of the default language's content.",
+          "message": "記事のタイトル。多言語記事の場合、これはデフォルト言語のコンテンツのタイトルになります。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dGl0bGU.short_desc": {
+          "source": "The title of the article.For multilingual articles, this will be the title of…",
+          "message": "記事のタイトル。多言語記事の場合、これはデフォルト言語のタイトルになります…"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.desc": {
+          "source": "The Translated Content of an Article. The keys are the locale codes and the values are the translated content of the article.",
+          "message": "記事の翻訳コンテンツ。キーはロケールコード、値は記事の翻訳コンテンツです。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.display_name": {
+          "source": "Translated Content",
+          "message": "翻訳コンテンツ"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.short_desc": {
+          "source": "The Translated Content of an Article",
+          "message": "記事の翻訳コンテンツ"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlQXJ0aWNsZQ.short_desc": {
+          "source": "Write a help center article",
+          "message": "ヘルプセンター記事を作成"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.desc": {
+          "source": "Records a data event against a contact - a signup, a purchase, a feature used.\n\nThe contact is named in exactly one of three ways: `id` is Intercom's identity for them, `user_id` is the external identity your own system gave them, and `email` is their address. Supply one.\n\n`metadata` carries up to five values describing the event itself.",
+          "message": "連絡先に対するデータイベント（サインアップ、購入、機能の利用など）を記録します。\n\n連絡先は次の3つの方法のいずれか1つだけで指定します: `id` はIntercomにおける識別子、`user_id` は自社システムが付与した外部識別子、`email` はアドレスです。いずれか1つを指定してください。\n\n`metadata` はイベント自体を説明する最大5つの値を保持します。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.display_name": {
+          "source": "Submit Data Event",
+          "message": "データイベントを送信"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "When the event happened.\n\nIntercom requires this. Set it to the current time for an event happening now; the application this module replaces did that silently, so a workflow migrated from it has to say so explicitly.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "イベントが発生した日時。\n\nIntercomでは必須です。現在発生しているイベントの場合は現在時刻を設定してください。このモジュールが置き換える以前のアプリケーションはそれを暗黙的に行っていたため、そこから移行したワークフローでは明示的に指定する必要があります。\n\nこの値は1970-01-01Zからの経過秒数の整数として送信されます。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Occurred At",
+          "message": "発生日時"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "When the event happened",
+          "message": "イベントが発生した日時"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZW1haWw.desc": {
+          "source": "An email address for your user. An email should only be used where your application uses email to uniquely identify users.",
+          "message": "ユーザーのメールアドレス。アプリケーションがユーザーを一意に識別するためにメールを使用している場合にのみ使用してください。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZW1haWw.display_name": {
+          "source": "E-mail",
+          "message": "メールアドレス"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZW1haWw.short_desc": {
+          "source": "The contact, by e-mail address",
+          "message": "メールアドレスによる連絡先の指定"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZXZlbnRfbmFtZQ.desc": {
+          "source": "The name of the event that occurred. This is presented to your App's admins when filtering and creating segments - a good event name is typically a past tense 'verb-noun' combination, to improve readability, for example `updated-plan`.",
+          "message": "発生したイベントの名前。これはセグメントの作成や絞り込み時にアプリの管理者に表示されます。読みやすさを向上させるため、適切なイベント名は通常、過去形の「動詞-名詞」の組み合わせ（例: `updated-plan`）です。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZXZlbnRfbmFtZQ.display_name": {
+          "source": "Event Name",
+          "message": "イベント名"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.ZXZlbnRfbmFtZQ.short_desc": {
+          "source": "The name of the event being recorded",
+          "message": "記録するイベントの名前"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.aWQ.desc": {
+          "source": "The unique identifier for the contact (lead or user) which is given by Intercom.",
+          "message": "Intercomによって付与された連絡先（リードまたはユーザー）の一意の識別子。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.aWQ.display_name": {
+          "source": "Contact",
+          "message": "コンタクト"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.aWQ.short_desc": {
+          "source": "The contact, by Intercom's identity for them",
+          "message": "Intercomの識別子による連絡先の指定"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.bWV0YWRhdGE.desc": {
+          "source": "Optional metadata about the event.",
+          "message": "イベントに関するオプションのメタデータ。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.bWV0YWRhdGE.display_name": {
+          "source": "Metadata",
+          "message": "メタデータ"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.bWV0YWRhdGE.short_desc": {
+          "source": "Optional metadata about the event",
+          "message": "イベントに関する任意のメタデータ"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.dXNlcl9pZA.desc": {
+          "source": "Your identifier for the user.",
+          "message": "ユーザーに対する自社システムの識別子。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.dXNlcl9pZA.display_name": {
+          "source": "External ID",
+          "message": "外部ID"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.option.dXNlcl9pZA.short_desc": {
+          "source": "The contact, by the identity your own system gave them",
+          "message": "自社システムの識別子による連絡先の指定"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlRGF0YUV2ZW50.short_desc": {
+          "source": "Record that a contact did something",
+          "message": "連絡先のアクションを記録"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.desc": {
+          "source": "Creates a company, or updates the existing one with the same `company_id`.\n\n`company_id` is **your** identifier for the company, not Intercom's: it is what decides whether this creates or updates, and Intercom will not let it be changed afterwards. The dropdown therefore lists companies by that identifier.\n\nOnly the fields sent are changed; the rest are left as they are.",
+          "message": "会社を作成するか、同じ `company_id` を持つ既存の会社を更新します。\n\n`company_id` はIntercomではなく**お客様のシステム**における会社の識別子です。これによって作成か更新かが決定され、Intercomでは後から変更できません。そのため、ドロップダウンにはその識別子で会社が一覧表示されます。\n\n送信されたフィールドのみが変更され、残りはそのまま保持されます。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.display_name": {
+          "source": "Create or Update Company",
+          "message": "会社を作成または更新"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y29tcGFueV9pZA.desc": {
+          "source": "The company id you have defined for the company. Can't be updated",
+          "message": "会社に対して定義した会社ID。更新はできません"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company ID",
+          "message": "会社ID"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "Your own identifier for the company",
+          "message": "会社に対する自社システムの識別子"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.desc": {
+          "source": "A hash of key/value pairs containing any other data about the company you want Intercom to store.",
+          "message": "Intercomに保存したい会社に関するその他のデータを含むキー/値ペアのハッシュ。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.display_name": {
+          "source": "Custom Attributes",
+          "message": "カスタム属性"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.Y3VzdG9tX2F0dHJpYnV0ZXM.short_desc": {
+          "source": "A hash of key/value pairs containing any other data about the company you want…",
+          "message": "Intercomに保存する会社に関するその他のデータのキー/値ハッシュ…"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.aW5kdXN0cnk.desc": {
+          "source": "The industry that this company operates in.",
+          "message": "この会社が事業を展開している業界。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.aW5kdXN0cnk.display_name": {
+          "source": "Industry",
+          "message": "業種"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.aW5kdXN0cnk.short_desc": {
+          "source": "The industry that this company operates in",
+          "message": "この会社が事業を展開している業界"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.desc": {
+          "source": "How much revenue the company generates for your business. Note that this will truncate floats. i.e. it only allow for whole integers, 155.98 will be truncated to 155. Note that this has an upper limit of 2**31-1 or 2147483647..",
+          "message": "この会社がビジネスにもたらす収益の額。浮動小数点数は切り捨てられる点に注意してください（整数のみ許可され、155.98は155に切り捨てられます）。また、上限は2**31-1または2147483647です。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.display_name": {
+          "source": "Monthly Spend",
+          "message": "月間利用額"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bW9udGhseV9zcGVuZA.short_desc": {
+          "source": "How much revenue the company generates for your business",
+          "message": "会社がビジネスにもたらす収益額"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bmFtZQ.desc": {
+          "source": "The name of the Company",
+          "message": "会社名"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bmFtZQ.display_name": {
+          "source": "Name",
+          "message": "名前"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.bmFtZQ.short_desc": {
+          "source": "The name of the Company",
+          "message": "会社名"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.c2l6ZQ.desc": {
+          "source": "The number of employees in this company.",
+          "message": "この会社の従業員数。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.c2l6ZQ.display_name": {
+          "source": "Size",
+          "message": "サイズ"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.c2l6ZQ.short_desc": {
+          "source": "The number of employees in this company",
+          "message": "この会社の従業員数"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cGxhbg.desc": {
+          "source": "The name of the plan you have associated with the company.",
+          "message": "会社に関連付けたプランの名前。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cGxhbg.display_name": {
+          "source": "Plan",
+          "message": "プラン"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cGxhbg.short_desc": {
+          "source": "The name of the plan you have associated with the company",
+          "message": "会社に関連付けたプランの名前"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cmVtb3RlX2NyZWF0ZWRfYXQ.desc": {
+          "source": "The time the company was created by you.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "お客様によって会社が作成された日時。\n\nこの値は1970-01-01Zからの経過秒数の整数として送信されます。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cmVtb3RlX2NyZWF0ZWRfYXQ.display_name": {
+          "source": "Created At",
+          "message": "作成日時"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.cmVtb3RlX2NyZWF0ZWRfYXQ.short_desc": {
+          "source": "When the company was created in your own system",
+          "message": "自社システムで会社が作成された日時"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.d2Vic2l0ZQ.desc": {
+          "source": "The URL for this company's website. Please note that the value specified here is not validated. Accepts any string.",
+          "message": "この会社のウェブサイトのURL。ここで指定した値は検証されません。任意の文字列を受け入れます。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.d2Vic2l0ZQ.display_name": {
+          "source": "Website",
+          "message": "ウェブサイト"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.d2Vic2l0ZQ.short_desc": {
+          "source": "The URL for this company's website",
+          "message": "この企業のWebサイトのURL"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.desc": {
+          "source": "Set to true to update the company's last seen time to now.",
+          "message": "trueに設定すると、会社の最終アクセス日時が現在に更新されます。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.display_name": {
+          "source": "Update Last Request At",
+          "message": "最終リクエスト日時を更新"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.option.dXBkYXRlX2xhc3RfcmVxdWVzdF9hdA.short_desc": {
+          "source": "Set to true to update the company's last seen time to now",
+          "message": "trueに設定すると会社の最終アクセス日時を現在に更新"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlT3JVcGRhdGVDb21wYW55.short_desc": {
+          "source": "Create a company, or update the one with this company ID",
+          "message": "会社を作成、またはこの会社IDの会社を更新"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.desc": {
+          "source": "Sends a message to a contact **from a teammate**, starting a new conversation.\n\n`message_type` selects how it is delivered: `email` needs a `subject`, `in_app` shows it in the messenger, and `whatsapp` needs an approved `template`.\n\nUse **Reply to Conversation** to add to a conversation that already exists.",
+          "message": "**チームメンバーから**連絡先にメッセージを送信し、新しい会話を開始します。\n\n`message_type` で配信方法を選択します: `email` には `subject` が必要、`in_app` はメッセンジャーに表示、`whatsapp` には承認済みの `template` が必要です。\n\n既存の会話に追加するには**会話に返信**を使用してください。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.display_name": {
+          "source": "Create Message",
+          "message": "メッセージを作成"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y2M.display_name": {
+          "source": "Cc",
+          "message": "CC"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.desc": {
+          "source": "Whether a conversation should be opened in the inbox for the message without the contact replying. Defaults to false if not provided.",
+          "message": "連絡先からの返信がなくても、メッセージの受信トレイで会話を開くかどうか。指定しない場合のデフォルトはfalseです。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.display_name": {
+          "source": "Create Conversation Without Contact Reply",
+          "message": "連絡先の返信なしで会話を作成"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlX2NvbnZlcnNhdGlvbl93aXRob3V0X2NvbnRhY3RfcmVwbHk.short_desc": {
+          "source": "Whether a conversation should be opened in the inbox for the message without…",
+          "message": "連絡先の返信なしで受信トレイに会話を開くかどうか"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "The time the message was created. If not provided, the current time will be used.\n\nThis value is sent as an integer number of seconds since 1970-01-01Z.",
+          "message": "メッセージが作成された日時。指定しない場合は現在時刻が使用されます。\n\nこの値は1970-01-01Zからの経過秒数の整数として送信されます。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "作成日時"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "The time the message was created",
+          "message": "メッセージが作成された日時"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Ym9keQ.desc": {
+          "source": "The content of the message. HTML and plaintext are supported.",
+          "message": "メッセージの本文。HTMLおよびプレーンテキストがサポートされています。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Ym9keQ.display_name": {
+          "source": "Message",
+          "message": "メッセージ"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.Ym9keQ.short_desc": {
+          "source": "The content of the message",
+          "message": "メッセージの本文"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.YmNj.display_name": {
+          "source": "Bcc",
+          "message": "BCC"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.ZnJvbQ.desc": {
+          "source": "The sender of the message. If not provided, the default sender will be used.",
+          "message": "メッセージの送信者。指定しない場合はデフォルトの送信者が使用されます。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.ZnJvbQ.display_name": {
+          "source": "From",
+          "message": "送信元"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.ZnJvbQ.short_desc": {
+          "source": "The teammate the message is from",
+          "message": "メッセージ送信元のチームメンバー"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.allowed-value.c3RyaW5nOmVtYWls.display_name": {
+          "source": "email",
+          "message": "email"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.allowed-value.c3RyaW5nOmluX2FwcA.display_name": {
+          "source": "in_app",
+          "message": "in_app"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.allowed-value.c3RyaW5nOndoYXRzYXBw.display_name": {
+          "source": "whatsapp",
+          "message": "whatsapp"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.desc": {
+          "source": "The kind of message being created. Values: `in_app`, `email` or `whatsapp`.",
+          "message": "作成するメッセージの種類。値: `in_app`、`email`、または `whatsapp`。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.display_name": {
+          "source": "Message Type",
+          "message": "メッセージタイプ"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.bWVzc2FnZV90eXBl.short_desc": {
+          "source": "The kind of message being created",
+          "message": "作成するメッセージの種類"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.c3ViamVjdA.desc": {
+          "source": "The title of the email.",
+          "message": "メールの件名。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "サブジェクト"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.c3ViamVjdA.short_desc": {
+          "source": "The title of the email",
+          "message": "メールの件名"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.display_name": {
+          "source": "To",
+          "message": "宛先"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dG8.short_desc": {
+          "source": "The contact to send the message to",
+          "message": "メッセージの送信先となるコンタクト"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dGVtcGxhdGU.desc": {
+          "source": "The style of the outgoing message. Possible values `plain` or `personal`.",
+          "message": "送信メッセージのスタイル。可能な値は `plain` または `personal` です。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dGVtcGxhdGU.display_name": {
+          "source": "Template",
+          "message": "テンプレート"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.option.dGVtcGxhdGU.short_desc": {
+          "source": "The style of the outgoing message",
+          "message": "送信メッセージのスタイル"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTWVzc2FnZQ.short_desc": {
+          "source": "Send a message to a contact from a teammate",
+          "message": "チームメイトからコンタクトにメッセージを送信"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.desc": {
+          "source": "Adds a note to a contact.\n\nA note is internal: it is visible to teammates on the contact's record and is never shown to the contact. Use **Reply to Conversation** to say something the contact sees.\n\nWithout `admin_id` the note is attributed to no teammate.",
+          "message": "コンタクトにノートを追加します。\n\nノートは社内専用です。チームメイトにはコンタクトのレコード上で表示されますが、コンタクト本人には一切表示されません。コンタクトに表示されるメッセージを送る場合は **会話に返信** を使用してください。\n\n`admin_id` を指定しない場合、ノートにはチームメイトが紐付けられません。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.display_name": {
+          "source": "Create Note",
+          "message": "ノートを作成"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier of a given contact.",
+          "message": "指定したコンタクトの一意の識別子。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "コンタクト"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "対象となる連絡先"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.YWRtaW5faWQ.desc": {
+          "source": "The unique identifier of a given admin.",
+          "message": "指定した管理者の一意の識別子。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.YWRtaW5faWQ.display_name": {
+          "source": "Teammate",
+          "message": "チームメイト"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.YWRtaW5faWQ.short_desc": {
+          "source": "The teammate the note is attributed to",
+          "message": "ノートの作成者として紐付けられるチームメイト"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Ym9keQ.desc": {
+          "source": "The text of the note.",
+          "message": "ノートの本文。"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Ym9keQ.display_name": {
+          "source": "Note",
+          "message": "ノート"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.option.Ym9keQ.short_desc": {
+          "source": "The text of the note",
+          "message": "ノートの本文"
+        },
+        "app.SW50ZXJjb20.action.Y3JlYXRlTm90ZQ.short_desc": {
+          "source": "Add a note to a contact",
+          "message": "コンタクトにノートを追加"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.desc": {
+          "source": "Applies a tag to a contact.\n\nThe tag has to exist already: this attaches one, it does not create one.",
+          "message": "コンタクトにタグを適用します。\n\nタグは事前に存在している必要があります。このアクションはタグを関連付けるものであり、新規作成は行いません。"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.display_name": {
+          "source": "Add Tag to Contact",
+          "message": "タグをコンタクトに追加"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "Intercomによって割り当てられた連絡先の一意の識別子"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "コンタクト"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "対象となる連絡先"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.aWQ.desc": {
+          "source": "The unique identifier for the tag which is given by Intercom",
+          "message": "Intercomによって割り当てられたタグの一意の識別子"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.aWQ.display_name": {
+          "source": "Tag",
+          "message": "タグ"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.option.aWQ.short_desc": {
+          "source": "The tag to apply",
+          "message": "適用するタグ"
+        },
+        "app.SW50ZXJjb20.action.YXR0YWNoVGFnVG9Db250YWN0.short_desc": {
+          "source": "Apply an existing tag to a contact",
+          "message": "既存のタグをコンタクトに適用"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.desc": {
+          "source": "Removes a tag from a contact.\n\nThe tag itself is untouched; only its application to this contact is removed.\n\nThe tag dropdown lists the tags the selected contact actually has, so choose the contact first.",
+          "message": "コンタクトからタグを削除します。\n\nタグ自体は削除されず、このコンタクトへの適用のみが解除されます。\n\nタグのドロップダウンには選択したコンタクトに実際に適用されているタグが表示されるため、先にコンタクトを選択してください。"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.display_name": {
+          "source": "Remove Tag from Contact",
+          "message": "連絡先からタグを削除"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "Intercomによって割り当てられた連絡先の一意の識別子"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "コンタクト"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "対象となる連絡先"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.dGFnX2lk.desc": {
+          "source": "The unique identifier for the tag which is given by Intercom",
+          "message": "Intercomによって割り当てられたタグの一意の識別子"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.dGFnX2lk.display_name": {
+          "source": "Tag",
+          "message": "タグ"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.option.dGFnX2lk.short_desc": {
+          "source": "The tag to remove from this contact",
+          "message": "このコンタクトから削除するタグ"
+        },
+        "app.SW50ZXJjb20.action.ZGV0YWNoVGFnRnJvbUNvbnRhY3Q.short_desc": {
+          "source": "Remove a tag from a contact",
+          "message": "連絡先からタグを削除"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.desc": {
+          "source": "Deletes every record in the given table matching the search criteria",
+          "message": "検索条件に一致する指定テーブルのすべてのレコードを削除します"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.display_name": {
+          "source": "Delete Records",
+          "message": "レコードを削除"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "操作対象のテーブル: `contacts`、`conversations`、`companies`、`articles`、`collections`、`tags`、または `teammates`"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "操作対象のテーブル名"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRl.short_desc": {
+          "source": "Delete the records matching the search criteria",
+          "message": "検索条件に一致するレコードを削除"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.desc": {
+          "source": "Deletes a company.\n\nThe contacts attached to it are **not** deleted; they simply stop belonging to it.",
+          "message": "会社を削除します。\n\n関連付けられているコンタクトは削除**されません**。単に対象の会社への所属が解除されます。"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.display_name": {
+          "source": "Delete Company",
+          "message": "会社を削除"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.desc": {
+          "source": "The unique identifier for the company which is given by Intercom",
+          "message": "Intercomによって割り当てられた会社の一意の識別子"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.display_name": {
+          "source": "Company",
+          "message": "会社"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.option.Y29tcGFueV9pZA.short_desc": {
+          "source": "The company to delete",
+          "message": "削除する会社"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQ29tcGFueQ.short_desc": {
+          "source": "Delete a company",
+          "message": "会社を削除"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.desc": {
+          "source": "Deletes a help center article",
+          "message": "ヘルプセンターの記事を削除します"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.display_name": {
+          "source": "Delete Article",
+          "message": "記事を削除"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.desc": {
+          "source": "The unique identifier for the article which is given by Intercom.",
+          "message": "Intercomによって割り当てられた記事の一意の識別子。"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.display_name": {
+          "source": "Article",
+          "message": "記事"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.short_desc": {
+          "source": "The article to delete",
+          "message": "削除する記事"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlQXJ0aWNsZQ.short_desc": {
+          "source": "Delete a help center article",
+          "message": "ヘルプセンターの記事を削除"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.desc": {
+          "source": "Deletes a tag.\n\nIntercom **refuses** to delete a tag that is still applied to any contact or company, answering 400; detach it everywhere first.",
+          "message": "タグを削除します。\n\nコンタクトまたは会社に適用中のタグの削除はIntercomによって**拒絶**され、400エラーが返されます。先にすべての関連付けを解除してください。"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.display_name": {
+          "source": "Delete Tag",
+          "message": "タグを削除"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.option.dGFnX2lk.desc": {
+          "source": "The unique identifier for the tag which is given by Intercom",
+          "message": "Intercomによって割り当てられたタグの一意の識別子"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.option.dGFnX2lk.display_name": {
+          "source": "Tag",
+          "message": "タグ"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.option.dGFnX2lk.short_desc": {
+          "source": "The tag to apply",
+          "message": "適用するタグ"
+        },
+        "app.SW50ZXJjb20.action.ZGVsZXRlVGFn.short_desc": {
+          "source": "Delete a tag",
+          "message": "タグを削除"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.desc": {
+          "source": "Retrieves one tag",
+          "message": "タグを1件取得します"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.display_name": {
+          "source": "Get Tag",
+          "message": "タグを取得"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.option.dGFnX2lk.desc": {
+          "source": "The unique identifier for the tag which is given by Intercom",
+          "message": "Intercomによって割り当てられたタグの一意の識別子"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.option.dGFnX2lk.display_name": {
+          "source": "Tag",
+          "message": "タグ"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.option.dGFnX2lk.short_desc": {
+          "source": "The tag to apply",
+          "message": "適用するタグ"
+        },
+        "app.SW50ZXJjb20.action.ZmluZFRhZw.short_desc": {
+          "source": "Retrieve a tag by its identity",
+          "message": "IDでタグを取得"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.desc": {
+          "source": "Returns a summary of the data events recorded for **one contact**.\n\nThis is not a listing of the workspace's events: `filter` names the contact - by `user_id`, `intercom_user_id` or `email` - and `type` must be `user`. What comes back is that contact's event summary, each event with its name, first and last occurrence and a count.\n\nThe action ID keeps Intercom's own spelling of `lisDataEvents`.",
+          "message": "**1件のコンタクト**に記録されたデータイベントのサマリーを返します。\n\nこれはワークスペース全体のイベント一覧ではありません。`filter` で `user_id`、`intercom_user_id`、または `email` のいずれかによりコンタクトを指定し、`type` は `user` である必要があります。返されるのは該当コンタクトのイベントサマリーであり、各イベントには名前、最初と最後の発生日時、発生回数が含まれます。\n\nアクションIDにはIntercom独自の表記である `lisDataEvents` が維持されています。"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.display_name": {
+          "source": "List Data Events",
+          "message": "データイベント一覧"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.desc": {
+          "source": "Names the contact whose events are summarised, in exactly one of three ways: `user_id` is the identity your own system gave them, `intercom_user_id` is Intercom's, and `email` is their address.",
+          "message": "イベントを集計するコンタクトを、次の3つの方法のいずれか1つで指定します: `user_id` は自社システム側で付与したID、`intercom_user_id` はIntercom側のID、`email` はメールアドレスです。"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.display_name": {
+          "source": "Contact",
+          "message": "コンタクト"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.ZmlsdGVy.short_desc": {
+          "source": "Which contact's events to summarise",
+          "message": "イベントを集計する対象のコンタクト"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.c3VtbWFyeQ.desc": {
+          "source": "summary flag",
+          "message": "サマリーフラグ"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.c3VtbWFyeQ.display_name": {
+          "source": "Summary",
+          "message": "概要"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.c3VtbWFyeQ.short_desc": {
+          "source": "summary flag",
+          "message": "サマリーフラグ"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.dHlwZQ.allowed-value.c3RyaW5nOnVzZXI.display_name": {
+          "source": "user",
+          "message": "ユーザー"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.dHlwZQ.desc": {
+          "source": "The value must be user",
+          "message": "値は user である必要があります"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.dHlwZQ.display_name": {
+          "source": "Type",
+          "message": "タイプ"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.option.dHlwZQ.short_desc": {
+          "source": "Must be \"user\"",
+          "message": "\"user\" を指定する必要があります"
+        },
+        "app.SW50ZXJjb20.action.bGlzRGF0YUV2ZW50cw.short_desc": {
+          "source": "Summarise the data events recorded for one contact",
+          "message": "1件のコンタクトに記録されたデータイベントを集計"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.desc": {
+          "source": "Lists the teammates who have access to the workspace.\n\nThis is exported so that the teammate dropdowns have an action to call - an article's author, a note's or a reply's teammate, a message's sender.\n\nThis listing is not paged: Intercom returns them all in one response, in an `admins` array.",
+          "message": "ワークスペースへのアクセス権を持つチームメイト一覧を取得します。\n\nこれは、記事の作成者、ノートや返信の担当チームメイト、メッセージの送信者など、チームメイト選択ドロップダウンで呼び出すアクションとして提供されています。\n\nこの一覧はページネーションされません。Intercomはすべての結果を `admins` 配列として1つのレスポンスで返します。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.display_name": {
+          "source": "List Teammates",
+          "message": "チームメイト一覧"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.desc": {
+          "source": "If set to true, the response will include the admin's avatar object containing the image URL. Defaults to false.",
+          "message": "If set to true, the response will include the admin's avatar object containing the image URL. Defaults to false."
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.display_name": {
+          "source": "Display Avatar",
+          "message": "アバターを表示"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.option.ZGlzcGxheV9hdmF0YXI.short_desc": {
+          "source": "If set to true, the response will include the admin's avatar object containing…",
+          "message": "trueの場合、画像URLを含む管理者のアバターオブジェクトを返します"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFkbWlucw.short_desc": {
+          "source": "List the teammates with access to the workspace",
+          "message": "ワークスペースにアクセス可能なチームメイト一覧を取得"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.desc": {
+          "source": "Lists the help center collections articles can be filed under.\n\nThis is exported so that **Create Article**'s parent dropdown has an action to call.\n\nCollections nest: a collection with a `parent_id` sits inside another one. What earlier API versions called a *section* is returned here as a nested collection - Intercom removed sections at version 2.10.",
+          "message": "記事を分類できるヘルプセンターのコレクション一覧を取得します。\n\nこれは、**記事を作成** の親ドロップダウンが呼び出すアクションとして提供されています。\n\nコレクションは階層構造を持てます。`parent_id` を持つコレクションは別のコレクション内にネストされます。以前のAPIバージョンで*セクション*と呼ばれていたものは、ここではネストされたコレクションとして返されます（Intercomはバージョン2.10でセクションを廃止しました）。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.display_name": {
+          "source": "List Collections",
+          "message": "コレクションの一覧表示"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "ページネーションカーソル: 前回のレスポンスから`pages.next.starting_after`を取得してここに渡します。\n\nこれは不透明な値であり、手動で構築してはいけません。コレクションをすべて取得し終えると`pages`は存在しなくなり、次のページがないことを示します。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "Starting After"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "次ページのカーソル"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one page. Intercom documents cursor pagination for every listing that answers a \"pages\" object, but declares this parameter on only some of them.",
+          "message": "1ページあたりに返すレコード数。Intercomは\"pages\"オブジェクトを返すリスト操作すべてでカーソルページネーションを説明していますが、このパラメータは一部の操作でのみ宣言しています。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "ページサイズ"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "1 ページあたりに返すレコード数"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbGxlY3Rpb25z.short_desc": {
+          "source": "List the help center collections",
+          "message": "ヘルプセンターのコレクション一覧を取得"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.desc": {
+          "source": "Lists every company in the workspace.\n\nThis is the one listing Intercom pages by **page number** rather than by cursor: `pages.total_pages` says how many there are, and `page` selects one.\n\nIt is a `POST` because Intercom made it one; it sends no body.",
+          "message": "ワークスペース内のすべての会社を一覧表示します。\n\nこれはIntercomがカーソルではなく**ページ番号**でページネーションを行う唯一の一覧です。`pages.total_pages` で件数を指定し、`page` でページを選択します。\n\nIntercomの仕様により `POST` となっており、リクエストボディは送信しません。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.display_name": {
+          "source": "List Companies",
+          "message": "会社一覧を取得"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.b3JkZXI.desc": {
+          "source": "`asc` or `desc`. Return the companies in ascending or descending order. Defaults to desc",
+          "message": "`asc` または `desc`。会社を昇順または降順で返します。デフォルトは desc です"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.b3JkZXI.display_name": {
+          "source": "Order",
+          "message": "順序"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.b3JkZXI.short_desc": {
+          "source": "'asc' or 'desc'",
+          "message": "'asc' または 'desc'"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGFnZQ.desc": {
+          "source": "The page of results to fetch. Defaults to first page",
+          "message": "取得する結果のページ。デフォルトは最初のページです"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGFnZQ.display_name": {
+          "source": "Page",
+          "message": "ページ"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGFnZQ.short_desc": {
+          "source": "Which page to return, starting at 1",
+          "message": "取得するページ番号（1始まり）"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGVyX3BhZ2U.desc": {
+          "source": "How many results to return per page. Defaults to 15",
+          "message": "1ページあたりに返す結果の件数。デフォルトは15件です"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "ページサイズ"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "1 ページあたりに返すレコード数"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFsbENvbXBhbmllcw.short_desc": {
+          "source": "List the companies in the workspace",
+          "message": "ワークスペース内の会社一覧を取得"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.desc": {
+          "source": "Lists the workspace's help center articles.\n\nIntercom's description declares no paging arguments for this operation even though it answers a paged envelope; `per_page` and `starting_after` are added when the schema is imported. See @ref IntercomDataProvider::IntercomSchema \"IntercomSchema\".",
+          "message": "ワークスペースのヘルプセンター記事一覧を取得します。\n\nIntercomの説明文ではこの操作にページネーション引数が宣言されていませんが、ページ分割されたエンベロープが返されます。`per_page` および `starting_after` はスキーマのインポート時に追加されます。@ref IntercomDataProvider::IntercomSchema \"IntercomSchema\" を参照してください。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.display_name": {
+          "source": "List Articles",
+          "message": "記事一覧"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "ページネーションカーソル: 前回のレスポンスから`pages.next.starting_after`を取得してここに渡します。\n\nこれは不透明な値であり、手動で構築してはいけません。コレクションをすべて取得し終えると`pages`は存在しなくなり、次のページがないことを示します。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "Starting After"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "次ページのカーソル"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.cGVyX3BhZ2U.desc": {
+          "source": "How many records to return in one page. Intercom documents cursor pagination for every listing that answers a \"pages\" object, but declares this parameter on only some of them.",
+          "message": "1ページあたりに返すレコード数。Intercomは\"pages\"オブジェクトを返すリスト操作すべてでカーソルページネーションを説明していますが、このパラメータは一部の操作でのみ宣言しています。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "ページサイズ"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "1 ページあたりに返すレコード数"
+        },
+        "app.SW50ZXJjb20.action.bGlzdEFydGljbGVz.short_desc": {
+          "source": "List the help center articles",
+          "message": "ヘルプセンターの記事一覧を取得"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3M.desc": {
+          "source": "Lists every tag defined in the workspace.\n\nThis listing is not paged: Intercom returns the whole set in one response.",
+          "message": "ワークスペースで定義されているすべてのタグを一覧表示します。\n\nこの一覧はページネーションされません。Intercomは全件を1つのレスポンスで返します。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3M.display_name": {
+          "source": "List Tags",
+          "message": "タグのリスト取得"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3M.short_desc": {
+          "source": "List the tags defined in the workspace",
+          "message": "ワークスペース内に定義されたタグ一覧を取得"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.desc": {
+          "source": "Lists the tags applied to a contact.\n\nThis is exported so that **Remove Tag from Contact** can offer the tags that contact actually has, rather than every tag in the workspace - almost all of which would fail.\n\nThis listing is not paged.",
+          "message": "コンタクトに適用されているタグ一覧を取得します。\n\nこれは、**コンタクトからタグを削除** でワークスペース内の全タグ（大半は失敗します）ではなく、そのコンタクトが実際に持っているタグを選択できるようにするために提供されています。\n\nこの一覧はページネーションされません。"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.display_name": {
+          "source": "List Tags on Contact",
+          "message": "コンタクトのタグ一覧"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.option.Y29udGFjdF9pZA.desc": {
+          "source": "The unique identifier for the contact which is given by Intercom",
+          "message": "Intercomによって割り当てられた連絡先の一意の識別子"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.option.Y29udGFjdF9pZA.display_name": {
+          "source": "Contact",
+          "message": "コンタクト"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.option.Y29udGFjdF9pZA.short_desc": {
+          "source": "The contact this applies to",
+          "message": "対象となる連絡先"
+        },
+        "app.SW50ZXJjb20.action.bGlzdFRhZ3NGb3JBQ29udGFjdA.short_desc": {
+          "source": "List the tags applied to one contact",
+          "message": "1件のコンタクトに適用されたタグ一覧を取得"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.desc": {
+          "source": "Make a custom HTTP / REST API call to **Intercom** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
+          "message": "設定済みの接続の認証情報を使用して、**Intercom** へのカスタムHTTP / REST API呼び出しを実行します。\n\nHTTPメソッド、URIパス（接続のAPIベースURLからの相対パス）、任意のクエリパラメータ、ヘッダー、およびリクエストボディを指定します。レスポンスはステータスコード、レスポンスヘッダー、レスポンスボディを含むハッシュとして返されます。\n\nこのアプリでファーストクラスのアクションとしてまだ提供されていないエンドポイントに対してこのアクションを使用します。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.display_name": {
+          "source": "Make an API call",
+          "message": "API コールを実行"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.desc": {
+          "source": "The request body. The effective type depends on `body_type`: JSON/form/YAML expect a hash, XML/text expect a string, multipart expects a file structure, binary expects raw bytes.",
+          "message": "リクエストボディ。有効な型は`body_type`に依存します。JSON/form/YAMLはハッシュを期待し、XML/textは文字列を期待し、multipartはファイル構造を期待し、binaryは生バイトを期待します。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keQ.short_desc": {
+          "source": "The request body",
+          "message": "リクエストボディ"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.desc": {
+          "source": "Upload a file using `multipart/form-data`. The body must be a @ref DataProvider::FileDataType \"FileDataType\" structure (filename + content + mime_type). The framework builds the multipart envelope and sets the boundary header.",
+          "message": "`multipart/form-data`を使用してファイルをアップロードします。ボディは@ref DataProvider::FileDataType \"FileDataType\"構造（filename + content + mime_type）である必要があります。フレームワークがmultipartエンベロープを構築し、boundaryヘッダーを設定します。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.display_name": {
+          "source": "Multipart Form",
+          "message": "マルチパートフォーム"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOm11bHRpcGFydA.short_desc": {
+          "source": "Upload a file using multipart/form-data",
+          "message": "multipart/form-dataを使用してファイルをアップロード"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.desc": {
+          "source": "Pass the body to the REST client unchanged; the client decides serialization based on its configured `data` option and the value type",
+          "message": "ボディを変更せずにRESTクライアントに渡します。クライアントは設定された`data`オプションと値の型に基づいてシリアライズを決定します"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.display_name": {
+          "source": "Auto",
+          "message": "自動"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmF1dG8.short_desc": {
+          "source": "Pass-through; use connection serialization and let the REST client decide",
+          "message": "パススルー。接続のシリアライズを使用し、RESTクライアントに決定させます"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.desc": {
+          "source": "Send the body as raw bytes. The body must be a binary value. Sets `Content-Type: application/octet-stream` unless overridden by `hdr`.",
+          "message": "ボディを生バイトとして送信します。ボディはバイナリ値である必要があります。`hdr`によってオーバーライドされない限り、`Content-Type: application/octet-stream`を設定します。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.display_name": {
+          "source": "Raw Binary",
+          "message": "生バイナリ"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmJpbmFyeQ.short_desc": {
+          "source": "Send body as raw bytes",
+          "message": "ボディを生バイトとして送信"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.desc": {
+          "source": "Serialize a hash of form fields as `application/x-www-form-urlencoded`. The body must be a hash whose values are scalars (strings/numbers/booleans).",
+          "message": "フォームフィールドのハッシュを`application/x-www-form-urlencoded`としてシリアライズします。ボディは値がスカラー（文字列/数値/ブール値）のハッシュである必要があります。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.display_name": {
+          "source": "Form (URL-encoded)",
+          "message": "フォーム (URLエンコード)"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmZvcm0.short_desc": {
+          "source": "Serialize body as application/x-www-form-urlencoded form fields",
+          "message": "ボディをapplication/x-www-form-urlencodedフォームフィールドとしてシリアライズ"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "Serialize the body as JSON; sets `Content-Type: application/json`. The body should be a hash, list, or scalar value.",
+          "message": "ボディをJSONとしてシリアライズします。`Content-Type: application/json`を設定します。ボディはハッシュ、リスト、またはスカラー値である必要があります。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOmpzb24.short_desc": {
+          "source": "Serialize body as JSON",
+          "message": "ボディをJSONとしてシリアライズ"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "Send the body as plain text. The body must be a string. Sets `Content-Type: text/plain`.",
+          "message": "ボディをプレーンテキストとして送信します。ボディは文字列である必要があります。`Content-Type: text/plain`を設定します。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "プレーンテキスト"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnRleHQ.short_desc": {
+          "source": "Send body as text/plain",
+          "message": "ボディをtext/plainとして送信"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.desc": {
+          "source": "Send the body as XML. If the body is a hash it is serialized to XML; if it is a string it is sent verbatim. Sets `Content-Type: application/xml`.",
+          "message": "ボディをXMLとして送信します。ボディがハッシュの場合はXMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/xml`を設定します。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.display_name": {
+          "source": "XML",
+          "message": "XML"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnhtbA.short_desc": {
+          "source": "Send body as XML",
+          "message": "ボディをXMLとして送信"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.desc": {
+          "source": "Send the body as YAML. If the body is a hash it is serialized to YAML; if it is a string it is sent verbatim. Sets `Content-Type: application/x-yaml`.",
+          "message": "ボディをYAMLとして送信します。ボディがハッシュの場合はYAMLにシリアライズされ、文字列の場合はそのまま送信されます。`Content-Type: application/x-yaml`を設定します。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.display_name": {
+          "source": "YAML",
+          "message": "YAML"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.allowed-value.c3RyaW5nOnlhbWw.short_desc": {
+          "source": "Send body as YAML",
+          "message": "ボディをYAMLとして送信"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.desc": {
+          "source": "Selects the body serialization mode and the corresponding `Content-Type` header. Changing this field reshapes the `body` editor - selecting JSON exposes a JSON editor, selecting Multipart Form exposes a file picker, and so on.",
+          "message": "ボディのシリアライズモードと対応する`Content-Type`ヘッダーを選択します。このフィールドを変更すると`body`エディターの形状が変わります。JSONを選択するとJSONエディターが表示され、マルチパートフォームを選択するとファイルピッカーが表示される、などです。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.display_name": {
+          "source": "Body Type",
+          "message": "ボディタイプ"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.Ym9keV90eXBl.short_desc": {
+          "source": "How the body is serialized and what Content-Type is sent",
+          "message": "ボディのシリアライズ方法および送信されるContent-Type"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
+          "source": "If `True`, non-2xx HTTP responses return as the normal response hash (with the actual status code) instead of raising `REST-RESPONSE-ERROR`. Useful for handling 4xx/5xx as data - e.g. checking whether a resource exists. Overrides the connection's `error_passthru` setting for this call only.",
+          "message": "`True`の場合、2xx以外のHTTPレスポンスは`REST-RESPONSE-ERROR`を発生させる代わりに（実際のステータスコードを含む）通常のレスポンスハッシュとして返されます。リソースが存在するかどうかの確認など、4xx/5xxをデータとして処理する場合に便利です。この呼び出しに限り、接続の`error_passthru`設定をオーバーライドします。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.display_name": {
+          "source": "Return Errors as Data",
+          "message": "エラーをデータとして返す"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXJyb3JfcGFzc3RocnU.short_desc": {
+          "source": "Return non-2xx responses normally instead of throwing",
+          "message": "例外をスローする代わりに2xx以外のレスポンスを通常通り返す"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.desc": {
+          "source": "Optional list of HTTP status codes treated as success. If set and the response status is not in this list, the action throws `REST-STATUS-ERROR`. When unset, the REST client's default behavior applies (typically: 2xx is success, non-2xx throws).",
+          "message": "成功として扱われるHTTPステータスコードのオプションリスト。設定されていてレスポンスステータスがこのリストに含まれない場合、アクションは`REST-STATUS-ERROR`をスローします。未設定の場合、RESTクライアントのデフォルト動作が適用されます（通常：2xxは成功、2xx以外はスロー）。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.display_name": {
+          "source": "Expected Status Codes",
+          "message": "期待されるステータスコード"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.ZXhwZWN0ZWRfc3RhdHVz.short_desc": {
+          "source": "Response status codes treated as success",
+          "message": "成功として扱われるレスポンスステータスコード"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aGRy.desc": {
+          "source": "Hash of custom headers added to the request. These override any default headers set by `body_type` (e.g. supplying `Content-Type` here wins over the body-type default).",
+          "message": "リクエストに追加されるカスタムヘッダーのハッシュ。これらは`body_type`によって設定されたデフォルトヘッダーをオーバーライドします（例：ここで`Content-Type`を指定すると、ボディタイプのデフォルトより優先されます）。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aGRy.display_name": {
+          "source": "Custom Headers",
+          "message": "カスタムヘッダー"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aGRy.short_desc": {
+          "source": "Extra request headers",
+          "message": "追加のリクエストヘッダー"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.desc": {
+          "source": "If `True`, the response hash includes a `debug` sub-hash containing the request method/URL/headers (with sensitive values redacted), request and response sizes, and round-trip duration. Useful when investigating slow or failing calls. Off by default to keep responses lean.",
+          "message": "`True`の場合、レスポンスハッシュにはリクエストメソッド/URL/ヘッダー（機密値は伏字処理済み）、リクエストとレスポンスのサイズ、およびラウンドトリップ時間を含む`debug`サブハッシュが含まれます。遅い呼び出しや失敗した呼び出しを調査する際に便利です。レスポンスを軽量に保つため、デフォルトではオフになっています。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.display_name": {
+          "source": "Include Debug Info",
+          "message": "デバッグ情報を含める"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.aW5jbHVkZV9kZWJ1Zw.short_desc": {
+          "source": "Include request/timing/size debug info in the response",
+          "message": "レスポンスにリクエスト/タイミング/サイズのデバッグ情報を含める"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.desc": {
+          "source": "HTTP `OPTIONS`",
+          "message": "HTTP `OPTIONS`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.display_name": {
+          "source": "OPTIONS",
+          "message": "OPTIONS"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOk9QVElPTlM.short_desc": {
+          "source": "HTTP OPTIONS",
+          "message": "HTTP OPTIONS"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.desc": {
+          "source": "HTTP `DELETE`",
+          "message": "HTTP `DELETE`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.display_name": {
+          "source": "DELETE",
+          "message": "DELETE"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkRFTEVURQ.short_desc": {
+          "source": "HTTP DELETE",
+          "message": "HTTP DELETE"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.desc": {
+          "source": "HTTP `GET`",
+          "message": "HTTP `GET`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.display_name": {
+          "source": "GET",
+          "message": "GET"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkdFVA.short_desc": {
+          "source": "HTTP GET",
+          "message": "HTTP GET"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.desc": {
+          "source": "HTTP `HEAD`",
+          "message": "HTTP `HEAD`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.display_name": {
+          "source": "HEAD",
+          "message": "HEAD"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOkhFQUQ.short_desc": {
+          "source": "HTTP HEAD",
+          "message": "HTTP HEAD"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.desc": {
+          "source": "HTTP `PATCH`",
+          "message": "HTTP `PATCH`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.display_name": {
+          "source": "PATCH",
+          "message": "PATCH"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBBVENI.short_desc": {
+          "source": "HTTP PATCH",
+          "message": "HTTP PATCH"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.desc": {
+          "source": "HTTP `POST`",
+          "message": "HTTP `POST`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.display_name": {
+          "source": "POST",
+          "message": "POST"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBPU1Q.short_desc": {
+          "source": "HTTP POST",
+          "message": "HTTP POST"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.desc": {
+          "source": "HTTP `PUT`",
+          "message": "HTTP `PUT`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.display_name": {
+          "source": "PUT",
+          "message": "PUT"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlBVVA.short_desc": {
+          "source": "HTTP PUT",
+          "message": "HTTP PUT"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.desc": {
+          "source": "HTTP `TRACE`",
+          "message": "HTTP `TRACE`"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.display_name": {
+          "source": "TRACE",
+          "message": "TRACE"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.allowed-value.c3RyaW5nOlRSQUNF.short_desc": {
+          "source": "HTTP TRACE",
+          "message": "HTTP TRACE"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.display_name": {
+          "source": "HTTP Method",
+          "message": "HTTPメソッド"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.bWV0aG9k.short_desc": {
+          "source": "The HTTP method to use for the request",
+          "message": "リクエストに使用するHTTPメソッド"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.desc": {
+          "source": "The URI path relative to the connection's API base URL. May contain `{name}` placeholders that are replaced from `path_vars`. Example: `/users/{id}/comments`.",
+          "message": "接続のAPIベースURLに対する相対URIパス。`path_vars`から置換される`{name}`プレースホルダーを含めることができます。例: `/users/{id}/comments`。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.display_name": {
+          "source": "URI Path",
+          "message": "URIパス"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "接続のAPIベースURLに対する相対URIパス"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
+          "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
+          "message": "URIパス内の `{name}` プレースホルダーに置換される値のハッシュ。例: `path = /users/{id}` と `path_vars = {id: 123}` を指定すると、フレームワークは `/users/123` を送信します。値はURLエンコードされます。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.display_name": {
+          "source": "Path Variables",
+          "message": "パス変数"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.short_desc": {
+          "source": "Values for {name} placeholders in path",
+          "message": "パス内の {name} プレースホルダーの値"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.desc": {
+          "source": "Hash of query string parameters to append to the URI path. Values are URL-encoded; list values are joined with `,`.",
+          "message": "URIパスに追加するクエリ文字列パラメータのハッシュ。値はURLエンコードされます。リスト値は `,` で結合されます。"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.display_name": {
+          "source": "Query Arguments",
+          "message": "クエリ引数"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.option.cXVlcnlfYXJncw.short_desc": {
+          "source": "Query string parameters",
+          "message": "クエリ文字列パラメータ"
+        },
+        "app.SW50ZXJjb20.action.bWFrZS1hcGktY2FsbA.short_desc": {
+          "source": "Make a custom API call to Intercom",
+          "message": "IntercomへのカスタムAPI呼び出しを実行"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.desc": {
+          "source": "Fires for each contact created in the workspace.\n\n`role` narrows the feed to users (a contact who has signed up) or to leads (one who has not); left unset, both are reported. The event carries the contact record Intercom returns.\n\nA contact that is edited later does **not** fire this again: the feed is positioned by `created_at`.",
+          "message": "ワークスペースでコンタクトが作成されるたびにトリガーされます。\n\n`role` により、フィードをユーザー（サインアップ済みのコンタクト）またはリード（未サインアップのコンタクト）に絞り込めます。未設定の場合は両方が通知されます。イベントにはIntercomから返されるコンタクトレコードが含まれます。\n\n後からコンタクトが編集されても、このトリガーは再発火**しません**。フィードは `created_at` に基づいて位置決めされます。"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.display_name": {
+          "source": "New Contact",
+          "message": "新規連絡先"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnRhY3Q.short_desc": {
+          "source": "Fires when a contact is created",
+          "message": "連絡先が作成されたときにトリガー"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.desc": {
+          "source": "Fires for each conversation created in the workspace.\n\nThe event carries the conversation record Intercom returns, which includes its source - who started it and what they said.\n\nA reply to an existing conversation does **not** fire this: the feed is positioned by `created_at`, so a conversation is reported once, when it starts.",
+          "message": "ワークスペースで会話が作成されるたびにトリガーされます。\n\nイベントには、開始者とその発言内容を含むソース情報など、Intercomから返される会話レコードが含まれます。\n\n既存の会話への返信ではこのトリガーは発火**しません**。フィードは `created_at` に基づいて位置決めされるため、会話は開始時に1回だけ通知されます。"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.display_name": {
+          "source": "New Conversation",
+          "message": "新規会話"
+        },
+        "app.SW50ZXJjb20.action.bmV3LWNvbnZlcnNhdGlvbg.short_desc": {
+          "source": "Fires when a conversation is created",
+          "message": "会話が作成されたときにトリガーされます"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.desc": {
+          "source": "Returns every record in the given table matching the search criteria",
+          "message": "検索条件に一致する指定テーブルのすべてのレコードを返します"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.display_name": {
+          "source": "Search Records",
+          "message": "レコードの検索"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "操作対象のテーブル: `contacts`、`conversations`、`companies`、`articles`、`collections`、`tags`、または `teammates`"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "操作対象のテーブル名"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNo.short_desc": {
+          "source": "Search for matching records in the given table",
+          "message": "指定テーブル内の一致するレコードを検索"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.desc": {
+          "source": "Returns the one record in the given table matching the search criteria; it is an error if more than one matches",
+          "message": "検索条件に一致する指定テーブルの1件のレコードを返します。複数一致した場合はエラーになります"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.display_name": {
+          "source": "Find a Single Record",
+          "message": "単一レコードの検索"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "操作対象のテーブル: `contacts`、`conversations`、`companies`、`articles`、`collections`、`tags`、または `teammates`"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "操作対象のテーブル名"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoLXNpbmdsZQ.short_desc": {
+          "source": "Search for a single matching record in the given table",
+          "message": "指定テーブル内の一致する単一レコードを検索"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.desc": {
+          "source": "Searches the workspace's conversations.\n\n`query` takes the same shape as **Search Contacts**: a single `{field, operator, value}` filter, or `{operator: \"AND\", value: [ ... ]}` combining several.\n\nTimestamps in a query are counts of seconds since the epoch.",
+          "message": "ワークスペースの会話を検索します。\n\n`query` は **Search Contacts** と同じ形式（単一の `{field, operator, value}` フィルター、または複数を組み合わせる `{operator: \"AND\", value: [ ... ]}`）をとります。\n\nクエリ内のタイムスタンプはエポックからの秒数です。"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.display_name": {
+          "source": "Search Conversations",
+          "message": "会話を検索"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.desc": {
+          "source": "If set to true, the response will include a `monitor_evaluations` array on each conversation with any QA monitor results that flagged it.",
+          "message": "true に設定すると、各会話に応答としてフラグを立てた QA モニター結果を含む `monitor_evaluations` 配列が含まれます。"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.display_name": {
+          "source": "Include Monitors",
+          "message": "モニターを含める"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9tb25pdG9ycw.short_desc": {
+          "source": "If set to true, the response will include a 'monitor_evaluations' array on…",
+          "message": "true に設定すると、各会話に応答として 'monitor_evaluations' 配列を含めます…"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.desc": {
+          "source": "If set to true, the response will include a `scorecards` array on each conversation with any QA scorecard results.",
+          "message": "true に設定すると、各会話に応答として QA スコアカード結果を含む `scorecards` 配列が含まれます。"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.display_name": {
+          "source": "Include Scorecards",
+          "message": "スコアカードを含める"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.aW5jbHVkZV9zY29yZWNhcmRz.short_desc": {
+          "source": "If set to true, the response will include a 'scorecards' array on each…",
+          "message": "true に設定すると、各会話に応答として 'scorecards' 配列を含めます…"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.c3RhcnRpbmdfYWZ0ZXI.desc": {
+          "source": "The pagination cursor: take `pages.next.starting_after` out of the previous response and pass it here.\n\nIt is opaque and must not be constructed by hand. `pages` is absent once the collection is exhausted, which is what says there is no next page.",
+          "message": "ページネーションカーソル: 前回のレスポンスから`pages.next.starting_after`を取得してここに渡します。\n\nこれは不透明な値であり、手動で構築してはいけません。コレクションをすべて取得し終えると`pages`は存在しなくなり、次のページがないことを示します。"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.c3RhcnRpbmdfYWZ0ZXI.display_name": {
+          "source": "Starting After",
+          "message": "Starting After"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.c3RhcnRpbmdfYWZ0ZXI.short_desc": {
+          "source": "The cursor for the next page",
+          "message": "次ページのカーソル"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cGVyX3BhZ2U.desc": {
+          "source": "The number of results to fetch per page.",
+          "message": "1ページあたりに取得する結果の件数。"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cGVyX3BhZ2U.display_name": {
+          "source": "Page Size",
+          "message": "ページサイズ"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cGVyX3BhZ2U.short_desc": {
+          "source": "How many records to return in one page",
+          "message": "1 ページあたりに返すレコード数"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.option.cXVlcnk.display_name": {
+          "source": "Query",
+          "message": "クエリ"
+        },
+        "app.SW50ZXJjb20.action.c2VhcmNoQ29udmVyc2F0aW9ucw.short_desc": {
+          "source": "Find conversations matching a query",
+          "message": "クエリに一致する会話を検索します"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.desc": {
+          "source": "Retrieves one help center article",
+          "message": "1 つのヘルプセンター記事を取得します"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.display_name": {
+          "source": "Get Article",
+          "message": "記事を取得"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.option.YXJ0aWNsZV9pZA.desc": {
+          "source": "The unique identifier for the article which is given by Intercom.",
+          "message": "Intercomによって割り当てられた記事の一意の識別子。"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.option.YXJ0aWNsZV9pZA.display_name": {
+          "source": "Article",
+          "message": "記事"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.option.YXJ0aWNsZV9pZA.short_desc": {
+          "source": "The article to retrieve",
+          "message": "取得する記事"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVBcnRpY2xl.short_desc": {
+          "source": "Retrieve a help center article by its identity",
+          "message": "ID でヘルプセンター記事を取得します"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.desc": {
+          "source": "Retrieves one conversation, including its parts - the messages and notes it holds",
+          "message": "保持するメッセージやノートなどのパーツを含め、1 つの会話を取得します"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.display_name": {
+          "source": "Get Conversation",
+          "message": "会話を取得"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.desc": {
+          "source": "The id of the conversation to target",
+          "message": "対象とする会話の ID"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.display_name": {
+          "source": "Conversation",
+          "message": "会話"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.short_desc": {
+          "source": "The conversation this applies to",
+          "message": "適用対象の会話"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.desc": {
+          "source": "Set to plaintext to retrieve conversation messages in plain text. This affects both the body and subject fields. Inline links are rendered as `label (url)`, preserving the link URL alongside the visible text.",
+          "message": "会話メッセージをプレーンテキストで取得するには plaintext に設定します。これは body フィールドと subject フィールドの両方に影響します。インラインリンクは `label (url)` としてレンダリングされ、表示テキストと並んでリンク URL も保持されます。"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.display_name": {
+          "source": "Display As",
+          "message": "表示形式"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.ZGlzcGxheV9hcw.short_desc": {
+          "source": "Set to plaintext to retrieve conversation messages in plain text",
+          "message": "会話メッセージをプレーンテキストで取得するには plaintext を設定します"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.desc": {
+          "source": "If set to true, conversation parts will be translated to the detected language of the conversation.",
+          "message": "true に設定すると、会話パーツが会話の検出言語に翻訳されます。"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.display_name": {
+          "source": "Include Translations",
+          "message": "翻訳を含める"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.option.aW5jbHVkZV90cmFuc2xhdGlvbnM.short_desc": {
+          "source": "If set to true, conversation parts will be translated to the detected language…",
+          "message": "true に設定すると、会話パーツが会話の検出言語に翻訳されます…"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb252ZXJzYXRpb24.short_desc": {
+          "source": "Retrieve a conversation by its identity",
+          "message": "ID で会話を取得します"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.desc": {
+          "source": "Retrieves one help center collection.\n\nWhat used to be a **section** is now a collection with a parent, which is how Intercom has represented them since API version 2.10.",
+          "message": "1 つのヘルプセンターコレクションを取得します。\n\nかつて **section** だったものは、API バージョン 2.10 以降の Intercom の表現仕様に従い、親を持つコレクションになっています。"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.display_name": {
+          "source": "Get Collection",
+          "message": "コレクションを取得"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.option.Y29sbGVjdGlvbl9pZA.desc": {
+          "source": "The unique identifier for the collection which is given by Intercom.",
+          "message": "Intercom から付与されるコレクションの一意の識別子。"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.option.Y29sbGVjdGlvbl9pZA.display_name": {
+          "source": "Collection",
+          "message": "コレクション"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.option.Y29sbGVjdGlvbl9pZA.short_desc": {
+          "source": "The collection to retrieve",
+          "message": "取得するコレクション"
+        },
+        "app.SW50ZXJjb20.action.cmV0cmlldmVDb2xsZWN0aW9u.short_desc": {
+          "source": "Retrieve a help center collection by its identity",
+          "message": "ID でヘルプセンターコレクションを取得します"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.desc": {
+          "source": "Adds a reply to an existing conversation, from a teammate.\n\n`message_type` decides who sees it: `comment` is a reply the contact sees and is notified about, `note` is an internal remark only teammates see, and `quick_reply` offers the contact a set of `reply_options` to choose from.\n\nUse **Create Conversation** to start one, and **Create Message** to write to a contact without an existing conversation.\n\nThis action is hand-written rather than generated, because Intercom's own description declares this operation's body as a union of five request contracts, which cannot be published as one option shape. It covers a teammate's reply, which is the branch Intercom declares in full; a reply attributed to the contact is reachable through `make-api-call`.",
+          "message": "チームメイトから既存の会話に返信を追加します。\n\n`message_type` で誰に表示されるかを決定します。`comment` は連絡先に表示され通知される返信、`note` はチームメイトのみに表示される内部メモ、`quick_reply` は連絡先に選択肢として `reply_options` のセットを提示します。\n\n新しく会話を始めるには **Create Conversation** を、既存の会話なしで連絡先にメッセージを送信するには **Create Message** を使用してください。\n\nこのアクションは、Intercom 自身の仕様記述でこの操作のボディが 5 つのリクエストコントラクトのユニオンとして宣言されており 1 つのオプション形状として公開できないため、自動生成ではなく手動で作成されています。これは Intercom が完全に宣言しているブランチであるチームメイトの返信をカバーしています。連絡先に帰属する返信には `make-api-call` 経由でアクセスできます。"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.display_name": {
+          "source": "Reply to Conversation",
+          "message": "会話に返信"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.desc": {
+          "source": "The conversation to reply to",
+          "message": "返信する会話"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.display_name": {
+          "source": "Conversation",
+          "message": "会話"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y29udmVyc2F0aW9uX2lk.short_desc": {
+          "source": "The conversation to reply to",
+          "message": "返信する会話"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y3JlYXRlZF9hdA.desc": {
+          "source": "When the reply was written, if it is being recorded after the fact.\n\nSent to Intercom as a count of seconds since the epoch; Intercom uses the current time when this is not set.",
+          "message": "事後記録する場合の、返信が作成された日時。\n\nエポックからの秒数として Intercom に送信されます。未設定の場合、Intercom は現在時刻を使用します。"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y3JlYXRlZF9hdA.display_name": {
+          "source": "Created At",
+          "message": "作成日時"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Y3JlYXRlZF9hdA.short_desc": {
+          "source": "When the reply was written",
+          "message": "返信が作成された日時"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YWRtaW5faWQ.desc": {
+          "source": "The teammate the reply is attributed to",
+          "message": "返信の作成者として帰属するチームメイト"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YWRtaW5faWQ.display_name": {
+          "source": "Teammate",
+          "message": "チームメイト"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YWRtaW5faWQ.short_desc": {
+          "source": "The teammate the reply is from",
+          "message": "返信元のチームメイト"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YXR0YWNobWVudF91cmxz.desc": {
+          "source": "The URLs of files to attach to the reply; Intercom accepts up to five",
+          "message": "返信に添付するファイルの URL（Intercom は最大 5 件まで受け付けます）"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YXR0YWNobWVudF91cmxz.display_name": {
+          "source": "Attachment URLs",
+          "message": "添付ファイル URL"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.YXR0YWNobWVudF91cmxz.short_desc": {
+          "source": "URLs of files to attach, up to five",
+          "message": "添付するファイルの URL（最大 5 つ）"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Ym9keQ.desc": {
+          "source": "The text of the reply, in HTML.\n\nIntercom does not require it for a `quick_reply`, which carries its content in `reply_options` instead.",
+          "message": "HTML 形式の返信本文。\n\n`quick_reply` の場合、コンテンツは代わりに `reply_options` に保持されるため、Intercom は本文を必須としません。"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Ym9keQ.display_name": {
+          "source": "Message",
+          "message": "メッセージ"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.Ym9keQ.short_desc": {
+          "source": "The text of the reply, in HTML",
+          "message": "HTML 形式の返信テキスト"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.bWVzc2FnZV90eXBl.desc": {
+          "source": "Whether the reply is seen by the contact.\n\n`comment` is a reply the contact sees and is notified about, `note` is an internal remark only teammates see, and `quick_reply` offers the contact the choices in `reply_options`.\n\nA `note` here is attached to the **conversation**; **Create Note** attaches one to the contact's record instead.",
+          "message": "返信が連絡先に表示されるかどうか。\n\n`comment` は連絡先に表示され通知される返信、`note` はチームメイトのみに表示される内部メモ、`quick_reply` は連絡先に `reply_options` 内の選択肢を提示します。\n\nここでの `note` は**会話**に添付されます。**Create Note** では代わりに連絡先のレコードに添付されます。"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.bWVzc2FnZV90eXBl.display_name": {
+          "source": "Message Type",
+          "message": "メッセージタイプ"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.bWVzc2FnZV90eXBl.short_desc": {
+          "source": "Whether the reply is seen by the contact",
+          "message": "連絡先に返信が表示されるかどうか"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.c2tpcF9ub3RpZmljYXRpb25z.desc": {
+          "source": "Add the reply without notifying the contact about it",
+          "message": "連絡先に通知せずに返信を追加します"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.c2tpcF9ub3RpZmljYXRpb25z.display_name": {
+          "source": "Skip Notifications",
+          "message": "通知をスキップ"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.c2tpcF9ub3RpZmljYXRpb25z.short_desc": {
+          "source": "Do not notify the contact about this reply",
+          "message": "この返信について連絡先に通知しません"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.cmVwbHlfb3B0aW9ucw.desc": {
+          "source": "The choices offered by a `quick_reply`, each `{text, uuid}`.\n\nOnly meaningful when `message_type` is `quick_reply`.",
+          "message": "`quick_reply` によって提示される選択肢（それぞれ `{text, uuid}`）。\n\n`message_type` が `quick_reply` の場合にのみ有効です。"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.cmVwbHlfb3B0aW9ucw.display_name": {
+          "source": "Reply Options",
+          "message": "返信の選択肢"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.option.cmVwbHlfb3B0aW9ucw.short_desc": {
+          "source": "The choices offered by a quick reply",
+          "message": "クイック返信によって提示される選択肢"
+        },
+        "app.SW50ZXJjb20.action.cmVwbHlDb252ZXJzYXRpb24.short_desc": {
+          "source": "Reply to a conversation as a teammate",
+          "message": "チームメイトとして会話に返信します"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.desc": {
+          "source": "Updates every record in the given table matching the search criteria",
+          "message": "指定されたテーブル内で検索条件に一致するすべてのレコードを更新します"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.display_name": {
+          "source": "Update Records",
+          "message": "レコードを更新"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.option.dGFibGU.desc": {
+          "source": "The table to work with: `contacts`, `conversations`, `companies`, `articles`, `collections`, `tags` or `teammates`",
+          "message": "操作対象のテーブル: `contacts`、`conversations`、`companies`、`articles`、`collections`、`tags`、または `teammates`"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.option.dGFibGU.display_name": {
+          "source": "Table",
+          "message": "表"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.option.dGFibGU.short_desc": {
+          "source": "The name of the table to work with",
+          "message": "操作対象のテーブル名"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRl.short_desc": {
+          "source": "Update the records matching the search criteria",
+          "message": "検索条件に一致するレコードを更新"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.desc": {
+          "source": "Updates a help center article that already exists.\n\nOnly the attributes supplied are changed. An article's parent can only be a **collection**: Intercom withdrew sections at API version 2.10.",
+          "message": "既存のヘルプセンター記事を更新します。\n\n指定された属性のみが変更されます。記事の親は**コレクション**のみ指定できます。Intercom は API バージョン 2.10 でセクションを廃止しました。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.display_name": {
+          "source": "Update Article",
+          "message": "記事を更新"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.desc": {
+          "source": "Whether the article should be available for AI Copilot. For multilingual articles, this sets the default language's availability.",
+          "message": "記事をAI Copilotで利用可能にするかどうか。多言語記事の場合、デフォルト言語の利用可否が設定されます。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.display_name": {
+          "source": "AI Copilot Availability",
+          "message": "AI Copilotの利用可否"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY29waWxvdF9hdmFpbGFiaWxpdHk.short_desc": {
+          "source": "Whether the article should be available for AI Copilot",
+          "message": "記事をAI Copilotで利用可能にするかどうか"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.desc": {
+          "source": "Whether the article should be available for AI Chatbot (Fin). For multilingual articles, this sets the default language's availability.",
+          "message": "記事をAIチャットボット (Fin) で利用可能にするかどうか。多言語記事の場合、デフォルト言語の利用可否が設定されます。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.display_name": {
+          "source": "AI Chatbot Availability",
+          "message": "AIチャットボットの利用可否"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfY2hhdGJvdF9hdmFpbGFiaWxpdHk.short_desc": {
+          "source": "Whether the article should be available for AI Chatbot (Fin)",
+          "message": "記事をAIチャットボット (Fin) で利用可能にするかどうか"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.desc": {
+          "source": "Whether the article should be available for AI Sales Agent. For multilingual articles, this sets the default language's availability.",
+          "message": "記事をAIセールスエージェントで利用可能にするかどうか。多言語記事の場合、デフォルト言語の利用可否が設定されます。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.display_name": {
+          "source": "AI Sales Agent Availability",
+          "message": "AIセールスエージェントの利用可否"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YWlfc2FsZXNfYWdlbnRfYXZhaWxhYmlsaXR5.short_desc": {
+          "source": "Whether the article should be available for AI Sales Agent",
+          "message": "記事をAIセールスエージェントで利用可能にするかどうか"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.desc": {
+          "source": "The unique identifier for the article which is given by Intercom.",
+          "message": "Intercomによって割り当てられた記事の一意の識別子。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.display_name": {
+          "source": "Article",
+          "message": "記事"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXJ0aWNsZV9pZA.short_desc": {
+          "source": "The article to update",
+          "message": "更新する記事"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.desc": {
+          "source": "The id of the author of the article. For multilingual articles, this will be the id of the author of the default language's content. Must be a teammate on the help center's workspace.",
+          "message": "記事の作成者のID。多言語記事の場合、デフォルト言語のコンテンツの作成者IDになります。ヘルプセンターのワークスペース上のチームメイトである必要があります。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.display_name": {
+          "source": "Teammate",
+          "message": "チームメイト"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXV0aG9yX2lk.short_desc": {
+          "source": "The teammate to act as",
+          "message": "代理実行するチームメイト"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.desc": {
+          "source": "The list of audience IDs to assign to this article for Fin AI Agent targeting. Sending a top-level `audience_ids` broadcasts the same set to every locale. Sending `audience_ids: []` clears all audience memberships from every locale. For per-locale targeting, use `translated_content.<locale>.audience_ids` instead. Sending both top-level and per-locale in the same request causes top-level to win. Unknown audience IDs return a 404 error. No partial commit occurs.",
+          "message": "Fin AI Agent のターゲティング用にこの記事に割り当てるオーディエンス ID のリスト。トップレベルの `audience_ids` を送信すると、すべてのロケールに同じセットが配信されます。`audience_ids: []` を送信すると、すべてのロケールからすべてのオーディエンスメンバーシップがクリアされます。ロケールごとのターゲティングを行うには、代わりに `translated_content.<locale>.audience_ids` を使用してください。同じリクエストでトップレベルとロケールごとの両方を送信すると、トップレベルが優先されます。不明なオーディエンス ID を指定すると 404 エラーが返されます。一部のみのコミットは行われません。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.display_name": {
+          "source": "Audience Ids",
+          "message": "オーディエンスID"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.YXVkaWVuY2VfaWRz.short_desc": {
+          "source": "The list of audience IDs to assign to this article for Fin AI Agent targeting",
+          "message": "Fin AI Agentのターゲティング用にこの記事に割り当てるオーディエンスIDのリスト"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keQ.desc": {
+          "source": "The content of the article in HTML. For multilingual articles, this will be the body of the default language's content. Mutually exclusive with `body_markdown`.",
+          "message": "HTML形式の記事本文。多言語記事の場合、デフォルト言語のコンテンツ本文になります。`body_markdown` とは排他です。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keQ.display_name": {
+          "source": "Body",
+          "message": "ボディ"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keQ.short_desc": {
+          "source": "The content of the article in HTML",
+          "message": "HTML 形式の記事のコンテンツ"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.desc": {
+          "source": "The content of the article in markdown. For multilingual articles, this will be the body of the default language's content. An alternative to `body` — you can provide content as markdown instead of HTML. Mutually exclusive with `body`.",
+          "message": "Markdown形式の記事本文。多言語記事の場合、デフォルト言語のコンテンツ本文になります。`body` の代替手段であり、HTMLの代わりにMarkdownとしてコンテンツを提供できます。`body` とは排他です。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.display_name": {
+          "source": "Body Markdown",
+          "message": "Markdown本文"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.Ym9keV9tYXJrZG93bg.short_desc": {
+          "source": "The content of the article in markdown",
+          "message": "Markdown形式の記事本文"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.desc": {
+          "source": "The description of the article. For multilingual articles, this will be the description of the default language's content.",
+          "message": "記事の説明。多言語記事の場合、デフォルト言語のコンテンツの説明になります。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.display_name": {
+          "source": "Description",
+          "message": "説明"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.ZGVzY3JpcHRpb24.short_desc": {
+          "source": "The description of the article",
+          "message": "記事の説明"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future publish of the article. When set together with `state: \"published\"`, the article is scheduled instead of published immediately. Setting `null` cancels a pending publish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Combining with `state: \"draft\"` returns 400 `parameter_invalid`. Sending in the same request as `scheduled_unpublish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`.",
+          "message": "記事の将来の公開をスケジュールするISO 8601タイムスタンプ。`state: \"published\"` と一緒に設定すると、即時公開される代わりに記事の公開がスケジュールされます。`null` を設定すると、保留中の公開スケジュールがキャンセルされます。過去または現在時刻と等しいタイムスタンプは400 `parameter_invalid` で拒否されます。値は厳密に未来である必要があります。`state: \"draft\"` と組み合わせると400 `parameter_invalid` が返されます。`scheduled_unpublish_at` と同じリクエストで送信すると400が返されます (記事ごとに設定できる保留中のスケジュールは1件のみです)。空文字列は400 `parameter_invalid` を返します。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.display_name": {
+          "source": "Scheduled Publish At",
+          "message": "公開予定日時"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3B1Ymxpc2hfYXQ.short_desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future publish of the article",
+          "message": "記事の将来の公開をスケジュール設定するISO 8601形式のタイムスタンプ"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future unpublish of the article. Setting `null` cancels a pending unpublish schedule. Timestamps in the past or equal to the current time are rejected with 400 `parameter_invalid` — the value must be strictly in the future. Rejected with 400 `parameter_invalid` if the article has never been published. Sending in the same request as `scheduled_publish_at` returns 400 — only one pending schedule per article. Empty string returns 400 `parameter_invalid`.",
+          "message": "記事の将来の非公開化をスケジュール設定するISO 8601形式のタイムスタンプ。`null` を設定すると保留中の非公開スケジュールがキャンセルされます。過去または現在時刻と等しいタイムスタンプは 400 `parameter_invalid` で拒否されます。値は厳密に未来である必要があります。記事が一度も公開されていない場合は 400 `parameter_invalid` で拒否されます。`scheduled_publish_at` と同じリクエストで送信すると400が返されます（記事ごとに保留できるスケジュールは1つのみ）。空文字列は 400 `parameter_invalid` を返します。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.display_name": {
+          "source": "Scheduled Unpublish At",
+          "message": "非公開予定日時"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c2NoZWR1bGVkX3VucHVibGlzaF9hdA.short_desc": {
+          "source": "ISO 8601 timestamp at which to schedule a future unpublish of the article",
+          "message": "記事の将来の非公開化をスケジュール設定するISO 8601形式のタイムスタンプ"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.allowed-value.c3RyaW5nOmRyYWZ0.display_name": {
+          "source": "draft",
+          "message": "ドラフト"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.allowed-value.c3RyaW5nOnB1Ymxpc2hlZA.display_name": {
+          "source": "published",
+          "message": "published"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.desc": {
+          "source": "Whether the article will be `published` or will be a `draft`. Defaults to draft. For multilingual articles, this will be the state of the default language's content.",
+          "message": "記事を `published` にするか `draft` にするか。デフォルトはドラフトです。多言語記事の場合、これはデフォルト言語のコンテンツの状態になります。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.display_name": {
+          "source": "State",
+          "message": "都道府県・州"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.c3RhdGU.short_desc": {
+          "source": "Whether the article will be 'published' or will be a 'draft'",
+          "message": "記事を「published」にするか「draft」にするか"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.desc": {
+          "source": "The id of the article's parent collection or section. An article without this field stands alone.",
+          "message": "記事の親コレクションまたはセクションのID。このフィールドがない記事は単独で存在します。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.display_name": {
+          "source": "Parent ID",
+          "message": "親ID"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X2lk.short_desc": {
+          "source": "The id of the article's parent collection or section",
+          "message": "記事の親コレクションまたはセクションの ID"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.desc": {
+          "source": "The type of parent, which can either be a `collection` or `section`.",
+          "message": "親のタイプ（`collection` または `section` のいずれか）。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.display_name": {
+          "source": "Parent Type",
+          "message": "親タイプ"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.cGFyZW50X3R5cGU.short_desc": {
+          "source": "The type of parent, which can either be a 'collection' or 'section'",
+          "message": "親のタイプ（'collection' または 'section'）"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dGl0bGU.desc": {
+          "source": "The title of the article.For multilingual articles, this will be the title of the default language's content.",
+          "message": "記事のタイトル。多言語記事の場合、これはデフォルト言語のコンテンツのタイトルになります。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dGl0bGU.display_name": {
+          "source": "Title",
+          "message": "タイトル"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dGl0bGU.short_desc": {
+          "source": "The title of the article.For multilingual articles, this will be the title of…",
+          "message": "記事のタイトル。多言語記事の場合、これはデフォルト言語のタイトルになります…"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.desc": {
+          "source": "The Translated Content of an Article. The keys are the locale codes and the values are the translated content of the article.",
+          "message": "記事の翻訳コンテンツ。キーはロケールコード、値は記事の翻訳コンテンツです。"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.display_name": {
+          "source": "Translated Content",
+          "message": "翻訳コンテンツ"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.option.dHJhbnNsYXRlZF9jb250ZW50.short_desc": {
+          "source": "The Translated Content of an Article",
+          "message": "記事の翻訳コンテンツ"
+        },
+        "app.SW50ZXJjb20.action.dXBkYXRlQXJ0aWNsZQ.short_desc": {
+          "source": "Update an existing help center article",
+          "message": "既存のヘルプセンター記事を更新します"
+        },
+        "app.SW50ZXJjb20.desc": {
+          "source": "Provides access to [Intercom](https://www.intercom.com), the customer communications platform.\n\nIntercom holds the people who use your product - **contacts**, either `user`s who have signed up or `lead`s who have not - the **companies** they belong to, and the **conversations** you have had with them, alongside a help center of **articles**.\n\n**Common use cases**:\n- **Contacts**: find contacts, note what you know about them, and tag them\n- **Companies**: create and update companies from your own system's records\n- **Conversations**: start one, search them, and reply as a teammate\n- **Messaging**: send a contact an e-mail or an in-app message from a teammate\n- **Data events**: record what a contact did, and read a contact's event summary\n- **Help center**: list and write articles\n\nAuthentication is the OAuth2 authorization code flow. Intercom asks for no scopes: what an access token may do is set by the permissions granted to the app in Intercom's own developer hub.\n\nIntercom is a trademark of Intercom, Inc.",
+          "message": "カスタマーコミュニケーションプラットフォームである [Intercom](https://www.intercom.com) へのアクセスを提供します。\n\nIntercom は、製品を利用するユーザーである**連絡先**（サインアップ済みの `user` または未サインアップの `lead`）、ユーザーが所属する**会社**、およびユーザーとの**会話**を、**記事**のヘルプセンターと共に保持します。\n\n**一般的なユースケース**:\n- **連絡先**: 連絡先を検索し、既知の情報をメモし、タグ付けします\n- **会社**: 自社システムのレコードから会社を作成および更新します\n- **会話**: 会話を開始し、検索し、チームメイトとして返信します\n- **メッセージング**: チームメイトから連絡先にメールやアプリ内メッセージを送信します\n- **データイベント**: 連絡先のアクションを記録し、連絡先のイベントサマリーを確認します\n- **ヘルプセンター**: 記事を一覧表示および作成します\n\n認証は OAuth2 認可コードフローです。Intercom はスコープを要求しません。アクセストークンで実行可能な操作は、Intercom 独自の開発者ハブでアプリに付与された権限によって設定されます。\n\nIntercom は Intercom, Inc. の商標です。"
+        },
+        "app.SW50ZXJjb20.display_name": {
+          "source": "Intercom",
+          "message": "Intercom"
+        },
+        "app.SW50ZXJjb20.short_desc": {
+          "source": "Talk to your customers and keep what you know about them in one place",
+          "message": "顧客と対話し、その情報を一元管理します"
+        }
+      }
     }
   }
 }

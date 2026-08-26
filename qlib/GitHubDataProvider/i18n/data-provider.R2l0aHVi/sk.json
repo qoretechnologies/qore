@@ -895,6 +895,10 @@
           "source": "Milestone",
           "message": "Milestone"
         },
+        "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.option.bWlsZXN0b25l.short_desc": {
+          "source": "If an 'integer' is passed, it should refer to a milestone by its 'number' field",
+          "message": "Ak sa odovzdá 'integer', mal by odkazovať na míľnik pomocou poľa 'number'"
+        },
         "app.R2l0aHVi.action.aXNzdWVzLWxpc3QtZm9yLXJlcG8.option.c29ydA.allowed-value.c3RyaW5nOmNvbW1lbnRz.display_name": {
           "source": "comments",
           "message": "comments"
@@ -1170,6 +1174,10 @@
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.display_name": {
           "source": "Duplicate Issue ID",
           "message": "ID duplicitnej issue"
+        },
+        "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.ZHVwbGljYXRlX2lzc3VlX2lk.short_desc": {
+          "source": "The ID of the issue to mark as the canonical duplicate when 'state_reason' is…",
+          "message": "ID issue, ktoré sa má označiť ako kánonický duplikát, keď je 'state_reason'…"
         },
         "app.R2l0aHVi.action.aXNzdWVzLXVwZGF0ZQ.option.aXNzdWVfZmllbGRfdmFsdWVz.desc": {
           "source": "An array of issue field values to set on this issue. Each field value must include the field ID and the value to set. Only users with push access can set field values for issues",
@@ -1735,6 +1743,10 @@
           "source": "URI Path",
           "message": "Cesta URI"
         },
+        "app.R2l0aHVi.action.bWFrZS1hcGktY2FsbA.option.cGF0aA.short_desc": {
+          "source": "The URI path relative to the connection's API base URL",
+          "message": "Cesta URI relatívna k základnej adrese API URL pripojenia"
+        },
         "app.R2l0aHVi.action.bWFrZS1hcGktY2FsbA.option.cGF0aF92YXJz.desc": {
           "source": "Hash of values substituted into `{name}` placeholders in the URI path. Example: with `path = /users/{id}` and `path_vars = {id: 123}` the framework sends `/users/123`. Values are URL-encoded.",
           "message": "Hash hodnôt nahradených do zastupiteľných objektov `{name}` v ceste URI. Príklad: s `path = /users/{id}` a `path_vars = {id: 123}` rozhranie odosiela `/users/123`. Hodnoty sú zakódované v URL."
@@ -1907,6 +1919,10 @@
           "source": "Order",
           "message": "Poradie"
         },
+        "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.b3JkZXI.short_desc": {
+          "source": "Determines whether the first search result returned is the highest number of…",
+          "message": "Určuje, či je prvý vrátený výsledok vyhľadávania s najvyšším počtom…"
+        },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c29ydA.allowed-value.c3RyaW5nOmNvbW1lbnRz.display_name": {
           "source": "comments",
           "message": "comments"
@@ -1958,6 +1974,10 @@
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "Zoradiť"
+        },
+        "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c29ydA.short_desc": {
+          "source": "Sorts the results of your query by the number of 'comments', 'reactions',…",
+          "message": "Zoradí výsledky dopytu podľa počtu 'comments', 'reactions',…"
         },
         "app.R2l0aHVi.action.c2VhcmNoLWlzc3Vlcy1hbmQtcHVsbC1yZXF1ZXN0cw.option.c2VhcmNoX3R5cGU.allowed-value.c3RyaW5nOmh5YnJpZA.display_name": {
           "source": "hybrid",
@@ -2043,6 +2063,10 @@
           "source": "Order",
           "message": "Poradie"
         },
+        "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.b3JkZXI.short_desc": {
+          "source": "Determines whether the first search result returned is the highest number of…",
+          "message": "Určuje, či je prvý vrátený výsledok vyhľadávania s najvyšším počtom…"
+        },
         "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.c29ydA.allowed-value.c3RyaW5nOmZvcmtz.display_name": {
           "source": "forks",
           "message": "forks"
@@ -2066,6 +2090,10 @@
         "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.c29ydA.display_name": {
           "source": "Sort",
           "message": "Zoradiť"
+        },
+        "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.c29ydA.short_desc": {
+          "source": "Sorts the results of your query by number of 'stars', 'forks', or…",
+          "message": "Zoradí výsledky dopytu podľa počtu 'stars', 'forks' alebo…"
         },
         "app.R2l0aHVi.action.c2VhcmNoLXJlcG9z.option.cGFnZQ.desc": {
           "source": "The page number of the results to fetch. For more information, see \"[Using pagination in the REST API](https://docs.github.com/rest/using-the-rest-api/using-pagination-in-the-rest-api).\"",
@@ -2230,6 +2258,10 @@
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.display_name": {
           "source": "Maintainer Can Modify",
           "message": "Správca môže upravovať"
+        },
+        "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.short_desc": {
+          "source": "Indicates whether…",
+          "message": "Určuje, či…"
         },
         "app.R2l0aHVi.action.cHVsbHMtY3JlYXRl.option.cmVwbw.desc": {
           "source": "The repository name on its own, **not** `owner/name`.\n\nFor `qoretechnologies/qorus` this is `qorus`.",
@@ -2707,6 +2739,10 @@
           "source": "Maintainer Can Modify",
           "message": "Správca môže upravovať"
         },
+        "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.option.bWFpbnRhaW5lcl9jYW5fbW9kaWZ5.short_desc": {
+          "source": "Indicates whether…",
+          "message": "Určuje, či…"
+        },
         "app.R2l0aHVi.action.cHVsbHMtdXBkYXRl.option.c3RhdGU.allowed-value.c3RyaW5nOm9wZW4.display_name": {
           "source": "open",
           "message": "open"
@@ -2963,6 +2999,10 @@
           "source": "Gitignore Template",
           "message": "Šablóna Gitignore"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.Z2l0aWdub3JlX3RlbXBsYXRl.short_desc": {
+          "source": "The desired language or platform to apply to the .gitignore",
+          "message": "Požadovaný jazyk alebo platforma, ktoré sa majú použiť pre .gitignore"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.desc": {
           "source": "Whether to delete head branches when pull requests are merged",
           "message": "Či odstrániť head vetvy po zlúčení pull requestov"
@@ -3066,6 +3106,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aXNfdGVtcGxhdGU.display_name": {
           "source": "Is Template",
           "message": "Je šablóna"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.aXNfdGVtcGxhdGU.short_desc": {
+          "source": "Whether this repository acts as a template that can be used to generate new…",
+          "message": "Určuje, či toto úložisko slúži ako šablóna na generovanie nových…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWZvci1hdXRoZW50aWNhdGVkLXVzZXI.option.bGljZW5zZV90ZW1wbGF0ZQ.desc": {
           "source": "The license keyword of the open source license for this repository.",
@@ -3235,6 +3279,10 @@
           "source": "Allow Auto Merge",
           "message": "Povoliť Auto Merge"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfYXV0b19tZXJnZQ.short_desc": {
+          "source": "Either 'true' to allow auto-merge on pull requests, or 'false' to disallow…",
+          "message": "Buď 'true' na povolenie auto-merge pri pull requestoch, alebo 'false' na…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfbWVyZ2VfY29tbWl0.desc": {
           "source": "Either `true` to allow merging pull requests with a merge commit, or `false` to prevent merging pull requests with merge commits.",
           "message": "Buď `true` na povolenie zlučovania pull requestov pomocou merge commitu, alebo `false` na zabránenie zlučovaniu pull requestov pomocou merge commitov."
@@ -3242,6 +3290,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfbWVyZ2VfY29tbWl0.display_name": {
           "source": "Allow Merge Commit",
           "message": "Povoliť Merge Commit"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfbWVyZ2VfY29tbWl0.short_desc": {
+          "source": "Either 'true' to allow merging pull requests with a merge commit, or 'false'…",
+          "message": "Buď 'true' na povolenie zlučovania PR pomocou merge commitu, alebo 'false'…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfc3F1YXNoX21lcmdl.desc": {
           "source": "Either `true` to allow squash-merging pull requests, or `false` to prevent squash-merging.",
@@ -3251,6 +3303,10 @@
           "source": "Allow Squash Merge",
           "message": "Povoliť Squash Merge"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfc3F1YXNoX21lcmdl.short_desc": {
+          "source": "Either 'true' to allow squash-merging pull requests, or 'false' to prevent…",
+          "message": "Buď 'true' na povolenie squash-merge pre pull requesty, alebo 'false' na…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfcmViYXNlX21lcmdl.desc": {
           "source": "Either `true` to allow rebase-merging pull requests, or `false` to prevent rebase-merging.",
           "message": "Buď `true` na povolenie rebase zlučovania pull requestov, alebo `false` na zabránenie rebase zlučovaniu."
@@ -3258,6 +3314,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfcmViYXNlX21lcmdl.display_name": {
           "source": "Allow Rebase Merge",
           "message": "Povoliť Rebase Merge"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YWxsb3dfcmViYXNlX21lcmdl.short_desc": {
+          "source": "Either 'true' to allow rebase-merging pull requests, or 'false' to prevent…",
+          "message": "Buď 'true' na povolenie rebase-merge pre pull requesty, alebo 'false' na…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.YXV0b19pbml0.desc": {
           "source": "Pass `true` to create an initial commit with empty README.",
@@ -3279,6 +3339,10 @@
           "source": "Gitignore Template",
           "message": "Šablóna Gitignore"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.Z2l0aWdub3JlX3RlbXBsYXRl.short_desc": {
+          "source": "Desired language or platform…",
+          "message": "Požadovaný jazyk alebo platforma…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.desc": {
           "source": "Either `true` to allow automatically deleting head branches when pull requests are merged, or `false` to prevent automatic deletion. **The authenticated user must be an organization owner to set this property to `true`.**",
           "message": "Buď `true` na povolenie automatického odstraňovania vetiev head po zlúčení pull requestov, alebo `false` na zabránenie automatickému odstraňovaniu. **Autentifikovaný používateľ musí byť vlastníkom organizácie, aby mohol túto vlastnosť nastaviť na `true`.**"
@@ -3286,6 +3350,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
           "source": "Delete Branch on Merge",
           "message": "Odstrániť vetvu pri zlúčení"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
+          "source": "Either 'true' to allow automatically deleting head branches when pull requests…",
+          "message": "Buď 'true' na povolenie automatického mazania head vetiev po zlúčení PR…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.ZGVzY3JpcHRpb24.desc": {
           "source": "A short description of the repository.",
@@ -3333,7 +3401,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX2lzc3Vlcw.short_desc": {
           "source": "Either 'true' to enable issues for this repository or 'false' to disable them",
-          "message": "Buď 'true' na povolenie issues pre tento repozitár, alebo 'false' na ich zakázanie"
+          "message": "Buď 'true' na povolenie issues pre toto úložisko alebo 'false' na ich zákaz"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3Byb2plY3Rz.desc": {
           "source": "Either `true` to enable projects for this repository or `false` to disable them. **Note:** If you're creating a repository in an organization that has disabled repository projects, the default is `false`, and if you pass `true`, the API returns an error.",
@@ -3342,6 +3410,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3Byb2plY3Rz.display_name": {
           "source": "Has Projects",
           "message": "Má projekty"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3Byb2plY3Rz.short_desc": {
+          "source": "Either 'true' to enable projects for this repository or 'false' to disable them",
+          "message": "Buď 'true' na povolenie projektov pre toto úložisko alebo 'false' na ich zákaz"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aGFzX3dpa2k.desc": {
           "source": "Either `true` to enable the wiki for this repository or `false` to disable it.",
@@ -3363,6 +3435,10 @@
           "source": "Is Template",
           "message": "Je šablóna"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.aXNfdGVtcGxhdGU.short_desc": {
+          "source": "Either 'true' to make this repo available as a template repository or 'false'…",
+          "message": "Buď 'true' na sprístupnenie tohto úložiska ako šablóny, alebo 'false'…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.b3Jn.desc": {
           "source": "The organization name. The name is not case sensitive.",
           "message": "Názov organizácie. Názov nerozlišuje malé a veľké písmená."
@@ -3382,6 +3458,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bGljZW5zZV90ZW1wbGF0ZQ.display_name": {
           "source": "License Template",
           "message": "Šablóna licencie"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bGljZW5zZV90ZW1wbGF0ZQ.short_desc": {
+          "source": "Choose an [open source license template](https://choosealicense.com/) that…",
+          "message": "Vyberte [šablónu open source licencie](https://choosealicense.com/), ktorá…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.bWVyZ2VfY29tbWl0X21lc3NhZ2U.allowed-value.c3RyaW5nOkJMQU5L.display_name": {
           "source": "BLANK",
@@ -3515,6 +3595,10 @@
           "source": "Use Squash PR Title as Default",
           "message": "Použiť názov PR squash zlúčenia ako predvolený"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.short_desc": {
+          "source": "Either 'true' to allow squash-merge commits to use pull request title, or…",
+          "message": "Buď 'true' na použitie názvu PR pre squash-merge commity, alebo…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLWluLW9yZw.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
           "source": "public",
           "message": "public"
@@ -3579,6 +3663,10 @@
           "source": "Discussion Category Name",
           "message": "Názov kategórie diskusie"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZGlzY3Vzc2lvbl9jYXRlZ29yeV9uYW1l.short_desc": {
+          "source": "If specified, a discussion of the specified category is created and linked to…",
+          "message": "Ak je zadané, vytvorí sa diskusia v zadanej kategórii a prepojí sa s…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZHJhZnQ.desc": {
           "source": "`true` to create a draft (unpublished) release, `false` to create a published one.",
           "message": "`true` na vytvorenie konceptu (nepublikovaného) vydania, `false` na vytvorenie publikovaného vydania."
@@ -3586,6 +3674,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZHJhZnQ.display_name": {
           "source": "Draft",
           "message": "Koncept"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.ZHJhZnQ.short_desc": {
+          "source": "'true' to create a draft (unpublished) release, 'false' to create a published…",
+          "message": "'true' na vytvorenie konceptu (nepublikovaného) vydania, 'false' na publikované…"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.b3duZXI.desc": {
           "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
@@ -3619,6 +3711,10 @@
           "source": "Make Latest",
           "message": "Nastaviť ako najnovšie"
         },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.bWFrZV9sYXRlc3Q.short_desc": {
+          "source": "Specifies whether this release should be set as the latest release for the…",
+          "message": "Určuje, či sa toto vydanie má nastaviť ako najnovšie vydanie pre…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.bmFtZQ.desc": {
           "source": "The name of the release.",
           "message": "Názov vydania."
@@ -3638,6 +3734,10 @@
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.cHJlcmVsZWFzZQ.display_name": {
           "source": "Prerelease",
           "message": "Predbežné vydanie"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.cHJlcmVsZWFzZQ.short_desc": {
+          "source": "'true' to identify the release as a prerelease",
+          "message": "'true' na označenie vydania ako prerelease"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.cmVwbw.desc": {
           "source": "The repository name on its own, **not** `owner/name`.\n\nFor `qoretechnologies/qorus` this is `qorus`.",
@@ -3673,7 +3773,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.option.dGFyZ2V0X2NvbW1pdGlzaA.short_desc": {
           "source": "The branch or commit to tag; only used when the tag does not exist",
-          "message": "Vetva alebo commit na označenie značkou; použije sa iba vtedy, ak značka neexistuje"
+          "message": "Vetva alebo commit na označenie tagom; použije sa, len ak tag neexistuje"
         },
         "app.R2l0aHVi.action.cmVwb3MtY3JlYXRlLXJlbGVhc2U.short_desc": {
           "source": "Publish a release for a tag",
@@ -4019,6 +4119,10 @@
           "source": "Protected",
           "message": "Chránené"
         },
+        "app.R2l0aHVi.action.cmVwb3MtbGlzdC1icmFuY2hlcw.option.cHJvdGVjdGVk.short_desc": {
+          "source": "Setting to 'true' returns only branches protected by branch protections or…",
+          "message": "Nastavenie na 'true' vráti iba vetvy chránené ochranou vetiev alebo…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1icmFuY2hlcw.option.cmVwbw.desc": {
           "source": "The repository name on its own, **not** `owner/name`.\n\nFor `qoretechnologies/qorus` this is `qorus`.",
           "message": "Samotný názov repozitára, **nie** `owner/name`.\n\nPre `qoretechnologies/qorus` je to `qorus`."
@@ -4053,7 +4157,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb21taXRz.option.Y29tbWl0dGVy.short_desc": {
           "source": "GitHub username or email address to use to filter by commit committer",
-          "message": "Používateľské meno alebo e-mailová adresa na GitHube na filtrovanie podľa committera commitu"
+          "message": "Používateľské meno alebo e-mail na GitHube na filtrovanie podľa committera"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb21taXRz.option.YXV0aG9y.desc": {
           "source": "GitHub username or email address to use to filter by commit author.",
@@ -4065,7 +4169,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb21taXRz.option.YXV0aG9y.short_desc": {
           "source": "GitHub username or email address to use to filter by commit author",
-          "message": "Používateľské meno alebo e-mailová adresa na GitHube na filtrovanie podľa autora commitu"
+          "message": "Používateľské meno alebo e-mail na GitHube na filtrovanie podľa autora"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb21taXRz.option.b3duZXI.desc": {
           "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
@@ -4085,7 +4189,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb21taXRz.option.c2hh.short_desc": {
           "source": "The branch, tag or commit to list from; the default branch if unset",
-          "message": "Vetva, značka alebo commit, z ktorého sa má zoznam načítať; predvolená vetva, ak nie je nastavené"
+          "message": "Vetva, tag alebo commit na výpis; ak nie je nastavené, predvolená vetva"
         },
         "app.R2l0aHVi.action.cmVwb3MtbGlzdC1jb21taXRz.option.c2luY2U.desc": {
           "source": "Only show repositories updated after the given time. This is a timestamp in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) format: `YYYY-MM-DDTHH:MM:SSZ`.",
@@ -4855,6 +4959,10 @@
           "source": "Allow Auto Merge",
           "message": "Povoliť Auto Merge"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfYXV0b19tZXJnZQ.short_desc": {
+          "source": "Either 'true' to allow auto-merge on pull requests, or 'false' to disallow…",
+          "message": "Buď 'true' na povolenie auto-merge pri pull requestoch, alebo 'false' na…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfZm9ya2luZw.desc": {
           "source": "Either `true` to allow private forks, or `false` to prevent private forks.",
           "message": "Buď `true` na povolenie súkromných forkov, alebo `false` na zabránenie súkromným forkom."
@@ -4865,7 +4973,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfZm9ya2luZw.short_desc": {
           "source": "Either 'true' to allow private forks, or 'false' to prevent private forks",
-          "message": "Buď 'true' na povolenie súkromných forkov, alebo 'false' na zabránenie súkromným forkom"
+          "message": "Buď 'true' na povolenie súkromných forkov, alebo 'false' na ich zakázanie"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfbWVyZ2VfY29tbWl0.desc": {
           "source": "Either `true` to allow merging pull requests with a merge commit, or `false` to prevent merging pull requests with merge commits.",
@@ -4875,6 +4983,10 @@
           "source": "Allow Merge Commit",
           "message": "Povoliť Merge Commit"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfbWVyZ2VfY29tbWl0.short_desc": {
+          "source": "Either 'true' to allow merging pull requests with a merge commit, or 'false'…",
+          "message": "Buď 'true' na povolenie zlučovania PR pomocou merge commitu, alebo 'false'…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfc3F1YXNoX21lcmdl.desc": {
           "source": "Either `true` to allow squash-merging pull requests, or `false` to prevent squash-merging.",
           "message": "Buď `true` na povolenie squash zlučovania pull requestov, alebo `false` na zabránenie squash zlučovaniu."
@@ -4882,6 +4994,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfc3F1YXNoX21lcmdl.display_name": {
           "source": "Allow Squash Merge",
           "message": "Povoliť Squash Merge"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfc3F1YXNoX21lcmdl.short_desc": {
+          "source": "Either 'true' to allow squash-merging pull requests, or 'false' to prevent…",
+          "message": "Buď 'true' na povolenie squash-merge pre pull requesty, alebo 'false' na…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfcmViYXNlX21lcmdl.desc": {
           "source": "Either `true` to allow rebase-merging pull requests, or `false` to prevent rebase-merging.",
@@ -4891,6 +5007,10 @@
           "source": "Allow Rebase Merge",
           "message": "Povoliť Rebase Merge"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfcmViYXNlX21lcmdl.short_desc": {
+          "source": "Either 'true' to allow rebase-merging pull requests, or 'false' to prevent…",
+          "message": "Buď 'true' na povolenie rebase-merge pre pull requesty, alebo 'false' na…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfdXBkYXRlX2JyYW5jaA.desc": {
           "source": "Either `true` to always allow a pull request head branch that is behind its base branch to be updated even if it is not required to be up to date before merging, or false otherwise.",
           "message": "Buď `true` na vždy povolenú aktualizáciu zdrojovej vetvy (head branch) pull requestu, ktorá zaostáva za cieľovou vetvou (base branch), aj keď sa pred zlúčením nevyžaduje jej aktuálnosť, alebo false v opačnom prípade."
@@ -4898,6 +5018,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfdXBkYXRlX2JyYW5jaA.display_name": {
           "source": "Allow Update Branch",
           "message": "Povoliť aktualizáciu vetvy"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YWxsb3dfdXBkYXRlX2JyYW5jaA.short_desc": {
+          "source": "Either 'true' to always allow a pull request head branch that is behind its…",
+          "message": "Buď 'true' na povolenie pull request head vetvy, ktorá zaostáva za…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.YXJjaGl2ZWQ.desc": {
           "source": "Whether to archive this repository. `false` will unarchive a previously archived repository.",
@@ -4930,6 +5054,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.display_name": {
           "source": "Delete Branch on Merge",
           "message": "Odstrániť vetvu pri zlúčení"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVsZXRlX2JyYW5jaF9vbl9tZXJnZQ.short_desc": {
+          "source": "Either 'true' to allow automatically deleting head branches when pull requests…",
+          "message": "Buď 'true' na povolenie automatického mazania head vetiev po zlúčení PR…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.ZGVzY3JpcHRpb24.desc": {
           "source": "A short description of the repository.",
@@ -4965,7 +5093,7 @@
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX2lzc3Vlcw.short_desc": {
           "source": "Either 'true' to enable issues for this repository or 'false' to disable them",
-          "message": "Buď 'true' na povolenie issues pre tento repozitár, alebo 'false' na ich zakázanie"
+          "message": "Buď 'true' na povolenie issues pre toto úložisko alebo 'false' na ich zákaz"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3B1bGxfcmVxdWVzdHM.desc": {
           "source": "Either `true` to allow pull requests for this repository or `false` to prevent pull requests.",
@@ -4975,6 +5103,10 @@
           "source": "Has Pull Requests",
           "message": "Má pull requesty"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3B1bGxfcmVxdWVzdHM.short_desc": {
+          "source": "Either 'true' to allow pull requests for this repository or 'false' to prevent…",
+          "message": "Buď 'true' na povolenie pull requestov pre toto úložisko, alebo 'false' na…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3Byb2plY3Rz.desc": {
           "source": "Either `true` to enable projects for this repository or `false` to disable them. **Note:** If you're creating a repository in an organization that has disabled repository projects, the default is `false`, and if you pass `true`, the API returns an error.",
           "message": "Buď `true` na povolenie projektov pre tento repozitár, alebo `false` na ich zakázanie. **Poznámka:** Ak vytvárate repozitár v organizácii, ktorá zakázala projekty repozitára, predvolená hodnota je `false`, a ak odovzdáte `true`, rozhranie API vráti chybu."
@@ -4982,6 +5114,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3Byb2plY3Rz.display_name": {
           "source": "Has Projects",
           "message": "Má projekty"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3Byb2plY3Rz.short_desc": {
+          "source": "Either 'true' to enable projects for this repository or 'false' to disable them",
+          "message": "Buď 'true' na povolenie projektov pre toto úložisko alebo 'false' na ich zákaz"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aGFzX3dpa2k.desc": {
           "source": "Either `true` to enable the wiki for this repository or `false` to disable it.",
@@ -5002,6 +5138,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aXNfdGVtcGxhdGU.display_name": {
           "source": "Is Template",
           "message": "Je šablóna"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.aXNfdGVtcGxhdGU.short_desc": {
+          "source": "Either 'true' to make this repo available as a template repository or 'false'…",
+          "message": "Buď 'true' na sprístupnenie tohto úložiska ako šablóny, alebo 'false'…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.b3duZXI.desc": {
           "source": "The account the repository belongs to - a user or an organization.\n\nFor `qoretechnologies/qorus` this is `qoretechnologies`.",
@@ -5079,6 +5219,10 @@
           "source": "Security and Analysis",
           "message": "Zabezpečenie a analýza"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c2VjdXJpdHlfYW5kX2FuYWx5c2lz.short_desc": {
+          "source": "Specify which security and analysis features to enable or disable for the…",
+          "message": "Určuje funkcie zabezpečenia a analýzy, ktoré sa majú povoliť alebo zakázať pre…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.c3F1YXNoX21lcmdlX2NvbW1pdF90aXRsZQ.allowed-value.c3RyaW5nOkNPTU1JVF9PUl9QUl9USVRMRQ.display_name": {
           "source": "COMMIT_OR_PR_TITLE",
           "message": "COMMIT_OR_PR_TITLE"
@@ -5131,6 +5275,10 @@
           "source": "Private",
           "message": "Súkromné"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHJpdmF0ZQ.short_desc": {
+          "source": "Either 'true' to make the repository private or 'false' to make it public",
+          "message": "Buď 'true' na nastavenie úložiska ako súkromného, alebo 'false' ako verejného"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHVsbF9yZXF1ZXN0X2NyZWF0aW9uX3BvbGljeQ.allowed-value.c3RyaW5nOmFsbA.display_name": {
           "source": "all",
           "message": "všetky"
@@ -5146,6 +5294,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHVsbF9yZXF1ZXN0X2NyZWF0aW9uX3BvbGljeQ.display_name": {
           "source": "Pull Request Creation Policy",
           "message": "Pravidlo vytvárania pull requestov"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cHVsbF9yZXF1ZXN0X2NyZWF0aW9uX3BvbGljeQ.short_desc": {
+          "source": "The policy that controls who can create pull requests for this repository:…",
+          "message": "Pravidlo určujúce, kto môže vytvárať pull requesty pre toto úložisko:…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.cmVwbw.desc": {
           "source": "The repository name on its own, **not** `owner/name`.\n\nFor `qoretechnologies/qorus` this is `qorus`.",
@@ -5167,6 +5319,10 @@
           "source": "Web Commit Signoff Required",
           "message": "Vyžadovať potvrdenie webových commitov"
         },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.d2ViX2NvbW1pdF9zaWdub2ZmX3JlcXVpcmVk.short_desc": {
+          "source": "Either 'true' to require contributors to sign off on web-based commits, or…",
+          "message": "Buď 'true' na vyžadovanie podpisu prispievateľov pre webové commity, alebo…"
+        },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.desc": {
           "source": "Either `true` to allow squash-merge commits to use pull request title, or `false` to use commit message. **This property is closing down. Please use `squash_merge_commit_title` instead.",
           "message": "Buď `true` na povolenie squash-merge commitom použiť názov pull requestu, alebo `false` na použitie správy commitu. **Podpora tejto vlastnosti končí. Použite namiesto toho `squash_merge_commit_title`."
@@ -5174,6 +5330,10 @@
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.display_name": {
           "source": "Use Squash PR Title as Default",
           "message": "Použiť názov PR squash zlúčenia ako predvolený"
+        },
+        "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dXNlX3NxdWFzaF9wcl90aXRsZV9hc19kZWZhdWx0.short_desc": {
+          "source": "Either 'true' to allow squash-merge commits to use pull request title, or…",
+          "message": "Buď 'true' na použitie názvu PR pre squash-merge commity, alebo…"
         },
         "app.R2l0aHVi.action.cmVwb3MtdXBkYXRl.option.dmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOnB1YmxpYw.display_name": {
           "source": "public",
@@ -5233,7 +5393,7 @@
         },
         "app.R2l0aHVi.short_desc": {
           "source": "Work with GitHub repositories, issues, pull requests, releases and Actions",
-          "message": "Práca s repozitármi, issues, pull requestami, vydaniami a Actions v službe GitHub"
+          "message": "Práca s GitHub úložiskami, issues, pull requestmi, vydaniami a Actions"
         }
       }
     }

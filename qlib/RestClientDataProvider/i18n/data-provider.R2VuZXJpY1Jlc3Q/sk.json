@@ -261,7 +261,7 @@
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZW5jb2RlX2NoYXJz.short_desc": {
           "source": "A set of additional characters to subject to percent encoding in URLs",
-          "message": "Množina dodatočných znakov, ktoré sa majú v URL adresách kódovať pomocou percentuálneho kódovania (percent encoding)"
+          "message": "Množina dodatočných znakov pre percentuálne kódovanie v URL"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.ZXJyb3JfcGFzc3RocnU.desc": {
           "source": "If `True` then HTTP status codes indicating errors will not cause an `HTTP-CLIENT-RECEIVE-ERROR` exception to be raised, rather such responses will be passed through to the caller like any other response",
@@ -327,6 +327,10 @@
           "source": "OAuth2 Auto Refresh",
           "message": "Automatická obnova OAuth2"
         },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dG9fcmVmcmVzaA.short_desc": {
+          "source": "Whether tokens are refreshed automatically",
+          "message": "Či sa tokeny obnovujú automaticky"
+        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.desc": {
           "source": "Optional arguments for authentication requests for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
           "message": "Voliteľné argumenty pre autentifikačné požiadavky pre typ udelenia prístupu `authorization_code`; ignorované, ak je nastavená možnosť `token`. Všimnite si, že typ udelenia prístupu `authorization_code` vyžaduje externú autorizáciu používateľa na získanie prístupového tokenu"
@@ -334,6 +338,10 @@
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.display_name": {
           "source": "OAuth2 Authorization Args",
           "message": "Autorizačné argumenty OAuth2"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfYXJncw.short_desc": {
+          "source": "Extra arguments for authorization_code token requests",
+          "message": "Ďalšie argumenty pre požiadavky na token authorization_code"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2F1dGhfdXJs.desc": {
           "source": "The OAuth2 authorization URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token",
@@ -369,7 +377,7 @@
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FsdF91cmxfc3Vic3Q.short_desc": {
           "source": "Optional URL substitution info for token requests to the alternate server",
-          "message": "Voliteľné informácie o substitúcii URL pre požiadavky na token voči alternatívnemu serveru"
+          "message": "Voliteľné informácie o nahradení URL pre požiadavky na token k inému serveru"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX2FwcA.desc": {
           "source": "This is a hint to external programs processing OAuth2 requests to external configuration for the OAuth2 configuration",
@@ -459,6 +467,10 @@
           "source": "OAuth2 PKCE",
           "message": "OAuth2 PKCE"
         },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3BrY2U.short_desc": {
+          "source": "Hint to use PKCE with the authorization code flow",
+          "message": "Odporúčanie použiť PKCE s tokom authorization code"
+        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.desc": {
           "source": "Per OAuth2 spec (RFC 6749), the state parameter should be returned by the authorization server. Some providers (like Trello) do not pass through the state parameter. Set this to False to embed the state in the redirect_uri as a workaround for non-compliant providers. Default: True (spec-compliant behavior).",
           "message": "Podľa špecifikácie OAuth2 (RFC 6749) by mal parameter state vracať autorizačný server. Niektorí poskytovatelia (ako napr. Trello) parameter state nevracajú. Nastavte túto možnosť na False, aby sa stav vložil do redirect_uri ako alternatívne riešenie pre nekompatibilných poskytovateľov. Predvolené: True (správanie v súlade so špecifikáciou)."
@@ -469,7 +481,7 @@
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3Bhc3N0aHJvdWdoX3N0YXRl.short_desc": {
           "source": "If False, embed state in redirect_uri for non-compliant OAuth2 providers",
-          "message": "Ak je False, stav sa vloží do redirect_uri pre nekompatibilných poskytovateľov OAuth2"
+          "message": "Pri False vloží stav do redirect_uri pre neštandardných poskytovateľov OAuth2"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3JlZGlyZWN0X3VybA.desc": {
           "source": "The OAuth2 redirect URL for the `authorization_code` grant type; ignored if the `token` option is set.  Note that the `authorization_code` grant type requires external user authorization to acquire an access token; the special value `auto` (the default) is meant to be interpreted by servers that implement OAuth2 authorization code client handling",
@@ -529,7 +541,7 @@
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2F1dGhfc2VjcmV0X29ubHk.short_desc": {
           "source": "Use basic authorization with the client secret only when making token requests",
-          "message": "Pri odosielaní požiadaviek na token použiť základnú autorizáciu iba s klientskym tajomstvom"
+          "message": "Použiť základnú autorizáciu s client secret len pri požiadavkách na token"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2FyZ3M.desc": {
           "source": "Optional extra arguments for token refresh requests; if this option is set as well as `oauth2_alt_token_url`, then the `oauth2_token_url` value will be added to this as well when the request is made to the `oauth2_alt_token_url`",
@@ -563,6 +575,10 @@
           "source": "OAuth2 Token Lifetime Hint in Minutes",
           "message": "Nápoveda životnosti OAuth2 tokenu v minútach"
         },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX2V4cGlyeV9oaW50.short_desc": {
+          "source": "How many minutes a token stays valid",
+          "message": "Počet minút, počas ktorých zostáva token platný"
+        },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VybA.desc": {
           "source": "The token URL for OAuth2 flows; ignored for logins if the `token` option is set",
           "message": "URL tokenu pre OAuth2 toky; ignoruje sa pri prihlasovaní, ak je nastavená možnosť `token`"
@@ -582,6 +598,10 @@
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.display_name": {
           "source": "OAuth2 Token Use Basic Auth?",
           "message": "Použiť základné overenie pre OAuth2 token?"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b2F1dGgyX3Rva2VuX3VzZV9iYXNpY19hdXRo.short_desc": {
+          "source": "Send the client ID and secret as basic authorization",
+          "message": "Odoslať ID klienta a tajný kľúč ako základnú autorizáciu"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.b3BlbmFwaTM.desc": {
           "source": "An OpenApi 3 schema location or file data for the REST connection",
@@ -954,6 +974,10 @@
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.display_name": {
           "source": "REST Body Auth Error Check",
           "message": "Kontrola chýb autentifikácie v tele REST"
+        },
+        "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.cmVzdF9ib2R5X2F1dGhfZXJyb3JfY2hlY2s.short_desc": {
+          "source": "Values marking a 200 OK body as an authentication error",
+          "message": "Hodnoty označujúce telo 200 OK ako chybu autentifikácie"
         },
         "app.R2VuZXJpY1Jlc3Q.action.Y2FsbA.option.dG9rZW4.desc": {
           "source": "Any authorization token to use for the connection; will be passed as `Authorization: Bearer ...` (assuming that `token_type` is `Bearer`) in request headers; this option cannot be used with username and password options or authentication information in the URL; if this option is set then most OAuth2 options are ignored for logins",
