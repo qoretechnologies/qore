@@ -1350,6 +1350,12 @@ using PendingNativeExprDefault = QoreAOTBinaryDeserializer::PendingNativeExprDef
 static thread_local std::vector<PendingNativeExprDefault>*
     g_aot_pending_native_expr_defaults = nullptr;
 
+// Same deferral mechanism for no-arg function-call param defaults; see
+// QoreAOTBinaryDeserializer::PendingFunctionDefault.
+using PendingFunctionDefault = QoreAOTBinaryDeserializer::PendingFunctionDefault;
+static thread_local std::vector<PendingFunctionDefault>*
+    g_aot_pending_function_defaults = nullptr;
+
 // Read an instance-member / static-member default value.
 //
 // If the value is a VT_NEW_OBJECT whose target class is not yet registered in
@@ -5982,12 +5988,17 @@ static void writeTypePathRef(QoreAOTBinaryWriter& writer, const QoreTypeInfo* ti
     writer.writeStringRef(path.c_str());
 }
 
-static std::string getNamespaceConstantPath(const qore_ns_private* ns, const char* name) {
+//! Returns the namespace-qualified path of a symbol declared in \a ns, with no leading "::"
+static std::string getNamespaceSymbolPath(const qore_ns_private* ns, const char* name) {
     std::string ns_path = ns ? ns->path : "";
     if (ns_path.size() >= 2) {
         ns_path = ns_path.substr(2);
     }
     return ns_path.empty() ? std::string(name ? name : "") : ns_path + "::" + (name ? name : "");
+}
+
+static std::string getNamespaceConstantPath(const qore_ns_private* ns, const char* name) {
+    return getNamespaceSymbolPath(ns, name);
 }
 
 static std::string getClassConstantPath(const qore_class_private* priv, const char* name) {
@@ -9598,7 +9609,16 @@ static bool writeVariantSignature(QoreAOTBinaryWriter& writer, const AbstractQor
                 auto* fcn = dynamic_cast<const FunctionCallNode*>(node);
                 if (fcn && fcn->getName() && (!fcn->getArgs() || fcn->getArgs()->empty())) {
                     writer.writeU8(2);  // expression default: function call
-                    writer.writeStringRef(fcn->getName());
+                    // Emit the namespace-qualified name.  The reader resolves this
+                    // name against the root function index, and a function declared
+                    // outside the root namespace (e.g. `OMQ::makeAuth()`) is not
+                    // reachable there by its bare identifier - the lookup would fail
+                    // and the parameter would silently lose its default.
+                    const FunctionEntry* dfe = fcn->getFunctionEntry();
+                    std::string default_fname = dfe
+                        ? getNamespaceSymbolPath(dfe->getNamespace(), dfe->getName())
+                        : std::string(fcn->getName());
+                    writer.writeStringRef(default_fname.c_str());
                     continue;
                 }
 
@@ -14894,6 +14914,18 @@ bool QoreAOTBinaryDeserializer::deserializeFunctionsAndMethods(std::string& erro
     };
     NativeExprDefaultsRAII ned_raii(&pending_ned);
 
+    // Same for no-arg function-call param defaults, which are resolved in
+    // finalizePostIndex() once every function is registered and indexed.
+    struct FunctionDefaultsRAII {
+        FunctionDefaultsRAII(std::vector<PendingFunctionDefault>* p) {
+            g_aot_pending_function_defaults = p;
+        }
+        ~FunctionDefaultsRAII() {
+            g_aot_pending_function_defaults = nullptr;
+        }
+    };
+    FunctionDefaultsRAII fd_raii(&pending_fd);
+
     // Resolve the per-blob TYPE_TABLE once up front so
     // readAndSetupVariantSignature can look up return/param types by
     // index.  Safe at this point: all sibling sessions' shells are
@@ -15032,9 +15064,47 @@ bool QoreAOTBinaryDeserializer::finalizePostIndex(std::string& error) {
         return false;
     }
 
+    // Resolve deferred no-arg function-call param defaults.  Same rationale: the
+    // referenced function may live anywhere in the module and is only guaranteed
+    // to be registered and indexed by this point.
+    if (!resolveFunctionCallDefaults(error)) {
+        return false;
+    }
+
     printd(2, "AOT: deserialized namespace tree: %d namespaces, %d classes\n",
         static_cast<int>(ns_list.size()), static_cast<int>(class_list.size()));
 
+    return true;
+}
+
+bool QoreAOTBinaryDeserializer::resolveFunctionCallDefaults(std::string& error) {
+    size_t i = 0;
+    for (auto& pd : pending_fd) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr,
+                "AOT default-argument function resolution")) {
+            error = "AOT default-argument function resolution cancelled";
+            pending_fd.clear();
+            return false;
+        }
+        ++i;
+        const FunctionEntry* fe = qore_aot_resolve_function_entry_for_slot(
+            pgm, pd.func_name.c_str());
+        if (!fe) {
+            error = "cannot resolve deferred default expression function '";
+            error += pd.func_name;
+            error += "()'";
+            pending_fd.clear();
+            return false;
+        }
+        UserSignature* sig = pd.uvb->getUserSignature();
+        arg_vec_t& defaults = const_cast<arg_vec_t&>(sig->getDefaultArgList());
+        if (pd.param_index < defaults.size()) {
+            defaults[pd.param_index].discard(nullptr);
+            defaults[pd.param_index] = QoreValue(new FunctionCallNode(
+                &loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr)));
+        }
+    }
+    pending_fd.clear();
     return true;
 }
 
@@ -17616,23 +17686,43 @@ static bool readAndSetupVariantSignature(
                 param_defaults[j] = QoreValue(true);
             }
         } else if (has_default == 2) {
-            // Expression default: no-arg function call (e.g., getcwd())
+            // Expression default: no-arg function call (e.g., getcwd()).
+            // The name is namespace-qualified; qore_aot_resolve_function_entry_for_slot()
+            // handles the qualified, still-pending and legacy bare-identifier forms.
             const char* fname = reader.readStringRef(ptr);
-            if (fname && *fname) {
-                qore_program_private* pp = qore_program_private::get(*pgm);
-                const FunctionEntry* fe = qore_root_ns_private::runtimeFindFunctionEntry(
-                    *pp->RootNS, fname);
-                if (fe) {
-                    FunctionCallNode* fcn = new FunctionCallNode(
-                        &loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr));
-                    param_defaults[j] = QoreValue(fcn);
-                } else {
-                    printd(0, "AOT deser: cannot resolve default expression function '%s'\n",
-                        fname);
-                    param_defaults[j] = QoreValue(true);
-                }
-            } else {
+            const FunctionEntry* fe = (fname && *fname)
+                ? qore_aot_resolve_function_entry_for_slot(pgm, fname)
+                : nullptr;
+            if (fe) {
+                FunctionCallNode* fcn = new FunctionCallNode(
+                    &loc_builtin, fe, static_cast<QoreParseListNode*>(nullptr));
+                param_defaults[j] = QoreValue(fcn);
+            } else if (fname && *fname && g_aot_pending_function_defaults) {
+                // The referenced function belongs to this module but has not been
+                // registered yet; the FUNCTIONS section is not ordered by dependency.
+                // Defer to finalizePostIndex(), which runs once everything is indexed.
+                PendingFunctionDefault pd;
+                pd.func_name = fname;
+                pd.uvb = uvb;
+                pd.param_index = j;
+                g_aot_pending_function_defaults->push_back(std::move(pd));
+                // Non-NOTHING placeholder so hasDefaultArg(j) reports true and
+                // min_param_types counts this param as optional; the fixup pass
+                // replaces it with the resolved call before any call can execute.
                 param_defaults[j] = QoreValue(true);
+            } else {
+                // Never substitute a placeholder value here: the parameter's declared
+                // type is unrelated to the placeholder, so a silent substitution
+                // produces a wrong-typed argument at every call that omits it.
+                error = "cannot resolve default expression function '";
+                error += fname && *fname ? fname : "(null)";
+                error += "()' for parameter ";
+                error += std::to_string(j);
+                error += " and no deferred-defaults context is active";
+                for (uint32_t k = 0; k < j; ++k) {
+                    param_defaults[k].discard(nullptr);
+                }
+                return false;
             }
         } else if (has_default == 3) {
             // Expression default: plain constant reference.

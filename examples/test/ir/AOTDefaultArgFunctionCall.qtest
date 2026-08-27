@@ -1,0 +1,235 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTDefaultArgFunctionCallTest
+
+#! Regression test for no-arg function-call default arguments in AOT modules
+/** A default argument of the form \c "f()" is serialized in its own compact form rather
+    than as a general expression tree.  The name written was the bare identifier, and the
+    reader looked it up in the root function index only, so a default calling a function
+    declared in a namespace - the normal case for a module - was never found.
+
+    The failure was silent and type-unsafe: the unresolved default was replaced with the
+    boolean \c True, so the parameter's declared type no longer matched its default.  A
+    call that omitted the argument passed a \c bool where an object was declared, and a
+    call that passed an explicit \c NOTHING for it did the same, which surfaced far from
+    the module as an overload or type error against the parameter's real type.
+
+    The name is now namespace-qualified, resolution accepts the qualified, still-pending
+    and legacy bare forms, and an unresolvable default fails the module load instead of
+    substituting a value of an unrelated type.
+*/
+class AOTDefaultArgFunctionCallTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AOTDefaultArgFunctionCallTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("namespaced function default argument", \testNamespacedFunctionDefault());
+        addTestCase("namespaced constructor default argument", \testNamespacedConstructorDefault());
+        addTestCase("explicit NOTHING selects the default", \testExplicitNothingUsesDefault());
+        addTestCase("callee declared after the caller", \testCalleeDeclaredLast());
+        addTestCase("root namespace function default argument", \testRootNamespaceFunctionDefault());
+
+        set_return_value(main());
+    }
+
+    private string writeFile(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+        f.close();
+        return path;
+    }
+
+    private string runModule(string module_dir, string script_path) {
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b --enable-debug %s 2>&1",
+            libqore_dir, module_dir, qore_bin, script_path));
+    }
+
+    #! compiles \a body into an AOT module; asserts source and AOT both print \a expected
+    /** @param mod_name the module (and namespace) name
+        @param body the module body following the module declaration
+        @param expected the exact string @c verify() must return
+    */
+    private checkModule(string mod_name, string body, string expected) {
+        TmpDir tmp("qore-aot-default-arg-func-");
+        string src_dir = tmp.path + "/src";
+        string qmod_dir = tmp.path + "/qmod";
+        mkdir(src_dir);
+        mkdir(qmod_dir);
+
+        string preamble = sprintf("%%modern\n\nmodule %s {\n"
+            "    version = \"1.0\";\n"
+            "    desc = \"AOT no-arg function-call default argument regression module\";\n"
+            "    author = \"Qore\";\n"
+            "    license = \"MIT\";\n}\n\n", mod_name);
+
+        string qm_path = writeFile(src_dir + "/" + mod_name + ".qm", preamble + body);
+        string script_path = writeFile(tmp.path + "/run.qr", sprintf("%%modern\n"
+            "%%requires %s\n"
+            "printf(\"%%s\\n\", verify());\n", mod_name));
+
+        string qmod_path = qmod_dir + "/" + mod_name + ".qmod";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --output %s %s 2>&1",
+            libqore_dir, qore_bin, qmod_path, qm_path));
+        assertTrue(is_file(qmod_path), sprintf("compiled %s: %s", mod_name, compile_out));
+
+        assertEq(expected + "\n", runModule(src_dir, script_path), mod_name + ": source module");
+        assertEq(expected + "\n", runModule(qmod_dir, script_path), mod_name + ": AOT module");
+    }
+
+    #! the default calls a function in the module's own namespace
+    testNamespacedFunctionDefault() {
+        checkModule("AOTDefArgNsFunc", 'public namespace AOTDefArgNsFunc {
+public class Tag {
+    public {
+        string value;
+    }
+
+    constructor(string v) {
+        value = v;
+    }
+}
+
+public Tag sub makeTag() {
+    return new Tag("ns-default");
+}
+
+public string sub tagged(string path, Tag t = makeTag()) {
+    return path + "|" + t.value;
+}
+}
+
+public string sub verify() {
+    return AOTDefArgNsFunc::tagged("/x");
+}
+', "/x|ns-default");
+    }
+
+    #! the same shape in a constructor, where the parameter type is an object
+    testNamespacedConstructorDefault() {
+        checkModule("AOTDefArgNsCtor", 'public namespace AOTDefArgNsCtor {
+public class Auth {
+    public {
+        string tag = "rbac";
+    }
+}
+
+public Auth sub makeAuth() {
+    return new Auth();
+}
+
+public class Handler {
+    public {
+        string tag;
+        bool isregex;
+    }
+
+    constructor(string path, Auth a = makeAuth(), bool n_isregex = True) {
+        tag = a.tag;
+        isregex = n_isregex;
+    }
+}
+}
+
+public string sub verify() {
+    AOTDefArgNsCtor::Handler h("/x");
+    return sprintf("%s|%y", h.tag, h.isregex);
+}
+', "rbac|True");
+    }
+
+    #! passing NOTHING explicitly must select the default, not shift the following argument
+    /** This is the shape that first exposed the defect: the unresolved default became a
+        bool, so the object-typed parameter received the trailing bool argument's value.
+    */
+    testExplicitNothingUsesDefault() {
+        checkModule("AOTDefArgNsShift", 'public namespace AOTDefArgNsShift {
+public class Auth {
+    public {
+        string tag = "rbac";
+    }
+}
+
+public Auth sub makeAuth() {
+    return new Auth();
+}
+
+public class Handler {
+    public {
+        string tag;
+        bool isregex;
+    }
+
+    constructor(string path, *softlist<auto> types, Auth a = makeAuth(), bool n_isregex = True) {
+        tag = a.tag;
+        isregex = n_isregex;
+    }
+}
+}
+
+public string sub verify() {
+    AOTDefArgNsShift::Handler h("/x", NOTHING, NOTHING, False);
+    return sprintf("%s|%y", h.tag, h.isregex);
+}
+', "rbac|False");
+    }
+
+    #! the referenced function is declared after the function whose default calls it
+    testCalleeDeclaredLast() {
+        checkModule("AOTDefArgNsOrder", 'public namespace AOTDefArgNsOrder {
+public class Tag {
+    public {
+        string value;
+    }
+
+    constructor(string v) {
+        value = v;
+    }
+}
+
+public string sub tagged(Tag t = makeTagLater()) {
+    return t.value;
+}
+
+public Tag sub makeTagLater() {
+    return new Tag("late");
+}
+}
+
+public string sub verify() {
+    return AOTDefArgNsOrder::tagged();
+}
+', "late");
+    }
+
+    #! a default calling a root-namespace function must keep working
+    testRootNamespaceFunctionDefault() {
+        checkModule("AOTDefArgRootFunc", 'public string sub makeRootTag() {
+    return "root-default";
+}
+
+public string sub taggedRoot(string t = makeRootTag()) {
+    return t;
+}
+
+public string sub verify() {
+    return taggedRoot();
+}
+', "root-default");
+    }
+}
