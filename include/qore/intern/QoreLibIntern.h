@@ -33,7 +33,9 @@
 
 #define _QORE_QORELIBINTERN_H
 
+#include <map>
 #include <string>
+#include <vector>
 
 class MethodVariantBase;
 class RuntimeConfig;
@@ -583,6 +585,106 @@ private:
     DLLLOCAL std::vector<std::pair<int, std::string>> rank() const;
 };
 
+//! A source range copied into structured diagnostic metadata
+struct QoreDiagnosticSpan {
+    std::string file;
+    std::string source;
+    int start_line = -1;
+    int end_line = -1;
+    int start_column = -1;
+    int end_column = -1;
+
+    DLLLOCAL QoreDiagnosticSpan() = default;
+
+    DLLLOCAL explicit QoreDiagnosticSpan(const QoreProgramLocation& loc)
+            : file(loc.getFileValue()), source(loc.getSourceValue()), start_line(loc.start_line),
+            end_line(loc.end_line), start_column(loc.start_column), end_column(loc.end_column) {
+    }
+};
+
+//! A related source range attached to a structured diagnostic
+struct QoreDiagnosticRelatedLocation {
+    std::string role;
+    std::string message;
+    QoreDiagnosticSpan span;
+
+    DLLLOCAL QoreDiagnosticRelatedLocation(const char* role, const QoreProgramLocation& loc,
+            const char* message = nullptr)
+            : role(role ? role : ""), message(message ? message : ""), span(loc) {
+    }
+};
+
+//! One source edit belonging to a structured diagnostic fix
+struct QoreDiagnosticEdit {
+    QoreDiagnosticSpan span;
+    std::string replacement;
+
+    DLLLOCAL QoreDiagnosticEdit(const QoreProgramLocation& loc, const char* replacement)
+            : span(loc), replacement(replacement ? replacement : "") {
+    }
+};
+
+//! A possible fix attached to a structured diagnostic
+struct QoreDiagnosticFix {
+    std::string title;
+    std::string applicability;
+    std::vector<QoreDiagnosticEdit> edits;
+
+    DLLLOCAL QoreDiagnosticFix(const char* title, const char* applicability = "review-required")
+            : title(title ? title : ""), applicability(applicability ? applicability : "review-required") {
+    }
+
+    DLLLOCAL QoreDiagnosticFix& addEdit(const QoreProgramLocation& loc, const char* replacement) {
+        edits.emplace_back(loc, replacement);
+        return *this;
+    }
+};
+
+//! Optional machine-readable metadata for a parse diagnostic
+/** The legacy exception or warning code remains in QoreDiagnostic::code.  The semantic id identifies the
+    exact condition independently of exception compatibility, while the remaining fields let tools present or
+    apply feedback without scraping the human-readable message.
+*/
+struct QoreDiagnosticMetadata {
+    std::string id;
+    std::string hint;
+    std::vector<std::string> suggestions;
+    std::map<std::string, std::string> facts;
+    std::vector<QoreDiagnosticRelatedLocation> related_locations;
+    std::vector<QoreDiagnosticFix> fixes;
+
+    DLLLOCAL QoreDiagnosticMetadata() = default;
+
+    DLLLOCAL explicit QoreDiagnosticMetadata(const char* id, const char* hint = nullptr)
+            : id(id ? id : ""), hint(hint ? hint : "") {
+    }
+
+    DLLLOCAL QoreDiagnosticMetadata& addSuggestion(const char* suggestion) {
+        if (suggestion && *suggestion) {
+            suggestions.emplace_back(suggestion);
+        }
+        return *this;
+    }
+
+    DLLLOCAL QoreDiagnosticMetadata& addFact(const char* key, const char* value) {
+        if (key && *key) {
+            facts[key] = value ? value : "";
+        }
+        return *this;
+    }
+
+    DLLLOCAL QoreDiagnosticMetadata& addRelatedLocation(const char* role, const QoreProgramLocation& loc,
+            const char* message = nullptr) {
+        related_locations.emplace_back(role, loc, message);
+        return *this;
+    }
+
+    DLLLOCAL QoreDiagnosticFix& addFix(const char* title, const char* applicability = "review-required") {
+        fixes.emplace_back(title, applicability);
+        return fixes.back();
+    }
+};
+
 //! A structured representation of a single parse-time diagnostic (error or warning)
 /** Captured at the parse error/warning chokepoints when structured diagnostic collection is enabled
     on a Program (see Program::setParseDiagnosticsCollected()).  Provides a machine-readable form of
@@ -600,12 +702,17 @@ struct QoreDiagnostic {
     int start_column = -1;      //!< 0-based start column, or -1 if unknown
     int end_column = -1;        //!< 0-based end column (exclusive), or -1 if unknown
     std::string message;        //!< the human-readable diagnostic message
+    QoreDiagnosticMetadata metadata; //!< semantic id, hints, related ranges, facts, and possible fixes
 
     DLLLOCAL QoreDiagnostic(bool error, const char* code, int warn_code, const QoreProgramLocation& loc,
-            const char* message) : error(error), code(code ? code : ""), warn_code(warn_code),
+            const char* message, const QoreDiagnosticMetadata* metadata = nullptr)
+            : error(error), code(code ? code : ""), warn_code(warn_code),
             file(loc.getFileValue()), source(loc.getSourceValue()), start_line(loc.start_line),
             end_line(loc.end_line), start_column(loc.start_column), end_column(loc.end_column),
-            message(message ? message : "") {
+            message(message ? message : ""), metadata(metadata ? *metadata : QoreDiagnosticMetadata()) {
+        if (this->metadata.id.empty()) {
+            this->metadata.id = this->code;
+        }
     }
 };
 

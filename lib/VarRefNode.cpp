@@ -310,6 +310,31 @@ int VarRefNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
         parse_context.analysis.setFlag(QoreParseAnalysis::KnownTypeInfo);
     }
 
+    // A declaration constrains a value but does not initialize it.  The flow-sensitive LocalVar
+    // state is authoritative here: it is merged across branches by AssignedStateHelper, so this
+    // warning is emitted only when the read is not definitely preceded by an assignment.  `exists`
+    // is the intentional way to inspect that state and suppresses the warning through its parse flag.
+    if (!err && !new_decl && !is_assignment && !(parse_context.pflag & PF_EXISTENCE_CHECK)
+            && (type == VT_LOCAL || type == VT_CLOSURE || type == VT_LOCAL_TS) && ref.id
+            && !ref.id->isAssigned()) {
+        const QoreTypeInfo* declared_type = ref.id->getTypeInfo();
+        if (QoreTypeInfo::hasType(declared_type)
+                && QoreTypeInfo::parseReturns(declared_type, NT_NOTHING) == QTI_NOT_EQUAL) {
+            QoreStringMaker hint("initialize '%s' before this read, or declare it with an optional type if "
+                "the absent value is intentional", ref.id->getName());
+            QoreDiagnosticMetadata metadata("UNINITIALIZED-LOCAL-READ", hint.c_str());
+            metadata.addFact("variable", ref.id->getName());
+            metadata.addFact("declaredType", QoreTypeInfo::getName(declared_type));
+            metadata.addFact("definitelyAssigned", "false");
+            metadata.addSuggestion(QoreStringMaker("initialize %s before this read", ref.id->getName()).c_str());
+            QoreStringNode* desc = new QoreStringNodeMaker("local variable '%s' with non-optional type '%s' "
+                "is read before it is definitely assigned; a declaration does not initialize the variable",
+                ref.id->getName(), QoreTypeInfo::getName(declared_type));
+            qore_program_private::makeParseWarning(parse_context.pgm, *loc, QP_WARN_LANGUAGE_TRAPS,
+                "LANGUAGE-TRAP", desc, metadata);
+        }
+    }
+
     return err;
 }
 

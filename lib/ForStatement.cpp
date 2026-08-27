@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/ForStatement.h"
+#include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
 
 ForStatement::ForStatement(int start_line, int end_line, QoreValue a, QoreValue c, QoreValue i, StatementBlock* cd)
@@ -179,6 +180,9 @@ int ForStatement::parseInitImpl(QoreParseContext& parse_context) {
         parse_context.typeInfo = nullptr;
         if (parse_init_value(cond, parse_context) && !err) {
             err = -1;
+        }
+        if (!err) {
+            qore_warn_hash_member_truth_test(parse_context.pgm, cond);
         }
         // FIXME: raise a parse warning if cond cannot be converted to a bool (i.e. always false)
     }

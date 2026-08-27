@@ -5559,11 +5559,10 @@ int QoreTypeInfo::doTypeException(const char* arg_type, int param_num, const cha
     desc->sprintf("expects type '%s', but got ", tname.c_str());
     QoreTypeInfo::getNodeType(*desc, n);
     desc->concat(" instead");
-    // When the target type is a container's declared value type, say so and point at auto!, which
-    // is the fix when that value type was narrowed from the container's initial value.  Without a
-    // container in the lvalue path there is nothing to narrow, so no hint is added: every
-    // assignment to a simple-typed lvalue used to claim a hash was involved even when the program
-    // contained no hash at all.
+    // At runtime we can prove that the rejected target type came from a container, but not whether
+    // that container was declared with an inferred or explicit element type.  Keep this message
+    // accurate for both cases; the parse-time diagnostic provides auto! guidance when it has the
+    // variable declaration and narrowing location needed to prove that recommendation applies.
     if (vts != QLVTS_None && isSimpleTypeNarrowed()) {
         const char* container = nullptr;
         switch (vts) {
@@ -5577,9 +5576,8 @@ int QoreTypeInfo::doTypeException(const char* arg_type, int param_num, const cha
                 break;
         }
         if (container) {
-            desc->sprintf("; this type is the value type of the %s holding the target; if that "
-                "value type was narrowed from the %s's initial value, declare the variable as "
-                "'%s<auto!>' to disable type narrowing", container, container, container);
+            desc->sprintf("; this type is the declared value type of the %s holding the target; "
+                "review the container declaration and the value being assigned", container);
         }
     }
     xsink->raiseException("RUNTIME-TYPE-ERROR", desc);

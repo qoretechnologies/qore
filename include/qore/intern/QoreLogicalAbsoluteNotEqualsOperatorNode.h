@@ -63,6 +63,10 @@ public:
 protected:
     DLLLOCAL static QoreString logical_absolute_not_equals_str;
 
+    DLLLOCAL virtual bool invertResult() const {
+        return true;
+    }
+
     DLLLOCAL virtual QoreValue evalImpl(bool& needs_deref, ExceptionSink *xsink) const {
         QoreValue rv = QoreLogicalAbsoluteEqualsOperatorNode::evalImpl(needs_deref, xsink);
         if (*xsink)

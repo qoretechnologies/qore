@@ -43,6 +43,29 @@
 #include <string>
 #include <vector>
 
+static int raise_missing_new_constructor(QoreProgram* pgm, const QoreProgramLocation* loc,
+        const QoreClass& qclass, const char* written_name) {
+    QoreStringMaker replacement("new %s(...)", written_name);
+    QoreDiagnosticMetadata metadata("MISSING-NEW-CONSTRUCTOR",
+        "object construction in an expression requires the 'new' keyword");
+    metadata.addFact("className", qclass.getNamespacePath(false).c_str());
+    metadata.addFact("requiredKeyword", "new");
+    metadata.addSuggestion(replacement.c_str());
+    bool has_exact_location = loc->start_line >= 0 && loc->start_column >= 0;
+    QoreDiagnosticFix& fix = metadata.addFix("insert 'new' before the class name",
+        has_exact_location ? "machine-applicable" : "review-required");
+    if (has_exact_location) {
+        QoreProgramLocation insert_loc(*loc);
+        insert_loc.end_line = insert_loc.start_line;
+        insert_loc.end_column = insert_loc.start_column;
+        fix.addEdit(insert_loc, "new ");
+    }
+    QoreStringNode* desc = new QoreStringNodeMaker("'%s()' names class '%s', not a function; "
+        "construct the object with 'new %s(...)'", written_name, qclass.getName(), written_name);
+    qore_program_private::makeParseException(pgm, *loc, "PARSE-EXCEPTION", desc, metadata);
+    return -1;
+}
+
 static bool static_scope_has_parameterized_receiver(const NamedScope& scope) {
     if (scope.size() < 2) {
         return false;
@@ -1251,6 +1274,12 @@ int FunctionCallNode::parseInitCall(QoreValue& val, QoreParseContext& parse_cont
     }
 
     if (!fe && !defer_source_function) {
+        // A bare call whose name resolves to a class is the unambiguous missing-`new` trap.  Detect
+        // it before parseResolveFunctionEntry() emits the generic "function cannot be found" error
+        // so both humans and tools receive an exact, mechanically applicable correction.
+        if (QoreClass* qc = qore_root_ns_private::parseFindClass(loc, c_str, false)) {
+            return raise_missing_new_constructor(parse_context.pgm, loc, *qc, c_str);
+        }
         fe = qore_root_ns_private::parseResolveFunctionEntry(loc, c_str);
     }
     free(c_str);
@@ -1673,6 +1702,15 @@ int StaticMethodCallNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_
                 return parse_init_value(val, parse_context);
             } else {
                 assert(!n);
+            }
+
+            // A namespace-qualified class call (Ns::C()) reaches the static-call parser.  A real
+            // function with that name was resolved above, so a class match here is just as precise
+            // as the unqualified C() case.
+            if (!defer_source_static_receiver) {
+                if (QoreClass* called_class = qore_root_ns_private::parseFindScopedClass(loc, *scope, false)) {
+                    return raise_missing_new_constructor(parse_context.pgm, loc, *called_class, scope->ostr);
+                }
             }
 
             if (qore_aot_source_parse_active() && scope->size() >= 2) {

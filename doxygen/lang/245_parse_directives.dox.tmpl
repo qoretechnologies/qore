@@ -61,7 +61,7 @@
     |@ref elif "%elif" <em>expression</em>|Allows for testing additional conditions in a @ref conditional_parsing "conditionally-parsed" block started by @ref parse_if "%if"; uses the same expression syntax as @ref parse_if "%if"
     |@ref else "%else"|Allows for parsing an alternate block when used with the @ref parse_if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives (for @ref conditional_parsing "conditional parsing based on parse defines") <br><br>Since %Qore 0.8.3
     |@ref enable-all-warnings "%enable-all-warnings"|Turns on all non-strict @ref warnings "warnings"
-    |@ref strict-warnings "%strict-warnings"|Enables strict warnings (ambiguous overload/call resolution)<br><br>Since %Qore 3.0
+    |@ref strict-warnings "%strict-warnings"|Enables strict warnings (ambiguous resolution and likely language traps)<br><br>Since %Qore 3.0
     |@ref enable-debug "%enable-debug"|Enables @@assert and @@debug statements; without this directive, these statements are skipped at parse time with no runtime overhead; equivalent to parse option @ref Qore::PO_ENABLE_DEBUG<br><br>Since %Qore 2.1
     |@ref enable-warning "%enable-warning" <em>@ref warnings "warning-code"</em>|Enables the named @ref warnings "warning"
     |@ref endif "%endif"|Closes a @ref conditional_parsing "conditionally-parsed" block started by the @ref parse_if "%if", @ref ifdef "%ifdef", or @ref ifndef "%ifndef" parse directives <br><br>Since %Qore 0.8.3
@@ -1161,8 +1161,8 @@ i+ =4;
     n/a
 
     @par Description
-    Enables strict warnings (ambiguous overload and call resolution) while parsing. See @ref warnings for more
-    information.
+    Enables strict warnings (ambiguous resolution and likely language traps) while parsing. See @ref warnings for
+    more information.
 
     @since %Qore 3.0
 

@@ -194,7 +194,9 @@ static bool old_style_default_enabled() {
 static void auto_enable_modern_for_command_line_source(QoreProgram* pgm) {
     if (!old_style_default_enabled()) {
         pgm->parseSetParseOptions(PO_MODERN);
-        warnings = QP_WARN_ALL;
+        // Preserve strict warnings explicitly requested on the command line. Modern mode contributes the
+        // non-strict default set; it must not replace warning bits already selected by the user.
+        warnings |= QP_WARN_ALL;
     }
 }
 
@@ -244,7 +246,7 @@ static const char helpstr[] =
    "      --version-animation      show animated version display and quit\n"
    "      --short-version          show short version information and quit\n"
    "  -W, --enable-all-warnings    turn on all non-strict warnings (recommended)\n"
-   "      --strict-warnings        turn on strict warnings (ambiguous overloads/calls)\n"
+   "      --strict-warnings        turn on strict warnings (ambiguity and language traps)\n"
    "  -w, --enable-warning=arg     turn on warning given by argument\n"
    "  -x, --exec-class[=arg]       instantiate class with same name as file name\n"
    "                               (override with arg, also sets --no-top-level)\n"

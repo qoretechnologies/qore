@@ -13,6 +13,7 @@ public class DiagJsonCliTest inherits QUnit::Test {
     constructor() : Test("DiagJsonCliTest", "1.0") {
         addTestCase("json error output", \testJsonError());
         addTestCase("json empty for clean program", \testJsonClean());
+        addTestCase("json language trap warning", \testJsonLanguageTrapWarning());
         addTestCase("json via environment variable", \testJsonEnv());
         set_return_value(main());
     }
@@ -40,6 +41,12 @@ public class DiagJsonCliTest inherits QUnit::Test {
         return backquote(cmd);
     }
 
+    private string runTrapDiag(string src) {
+        string cmd = sprintf("%s --diag-format=json --enable-warning=language-traps -e %s 2>/dev/null",
+            qoreBin(), shellQuote(src));
+        return backquote(cmd);
+    }
+
     private string runEnv(string src) {
         string cmd = sprintf("QORE_DIAG_FORMAT=json %s -e %s 2>/dev/null",
             qoreBin(), shellQuote(src));
@@ -50,6 +57,12 @@ public class DiagJsonCliTest inherits QUnit::Test {
         string out = runDiag("class MyWidget {} MyWidget sub f() { return new MyWidgett(); }");
         assertRegex("\"severity\":\"error\"", out);
         assertRegex("\"code\":\"PARSE-EXCEPTION\"", out);
+        assertRegex("\"id\":\"PARSE-EXCEPTION\"", out);
+        assertRegex("\"hint\":null", out);
+        assertRegex("\"suggestions\":\\[\\]", out);
+        assertRegex("\"facts\":\\{\\}", out);
+        assertRegex("\"relatedLocations\":\\[\\]", out);
+        assertRegex("\"fixes\":\\[\\]", out);
         assertRegex("undefined class 'MyWidgett'; did you mean 'MyWidget'", out);
         # a real column span must be present (a positive integer)
         assertRegex("\"startColumn\":[0-9]+", out);
@@ -59,6 +72,15 @@ public class DiagJsonCliTest inherits QUnit::Test {
     testJsonClean() {
         string out = runDiag("int sub f() { return 1; }");
         assertEq("[]", trim(out), "clean program emits an empty JSON array");
+    }
+
+    testJsonLanguageTrapWarning() {
+        string out = runTrapDiag("nothing sub f() { int x; int y = x; }");
+        assertRegex("\"severity\":\"warning\"", out);
+        assertRegex("\"code\":\"LANGUAGE-TRAP\"", out);
+        assertRegex("\"id\":\"UNINITIALIZED-LOCAL-READ\"", out);
+        assertRegex("\"variable\":\"x\"", out);
+        assertRegex("initialize 'x' before this read", out);
     }
 
     testJsonEnv() {

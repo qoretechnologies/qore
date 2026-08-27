@@ -2034,6 +2034,39 @@ static AbstractQoreNode* process_dot(int sline, int eline, QoreValue l, QoreValu
     return new QoreHashObjectDereferenceOperatorNode(loc, l, r);
 }
 
+static AbstractQoreNode* process_hard_keyword_member(int sline, int scol, QoreValue left,
+        QoreStringNode* member) {
+    const char* keyword = member->c_str();
+    const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(
+        sline, sline, scol, scol + member->size() + 1);
+    QoreStringMaker replacement("{\"%s\"}", keyword);
+    QoreDiagnosticMetadata metadata("HARD-KEYWORD-MEMBER-ACCESS",
+        "hard keywords cannot be used with dot member syntax; use a quoted hash subscript");
+    metadata.addFact("keyword", keyword);
+    metadata.addFact("accessSyntax", "dot");
+    metadata.addSuggestion(replacement.c_str());
+    metadata.addFix(QoreStringMaker("replace '.%s' with '%s'", keyword, replacement.c_str()).c_str(),
+        "machine-applicable").addEdit(*loc, replacement.c_str());
+    QoreStringNode* desc = new QoreStringNodeMaker("hard keyword '%s' cannot be used after '.'; "
+        "write %s instead", keyword, replacement.c_str());
+    qore_program_private::makeParseException(getProgram(), *loc, "PARSE-EXCEPTION", desc, metadata);
+    return new QoreHashObjectDereferenceOperatorNode(loc, left, member);
+}
+
+static void make_readonly_untyped_local_error(const QoreProgramLocation* loc, const char* name) {
+    QoreStringMaker suggestion("const auto %s", name);
+    QoreDiagnosticMetadata metadata("READONLY-LOCAL-REQUIRES-TYPE",
+        "read-only local declarations require an explicit type; use 'auto' when the initializer should infer it");
+    metadata.addFact("variable", name);
+    metadata.addFact("declarationKind", "read-only-local");
+    metadata.addFact("requiredTypeSyntax", "explicit");
+    metadata.addSuggestion(suggestion.c_str());
+    metadata.addFix("add 'auto' or another explicit type after 'const'", "review-required");
+    QoreStringNode* desc = new QoreStringNodeMaker("read-only local variable '%s' declared without type "
+        "information; use 'const auto %s' or another explicit type", name, name);
+    qore_program_private::makeParseException(getProgram(), *loc, "PARSE-EXCEPTION", desc, metadata);
+}
+
 static int check_strong_encapsulation(const QoreProgramLocation* loc, const char* type, const char* name) {
     if (parse_check_parse_option(PO_STRONG_ENCAPSULATION)) {
         parse_error(*loc, "illegal out of line %s definition \"%s\" (conflicts with parse option PO_STRONG_ENCAPSULATION)", type, name);
@@ -2320,9 +2353,10 @@ static QoreParseListNode* append_call_args(QoreParseListNode* positional, QorePa
     return positional;
 }
 
-static AbstractQoreNode* processCall(int sline, int eline, QoreValue $1, QoreParseListNode* args) {
+static AbstractQoreNode* processCall(int sline, int eline, int scol, int ecol, QoreValue $1,
+        QoreParseListNode* args) {
     AbstractQoreNode* $$;
-    const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(sline, eline);
+    const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(sline, eline, scol, ecol);
 
     qore_type_t t = $1.getType();
     if (t == NT_BAREWORD) {
@@ -2717,6 +2751,7 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %token <Regex> REGEX_EXTRACT "regular expression extraction expression"
 %token <implicit_arg> IMPLICIT_ARG_REF "implicit argument reference"
 %token <String> DOT_KW_IDENTIFIER "keyword used as hash key or object member reference"
+%token <String> DOT_HARD_KEYWORD "hard keyword used as hash key or object member reference"
 %token <trymod> TRY_MODULE_ERROR "%try-module error token"
 
 %nonassoc IFX SCOPED_REF SCOPED_VREF
@@ -2752,7 +2787,7 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %right TOK_BACKGROUND TOK_DELETE TOK_REMOVE QORE_CAST QORE_OR_NOTHING_CAST
 %nonassoc TOK_NEW
 %nonassoc P_INCREMENT P_DECREMENT
-%left '{' '[' '.' '(' DOT_KW_IDENTIFIER  // list and object references, etc, defined for precedence
+%left '{' '[' '.' '(' DOT_KW_IDENTIFIER DOT_HARD_KEYWORD  // list and object references, etc, defined for precedence
 
 %type <sblock>         block
 %type <sblock>         statement_or_block
@@ -2836,7 +2871,7 @@ DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
 %destructor { delete $$; } TRY_MODULE_ERROR REGEX REGEX_SUBST REGEX_EXTRACT REGEX_TRANS BASE_CLASS_CALL CLASS_SCOPED_REF block statement_or_block statements statement return_statement try_statement hash_element context_mods context_mod inline_methoddef class_def hashdecl_def enum_def enum_members enum_member top_namespace_decl scoped_const_decl unscoped_const_decl switch_statement case_block case_code superclass base_constructor internal_member_list private_member_list public_member_list member_list member_list2 base_constructor_list base_constructors return_value member member2 transient_member transient_member2 hashdecl_member superclass_list inheritance_list qtypedef uncqtypedef callable_return_type classvardecl sub_def scoped_sub_def gvardecl outofline_methoddef hash alt_hash hashdecl_inherits
 %destructor { qore_class_private::get(*$$)->deref(true, true); } class_attributes
 %destructor { free($$); } IDENTIFIER ANGLE_IDENTIFIER VAR_REF SELF_REF CONTEXT_REF COMPLEX_CONTEXT_REF BACKQUOTE SCOPED_REF SCOPED_VREF KW_IDENTIFIER_OPENPAREN QORE_CAST QORE_OR_NOTHING_CAST CLASS_STRING CLASS_GENERIC_STRING optname identifier ident_openparen HASHDECL_IDENTIFIER_OPENCURLY
-%destructor { if ($$) $$->deref(); } namespace_decl namespace_decls string QUOTED_WORD DATETIME BINARY IMPLICIT_ARG_REF DOT_KW_IDENTIFIER hashdecl_attrs list list_n call_args named_call_args named_arg_list
+%destructor { if ($$) $$->deref(); } namespace_decl namespace_decls string QUOTED_WORD DATETIME BINARY IMPLICIT_ARG_REF DOT_KW_IDENTIFIER DOT_HARD_KEYWORD hashdecl_attrs list list_n call_args named_call_args named_arg_list
 %destructor { if ($$) $$->deref(nullptr); } immediate_typed_hash
 %destructor { QoreValue($$).discard(nullptr); } scalar exp exp_n exp_c myexp
 
@@ -5139,8 +5174,7 @@ exp_c:
             delete $2;
         } else {
             if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
-                parse_error(*loc, "read-only local variable '%s' declared without type information; use 'const auto %s' "
-                    "or another explicit type", $3, $3);
+                make_readonly_untyped_local_error(loc, $3);
             }
             v = new VarRefDeclNode(loc, $3, get_var_type(), autoTypeInfo);
         }
@@ -5170,8 +5204,7 @@ exp_c:
             @2.last_line, @1.first_col,
             @2.last_col);
         if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
-            parse_error(*loc, "read-only local variable '%s' declared without type information; use 'const auto %s' "
-                "or another explicit type", $2, $2);
+            make_readonly_untyped_local_error(loc, $2);
         }
         VarRefDeclNode* v = new VarRefDeclNode(loc, $2, get_var_type(), autoTypeInfo);
         v->setReadOnlyDecl();
@@ -5198,7 +5231,7 @@ exp_c:
         if (!parse_check_parse_option(PO_ALLOW_BARE_REFS))
             parse_error(*loc, "local variable '%s' declared without '$' prefix, but parse option 'allow-bare-refs' is "
                 "not set", $2);
-        $$ = processCall(@1.first_line, @4.last_line, decl, $3);
+        $$ = processCall(@1.first_line, @4.last_line, @1.first_col, @4.last_col, decl, $3);
     }
     | TOK_MY uncqtypedef identifier {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
@@ -5838,7 +5871,7 @@ exp:
     | exp '?' exp ':' exp               { $$ = (new QoreQuestionMarkOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, $3, $5)); }
     | exp P_INCREMENT                   { $$ = (new QorePostIncrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1)); } // post-increment
     | exp P_DECREMENT                   { $$ = (new QorePostDecrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1)); } // post-decrement
-    | exp '(' call_args ')'                 { $$ = (processCall(@1.first_line, @4.last_line, $1, $3)); }
+    | exp '(' call_args ')'                 { $$ = (processCall(@1.first_line, @4.last_line, @1.first_col, @4.last_col, $1, $3)); }
     | exp LOGICAL_AND exp               {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         check_operator_log_or(loc, $1, "logical AND");
@@ -5906,6 +5939,7 @@ exp:
     | exp RANGE exp                     { $$ = (new QoreRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
     | exp '.' exp                       { $$ = (process_dot(@1.first_line, @3.last_line, $1, $3)); }
     | exp DOT_KW_IDENTIFIER             { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1, $2)); }
+    | exp DOT_HARD_KEYWORD              { $$ = process_hard_keyword_member(@2.first_line, @2.first_col, $1, $2); }
     ;
 
 exp_n:
@@ -5944,7 +5978,7 @@ exp_n:
     | exp_n '?' exp ':' exp               { $$ = (new QoreQuestionMarkOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @5.last_line, @1.first_col, @5.last_col), $1, $3, $5)); }
     | exp_n P_INCREMENT                   { $$ = (new QorePostIncrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1)); } // post-increment
     | exp_n P_DECREMENT                   { $$ = (new QorePostDecrementOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1)); } // post-decrement
-    | exp_n '(' call_args ')'                 { $$ = (processCall(@1.first_line, @4.last_line, $1, $3)); }
+    | exp_n '(' call_args ')'                 { $$ = (processCall(@1.first_line, @4.last_line, @1.first_col, @4.last_col, $1, $3)); }
     | exp_n LOGICAL_AND exp               {
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col);
         check_operator_log_or(loc, $1, "logical AND");
@@ -6014,6 +6048,7 @@ exp_n:
     | exp_n RANGE exp                     { $$ = (new QoreRangeOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
     | exp_n '.' exp                       { $$ = (process_dot(@1.first_line, @3.last_line, $1, $3)); }
     | exp_n DOT_KW_IDENTIFIER             { $$ = (new QoreHashObjectDereferenceOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), $1, $2)); }
+    | exp_n DOT_HARD_KEYWORD              { $$ = process_hard_keyword_member(@2.first_line, @2.first_col, $1, $2); }
     ;
 
 string:

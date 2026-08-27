@@ -1107,6 +1107,7 @@ static bool angle_balanced(const char* p) {
 }
 
 #define DO_DOT_KW_IDENTIFIER(kw) { yylval->String = new QoreStringNode(kw); size_t pos = yylval->String->size() + 1; if (yytext[pos]) unput(yytext[pos]); return DOT_KW_IDENTIFIER; }
+#define DO_DOT_HARD_KEYWORD(kw) { yylval->String = new QoreStringNode(kw); size_t pos = yylval->String->size() + 1; if (yytext[pos]) unput(yytext[pos]); return DOT_HARD_KEYWORD; }
 
 #define QORE_FLEX_DO_EOF { /* delete current buffer */ yy_delete_buffer(YY_CURRENT_BUFFER, yyscanner); \
     /* get last parse state */ YY_BUFFER_STATE yybs = (YY_BUFFER_STATE)endParsing(); \
@@ -2925,6 +2926,12 @@ returns{WS}*\(                          yylval->string = strdup("returns"); retu
 public{WS}*\(                           yylval->string = strdup("public"); return KW_IDENTIFIER_OPENPAREN;
 deprecated{WS}*\(                       yylval->string = strdup("deprecated"); return KW_IDENTIFIER_OPENPAREN;
 module{WS}*\(                           yylval->string = strdup("module"); return KW_IDENTIFIER_OPENPAREN;
+\.enum([^A-Za-z_0-9]|$)                 {
+                                            if (getProgram()->getParseOptions() & PO_NO_ENUM) {
+                                                DO_DOT_KW_IDENTIFIER("enum")
+                                            }
+                                            DO_DOT_HARD_KEYWORD("enum")
+                                        }
 \.returns[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("returns")
 \.new[^A-Za-z_0-9]                      DO_DOT_KW_IDENTIFIER("new")
 \.private[^A-Za-z_0-9]                  DO_DOT_KW_IDENTIFIER("private")

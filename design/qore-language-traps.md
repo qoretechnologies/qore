@@ -17,17 +17,43 @@ and would have been documented as true if they had not been re-run.
 | Error or symptom | Trap |
 |---|---|
 | `RUNTIME-TYPE-ERROR: <lvalue> expects type 'X', but got no value instead` | [1](#1-a-declaration-does-not-initialize), [9](#9-map-over-nothing-returns-nothing) |
-| `PARSE-TYPE-ERROR: ... the container's element type was inferred from the initial value` | [2](#2-container-types-are-narrowed-by-their-first-value) |
+| `PARSE-TYPE-ERROR: ... the container's element type was inferred from an earlier assignment` | [2](#2-container-types-are-narrowed-by-their-first-value) |
 | `PARSE-TYPE-ERROR: cannot append a value with type 'X' to a list with element type 'Y'` | [2](#2-container-types-are-narrowed-by-their-first-value) |
-| `RUNTIME-TYPE-ERROR: ... this type is the value type of the hash holding the target` | [2](#2-container-types-are-narrowed-by-their-first-value) |
-| `PARSE-EXCEPTION: function 'C()' cannot be found` where `C` is a class | [11](#11-constructing-an-object-in-an-expression-requires-new) |
+| `RUNTIME-TYPE-ERROR: ... this type is the declared value type of the hash holding the target` | [2](#2-container-types-are-narrowed-by-their-first-value) |
+| `PARSE-EXCEPTION: 'C()' names class 'C', not a function` | [11](#11-constructing-an-object-in-an-expression-requires-new) |
 | `PARSE-EXCEPTION: read-only local variable 'X' declared without type information` | [12](#12-a-read-only-local-needs-an-explicit-type) |
-| `syntax error, unexpected ';'` / `unexpected <token>` pointing at the *following* line | [10](#10-identifiers-that-collide-with-keywords) |
+| `PARSE-EXCEPTION: hard keyword 'enum' cannot be used after '.'` | [10](#10-identifiers-that-collide-with-keywords) |
 | a lookup always reports "not found"; a loop over an inherited member iterates zero times | [6](#6-privateinternal-is-invisible-to-subclasses-silently) |
 | a method override is ignored, with no error | [7](#7-the-first-inherits-branch-wins) |
 | a declared capability/option key reads as absent | [5](#5-presence-emptiness-and-absence-are-three-different-things) |
 | a remote call exceeds an interval limit only in some time zones | [8](#8-days-and-months-are-calendar-units) |
 | a character loop truncates non-ASCII text or reads past the end | [13](#13-size-counts-bytes-length-counts-characters) |
+
+## Parser and tool feedback
+
+The parser reports traps only when it can identify the exact construct and give advice that is valid for that
+construct. Provable failures are errors; cases that can be intentional use the opt-in `language-traps` strict
+warning (`%enable-warning language-traps`, `--enable-warning language-traps`, `%strict-warnings`, or
+`WARN_LANGUAGE_TRAPS` in the embedding API). The warning is deliberately excluded from `WARN_ALL` and the
+default `%modern` warning set.
+
+Every targeted diagnostic has a stable semantic `id`, a plain-language `hint`, machine-readable `facts`, and
+one or more `suggestions`. Exact source rewrites are marked `machine-applicable`; advice requiring a choice is
+marked `review-required`. This lets an editor or coding agent act on the diagnostic without matching mutable
+exception prose.
+
+| Diagnostic ID | Severity and exact detection boundary | Primary correction |
+|---|---|---|
+| `UNINITIALIZED-LOCAL-READ` | strict warning for a direct read of a non-optional local that is not definitely assigned; optional locals, `exists` operands, declaration sites, assignment targets, and reads after all control-flow branches assign are excluded | initialize before the read or make absence explicit in the type |
+| `NARROWED-CONTAINER-TYPE-MISMATCH` | error only when the parser can trace an `auto` container's effective element type to a narrowing assignment | use `auto!` only for an intentionally heterogeneous container |
+| `NULL-NOTHING-COMPARISON` | strict warning for a parse-time-known `NULL`/`NOTHING` comparison with `==`, `!=`, `===`, or `!==` | test the two states separately according to the data contract |
+| `HASH-MEMBER-TRUTHINESS` | strict warning when a statically container-valued hash member is converted directly to bool by `if`, loop, ternary, `!`, `&&`, or `\|\|`; scalar members and members passed through another expression are excluded | use `hasKey()` if presence is intended |
+| `OPTIONAL-MAP-RESULT` | strict warning for a direct `map` result whose source's static type permits `NOTHING` assigned to a required list; optional and explicitly coalesced targets are excluded, and the wording does not claim that a runtime guard is absent | confirm the source is non-`NOTHING` on every path, coalesce with `?? ()`, or make the target optional |
+| `HARD-KEYWORD-MEMBER-ACCESS` | syntax error only for a hard keyword after `.` | apply the exact quoted-subscript replacement |
+| `MISSING-NEW-CONSTRUCTOR` | error only after callable lookup fails and the same reachable name resolves to a class | apply the exact `new ` insertion |
+| `READONLY-LOCAL-REQUIRES-TYPE` | error for an untyped read-only local when types are required | write `const auto NAME` or a concrete type |
+| `STRING-MULTIPLICATION-IS-NUMERIC` | strict warning when exactly one `*` operand is a parse-time-known string and the other is statically numeric | call `strmul()` |
+| `EXISTS-OPTIONAL-REFERENCE-VALUE` | strict warning for `exists` applied directly to an optional local reference | return `{found, value}` or pass a separate supplied flag |
 
 ---
 
@@ -54,6 +80,9 @@ int j = i;   # RUNTIME-TYPE-ERROR: <lvalue> expects type 'int', but got no value
 before it is unconditionally set, or declare it `*int` to say that "no value" is expected. Test with
 `exists`, never with `== 0` / `== ""` / a truth test.
 
+The opt-in `UNINITIALIZED-LOCAL-READ` warning uses definite-assignment state merged across control-flow
+branches. It does not warn for optional declarations or deliberate `exists` checks.
+
 ## 2. Container types are narrowed by their first value
 
 `hash<auto>` and `list<auto>` accept any hash or list and then **keep** the concrete type they were
@@ -72,8 +101,8 @@ The full message names the fix itself:
 
 ```
 PARSE-TYPE-ERROR: lvalue for assignment operator '=' expects type '*int', but right-hand side is
-type 'date'; the container's element type was inferred from the initial value; to use mixed types,
-include values of all needed types in the initial assignment, or use hash<auto!> or list<auto!> to
+type 'date'; the container's element type was inferred from an earlier assignment; to use mixed types,
+include values of all needed types in that assignment, or use hash<auto!> or list<auto!> to
 disable type narrowing for the variable
 ```
 
@@ -84,10 +113,16 @@ Three things make this bite unpredictably:
 - typed lists enforce at parse time too — `list<int> l = (1,2); l += "x";` is
   `PARSE-TYPE-ERROR: cannot append a value with type 'string' to a list with element type 'int'`;
 - when the value crosses a function boundary the parser cannot see it, and the same defect surfaces
-  at run time instead — the message again names the fix:
+  at run time instead. Runtime code can identify the holding container but cannot always recover its
+  source declaration, so its message deliberately does not guess that `auto!` is appropriate:
   `RUNTIME-TYPE-ERROR: <lvalue> expects type 'string', but got type 'hash<string, int>' instead; this
-  type is the value type of the hash holding the target; if that value type was narrowed from the
-  hash's initial value, declare the variable as 'hash<auto!>' to disable type narrowing`.
+  type is the declared value type of the hash holding the target; review the container declaration
+  and the value being assigned`.
+
+The structured diagnostic ID is `NARROWED-CONTAINER-TYPE-MISMATCH` only when the parser can prove
+that the target variable has an inferred container type and can identify the assignment that established
+it. Explicitly typed targets use `INCOMPATIBLE-ASSIGNMENT-TYPE` or
+`INCOMPATIBLE-LIST-ELEMENT-TYPE` and never receive `auto!` guidance.
 
 **Do:** declare `hash<auto!>` / `list<auto!>` when the container genuinely holds mixed types, and say
 in a comment why it is heterogeneous. Hash addition (`h + {...}`) does widen and is tempting as a
@@ -105,6 +140,9 @@ printf("%y %y %y\n", NULL === NOTHING, NULL == NOTHING, exists NULL);   # False 
 `exists NULL` being `True` is the sharp edge: `exists` does not distinguish them. A database column
 or a JSON `null` round-trips as `NULL`, and code that treats "no value" and "null value" as the same
 thing will silently write one where the other is meant.
+
+Comparisons where both values are known at parse time receive the opt-in `NULL-NOTHING-COMPARISON` warning.
+Comparisons involving variables are not diagnosed because the parser cannot infer the intended data contract.
 
 ## 4. Hash addition widens; assignment does not
 
@@ -139,6 +177,11 @@ key whose value is an often-empty settings hash:
 if (caps.elicitation)          { ... }   # wrong: an empty settings hash reads as absent
 if (caps.hasKey("elicitation")) { ... }  # right
 ```
+
+The opt-in `HASH-MEMBER-TRUTHINESS` warning covers direct condition tests when the member is statically a hash
+or list, including direct `!`, `&&`, and `||` operands. It remains quiet for scalar members, explicit
+`hasKey()` or non-empty checks, and values passed to another expression because those cases do not establish
+that member truthiness itself carries the condition.
 
 ## 6. `private:internal` is invisible to subclasses, silently
 
@@ -225,6 +268,11 @@ list<string> rv = map string($1), src;
 **Do:** coerce with `?? ()` when the source may be `NOTHING`:
 `list<string> rv = (map string($1), src) ?? ();`
 
+When the optional source type and required assignment target are both visible, the opt-in strict warning reports
+`OPTIONAL-MAP-RESULT` before execution. The parser does not claim that an enclosing runtime guard is absent, so
+the diagnostic asks the user to confirm control flow as one valid resolution. An optional target or explicit
+coalescing is accepted without this diagnostic.
+
 ## 10. Identifiers that collide with keywords
 
 Soft keywords (`sub`, `elements`, `keys`, `context`, `final`, …) are usable as hash member names after
@@ -236,8 +284,9 @@ h{"enum"}    # fine
 ```
 
 This bites when mirroring an external field name into Qore — a JSON Schema `enum` field, OpenID
-Connect's `sub`. The resulting parse error usually points at the *following* line, so it reads as a
-mistake in code that is fine.
+Connect's `sub`. The parser reports `HARD-KEYWORD-MEMBER-ACCESS` on the exact `.enum` span and
+provides a machine-applicable replacement with `{"enum"}`; other syntax errors retain the ordinary
+parser diagnostic.
 
 **Do:** write any externally-derived key that could collide as a quoted subscript.
 
@@ -250,9 +299,13 @@ are contextual keywords only.
 
 ```qore
 class C { string f() { return "v"; } }
-C().f();          # PARSE-EXCEPTION: function 'C()' cannot be found
+C().f();          # PARSE-EXCEPTION: 'C()' names class 'C', not a function
 (new C()).f();    # correct
 ```
+
+The structured diagnostic ID is `MISSING-NEW-CONSTRUCTOR`; it includes the resolved class name and
+a machine-applicable insertion of `new `. This check also applies to qualified names such as
+`Ns::C()` and does not fire if a reachable function with the same name exists.
 
 Separately: never take a call reference on a temporary object
 (`\obj.getChild("x").doRequest()`) — the temporary is released before the call runs and you get
@@ -269,6 +322,9 @@ const string X = "v";   # correct
 
 The error text already names the fix; it is listed here only because the same declaration is legal at
 namespace scope, so the failure looks arbitrary.
+
+The structured diagnostic ID is `READONLY-LOCAL-REQUIRES-TYPE`; its suggested `const auto NAME` form is
+review-required because a concrete type can be the better correction.
 
 ## 13. `size()` counts bytes; `length()` counts characters
 
@@ -288,7 +344,8 @@ Two more standard-library signatures worth checking rather than assuming:
 - `int / int` is integer division truncating **toward zero**: `7 / 2` is `3`, `-7 / 2` is `-3`.
   Flooring a negative quotient needs an explicit correction, and there is no `div` operator.
 - `"0" * 64` is numeric multiplication and evaluates to the integer `0`; it does not repeat the
-  string. Use `strmul()`.
+  string. Use `strmul()`. A string value known at parse time multiplied by a statically numeric expression
+  receives the opt-in `STRING-MULTIPLICATION-IS-NUMERIC` warning; dynamic operands are not guessed at.
 - `float()` **saturates** at the largest finite double rather than overflowing to infinity:
   `float("2e+308")` is `1.7976931348623157e308`. Any shortest-round-trip search over float formatting
   must guard against this explicitly.
@@ -305,6 +362,8 @@ int b;      t(\b);   # False  <- a reference WAS supplied
 `exists r` cannot distinguish "no reference supplied" from "reference to an unassigned variable", so
 it cannot be used to detect whether the caller passed one. Return a `{found, value}` hash, or use a
 separate flag parameter, when the distinction matters.
+
+Direct checks of an optional local reference receive the opt-in `EXISTS-OPTIONAL-REFERENCE-VALUE` warning.
 
 ---
 

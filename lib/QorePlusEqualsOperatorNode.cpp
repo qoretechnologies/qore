@@ -48,6 +48,7 @@ int QorePlusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
         parse_context.typeInfo = nullptr;
         err = parse_init_value(left, parse_context);
         ti = parse_context.typeInfo;
+        fh0.preserveFlags(PF_NARROWED_TYPE);
     }
     if (!err) {
         err = checkLValue(left, parse_context.pflag);
@@ -79,12 +80,19 @@ int QorePlusEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& 
                 QoreStringNode* edesc = new QoreStringNodeMaker(
                     "cannot append a value with type '%s' to a list with element type '%s'",
                     QoreTypeInfo::getName(rightTypeInfo), QoreTypeInfo::getName(eti));
-                // Add context about type narrowing
-                edesc->concat("; the list's element type was inferred from the initial value; "
-                    "to use mixed types, include values of all needed types in the initial assignment, "
-                    "or use list<auto!> to disable type narrowing for the variable; "
-                    "note: %broken-narrowed-types will suppress this error but move it to runtime");
-                qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", edesc);
+                // Inspect the target itself; the right-hand expression can independently contain
+                // a narrowed variable and set PF_NARROWED_TYPE.
+                bool narrowed = qore_is_narrowed_lvalue(left);
+                if (narrowed) {
+                    edesc->concat("; the list's element type was inferred from an earlier assignment; "
+                        "to use mixed types, include values of all needed types in that assignment, "
+                        "or use list<auto!> to disable type narrowing for the variable; "
+                        "note: %broken-narrowed-types will suppress this error but move it to runtime");
+                }
+                QoreDiagnosticMetadata metadata = qore_make_lvalue_type_diagnostic(left, eti, rightTypeInfo,
+                    narrowed, "INCOMPATIBLE-LIST-ELEMENT-TYPE", "+=");
+                qore_program_private::makeParseException(getProgram(), *loc, "PARSE-TYPE-ERROR", edesc,
+                    metadata);
                 if (!err) {
                     err = -1;
                 }

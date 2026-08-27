@@ -15,6 +15,28 @@ public class StructuredDiagnosticsTest inherits QUnit::Test {
         addTestCase("toggle flag", \testToggleFlag());
         addTestCase("structured error with column + suggestion", \testStructuredError());
         addTestCase("structured warning with warning code", \testStructuredWarning());
+        addTestCase("narrowed hash mismatch metadata", \testNarrowedHashMismatch());
+        addTestCase("narrowed list append metadata", \testNarrowedListAppend());
+        addTestCase("explicit list mismatch does not claim narrowing", \testExplicitListMismatch());
+        addTestCase("explicit hash mismatch does not claim narrowing", \testExplicitHashMismatch());
+        addTestCase("narrowed RHS does not taint explicit list", \testNarrowedRhsExplicitList());
+        addTestCase("narrowed RHS does not taint explicit hash", \testNarrowedRhsExplicitHash());
+        addTestCase("runtime typed container message stays neutral", \testRuntimeTypedContainerMessage());
+        addTestCase("missing new constructor diagnostic", \testMissingNewConstructor());
+        addTestCase("missing new scoped constructor diagnostic", \testMissingNewScopedConstructor());
+        addTestCase("function named like class is not constructor trap", \testFunctionNamedLikeClass());
+        addTestCase("enum member with no-enum is not keyword trap", \testEnumMemberWithNoEnum());
+        addTestCase("hard keyword member diagnostic", \testHardKeywordMember());
+        addTestCase("uninitialized local trap warning", \testUninitializedLocalWarning());
+        addTestCase("intentional absence checks stay quiet", \testIntentionalAbsenceChecks());
+        addTestCase("NULL and NOTHING trap warning", \testNullNothingWarning());
+        addTestCase("string multiplication trap warning", \testStringMultiplicationWarning());
+        addTestCase("optional reference exists trap warning", \testOptionalReferenceExistsWarning());
+        addTestCase("hash member truthiness trap warning", \testHashMemberTruthinessWarning());
+        addTestCase("trap warning boundaries", \testTrapWarningBoundaries());
+        addTestCase("optional map result diagnostic", \testOptionalMapResult());
+        addTestCase("optional and coalesced map targets parse", \testHandledOptionalMapResult());
+        addTestCase("read-only local type diagnostic", \testReadonlyLocalType());
         addTestCase("accurate error columns", \testErrorColumns());
         addTestCase("first-column diagnostic preserved", \testFirstColumnPreserved());
         addTestCase("disabling clears diagnostics", \testClearedOnDisable());
@@ -77,9 +99,15 @@ public class StructuredDiagnosticsTest inherits QUnit::Test {
         }
         assertEq(True, exists err, "undefined-class diagnostic present");
         assertEq("error", err.severity);
+        assertEq("PARSE-EXCEPTION", err.id, "legacy diagnostics use their exception code as the semantic id");
         assertEq("<in>", err.file);
         assertEq(NOTHING, err.warningCode, "errors have no warning code");
         assertRegex("did you mean 'MyWidget'", err.message);
+        assertEq(NOTHING, err.hint, "legacy prose-only suggestions do not invent structured hints");
+        assertEq((), err.suggestions);
+        assertEq({}, err.facts);
+        assertEq((), err.relatedLocations);
+        assertEq((), err.fixes);
         assertGt(0, err.startColumn, "error carries a real start column");
     }
 
@@ -93,8 +121,323 @@ public class StructuredDiagnosticsTest inherits QUnit::Test {
         assertEq(1, diags.size(), "one warning collected");
         assertEq("warning", diags[0].severity);
         assertEq("NON-EXHAUSTIVE-SWITCH", diags[0].code);
+        assertEq("NON-EXHAUSTIVE-SWITCH", diags[0].id);
         assertEq(WARN_NONEXHAUSTIVE_SWITCH, diags[0].warningCode);
         assertRegex("Green", diags[0].message);
+        assertEq("add the missing enum cases or an explicit default: label", diags[0].hint);
+        assertEq("Color", diags[0].facts{"enum"});
+        assertEq("Green", diags[0].facts.missingValues);
+        assertEq("1", diags[0].facts.missingCount);
+    }
+
+    private hash<ParseDiagnosticInfo> parseTypeError(string source) {
+        Program p(PO_MODERN);
+        p.setParseDiagnosticsCollected(True);
+        try {
+            p.parse(sprintf("nothing sub trapTest() { %s }", source), "<type-test>");
+        } catch (hash<ExceptionInfo> ex) {}
+        list<hash<ParseDiagnosticInfo>> diags = p.getParseDiagnostics();
+        foreach hash<ParseDiagnosticInfo> d in (diags) {
+            if (d{"code"} == "PARSE-TYPE-ERROR") {
+                return d;
+            }
+        }
+        assertTrue(False, sprintf("no PARSE-TYPE-ERROR diagnostic for: %s", source));
+        return diags[0];
+    }
+
+    testNarrowedHashMismatch() {
+        hash<ParseDiagnosticInfo> d = parseTypeError(
+            "hash<auto> h = {\"x\": 1}; h.y = \"string\";");
+        assertEq("NARROWED-CONTAINER-TYPE-MISMATCH", d.id);
+        assertEq("hash", d.facts.containerKind);
+        assertEq("h", d.facts.variable);
+        assertEq("hash<auto>", d.facts.declaredType);
+        assertEq("hash<string, int>", d.facts.effectiveType);
+        assertEq("hash<auto!>", d.facts.recommendedType);
+        assertEq(1, d.relatedLocations.size(), "the narrowing assignment is identified");
+        assertEq("narrowing-initializer", d.relatedLocations[0].role);
+        assertRegex("only if it is intentionally heterogeneous", d.hint);
+    }
+
+    testNarrowedListAppend() {
+        hash<ParseDiagnosticInfo> d = parseTypeError(
+            "list<auto> values = (1, 2); values += \"string\";");
+        assertEq("NARROWED-CONTAINER-TYPE-MISMATCH", d.id);
+        assertEq("list", d.facts.containerKind);
+        assertEq("list<auto!>", d.facts.recommendedType);
+        assertRegex("inferred from an earlier assignment", d.message);
+    }
+
+    testExplicitListMismatch() {
+        hash<ParseDiagnosticInfo> d = parseTypeError(
+            "list<int> values = (1, 2); values += \"string\";");
+        assertEq("INCOMPATIBLE-LIST-ELEMENT-TYPE", d.id);
+        assertEq(NOTHING, d.facts.narrowed);
+        assertFalse(d.message =~ /inferred from/, "an explicit list type must not be described as inferred");
+        assertFalse(d.message =~ /auto!/, "an explicit list type must not receive auto! guidance");
+        assertRegex("explicitly declared type", d.hint);
+    }
+
+    testExplicitHashMismatch() {
+        hash<ParseDiagnosticInfo> d = parseTypeError(
+            "hash<string, int> h = {\"x\": 1}; h.y = \"string\";");
+        assertEq("INCOMPATIBLE-ASSIGNMENT-TYPE", d.id);
+        assertEq(NOTHING, d.facts.narrowed);
+        assertFalse(d.message =~ /inferred from/, "an explicit hash type must not be described as inferred");
+        assertFalse(d.message =~ /auto!/, "an explicit hash type must not receive auto! guidance");
+        assertRegex("explicitly declared type", d.hint);
+    }
+
+    testNarrowedRhsExplicitList() {
+        hash<ParseDiagnosticInfo> d = parseTypeError(
+            "list<int> values = (1, 2); list<auto> source = (\"string\",); values += source[0];");
+        assertEq("INCOMPATIBLE-LIST-ELEMENT-TYPE", d.id);
+        assertEq(NOTHING, d.facts.narrowed);
+        assertFalse(d.message =~ /auto!/, "a narrowed RHS must not add narrowing guidance to an explicit LHS");
+    }
+
+    testNarrowedRhsExplicitHash() {
+        hash<ParseDiagnosticInfo> d = parseTypeError(
+            "hash<string, int> target = {\"x\": 1}; "
+            "hash<auto> source = {\"x\": \"string\"}; target = source;");
+        assertEq("INCOMPATIBLE-ASSIGNMENT-TYPE", d.id);
+        assertEq(NOTHING, d.facts.narrowed);
+        assertFalse(d.message =~ /auto!/, "a narrowed RHS must not add narrowing guidance to an explicit LHS");
+    }
+
+    testRuntimeTypedContainerMessage() {
+        list<int> target = (1,);
+        any value = "string";
+        try {
+            target[0] = value;
+            assertTrue(False, "the runtime assignment must reject the incompatible value");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("RUNTIME-TYPE-ERROR", ex.err);
+            assertFalse(ex.desc =~ /auto!/, "an explicit container must not receive auto! runtime guidance");
+        }
+    }
+
+    private hash<ParseDiagnosticInfo> parseFirstError(string source) {
+        Program p(PO_MODERN);
+        p.setParseDiagnosticsCollected(True);
+        try {
+            p.parse(source, "<syntax-trap>");
+        } catch (hash<ExceptionInfo> ex) {}
+        list<hash<ParseDiagnosticInfo>> diags = p.getParseDiagnostics();
+        foreach hash<ParseDiagnosticInfo> d in (diags) {
+            if (d.severity == "error") {
+                return d;
+            }
+        }
+        assertTrue(False, sprintf("no error diagnostic for: %s", source));
+        return diags[0];
+    }
+
+    testMissingNewConstructor() {
+        hash<ParseDiagnosticInfo> d = parseFirstError(
+            "class TrapCtor {} nothing sub trapTest() { TrapCtor(); }");
+        assertEq("MISSING-NEW-CONSTRUCTOR", d.id);
+        assertEq("PARSE-EXCEPTION", d.code);
+        assertEq("TrapCtor", d.facts.className);
+        assertEq("new", d.facts.requiredKeyword);
+        assertRegex("names class 'TrapCtor', not a function", d.message);
+        assertEq("new TrapCtor(...)", d.suggestions[0]);
+        assertEq("machine-applicable", d.fixes[0].applicability);
+        assertEq("new ", d.fixes[0].edits[0].replacement);
+    }
+
+    testMissingNewScopedConstructor() {
+        hash<ParseDiagnosticInfo> d = parseFirstError(
+            "namespace TrapNs { class TrapCtor {} } "
+            "nothing sub trapTest() { TrapNs::TrapCtor(); }");
+        assertEq("MISSING-NEW-CONSTRUCTOR", d.id);
+        assertEq("TrapNs::TrapCtor", d.facts.className);
+        assertEq("new TrapNs::TrapCtor(...)", d.suggestions[0]);
+        assertEq("new ", d.fixes[0].edits[0].replacement);
+    }
+
+    testFunctionNamedLikeClass() {
+        Program p(PO_MODERN);
+        p.setParseDiagnosticsCollected(True);
+        p.parse("class SameName {} nothing sub SameName() {} "
+            "nothing sub trapTest() { SameName(); }", "<function-class-name>");
+        assertEq(0, p.getParseDiagnostics().size(),
+            "a reachable function takes precedence over a class with the same name");
+    }
+
+    testEnumMemberWithNoEnum() {
+        Program p(PO_MODERN | PO_NO_ENUM);
+        p.setParseDiagnosticsCollected(True);
+        p.parse("nothing sub trapTest() { hash<auto> h = {}; any value = h.enum; }", "<no-enum>");
+        assertEq(0, p.getParseDiagnostics().size(),
+            "enum is an identifier when enum syntax is explicitly disabled");
+    }
+
+    testHardKeywordMember() {
+        hash<ParseDiagnosticInfo> d = parseFirstError(
+            "nothing sub trapTest() { hash<auto> h = {}; any value = h.enum; }");
+        assertEq("HARD-KEYWORD-MEMBER-ACCESS", d.id);
+        assertEq("PARSE-EXCEPTION", d.code);
+        assertEq("enum", d.facts.keyword);
+        assertEq("dot", d.facts.accessSyntax);
+        assertRegex("write {\"enum\"} instead", d.message);
+        assertEq("{\"enum\"}", d.fixes[0].edits[0].replacement);
+        assertEq(57, d.startColumn, "diagnostic starts at the dot");
+        assertEq(62, d.endColumn, "diagnostic ends after the keyword");
+    }
+
+    private list<hash<ParseDiagnosticInfo>> parseTrapWarnings(string source) {
+        Program p(PO_MODERN);
+        p.setParseDiagnosticsCollected(True);
+        p.parse(source, "<warning-trap>", WARN_LANGUAGE_TRAPS);
+        return p.getParseDiagnostics();
+    }
+
+    testUninitializedLocalWarning() {
+        list<hash<ParseDiagnosticInfo>> diags = parseTrapWarnings(
+            "nothing sub trapTest() { int value; int copy = value; }");
+        assertEq(1, diags.size());
+        assertEq("warning", diags[0].severity);
+        assertEq("LANGUAGE-TRAP", diags[0].code);
+        assertEq("UNINITIALIZED-LOCAL-READ", diags[0].id);
+        assertEq(WARN_LANGUAGE_TRAPS, diags[0].warningCode);
+        assertEq("value", diags[0].facts.variable);
+        assertEq("int", diags[0].facts.declaredType);
+        assertRegex("declaration does not initialize", diags[0].message);
+    }
+
+    testIntentionalAbsenceChecks() {
+        list<hash<ParseDiagnosticInfo>> diags = parseTrapWarnings(
+            "nothing sub trapTest(bool condition) { int checked; bool present = exists checked; "
+            "*int optional; any allowed = optional; int assigned; "
+            "if (condition) { assigned = 1; } else { assigned = 2; } int copy = assigned; }");
+        assertEq(0, diags.size(), "exists, optional values, and definitely assigned branches stay quiet");
+
+        diags = parseTrapWarnings(
+            "nothing sub trapTest(bool condition) { int partial; if (condition) { partial = 1; } "
+            "int copy = partial; }");
+        assertEq(1, diags.size(), "assignment on only one branch is not definitely assigned");
+        assertEq("UNINITIALIZED-LOCAL-READ", diags[0].id);
+    }
+
+    testNullNothingWarning() {
+        list<hash<ParseDiagnosticInfo>> diags = parseTrapWarnings(
+            "nothing sub trapTest() { bool a = NULL == NOTHING; bool b = NULL != NOTHING; "
+            "bool c = NULL === NOTHING; bool d = NULL !== NOTHING; }");
+        assertEq(4, diags.size());
+        int i = 0;
+        foreach string operation in ("==", "!=", "===", "!==") {
+            assertEq("NULL-NOTHING-COMPARISON", diags[i].id);
+            assertEq("NULL", diags[i].facts.leftValue);
+            assertEq("NOTHING", diags[i].facts.rightValue);
+            assertEq(operation, diags[i].facts.operation);
+            assertRegex("always distinct", diags[i].hint);
+            ++i;
+        }
+    }
+
+    testStringMultiplicationWarning() {
+        list<hash<ParseDiagnosticInfo>> diags = parseTrapWarnings(
+            "nothing sub trapTest() { int zeros = \"0\" * 64; }");
+        assertEq(1, diags.size());
+        assertEq("STRING-MULTIPLICATION-IS-NUMERIC", diags[0].id);
+        assertEq("numeric-multiplication", diags[0].facts.resultSemantics);
+        assertRegex("strmul", diags[0].hint);
+    }
+
+    testOptionalReferenceExistsWarning() {
+        list<hash<ParseDiagnosticInfo>> diags = parseTrapWarnings(
+            "nothing sub trapTest(*reference<int> result) { bool supplied = exists result; }");
+        assertEq(1, diags.size());
+        assertEq("EXISTS-OPTIONAL-REFERENCE-VALUE", diags[0].id);
+        assertEq("result", diags[0].facts.variable);
+        assertEq("referenced-value", diags[0].facts.tests);
+        assertRegex("reference is not bound", diags[0].hint);
+    }
+
+    testHashMemberTruthinessWarning() {
+        list<hash<ParseDiagnosticInfo>> diags = parseTrapWarnings(
+            "nothing sub trapTest(hash<string, hash<auto>> caps) { if (caps.elicitation) {} }");
+        assertEq(1, diags.size());
+        assertEq("HASH-MEMBER-TRUTHINESS", diags[0].id);
+        assertEq("elicitation", diags[0].facts.key);
+        assertEq("truthiness", diags[0].facts.test);
+        assertEq("hasKey(\"elicitation\")", diags[0].suggestions[0]);
+        assertRegex("present empty", diags[0].hint);
+
+        diags = parseTrapWarnings(
+            "nothing sub trapTest(hash<string, hash<auto>> caps) { "
+            "if (!caps.first || (caps.second && True)) {} }");
+        assertEq(2, diags.size(), "direct logical condition operands are each diagnosed");
+        assertEq("first", diags[0].facts.key);
+        assertEq("second", diags[1].facts.key);
+
+        diags = parseTrapWarnings(
+            "bool sub acceptValue(*hash<auto> value) { return exists value; } "
+            "nothing sub trapTest(hash<string, hash<auto>> caps, hash<string, bool> flags) { "
+            "if (caps.hasKey(\"elicitation\")) {} if (caps.elicitation.size()) {} "
+            "if (flags.enabled) {} if (acceptValue(caps.elicitation)) {} }");
+        assertEq(0, diags.size(),
+            "explicit presence, non-empty checks, scalar values, and function arguments stay quiet");
+    }
+
+    testTrapWarningBoundaries() {
+        list<hash<ParseDiagnosticInfo>> diags = parseTrapWarnings(
+            "nothing sub trapTest(reference<int> required, string text) { "
+            "bool required_value_exists = exists required; int numeric = text * 64; "
+            "*any nullable = NULL; bool dynamic_comparison = nullable === NOTHING; }");
+        assertEq(0, diags.size(),
+            "required references and dynamic multiplication/comparisons do not imply trapped intent");
+    }
+
+    testOptionalMapResult() {
+        list<hash<ParseDiagnosticInfo>> diags = parseTrapWarnings(
+            "nothing sub trapTest(*list<int> source) { "
+            "list<string> result = map string($1), source; }");
+        assertEq(1, diags.size());
+        hash<ParseDiagnosticInfo> d = diags[0];
+        assertEq("OPTIONAL-MAP-RESULT", d.id);
+        assertEq("warning", d.severity);
+        assertEq("*list<int>", d.facts.sourceType);
+        assertEq("true", d.facts.sourceTypeAllowsNothing);
+        assertRegex("static type .* permits NOTHING", d.message);
+        assertRegex("control flow does not guarantee", d.hint);
+        assertEq("(map expression) ?? ()", d.suggestions[0]);
+    }
+
+    testHandledOptionalMapResult() {
+        Program optional(PO_MODERN);
+        optional.parse("nothing sub trapTest(*list<int> source) { "
+            "*list<string> result = map string($1), source; }", "<optional-map>");
+        Program coalesced(PO_MODERN);
+        coalesced.parse("nothing sub trapTest(*list<int> source) { "
+            "list<string> result = (map string($1), source) ?? (); }", "<coalesced-map>");
+        Program required(PO_MODERN);
+        required.parse("nothing sub trapTest(list<int> source) { "
+            "list<string> result = map string($1), source; }", "<required-map>");
+        Program unknown(PO_MODERN);
+        unknown.parse("nothing sub trapTest(auto source) { "
+            "list<string> result = map string($1), source; }", "<unknown-map>");
+        Program mixed_source(PO_MODERN);
+        mixed_source.parse("nothing sub trapTest(union<list<int>, string> source) { "
+            "list<string> result = map string($1), source; }", "<mixed-source-map>");
+        Program warning_disabled(PO_MODERN);
+        warning_disabled.parse("nothing sub trapTest(*list<int> source) { "
+            "list<string> result = map string($1), source; }", "<optional-map-warning-disabled>");
+        assertTrue(True,
+            "optional targets, coalesced results, required, unknown, and mixed sources, and disabled trap "
+            "warnings parse appropriately");
+    }
+
+    testReadonlyLocalType() {
+        hash<ParseDiagnosticInfo> d = parseFirstError(
+            "nothing sub trapTest() { const VALUE = 1; }");
+        assertEq("READONLY-LOCAL-REQUIRES-TYPE", d.id);
+        assertEq("VALUE", d.facts.variable);
+        assertEq("read-only-local", d.facts.declarationKind);
+        assertEq("const auto VALUE", d.suggestions[0]);
+        assertEq("review-required", d.fixes[0].applicability);
     }
 
     testErrorColumns() {

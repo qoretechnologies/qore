@@ -10,18 +10,24 @@
     consequence appears somewhere else — usually at run time, and usually only on the input that
     triggers it.  That is what makes them worth collecting in one place.
 
+    Enable the strict @ref warning-language-traps "language-traps" warning to have the parser flag
+    high-confidence instances whose intent can still be legitimate. Provable failures remain errors without
+    requiring the warning. Each targeted diagnostic includes a stable semantic ID, facts, suggestions, and
+    applicability information for editors and coding agents.
+
     @section pitfalls_index Index by Symptom
 
     |!What you see|!Cause|!Read
     |<tt>RUNTIME-TYPE-ERROR: &lt;lvalue&gt; expects type 'int', but got no value instead</tt>|a declared variable was read before being assigned; a declaration does not initialize|@ref declaration_vs_initialization
-    |<tt>PARSE-TYPE-ERROR: ... the container's element type was inferred from the initial value</tt>|a \c hash<auto> or \c list<auto> was narrowed by its first assignment|@ref auto_no_narrow
+    |<tt>PARSE-TYPE-ERROR: ... the container's element type was inferred from an earlier assignment</tt>|a \c hash<auto> or \c list<auto> was narrowed by an assignment|@ref auto_no_narrow
     |a \c map result fails to satisfy a \c list&lt;T&gt; lvalue, but only sometimes|the source was @ref nothing, so \c map returned @ref nothing rather than an empty list|@ref map
     |a hash key that is present tests as absent|the key's value is an empty hash or list, which is @ref False|@ref hash_key_presence_tests
     |a value compares equal to both a real value and "missing"|@ref NULL is not @ref NOTHING; <tt>exists NULL</tt> is @ref True|@ref null
     |a method override is silently ignored|another branch of the <tt>inherits</tt> clause is listed first|@ref multiple_inheritance_order
     |a subclass reads a parent member as empty, with no error|the member is <tt>private:internal</tt> and is invisible to subclasses|@ref pitfalls_private_internal
     |an interval drifts by an hour, or exceeds a remote limit only in some time zones|\c D and \c M are calendar components, not fixed durations|@ref date_time_arithmetic_calendar_components
-    |<tt>syntax error</tt> pointing at the line after the real mistake|an identifier collided with a @ref keywords "keyword"|@ref pitfalls_keywords
+    |<tt>PARSE-EXCEPTION: hard keyword 'enum' cannot be used after '.'</tt>|a dot member name collided with a @ref keywords "hard keyword"|@ref pitfalls_keywords
+    |<tt>PARSE-EXCEPTION: 'C()' names class 'C', not a function</tt>|an object constructor was written without \c new|@ref pitfalls_new
     |a character loop truncates non-ASCII text|@ref <string>::size() "size()" counts bytes, not characters|@ref pitfalls_size_length
 
     @section pitfalls_types Types and Declarations
@@ -29,7 +35,10 @@
     @subsection pitfalls_declaration Declaring a variable does not initialize it
     <tt>int i;</tt> leaves \c i with no value, not \c 0.  Reads mostly appear to work because
     @ref nothing converts to \c 0, \c "" or @ref False as needed, so the failure arrives only where
-    the declared type is actually required.  See @ref declaration_vs_initialization.
+    the declared type is actually required. The strict @ref warning-language-traps "language-traps"
+    warning reports a direct non-optional read that is not definitely assigned, while remaining quiet for
+    optional declarations, @ref exists checks, and reads after every control-flow branch assigns. See
+    @ref declaration_vs_initialization.
 
     @subsection pitfalls_narrowing Container types are narrowed by the first assignment
     <tt>hash&lt;auto&gt; h = {"x": 1};</tt> makes \c h a <tt>hash&lt;string, int&gt;</tt>, so <tt>h.y = "s";</tt>
@@ -40,18 +49,25 @@
     @subsection pitfalls_null NULL is not NOTHING
     @ref NULL is the SQL \c NULL value and is a value: <tt>exists NULL</tt> is @ref True and
     <tt>NULL === NOTHING</tt> is @ref False.  @ref NOTHING is the absence of a value.  Database
-    columns and protocol payloads distinguish the two; see @ref null and @ref nothing.
+    columns and protocol payloads distinguish the two. Comparisons whose values are known at parse time receive
+    the strict @ref warning-language-traps "language-traps" warning; see @ref null and @ref nothing.
 
     @section pitfalls_containers Containers
 
     @subsection pitfalls_presence Presence, emptiness, and absence are three different things
     An empty hash or list is @ref False, so a truth test cannot tell a missing key from a key whose
     value is empty.  Use @ref <hash>::hasKey() "hasKey()" when presence is what carries the
-    meaning; see @ref hash_key_presence_tests.
+    meaning. The strict @ref warning-language-traps "language-traps" warning reports direct condition tests
+    of statically container-valued hash members, while remaining quiet for scalar members, explicit presence
+    or non-empty checks, and values passed through another expression. See @ref hash_key_presence_tests.
 
     @subsection pitfalls_map_nothing map over NOTHING returns NOTHING
     A @ref nothing source yields @ref nothing, while an empty list yields an empty list.  Coerce with
-    <tt>?? ()</tt> where the result must satisfy a typed list; see @ref map.
+    <tt>?? ()</tt> where the result must satisfy a typed list. When the parser sees an optional source and a
+    required list assignment, the strict @ref warning-language-traps "language-traps" warning reports
+    \c OPTIONAL-MAP-RESULT before execution. Its wording allows for an enclosing runtime guard because static
+    type analysis does not prove that the source is absent on that path. Optional and explicitly coalesced targets
+    remain quiet. See @ref map.
 
     @section pitfalls_operators Operators and Functions
 
@@ -74,7 +90,9 @@
 
     @subsection pitfalls_string_repeat Multiplication is always numeric
     <tt>"0" * 64</tt> converts the string to a number and evaluates to the integer \c 0; it does not
-    repeat the string.  Use @ref Qore::strmul() "strmul()" to repeat a string.
+    repeat the string.  Use @ref Qore::strmul() "strmul()" to repeat a string. The strict
+    @ref warning-language-traps "language-traps" warning reports a string value known at parse time multiplied by
+    a statically numeric expression.
 
     @section pitfalls_dates Dates and Intervals
 
@@ -108,17 +126,26 @@
     accepted as hash member names after the @ref dot_operator ". operator", but \c enum is a hard
     keyword and is not.  This bites when mirroring an external field name — a JSON Schema \c enum
     field, or OpenID Connect's \c sub — into %Qore code.  Write the key as a quoted subscript
-    (<tt>h{"enum"}</tt>) whenever it could collide, and note that the resulting parse error usually
-    points at the <i>following</i> line.
+    (<tt>h{"enum"}</tt>) whenever it could collide. The parser reports the exact \c .enum span and
+    supplies that quoted-subscript replacement to diagnostic tools.
 
     @subsection pitfalls_new Constructing an object in an expression requires new
-    <tt>C().f()</tt> is parsed as a call to a function named \c C, giving
-    <tt>PARSE-EXCEPTION: function 'C()' cannot be found</tt>.  Write <tt>(new C()).f()</tt>, or
-    assign the object to a variable first.
+    <tt>C().f()</tt> is parsed as a call to a function named \c C. When the name resolves to a class,
+    the parser gives <tt>PARSE-EXCEPTION: 'C()' names class 'C', not a function</tt> and supplies a
+    machine-applicable insertion of \c new. Write <tt>(new C()).f()</tt>, or assign the object to a
+    variable first. Qualified class names such as <tt>Ns::C()</tt> receive the same feedback.
 
     @subsection pitfalls_const_type A read-only local variable needs an explicit type
     <tt>const X = "v";</tt> inside a method body is rejected with
     <tt>read-only local variable 'X' declared without type information</tt>.  Write
     <tt>const string X = "v";</tt> or <tt>const auto X = "v";</tt>; see
-    @ref readonly_local_variables.
+    @ref readonly_local_variables. Diagnostic tools receive the semantic ID
+    \c READONLY-LOCAL-REQUIRES-TYPE and a review-required suggestion because either inferred or concrete
+    typing can be correct.
+
+    @subsection pitfalls_optional_reference_exists exists on an optional reference tests its value
+    For an optional <tt>*reference&lt;T&gt;</tt>, @ref exists is @ref False both when no reference was supplied
+    and when the reference points to an unassigned variable. It therefore cannot answer whether the caller
+    supplied a reference. Return a <tt>{found, value}</tt> result or pass a separate supplied flag. Direct
+    checks receive the strict @ref warning-language-traps "language-traps" warning.
 */
