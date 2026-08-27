@@ -3912,6 +3912,14 @@ DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticEditInfo(QoreNamespace& ns)
 DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticFixInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticInfo(QoreNamespace& ns);
 
+//! Builds precise structured metadata for assignment and append type errors
+DLLLOCAL QoreDiagnosticMetadata qore_make_lvalue_type_diagnostic(const QoreValue& left,
+        const QoreTypeInfo* expected, const QoreTypeInfo* actual, bool narrowed, const char* base_id,
+        const char* operation);
+
+//! Returns true only when the root variable of @a left is an auto container with a proven narrowed type
+DLLLOCAL bool qore_is_narrowed_lvalue(const QoreValue& left);
+
 class RuntimeConfig;
 //! Returns the QoreProgram a builtin call should operate on: the thread-current Program is
 //! authoritative, falling back to the runtime-config/context Program only when there is no

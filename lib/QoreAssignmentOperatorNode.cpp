@@ -37,6 +37,137 @@
 QoreString QoreAssignmentOperatorNode::op_str("assignment (=) operator expression");
 QoreString QoreWeakAssignmentOperatorNode::op_str("weak assignment (:=) operator expression");
 
+static const VarRefNode* get_lvalue_root_var_ref(QoreValue value) {
+    unsigned depth = 0;
+    while (value.hasNode()) {
+        if (++depth % 100 == 0 && qore_check_cancel(nullptr, "parse lvalue narrowing analysis")) {
+            return nullptr;
+        }
+        if (value.getType() == NT_VARREF) {
+            return value.get<const VarRefNode>();
+        }
+        const AbstractQoreNode* node = value.getInternalNode();
+        if (const auto* op = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+            value = op->getLeft();
+            continue;
+        }
+        if (const auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+            value = op->getLeft();
+            continue;
+        }
+        break;
+    }
+    return nullptr;
+}
+
+static const char* get_type_name(const QoreTypeInfo* type_info) {
+    const char* name = QoreTypeInfo::getName(type_info);
+    return name ? name : "unknown";
+}
+
+bool qore_is_narrowed_lvalue(const QoreValue& left) {
+    const VarRefNode* root = get_lvalue_root_var_ref(left);
+    if (!root) {
+        return false;
+    }
+
+    qore_var_t variable_type = root->getType();
+    if (variable_type == VT_LOCAL || variable_type == VT_CLOSURE || variable_type == VT_LOCAL_TS) {
+        const LocalVar* variable = root->ref.id;
+        return variable && variable->isAutoType() && !variable->isNoNarrowing()
+            && variable->parseGetNarrowedType();
+    }
+    if (variable_type == VT_GLOBAL || variable_type == VT_THREAD_LOCAL) {
+        const Var* variable = root->ref.var;
+        return variable && variable->isAutoType() && !variable->isNoNarrowing()
+            && variable->parseGetNarrowedType();
+    }
+    return false;
+}
+
+QoreDiagnosticMetadata qore_make_lvalue_type_diagnostic(const QoreValue& left,
+        const QoreTypeInfo* expected, const QoreTypeInfo* actual, bool narrowed, const char* base_id,
+        const char* operation) {
+    QoreDiagnosticMetadata metadata(narrowed ? "NARROWED-CONTAINER-TYPE-MISMATCH" : base_id);
+    metadata.addFact("expectedType", get_type_name(expected));
+    metadata.addFact("actualType", get_type_name(actual));
+    metadata.addFact("operation", operation);
+
+    if (!narrowed) {
+        QoreStringMaker hint("use a value compatible with '%s' or change the explicitly declared type",
+            get_type_name(expected));
+        metadata.hint = hint.c_str();
+        return metadata;
+    }
+
+    metadata.addFact("narrowed", "true");
+    const VarRefNode* root = get_lvalue_root_var_ref(left);
+    const QoreTypeInfo* declared = nullptr;
+    const QoreTypeInfo* effective = nullptr;
+    const QoreProgramLocation* narrowed_loc = nullptr;
+    const char* variable_name = nullptr;
+    if (root) {
+        qore_var_t variable_type = root->getType();
+        if (variable_type == VT_LOCAL || variable_type == VT_CLOSURE || variable_type == VT_LOCAL_TS) {
+            const LocalVar* variable = root->ref.id;
+            if (variable) {
+                declared = variable->getTypeInfo();
+                effective = variable->parseGetNarrowedType();
+                narrowed_loc = variable->parseGetNarrowedLoc();
+                variable_name = variable->getName();
+            }
+        } else if (variable_type == VT_GLOBAL || variable_type == VT_THREAD_LOCAL) {
+            const Var* variable = root->ref.var;
+            if (variable) {
+                declared = variable->getTypeInfo();
+                effective = variable->parseGetNarrowedType();
+                narrowed_loc = variable->parseGetNarrowedLoc();
+                variable_name = variable->getName();
+            }
+        }
+    }
+
+    const char* recommended_type = "auto!";
+    const char* container = "container";
+    const QoreTypeInfo* container_type = effective ? effective : declared;
+    if (QoreTypeInfo::isHashType(container_type)) {
+        container = "hash";
+        recommended_type = declared == autoHashOrNothingTypeInfo ? "*hash<auto!>" : "hash<auto!>";
+    } else if (QoreTypeInfo::isListType(container_type)) {
+        container = "list";
+        recommended_type = declared == autoListOrNothingTypeInfo ? "*list<auto!>" : "list<auto!>";
+    }
+
+    metadata.addFact("containerKind", container);
+    metadata.addFact("recommendedType", recommended_type);
+    metadata.addSuggestion(recommended_type);
+    if (variable_name) {
+        metadata.addFact("variable", variable_name);
+    }
+    if (declared) {
+        metadata.addFact("declaredType", get_type_name(declared));
+    }
+    if (effective) {
+        metadata.addFact("effectiveType", get_type_name(effective));
+    }
+    if (narrowed_loc) {
+        metadata.addRelatedLocation("narrowing-initializer", *narrowed_loc,
+            "this assignment established the container's effective element type");
+    }
+
+    if (variable_name) {
+        QoreStringMaker hint("the %s variable '%s' was narrowed by an earlier assignment; declare it as '%s' "
+            "only if it is intentionally heterogeneous", container, variable_name, recommended_type);
+        metadata.hint = hint.c_str();
+    } else {
+        QoreStringMaker hint("the %s was narrowed by an earlier assignment; declare it as '%s' only if it is "
+            "intentionally heterogeneous", container, recommended_type);
+        metadata.hint = hint.c_str();
+    }
+    metadata.addFix(QoreStringMaker("declare the %s as '%s'", container, recommended_type).c_str());
+    return metadata;
+}
+
 int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context, bool weak_assignment) {
     // turn off "reference ok" and "return value ignored" flags
     QoreParseContextFlagHelper fh(parse_context);
@@ -209,8 +340,10 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
     // Check for type mismatch - either with parse exception sink enabled, or for narrowed types
     bool type_mismatch = !res;
 
-    // Check if the lvalue involves a narrowed auto-type (via PF_NARROWED_TYPE flag)
-    bool has_narrowed_type = (parse_context.pflag & PF_NARROWED_TYPE) != 0;
+    // Check the lvalue itself rather than the shared parse flag: parsing a narrowed variable on
+    // the right-hand side can also set PF_NARROWED_TYPE and must not make an explicitly typed
+    // target look inferred.
+    bool has_narrowed_type = qore_is_narrowed_lvalue(left);
 
     // Check if this is a direct assignment to an auto-type variable
     // Direct assignment to auto-type variables should NOT raise narrowed type errors
@@ -317,13 +450,16 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
 
         // Add context about type narrowing if applicable
         if (has_narrowed_type && !is_direct_auto_assignment) {
-            edesc->concat("; the container's element type was inferred from the initial value; "
-                "to use mixed types, include values of all needed types in the initial assignment, "
+            edesc->concat("; the container's element type was inferred from an earlier assignment; "
+                "to use mixed types, include values of all needed types in that assignment, "
                 "or use hash<auto!> or list<auto!> to disable type narrowing for the variable; "
                 "note: %broken-narrowed-types will suppress this error but move it to runtime");
         }
 
-        qore_program_private::makeParseException(parse_context.pgm, *loc, "PARSE-TYPE-ERROR", edesc);
+        QoreDiagnosticMetadata metadata = qore_make_lvalue_type_diagnostic(left, error_ti, error_rhs_ti,
+            has_narrowed_type && !is_direct_auto_assignment, "INCOMPATIBLE-ASSIGNMENT-TYPE",
+            weak_assignment ? ":=" : "=");
+        qore_program_private::makeParseException(parse_context.pgm, *loc, "PARSE-TYPE-ERROR", edesc, metadata);
         if (!err) {
             err = -1;
         }

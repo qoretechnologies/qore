@@ -15,6 +15,13 @@ public class StructuredDiagnosticsTest inherits QUnit::Test {
         addTestCase("toggle flag", \testToggleFlag());
         addTestCase("structured error with column + suggestion", \testStructuredError());
         addTestCase("structured warning with warning code", \testStructuredWarning());
+        addTestCase("narrowed hash mismatch metadata", \testNarrowedHashMismatch());
+        addTestCase("narrowed list append metadata", \testNarrowedListAppend());
+        addTestCase("explicit list mismatch does not claim narrowing", \testExplicitListMismatch());
+        addTestCase("explicit hash mismatch does not claim narrowing", \testExplicitHashMismatch());
+        addTestCase("narrowed RHS does not taint explicit list", \testNarrowedRhsExplicitList());
+        addTestCase("narrowed RHS does not taint explicit hash", \testNarrowedRhsExplicitHash());
+        addTestCase("runtime typed container message stays neutral", \testRuntimeTypedContainerMessage());
         addTestCase("accurate error columns", \testErrorColumns());
         addTestCase("first-column diagnostic preserved", \testFirstColumnPreserved());
         addTestCase("disabling clears diagnostics", \testClearedOnDisable());
@@ -106,6 +113,94 @@ public class StructuredDiagnosticsTest inherits QUnit::Test {
         assertEq("Color", diags[0].facts{"enum"});
         assertEq("Green", diags[0].facts.missingValues);
         assertEq("1", diags[0].facts.missingCount);
+    }
+
+    private hash<ParseDiagnosticInfo> parseTypeError(string source) {
+        Program p(PO_MODERN);
+        p.setParseDiagnosticsCollected(True);
+        try {
+            p.parse(sprintf("void sub trapTest() { %s }", source), "<type-test>");
+        } catch (hash<ExceptionInfo> ex) {}
+        list<hash<ParseDiagnosticInfo>> diags = p.getParseDiagnostics();
+        foreach hash<ParseDiagnosticInfo> d in (diags) {
+            if (d{"code"} == "PARSE-TYPE-ERROR") {
+                return d;
+            }
+        }
+        assertTrue(False, sprintf("no PARSE-TYPE-ERROR diagnostic for: %s", source));
+        return diags[0];
+    }
+
+    testNarrowedHashMismatch() {
+        hash<ParseDiagnosticInfo> d = parseTypeError(
+            "hash<auto> h = {\"x\": 1}; h.y = \"string\";");
+        assertEq("NARROWED-CONTAINER-TYPE-MISMATCH", d.id);
+        assertEq("hash", d.facts.containerKind);
+        assertEq("h", d.facts.variable);
+        assertEq("hash<auto>", d.facts.declaredType);
+        assertEq("hash<string, int>", d.facts.effectiveType);
+        assertEq("hash<auto!>", d.facts.recommendedType);
+        assertEq(1, d.relatedLocations.size(), "the narrowing assignment is identified");
+        assertEq("narrowing-initializer", d.relatedLocations[0].role);
+        assertRegex("only if it is intentionally heterogeneous", d.hint);
+    }
+
+    testNarrowedListAppend() {
+        hash<ParseDiagnosticInfo> d = parseTypeError(
+            "list<auto> values = (1, 2); values += \"string\";");
+        assertEq("NARROWED-CONTAINER-TYPE-MISMATCH", d.id);
+        assertEq("list", d.facts.containerKind);
+        assertEq("list<auto!>", d.facts.recommendedType);
+        assertRegex("inferred from an earlier assignment", d.message);
+    }
+
+    testExplicitListMismatch() {
+        hash<ParseDiagnosticInfo> d = parseTypeError(
+            "list<int> values = (1, 2); values += \"string\";");
+        assertEq("INCOMPATIBLE-LIST-ELEMENT-TYPE", d.id);
+        assertEq(NOTHING, d.facts.narrowed);
+        assertFalse(d.message =~ /inferred from/, "an explicit list type must not be described as inferred");
+        assertFalse(d.message =~ /auto!/, "an explicit list type must not receive auto! guidance");
+        assertRegex("explicitly declared type", d.hint);
+    }
+
+    testExplicitHashMismatch() {
+        hash<ParseDiagnosticInfo> d = parseTypeError(
+            "hash<string, int> h = {\"x\": 1}; h.y = \"string\";");
+        assertEq("INCOMPATIBLE-ASSIGNMENT-TYPE", d.id);
+        assertEq(NOTHING, d.facts.narrowed);
+        assertFalse(d.message =~ /inferred from/, "an explicit hash type must not be described as inferred");
+        assertFalse(d.message =~ /auto!/, "an explicit hash type must not receive auto! guidance");
+        assertRegex("explicitly declared type", d.hint);
+    }
+
+    testNarrowedRhsExplicitList() {
+        hash<ParseDiagnosticInfo> d = parseTypeError(
+            "list<int> values = (1, 2); list<auto> source = (\"string\",); values += source[0];");
+        assertEq("INCOMPATIBLE-LIST-ELEMENT-TYPE", d.id);
+        assertEq(NOTHING, d.facts.narrowed);
+        assertFalse(d.message =~ /auto!/, "a narrowed RHS must not add narrowing guidance to an explicit LHS");
+    }
+
+    testNarrowedRhsExplicitHash() {
+        hash<ParseDiagnosticInfo> d = parseTypeError(
+            "hash<string, int> target = {\"x\": 1}; "
+            "hash<auto> source = {\"x\": \"string\"}; target = source;");
+        assertEq("INCOMPATIBLE-ASSIGNMENT-TYPE", d.id);
+        assertEq(NOTHING, d.facts.narrowed);
+        assertFalse(d.message =~ /auto!/, "a narrowed RHS must not add narrowing guidance to an explicit LHS");
+    }
+
+    testRuntimeTypedContainerMessage() {
+        list<int> target = (1,);
+        any value = "string";
+        try {
+            target[0] = value;
+            assertTrue(False, "the runtime assignment must reject the incompatible value");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("RUNTIME-TYPE-ERROR", ex.err);
+            assertFalse(ex.desc =~ /auto!/, "an explicit container must not receive auto! runtime guidance");
+        }
     }
 
     testErrorColumns() {
