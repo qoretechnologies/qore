@@ -77,6 +77,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         list<string> received = ();
         #! signals server thread completion
         Counter done(1);
+        #! signals that the accept loop is running; start() returns only after this
+        Counter accepting(1);
         #! Set by wait() to stop the accept loop
         bool stop_flag = False;
         #! error from the server thread
@@ -190,8 +192,16 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         return server_error;
     }
 
+    #! Starts the accept loop and returns only once it is actually accepting
+    /** Returning as soon as the thread is spawned left an unbounded gap before the
+        first accept(): on a loaded machine the greeting the client waits for could
+        arrive later than its I/O timeout, failing the test for a scheduling delay.
+        Waiting on the counter closes the gap deterministically - no polling, and no
+        dependence on how quickly the new thread is scheduled.
+    */
     start() {
         background acceptAndServe();
+        accepting.waitForZero();
     }
 
     #! Stops the accept loop and waits for the server thread to exit
@@ -244,6 +254,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
     */
     private acceptAndServe() {
         on_exit done.dec();
+        # release start() only once the loop is about to accept
+        accepting.dec();
         while (!stopping()) {
             *Socket client;
             try {

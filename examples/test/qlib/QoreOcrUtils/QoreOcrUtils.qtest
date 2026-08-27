@@ -69,12 +69,29 @@ public class QoreOcrUtilsTest inherits QUnit::Test {
     }
 
 %ifndef NoOcr
+    #! Returns a native-mode engine, or skips the calling test case
+    /** The ocr module can be present while the Tesseract language data it needs is not
+        installed; that is an environment condition, not a test failure, so the case is
+        skipped rather than reported as an error.  Only engine initialization is guarded -
+        every later error still fails the test.
+    */
+    private OcrEngine makeNativeEngine() {
+        try {
+            return new OcrEngine(<OcrConfig>{
+                "mode": "native",
+                "language": "eng",
+            });
+        } catch (hash<ExceptionInfo> ex) {
+            if (ex.err == "OCR-INIT-ERROR") {
+                testSkip(sprintf("native OCR unavailable: %s", ex.desc));
+            }
+            rethrow;
+        }
+    }
+
     ocrNativeModeTest() {
-        OcrEngine engine(<OcrConfig>{
-            "mode": "native",
-            "language": "eng",
-        });
-        assertTrue(True);
+        OcrEngine engine = makeNativeEngine();
+        assertEq("OcrEngine", engine.className(), "native-mode engine constructed");
     }
 
     ocrNativeImageTest() {
@@ -87,7 +104,7 @@ public class QoreOcrUtilsTest inherits QUnit::Test {
         }
 
         binary img = ReadOnlyFile::readBinaryFile(test_img);
-        OcrEngine engine(<OcrConfig>{"mode": "native", "language": "eng"});
+        OcrEngine engine = makeNativeEngine();
         hash<OcrResult> result = engine.extractText(img);
 
         assertTrue(result.text.val());
