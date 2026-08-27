@@ -32,6 +32,9 @@
 
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/LocalVar.h"
+#include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
+#include "qore/intern/QoreMapOperatorNode.h"
+#include "qore/intern/QoreSquareBracketsOperatorNode.h"
 #include "qore/intern/Variable.h"
 
 QoreString QoreAssignmentOperatorNode::op_str("assignment (=) operator expression");
