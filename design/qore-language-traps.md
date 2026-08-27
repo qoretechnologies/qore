@@ -17,12 +17,12 @@ and would have been documented as true if they had not been re-run.
 | Error or symptom | Trap |
 |---|---|
 | `RUNTIME-TYPE-ERROR: <lvalue> expects type 'X', but got no value instead` | [1](#1-a-declaration-does-not-initialize), [9](#9-map-over-nothing-returns-nothing) |
-| `PARSE-TYPE-ERROR: ... the container's element type was inferred from the initial value` | [2](#2-container-types-are-narrowed-by-their-first-value) |
+| `PARSE-TYPE-ERROR: ... the container's element type was inferred from an earlier assignment` | [2](#2-container-types-are-narrowed-by-their-first-value) |
 | `PARSE-TYPE-ERROR: cannot append a value with type 'X' to a list with element type 'Y'` | [2](#2-container-types-are-narrowed-by-their-first-value) |
-| `RUNTIME-TYPE-ERROR: ... this type is the value type of the hash holding the target` | [2](#2-container-types-are-narrowed-by-their-first-value) |
-| `PARSE-EXCEPTION: function 'C()' cannot be found` where `C` is a class | [11](#11-constructing-an-object-in-an-expression-requires-new) |
+| `RUNTIME-TYPE-ERROR: ... this type is the declared value type of the hash holding the target` | [2](#2-container-types-are-narrowed-by-their-first-value) |
+| `PARSE-EXCEPTION: 'C()' names class 'C', not a function` | [11](#11-constructing-an-object-in-an-expression-requires-new) |
 | `PARSE-EXCEPTION: read-only local variable 'X' declared without type information` | [12](#12-a-read-only-local-needs-an-explicit-type) |
-| `syntax error, unexpected ';'` / `unexpected <token>` pointing at the *following* line | [10](#10-identifiers-that-collide-with-keywords) |
+| `PARSE-EXCEPTION: hard keyword 'enum' cannot be used after '.'` | [10](#10-identifiers-that-collide-with-keywords) |
 | a lookup always reports "not found"; a loop over an inherited member iterates zero times | [6](#6-privateinternal-is-invisible-to-subclasses-silently) |
 | a method override is ignored, with no error | [7](#7-the-first-inherits-branch-wins) |
 | a declared capability/option key reads as absent | [5](#5-presence-emptiness-and-absence-are-three-different-things) |
@@ -72,8 +72,8 @@ The full message names the fix itself:
 
 ```
 PARSE-TYPE-ERROR: lvalue for assignment operator '=' expects type '*int', but right-hand side is
-type 'date'; the container's element type was inferred from the initial value; to use mixed types,
-include values of all needed types in the initial assignment, or use hash<auto!> or list<auto!> to
+type 'date'; the container's element type was inferred from an earlier assignment; to use mixed types,
+include values of all needed types in that assignment, or use hash<auto!> or list<auto!> to
 disable type narrowing for the variable
 ```
 
@@ -84,10 +84,16 @@ Three things make this bite unpredictably:
 - typed lists enforce at parse time too — `list<int> l = (1,2); l += "x";` is
   `PARSE-TYPE-ERROR: cannot append a value with type 'string' to a list with element type 'int'`;
 - when the value crosses a function boundary the parser cannot see it, and the same defect surfaces
-  at run time instead — the message again names the fix:
+  at run time instead. Runtime code can identify the holding container but cannot always recover its
+  source declaration, so its message deliberately does not guess that `auto!` is appropriate:
   `RUNTIME-TYPE-ERROR: <lvalue> expects type 'string', but got type 'hash<string, int>' instead; this
-  type is the value type of the hash holding the target; if that value type was narrowed from the
-  hash's initial value, declare the variable as 'hash<auto!>' to disable type narrowing`.
+  type is the declared value type of the hash holding the target; review the container declaration
+  and the value being assigned`.
+
+The structured diagnostic ID is `NARROWED-CONTAINER-TYPE-MISMATCH` only when the parser can prove
+that the target variable has an inferred container type and can identify the assignment that established
+it. Explicitly typed targets use `INCOMPATIBLE-ASSIGNMENT-TYPE` or
+`INCOMPATIBLE-LIST-ELEMENT-TYPE` and never receive `auto!` guidance.
 
 **Do:** declare `hash<auto!>` / `list<auto!>` when the container genuinely holds mixed types, and say
 in a comment why it is heterogeneous. Hash addition (`h + {...}`) does widen and is tempting as a
@@ -236,8 +242,9 @@ h{"enum"}    # fine
 ```
 
 This bites when mirroring an external field name into Qore — a JSON Schema `enum` field, OpenID
-Connect's `sub`. The resulting parse error usually points at the *following* line, so it reads as a
-mistake in code that is fine.
+Connect's `sub`. The parser reports `HARD-KEYWORD-MEMBER-ACCESS` on the exact `.enum` span and
+provides a machine-applicable replacement with `{"enum"}`; other syntax errors retain the ordinary
+parser diagnostic.
 
 **Do:** write any externally-derived key that could collide as a quoted subscript.
 
@@ -250,9 +257,13 @@ are contextual keywords only.
 
 ```qore
 class C { string f() { return "v"; } }
-C().f();          # PARSE-EXCEPTION: function 'C()' cannot be found
+C().f();          # PARSE-EXCEPTION: 'C()' names class 'C', not a function
 (new C()).f();    # correct
 ```
+
+The structured diagnostic ID is `MISSING-NEW-CONSTRUCTOR`; it includes the resolved class name and
+a machine-applicable insertion of `new `. This check also applies to qualified names such as
+`Ns::C()` and does not fire if a reachable function with the same name exists.
 
 Separately: never take a call reference on a temporary object
 (`\obj.getChild("x").doRequest()`) — the temporary is released before the call runs and you get

@@ -14,14 +14,15 @@
 
     |!What you see|!Cause|!Read
     |<tt>RUNTIME-TYPE-ERROR: &lt;lvalue&gt; expects type 'int', but got no value instead</tt>|a declared variable was read before being assigned; a declaration does not initialize|@ref declaration_vs_initialization
-    |<tt>PARSE-TYPE-ERROR: ... the container's element type was inferred from the initial value</tt>|a \c hash<auto> or \c list<auto> was narrowed by its first assignment|@ref auto_no_narrow
+    |<tt>PARSE-TYPE-ERROR: ... the container's element type was inferred from an earlier assignment</tt>|a \c hash<auto> or \c list<auto> was narrowed by an assignment|@ref auto_no_narrow
     |a \c map result fails to satisfy a \c list&lt;T&gt; lvalue, but only sometimes|the source was @ref nothing, so \c map returned @ref nothing rather than an empty list|@ref map
     |a hash key that is present tests as absent|the key's value is an empty hash or list, which is @ref False|@ref hash_key_presence_tests
     |a value compares equal to both a real value and "missing"|@ref NULL is not @ref NOTHING; <tt>exists NULL</tt> is @ref True|@ref null
     |a method override is silently ignored|another branch of the <tt>inherits</tt> clause is listed first|@ref multiple_inheritance_order
     |a subclass reads a parent member as empty, with no error|the member is <tt>private:internal</tt> and is invisible to subclasses|@ref pitfalls_private_internal
     |an interval drifts by an hour, or exceeds a remote limit only in some time zones|\c D and \c M are calendar components, not fixed durations|@ref date_time_arithmetic_calendar_components
-    |<tt>syntax error</tt> pointing at the line after the real mistake|an identifier collided with a @ref keywords "keyword"|@ref pitfalls_keywords
+    |<tt>PARSE-EXCEPTION: hard keyword 'enum' cannot be used after '.'</tt>|a dot member name collided with a @ref keywords "hard keyword"|@ref pitfalls_keywords
+    |<tt>PARSE-EXCEPTION: 'C()' names class 'C', not a function</tt>|an object constructor was written without \c new|@ref pitfalls_new
     |a character loop truncates non-ASCII text|@ref <string>::size() "size()" counts bytes, not characters|@ref pitfalls_size_length
 
     @section pitfalls_types Types and Declarations
@@ -108,13 +109,14 @@
     accepted as hash member names after the @ref dot_operator ". operator", but \c enum is a hard
     keyword and is not.  This bites when mirroring an external field name — a JSON Schema \c enum
     field, or OpenID Connect's \c sub — into %Qore code.  Write the key as a quoted subscript
-    (<tt>h{"enum"}</tt>) whenever it could collide, and note that the resulting parse error usually
-    points at the <i>following</i> line.
+    (<tt>h{"enum"}</tt>) whenever it could collide. The parser reports the exact \c .enum span and
+    supplies that quoted-subscript replacement to diagnostic tools.
 
     @subsection pitfalls_new Constructing an object in an expression requires new
-    <tt>C().f()</tt> is parsed as a call to a function named \c C, giving
-    <tt>PARSE-EXCEPTION: function 'C()' cannot be found</tt>.  Write <tt>(new C()).f()</tt>, or
-    assign the object to a variable first.
+    <tt>C().f()</tt> is parsed as a call to a function named \c C. When the name resolves to a class,
+    the parser gives <tt>PARSE-EXCEPTION: 'C()' names class 'C', not a function</tt> and supplies a
+    machine-applicable insertion of \c new. Write <tt>(new C()).f()</tt>, or assign the object to a
+    variable first. Qualified class names such as <tt>Ns::C()</tt> receive the same feedback.
 
     @subsection pitfalls_const_type A read-only local variable needs an explicit type
     <tt>const X = "v";</tt> inside a method body is rejected with

@@ -22,6 +22,11 @@ public class StructuredDiagnosticsTest inherits QUnit::Test {
         addTestCase("narrowed RHS does not taint explicit list", \testNarrowedRhsExplicitList());
         addTestCase("narrowed RHS does not taint explicit hash", \testNarrowedRhsExplicitHash());
         addTestCase("runtime typed container message stays neutral", \testRuntimeTypedContainerMessage());
+        addTestCase("missing new constructor diagnostic", \testMissingNewConstructor());
+        addTestCase("missing new scoped constructor diagnostic", \testMissingNewScopedConstructor());
+        addTestCase("function named like class is not constructor trap", \testFunctionNamedLikeClass());
+        addTestCase("enum member with no-enum is not keyword trap", \testEnumMemberWithNoEnum());
+        addTestCase("hard keyword member diagnostic", \testHardKeywordMember());
         addTestCase("accurate error columns", \testErrorColumns());
         addTestCase("first-column diagnostic preserved", \testFirstColumnPreserved());
         addTestCase("disabling clears diagnostics", \testClearedOnDisable());
@@ -119,7 +124,7 @@ public class StructuredDiagnosticsTest inherits QUnit::Test {
         Program p(PO_MODERN);
         p.setParseDiagnosticsCollected(True);
         try {
-            p.parse(sprintf("void sub trapTest() { %s }", source), "<type-test>");
+            p.parse(sprintf("nothing sub trapTest() { %s }", source), "<type-test>");
         } catch (hash<ExceptionInfo> ex) {}
         list<hash<ParseDiagnosticInfo>> diags = p.getParseDiagnostics();
         foreach hash<ParseDiagnosticInfo> d in (diags) {
@@ -201,6 +206,75 @@ public class StructuredDiagnosticsTest inherits QUnit::Test {
             assertEq("RUNTIME-TYPE-ERROR", ex.err);
             assertFalse(ex.desc =~ /auto!/, "an explicit container must not receive auto! runtime guidance");
         }
+    }
+
+    private hash<ParseDiagnosticInfo> parseFirstError(string source) {
+        Program p(PO_MODERN);
+        p.setParseDiagnosticsCollected(True);
+        try {
+            p.parse(source, "<syntax-trap>");
+        } catch (hash<ExceptionInfo> ex) {}
+        list<hash<ParseDiagnosticInfo>> diags = p.getParseDiagnostics();
+        foreach hash<ParseDiagnosticInfo> d in (diags) {
+            if (d.severity == "error") {
+                return d;
+            }
+        }
+        assertTrue(False, sprintf("no error diagnostic for: %s", source));
+        return diags[0];
+    }
+
+    testMissingNewConstructor() {
+        hash<ParseDiagnosticInfo> d = parseFirstError(
+            "class TrapCtor {} nothing sub trapTest() { TrapCtor(); }");
+        assertEq("MISSING-NEW-CONSTRUCTOR", d.id);
+        assertEq("PARSE-EXCEPTION", d.code);
+        assertEq("TrapCtor", d.facts.className);
+        assertEq("new", d.facts.requiredKeyword);
+        assertRegex("names class 'TrapCtor', not a function", d.message);
+        assertEq("new TrapCtor(...)", d.suggestions[0]);
+        assertEq("machine-applicable", d.fixes[0].applicability);
+        assertEq("new ", d.fixes[0].edits[0].replacement);
+    }
+
+    testMissingNewScopedConstructor() {
+        hash<ParseDiagnosticInfo> d = parseFirstError(
+            "namespace TrapNs { class TrapCtor {} } "
+            "nothing sub trapTest() { TrapNs::TrapCtor(); }");
+        assertEq("MISSING-NEW-CONSTRUCTOR", d.id);
+        assertEq("TrapNs::TrapCtor", d.facts.className);
+        assertEq("new TrapNs::TrapCtor(...)", d.suggestions[0]);
+        assertEq("new ", d.fixes[0].edits[0].replacement);
+    }
+
+    testFunctionNamedLikeClass() {
+        Program p(PO_MODERN);
+        p.setParseDiagnosticsCollected(True);
+        p.parse("class SameName {} nothing sub SameName() {} "
+            "nothing sub trapTest() { SameName(); }", "<function-class-name>");
+        assertEq(0, p.getParseDiagnostics().size(),
+            "a reachable function takes precedence over a class with the same name");
+    }
+
+    testEnumMemberWithNoEnum() {
+        Program p(PO_MODERN | PO_NO_ENUM);
+        p.setParseDiagnosticsCollected(True);
+        p.parse("nothing sub trapTest() { hash<auto> h = {}; any value = h.enum; }", "<no-enum>");
+        assertEq(0, p.getParseDiagnostics().size(),
+            "enum is an identifier when enum syntax is explicitly disabled");
+    }
+
+    testHardKeywordMember() {
+        hash<ParseDiagnosticInfo> d = parseFirstError(
+            "nothing sub trapTest() { hash<auto> h = {}; any value = h.enum; }");
+        assertEq("HARD-KEYWORD-MEMBER-ACCESS", d.id);
+        assertEq("PARSE-EXCEPTION", d.code);
+        assertEq("enum", d.facts.keyword);
+        assertEq("dot", d.facts.accessSyntax);
+        assertRegex("write {\"enum\"} instead", d.message);
+        assertEq("{\"enum\"}", d.fixes[0].edits[0].replacement);
+        assertEq(57, d.startColumn, "diagnostic starts at the dot");
+        assertEq(62, d.endColumn, "diagnostic ends after the keyword");
     }
 
     testErrorColumns() {
