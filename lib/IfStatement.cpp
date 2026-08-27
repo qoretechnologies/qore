@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/IfStatement.h"
+#include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
 
 IfStatement::IfStatement(int start_line, int end_line, QoreValue c, StatementBlock* i, StatementBlock* e)
@@ -103,6 +104,9 @@ int IfStatement::parseInitImpl(QoreParseContext& parse_context) {
     if (cond) {
         parse_context.typeInfo = nullptr;
         err = parse_init_value(cond, parse_context);
+        if (!err) {
+            qore_warn_hash_member_truth_test(parse_context.pgm, cond);
+        }
         // FIXME: generate a warning here if the type cannot be converted to a bool (i.e. always false)
     }
 

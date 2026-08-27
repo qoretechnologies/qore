@@ -12,6 +12,7 @@
 public class DiagCodeFramesTest inherits QUnit::Test {
     constructor() : Test("DiagCodeFramesTest", "1.0") {
         addTestCase("code frame for parse error", \testFrameError());
+        addTestCase("code frame for language trap warning", \testFrameLanguageTrap());
         addTestCase("no frame for clean program", \testFrameClean());
         addTestCase("frame via environment variable", \testFrameEnv());
         set_return_value(main());
@@ -43,6 +44,16 @@ public class DiagCodeFramesTest inherits QUnit::Test {
         assertRegex("int sub f\\(\\) \\{ return undefinedvar", out);
         # a caret underline is rendered (^ followed by ~ tildes under the identifier)
         assertRegex("\\^~+", out);
+    }
+
+    testFrameLanguageTrap() {
+        string cmd = sprintf("%s --code-frames --enable-warning=language-traps -e %s 2>&1",
+            qoreBin(), shellQuote("nothing sub f() { int x; int y = x; }"));
+        string out = backquote(cmd);
+        assertRegex("warning\\[UNINITIALIZED-LOCAL-READ\\]", out);
+        assertRegex("a declaration does not initialize", out);
+        assertRegex("help: initialize 'x' before this read", out);
+        assertRegex("\\^", out);
     }
 
     testFrameClean() {

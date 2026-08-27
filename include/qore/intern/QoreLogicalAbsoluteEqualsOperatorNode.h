@@ -69,6 +69,10 @@ protected:
 
     DLLLOCAL virtual int parseInitImpl(QoreValue& val, QoreParseContext& parse_context);
 
+    DLLLOCAL virtual bool invertResult() const {
+        return false;
+    }
+
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
         return boolTypeInfo;
     }

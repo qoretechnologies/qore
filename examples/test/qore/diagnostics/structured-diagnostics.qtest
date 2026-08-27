@@ -27,6 +27,16 @@ public class StructuredDiagnosticsTest inherits QUnit::Test {
         addTestCase("function named like class is not constructor trap", \testFunctionNamedLikeClass());
         addTestCase("enum member with no-enum is not keyword trap", \testEnumMemberWithNoEnum());
         addTestCase("hard keyword member diagnostic", \testHardKeywordMember());
+        addTestCase("uninitialized local trap warning", \testUninitializedLocalWarning());
+        addTestCase("intentional absence checks stay quiet", \testIntentionalAbsenceChecks());
+        addTestCase("NULL and NOTHING trap warning", \testNullNothingWarning());
+        addTestCase("string multiplication trap warning", \testStringMultiplicationWarning());
+        addTestCase("optional reference exists trap warning", \testOptionalReferenceExistsWarning());
+        addTestCase("hash member truthiness trap warning", \testHashMemberTruthinessWarning());
+        addTestCase("trap warning boundaries", \testTrapWarningBoundaries());
+        addTestCase("optional map result diagnostic", \testOptionalMapResult());
+        addTestCase("optional and coalesced map targets parse", \testHandledOptionalMapResult());
+        addTestCase("read-only local type diagnostic", \testReadonlyLocalType());
         addTestCase("accurate error columns", \testErrorColumns());
         addTestCase("first-column diagnostic preserved", \testFirstColumnPreserved());
         addTestCase("disabling clears diagnostics", \testClearedOnDisable());
@@ -275,6 +285,159 @@ public class StructuredDiagnosticsTest inherits QUnit::Test {
         assertEq("{\"enum\"}", d.fixes[0].edits[0].replacement);
         assertEq(57, d.startColumn, "diagnostic starts at the dot");
         assertEq(62, d.endColumn, "diagnostic ends after the keyword");
+    }
+
+    private list<hash<ParseDiagnosticInfo>> parseTrapWarnings(string source) {
+        Program p(PO_MODERN);
+        p.setParseDiagnosticsCollected(True);
+        p.parse(source, "<warning-trap>", WARN_LANGUAGE_TRAPS);
+        return p.getParseDiagnostics();
+    }
+
+    testUninitializedLocalWarning() {
+        list<hash<ParseDiagnosticInfo>> diags = parseTrapWarnings(
+            "nothing sub trapTest() { int value; int copy = value; }");
+        assertEq(1, diags.size());
+        assertEq("warning", diags[0].severity);
+        assertEq("LANGUAGE-TRAP", diags[0].code);
+        assertEq("UNINITIALIZED-LOCAL-READ", diags[0].id);
+        assertEq(WARN_LANGUAGE_TRAPS, diags[0].warningCode);
+        assertEq("value", diags[0].facts.variable);
+        assertEq("int", diags[0].facts.declaredType);
+        assertRegex("declaration does not initialize", diags[0].message);
+    }
+
+    testIntentionalAbsenceChecks() {
+        list<hash<ParseDiagnosticInfo>> diags = parseTrapWarnings(
+            "nothing sub trapTest(bool condition) { int checked; bool present = exists checked; "
+            "*int optional; any allowed = optional; int assigned; "
+            "if (condition) { assigned = 1; } else { assigned = 2; } int copy = assigned; }");
+        assertEq(0, diags.size(), "exists, optional values, and definitely assigned branches stay quiet");
+
+        diags = parseTrapWarnings(
+            "nothing sub trapTest(bool condition) { int partial; if (condition) { partial = 1; } "
+            "int copy = partial; }");
+        assertEq(1, diags.size(), "assignment on only one branch is not definitely assigned");
+        assertEq("UNINITIALIZED-LOCAL-READ", diags[0].id);
+    }
+
+    testNullNothingWarning() {
+        list<hash<ParseDiagnosticInfo>> diags = parseTrapWarnings(
+            "nothing sub trapTest() { bool a = NULL == NOTHING; bool b = NULL != NOTHING; "
+            "bool c = NULL === NOTHING; bool d = NULL !== NOTHING; }");
+        assertEq(4, diags.size());
+        int i = 0;
+        foreach string operation in ("==", "!=", "===", "!==") {
+            assertEq("NULL-NOTHING-COMPARISON", diags[i].id);
+            assertEq("NULL", diags[i].facts.leftValue);
+            assertEq("NOTHING", diags[i].facts.rightValue);
+            assertEq(operation, diags[i].facts.operation);
+            assertRegex("always distinct", diags[i].hint);
+            ++i;
+        }
+    }
+
+    testStringMultiplicationWarning() {
+        list<hash<ParseDiagnosticInfo>> diags = parseTrapWarnings(
+            "nothing sub trapTest() { int zeros = \"0\" * 64; }");
+        assertEq(1, diags.size());
+        assertEq("STRING-MULTIPLICATION-IS-NUMERIC", diags[0].id);
+        assertEq("numeric-multiplication", diags[0].facts.resultSemantics);
+        assertRegex("strmul", diags[0].hint);
+    }
+
+    testOptionalReferenceExistsWarning() {
+        list<hash<ParseDiagnosticInfo>> diags = parseTrapWarnings(
+            "nothing sub trapTest(*reference<int> result) { bool supplied = exists result; }");
+        assertEq(1, diags.size());
+        assertEq("EXISTS-OPTIONAL-REFERENCE-VALUE", diags[0].id);
+        assertEq("result", diags[0].facts.variable);
+        assertEq("referenced-value", diags[0].facts.tests);
+        assertRegex("reference is not bound", diags[0].hint);
+    }
+
+    testHashMemberTruthinessWarning() {
+        list<hash<ParseDiagnosticInfo>> diags = parseTrapWarnings(
+            "nothing sub trapTest(hash<string, hash<auto>> caps) { if (caps.elicitation) {} }");
+        assertEq(1, diags.size());
+        assertEq("HASH-MEMBER-TRUTHINESS", diags[0].id);
+        assertEq("elicitation", diags[0].facts.key);
+        assertEq("truthiness", diags[0].facts.test);
+        assertEq("hasKey(\"elicitation\")", diags[0].suggestions[0]);
+        assertRegex("present empty", diags[0].hint);
+
+        diags = parseTrapWarnings(
+            "nothing sub trapTest(hash<string, hash<auto>> caps) { "
+            "if (!caps.first || (caps.second && True)) {} }");
+        assertEq(2, diags.size(), "direct logical condition operands are each diagnosed");
+        assertEq("first", diags[0].facts.key);
+        assertEq("second", diags[1].facts.key);
+
+        diags = parseTrapWarnings(
+            "bool sub acceptValue(*hash<auto> value) { return exists value; } "
+            "nothing sub trapTest(hash<string, hash<auto>> caps, hash<string, bool> flags) { "
+            "if (caps.hasKey(\"elicitation\")) {} if (caps.elicitation.size()) {} "
+            "if (flags.enabled) {} if (acceptValue(caps.elicitation)) {} }");
+        assertEq(0, diags.size(),
+            "explicit presence, non-empty checks, scalar values, and function arguments stay quiet");
+    }
+
+    testTrapWarningBoundaries() {
+        list<hash<ParseDiagnosticInfo>> diags = parseTrapWarnings(
+            "nothing sub trapTest(reference<int> required, string text) { "
+            "bool required_value_exists = exists required; int numeric = text * 64; "
+            "*any nullable = NULL; bool dynamic_comparison = nullable === NOTHING; }");
+        assertEq(0, diags.size(),
+            "required references and dynamic multiplication/comparisons do not imply trapped intent");
+    }
+
+    testOptionalMapResult() {
+        list<hash<ParseDiagnosticInfo>> diags = parseTrapWarnings(
+            "nothing sub trapTest(*list<int> source) { "
+            "list<string> result = map string($1), source; }");
+        assertEq(1, diags.size());
+        hash<ParseDiagnosticInfo> d = diags[0];
+        assertEq("OPTIONAL-MAP-RESULT", d.id);
+        assertEq("warning", d.severity);
+        assertEq("*list<int>", d.facts.sourceType);
+        assertEq("true", d.facts.sourceTypeAllowsNothing);
+        assertRegex("static type .* permits NOTHING", d.message);
+        assertRegex("control flow does not guarantee", d.hint);
+        assertEq("(map expression) ?? ()", d.suggestions[0]);
+    }
+
+    testHandledOptionalMapResult() {
+        Program optional(PO_MODERN);
+        optional.parse("nothing sub trapTest(*list<int> source) { "
+            "*list<string> result = map string($1), source; }", "<optional-map>");
+        Program coalesced(PO_MODERN);
+        coalesced.parse("nothing sub trapTest(*list<int> source) { "
+            "list<string> result = (map string($1), source) ?? (); }", "<coalesced-map>");
+        Program required(PO_MODERN);
+        required.parse("nothing sub trapTest(list<int> source) { "
+            "list<string> result = map string($1), source; }", "<required-map>");
+        Program unknown(PO_MODERN);
+        unknown.parse("nothing sub trapTest(auto source) { "
+            "list<string> result = map string($1), source; }", "<unknown-map>");
+        Program mixed_source(PO_MODERN);
+        mixed_source.parse("nothing sub trapTest(union<list<int>, string> source) { "
+            "list<string> result = map string($1), source; }", "<mixed-source-map>");
+        Program warning_disabled(PO_MODERN);
+        warning_disabled.parse("nothing sub trapTest(*list<int> source) { "
+            "list<string> result = map string($1), source; }", "<optional-map-warning-disabled>");
+        assertTrue(True,
+            "optional targets, coalesced results, required, unknown, and mixed sources, and disabled trap "
+            "warnings parse appropriately");
+    }
+
+    testReadonlyLocalType() {
+        hash<ParseDiagnosticInfo> d = parseFirstError(
+            "nothing sub trapTest() { const VALUE = 1; }");
+        assertEq("READONLY-LOCAL-REQUIRES-TYPE", d.id);
+        assertEq("VALUE", d.facts.variable);
+        assertEq("read-only-local", d.facts.declarationKind);
+        assertEq("const auto VALUE", d.suggestions[0]);
+        assertEq("review-required", d.fixes[0].applicability);
     }
 
     testErrorColumns() {

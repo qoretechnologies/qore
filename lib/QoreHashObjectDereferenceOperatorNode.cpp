@@ -32,9 +32,71 @@
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/QoreLogicalAndOperatorNode.h"
+#include "qore/intern/QoreLogicalNotOperatorNode.h"
+#include "qore/intern/QoreLogicalOrOperatorNode.h"
 #include "qore/intern/typed_hash_decl_private.h"
 
 QoreString QoreHashObjectDereferenceOperatorNode::op_str(". or {} operator expression");
+
+void qore_warn_hash_member_truth_test(QoreProgram* pgm, const QoreValue& condition) {
+    if (!condition.hasNode()) {
+        return;
+    }
+
+    if (const QoreLogicalNotOperatorNode* logical_not
+            = dynamic_cast<const QoreLogicalNotOperatorNode*>(condition.getInternalNode())) {
+        qore_warn_hash_member_truth_test(pgm, logical_not->getExp());
+        return;
+    }
+    if (const QoreLogicalAndOperatorNode* logical_and
+            = dynamic_cast<const QoreLogicalAndOperatorNode*>(condition.getInternalNode())) {
+        qore_warn_hash_member_truth_test(pgm, logical_and->getLeft());
+        qore_warn_hash_member_truth_test(pgm, logical_and->getRight());
+        return;
+    }
+    if (const QoreLogicalOrOperatorNode* logical_or
+            = dynamic_cast<const QoreLogicalOrOperatorNode*>(condition.getInternalNode())) {
+        qore_warn_hash_member_truth_test(pgm, logical_or->getLeft());
+        qore_warn_hash_member_truth_test(pgm, logical_or->getRight());
+        return;
+    }
+
+    const QoreHashObjectDereferenceOperatorNode* member
+        = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(condition.getInternalNode());
+    if (!member) {
+        return;
+    }
+
+    const QoreTypeInfo* owner_type = member->getOwnerTypeInfo();
+    const QoreTypeInfo* value_type = member->getTypeInfo();
+    QoreValue key_value = member->getRight();
+    if (!QoreTypeInfo::hasType(owner_type)
+            || !QoreTypeInfo::parseAccepts(hashTypeInfo, owner_type)
+            || QoreTypeInfo::parseAccepts(objectTypeInfo, owner_type)
+            || !QoreTypeInfo::hasType(value_type)
+            || (!QoreTypeInfo::getReturnComplexHashOrNothing(value_type)
+                && !QoreTypeInfo::getReturnComplexListOrNothing(value_type))
+            || key_value.getType() != NT_STRING) {
+        return;
+    }
+
+    QoreStringValueHelper key(key_value);
+    QoreStringMaker suggestion("hasKey(\"%s\")", key->c_str());
+    QoreDiagnosticMetadata metadata("HASH-MEMBER-TRUTHINESS",
+        "a hash member truth test cannot distinguish an absent key from a present empty container; use hasKey() "
+        "when key presence carries the meaning");
+    metadata.addFact("key", key->c_str());
+    metadata.addFact("valueType", QoreTypeInfo::getName(value_type));
+    metadata.addFact("test", "truthiness");
+    metadata.addSuggestion(suggestion.c_str());
+    metadata.addFix("replace the truth test with hasKey() if presence is intended", "review-required");
+    QoreStringNode* desc = new QoreStringNodeMaker("truth-testing hash member '%s' cannot distinguish an absent "
+        "key from a present empty hash or list; use hasKey(\"%s\") if key presence is intended", key->c_str(),
+        key->c_str());
+    qore_program_private::makeParseWarning(pgm, *member->loc, QP_WARN_LANGUAGE_TRAPS, "LANGUAGE-TRAP", desc,
+        metadata);
+}
 
 int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_context) {
     const QoreTypeInfo* serializedTypeInfo = typeInfo;
@@ -54,6 +116,7 @@ int QoreHashObjectDereferenceOperatorNode::parseInitImpl(QoreValue& val, QorePar
         left_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* lti = parse_context.typeInfo;
+    ownerTypeInfo = lti;
 
     // Preserve the PF_NARROWED_TYPE flag if set during left side parsing
     fh.preserveFlags(PF_NARROWED_TYPE);

@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include <qore/intern/QorePluginRegistry.h>
+#include "qore/intern/qore_program_private.h"
 
 QoreString QoreLogicalEqualsOperatorNode::logical_equals_str("logical equals operator expression");
 QoreString QoreLogicalNotEqualsOperatorNode::logical_not_equals_str("logical not equals operator expression");
@@ -45,6 +46,25 @@ static void set_binary_analysis_eq(QoreParseContext& parse_context,
             && right.hasFlag(QoreParseAnalysis::DefinitelyAssigned)) {
         parse_context.analysis.setFlag(QoreParseAnalysis::DefinitelyAssigned);
     }
+}
+
+static void warn_null_nothing_comparison(const QoreProgramLocation* loc, QoreProgram* pgm,
+        const QoreValue& left, const QoreValue& right, const char* operation) {
+    bool left_null = left.getType() == NT_NULL;
+    bool right_null = right.getType() == NT_NULL;
+    if (!((left_null && right.isNothing()) || (right_null && left.isNothing()))) {
+        return;
+    }
+
+    QoreDiagnosticMetadata metadata("NULL-NOTHING-COMPARISON",
+        "NULL is a present SQL null value while NOTHING is the absence of a value; they are always distinct");
+    metadata.addFact("leftValue", left_null ? "NULL" : "NOTHING");
+    metadata.addFact("rightValue", right_null ? "NULL" : "NOTHING");
+    metadata.addFact("operation", operation);
+    metadata.addSuggestion("test for NULL and NOTHING separately according to the data contract");
+    QoreStringNode* desc = new QoreStringNodeMaker("comparison '%s' mixes NULL with NOTHING; NULL is a present "
+        "SQL null value and NOTHING is the absence of a value, so they are always distinct", operation);
+    qore_program_private::makeParseWarning(pgm, *loc, QP_WARN_LANGUAGE_TRAPS, "LANGUAGE-TRAP", desc, metadata);
 }
 
 static int try_plugin_binary_parse_eq(QoreParseContext& parse_context, const QoreTypeInfo* lti,
@@ -124,6 +144,11 @@ int QoreLogicalEqualsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContex
         right_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* rti = parse_context.typeInfo;
+
+    if (!err) {
+        warn_null_nothing_comparison(loc, parse_context.pgm, left, right,
+            invertFallbackResult() ? "!=" : "==");
+    }
 
     // FIXME issue warnings or errors at parse time based on operand types
 

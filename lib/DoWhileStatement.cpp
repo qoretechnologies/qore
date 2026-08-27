@@ -30,6 +30,7 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/DoWhileStatement.h"
+#include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
 
 int DoWhileStatement::execImpl(QoreValue& return_value, ExceptionSink* xsink) {
@@ -140,6 +141,9 @@ int DoWhileStatement::parseInitImpl(QoreParseContext& parse_context) {
             if (parse_init_value(cond, parse_context) && !err) {
                 err = -1;
             }
+            if (!err) {
+                qore_warn_hash_member_truth_test(parse_context.pgm, cond);
+            }
         }
 
         nth.recordBranchAndRestore();
@@ -152,6 +156,9 @@ int DoWhileStatement::parseInitImpl(QoreParseContext& parse_context) {
         parse_context.typeInfo = nullptr;
         if (parse_init_value(cond, parse_context) && !err) {
             err = -1;
+        }
+        if (!err) {
+            qore_warn_hash_member_truth_test(parse_context.pgm, cond);
         }
         // FIXME: raise a parse warning if cond cannot be converted to a bool (i.e. always false)
     }

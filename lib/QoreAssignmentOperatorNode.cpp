@@ -65,6 +65,19 @@ static const char* get_type_name(const QoreTypeInfo* type_info) {
     return name ? name : "unknown";
 }
 
+static bool is_optional_map_result_mismatch(const QoreValue& right, const QoreTypeInfo* expected,
+        const QoreTypeInfo* actual) {
+    if (!right.hasNode() || !dynamic_cast<const QoreMapOperatorNode*>(right.getInternalNode())) {
+        return false;
+    }
+    bool expected_is_list = QoreTypeInfo::isType(expected, NT_LIST)
+        || QoreTypeInfo::getReturnComplexListOrNothing(expected);
+    bool actual_is_list_or_nothing = QoreTypeInfo::getReturnComplexListOrNothing(actual);
+    return expected_is_list && actual_is_list_or_nothing
+        && QoreTypeInfo::parseReturns(expected, NT_NOTHING) == QTI_NOT_EQUAL
+        && QoreTypeInfo::parseReturns(actual, NT_NOTHING) != QTI_NOT_EQUAL;
+}
+
 bool qore_is_narrowed_lvalue(const QoreValue& left) {
     const VarRefNode* root = get_lvalue_root_var_ref(left);
     if (!root) {
@@ -339,6 +352,7 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
 
     // Check for type mismatch - either with parse exception sink enabled, or for narrowed types
     bool type_mismatch = !res;
+    bool optional_map_result = is_optional_map_result_mismatch(right, ti, parse_context.typeInfo);
 
     // Check the lvalue itself rather than the shared parse flag: parsing a narrowed variable on
     // the right-hand side can also set PF_NARROWED_TYPE and must not make an explicitly typed
@@ -439,6 +453,33 @@ int QoreAssignmentOperatorNode::parseInitIntern(QoreParseContext& parse_context,
                 raise_exception = (bool)parse_context.pgm->getParseExceptionSink();
             }
         }
+    }
+
+    // Preserve the language's existing runtime handling of possibly-NOTHING assignments.  The parser can identify
+    // this map-specific risk precisely, but it cannot prove that an enclosing runtime guard has not already excluded
+    // NOTHING.  Report it through the opt-in trap warning instead of rejecting valid guarded code.
+    if (optional_map_result && !raise_exception) {
+        const auto* map = dynamic_cast<const QoreMapOperatorNode*>(right.getInternalNode());
+        assert(map);
+        const QoreTypeInfo* source_ti = map->getIteratorTypeInfo();
+        QoreStringNode* desc = new QoreStringNodeMaker(
+            "a direct map result with type '%s' is assigned to required list type '%s'; the map source's "
+            "static type '%s' permits NOTHING, so the result can also be NOTHING; confirm that the source is "
+            "non-NOTHING on every path, coalesce the result with '?? ()', or make the target type optional",
+            get_type_name(parse_context.typeInfo), get_type_name(ti), get_type_name(source_ti));
+        QoreDiagnosticMetadata metadata("OPTIONAL-MAP-RESULT",
+            "the map source's static type permits NOTHING; if control flow does not guarantee a value, use "
+            "'(map expression) ?? ()' for a required list or declare the target as an optional list");
+        metadata.addFact("expectedType", get_type_name(ti));
+        metadata.addFact("actualType", get_type_name(parse_context.typeInfo));
+        metadata.addFact("operation", weak_assignment ? ":=" : "=");
+        metadata.addFact("sourceType", get_type_name(source_ti));
+        metadata.addFact("sourceTypeAllowsNothing", "true");
+        metadata.addSuggestion("(map expression) ?? ()");
+        metadata.addSuggestion("make the target list type optional");
+        metadata.addFix("coalesce the map result with '?? ()'", "review-required");
+        qore_program_private::makeParseWarning(parse_context.pgm, *loc, QP_WARN_LANGUAGE_TRAPS,
+            "LANGUAGE-TRAP", desc, metadata);
     }
 
     if (raise_exception) {

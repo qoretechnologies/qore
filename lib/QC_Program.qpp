@@ -1082,7 +1082,8 @@ enum Qore::ExecMode : int {
 */
 ///@{
 //! Enables all non-strict warnings
-/** This warning mask excludes @ref WARN_AMBIGUOUS_CALL_RESOLUTION and @ref WARN_AMBIGUOUS_OVERLOAD; use
+/** This warning mask excludes @ref WARN_AMBIGUOUS_CALL_RESOLUTION, @ref WARN_AMBIGUOUS_OVERLOAD, and
+    @ref WARN_LANGUAGE_TRAPS; use
     @ref WARN_STRICT to enable strict warnings.
 */
 const WARN_ALL = QP_WARN_ALL;
@@ -1091,6 +1092,7 @@ const WARN_ALL = QP_WARN_ALL;
 /** This warning mask enables:
     - @ref WARN_AMBIGUOUS_CALL_RESOLUTION
     - @ref WARN_AMBIGUOUS_OVERLOAD
+    - @ref WARN_LANGUAGE_TRAPS
 */
 const WARN_STRICT = QP_WARN_STRICT;
 
@@ -1188,6 +1190,17 @@ const WARN_AMBIGUOUS_CALL_RESOLUTION = QP_WARN_AMBIGUOUS_CALL_RESOLUTION;
 /** @see ambiguous-overload warning
  */
 const WARN_AMBIGUOUS_OVERLOAD = QP_WARN_AMBIGUOUS_OVERLOAD;
+
+//! Enables warnings for valid but surprising language constructs that are likely unintended
+/** This strict warning is deliberately excluded from @ref WARN_ALL because the parser cannot know the
+    programmer's intent in every case. Individual diagnostics have stable semantic IDs and structured
+    hints for tools and coding agents.
+
+    @see @ref warning-language-traps
+
+    @since %Qore 3.0
+*/
+const WARN_LANGUAGE_TRAPS = QP_WARN_LANGUAGE_TRAPS;
 
 //! Indicates that the embedded code referenced an undeclared variable that will be assumed to be a global variable
 /** @see @ref undeclared-var

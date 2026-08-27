@@ -28,6 +28,7 @@
     - @ref excess-args
     - @ref invalid-catch
     - @ref invalid-operation
+    - @ref warning-language-traps language-traps
     - @ref module-only
     - @ref non-exhaustive-switch
     - @ref non-existent-method-call
@@ -121,6 +122,21 @@ AMBIGUOUS-CALL-RESOLUTION: call to function 'f()' is ambiguous; matches: 'A::f()
     @section invalid-operation invalid-operation
     Raised when the parser determins that the types of an operation are such that the operation is guaranteed to produce no value; this warning can only be raised when type information is available at parse time
     @since %Qore 0.8.0
+
+    <hr>
+    @section warning-language-traps language-traps
+    Raised when the parser can identify a valid but surprising language construct that is likely unintended,
+    such as reading a non-optional local before it is definitely assigned, comparing @ref NULL with
+    @ref NOTHING, truth-testing a container-valued hash member, using numeric multiplication where one operand
+    is a parse-time-known string, applying @ref exists to an optional reference, or assigning a direct map result
+    with a statically optional source to a required list. Each condition has a distinct structured diagnostic ID
+    and a targeted hint.
+
+    This is a strict warning: it is not included in @ref enable-all-warnings "%enable-all-warnings". Enable
+    it by name, with @ref strict-warnings "%strict-warnings", or with @ref WARN_LANGUAGE_TRAPS through the
+    embedding API.
+
+    @since %Qore 3.0
 
     <hr>
     @section module-only module-only

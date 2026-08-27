@@ -13,6 +13,7 @@ public class DiagJsonCliTest inherits QUnit::Test {
     constructor() : Test("DiagJsonCliTest", "1.0") {
         addTestCase("json error output", \testJsonError());
         addTestCase("json empty for clean program", \testJsonClean());
+        addTestCase("json language trap warning", \testJsonLanguageTrapWarning());
         addTestCase("json via environment variable", \testJsonEnv());
         set_return_value(main());
     }
@@ -37,6 +38,12 @@ public class DiagJsonCliTest inherits QUnit::Test {
         # capture stdout only (diagnostics mode prints the JSON array to stdout and suppresses text output)
         string cmd = sprintf("%s%s --diag-format=json -e %s 2>/dev/null",
             env_prefix, qoreBin(), shellQuote(src));
+        return backquote(cmd);
+    }
+
+    private string runTrapDiag(string src) {
+        string cmd = sprintf("%s --diag-format=json --enable-warning=language-traps -e %s 2>/dev/null",
+            qoreBin(), shellQuote(src));
         return backquote(cmd);
     }
 
@@ -65,6 +72,15 @@ public class DiagJsonCliTest inherits QUnit::Test {
     testJsonClean() {
         string out = runDiag("int sub f() { return 1; }");
         assertEq("[]", trim(out), "clean program emits an empty JSON array");
+    }
+
+    testJsonLanguageTrapWarning() {
+        string out = runTrapDiag("nothing sub f() { int x; int y = x; }");
+        assertRegex("\"severity\":\"warning\"", out);
+        assertRegex("\"code\":\"LANGUAGE-TRAP\"", out);
+        assertRegex("\"id\":\"UNINITIALIZED-LOCAL-READ\"", out);
+        assertRegex("\"variable\":\"x\"", out);
+        assertRegex("initialize 'x' before this read", out);
     }
 
     testJsonEnv() {

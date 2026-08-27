@@ -51,6 +51,7 @@
 #define PF_NO_TOP_LEVEL_LVARS    (1 << 8)
 #define PF_NARROWED_TYPE         (1 << 9) //!< current expression involves a narrowed auto type
 #define PF_CONST_METHOD          (1 << 10) //!< parsing a const method body
+#define PF_EXISTENCE_CHECK       (1 << 11) //!< parsing the operand of exists; an unassigned value is intentional
 
 // all definitions in this file are private to the library and subject to change
 // forward references

@@ -33,10 +33,14 @@
 
 #define _QORE_QOREHASHOBJECTDEREFERENCEOPERATORNODE_H
 
+//! Warns when a hash member is converted directly to bool by a condition expression
+DLLLOCAL void qore_warn_hash_member_truth_test(QoreProgram* pgm, const QoreValue& condition);
+
 class QoreHashObjectDereferenceOperatorNode : public QoreBinaryOperatorNode<> {
 OP_COMMON
 protected:
     const QoreTypeInfo* typeInfo;
+    const QoreTypeInfo* ownerTypeInfo = nullptr;
 
     DLLLOCAL QoreValue evalImpl(bool& needs_deref, ExceptionSink* xsink) const;
 
@@ -50,6 +54,10 @@ public:
 
     DLLLOCAL virtual const QoreTypeInfo* getTypeInfo() const {
         return typeInfo;
+    }
+
+    DLLLOCAL const QoreTypeInfo* getOwnerTypeInfo() const {
+        return ownerTypeInfo;
     }
 
     DLLLOCAL virtual QoreOperatorNode* copyBackground(ExceptionSink* xsink) const {

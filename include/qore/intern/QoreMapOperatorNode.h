@@ -79,6 +79,11 @@ public:
         return expTypeInfo;
     }
 
+    //! Returns the statically inferred iterator type for parse diagnostics.
+    DLLLOCAL const QoreTypeInfo* getIteratorTypeInfo() const {
+        return iteratorTypeInfo;
+    }
+
     //! Returns the map expression for IR lowering.
     DLLLOCAL const QoreValue& getMapExpression() const {
         return left;
@@ -92,6 +97,7 @@ public:
 protected:
     const QoreTypeInfo* returnTypeInfo;
     const QoreTypeInfo* expTypeInfo = nullptr;
+    const QoreTypeInfo* iteratorTypeInfo = nullptr;
     FunctionalOperator* iterator_func;
 
     DLLLOCAL static QoreString map_str;

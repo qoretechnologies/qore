@@ -49,6 +49,10 @@
       compiled image
 
     <i>Language features:</i>
+    - parse diagnostics now identify common language traps as early as their intent can be determined: provable
+      mistakes receive targeted errors, while intent-dependent constructs are available through the new strict
+      \c language-traps warning; all targeted diagnostics expose stable semantic IDs, hints, facts, suggestions,
+      related locations, and applicability-ranked fixes for editors and coding agents
     - new @ref modern "%modern" parse directive, <tt>.qr</tt> file extension, and modern-by-default
       parsing for non-<tt>.q</tt> source files; together these bundle the recommended parse options
       into one

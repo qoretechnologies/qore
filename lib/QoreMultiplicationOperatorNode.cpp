@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/qore_program_private.h"
 
 QoreString QoreMultiplicationOperatorNode::multiplication_str("* operator expression");
 
@@ -119,6 +120,29 @@ int QoreMultiplicationOperatorNode::parseInitImpl(QoreValue& val, QoreParseConte
         right_analysis = parse_context.analysis;
     }
     const QoreTypeInfo* rightTypeInfo = parse_context.typeInfo;
+
+    bool left_string_literal = left.getType() == NT_STRING;
+    bool right_string_literal = right.getType() == NT_STRING;
+    const QoreTypeInfo* other_type = left_string_literal ? rightTypeInfo : leftTypeInfo;
+    bool other_numeric = QoreTypeInfo::isType(other_type, NT_INT)
+        || QoreTypeInfo::isType(other_type, NT_FLOAT)
+        || QoreTypeInfo::isType(other_type, NT_NUMBER)
+        || QoreTypeInfo::isType(other_type, NT_CHAR);
+    if (!err && (left_string_literal != right_string_literal) && other_numeric) {
+        QoreDiagnosticMetadata metadata("STRING-MULTIPLICATION-IS-NUMERIC",
+            "the '*' operator is numeric even when one operand is a parse-time-known string; use strmul() to "
+            "repeat text");
+        metadata.addFact("operation", "*");
+        metadata.addFact("stringOperand", left_string_literal ? "left" : "right");
+        metadata.addFact("resultSemantics", "numeric-multiplication");
+        metadata.addSuggestion(left_string_literal
+            ? "strmul(string, count)"
+            : "strmul(string, count) with the operands reordered");
+        QoreStringNode* desc = new QoreStringNodeMaker("multiplying a string value known at parse time with '*' "
+            "performs numeric multiplication and does not repeat the string; use strmul() for repetition");
+        qore_program_private::makeParseWarning(parse_context.pgm, *loc, QP_WARN_LANGUAGE_TRAPS,
+            "LANGUAGE-TRAP", desc, metadata);
+    }
 
     // see if both arguments are constants, then eval immediately and substitute this node with the result
     if (!err && right.isValue() && left.isValue()) {

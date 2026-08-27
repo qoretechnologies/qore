@@ -29,6 +29,7 @@
 */
 
 #include <qore/Qore.h>
+#include "qore/intern/QoreHashObjectDereferenceOperatorNode.h"
 #include "qore/intern/StatementBlock.h"
 
 QoreString QoreQuestionMarkOperatorNode::question_mark_str("question mark (?:) operator expression");
@@ -60,6 +61,9 @@ int QoreQuestionMarkOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext
         QoreParseContextAnalysisHelper ah(parse_context);
         err = parse_init_value(e[0], parse_context);
         cond_analysis = parse_context.analysis;
+    }
+    if (!err) {
+        qore_warn_hash_member_truth_test(parse_context.pgm, e[0]);
     }
 
     if (!QoreTypeInfo::canConvertToScalar(parse_context.typeInfo)

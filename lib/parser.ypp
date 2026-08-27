@@ -2053,6 +2053,20 @@ static AbstractQoreNode* process_hard_keyword_member(int sline, int scol, QoreVa
     return new QoreHashObjectDereferenceOperatorNode(loc, left, member);
 }
 
+static void make_readonly_untyped_local_error(const QoreProgramLocation* loc, const char* name) {
+    QoreStringMaker suggestion("const auto %s", name);
+    QoreDiagnosticMetadata metadata("READONLY-LOCAL-REQUIRES-TYPE",
+        "read-only local declarations require an explicit type; use 'auto' when the initializer should infer it");
+    metadata.addFact("variable", name);
+    metadata.addFact("declarationKind", "read-only-local");
+    metadata.addFact("requiredTypeSyntax", "explicit");
+    metadata.addSuggestion(suggestion.c_str());
+    metadata.addFix("add 'auto' or another explicit type after 'const'", "review-required");
+    QoreStringNode* desc = new QoreStringNodeMaker("read-only local variable '%s' declared without type "
+        "information; use 'const auto %s' or another explicit type", name, name);
+    qore_program_private::makeParseException(getProgram(), *loc, "PARSE-EXCEPTION", desc, metadata);
+}
+
 static int check_strong_encapsulation(const QoreProgramLocation* loc, const char* type, const char* name) {
     if (parse_check_parse_option(PO_STRONG_ENCAPSULATION)) {
         parse_error(*loc, "illegal out of line %s definition \"%s\" (conflicts with parse option PO_STRONG_ENCAPSULATION)", type, name);
@@ -5160,8 +5174,7 @@ exp_c:
             delete $2;
         } else {
             if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
-                parse_error(*loc, "read-only local variable '%s' declared without type information; use 'const auto %s' "
-                    "or another explicit type", $3, $3);
+                make_readonly_untyped_local_error(loc, $3);
             }
             v = new VarRefDeclNode(loc, $3, get_var_type(), autoTypeInfo);
         }
@@ -5191,8 +5204,7 @@ exp_c:
             @2.last_line, @1.first_col,
             @2.last_col);
         if (parse_check_parse_option(PO_REQUIRE_TYPES)) {
-            parse_error(*loc, "read-only local variable '%s' declared without type information; use 'const auto %s' "
-                "or another explicit type", $2, $2);
+            make_readonly_untyped_local_error(loc, $2);
         }
         VarRefDeclNode* v = new VarRefDeclNode(loc, $2, get_var_type(), autoTypeInfo);
         v->setReadOnlyDecl();

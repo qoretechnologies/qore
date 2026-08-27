@@ -31,6 +31,7 @@
 #include <qore/Qore.h>
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/qore_number_private.h"
+#include "qore/intern/qore_program_private.h"
 
 QoreString QoreExistsOperatorNode::Exists_str("exists operator expression");
 
@@ -57,6 +58,7 @@ int QoreExistsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
     // turn off "return value ignored" flags
     QoreParseContextFlagHelper fh(parse_context);
     fh.unsetFlags(PF_RETURN_VALUE_IGNORED);
+    fh.setFlags(PF_EXISTENCE_CHECK);
 
     assert(!parse_context.typeInfo);
     QoreParseAnalysis operand_analysis;
@@ -65,6 +67,31 @@ int QoreExistsOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& pars
         QoreParseContextAnalysisHelper ah(parse_context);
         err = parse_init_value(exp, parse_context);
         operand_analysis = parse_context.analysis;
+    }
+
+    if (!err && exp.getType() == NT_VARREF) {
+        const VarRefNode* variable_ref = exp.get<const VarRefNode>();
+        qore_var_t variable_type = variable_ref->getType();
+        if ((variable_type == VT_LOCAL || variable_type == VT_CLOSURE || variable_type == VT_LOCAL_TS)
+                && variable_ref->ref.id) {
+            const QoreTypeInfo* declared_type = variable_ref->ref.id->getTypeInfo();
+            if (QoreTypeInfo::getReferenceTarget(declared_type)
+                    && QoreTypeInfo::parseReturns(declared_type, NT_NOTHING) != QTI_NOT_EQUAL) {
+                const char* variable_name = variable_ref->ref.id->getName();
+                QoreDiagnosticMetadata metadata("EXISTS-OPTIONAL-REFERENCE-VALUE",
+                    "exists tests the referenced value, so false means either the optional reference is not bound "
+                    "or the referenced variable has no value");
+                metadata.addFact("variable", variable_name);
+                metadata.addFact("declaredType", QoreTypeInfo::getName(declared_type));
+                metadata.addFact("tests", "referenced-value");
+                metadata.addSuggestion("return a {found, value} result or track reference binding separately");
+                QoreStringNode* desc = new QoreStringNodeMaker("'exists %s' tests the referenced value, not "
+                    "whether an optional reference is bound; it is false both for an unbound reference and for a "
+                    "reference to an unassigned variable", variable_name);
+                qore_program_private::makeParseWarning(parse_context.pgm, *loc, QP_WARN_LANGUAGE_TRAPS,
+                    "LANGUAGE-TRAP", desc, metadata);
+            }
+        }
     }
 
     // see the argument is a constant value, then eval immediately and substitute this node with the result

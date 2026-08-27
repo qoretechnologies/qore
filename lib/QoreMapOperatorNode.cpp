@@ -119,7 +119,7 @@ int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
         err = parse_init_value(right, parse_context);
         right_analysis = parse_context.analysis;
     }
-    const QoreTypeInfo* iteratorTypeInfo = parse_context.typeInfo;
+    iteratorTypeInfo = parse_context.typeInfo;
 
     // check iterated expression
     {
@@ -164,7 +164,8 @@ int QoreMapOperatorNode::parseInitImpl(QoreValue& val, QoreParseContext& parse_c
                 "therefore this expression will also return no value; update the expression to return a value or " \
                 "use '%%disable-warning invalid-operation' in your code to avoid seeing this warning in the future");
             parse_context.typeInfo = nothingTypeInfo;
-        } else if (QoreTypeInfo::isType(iteratorTypeInfo, NT_LIST)) {
+        } else if (QoreTypeInfo::isType(iteratorTypeInfo, NT_LIST)
+                || QoreTypeInfo::getReturnComplexListOrNothing(iteratorTypeInfo)) {
             parse_context.typeInfo = QoreMapOperatorNode::setReturnTypeInfo(returnTypeInfo, expTypeInfo,
                 iteratorTypeInfo);
         } else {
