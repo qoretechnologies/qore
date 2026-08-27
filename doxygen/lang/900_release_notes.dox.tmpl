@@ -2788,6 +2788,18 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         remain compatible with MySQL 5.7 and current MariaDB releases
 
     - Core language
+      - fixed the process aborting during @ref Qore::exit() "exit()" instead of exiting, losing the exit status the
+        script had set, in any process where a binary module owns a @ref Qore::Program "Program" in an object with
+        static storage duration -- the jni module's global Java context \c Program is one such owner, so
+        <tt>qore -l jni -e 'exit(7);'</tt> exited 134 on macOS instead of 7.  The JIT singleton is created on first
+        use, and qore_exit_process() itself creates it on its way out if nothing else had, which registered its
+        destructor after every module's, so it was destroyed first; \c Program teardown then ran from those
+        modules' static destructors and locked the singleton's already-destroyed \c std::mutex.  On macOS
+        \c pthread_mutex_lock() returns \c EINVAL for a destroyed mutex and libc++ turns that into an uncaught
+        \c std::system_error, aborting the process; glibc silently tolerates it, so the same defect was invisible
+        on Linux.  The JIT singleton is now allocated once and never destroyed, so it outlives every \c Program it
+        serves; its background compile thread is still stopped at exit
+        (<a href="https://github.com/qoretechnologies/qore/issues/5392">issue 5392</a>)
       - fixed a potential crash when a running @ref Qore::Program "Program" loaded a module while other threads
         resolved functions, classes, namespaces, constants, or global and static variables in the same Program;
         runtime module application and committed namespace lookups are now synchronized without stopping unrelated

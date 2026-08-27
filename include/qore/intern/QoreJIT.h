@@ -646,6 +646,9 @@ public:
 
 private:
     QoreJIT() = default;
+    // Not reached for the singleton: instance() never destroys it, so that it outlives every
+    // Program whose teardown calls into it; the background thread is stopped by the atexit handler
+    // instance() registers.  Kept correct for any other destruction path.
     ~QoreJIT() {
         // Ensure background thread is stopped before destructor completes
         shutdown();

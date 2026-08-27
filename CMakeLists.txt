@@ -3069,6 +3069,9 @@ endif (DOXYGEN_FOUND)
 # test modules for the module C++ API mechanism; built but never installed
 add_subdirectory(examples/test/module-cpp-api)
 
+# test module owning a Program with static storage duration; built but never installed
+add_subdirectory(examples/test/module-static-program)
+
 # astparser module
 add_subdirectory(modules/astparser)
 # avro module

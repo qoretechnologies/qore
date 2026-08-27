@@ -866,9 +866,40 @@ static void optimizeModule(llvm::Module& module, int opt_level) {
     delete tm;
 }
 
+//! stops the background compile thread at process exit
+/** ~QoreJIT() used to do this; the singleton is immortal now, so the stop is registered from the
+    constructor instead, which puts it at the same point in the teardown order.  It matters for a
+    process that exits without going through qore_exit_process() or qore_main_intern(): the
+    background thread must not still be compiling while LLVM's process-wide state is torn down.
+    shutdown() is idempotent and permanently stops the queue from accepting work, so running it
+    here as well as from those two callers is harmless.
+*/
+static void qore_jit_shutdown_at_exit() {
+    QoreJIT::instance().shutdown();
+}
+
+// The singleton is allocated once and deliberately never destroyed.  Programs are torn down from
+// static destructors and atexit handlers while exit() runs, and qore_program_private::del() calls
+// waitForBgCompileQueue(), which locks bg_queue_mutex.  This singleton is constructed lazily - on
+// the first JIT-eligible call, therefore after any module that owns a Program with static storage
+// duration has been loaded and registered its own destructor - so a destructible singleton is
+// destroyed *first* and is then used by that later teardown.  Locking a std::mutex whose destructor
+// has run aborts the process on macOS, where pthread_mutex_lock() returns EINVAL and libc++ turns
+// that into an uncaught std::system_error ("mutex lock failed: Invalid argument"), losing the exit
+// status the script set; glibc silently tolerates it, so the same defect is invisible on Linux.
+// An immortal singleton keeps the JIT usable for the entire life of the process.  Its resources are
+// released by shutdown(), which qore_exit_process() and qore_main_intern() call explicitly, and the
+// rest is reclaimed by the operating system at process exit.
 QoreJIT& QoreJIT::instance() {
-    static QoreJIT jit;
-    return jit;
+    static QoreJIT* jit = [] {
+        QoreJIT* rv = new QoreJIT;
+        if (atexit(qore_jit_shutdown_at_exit)) {
+            printd(0, "QoreJIT::instance(): failed to register the atexit JIT shutdown handler; "
+                "the background compile thread will not be stopped before process exit\n");
+        }
+        return rv;
+    }();
+    return *jit;
 }
 
 bool QoreJIT::isEnabled() const {
