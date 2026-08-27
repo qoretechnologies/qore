@@ -337,11 +337,15 @@ class I18nTest inherits QUnit::Test {
         assertTrue(I18n::string_predicate("Cafe\u0301", "ends-with", "\u00e9", "en-US"));
         assertTrue(I18n::string_predicate("Alpha", "equals", "alpha", "en-US"));
         assertFalse(I18n::string_predicate("Alpha", "equals", "alpha", "en-US", {"strength": "tertiary"}));
+        assertFalse(I18n::string_predicate("", "contains", "a", "en-US"));
+        assertFalse(I18n::string_predicate("", "starts-with", "a", "en-US"));
+        assertFalse(I18n::string_predicate("", "ends-with", "a", "en-US"));
+        assertTrue(I18n::string_predicate("", "contains", "", "en-US"));
 
-        auto mask = I18n::string_predicate_mask(("\u0130stanbul", "Istanbul", NOTHING), "starts-with", "i",
-            "tr-TR");
+        auto mask = I18n::string_predicate_mask(("\u0130stanbul", "Istanbul", "", NOTHING), "starts-with",
+            "i", "tr-TR");
         assertEq("buffer<bool>", mask.fullType());
-        assertEq((True, False, False), mask.toList());
+        assertEq((True, False, False, False), mask.toList());
     }
 
     localePercentageFormattingTest() {
