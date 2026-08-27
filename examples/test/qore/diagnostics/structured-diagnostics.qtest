@@ -77,9 +77,15 @@ public class StructuredDiagnosticsTest inherits QUnit::Test {
         }
         assertEq(True, exists err, "undefined-class diagnostic present");
         assertEq("error", err.severity);
+        assertEq("PARSE-EXCEPTION", err.id, "legacy diagnostics use their exception code as the semantic id");
         assertEq("<in>", err.file);
         assertEq(NOTHING, err.warningCode, "errors have no warning code");
         assertRegex("did you mean 'MyWidget'", err.message);
+        assertEq(NOTHING, err.hint, "legacy prose-only suggestions do not invent structured hints");
+        assertEq((), err.suggestions);
+        assertEq({}, err.facts);
+        assertEq((), err.relatedLocations);
+        assertEq((), err.fixes);
         assertGt(0, err.startColumn, "error carries a real start column");
     }
 
@@ -93,8 +99,13 @@ public class StructuredDiagnosticsTest inherits QUnit::Test {
         assertEq(1, diags.size(), "one warning collected");
         assertEq("warning", diags[0].severity);
         assertEq("NON-EXHAUSTIVE-SWITCH", diags[0].code);
+        assertEq("NON-EXHAUSTIVE-SWITCH", diags[0].id);
         assertEq(WARN_NONEXHAUSTIVE_SWITCH, diags[0].warningCode);
         assertRegex("Green", diags[0].message);
+        assertEq("add the missing enum cases or an explicit default: label", diags[0].hint);
+        assertEq("Color", diags[0].facts{"enum"});
+        assertEq("Green", diags[0].facts.missingValues);
+        assertEq("1", diags[0].facts.missingCount);
     }
 
     testErrorColumns() {

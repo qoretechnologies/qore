@@ -50,6 +50,12 @@ public class DiagJsonCliTest inherits QUnit::Test {
         string out = runDiag("class MyWidget {} MyWidget sub f() { return new MyWidgett(); }");
         assertRegex("\"severity\":\"error\"", out);
         assertRegex("\"code\":\"PARSE-EXCEPTION\"", out);
+        assertRegex("\"id\":\"PARSE-EXCEPTION\"", out);
+        assertRegex("\"hint\":null", out);
+        assertRegex("\"suggestions\":\\[\\]", out);
+        assertRegex("\"facts\":\\{\\}", out);
+        assertRegex("\"relatedLocations\":\\[\\]", out);
+        assertRegex("\"fixes\":\\[\\]", out);
         assertRegex("undefined class 'MyWidgett'; did you mean 'MyWidget'", out);
         # a real column span must be present (a positive integer)
         assertRegex("\"startColumn\":[0-9]+", out);

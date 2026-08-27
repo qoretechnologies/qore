@@ -241,11 +241,17 @@ static void warnNonExhaustiveSwitch(QoreProgram* pgm, const QoreProgramLocation*
     }
 
     if (missing_count) {
-        qore_program_private::makeParseWarning(pgm, *loc, QP_WARN_NONEXHAUSTIVE_SWITCH,
-            "NON-EXHAUSTIVE-SWITCH",
+        QoreStringNode* desc = new QoreStringNodeMaker(
             "switch over enum '%s' does not handle %d of its values (%s); add the missing "
             "case%s or a default: label", ed->getName(), missing_count, missing.c_str(),
             missing_count == 1 ? "" : "s");
+        QoreDiagnosticMetadata metadata("NON-EXHAUSTIVE-SWITCH",
+            "add the missing enum cases or an explicit default: label");
+        metadata.addFact("enum", ed->getName());
+        metadata.addFact("missingValues", missing.c_str());
+        metadata.addFact("missingCount", std::to_string(missing_count).c_str());
+        qore_program_private::makeParseWarning(pgm, *loc, QP_WARN_NONEXHAUSTIVE_SWITCH,
+            "NON-EXHAUSTIVE-SWITCH", desc, metadata);
     }
 }
 

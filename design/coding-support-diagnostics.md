@@ -74,9 +74,10 @@ Declared as a hashdecl in `lib/QC_Program.qpp` (so it is documented):
 ```
 hashdecl ParseDiagnosticInfo {
     string severity;          # "error" | "warning"
-    string code;              # stable id, e.g. "UNDEFINED-CLASS"
+    string code;              # legacy exception/warning code
+    string id;                # stable semantic id for the exact condition
     *int warningCode;         # QP_WARN_* bit for warnings, NOTHING for errors
-    string file;
+    *string file;
     *string source;
     int startLine;
     int endLine = -1;
@@ -85,12 +86,22 @@ hashdecl ParseDiagnosticInfo {
     string message;
     *string hint;
     list<string> suggestions = ();
+    hash<string, string> facts = {};
+    list<hash<ParseDiagnosticRelatedLocationInfo>> relatedLocations = ();
+    list<hash<ParseDiagnosticFixInfo>> fixes = ();
 }
 ```
 
+Related locations and fix edits use the typed `ParseDiagnosticSpanInfo` shape (`file`, `source`, and
+start/end line and column fields).  A `ParseDiagnosticFixInfo` has a title, an applicability value,
+and a typed list of `ParseDiagnosticEditInfo` records with replacement text.
+
 Internally each diagnostic is built as a `QoreDiagnostic` record (severity, stable
-string `code`, warning bit, location, message, optional hint, suggestions) at the
-chokepoint when collection is enabled, then converted to the hashdecl.
+legacy `code`, semantic `id`, warning bit, location, message, optional hint,
+suggestions, facts, related source ranges, and possible source fixes) at the
+chokepoint when collection is enabled, then converted to the hashdecl.  Fixes
+declare their applicability as `machine-applicable` or `review-required`; tools
+must never apply a review-required fix automatically.
 
 ## Source columns
 

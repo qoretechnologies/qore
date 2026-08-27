@@ -372,6 +372,26 @@ DLLEXPORT extern const TypedHashDecl* hashdeclSourceLocationInfo;
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclParseDiagnosticInfo;
 
+//! ParseDiagnosticSpanInfo hashdecl
+/** @since %Qore 3.0
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclParseDiagnosticSpanInfo;
+
+//! ParseDiagnosticRelatedLocationInfo hashdecl
+/** @since %Qore 3.0
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclParseDiagnosticRelatedLocationInfo;
+
+//! ParseDiagnosticEditInfo hashdecl
+/** @since %Qore 3.0
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclParseDiagnosticEditInfo;
+
+//! ParseDiagnosticFixInfo hashdecl
+/** @since %Qore 3.0
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclParseDiagnosticFixInfo;
+
 //! SerializationInfo hashdecl
 /** @since %Qore 0.9
 */

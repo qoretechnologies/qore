@@ -430,6 +430,54 @@ qore_program_private::~qore_program_private() {
     assert(!dpgm.load(std::memory_order_relaxed));
 }
 
+static void set_diagnostic_span_hash(QoreHashNode& h, const QoreDiagnosticSpan& span) {
+    auto ph = qore_hash_private::get(h);
+    ph->setKeyValueIntern("file", span.file.empty() ? QoreValue() : QoreValue(new QoreStringNode(span.file)));
+    ph->setKeyValueIntern("source", span.source.empty() ? QoreValue() : QoreValue(new QoreStringNode(span.source)));
+    ph->setKeyValueIntern("startLine", (int64)span.start_line);
+    ph->setKeyValueIntern("endLine", (int64)span.end_line);
+    ph->setKeyValueIntern("startColumn", (int64)span.start_column);
+    ph->setKeyValueIntern("endColumn", (int64)span.end_column);
+}
+
+static QoreListNode* make_diagnostic_related_location_list(
+        const std::vector<QoreDiagnosticRelatedLocation>& related_locations) {
+    ReferenceHolder<QoreListNode> list(
+        new QoreListNode(hashdeclParseDiagnosticRelatedLocationInfo->getTypeInfo()), nullptr);
+    for (const auto& related : related_locations) {
+        ReferenceHolder<QoreHashNode> h(
+            new QoreHashNode(hashdeclParseDiagnosticRelatedLocationInfo, nullptr), nullptr);
+        set_diagnostic_span_hash(**h, related.span);
+        auto ph = qore_hash_private::get(**h);
+        ph->setKeyValueIntern("role", new QoreStringNode(related.role));
+        ph->setKeyValueIntern("message", related.message.empty()
+            ? QoreValue() : QoreValue(new QoreStringNode(related.message)));
+        list->push(h.release(), nullptr);
+    }
+    return list.release();
+}
+
+static QoreListNode* make_diagnostic_fix_list(const std::vector<QoreDiagnosticFix>& fixes) {
+    ReferenceHolder<QoreListNode> list(new QoreListNode(hashdeclParseDiagnosticFixInfo->getTypeInfo()), nullptr);
+    for (const auto& fix : fixes) {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclParseDiagnosticFixInfo, nullptr), nullptr);
+        auto ph = qore_hash_private::get(**h);
+        ph->setKeyValueIntern("title", new QoreStringNode(fix.title));
+        ph->setKeyValueIntern("applicability", new QoreStringNode(fix.applicability));
+        ReferenceHolder<QoreListNode> edits(
+            new QoreListNode(hashdeclParseDiagnosticEditInfo->getTypeInfo()), nullptr);
+        for (const auto& edit : fix.edits) {
+            ReferenceHolder<QoreHashNode> eh(new QoreHashNode(hashdeclParseDiagnosticEditInfo, nullptr), nullptr);
+            set_diagnostic_span_hash(**eh, edit.span);
+            qore_hash_private::get(**eh)->setKeyValueIntern("replacement", new QoreStringNode(edit.replacement));
+            edits->push(eh.release(), nullptr);
+        }
+        ph->setKeyValueIntern("edits", edits.release());
+        list->push(h.release(), nullptr);
+    }
+    return list.release();
+}
+
 QoreListNode* qore_program_private::getParseDiagnosticList() const {
     ReferenceHolder<QoreListNode> l(new QoreListNode(hashdeclParseDiagnosticInfo->getTypeInfo()), nullptr);
     for (auto& d : diagnostics) {
@@ -437,6 +485,7 @@ QoreListNode* qore_program_private::getParseDiagnosticList() const {
         auto ph = qore_hash_private::get(**h);
         ph->setKeyValueIntern("severity", new QoreStringNode(d.error ? "error" : "warning"));
         ph->setKeyValueIntern("code", new QoreStringNode(d.code));
+        ph->setKeyValueIntern("id", new QoreStringNode(d.metadata.id));
         ph->setKeyValueIntern("warningCode", d.warn_code >= 0 ? QoreValue((int64)d.warn_code) : QoreValue());
         ph->setKeyValueIntern("file", d.file.empty() ? QoreValue() : QoreValue(new QoreStringNode(d.file)));
         ph->setKeyValueIntern("source", d.source.empty() ? QoreValue() : QoreValue(new QoreStringNode(d.source)));
@@ -445,6 +494,22 @@ QoreListNode* qore_program_private::getParseDiagnosticList() const {
         ph->setKeyValueIntern("startColumn", (int64)d.start_column);
         ph->setKeyValueIntern("endColumn", (int64)d.end_column);
         ph->setKeyValueIntern("message", new QoreStringNode(d.message));
+        ph->setKeyValueIntern("hint", d.metadata.hint.empty()
+            ? QoreValue() : QoreValue(new QoreStringNode(d.metadata.hint)));
+        ReferenceHolder<QoreListNode> suggestions(new QoreListNode(stringTypeInfo), nullptr);
+        for (const auto& suggestion : d.metadata.suggestions) {
+            suggestions->push(new QoreStringNode(suggestion), nullptr);
+        }
+        ph->setKeyValueIntern("suggestions", suggestions.release());
+        ReferenceHolder<QoreHashNode> facts(new QoreHashNode(stringTypeInfo), nullptr);
+        auto fph = qore_hash_private::get(**facts);
+        for (const auto& fact : d.metadata.facts) {
+            fph->setKeyValueIntern(fact.first.c_str(), new QoreStringNode(fact.second));
+        }
+        ph->setKeyValueIntern("facts", facts.release());
+        ph->setKeyValueIntern("relatedLocations",
+            make_diagnostic_related_location_list(d.metadata.related_locations));
+        ph->setKeyValueIntern("fixes", make_diagnostic_fix_list(d.metadata.fixes));
         l->push(h.release(), nullptr);
     }
     return l.release();
@@ -473,6 +538,105 @@ static void json_escape_append(std::string& str, const std::string& s) {
     }
 }
 
+static void json_string_append(std::string& str, const std::string& value) {
+    str += '"';
+    json_escape_append(str, value);
+    str += '"';
+}
+
+static void json_nullable_string_append(std::string& str, const std::string& value) {
+    if (value.empty()) {
+        str += "null";
+    } else {
+        json_string_append(str, value);
+    }
+}
+
+static void json_diagnostic_span_fields_append(std::string& str, const QoreDiagnosticSpan& span) {
+    str += "\"file\":";
+    json_nullable_string_append(str, span.file);
+    str += ",\"source\":";
+    json_nullable_string_append(str, span.source);
+    str += ",\"startLine\":" + std::to_string(span.start_line);
+    str += ",\"endLine\":" + std::to_string(span.end_line);
+    str += ",\"startColumn\":" + std::to_string(span.start_column);
+    str += ",\"endColumn\":" + std::to_string(span.end_column);
+}
+
+static void json_diagnostic_metadata_append(std::string& str, const QoreDiagnosticMetadata& metadata) {
+    str += ",\"hint\":";
+    json_nullable_string_append(str, metadata.hint);
+
+    str += ",\"suggestions\":[";
+    bool first = true;
+    for (const auto& suggestion : metadata.suggestions) {
+        if (!first) {
+            str += ',';
+        }
+        first = false;
+        json_string_append(str, suggestion);
+    }
+    str += ']';
+
+    str += ",\"facts\":{";
+    first = true;
+    for (const auto& fact : metadata.facts) {
+        if (!first) {
+            str += ',';
+        }
+        first = false;
+        json_string_append(str, fact.first);
+        str += ':';
+        json_string_append(str, fact.second);
+    }
+    str += '}';
+
+    str += ",\"relatedLocations\":[";
+    first = true;
+    for (const auto& related : metadata.related_locations) {
+        if (!first) {
+            str += ',';
+        }
+        first = false;
+        str += '{';
+        json_diagnostic_span_fields_append(str, related.span);
+        str += ",\"role\":";
+        json_string_append(str, related.role);
+        str += ",\"message\":";
+        json_nullable_string_append(str, related.message);
+        str += '}';
+    }
+    str += ']';
+
+    str += ",\"fixes\":[";
+    first = true;
+    for (const auto& fix : metadata.fixes) {
+        if (!first) {
+            str += ',';
+        }
+        first = false;
+        str += "{\"title\":";
+        json_string_append(str, fix.title);
+        str += ",\"applicability\":";
+        json_string_append(str, fix.applicability);
+        str += ",\"edits\":[";
+        bool first_edit = true;
+        for (const auto& edit : fix.edits) {
+            if (!first_edit) {
+                str += ',';
+            }
+            first_edit = false;
+            str += '{';
+            json_diagnostic_span_fields_append(str, edit.span);
+            str += ",\"replacement\":";
+            json_string_append(str, edit.replacement);
+            str += '}';
+        }
+        str += "]}";
+    }
+    str += ']';
+}
+
 std::string qore_program_private::getParseDiagnosticsJSON() const {
     std::string j = "[";
     bool first = true;
@@ -485,6 +649,8 @@ std::string qore_program_private::getParseDiagnosticsJSON() const {
         j += d.error ? "error" : "warning";
         j += "\",\"code\":\"";
         json_escape_append(j, d.code);
+        j += "\",\"id\":\"";
+        json_escape_append(j, d.metadata.id);
         j += "\",\"warningCode\":";
         j += (d.warn_code >= 0) ? std::to_string(d.warn_code) : std::string("null");
         j += ",\"file\":";
@@ -509,7 +675,9 @@ std::string qore_program_private::getParseDiagnosticsJSON() const {
         j += ",\"endColumn\":" + std::to_string(d.end_column);
         j += ",\"message\":\"";
         json_escape_append(j, d.message);
-        j += "\"}";
+        j += '"';
+        json_diagnostic_metadata_append(j, d.metadata);
+        j += '}';
     }
     j += "]";
     return j;
@@ -556,12 +724,12 @@ unsigned qore_program_private::renderParseDiagnosticFrames(const char* source_te
             ++errors;
         }
         const char* sev = d.error ? "error" : "warning";
-        // header: file:line:col: severity[code]: message
+        // header: file:line:col: severity[semantic-id]: message
         fprintf(os, "%s:%d", d.file.empty() ? "<input>" : d.file.c_str(), d.start_line);
         if (d.start_column >= 0) {
             fprintf(os, ":%d", d.start_column);
         }
-        fprintf(os, ": %s[%s]: %s\n", sev, d.code.c_str(), d.message.c_str());
+        fprintf(os, ": %s[%s]: %s\n", sev, d.metadata.id.c_str(), d.message.c_str());
 
         // code frame: the source line plus a caret line under the offending span
         std::string line;
@@ -580,6 +748,9 @@ unsigned qore_program_private::renderParseDiagnosticFrames(const char* source_te
                 }
                 fprintf(os, "%s\n", caret.c_str());
             }
+        }
+        if (!d.metadata.hint.empty()) {
+            fprintf(os, "  help: %s\n", d.metadata.hint.c_str());
         }
     }
     return errors;

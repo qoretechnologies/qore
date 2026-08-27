@@ -2191,11 +2191,12 @@ public:
         TZ = tz;
     }
 
-    DLLLOCAL void makeParseException(const QoreProgramLocation& loc, const char* err, QoreStringNode* desc) {
+    DLLLOCAL void makeParseException(const QoreProgramLocation& loc, const char* err, QoreStringNode* desc,
+            const QoreDiagnosticMetadata* metadata = nullptr) {
         QORE_TRACE("QoreProgram::makeParseException()");
 
         if (collect_diagnostics) {
-            diagnostics.push_back(QoreDiagnostic(true, err, -1, loc, desc->c_str()));
+            diagnostics.push_back(QoreDiagnostic(true, err, -1, loc, desc->c_str(), metadata));
         }
 
         QoreStringNodeHolder d(desc);
@@ -2958,6 +2959,11 @@ public:
         pgm->priv->makeParseException(loc, err, desc);
     }
 
+    DLLLOCAL static void makeParseException(QoreProgram* pgm, const QoreProgramLocation& loc, const char* err,
+            QoreStringNode* desc, const QoreDiagnosticMetadata& metadata) {
+        pgm->priv->makeParseException(loc, err, desc, &metadata);
+    }
+
     DLLLOCAL static const QoreValue parseGetDefine(QoreProgram* pgm, const char* name) {
         bool is_defined;
         return pgm->priv->getDefine(name, is_defined);
@@ -3188,6 +3194,21 @@ public:
             pgm->priv->diagnostics.push_back(QoreDiagnostic(false, warn, code, loc, desc->c_str()));
         }
         QoreException *ne = new ParseException(loc, warn, desc);
+        pgm->priv->warnSink->raiseException(ne);
+    }
+
+    //! Raises a parse warning and attaches structured metadata when diagnostic collection is enabled
+    DLLLOCAL static void makeParseWarning(QoreProgram* pgm, const QoreProgramLocation& loc, int code,
+            const char* warn, QoreStringNode* desc, const QoreDiagnosticMetadata& metadata) {
+        if (!pgm || !pgm->priv->warnSink || !(code & pgm->priv->pwo.warn_mask)) {
+            desc->deref();
+            return;
+        }
+
+        if (pgm->priv->collect_diagnostics) {
+            pgm->priv->diagnostics.push_back(QoreDiagnostic(false, warn, code, loc, desc->c_str(), &metadata));
+        }
+        QoreException* ne = new ParseException(loc, warn, desc);
         pgm->priv->warnSink->raiseException(ne);
     }
 
@@ -3885,6 +3906,10 @@ private:
 };
 
 DLLLOCAL TypedHashDecl* init_hashdecl_SourceLocationInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticSpanInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticRelatedLocationInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticEditInfo(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticFixInfo(QoreNamespace& ns);
 DLLLOCAL TypedHashDecl* init_hashdecl_ParseDiagnosticInfo(QoreNamespace& ns);
 
 class RuntimeConfig;

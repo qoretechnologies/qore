@@ -168,11 +168,16 @@ qcc -o myapp build/aot/*.qo
     command-line emitter and the embedded
     @ref Qore::Program::getParseDiagnostics() "Program::getParseDiagnostics()" API
     return the same information. The fields are \c severity (<tt>"error"</tt> or
-    <tt>"warning"</tt>), \c code (a stable diagnostic id), \c warningCode (the
+    <tt>"warning"</tt>), \c code (the legacy exception or warning code), \c id
+    (a stable id for the exact semantic condition), \c warningCode (the
     @ref warnings "warning bit" for warnings, \c null for errors), \c file,
     \c source, \c startLine, \c endLine, \c startColumn, \c endColumn (a column of
-    \c -1 means the column is unknown), and \c message. Suggestions and hints are
-    included in the \c message text.
+    \c -1 means the column is unknown), \c message, \c hint, \c suggestions,
+    \c facts, \c relatedLocations, and \c fixes.  A fix declares an
+    <tt>applicability</tt> of <tt>machine-applicable</tt> or
+    <tt>review-required</tt>; tools must not apply review-required fixes without
+    review.  Legacy diagnostics that do not yet provide richer metadata use
+    their \c code as \c id and return empty metadata fields.
 
     For example, given the following file \c bad.q with two errors (an undefined
     class and a function-name typo):
@@ -202,6 +207,7 @@ qore --diag-format=json bad.q
   {
     "severity": "error",
     "code": "PARSE-EXCEPTION",
+    "id": "PARSE-EXCEPTION",
     "warningCode": null,
     "file": "bad.q",
     "source": null,
@@ -209,11 +215,17 @@ qore --diag-format=json bad.q
     "endLine": 8,
     "startColumn": 12,
     "endColumn": 24,
-    "message": "reference to undefined class 'widget'; did you mean 'Widget'? (check capitalization)"
+    "message": "reference to undefined class 'widget'; did you mean 'Widget'? (check capitalization)",
+    "hint": null,
+    "suggestions": [],
+    "facts": {},
+    "relatedLocations": [],
+    "fixes": []
   },
   {
     "severity": "error",
     "code": "PARSE-EXCEPTION",
+    "id": "PARSE-EXCEPTION",
     "warningCode": null,
     "file": "bad.q",
     "source": null,
@@ -221,7 +233,12 @@ qore --diag-format=json bad.q
     "endLine": 9,
     "startColumn": -1,
     "endColumn": -1,
-    "message": "function 'calculateTotl()' cannot be found; did you mean 'calculateTotal'?"
+    "message": "function 'calculateTotl()' cannot be found; did you mean 'calculateTotal'?",
+    "hint": null,
+    "suggestions": [],
+    "facts": {},
+    "relatedLocations": [],
+    "fixes": []
   }
 ]
     @endcode
@@ -259,6 +276,7 @@ qore --diag-format=json warn.q
   {
     "severity": "warning",
     "code": "NON-EXHAUSTIVE-SWITCH",
+    "id": "NON-EXHAUSTIVE-SWITCH",
     "warningCode": 1048576,
     "file": "warn.q",
     "source": null,
@@ -266,7 +284,12 @@ qore --diag-format=json warn.q
     "endLine": 13,
     "startColumn": -1,
     "endColumn": -1,
-    "message": "switch over enum 'Color' does not handle 1 of its values (BLUE); add the missing case or a default: label"
+    "message": "switch over enum 'Color' does not handle 1 of its values (BLUE); add the missing case or a default: label",
+    "hint": "add the missing enum cases or an explicit default: label",
+    "suggestions": [],
+    "facts": {"enum":"Color","missingCount":"1","missingValues":"BLUE"},
+    "relatedLocations": [],
+    "fixes": []
   }
 ]
     @endcode
