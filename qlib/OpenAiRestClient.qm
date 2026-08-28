@@ -892,6 +892,9 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             if (parsed.choices[0].delta.content.val()) {
                 delta = parsed.choices[0].delta.content;
             }
+            bool has_tool_call_delta =
+                parsed.choices[0].delta.tool_calls.typeCode() == NT_LIST
+                && parsed.choices[0].delta.tool_calls.size() > 0;
             if (parsed.choices[0].finish_reason.val()) {
                 callback(<QoreLlmUtils::ChatStreamEvent>{
                     "done": True,
@@ -900,7 +903,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 });
                 break;
             }
-            if (delta.val()) {
+            if (delta.val() || has_tool_call_delta) {
                 callback(<QoreLlmUtils::ChatStreamEvent>{
                     "event": evt.event,
                     "delta": delta,

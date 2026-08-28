@@ -15,6 +15,7 @@
 %requires RestClient
 %requires RestClientIo
 %requires QoreLlmTypes
+%requires OpenAiRestClient
 %requires GeminiBodyShape
 %requires GeminiRestClient
 %requires QoreLlmUtils
@@ -71,6 +72,86 @@ class FakeGeminiLlmHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+class FakeOpenAiStreamHandler inherits AbstractHttpRequestHandler {
+    public {
+        list<hash<auto>> requests = ();
+        Mutex m();
+    }
+
+    hash handleRequest(hash cx, hash hdr, *data body) {
+        m.lock();
+        on_exit m.unlock();
+        push requests, {
+            "path": cx.raw_path,
+            "method": hdr.method,
+            "body": body.val() ? parse_json(body) : {},
+        };
+        list<hash<auto>> chunks = (
+            {
+                "id": "chatcmpl-stream-tool",
+                "object": "chat.completion.chunk",
+                "model": "test-model",
+                "choices": ({
+                    "index": 0,
+                    "delta": {
+                        "role": "assistant",
+                        "tool_calls": ({
+                            "index": 0,
+                            "id": "call-stream-1",
+                            "type": "function",
+                            "function": {
+                                "name": "get_",
+                                "arguments": "{\"city\":",
+                            },
+                        },),
+                    },
+                    "finish_reason": NOTHING,
+                },),
+            },
+            {
+                "id": "chatcmpl-stream-tool",
+                "object": "chat.completion.chunk",
+                "model": "test-model",
+                "choices": ({
+                    "index": 0,
+                    "delta": {
+                        "tool_calls": ({
+                            "index": 0,
+                            "function": {
+                                "name": "weather",
+                                "arguments": "\"Prague\"}",
+                            },
+                        },),
+                    },
+                    "finish_reason": NOTHING,
+                },),
+            },
+            {
+                "id": "chatcmpl-stream-tool",
+                "object": "chat.completion.chunk",
+                "model": "test-model",
+                "choices": ({
+                    "index": 0,
+                    "delta": {},
+                    "finish_reason": "tool_calls",
+                },),
+                "usage": {
+                    "prompt_tokens": 3,
+                    "completion_tokens": 2,
+                    "total_tokens": 5,
+                },
+            },
+        );
+        string response;
+        foreach hash<auto> chunk in (chunks) {
+            response += "data: " + make_json(chunk) + "\n\n";
+        }
+        response += "data: [DONE]\n\n";
+        return makeResponse(200, response,
+            {"Content-Type": "text/event-stream"});
+    }
+}
+
 class FakeLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
     constructor(hash<LlmBackendConfig> config) : AbstractLlmProvider(config) {
     }
@@ -110,7 +191,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
     private {
         HttpServer http;
         int port;
-        FakeGeminiLlmHandler gemini_handler;
+        *FakeGeminiLlmHandler gemini_handler;
+        *FakeOpenAiStreamHandler openai_stream_handler;
     }
 
     constructor() : Test("QoreLlmUtilsTest", "1.0") {
@@ -189,6 +271,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "token budgets", \geminiOpenAiAbstractTokenBudgetFacadeTest());
         addTestCase("LlmBackend OpenAI provider maps reasoning-model "
             "completion budgets", \openAiReasoningModelTokenBudgetTest());
+        addTestCase("LlmBackend OpenAI provider preserves streamed tool calls",
+            \openAiStreamedToolCallTest());
         addTestCase("LlmBackend OpenAI chat facade normalizes forced JSON "
             "tool text", \geminiOpenAiForcedToolJsonTextTest());
         addTestCase("LlmBackend OpenAI chat facade retries malformed forced "
@@ -295,11 +379,28 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
     }
 
     private installGeminiHandler(hash<string, hash<auto>> responses) {
+        if (openai_stream_handler) {
+            http.removeHandler("openai-stream-llm");
+            openai_stream_handler = NOTHING;
+        }
         if (gemini_handler) {
             http.removeHandler("gemini-llm");
         }
         gemini_handler = new FakeGeminiLlmHandler(responses);
         http.setHandler("gemini-llm", "/", MimeTypeJson, gemini_handler);
+    }
+
+    private installOpenAiStreamHandler() {
+        if (gemini_handler) {
+            http.removeHandler("gemini-llm");
+            gemini_handler = NOTHING;
+        }
+        if (openai_stream_handler) {
+            http.removeHandler("openai-stream-llm");
+        }
+        openai_stream_handler = new FakeOpenAiStreamHandler();
+        http.setHandler("openai-stream-llm", "/", MimeTypeJson,
+            openai_stream_handler);
     }
 
     private LlmBackend makeGeminiBackend(*string model) {
@@ -2219,6 +2320,68 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "OpenAI reasoning models receive max_completion_tokens");
         assertFalse(body.hasKey("max_tokens"),
             "OpenAI reasoning models must not receive max_tokens");
+    }
+
+    openAiStreamedToolCallTest() {
+        installOpenAiStreamHandler();
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "http",
+            "url": "http://localhost:" + port,
+            "model": "test-model",
+        });
+        list<hash<auto>> chunks = ();
+        hash<auto> rv = llm.chatCompletionsStream({
+            "messages": ({"role": "user", "content": "weather"},),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "get_weather",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"city": {"type": "string"}},
+                        "required": ("city",),
+                    },
+                },
+            },),
+        }, sub (hash<auto> chunk) {
+            push chunks, chunk;
+        });
+
+        assertEq(3, chunks.size(),
+            "two tool-call fragments and the terminal chunk are forwarded");
+        assertEq("call-stream-1",
+            chunks[0].choices[0].delta.tool_calls[0].id,
+            "the first streamed tool-call fragment is preserved");
+        assertEq("\"Prague\"}",
+            chunks[1].choices[0].delta.tool_calls[0]."function".arguments,
+            "the second streamed arguments fragment is preserved");
+        assertEq("tool_calls", chunks[2].choices[0].finish_reason,
+            "the terminal tool-call reason is preserved");
+        assertEq("tool_calls", rv.choices[0].finish_reason,
+            "the accumulated response reports a tool call");
+        assertEq("get_weather",
+            rv.choices[0].message.tool_calls[0]."function".name,
+            "the accumulated response preserves the tool name");
+        assertEq({"city": "Prague"}, parse_json(
+                rv.choices[0].message.tool_calls[0]."function".arguments),
+            "the accumulated response joins JSON argument fragments");
+        assertEq(5, rv.usage.total_tokens,
+            "the accumulated response preserves terminal usage");
+        assertEq(True, openai_stream_handler.requests[0].body.stream,
+            "the HTTP provider sends a streaming request");
+
+        FakeLlmProvider provider(<LlmBackendConfig>{"mode": "test-fake"});
+        hash<auto> state = {"tool_calls": ()};
+        list<hash<auto>> malformed = provider.getOpenAiToolCallDeltas(
+            \state, {
+                "choices": ({
+                    "delta": {"tool_calls": ({"index": 1000000},)},
+                },),
+            });
+        assertEq(0, malformed.size(),
+            "a sparse provider index is rejected instead of being allocated");
+        assertEq(0, state.tool_calls.size(),
+            "a sparse provider index cannot grow the accumulated state");
     }
 
     geminiOpenAiForcedToolJsonTextTest() {

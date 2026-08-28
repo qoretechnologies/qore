@@ -1037,17 +1037,73 @@ public class AbstractLlmProvider {
     #! OpenAI-facade hook: extracts OpenAI tool-call deltas from a provider-native raw event
     /** Returns the list of OpenAI-shaped \c tool_calls deltas (index, id,
         type, function) that should be emitted to the caller for this event.
-        Default returns an empty list (OpenAI streams emit tool calls
-        progressively in \c choices[0].delta.tool_calls which the existing
-        delta accumulator handles directly); Gemini overrides to harvest
-        \c candidates[0].content.parts[].functionCall entries.
+        The default implementation accumulates OpenAI-compatible
+        \c choices[0].delta.tool_calls fragments in @a state while returning
+        the original deltas to the caller. Gemini overrides this hook to
+        harvest \c candidates[0].content.parts[].functionCall entries.
 
         @param state the OpenAI-compatible stream-state hash being accumulated
         @param raw the parsed provider-native event hash, or @ref nothing
     */
     list<hash<auto>> getOpenAiToolCallDeltas(reference<hash<auto>> state,
             *hash<auto> raw) {
-        return ();
+        if (!raw || raw.choices.typeCode() != NT_LIST || !raw.choices
+                || raw.choices[0].typeCode() != NT_HASH) {
+            return ();
+        }
+        hash<auto> choice = raw.choices[0];
+        if (choice.delta.typeCode() != NT_HASH
+                || choice.delta.tool_calls.typeCode() != NT_LIST) {
+            return ();
+        }
+        if (state.tool_calls.typeCode() != NT_LIST) {
+            state.tool_calls = ();
+        }
+        list<hash<auto>> streamed = ();
+        foreach auto raw_fragment in (choice.delta.tool_calls) {
+            if (raw_fragment.typeCode() != NT_HASH) {
+                continue;
+            }
+            hash<auto> fragment = raw_fragment;
+            int idx = fragment.index.typeCode() == NT_INT
+                ? fragment.index : 0;
+            # OpenAI indexes are contiguous and arrive in order. Reject a
+            # negative or sparse index instead of allowing an untrusted
+            # provider to force an arbitrarily large list allocation.
+            if (idx < 0 || idx > state.tool_calls.size()) {
+                continue;
+            }
+            if (idx == state.tool_calls.size()) {
+                push state.tool_calls, {
+                    "id": NOTHING,
+                    "type": "function",
+                    "function": {"name": "", "arguments": ""},
+                };
+            }
+            hash<auto> call = state.tool_calls[idx];
+            if (fragment.id.typeCode() == NT_STRING
+                    && fragment.id.val()) {
+                call.id = fragment.id;
+            }
+            if (fragment."type".typeCode() == NT_STRING
+                    && fragment."type".val()) {
+                call."type" = fragment."type";
+            }
+            if (fragment."function".typeCode() == NT_HASH) {
+                if (fragment."function".name.typeCode() == NT_STRING
+                        && fragment."function".name.val()) {
+                    call."function".name += fragment."function".name;
+                }
+                if (fragment."function".arguments.typeCode() == NT_STRING
+                        && fragment."function".arguments.val()) {
+                    call."function".arguments +=
+                        fragment."function".arguments;
+                }
+            }
+            state.tool_calls[idx] = call;
+            push streamed, fragment;
+        }
+        return streamed;
     }
 }
 
