@@ -1306,6 +1306,17 @@ class SourceOrderEngine {
     private {
         Regex compile_contract_re = new Regex(
             "((?:\\\\[\\s\\S]|[^\\s])+\\.compile-contract\\.stamp)", RE_Global);
+        #! Every source-content prerequisite a depfile names.
+        /** The other half of what a compile records.  A reference that uses a
+            declaration only as a TYPE leaves no compile contract -- qcc records a
+            provider's contract only when the consumer folds its value or bakes its
+            link-time hash -- but it does leave the provider's source-content
+            digest here.  A parse resolving against shells needs those providers
+            too, or the type it cannot see is deferred to a placeholder it then
+            cannot construct.
+        */
+        Regex source_content_re = new Regex(
+            "((?:\\\\[\\s\\S]|[^\\s])+\\.sha256)", RE_Global);
         #! Every whitespace-separated make prerequisite, escapes included.
         /** Scanning depfiles a byte at a time from Qore made a whole-group
             currency pass the most expensive thing the build ran: 7.8 MB of
@@ -1317,6 +1328,13 @@ class SourceOrderEngine {
         Regex depfile_input_re = new Regex(
             "((?:\\\\[\\s\\S]|[^\\s])+)", RE_Global);
         hash<string, string> contract_digests = {};
+        #! Group members by object basename, indexed once per process.
+        /** contentDependencyOutputs() maps a `.sha256` prerequisite back to the member
+            whose object shares its mangled stem, and the preload-set closure calls it once
+            per round.  Rebuilding the index over every output on each call would walk the
+            whole group several times for a set that never changes.
+        */
+        *hash<string, string> outputs_by_stem;
         #! Depfile prerequisites by depfile path, parsed once per process.
         hash<string, list<string>> depfile_inputs = {};
         #! Build inputs from outside the group by member output, filtered once.
@@ -1922,10 +1940,55 @@ class SourceOrderEngine {
         return info.mtime;
     }
 
+    #! The group members whose source content \a outputs were compiled against.
+    /** Maps each `<mangled source>.sha256` prerequisite back to the member whose
+        object has the same mangled stem.  Entries naming files outside the group
+        (there are none today, but the map is not the group's to police) are
+        skipped rather than guessed at.
+    */
+    list<string> contentDependencyOutputs(hash<SourceOrderContext> context_info,
+            softlist<string> outputs) {
+        if (!exists outputs_by_stem) {
+            hash<string, string> index = {};
+            foreach string output in (context_info.outputs) {
+                index{basename(output)} = output;
+            }
+            outputs_by_stem = index;
+        }
+        hash<string, string> by_stem = outputs_by_stem;
+        hash<string, bool> seen = {};
+        list<string> rv = ();
+        foreach string output in (outputs) {
+            string depfile = output + ".d";
+            if (!is_file(depfile)) {
+                continue;
+            }
+            foreach string dependency in (parseMakeDepfileContentInputs(depfile)) {
+                string stem = basename(dependency);
+                stem = stem.substr(0, stem.size() - 7) + ".qo";
+                *string member = by_stem{stem};
+                if (!exists member || seen{member}) {
+                    continue;
+                }
+                seen{member} = True;
+                push rv, member;
+            }
+        }
+        return rv;
+    }
+
+    private list<string> parseMakeDepfileContentInputs(string path) {
+        return parseMakeDepfileMatches(path, source_content_re);
+    }
+
     private list<string> parseMakeDepfileContractInputs(string path) {
+        return parseMakeDepfileMatches(path, compile_contract_re);
+    }
+
+    private list<string> parseMakeDepfileMatches(string path, Regex re) {
         list<string> values = ();
         string text = ReadOnlyFile::readTextFile(path);
-        foreach *string value in (compile_contract_re.extractGroups(text) ?? ()) {
+        foreach *string value in (re.extractGroups(text) ?? ()) {
             if (!exists value) {
                 continue;
             }
@@ -3848,19 +3911,72 @@ int sub main() {
                         compiled{context_info.outputs[node]} = True;
                     }
                 }
+                # What the parse must be able to resolve against.  Two edge
+                # kinds reach it, and both are needed:
+                #
+                #   * PREREQUISITES, the members reachable over required edges --
+                #     recorded when a compile folds a provider's value or bakes
+                #     its link-time hash; and
+                #   * CONTENT dependencies, the providers a compile recorded only
+                #     as a source-content digest.  A reference that uses another
+                #     source's declaration purely as a TYPE leaves no required
+                #     edge, so prerequisites alone leave that provider out of the
+                #     parse entirely.  The type then resolves to a deferred
+                #     placeholder, and an initializer that has to CONSTRUCT it at
+                #     parse commit gets nothing:
+                #
+                #       RUNTIME-TYPE-ERROR: <return statement> expects type
+                #         'object<::OmqMap>', but got no value instead
+                #
+                # The closure has to be taken over both together: a shell added
+                # for either reason brings its own unmet requirements, and
+                # preloading a class whose base is absent fails the parse just as
+                # surely ("cannot resolve base class ... for class ...").
+                #
+                # These are not ordering edges.  Widening the preload set leaves
+                # the decomposition alone: it neither merges components nor
+                # changes what the build considers stale.
                 hash<string, bool> emitted = {};
+                hash<string, int> component_of = {};
+                for (int component = 0; component < components.members.size(); ++component) {
+                    foreach int node in (components.members[component]) {
+                        component_of{context_info.outputs[node]} = component;
+                    }
+                }
+                list<string> preload = ();
+                list<string> pending = ();
                 foreach int resolved in (selected) {
-                    foreach int prerequisite in (
-                            engine.componentPrerequisites(components, resolved)) {
-                        foreach int node in (components.members[prerequisite]) {
-                            string output = context_info.outputs[node];
-                            if (compiled{output} || emitted{output}) {
-                                continue;
+                    foreach int node in (components.members[resolved]) {
+                        push pending, context_info.outputs[node];
+                    }
+                }
+                while (pending) {
+                    list<string> reached = ();
+                    foreach string output in (pending) {
+                        *int component = component_of{output};
+                        if (exists component) {
+                            foreach int prerequisite in (
+                                    engine.componentPrerequisites(components, component)) {
+                                foreach int node in (components.members[prerequisite]) {
+                                    push reached, context_info.outputs[node];
+                                }
                             }
-                            emitted{output} = True;
-                            printf("%s\n", output);
                         }
                     }
+                    reached += engine.contentDependencyOutputs(context_info, pending);
+                    list<string> next = ();
+                    foreach string output in (reached) {
+                        if (compiled{output} || emitted{output}) {
+                            continue;
+                        }
+                        emitted{output} = True;
+                        push preload, output;
+                        push next, output;
+                    }
+                    pending = next;
+                }
+                foreach string output in (preload) {
+                    printf("%s\n", output);
                 }
                 return 0;
             }

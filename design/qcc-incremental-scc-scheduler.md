@@ -203,21 +203,50 @@ publishes: the same object and the same compile contract.
 The coordinator picks between three answers, in order of how much it parses:
 
 |!Condition|!Answer
-|rebuild closure ≥ `max(8, 50% of components)`|whole-group parse
+|rebuild closure ≥ the escalation floor (below)|whole-group parse
 |stale set spans a multi-source component, or ≥ 2 components|one parse over the stale set
 |otherwise|standalone compiles, one component at a time
 
 The **closure** decides only the first question — compiling a component rewrites
 its compile contract, so its consumers go stale as a result, and a closure that
-covers half the group will be parsed either way. The **stale set** decides the
-second: two stale components already pay for a shared parse, because N standalone
-compiles preload the group N times while one parse preloads it once. The
-thresholds are `QORE_QCC_INCREMENTAL_GROUP_BATCH_PERCENT` (50),
-`QORE_QCC_INCREMENTAL_GROUP_BATCH_MINIMUM` (8) and
-`QORE_QCC_INCREMENTAL_BATCH_THRESHOLD` (2); `QORE_QCC_SUBSET_PARSE=0` declines
-partial parses, and a group configured by an older `QoreMacros.cmake` has no
-`qcc-subset.sh`, in which case the scheduler behaves exactly as it did before
-partial parses existed.
+large will be parsed either way. The **stale set** decides the second: two stale
+components already pay for a shared parse, because N standalone compiles preload
+the group N times while one parse preloads it once.
+
+The escalation floor is `max(QORE_QCC_INCREMENTAL_GROUP_BATCH_MINIMUM,
+QORE_QCC_INCREMENTAL_GROUP_BATCH_PERCENT% of the group's components)` — 8 and a
+percentage that defaults to what serves the band below it (next paragraph);
+`QORE_QCC_INCREMENTAL_BATCH_THRESHOLD` (2) is the second boundary.
+`QORE_QCC_SUBSET_PARSE=0` declines partial parses, and a group configured by an
+older `QoreMacros.cmake` has no `qcc-subset.sh`, in which case the scheduler
+behaves exactly as it did before partial parses existed.
+
+**The percentage defaults to what serves the band below it**, because that is
+what the closure is being compared against. With a partial parse the band below
+is one parse over the stale set, and the group's own parse is worth reaching for
+only when the closure really is most of the group: 50%. Without one the band
+below is a walk of standalone compiles, one component at a time, each preloading
+the whole group — while the group's own parse compiles every member in one parse
+and at the build tool's parallelism.
+
+What decides that crossover is not one build but the next one. The two modes
+publish different compile contracts for the same source, so the first incremental
+build after a group parse walks the whole closure of whatever was edited whatever
+the size of the edit — and **a build that escalates leaves the tree in the mode
+that makes the next edit walk it again**. A walk pays that transition once and
+every edit after it is one compile. Measured on Qorus, editing a source whose
+closure is 13 components:
+
+|!Build|!Walk|!Escalate to the group's parse
+|first edit after a group parse|5m03, 23 `qcc` invocations|4m54, 876
+|the edit after that|1m38, 1|4m54, 876
+
+So the floor belongs well above the closures a developer edits through, and
+should catch only the ones a walk can never amortise: at 408 components a walk is
+an hour of serial compiles against a four-minute parse. The default of 5% puts
+that boundary at 41 components on that tree. Left at 50% the floor was 410, and
+thirteen widely required sources sat at closures of 408 and 409 — exactly the
+ones the walk cannot amortise. Setting the variable pins either value.
 
 **What a partial parse preloads is the transitive predecessors of what it
 compiles, staged into a directory of its own — never the group's object
@@ -234,22 +263,249 @@ The per-file path has always staged its preloads this way (`--scc-preload` into 
 `.qcc-preload.*` directory); a parse of several sources needs the union of their
 predecessors, which is what `--scc-preload-set` reports.
 
-The partial parse is nevertheless **opt-in** (`QORE_QCC_SUBSET_PARSE=1`). A parse
-that resolves against shells cannot see the bodies the group's own parse sees, so
-its objects record fewer cross-object fast-entry providers — the same difference
-the standalone path has always had, but now reachable for sources that only the
-group's parse used to compile. Closing that difference, or accepting it
-deliberately, is what the default waits on. The coordinator falls back to the
-group's own parse when a partial parse fails, so enabling it cannot break a
-build.
+The partial parse is nevertheless **opt-in** (`QORE_QCC_SUBSET_PARSE=1`); what
+the default waits on is below. The coordinator falls back to the group's own
+parse when a partial parse fails, so enabling it cannot break a build — but the
+fallback costs the failed parse on top of the group's, so a partial parse that
+fails routinely is worse than not trying.
 
-A whole-group parse still lowers cross-member calls it can see in its own parse,
-so an object it emits is not byte-identical to one emitted against preloaded
-shells; switching a component between the two therefore changes its compile
-contract and rebuilds its consumers once. That difference is a property of the
-two compile modes, not of the partial parse — a standalone compile has always
-published the preload-based contract — but it is why the coordinator prefers to
-stay in one mode for a whole build rather than mixing them.
+## Parsing part of a group is not the same as parsing all of it
+
+The scheduler's open problems come from one place: a parse that resolves the rest
+of its group from preloaded `.qo` shells does not get what the group's own parse
+would have given it, and the rules written for a parse of ONE source do not all
+carry over to a parse of several.
+
+Three defects sat between the partial parse and a Qorus build; two are fixed and
+the third is the one the default still waits on.
+
+**It makes the parse defer to sources it is compiling itself.** *(Fixed.)* The
+source-symbol manifest names which source of the build group provides each
+symbol, and a parse that resolves against `-L` shells *defers* every symbol the
+manifest attributes to a source other than the consumer's own: the emitted object
+records an import rather than binding a same-name declaration from a loaded
+module or stub. That rule is right for a parse of **one** source, where "not the
+consumer" and "not in this parse" are the same thing. A parse over part of a
+group compiles several sources at once, and there they are not — a provider being
+compiled in the same parse was deferred to a placeholder anyway, and a value
+folded through a placeholder loses its declared type. On Qorus,
+`Classes/ConstantMetadata.qc` builds a constant from
+`QorusMapManager::CodeBaseMetadata`, a `hash<string, hash<MetaFieldInfo>>`; with
+`QorusMapManager` deferred it folded to `hash<string, hash<auto>>`, while the
+source that declares `MetaFieldInfo` — the same `QorusMapManager.qc`, which is
+not "another source" to itself — got the real type for its own signature:
+
+```
+RUNTIME-OVERLOAD-ERROR: no variant matching
+  'QorusMapManager::getUiCompatFields(hash<string, hash<auto>>)' can be found
+```
+
+The deferral test now asks whether the provider is any source in the current
+parse, not only whether it is the consumer: the parse arms the set of sources it
+is compiling alongside the manifest, exactly as it already arms the set it
+preloaded. A parse of one source has a one-element set, so that path is
+unchanged, and the whole-group parse never arms the manifest at all.
+
+**A parse directive belonged to its batch rather than to its source.**
+*(Fixed.)* A batch parses many sources into one program, and parse options were
+program state for the rest of the batch. `%exec-class` sets
+`PO_NO_TOP_LEVEL_STATEMENTS`, so the first script in a batch made every
+declaration source parsed *after* it reject a top-level statement it accepts on
+its own — a stray `;` after a hashdecl, in the case that surfaced it. The
+whole-group parse escaped only by the order its context lists: with Qorus's one
+`.qr` at position 874 of 875, nothing followed it. A parse of part of a group
+orders by the plan instead. Parse options are now saved and restored around each
+batch source; module loads, parse defines and module parse commands are batch
+state by construction and are left alone.
+
+**A subset must be convex, and the preload set must be complete.** *(Partly fixed;
+the convexity half is what the default still waits on.)* Two separate requirements hide
+here, and both come from the same fact: **a `.qo` carries the declarations it was compiled
+against**.
+
+*Completeness (fixed).* The preload set was the members reachable over **required edges**
+only, and a required edge is recorded only when a compile folds a provider's value or
+bakes its link-time hash. A source that uses another's declaration purely as a **type**
+records no such edge — only the provider's source-content digest — so those providers were
+left out of the parse altogether. The type then resolved to a deferred placeholder, and an
+initializer that has to *construct* it at parse commit got nothing:
+
+```
+RUNTIME-TYPE-ERROR: <return statement> expects type 'object<::OmqMap>', but got
+  no value instead (while initializing constant 'TypeMap')
+```
+
+`Classes/GroupRuntimeContext.qc` declares `static OmqMap host_map();` and names
+`Classes/OmqMap.qc` in its depfile *only* as `OmqMap_qc.sha256` — no compile contract — so
+`OmqMap.qc` was neither compiled nor preloaded. `--scc-preload-set` now closes over
+prerequisites **and** content dependencies together, iterating to a fixpoint: a shell added
+for either reason brings its own unmet requirements, and preloading a class whose base is
+absent fails the parse just as surely. These are not ordering edges, so the decomposition
+is untouched — no components merge and nothing extra goes stale.
+
+*Convexity (open).* Completing the preload set is necessary but not sufficient. The
+compiled set must also be **convex**: no preloaded source may depend on a source the parse
+compiles. On Qorus, `Classes/AbstractCompilableMetadata.qc` is preloaded while its own base
+`Classes/AbstractMetadata.qc` is compiled — so the shell brings back the *previous*
+`AbstractMetadata` and the parse's copy is shadowed:
+
+```
+INVALID-MEMBER: 'type' is not a registered member of class 'ReleaseScriptMetadata'
+   AbstractMetadata::constructor() (Classes/AbstractMetadata.qc:106)
+```
+
+Enforcing convexity means promoting any such shell into the compiled set and iterating.
+**That closure was measured on Qorus, and it decides the question.** Taking the provider
+relation as required edges plus content dependencies — content is the right relation here,
+because a shell carries the declarations it was compiled against — the convex closure is:
+
+|!edited source|!must be compiled|!plus preloaded|!of 820
+|`Classes/QorusRestApiHandler.qc`|386|290|82% involved
+|`Classes/QorusMapManager.qc`|386|290|82%
+|`lib/misc.ql`|386|290|82%
+|`Classes/ServiceApi.qc`|386|290|82%
+|`Classes/QorusRestClass.qc`|386|290|82%
+
+The closure is **the same for every seed**: Qorus's combined provider graph is dense enough
+that convexity collapses to one fixed point regardless of what was edited. A partial parse
+would compile 386 components and load 290 shells where the group's own parse compiles all
+820 in about four minutes with full build-tool parallelism — and it would still pay the
+mode-transition cascade. (The figure is an upper bound: it assumes a shell carries
+declarations for everything its compile recorded as a content dependency.)
+
+**So the partial parse should not be finished for this codebase.** It can only pay where a
+group's dependency graph is sparse enough for convex subsets to stay small; Qorus's is not.
+`QORE_QCC_SUBSET_PARSE` stays off, and the effort belongs in the two levers that do not
+depend on partitioning a parse: parallelising the standalone walk, and removing the
+mode-transition cascade by making the two compile modes publish the same contract.
+
+## What actually causes the mode-transition cascade
+
+The cascade — the first incremental build after any full build walking the whole closure of
+whatever was edited — was attributed to the two modes emitting "different cross-object
+fast-entry providers". Compiling one real source both ways and diffing the compile
+contracts locates it exactly. `Classes/QorusRestApiHandlerV2.qc`, group parse against shell
+parse: 436 differing lines, 208 of them `defined` entries. Taking one symbol present in
+both:
+
+```
+GROUP:  sig=c2012fb3dfaef684  decl=985a5a1d427a63ca  value=(empty)  body=fnv1a64:4986fd2c00554eed
+SHELL:  sig=c2012fb3dfaef684  decl=985a5a1d427a63ca  value=(empty)  body=(empty)
+```
+
+**Signature, declaration and value hashes are identical. Only the body-contract hash
+differs — present in one mode, absent in the other.** (A handful of entries also differ in
+type-name qualification, `hash<OMQ::SlaInfo>` against `hash<SlaInfo>`, and ten `native`
+fast-entry symbols differ; those are the minority.)
+
+`hasBodyContract()` is `approach_b_eligible || hasImportableBodySummary() ||
+hasBodyEffectContract()` — all results of the interprocedural summary pass over *the batch
+being lowered*. A whole-group parse lowers 875 sources and derives richer summaries than a
+parse of one, so more functions qualify. The difference is therefore real, not cosmetic:
+it is the optimisation opportunity the compiler could prove.
+
+**The problem is where it is recorded, not that it differs.** A body contract is an
+optimisation opportunity, but it sits in the compile contract — the thing that decides
+whether consumers are stale. So a source that gains or loses one invalidates every consumer,
+and switching a component between modes rebuilds its whole closure for a difference that
+changes no declaration.
+
+It cannot simply be dropped from the contract: the link step validates a consumer's recorded
+import against the provider's body-contract hash (`qo-link hash mismatch`), so a consumer
+that fast-called a provider must be rebuilt when that provider's contract changes. The
+obvious answer is granularity — a consumer records the body contract only of providers it
+actually fast-called, so invalidation could follow those recorded imports rather than the
+provider's whole contract.
+
+**That was specified, its precondition checked, and measured to be insufficient.**
+Projecting one real contract pair to the mode-stable part (`defined` rows without the body
+field, `native` rows dropped) still leaves 126 of 668 rows differing. Of the 101 symbols
+that differ:
+
+|!differing fields|!count|!nature
+|`body_contract_hash` only|41|optimisation artifact — what granularity would fix
+|`value_hash` only|39|real content difference
+|`declaration_hash` only|12|real content difference
+|`signature_hash` + `declaration_hash` (+ body)|9|real content difference
+
+Contracts are compared whole, so fixing only the 41 changes nothing — the other 60 still
+invalidate every consumer.
+
+**The 60 are the useful result.** A body contract *should* differ between modes: it hashes
+what the analysis proved, and a parse of 875 sources proves more than a parse of one. A
+signature, declaration or folded constant value **should not** — the same source text ought
+to yield the same declarations however much else was in the parse. Those 60 are shell-mode
+type erasure surfacing in the contract, the same class the deferral fix above addressed only
+for providers inside the parse.
+
+**The order of work is therefore fixed by measurement**: make declarations mode-independent
+first, because they are bugs; only then is body-contract granularity both sufficient and
+worth its machinery. The reverse order buys nothing.
+
+**It also loses bodies.** A whole-group parse lowers cross-member calls
+it can see in its own parse, so an object it emits is not byte-identical to one
+emitted against preloaded shells: it records more cross-object fast-entry
+providers. Switching a component between the two modes therefore changes its
+compile contract and rebuilds its consumers once — which is why the first
+incremental build after a group parse walks the whole closure of whatever was
+edited, however small the edit, and why the coordinator prefers to stay in one
+mode for a whole build.
+
+The sharper form of the same fact is that **parse commit runs user code**. A
+constant initializer that calls across the subset boundary needs the provider's
+body, and a shell does not carry one. With the two defects above fixed, a
+419-source subset of Qorus reaches exactly that:
+
+```
+RUNTIME-TYPE-ERROR: <return statement> expects type 'object<::OmqMap>', but got
+  no value instead (while initializing constant 'TypeMap')
+   GroupRuntimeContext::hostOmqMap() (Classes/MetadataActionContext.qc:379-615)
+```
+
+`hostOmqMap()`'s body is in `QorusMapManager.qc`, which that subset preloads
+rather than compiles. No preload-set or ordering rule fixes this: either the
+shells carry enough to execute the initializer, or a subset must be widened to
+include every source whose body a member's constant initialization reaches. Until
+one of those exists, `QORE_QCC_SUBSET_PARSE` stays off by default.
+
+## A pass walks one level of the closure, not the whole closure
+
+A pass compiles the stale set it was planned from. Compiling a component rewrites
+its compile contract, so the pass *leaves that component's consumers stale* — an
+invalidation reaches the consumer closure one dependency level per pass, and the
+plan is converged only when it has walked all of them. The coordinator therefore
+loops until the group is current rather than for a fixed number of passes.
+
+A fixed count was a cliff of its own. The pass that follows a **whole-group
+parse** is the deep one: the group's parse and a standalone or subset compile
+publish different compile contracts for the same source (it loses bodies, above),
+so the first
+incremental build after a full build crosses the whole closure of whatever was
+edited, one level at a time, whatever the size of the edit. Capping the walk threw
+a converging plan away and reparsed the group. Measured on Qorus — 875 sources,
+820 components, one comment appended to `Classes/QorusRestApiHandler.qc`, whose
+closure is 13 components:
+
+|!Coordinator|!Passes|!`qcc` invocations|!Wall
+|two-pass cap|2, then the whole-group parse|889|7m39
+|walk to convergence|3|23|4m52
+|walk to convergence, `QORE_QCC_SUBSET_PARSE=1`|3|15|2m24
+
+The second incremental build over the same tree is one `qcc` invocation — 1m38
+through `make`, of which 22 seconds is the compile: the closure is already in the
+preload-based mode, so nothing cascades.
+
+Two conditions end the walk early, and both say the same thing — the incremental
+path is no longer the cheaper answer:
+
+- a pass that leaves stale **exactly** the set it compiled has not moved, and no
+  further pass will move it; and
+- a walk whose compiles have added up to what the whole-group parse would have
+  compiled anyway has spent the group parse's budget without its parallelism.
+
+Both escalate to the group's own parse and say so. The second is also what bounds
+the loop: every pass compiles at least one component, so the cumulative count
+reaches the bound in a finite number of passes whatever the graph does.
 
 ## The bootstrap recipe hands the stale set to the coordinator
 
@@ -342,8 +598,12 @@ failed for any other reason.
 5. A depfile becomes visible atomically or not at all.
 6. One group has one scheduler; everything behind it verifies with the
    scheduler's own rule.
-7. No convergence loops. Every unpublishable outcome is rebuilt at most once,
-   and repetition is a reported failure rather than a strategy.
+7. No convergence loops. An unpublishable outcome is rebuilt at most once, and
+   repetition -- a pass that leaves stale exactly the set it compiled -- is a
+   reported failure rather than a strategy. Walking a consumer closure one
+   dependency level per pass is not repetition: each pass compiles a set the
+   previous pass did not, and the walk is bounded by the work the group's own
+   parse would have done.
 8. Removing a lock succeeds when the lock is gone, whoever removed it.
 9. A parse publishes what it compiled or nothing, and a run that publishes
    nothing leaves the tree exactly as it found it -- including the ordering
@@ -351,6 +611,12 @@ failed for any other reason.
 10. A graph transition under a partial parse is re-planned, not failed: a
     consumer is free to reach the object recipes without waiting for the
     coordinator, so a member can be compiled while the parse is running.
+11. What a parse resolves live, and what a parse directive applies to, are
+    properties of the parse's own target set. A symbol provided by a source in
+    the same parse is resolved, not deferred; a directive applies to the source
+    that wrote it, not to the sources parsed after it. Both rules read the same
+    for a parse of one source, which is why both were written as if they were
+    about the consumer and the batch.
 
 ## Tests
 
@@ -358,6 +624,11 @@ failed for any other reason.
 - `examples/test/ir/AOTSccGraphTransition.qtest` — key vs index durability, graph
   generation naming, freeze semantics, and the 75/76 split
 - `examples/test/ir/AOTSccIncrementalDriver.qtest` — the driver and coordinator
-  against a compiler that rewrites another member's depfile mid-compile
+  against a compiler that rewrites another member's depfile mid-compile; also the
+  coordinator's pass loop: a cascade walked to convergence, a pass that changes
+  nothing escalating instead of lapping, and the escalation floor following
+  whether a partial parse is configured
+- `examples/test/ir/AOTSymbolIndex.qtest` — the symbol index and the source-symbol
+  manifest, including a subset parse resolving a provider it compiles itself
 - `examples/test/ir/AOTDepfileAtomicWrite.qtest` — depfile publication atomicity
 - `examples/test/ir/CMakeBuildHelpers.qtest` — the CMake surface end to end

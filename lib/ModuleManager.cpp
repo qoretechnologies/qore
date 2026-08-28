@@ -48,6 +48,12 @@
 #define QORE_DLOPEN_FLAGS RTLD_LAZY|RTLD_GLOBAL
 #define QORE_DLOPEN_NOW_FLAGS RTLD_NOW|RTLD_GLOBAL
 
+#ifdef __APPLE__
+#include <CoreFoundation/CoreFoundation.h>
+#include <Security/SecCode.h>
+#include <Security/SecStaticCode.h>
+#endif
+
 #ifdef HAVE_GLOB_H
 #include <glob.h>
 #else
@@ -2771,6 +2777,81 @@ static qore_binary_module_desc_t get_binary_module_desc(void* ptr, const char* f
     return (qore_binary_module_desc_t)dlsym(ptr, sym.c_str());
 }
 
+//! True when the caller asked for module files to be checked before they are mapped.
+/** Off by default, and read once: the check costs a whole-file hash (measured at ~5 ms/MB
+    on macOS), which a process loading a hundred modules would pay on every start.
+*/
+static bool qore_verify_module_signatures() {
+    static const bool rv = []() -> bool {
+        const char* v = getenv("QORE_VERIFY_MODULE_SIGNATURES");
+        return v && *v && strcmp(v, "0");
+    }();
+    return rv;
+}
+
+//! Checks that a binary module file is intact before dlopen() maps it.
+/** macOS signs every dylib -- the linker attaches an ad-hoc signature -- and on Apple
+    Silicon the kernel SIGKILLs a process that maps a page whose signature no longer
+    validates.  A `.qmod` damaged on disk (a partial write, a bad copy, a build interrupted
+    mid-write) therefore kills the loading process outright, with no diagnostic: the signal
+    arrives inside dlopen(), before anything here can report which file was at fault, and
+    SIGKILL cannot be caught.  Verifying first turns that into an ordinary
+    LOAD-MODULE-ERROR naming the file.
+
+    It is opt-in because the check hashes the whole file, so making it unconditional would
+    add hundreds of milliseconds to the start of any process that loads many modules.  The
+    cost is only worth paying when something is already wrong -- which is exactly when a
+    user, faced with an unexplained "Killed: 9", turns it on.
+
+    Nothing here is macOS-specific in principle; it is implemented only there because that
+    is the platform whose kernel kills the process rather than letting dlopen() fail.
+
+    @param path the module file about to be opened
+    @param err receives a description when the file cannot be verified
+
+    @return 0 when the file is intact or cannot be checked on this platform, -1 with @a err
+    set when it is not
+*/
+static int qore_check_module_file_integrity(const char* path, QoreString& err) {
+    if (!qore_verify_module_signatures()) {
+        return 0;
+    }
+#ifdef __APPLE__
+    CFStringRef cf_path = CFStringCreateWithCString(nullptr, path, kCFStringEncodingUTF8);
+    if (!cf_path) {
+        return 0;
+    }
+    ON_BLOCK_EXIT(CFRelease, cf_path);
+    CFURLRef url = CFURLCreateWithFileSystemPath(nullptr, cf_path, kCFURLPOSIXPathStyle, false);
+    if (!url) {
+        return 0;
+    }
+    ON_BLOCK_EXIT(CFRelease, url);
+
+    SecStaticCodeRef code = nullptr;
+    OSStatus rc = SecStaticCodeCreateWithPath(url, kSecCSDefaultFlags, &code);
+    if (rc != noErr) {
+        // an unsigned file is not evidence of damage: report only what we can stand behind
+        return 0;
+    }
+    ON_BLOCK_EXIT(CFRelease, code);
+
+    rc = SecStaticCodeCheckValidity(code, kSecCSDefaultFlags, nullptr);
+    if (rc == noErr) {
+        return 0;
+    }
+    err.sprintf("the file's code signature does not match its contents (OSStatus %d); the "
+        "file is damaged -- reinstall the module.  Loading it would be fatal: macOS kills "
+        "a process that maps a page failing signature validation, without a diagnostic",
+        (int)rc);
+    return -1;
+#else
+    (void)path;
+    (void)err;
+    return 0;
+#endif
+}
+
 QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& xsink, const char* path,
         const char* feature, bool reexport, QoreProgram* mpgm, QoreProgram* path_pgm,
         unsigned load_opt, qore_binary_module_desc_t mod_desc) {
@@ -2790,6 +2871,16 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
     }
 
     QoreModuleNameContextHelper mnch(feature);
+
+    // must happen before dlopen(): on macOS an invalid signature is fatal inside dlopen()
+    {
+        QoreString integrity_err;
+        if (qore_check_module_file_integrity(path, integrity_err)) {
+            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
+                "cannot load qore module '%s': %s", path, integrity_err.c_str());
+            return nullptr;
+        }
+    }
 
     void* ptr = dlopen(path, QORE_DLOPEN_FLAGS);
     if (!ptr) {

@@ -74,6 +74,12 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testBootstrapHandsTheStaleSetToTheCoordinator());
         addTestCase("the batch is chosen from what a rebuild reaches, not from what is stale",
             \testPlanChoosesTheBatchFromTheConsumerClosure());
+        addTestCase("a cascading invalidation is walked to convergence, not escalated",
+            \testCascadingInvalidationIsWalkedToConvergence());
+        addTestCase("a pass that changes nothing escalates instead of looping",
+            \testAPassThatChangesNothingEscalates());
+        addTestCase("the escalation floor follows what serves the band below it",
+            \testEscalationFloorFollowsThePartialParse());
         addTestCase("concurrent recipes publish one coherent generation",
             \testConcurrentRecipesPublishOneGeneration());
         addTestCase("a stale lock survives losing the race to reclaim it",
@@ -166,7 +172,7 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         while the driver believes a compile is in progress.  That is the window
         a real qcc occupies when it rewrites its own depfile.
     */
-    private string writeCompiler(hash<auto> fx, *string mutation) {
+    private string writeCompiler(hash<auto> fx, *string mutation, *string always) {
         string script = fx.qo_dir + "/qcc-single.sh";
         string log = fx.qo_dir + "/compiles.log";
         string once = fx.qo_dir + "/mutation.pending";
@@ -195,6 +201,12 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             body += "printf 'compiled\\n' > \"$out" + suffix + "\"\n";
         }
         body += "printf '%s\\n' '{\"source_parse_defines\": []}' > \"$out.idx.json\"\n";
+        if (exists always) {
+            # Unlike \a mutation this runs on EVERY compile, and after the
+            # artifacts are written, so it can leave output a settled compiler
+            # would not.
+            body += always + "\n";
+        }
         write(script, body);
         chmod(script, 0755);
         return script;
@@ -346,7 +358,7 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
     }
 
     #! Runs the group coordinator the way the build's plan target does.
-    private hash<auto> plan(hash<auto> fx) {
+    private hash<auto> plan(hash<auto> fx, *string extra_env) {
         string qo_dir = fx.qo_dir;
         # The coordinator refuses to start without a batch script.  A test that
         # expects the shared parse installs a working one first; for every other
@@ -363,8 +375,9 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         if (!is_file(qo_dir + "/.qcc-batch-bootstrap.stamp")) {
             write(qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
         }
-        string command = sprintf("QORE_QCC_QORE_EXECUTABLE=%y QORE_QCC_GRAPH_SNAPSHOT=%y "
+        string command = sprintf("%sQORE_QCC_QORE_EXECUTABLE=%y QORE_QCC_GRAPH_SNAPSHOT=%y "
             "%y %y %y %y %y %y %y %y %y",
+            exists extra_env ? extra_env + " " : "",
             qore_bin, fx.context + ".graph-snapshot.json",
             tools_dir + DirSep + "qore-qo-incremental-plan",
             fx.context, qo_dir + "/.qcc-incremental-plan.stamp",
@@ -948,6 +961,167 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         assertEq(("d.qc d.qo",), compiles(fx),
             "the component is compiled on the standalone path");
         assertTrue(exists record(fx, component.key), "and published");
+    }
+
+    #! A pass compiles its stale set; the consumers it invalidates are the next pass.
+    /** A component's generation names its predecessors' published compile
+        contracts, so compiling one leaves its consumers stale -- an invalidation
+        reaches the closure one dependency level per pass.  Capping the walk at
+        two passes threw a converging plan away and reparsed the whole group,
+        which on a large tree is the difference between compiling the closure and
+        compiling everything.
+
+        The fixture is a chain: a <- c <- e <- f.  Editing a makes exactly one
+        component stale, and each pass makes exactly the next link stale.  The
+        closure stays well under the escalation floor throughout, so nothing but
+        the pass count can send this to the shared parse.
+    */
+    testCascadingInvalidationIsWalkedToConvergence() {
+        TmpDir tmp("qore-aot-driver-cascade-");
+        # Singletons only: a component spanning several sources routes to the
+        # shared parse whatever the walk does, which would prove nothing here.
+        hash<auto> fx = fixture(tmp.path, NOTHING, False, ("e", "f"));
+        writeDepfile(fx.qo_dir, "c", "a");
+        writeDepfile(fx.qo_dir, "e", "c");
+        writeDepfile(fx.qo_dir, "f", "e");
+        writeCompiler(fx);
+
+        write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
+        foreach string name in (fx.names) {
+            write(fx.qo_dir + "/" + name + ".qo.stamp", "stamp\n");
+        }
+        assertEq(0, runTool(("--scc-publish-all", fx.context)).rc,
+            "the fixture starts fully published");
+        assertEq((), stalePlan(fx).stale, "and fully current");
+
+        write(fx.src_dir + "/a.qc", isolatedSource("a") + "# edited\n");
+
+        hash<auto> planned = stalePlan(fx);
+        assertEq(1, planned.stale.size(),
+            "one edited source leaves one component stale: " + planned.output);
+        assertEq(4, planned.closure,
+            "and a rebuild of it reaches the whole chain: " + planned.output);
+
+        hash<auto> result = plan(fx);
+        assertEq(0, result.rc, "the coordinator converges: " + result.output);
+        assertEq(-1, result.output.find("selecting the shared-parse batch"),
+            "without ever reaching for the group's own parse: " + result.output);
+        assertEq((), stalePlan(fx).stale, "and leaves the group current");
+
+        # Every link compiled, each exactly once, in dependency order: the walk
+        # follows the chain rather than rebuilding the closure over and over.
+        list<string> built = map $1.split(" ")[0], compiles(fx);
+        assertEq(("a.qc", "c.qc", "e.qc", "f.qc"), built,
+            "the walk follows the chain once: " + built.join(", "));
+    }
+
+    #! Repetition is a reported failure, not a strategy.
+    /** Walking a closure is progress because each pass compiles a set the
+        previous pass did not.  A pass that leaves stale exactly the set it just
+        compiled has made none, and no further pass will: the group's own parse
+        is the answer to that, and the coordinator has to say so rather than lap.
+    */
+    testAPassThatChangesNothingEscalates() {
+        TmpDir tmp("qore-aot-driver-nonconvergent-");
+        hash<auto> fx = fixture(tmp.path, NOTHING, False);
+        writeDepfile(fx.qo_dir, "c", "a");
+        # Only c's compile does this: it emits a complete, publishable object
+        # whose stamp predates the group's last shared parse, which is what "this
+        # was built before the current generation" means -- so compiling c never
+        # makes c current.  a settles on its first compile, so the walk's stale
+        # set is exactly {c} from the second pass on.
+        writeCompiler(fx, NOTHING,
+            "case \"$(basename \"$src\")\" in c.qc) "
+            + "touch -t 200001010000 \"$out.stamp\" ;; esac");
+        # The escalation is a real whole-group parse, so this fixture needs one
+        # that works rather than the stand-in plan() installs.
+        writeBatchCompiler(fx);
+
+        write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
+        foreach string name in (fx.names) {
+            write(fx.qo_dir + "/" + name + ".qo.stamp", "stamp\n");
+        }
+        assertEq(0, runTool(("--scc-publish-all", fx.context)).rc,
+            "the fixture starts fully published");
+        assertEq((), stalePlan(fx).stale, "and fully current");
+
+        write(fx.src_dir + "/a.qc", isolatedSource("a") + "# edited\n");
+
+        hash<auto> result = plan(fx);
+        assertEq(0, result.rc, "the coordinator still finishes: " + result.output);
+        assertTrue(result.output.find("is not converging") >= 0,
+            "and says the walk stopped moving: " + result.output);
+        assertTrue(result.output.find("selecting the shared-parse batch") >= 0,
+            "before falling back to the group's own parse: " + result.output);
+        assertEq((), stalePlan(fx).stale, "which leaves the group current");
+    }
+
+    #! The closure is compared against whatever serves the band below it.
+    /** With a partial parse the band below the whole-group parse is ONE parse
+        over the stale set, so the group's own parse is worth reaching for only
+        when the closure really is most of the group.  Without one it is a walk
+        of standalone compiles, one component at a time, each preloading the
+        whole group, and the group's own parse -- one parse, at the build tool's
+        parallelism -- overtakes it far earlier.  A single floor for both cases
+        was calibrated for the parse that is off by default: on Qorus it put the
+        floor at 410 components while thirteen widely required sources sat at
+        closures of 408 and 409.
+
+        The fixture puts one closure between the two floors and asks each
+        configuration what it does with it.
+    */
+    testEscalationFloorFollowsThePartialParse() {
+        TmpDir tmp("qore-aot-driver-floor-");
+        # Large enough that the percentages, not the absolute minimum of 8,
+        # decide: 5% of 184 is 10 and 50% is 92, so a closure of 31 falls
+        # between them.
+        list<string> extra = ();
+        for (int i = 0; i < 180; ++i) {
+            push extra, sprintf("p%03d", i);
+        }
+        hash<auto> fx = fixture(tmp.path, NOTHING, False, extra);
+        # 30 consumers of d, and 150 components that depend on nothing.
+        for (int i = 0; i < 30; ++i) {
+            writeDepfile(fx.qo_dir, extra[i], "d");
+        }
+        writeCompiler(fx);
+        writeBatchCompiler(fx);
+        string subset = writeSubsetCompiler(fx);
+
+        write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
+        foreach string name in (fx.names) {
+            write(fx.qo_dir + "/" + name + ".qo.stamp", "stamp\n");
+        }
+        assertEq(0, runTool(("--scc-publish-all", fx.context)).rc,
+            "the fixture starts fully published");
+        assertEq((), stalePlan(fx).stale, "and fully current");
+
+        write(fx.src_dir + "/d.qc", isolatedSource("d") + "# edited\n");
+        hash<auto> planned = stalePlan(fx);
+        assertEq(31, planned.closure,
+            "the edit reaches d and its thirty consumers: " + planned.output);
+        assertEq(184, fx.names.size(), "out of a group of 184 components");
+
+        # No partial parse: the band below is the serial walk, so 31 of 184 is
+        # already the group's parse.
+        hash<auto> without = plan(fx);
+        assertEq(0, without.rc, "the coordinator succeeds: " + without.output);
+        assertTrue(without.output.find("selecting the shared-parse batch") >= 0,
+            "and a closure over 5% selects the group's own parse when the walk "
+            "is what it would otherwise do: " + without.output);
+
+        # Same closure, same group, with a partial parse configured: the band
+        # below is one parse over the stale set, and 31 of 184 is nowhere near
+        # enough to reparse the group instead.
+        write(fx.src_dir + "/d.qc", isolatedSource("d") + "# edited again\n");
+        assertEq(1, stalePlan(fx).stale.size(), "one component is stale again");
+        hash<auto> with = plan(fx, sprintf("QORE_QCC_SUBSET_PARSE=1 "
+            "QORE_QCC_SUBSET_SCRIPT=%y", subset));
+        assertEq(0, with.rc, "the coordinator succeeds: " + with.output);
+        assertEq(-1, with.output.find("selecting the shared-parse batch"),
+            "and the same closure does not reach the group's own parse: "
+                + with.output);
+        assertEq((), stalePlan(fx).stale, "either way the group ends current");
     }
 
     /** The reported failure needed concurrency to become visible, so the fix is
