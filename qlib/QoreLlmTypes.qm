@@ -80,6 +80,8 @@ module QoreLlmTypes {
     @subsection qorellmtypes_1_0 QoreLlmTypes 1.0
     - Initial release; extracted from the QoreLlmUtils module to break a
       future dependency cycle with LLM provider modules
+    - Fixed OpenAI-compatible streamed function calls so progressive tool-call
+      deltas are accumulated in the final chat response
 */
 
 #! Provider-neutral LLM types and abstract classes (shared with QoreLlmUtils)
@@ -1037,10 +1039,11 @@ public class AbstractLlmProvider {
     #! OpenAI-facade hook: extracts OpenAI tool-call deltas from a provider-native raw event
     /** Returns the list of OpenAI-shaped \c tool_calls deltas (index, id,
         type, function) that should be emitted to the caller for this event.
-        The default implementation accumulates OpenAI-compatible
-        \c choices[0].delta.tool_calls fragments in @a state while returning
-        the original deltas to the caller. Gemini overrides this hook to
-        harvest \c candidates[0].content.parts[].functionCall entries.
+        The default implementation accumulates OpenAI-compatible progressive
+        deltas from \c choices[0].delta.tool_calls into the final response
+        state and returns the original deltas for streaming callers. Gemini
+        overrides this hook to harvest
+        \c candidates[0].content.parts[].functionCall entries.
 
         @param state the OpenAI-compatible stream-state hash being accumulated
         @param raw the parsed provider-native event hash, or @ref nothing
@@ -1060,48 +1063,58 @@ public class AbstractLlmProvider {
             state.tool_calls = ();
         }
         list<hash<auto>> streamed = ();
-        foreach auto raw_fragment in (choice.delta.tool_calls) {
-            if (raw_fragment.typeCode() != NT_HASH) {
+        foreach auto raw_delta in (choice.delta.tool_calls) {
+            if (raw_delta.typeCode() != NT_HASH) {
                 continue;
             }
-            hash<auto> fragment = raw_fragment;
-            int idx = fragment.index.typeCode() == NT_INT
-                ? fragment.index : 0;
-            # OpenAI indexes are contiguous and arrive in order. Reject a
-            # negative or sparse index instead of allowing an untrusted
-            # provider to force an arbitrarily large list allocation.
-            if (idx < 0 || idx > state.tool_calls.size()) {
+            hash<auto> delta = cast<hash>(raw_delta);
+            # Stream indexes are mandatory in the OpenAI protocol.  Reject
+            # missing, negative, and sparse indexes: accepting a large sparse
+            # index would let an untrusted provider force an unbounded list
+            # allocation, while an omitted index cannot be correlated safely
+            # with an existing progressive tool call.
+            if (delta."index".typeCode() != NT_INT) {
                 continue;
             }
-            if (idx == state.tool_calls.size()) {
-                push state.tool_calls, {
+            int index = delta."index";
+            if (index < 0 || index > state.tool_calls.size()) {
+                continue;
+            }
+            if (state.tool_calls.size() == index) {
+                state.tool_calls += {
                     "id": NOTHING,
                     "type": "function",
                     "function": {"name": "", "arguments": ""},
                 };
             }
-            hash<auto> call = state.tool_calls[idx];
-            if (fragment.id.typeCode() == NT_STRING
-                    && fragment.id.val()) {
-                call.id = fragment.id;
+
+            hash<auto!> tool_call;
+            tool_call += cast<hash>(state.tool_calls[index]);
+            hash<auto!> function;
+            if (tool_call."function".typeCode() == NT_HASH) {
+                function += cast<hash>(tool_call."function");
             }
-            if (fragment."type".typeCode() == NT_STRING
-                    && fragment."type".val()) {
-                call."type" = fragment."type";
+            if (delta.id.typeCode() == NT_STRING && delta.id.val()) {
+                tool_call.id = delta.id;
             }
-            if (fragment."function".typeCode() == NT_HASH) {
-                if (fragment."function".name.typeCode() == NT_STRING
-                        && fragment."function".name.val()) {
-                    call."function".name += fragment."function".name;
+            if (delta.type.typeCode() == NT_STRING && delta.type.val()) {
+                tool_call.type = delta.type;
+            }
+            if (delta."function".typeCode() == NT_HASH) {
+                hash<auto> function_delta = cast<hash>(delta."function");
+                if (function_delta.name.typeCode() == NT_STRING) {
+                    function.name = (function.name ?? "").toString()
+                        + function_delta.name;
                 }
-                if (fragment."function".arguments.typeCode() == NT_STRING
-                        && fragment."function".arguments.val()) {
-                    call."function".arguments +=
-                        fragment."function".arguments;
+                if (function_delta.arguments.typeCode() == NT_STRING) {
+                    function.arguments =
+                        (function.arguments ?? "").toString()
+                        + function_delta.arguments;
                 }
             }
-            state.tool_calls[idx] = call;
-            push streamed, fragment;
+            tool_call."function" = function;
+            state.tool_calls[index] = tool_call;
+            streamed += delta;
         }
         return streamed;
     }
