@@ -385,15 +385,23 @@ static std::string aotDeferredTypeQorePath(const char* qore_path) {
     return qore_path;
 }
 
+//! Renders a deferred type the way a resolved one renders.
+/** A type this parse cannot see yet and the same type resolved live must render
+    identically, or every signature and declaration hash that names it differs between a
+    whole-group parse and a parse against preloaded shells -- and the scheduler then
+    rebuilds the whole closure of an edit for a difference that changes no declaration.
+
+    They did not: a deferred CLASS was rooted (`object<::X>`) while a resolved one is not
+    (`object<X>`), and a deferred hashdecl was already unrooted like its resolved form.
+    The unrooted spelling is what a whole-group parse emits, so it is the form already in
+    every existing artifact and the one both paths now agree on.
+*/
 static std::string aotDeferredTypePath(const std::string& qore_path, bool hashdecl, bool or_nothing) {
     std::string rv;
     if (or_nothing) {
         rv += '*';
     }
     rv += hashdecl ? "hash<" : "object<";
-    if (!hashdecl) {
-        rv += "::";
-    }
     rv += qore_path;
     rv += '>';
     return rv;

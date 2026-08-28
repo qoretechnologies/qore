@@ -627,6 +627,15 @@ int echoed = child.echo(value);
     enum and the @ref Qore::Program::setExecMode() "Program::setExecMode()" /
     @ref Qore::Program::getExecMode() "Program::getExecMode()" methods.
 
+    A damaged binary module is reported rather than fatal when
+    \c QORE_VERIFY_MODULE_SIGNATURES is set: the module loader verifies that a module file is
+    intact before mapping it and raises a \c LOAD-MODULE-ERROR naming the file if it is not.
+    It is off by default because the check hashes the whole file; it is worth enabling when a
+    module load fails inexplicably, since on macOS/Apple Silicon the kernel terminates a
+    process that maps a page whose code signature no longer validates, so a \c .qmod damaged
+    on disk otherwise kills the loading process with no diagnostic at all.  See
+    @ref environment_variables "Environment Variables".
+
     LLVM 16 or later is required for JIT and AOT.  See @ref execution_modes "Execution Modes" for
     complete mode semantics, \c qcc options, artifact types, source-stripping behavior, and debugging
     notes.
