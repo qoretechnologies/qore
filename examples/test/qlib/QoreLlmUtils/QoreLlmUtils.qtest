@@ -65,6 +65,16 @@ class FakeGeminiLlmHandler inherits AbstractHttpRequestHandler {
             usleep(resp.delay_ms * 1000);
         }
         int code = resp.code ?? 200;
+        if (resp.sse.typeCode() == NT_LIST) {
+            list<string> frames = ();
+            foreach auto chunk in ((resp.sse)) {
+                frames += "data: " + (chunk.typeCode() == NT_STRING
+                    ? chunk.toString() : make_json(chunk));
+            }
+            frames += "data: [DONE]";
+            return makeResponse(code, frames.join("\n\n") + "\n\n",
+                {"Content-Type": "text/event-stream"});
+        }
         string out = resp.body.typeCode() == NT_STRING
             ? resp.body : make_json(resp.body);
         return makeResponse(code, out, {"Content-Type": MimeTypeJson});
@@ -189,6 +199,8 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "token budgets", \geminiOpenAiAbstractTokenBudgetFacadeTest());
         addTestCase("LlmBackend OpenAI provider maps reasoning-model "
             "completion budgets", \openAiReasoningModelTokenBudgetTest());
+        addTestCase("LlmBackend OpenAI streaming preserves tool-call-only deltas",
+            \openAiStreamingToolCallOnlyDeltasTest());
         addTestCase("LlmBackend OpenAI chat facade normalizes forced JSON "
             "tool text", \geminiOpenAiForcedToolJsonTextTest());
         addTestCase("LlmBackend OpenAI chat facade retries malformed forced "
@@ -2219,6 +2231,129 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             "OpenAI reasoning models receive max_completion_tokens");
         assertFalse(body.hasKey("max_tokens"),
             "OpenAI reasoning models must not receive max_tokens");
+    }
+
+    openAiStreamingToolCallOnlyDeltasTest() {
+        installGeminiHandler({
+            "/v1/chat/completions": {
+                "sequence": (
+                    {
+                        "code": 503,
+                        "body": {
+                            "error": {
+                                "type": "server_error",
+                                "message": "fixture unavailable",
+                            },
+                        },
+                    }, {
+                        "code": 200,
+                        "sse": (
+                            {
+                                "id": "openai-stream-tool-1",
+                                "object": "chat.completion.chunk",
+                                "model": "test-model",
+                                "choices": ({
+                                    "index": 0,
+                                    "delta": {
+                                        "tool_calls": ({
+                                            "index": 1000000000,
+                                            "function": {"name": "ignored"},
+                                        }, {
+                                            "function": {
+                                                "name": "also_ignored",
+                                            },
+                                        },),
+                                    },
+                                    "finish_reason": NOTHING,
+                                },),
+                            },
+                            {
+                                "id": "openai-stream-tool-1",
+                                "object": "chat.completion.chunk",
+                                "model": "test-model",
+                                "choices": ({
+                                    "index": 0,
+                                    "delta": {
+                                        "tool_calls": ({
+                                            "index": 0,
+                                            "id": "call_fixture",
+                                            "type": "function",
+                                            "function": {
+                                                "name": "list_records",
+                                            },
+                                        },),
+                                    },
+                                    "finish_reason": NOTHING,
+                                },),
+                            },
+                            {
+                                "id": "openai-stream-tool-1",
+                                "object": "chat.completion.chunk",
+                                "model": "test-model",
+                                "choices": ({
+                                    "index": 0,
+                                    "delta": {
+                                        "tool_calls": ({
+                                            "index": 0,
+                                            "function": {"arguments": "{}"},
+                                        },),
+                                    },
+                                    "finish_reason": NOTHING,
+                                },),
+                            },
+                            {
+                                "id": "openai-stream-tool-1",
+                                "object": "chat.completion.chunk",
+                                "model": "test-model",
+                                "choices": ({
+                                    "index": 0,
+                                    "delta": {},
+                                    "finish_reason": "tool_calls",
+                                },),
+                                "usage": {"total_tokens": 5},
+                            },
+                        ),
+                    },
+                ),
+            },
+        });
+
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "http",
+            "url": "http://localhost:" + port,
+            "model": "test-model",
+        });
+        list<hash<auto>> chunks = ();
+        hash<auto> rv = llm.chatCompletionsStream({
+            "messages": ({"role": "user", "content": "fixture-input"},),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "list_records",
+                    "description": "fixture-tool",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                    },
+                },
+            },),
+        }, sub (hash<auto> chunk) {
+            chunks += chunk;
+        });
+
+        assertEq(3, chunks.size(),
+            "valid tool-call deltas and the terminal chunk are forwarded, "
+                + "while malformed indexes are ignored");
+        assertEq(2, gemini_handler.requests.size(),
+            "a transient streaming HTTP response is retried before deltas");
+        assertEq("list_records",
+            rv.choices[0].message.tool_calls[0]."function".name,
+            "the accumulated response preserves the streamed tool identity");
+        assertEq("{}",
+            rv.choices[0].message.tool_calls[0]."function".arguments,
+            "the accumulated response preserves streamed arguments");
+        assertEq("tool_calls", rv.choices[0].finish_reason,
+            "the accumulated response preserves the terminal reason");
     }
 
     geminiOpenAiForcedToolJsonTextTest() {

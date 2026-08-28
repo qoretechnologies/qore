@@ -123,6 +123,7 @@ stream.close();
 
     @subsection OpenAiRestClientv1_1 OpenAiRestClient v1.1
     - added SSE helper for streaming responses
+    - fixed streaming chat completions to preserve function-call-only deltas
 
     @subsection OpenAiRestClientv1_0 OpenAiRestClient v1.0
     - the initial version of the %OpenAiRestClient module
@@ -858,16 +859,17 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         }
         hdr."Content-Type" = "application/json";
 
-        HttpClientIo::HttpClientConnectionManager mgr =
-            rest_client.getConnectionManager();
-        HttpClientIo::HttpClientStreamHandle stream =
-            mgr.acquireStream(getConfig().url);
-
         string json_body = make_json(body);
-        stream.startStreaming("POST", getChatCompletionsPath(), hdr, False,
-            json_body);
-
-        HttpClientStreamingIo::SseStreamReader reader(stream);
+        HttpClientStreamingIo::SseStreamReader reader;
+        try {
+            reader = withRetry(HttpClientStreamingIo::SseStreamReader sub () {
+                return rest_client.restSseReader("POST",
+                    getChatCompletionsPath(), hdr, json_body);
+            }, opts);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR", sprintf("streaming chat request failed: %s",
+                ex.desc), ex;
+        }
 
         while (True) {
             *hash<SseMessageInfo> evt = reader.readEvent(
@@ -892,6 +894,9 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             if (parsed.choices[0].delta.content.val()) {
                 delta = parsed.choices[0].delta.content;
             }
+            bool has_tool_call_delta =
+                parsed.choices[0].delta.tool_calls.typeCode() == NT_LIST
+                && parsed.choices[0].delta.tool_calls.size() > 0;
             if (parsed.choices[0].finish_reason.val()) {
                 callback(<QoreLlmUtils::ChatStreamEvent>{
                     "done": True,
@@ -900,7 +905,11 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 });
                 break;
             }
-            if (delta.val()) {
+            # OpenAI-compatible providers normally emit function calls in
+            # tool-call-only deltas. Dropping a chunk merely because it has no
+            # text loses the function name/argument stream and makes the final
+            # response look like a clean no-call completion to every caller.
+            if (delta.val() || has_tool_call_delta) {
                 callback(<QoreLlmUtils::ChatStreamEvent>{
                     "event": evt.event,
                     "delta": delta,
