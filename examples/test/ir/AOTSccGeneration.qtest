@@ -46,6 +46,8 @@ class AOTSccGenerationTest inherits QUnit::Test {
             \testDegenerateGroups());
         addTestCase("CMake dependency plan is atomic and content-stable",
             \testCMakePlan());
+        addTestCase("a regex literal does not hide the namespace of what follows it",
+            \testRegexLiteralNamespaceTracking());
 
         set_return_value(main());
     }
@@ -202,6 +204,52 @@ class AOTSccGenerationTest inherits QUnit::Test {
             "comment-only edits preserve the SCC map");
         assertEq(symbols, ReadOnlyFile::readTextFile(symbols_path),
             "comment-only edits preserve the symbol manifest");
+    }
+
+    testRegexLiteralNamespaceTracking() {
+        TmpDir tmp("qore-aot-regex-mask-");
+        # The manifest names each declaration by its namespace path, which the scanner tracks by counting
+        # braces in the masked source.  A regex literal is not a comment and not a string: reading `#`, `//`
+        # or a quote inside one as the start of a comment blanks the rest of the line, and the `{` that opens
+        # the block goes with it.  Brace depth then desynchronises for the whole rest of the file, and every
+        # declaration after that point is recorded without its namespace -- which makes a type deferred to
+        # `hash<Late>` where the same type resolved live is `hash<Ns::Late>`, so a whole-group parse and a
+        # parse against preloaded shells publish different signatures for it.
+        string context_path = writeContext(tmp.path, (
+            "masking": "%new-style\n"
+                "public namespace RegexMaskNs {\n"
+                "    public class RegexMaskEarly {\n"
+                "        static bool comment(string line) {\n"
+                "            if (line =~ /^#/ || !line.size()) {\n"
+                "                return True;\n"
+                "            }\n"
+                "            if (line =~ x/(\\/\\/.*)/) {\n"
+                "                return True;\n"
+                "            }\n"
+                "            if (line =~ s/\"#\"/x/) {\n"
+                "                return True;\n"
+                "            }\n"
+                "            return False;\n"
+                "        }\n"
+                "    }\n"
+                "    public hashdecl RegexMaskLate {\n"
+                "        string name;\n"
+                "    }\n"
+                "    public class RegexMaskLast {\n"
+                "        static string label() { return \"last\"; }\n"
+                "    }\n"
+                "}\n",
+        ));
+        string output_dir = cmakePlan(context_path, "REGEX_MASK_TEST");
+        string symbols = ReadOnlyFile::readTextFile(output_dir + "/source-symbols.manifest");
+        assertTrue(symbols.find("class\tRegexMaskNs::RegexMaskEarly\t") >= 0,
+            "a declaration before the regex literals keeps its namespace: " + symbols);
+        assertTrue(symbols.find("hashdecl\tRegexMaskNs::RegexMaskLate\t") >= 0,
+            "and so does one declared after them: " + symbols);
+        assertTrue(symbols.find("class\tRegexMaskNs::RegexMaskLast\t") >= 0,
+            "through to the end of the file: " + symbols);
+        assertEq(-1, symbols.find("hashdecl\tRegexMaskLate\t"),
+            "the unqualified spelling is not recorded: " + symbols);
     }
 
     testMutualDependencyComponent() {

@@ -636,6 +636,19 @@ int echoed = child.echo(value);
     on disk otherwise kills the loading process with no diagnostic at all.  See
     @ref environment_variables "Environment Variables".
 
+    Compiling a source in a whole-group parse and compiling it against preloaded <tt>.qo</tt>
+    declaration shells now publish the same declarations.  A <tt>.qo</tt> carries declarations
+    rather than executable bodies, so a <tt>qcc -c -L</tt> parse could not run a preloaded
+    provider's constant initializer where a whole-group parse could, and evaluating a constant
+    is what narrows its declared type to its value's type; the shell now records the value the
+    producing parse computed (AOT binary format 15) and the consuming parse reads it.  The
+    value is recorded for compile-time use only: a runtime module load ignores it, and a
+    constant's initializer function remains the only source of its value there.  Three
+    normalization defects went with it -- a constant's value hash depended on whether its
+    strings were stored inline or on the heap, \c callref and \c closure did not read back as
+    themselves from a serialized type path, and an object whose metadata length did not fall on
+    the emitter's alignment boundary listed every symbol of its compile contract twice.
+
     LLVM 16 or later is required for JIT and AOT.  See @ref execution_modes "Execution Modes" for
     complete mode semantics, \c qcc options, artifact types, source-stripping behavior, and debugging
     notes.

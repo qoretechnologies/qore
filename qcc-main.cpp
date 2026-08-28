@@ -1970,7 +1970,18 @@ static void extract_aot_metadata_from_object(const llvm::object::ObjectFile& obj
             continue;
         }
         const uint8_t* p = reinterpret_cast<const uint8_t*>(contents.data() + offset);
-        std::vector<uint8_t> bytes(p, p + size);
+        // A metadata symbol's size is the storage the emitter reserved, which is rounded up to the
+        // symbol's alignment; the blob's own header gives its exact length.  Trim to that, because the
+        // same metadata is also found by the raw file scan below at its exact length, and
+        // add_aot_metadata_blob() keys its duplicate check on the byte count -- so a blob whose length
+        // does not land on the alignment boundary is admitted twice and every row of the object's
+        // compile contract is emitted twice.  That made an object's contract depend on the parity of its
+        // metadata length rather than on its declarations, so two compiles of the same source could
+        // publish contracts that differ in their entirety with no symbol differing at all.
+        size_t exact_size = 0;
+        uint64_t blob_size = find_aot_metadata_length(p, static_cast<size_t>(size), exact_size)
+            && exact_size ? static_cast<uint64_t>(exact_size) : size;
+        std::vector<uint8_t> bytes(p, p + blob_size);
         add_aot_metadata_blob(blobs, seen, std::move(bytes), "symbol " + name.str());
     }
 }

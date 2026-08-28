@@ -91,6 +91,10 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             \testSerializedConstructorFunctionCallPreload());
         addTestCase("a subset parse resolves providers it is compiling itself",
             \testSubsetParseResolvesItsOwnProviders());
+        addTestCase("a parse against shells publishes the whole-group parse's declarations",
+            \testShellParseDeclarationsMatchGroupParse());
+        addTestCase("an object carries one copy of its AOT metadata",
+            \testSingleMetadataBlobPerObject());
         addTestCase("qo link aggregate", \testQoLinkAggregate());
         addTestCase("prelinked call disable switch", \testPrelinkedCallDisableSwitch());
 
@@ -476,6 +480,134 @@ class AOTSymbolIndexTest inherits QUnit::Test {
             env, qcc_bin, single_qo));
         assertTrue(single_index.find("AOTSubsetField") != -1,
             "and still records the deferred hashdecl provider: " + single_index);
+    }
+
+    #! A `.qo` carries its metadata once, however its length falls
+    /** The blob is reachable both through its metadata symbol and by scanning the file, and the two were
+        admitted as different blobs whenever the symbol's size -- the storage the emitter reserved, rounded up
+        for alignment -- exceeded the length recorded in the blob's own header.  Every row of the object's
+        compile contract was then emitted twice, so an object's contract depended on the parity of its
+        metadata length rather than on its declarations.
+    */
+    testSingleMetadataBlobPerObject() {
+        TmpDir tmp = initDirs();
+        int blobs = 0;
+        # The length that used to decide this is not something a fixture can aim at, so vary the source until
+        # both parities have certainly been produced.
+        for (int i = 0; i < 6; ++i) {
+            string dump = compileAndDump("blobcount" + i,
+                sprintf("class MetaBlobCount%d {\n"
+                    "    public { const Pad = \"%s\"; }\n"
+                    "    int f() { return %d; }\n"
+                    "}\n", i, strmul("x", i), i));
+            int found = 0;
+            foreach string line in (dump.split("\n")) {
+                if (trim(line).startsWith("AOT metadata #")) {
+                    ++found;
+                }
+            }
+            assertEq(1, found, sprintf("object %d reports exactly one AOT metadata blob: %s", i, dump));
+            blobs += found;
+        }
+        assertEq(6, blobs, "every fixture object was inspected");
+    }
+
+    #! The two compile modes must publish the same declarations for the same source
+    /** A whole-group parse and a `qcc -c -L` parse against preloaded shells are both production paths for the
+        same source, and the compile contract is compared whole to decide whether consumers are stale.  Any
+        field of it that depends on which mode compiled the source therefore rebuilds the whole closure of an
+        edit for a difference that changes no declaration.
+
+        Each constant here exercises a distinct way that used to happen: `Forced` takes its declared type from
+        its evaluated value, so it needs the shell to supply the value the provider computed; the inherited
+        `Keys` is a list of short strings, whose value hash used to depend on whether the strings were stored
+        inline or on the heap; and the inherited `CallOpt` holds a call reference, whose type name does not
+        read back as itself.
+    */
+    testShellParseDeclarationsMatchGroupParse() {
+        TmpDir tmp = initDirs();
+        string group_dir = tmp_dir + "/qo-mode-group";
+        string preload_dir = tmp_dir + "/qo-mode-preload";
+        string shell_dir = tmp_dir + "/qo-mode-shell";
+        mkdir(group_dir);
+        mkdir(preload_dir);
+        mkdir(shell_dir);
+
+        string provider_src = tmp_dir + "/mode-provider.qc";
+        string consumer_src = tmp_dir + "/mode-consumer.qc";
+        string other_src = tmp_dir + "/mode-other.qc";
+        string manifest = tmp_dir + "/mode-symbols.manifest";
+
+        write(provider_src,
+            "%new-style\n"
+            "public namespace ModeNs {\n"
+            "    public hashdecl ModeField {\n"
+            "        string name;\n"
+            "        bool req = False;\n"
+            "    }\n"
+            "    public class ModeProvider {\n"
+            "        private { const CallOpt = {\"cb\": \\ModeProvider::helper()}; }\n"
+            "        public {\n"
+            "            const Base = {\"a\": <ModeField>{\"name\": \"a\"}};\n"
+            "            const Keys = (\"name\", \"id\", \"version\");\n"
+            "        }\n"
+            "        static int helper() { return 1; }\n"
+            "    }\n"
+            "}\n");
+        write(consumer_src,
+            "%new-style\n"
+            "public namespace ModeNs {\n"
+            "    public class ModeUser inherits ModeProvider {\n"
+            "        public {\n"
+            "            const Derived = ModeProvider::Base + {\"b\": <ModeField>{\"name\": \"b\"}};\n"
+            "            const Forced = ModeUser::Derived.b.name;\n"
+            "        }\n"
+            "    }\n"
+            "}\n");
+        # A third member, so the shell parse has something to preload: with an empty `-L` the manifest is
+        # never armed and nothing is deferred.
+        write(other_src,
+            "%new-style\n"
+            "class ModeOther {\n"
+            "    static string label() { return \"other\"; }\n"
+            "}\n");
+        write(manifest,
+            "format=1\n"
+            "hashdecl\tModeNs::ModeField\t" + provider_src + "\n"
+            "class\tModeNs::ModeProvider\t" + provider_src + "\n"
+            "class\tModeNs::ModeUser\t" + consumer_src + "\n"
+            "class\tModeOther\t" + other_src + "\n");
+
+        string group_out = run(sprintf(
+            "%s %s -c --output-dir=%s --depfile-dir=%s --batch-build-sidecars "
+            "--source-symbol-manifest=%s --parse-option=PO_MODERN %s %s %s",
+            env, qcc_bin, group_dir, group_dir, manifest,
+            provider_src, consumer_src, other_src));
+        *string group_qo = batchObject(group_dir, "mode-consumer");
+        assertTrue(exists group_qo, "the whole-group parse compiles the fixture: " + group_out);
+
+        foreach string stem in (("mode-provider", "mode-other")) {
+            string qo = batchObject(group_dir, stem) ?? "";
+            assertTrue(qo != "", "the group's parse emitted " + stem + ": " + group_out);
+            copy_file(qo, preload_dir + DirSep + basename(qo));
+        }
+
+        string shell_out = run(sprintf(
+            "%s %s -c --output-dir=%s --depfile-dir=%s --batch-build-sidecars -L %s "
+            "--source-symbol-manifest=%s --parse-option=PO_MODERN %s",
+            env, qcc_bin, shell_dir, shell_dir, preload_dir, manifest, consumer_src));
+        *string shell_qo = batchObject(shell_dir, "mode-consumer");
+        assertTrue(exists shell_qo,
+            "the same source compiles against preloaded shells: " + shell_out);
+
+        string group_contract = ReadOnlyFile::readTextFile(group_qo + ".compile-contract.stamp");
+        string shell_contract = ReadOnlyFile::readTextFile(shell_qo + ".compile-contract.stamp");
+        assertTrue(group_contract.find("ModeNs::ModeUser::Forced") != -1,
+            "the contract names the constant whose type comes from its value: " + group_contract);
+        assertTrue(group_contract.find("ModeNs::ModeUser::Keys") != -1,
+            "and the inherited literal constant: " + group_contract);
+        assertEq(group_contract, shell_contract,
+            "both compile modes publish the same compile contract");
     }
 
     testQoLinkAggregate() {

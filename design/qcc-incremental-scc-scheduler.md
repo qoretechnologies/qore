@@ -442,6 +442,114 @@ for providers inside the parse.
 first, because they are bugs; only then is body-contract granularity both sufficient and
 worth its machinery. The reverse order buys nothing.
 
+### What making declarations mode-independent turned out to need
+
+One of the two causes was a rendering bug and is fixed: `aotDeferredTypePath()` rooted a
+deferred class (`object<::X>`) where a resolved one is unrooted (`object<X>`), while
+deferred hashdecls were already unrooted — so the asymmetry hit classes only. On
+`QorusRestApiHandlerV2.qc` that took symbol paths present in only one mode from 6/5 to 2/2
+and symbols differing in `signature_hash` from 9 to 1.
+
+The other cause is not a rendering bug, and 52 of the original 60 remain. **They are all
+constants**, and the mechanism is that a parse resolving against shells infers weaker types
+for a constant's initializer expression. Reduced to two sources:
+
+```
+// provider.qc, preloaded
+public class CProvider { public { const Base = {"a": <CField>{"name": "a"}}; } }
+// consumer.qc, compiled
+public class CUser {
+    public {
+        const Derived = CProvider::Base + {"b": <CField>{"name": "b"}};
+        const Forced  = CUser::Derived.b.name;      // declaration_hash differs by mode
+    }
+}
+```
+
+Writing `cast<string>(CUser::Derived.b.name)` makes both modes produce the identical hash,
+which isolates it to inference rather than to the value or the rendering. `CProvider::Base`
+carries `value_hash = "pending"` in the *whole-group* parse too, so neither mode has folded
+it at emit time: what differs is that the group parse can evaluate the provider's retained
+initializer expression during the consumer's parse and a shell-based one cannot.
+
+So the remaining half is a compiler capability — a preloaded shell has to supply constant
+initializers the consuming parse can evaluate with full type fidelity — not a
+normalisation.
+
+### Declarations are now mode-independent
+
+That capability, and three defects it uncovered, are in. On `QorusRestApiHandlerV2.qc`,
+whole-group parse against a parse with the rest preloaded:
+
+|!symbols differing in|!before|!after
+|`value_hash`|39|0
+|`declaration_hash`|12|0
+|`signature_hash` + `declaration_hash`|9 -> 1|0
+|symbol paths present in only one mode|6 / 5 -> 2 / 2|0 / 0
+|`body_contract_hash`|41|12
+|`native` rows|10|0
+
+Every remaining difference is `body_contract_hash`, which is what the section above says a
+body contract legitimately is. Four things had to change.
+
+**A shell now carries the value a pending constant's initializer produced** (AOT binary
+format v15). A `.qo` holds declarations, not executable bodies, so a parse resolving a
+constant against a preloaded shell cannot run the provider's `__const_init` function; a
+whole-group parse evaluates the provider's retained initializer during the consumer's parse
+instead. Evaluating a constant narrows its declared type to its value's type
+(`ConstantEntry::parseCommitRuntimeInit()`), so `Forced` above came out `*string` in one
+mode and `string` in the other. The writer records the value the producing parse computed
+beside the pending flag; the reader attaches it to the `ConstantEntry`
+(`ConstantEntry::setAOTParseShellValue()`) and `RuntimeConstantRefNode` reads it. It is
+attached **only** where `.qo` shells are preloaded for a compile
+(`QoreAOTBinaryDeserializer::preload_parse_constant_values`), so a runtime module load never
+sees one and the init function stays the only source of a constant's value there. A value
+that cannot be serialized without loss — an object, a closure — writes a presence byte of 0
+and the consuming parse defers exactly as before.
+
+Cost, measured over the 875 Qorus objects: **−0.01% total object size** (147 grew, 73 shrank,
+655 unchanged; the largest single growth is 0.9% on `QorusMapManager.qc`).
+
+**The value hash was representation-dependent.** `aotAppendValueHashParts()` gave a short
+(NaN-boxed) string its own case, so the same string content hashed differently depending on
+whether the bytes were stored inline or on the heap — and a source parse builds heap strings
+where AOT deserialization rebuilds the short ones inline. A constant such as
+`("name", "id", "version")` therefore published a different `value_hash` depending on how
+the parse reached it. Short strings are `NT_STRING` like any other and now go through the
+same case.
+
+**`callref` and `closure` do not read back as themselves.** The language deliberately treats
+both as interchangeable with `code` and resolves either name to `codeTypeInfo`, so a
+serialized `hash<string, callref>` came back as `hash<string, code>`. A constant initialized
+to a call reference takes its declared type from its evaluated value, so the two modes
+published different declarations for it. `getAOTSerializableTypePath()` now emits the name
+that round-trips.
+
+**A regex literal is not a comment.** `qore-qo-source-order` masks strings and comments
+before counting braces to attribute each declaration to its namespace, and
+`if (line =~ /^#/ || !line.size()) {` was masked from the `#` onwards — taking the block's
+opening brace with it. Brace depth desynchronised for the rest of the file, and every
+declaration after that point was recorded in the manifest without its namespace: 201 of the
+210 symbols in Qorus's `lib/qorus.ql`, plus 28 across five other sources. A type deferred
+against such an entry rendered as `hash<SlaInfo>` where the same type resolved live renders
+as `hash<OMQ::SlaInfo>`. The mask pattern now matches a regex literal first, anchored on
+`=~` / `!~` (which is what distinguishes the leading `/` from division).
+
+**A `.qo` was admitting its metadata twice.** The blob is reachable both through its metadata
+symbol and by scanning the file, and `add_aot_metadata_blob()` keys its duplicate check on
+the byte count — while the symbol path passed the symbol's *size*, which is the storage the
+emitter reserved, rounded up for alignment. Whenever that exceeded the length in the blob's
+own header the same metadata was admitted twice and **every row of the object's compile
+contract was emitted twice**, so an object's contract depended on the parity of its metadata
+length rather than on its declarations. 697 of 875 Qorus contracts carried duplicated rows.
+The symbol path now trims to the length the header records.
+
+**The cascade is not yet gone.** A comment-only edit to `Classes/QorusRestApiHandler.qc` from
+a group-parse state still rebuilds 13 objects in 4m49, because contracts are compared whole
+and 12 symbols still differ in `body_contract_hash`. But the ordering above is now
+discharged: body-contract granularity is what remains, and it is now both sufficient and
+worth its machinery.
+
 **It also loses bodies.** A whole-group parse lowers cross-member calls
 it can see in its own parse, so an object it emits is not byte-identical to one
 emitted against preloaded shells: it records more cross-object fast-entry

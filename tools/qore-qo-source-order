@@ -161,7 +161,17 @@ class SourceSymbolManifestGenerator {
         hash<string, bool> non_type_prefixes = (
             "return": True, "throw": True, "new": True, "case": True,
         );
-        string mask_pattern = "(?:\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"|'(?:\\\\[\\s\\S]|[^'\\\\])*'|"
+        # A regex literal is matched BEFORE the comment alternatives: `#`, `//` and quotes are ordinary
+        # characters inside one, and masking `if (line =~ /^#/ || !line.length()) {` as a comment swallowed
+        # the block's opening brace.  The brace depth then desynchronised for the rest of the file and every
+        # declaration after that point was recorded in the manifest without its namespace -- which made a
+        # deferred type render as `hash<SlaInfo>` where the same type resolved live renders as
+        # `hash<OMQ::SlaInfo>`, so the two compile modes published different signatures for it.
+        # `=~` / `!~` is what disambiguates the leading `/` from division.
+        string mask_pattern = "(?:(?:=~|!~)\\s*(?:(?:s|tr|t)/(?:\\\\[\\s\\S]|[^/\\\\\\n])*"
+            "/(?:\\\\[\\s\\S]|[^/\\\\\\n])*/[A-Za-z]*"
+            "|[A-Za-z]*/(?:\\\\[\\s\\S]|[^/\\\\\\n])*/[A-Za-z]*)|"
+            "\"(?:\\\\[\\s\\S]|[^\"\\\\])*\"|'(?:\\\\[\\s\\S]|[^'\\\\])*'|"
             "(?<!\\\\)//[^\\n]*|(?<!\\$)#[^\\n]*|/\\*[\\s\\S]*?\\*/)";
     }
 

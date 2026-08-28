@@ -122,7 +122,7 @@ ConstantEntry::ConstantEntry(const QoreProgramLocation* loc, const char* n, Qore
         : loc(loc), name(n), typeInfo(ti), parseTypeInfo(pti), val(val), in_init(false), pub(n_pub),
         init(n_init), builtin(n_builtin), delayed_eval(false), explicit_type(ti || pti), has_init_expr(false),
         saved_val_set(false), aot_shell_pending(false), external_stub(false), external_stub_dependent(false),
-        rt_in_init(false),
+        rt_in_init(false), aot_parse_shell_value_set(false),
         // a constant created already initialized -- every builtin -- is finished now; one that still has to
         // be initialized is stamped when ConstantEntryInitHelper retires
         init_seq(n_init ? qore_next_constant_init_seq() : 0),
@@ -151,6 +151,9 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
         external_stub(old.external_stub),
         external_stub_dependent(old.external_stub_dependent),
         rt_in_init(false),
+        // a shell's compile-time value is copied with the entry so every Program importing the same shell
+        // resolves constant initializers the same way
+        aot_parse_shell_value_set(old.aot_parse_shell_value_set),
         // the copy keeps the original's sequence: importing a module must not reorder its constants relative
         // to each other, or the AOT writer would pick a different owner for a shared value in the importing
         // Program than the module was built with
@@ -159,6 +162,7 @@ ConstantEntry::ConstantEntry(const ConstantEntry& old)
         // it from its own entry
         aot_pending_init(old.aot_pending_init),
         saved_val(old.saved_val.refSelf()),
+        aot_parse_shell_value(old.aot_parse_shell_value.refSelf()),
         access(old.access), from_module(old.from_module) {
     assert(!old.in_init);
     assert(old.init);
@@ -170,8 +174,14 @@ void ConstantEntry::del(QoreListNode& l) {
     //printd(5, "ConstantEntry::del(l) this: %p '%s' node: %p (%d) %s %d (saved_val: %s)\n", this, name.c_str(),
     //  node, get_node_type(node), get_type_name(node), node->reference_count(), saved_val.getTypeName());
     aot_init_expr.discard(nullptr);
+    if (aot_parse_shell_value.hasNode()) {
+        l.push(aot_parse_shell_value, nullptr);
+    } else {
+        aot_parse_shell_value.clear();
+    }
 #ifdef DEBUG
     aot_init_expr.clear();
+    aot_parse_shell_value.clear();
 #endif
     if (saved_val_set) {
         val.discard(nullptr);
@@ -196,8 +206,10 @@ void ConstantEntry::del(QoreListNode& l) {
 
 void ConstantEntry::del(ExceptionSink* xsink) {
     aot_init_expr.discard(xsink);
+    aot_parse_shell_value.discard(xsink);
 #ifdef DEBUG
     aot_init_expr.clear();
+    aot_parse_shell_value.clear();
 #endif
     if (saved_val_set) {
         val.discard(xsink);
@@ -259,6 +271,32 @@ void ConstantEntry::materializeRuntimeRefs(ExceptionSink* xsink) {
         saved_val = target.refSelf();
         saved_val_set = true;
     }
+}
+
+void ConstantEntry::materializeAOTParseShellValue(ExceptionSink* xsink) {
+    if (!aot_parse_shell_value_set) {
+        return;
+    }
+    bool changed = false;
+    QoreValue resolved = resolveRtConstRefDeep(aot_parse_shell_value, xsink, changed);
+    if (xsink && *xsink) {
+        // a reference this preload cannot follow -- the constant it names is not among the preloaded shells;
+        // discard the value so the consuming parse defers the initializer as it did before shells carried
+        // values, rather than folding a reference node into a typed container
+        xsink->clear();
+        resolved.discard(nullptr);
+        aot_parse_shell_value.discard(nullptr);
+        aot_parse_shell_value = QoreValue();
+        aot_parse_shell_value_set = false;
+        return;
+    }
+    if (!changed) {
+        resolved.discard(nullptr);
+        return;
+    }
+    reapplyConstantType(typeInfo, resolved);
+    aot_parse_shell_value.discard(xsink);
+    aot_parse_shell_value = resolved;
 }
 
 void ConstantEntry::makeExternalStubDeclaration() {

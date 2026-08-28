@@ -167,7 +167,8 @@ public:
         aot_shell_pending : 1, // AOT-deserialized shell whose init-func has not run
         external_stub : 1, // qcc --stub declaration; value is supplied by the runtime host
         external_stub_dependent : 1, // initializer references an external stub constant
-        rt_in_init : 1 // runtime value evaluation in progress (parseCommitRuntimeInit); detects genuine cycles
+        rt_in_init : 1, // runtime value evaluation in progress (parseCommitRuntimeInit); detects genuine cycles
+        aot_parse_shell_value_set : 1 // a preloaded `.qo` shell supplied a compile-time value (see below)
         ;
 
     //! deferred AOT initializer for an unpopulated shell, or nullptr; owned by the AOT runtime
@@ -243,6 +244,50 @@ public:
         return !aot_shell_pending && !external_stub
             && (saved_val_set || (init && val.getType() != NT_RTCONSTREF));
     }
+
+    //! Supplies the value a preloaded `.qo` shell recorded for this pending constant
+    /** A `.qo` carries declarations, not executable bodies, so a `qcc -c -L` parse resolving a constant
+        against a preloaded shell cannot run the provider's `__const_init` function.  A whole-group parse can
+        evaluate the provider's retained initializer during the consumer's parse, and evaluating a constant
+        narrows its declared type to its value's type (see parseCommitRuntimeInit()), so the same source
+        compiled the two ways published different declared types for every constant folded from a sibling --
+        which invalidated every consumer on a mode change.  The provider records the value it computed itself
+        (AOT format v15), and a parse reads it here.
+
+        Only a qcc source parse reads this; at runtime the `__const_init` function remains the sole source of
+        the value, so nothing about module load order changes.
+
+        @param v the value the shell recorded; ownership is taken
+    */
+    DLLLOCAL void setAOTParseShellValue(QoreValue v) {
+        if (aot_parse_shell_value_set) {
+            aot_parse_shell_value.discard(nullptr);
+        }
+        aot_parse_shell_value = v;
+        aot_parse_shell_value_set = true;
+    }
+
+    //! Returns true if a preloaded shell supplied a compile-time value for this constant
+    /** A value is attached only where `.qo` declaration shells are preloaded for a compile
+        (QoreAOTBinaryDeserializer::preload_parse_constant_values), so a runtime module load never has one and
+        the `__const_init` function stays the only source of a constant's value there.
+    */
+    DLLLOCAL bool hasAOTParseShellValue() const {
+        return aot_parse_shell_value_set;
+    }
+
+    //! Deep-resolves the AOT constant references inside a shell-supplied compile-time value
+    /** The value is deserialized while sibling shells are still being registered, so references into other
+        constants are left as deferred reference nodes; they have to be replaced with the values they name
+        before any parse can fold the constant, or a reference node reaches a typed container and the parse
+        fails with a RUNTIME-TYPE-ERROR naming an 'AOT constant path reference'.
+
+        A reference that cannot be resolved drops the whole value rather than failing: without it the
+        consuming parse defers the initializer exactly as it did before shells carried values at all.
+
+        @param xsink exception sink used for the walk; any exception it takes is consumed here
+    */
+    DLLLOCAL void materializeAOTParseShellValue(ExceptionSink* xsink);
 
     DLLLOCAL const QoreTypeInfo* getParseTypeInfo() const {
         if (qore_aot_source_parse_active() && typeInfo == nothingTypeInfo
@@ -350,12 +395,15 @@ public:
 protected:
     QoreValue saved_val{};
     QoreValue aot_init_expr{};  //!< preserved init expression for AOT lowering
+    //! compile-time value recorded by a preloaded `.qo` shell; see setAOTParseShellValue()
+    QoreValue aot_parse_shell_value{};
     ClassAccess access;
     std::string from_module;
 
     DLLLOCAL ~ConstantEntry() {
         assert(saved_val.isNothing());
         assert(aot_init_expr.isNothing());
+        assert(aot_parse_shell_value.isNothing());
         assert(val.isNothing());
         // free the deferred declared type if parseInit() never ran (e.g. a parse error aborted the commit)
         delete parseTypeInfo;
@@ -639,6 +687,13 @@ protected:
             }
             return ce->saved_val.eval(needs_deref, xsink);
         }
+        // A `.qo` preloaded as a declaration shell records the value its provider computed for a pending
+        // constant, so a parse resolving against shells evaluates an initializer that reads it exactly as a
+        // whole-group parse does.  hasAOTParseShellValue() is false at runtime, where the init function is
+        // still the only source of the value.
+        if (ce->hasAOTParseShellValue()) {
+            return ce->aot_parse_shell_value.eval(needs_deref, xsink);
+        }
         // AOT pending shell: ce->val is a self-referential RuntimeConstantRefNode
         // set up by QoreAOTBinaryDeserializer::deserializeConstants so sibling
         // `.qo` references defer to runtime.  Evaluating ce->val here would
@@ -721,6 +776,9 @@ public:
         if (ce->saved_val_set) {
             return ce->saved_val.getAsString(str, foff, xsink);
         }
+        if (ce->hasAOTParseShellValue()) {
+            return ce->aot_parse_shell_value.getAsString(str, foff, xsink);
+        }
         if (ce->external_stub) {
             xsink->raiseException("EXTERNAL-STUB-CONSTANT",
                 "cannot convert external stub constant '%s' to a string; the runtime host "
@@ -745,6 +803,9 @@ public:
     DLLLOCAL virtual QoreString* getAsString(bool& del, int foff, ExceptionSink* xsink) const {
         if (ce->saved_val_set) {
             return ce->saved_val.getAsString(del, foff, xsink);
+        }
+        if (ce->hasAOTParseShellValue()) {
+            return ce->aot_parse_shell_value.getAsString(del, foff, xsink);
         }
         if (ce->external_stub) {
             xsink->raiseException("EXTERNAL-STUB-CONSTANT",

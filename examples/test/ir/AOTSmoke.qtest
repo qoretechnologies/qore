@@ -11765,10 +11765,17 @@ public namespace SigCheckQmodTest {
         assertFalse(out.regex("EXIT=137"),
             "sigcheck-qmod: the loader reported the damaged module instead of being "
                 "killed mapping it: " + out);
-        assertTrue(out.regex("(MODULE-LOAD-ERROR|LOAD-MODULE-ERROR)"),
-            "sigcheck-qmod: a module load error names the failure: " + out);
-        assertTrue(out.find("SigCheckQmodTest.qmod") != -1,
-            "sigcheck-qmod: and names the file at fault: " + out);
+        # The pre-dlopen check is implemented only where the kernel kills the process for mapping a page
+        # that fails signature validation, which is the failure it exists to turn into a diagnostic; see
+        # qore_check_module_file_integrity().  Elsewhere the byte damaged here is an ordinary byte in the
+        # mapped code, the loader is not killed, and there is no signature to disagree with it -- which the
+        # two assertions above are what establishes.
+        if (PlatformOS == "Darwin") {
+            assertTrue(out.regex("(MODULE-LOAD-ERROR|LOAD-MODULE-ERROR)"),
+                "sigcheck-qmod: a module load error names the failure: " + out);
+            assertTrue(out.find("SigCheckQmodTest.qmod") != -1,
+                "sigcheck-qmod: and names the file at fault: " + out);
+        }
     }
 
     testCorruptQmodLoadNoDeadlock() {

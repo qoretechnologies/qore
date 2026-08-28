@@ -54,7 +54,9 @@ foreach string mode in ("auto", "sectioned", "zstd", "zlib", "none") {
     }
     *list<string> debug_section =
         dump_out =~ x/DEBUG_IR\s+type=28\s+offset=\d+\s+size=(\d+)/;
-    if (!(dump_out =~ /format: 14 \(current 14\)/)
+    # the blob must be at the compiler's own current format; matching the number against itself keeps this
+    # assertion from having to be edited every time the AOT binary format is revised
+    if (!(dump_out =~ /format: (\d+) \(current \1\)/)
             || !debug_section || debug_section[0].toInt() <= 4) {
         printf("%s split debug IR metadata mismatch:\n%s", mode, dump_out);
         unlink(source_path);

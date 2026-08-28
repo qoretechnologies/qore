@@ -27462,6 +27462,10 @@ struct QoreAOTSiblingPreload {
                 return false;
             }
             auto mdes = std::make_unique<QoreAOTBinaryMultiDeserializer>(pgm);
+            // These shells resolve declarations for a compile, so keep the compile-time value each pending
+            // constant recorded: without it this parse cannot evaluate an initializer that folds a sibling's
+            // constant, and it publishes a weaker declared type for the result than a whole-group parse does.
+            mdes->setPreloadParseConstantValues(true);
             bool preload_failed = false;
             std::string deser_error;
             for (auto& frag : extracted_frags) {
