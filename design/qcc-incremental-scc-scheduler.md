@@ -837,6 +837,33 @@ single `rename(2)`. The temporary is named after its target, so concurrent batch
 threads cannot collide, and it does not end in `.d`, so a scan for depfiles cannot
 pick one up mid-write.
 
+## A covered input has to be recognised however its path is spelled
+
+The generation token accounts for every in-context source, digest sidecar and sibling artifact
+by content, so `externalDepfileInputs()` removes those from the mtime comparison and leaves only
+what has no content identity in the manifest — the toolchain, loaded modules, stubs, includes.
+
+The covered set indexes each path three ways: as written, made absolute, and canonical. The
+lookup tried only the first two, and `absoluteNormalized()` prepends the working directory and
+nothing else — it does not collapse a `..`, and it does not resolve a symlink.
+
+A group source that looks foreign does not merely lose an optimisation. It stops being accounted
+for by content and is compared by mtime instead, against the rule that an input must be strictly
+**older** than the stamp it feeds. A source written in the same filesystem tick as the artifacts
+is then stale the instant it is published, and the component can never become current.
+
+That is a cross-platform bug that only one platform shows. It surfaced the first time the ir
+suite was run on Linux: on spinster the whole test fixture — context, source, depfile and success
+stamp — landed on a single timestamp (`09:42:34.698857745`), where APFS had spread the same
+writes far enough apart for the comparison to pass by luck. The lookup now also tries the
+canonical form, memoised because a whole-group currency pass would otherwise resolve the same
+1.9k distinct paths once per member.
+
+qcc canonicalises everything it writes, so no real build reaches this today; a build tree under a
+symlink is how one would. The test fixture reached it because it spelled a member source
+`<qo dir>/../src/NAME.qc`, which qcc never emits — it now writes the canonical path, so the
+fixture exercises the depfile the build actually writes.
+
 ## A lock the kernel owns, rather than one the build has to reclaim
 
 Two things in a group build are serialised: the whole-group parse behind its bootstrap stamp,
@@ -944,6 +971,11 @@ which two builders can still race to restore.
     its holder exits, so no builder inspects, reclaims or removes another's lock; the lock
     file itself is never unlinked, because the lock is a property of the open file
     description and not of the name.
+15. What the token accounts for by content is never also compared by mtime, and a path is
+    recognised as covered however it is spelled. The two rules are one rule: an in-group
+    input that is compared by mtime must be strictly older than what it feeds, which a
+    build that writes a source and its artifacts in the same filesystem tick can never
+    satisfy.
 
 ## Tests
 
