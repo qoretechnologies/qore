@@ -217,6 +217,9 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         addTestCase("LlmBackend OpenAI streaming facade retries single "
             "required empty tool responses as JSON",
             \callbackOpenAiStreamSingleRequiredToolEmptyJsonRetryTest());
+        addTestCase("LlmBackend falls back to a tool retry when the forced "
+            "JSON repair returns no tool call",
+            \callbackRequiredToolJsonRepairFallsBackToToolRetryTest());
         addTestCase("LlmBackend OpenAI streaming facade rejects truncated "
             "malformed forced-tool retry content",
             \callbackOpenAiStreamMalformedForcedToolRetryContentTest());
@@ -2985,6 +2988,128 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
             rv.choices[0].message.tool_calls[0].function.arguments);
         assertEq("revise", args.operation,
             "JSON retry arguments are serialized as the required tool call");
+    }
+
+    #! A provider that can only answer with native tool calls stays repairable
+    /** The forced-JSON repair deliberately resends with NO tools and asks for
+        raw arguments, which a provider that only emits native tool calls cannot
+        satisfy - it answers with ordinary prose.  Giving up there left such a
+        provider permanently unrepairable: the caller got the original empty
+        completion back and executed no tool at all.
+
+        The backend must fall through to the structural retry, which resends the
+        tools and is the repair such a provider can actually answer.
+    */
+    callbackRequiredToolJsonRepairFallsBackToToolRetryTest() {
+        int sync_calls = 0;
+        list<hash<auto>> sync_bodies = ();
+
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "callback",
+            "model": "callback-model",
+            "api_callback": hash<auto> sub (string m, string p,
+                    hash<auto> body) {
+                ++sync_calls;
+                push sync_bodies, body;
+                if (sync_calls == 1) {
+                    # required tool, but neither content nor a tool call
+                    return {
+                        "id": "callback-required-empty-1",
+                        "model": "callback-model",
+                        "choices": ({
+                            "message": {"role": "assistant"},
+                            "finish_reason": "stop",
+                        },),
+                        "usage": {"prompt_tokens": 10,
+                            "completion_tokens": 0, "total_tokens": 10},
+                    };
+                }
+                if (sync_calls == 2) {
+                    # the JSON repair carries no tools; a native-tool-calling
+                    # provider has nothing to answer with but prose
+                    return {
+                        "id": "callback-json-repair-prose-1",
+                        "model": "callback-model",
+                        "choices": ({
+                            "message": {
+                                "role": "assistant",
+                                "content": "I will call the function now.",
+                            },
+                            "finish_reason": "stop",
+                        },),
+                        "usage": {"prompt_tokens": 12,
+                            "completion_tokens": 6, "total_tokens": 18},
+                    };
+                }
+                # the structural retry resends the tools, which this provider
+                # can answer natively
+                return {
+                    "id": "callback-tool-retry-1",
+                    "model": "callback-model",
+                    "choices": ({
+                        "message": {
+                            "role": "assistant",
+                            "tool_calls": ({
+                                "id": "call-1",
+                                "type": "function",
+                                "function": {
+                                    "name": "select_action",
+                                    "arguments": make_json({
+                                        "operation": "revise",
+                                        "reason": "structural retry",
+                                    }),
+                                },
+                            },),
+                        },
+                        "finish_reason": "tool_calls",
+                    },),
+                    "usage": {"prompt_tokens": 14,
+                        "completion_tokens": 7, "total_tokens": 21},
+                };
+            },
+        });
+
+        hash<auto> rv = llm.chatCompletions({
+            "model": "callback-model",
+            "messages": (
+                {"role": "system", "content": "Choose one action."},
+                {"role": "user", "content": "Continue design mode."},
+            ),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "select_action",
+                    "description": "Select the next design action",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "operation": {"type": "string"},
+                            "reason": {"type": "string"},
+                        },
+                        "required": ("operation",),
+                    },
+                },
+            },),
+            "tool_choice": "required",
+        });
+
+        assertEq(3, sync_calls,
+            "a failed JSON repair is followed by the structural tool retry");
+        assertEq(1, sync_bodies[0].tools.size(),
+            "the initial request offers the single required tool");
+        assertNothing(sync_bodies[1].tools,
+            "the JSON repair deliberately carries no tools");
+        assertEq(1, sync_bodies[2].tools.size(),
+            "the structural retry resends the tools");
+        assertEq("tool_calls", rv.choices[0].finish_reason,
+            "the recovered response reports a tool call");
+        assertEq("select_action",
+            rv.choices[0].message.tool_calls[0].function.name,
+            "the recovered response preserves the tool identity");
+        hash<auto> args = parse_json(
+            rv.choices[0].message.tool_calls[0].function.arguments);
+        assertEq("revise", args.operation,
+            "the recovered response preserves the tool arguments");
     }
 
     callbackOpenAiStreamSingleRequiredToolEmptyJsonRetryTest() {

@@ -1544,16 +1544,22 @@ llm.chatStream(
                 options, forced_tool_name,
                 "The previous response returned no content and no function "
                     "call even though a tool call was required.");
-            if (retry) {
-                if (openAiResponseHasToolCall(retry)) {
-                    return attachForcedToolRetryDiagnostics(retry,
-                        original_response, retry, True, True,
-                        "required_tool_no_output");
-                }
-                return attachForcedToolRetryDiagnostics(original_response,
-                    original_response, retry, False, False,
+            if (retry && openAiResponseHasToolCall(retry)) {
+                return attachForcedToolRetryDiagnostics(retry,
+                    original_response, retry, True, True,
                     "required_tool_no_output");
             }
+            # The JSON repair asks for raw arguments with NO tools attached, so
+            # a provider that can only answer with native tool calls has no way
+            # to satisfy it and replies with ordinary prose.  Abandoning the
+            # turn here left such a provider permanently unrepairable: the
+            # caller received the original empty completion, executed no tool,
+            # and reported a model that simply declined to act.
+            #
+            # Fall through to the structural retry below instead, which resends
+            # the tools.  That is the repair a native-tool-calling provider can
+            # actually answer, and it costs one extra request only in the case
+            # that was previously guaranteed to fail.
         }
         list<hash<ChatMessage>> retry_messages = messages;
         push retry_messages, <ChatMessage>{
