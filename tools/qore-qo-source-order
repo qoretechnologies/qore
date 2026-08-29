@@ -19,6 +19,15 @@ const CACHE_VERSION = 38;
     advances this file only when a shared parse has published the whole group.
 */
 const BATCH_PUBLICATION_SUFFIX = ".publication";
+#! The sidecar carrying a member's declaration contract, beside its object.
+/** qcc's content-preserving description of what a consumer compiles AGAINST,
+    with the lowering artifacts left out: the same source parsed in a whole-group
+    batch and standalone against shells publishes the same bytes here, where its
+    `.compile-contract.stamp` legitimately differs.  That is what makes it the
+    right thing for both a folded-constant dependency edge and the planner's
+    generation token to watch, and both do.
+*/
+const DeclarationContractSuffix = ".aggregate-contract.stamp";
 const SOURCE_SYMBOL_CACHE_VERSION = 1;
 const SOURCE_SUMMARY_KEYS = (
     "provides",
@@ -1316,17 +1325,32 @@ class SourceOrderEngine {
     private {
         Regex compile_contract_re = new Regex(
             "((?:\\\\[\\s\\S]|[^\\s])+\\.compile-contract\\.stamp)", RE_Global);
-        #! Every source-content prerequisite a depfile names.
+        #! Every content prerequisite a depfile names.
         /** The other half of what a compile records.  A reference that uses a
             declaration only as a TYPE leaves no compile contract -- qcc records a
             provider's contract only when the consumer folds its value or bakes its
-            link-time hash -- but it does leave the provider's source-content
-            digest here.  A parse resolving against shells needs those providers
-            too, or the type it cannot see is deferred to a placeholder it then
-            cannot construct.
+            link-time hash -- but it does leave a content dependency here.  A parse
+            resolving against shells needs those providers too, or the type it
+            cannot see is deferred to a placeholder it then cannot construct.
+
+            Two spellings reach this, and the difference is granularity, not kind.
+            `.sha256` is the provider's source-content digest, which is what qcc
+            records for a provider outside the build group -- or for any provider
+            at all without `--depfile-declaration-contract-stamps`.
+            `.qo.aggregate-contract.stamp` is the provider's DECLARATION contract,
+            which that option records for a group member instead: a folded constant
+            consumes the provider's declarations and nothing else, so watching its
+            source bytes rebuilt every consumer for a comment.
+
+            Neither may be spelled `.compile-contract.stamp`: that suffix is how
+            collectDepfileContractEdges() recognises a REQUIRED edge, and reusing
+            it here would promote every content reference to an ordering edge and
+            collapse the component decomposition -- measured on one 875-source
+            group as 820 components becoming 435, one of them with 441 members.
         */
         Regex source_content_re = new Regex(
-            "((?:\\\\[\\s\\S]|[^\\s])+\\.sha256)", RE_Global);
+            "((?:\\\\[\\s\\S]|[^\\s])+(?:\\.sha256|\\.aggregate-contract\\.stamp))",
+            RE_Global);
         #! Every whitespace-separated make prerequisite, escapes included.
         /** Scanning depfiles a byte at a time from Qore made a whole-group
             currency pass the most expensive thing the build ran: 7.8 MB of
@@ -1950,11 +1974,12 @@ class SourceOrderEngine {
         return info.mtime;
     }
 
-    #! The group members whose source content \a outputs were compiled against.
-    /** Maps each `<mangled source>.sha256` prerequisite back to the member whose
-        object has the same mangled stem.  Entries naming files outside the group
-        (there are none today, but the map is not the group's to police) are
-        skipped rather than guessed at.
+    #! The group members whose content \a outputs were compiled against.
+    /** Maps each content prerequisite back to the member it names: a
+        `<mangled source>.sha256` digest sidecar by its mangled stem, and a
+        `<member object>.aggregate-contract.stamp` declaration contract by the
+        member object it is a sidecar of.  Entries naming files outside the group
+        (the toolchain, loaded modules, stubs) are skipped rather than guessed at.
     */
     list<string> contentDependencyOutputs(hash<SourceOrderContext> context_info,
             softlist<string> outputs) {
@@ -1975,7 +2000,12 @@ class SourceOrderEngine {
             }
             foreach string dependency in (parseMakeDepfileContentInputs(depfile)) {
                 string stem = basename(dependency);
-                stem = stem.substr(0, stem.size() - 7) + ".qo";
+                if (stem.endsWith(DeclarationContractSuffix)) {
+                    stem = stem.substr(0,
+                        stem.size() - DeclarationContractSuffix.size());
+                } else {
+                    stem = stem.substr(0, stem.size() - 7) + ".qo";
+                }
                 *string member = by_stem{stem};
                 if (!exists member || seen{member}) {
                     continue;
@@ -2811,11 +2841,38 @@ class SourceOrderEngine {
     }
 
     #! The published interface a consumer depends on, for one provider member.
-    /** The compile-contract stamp is qcc's content-preserving description of the
+    /** The declaration contract is qcc's content-preserving description of the
         part of a provider that its consumers compile against, which is why a
         comment-only provider edit leaves it byte-identical. Using it -- rather
         than the provider's source digest -- is what keeps such an edit from
         rebuilding every transitive consumer.
+
+        It is preferred over the COMPILE contract, which was what this read
+        before, because a compile contract also carries the lowering artifacts:
+        native rows and body-contract hashes, which are outputs of the
+        interprocedural summary pass over the batch being lowered.  An 875-source
+        parse derives richer summaries than a 1-source parse, so a source
+        recompiled standalone against shells publishes a different compile
+        contract from the one the group's own parse published for it -- legitimately,
+        and with no declaration having changed.  Watching that made every FIRST
+        incremental build after a full build walk the whole consumer closure of
+        whatever was edited: one comment appended to a source with a closure of 13
+        rebuilt 13 objects in 23 qcc invocations, where the same edit built a
+        second time from the state that left needed 1.
+
+        KNOWN BOUND, and the open edge of this design.  A consumer that BAKED a
+        provider's body-contract hash -- 1139 of 24337 import records across 280
+        of 875 objects in one real group, on about ten providers -- must still be
+        rebuilt when that hash moves, or the aggregate link fails with "qo-link
+        hash mismatch" naming an object the build had no recorded reason to
+        rebuild.  A declaration contract does not carry body-contract hashes, so
+        this digest no longer sees such a move.  The correct form is per consumer
+        -- the compile contract for a predecessor this consumer baked a body
+        contract from, the declaration contract for every other -- and the marker
+        for that set is which providers the consumer's own symbol index records a
+        `body_contract_hash` for.  The failure mode is a build failure rather
+        than a silently stale object, which is why this is a stated bound and not
+        a silent hazard.  See design/qcc-incremental-scc-scheduler.md.
     */
     private string memberContractDigest(string output) {
         *string cached = contract_digests{output};
@@ -2823,7 +2880,8 @@ class SourceOrderEngine {
             return cached;
         }
         string result = "";
-        foreach string path in ((output + ".compile-contract.stamp",
+        foreach string path in ((output + DeclarationContractSuffix,
+                output + ".compile-contract.stamp",
                 output + ".content.stamp")) {
             if (is_file(path)) {
                 result = digest("sha256", ReadOnlyFile::readBinaryFile(path)).toHex();
@@ -3099,12 +3157,81 @@ class SourceOrderEngine {
         return hstat(context_path).mtime;
     }
 
+    #! True when \a record and \a generation differ only because the graph moved.
+    /** A generation token names a component's members AND its prerequisite
+        components, so it is only comparable against another token computed from
+        the same dependency graph -- the same reason componentSourceToken() exists
+        for the publication compare-and-swap.  A compile rewrites its own depfile,
+        depfile entries are what produce required edges, and a component's
+        predecessors come from its own depfile: so compiling a component is itself
+        enough to move the graph its record was published against.
+
+        It routinely does.  A whole-group parse resolves cross-member references it
+        can see in its own parse and records a compile-contract prerequisite for
+        each; the same source compiled standalone against shells defers more of them
+        and records fewer.  On one real 875-source group the two forms of one
+        member's depfile carry 45 and 28 contract edges, so the FIRST standalone
+        compile after a group parse drops prerequisites -- and comparing the token
+        it published against a token computed from the graph its own compile
+        produced then reports it stale immediately after building it.  The
+        coordinator sees a pass leave stale exactly what it compiled, calls the plan
+        non-convergent, and reparses the whole group.  That was invisible while a
+        mode transition also invalidated the consumer closure, because the next pass
+        then had different work to do and the loop moved on.
+
+        What is comparable across a graph transition is what does not come from the
+        graph: the component's own member sources, and the published contract of
+        every prerequisite the CURRENT graph still names.  A prerequisite the record
+        does not name at all is not comparable and is treated as stale -- the
+        artifacts were compiled without knowing about it.  A prerequisite the record
+        names and the current graph no longer does is not a reason to rebuild: the
+        component's own compile is what said it no longer depends on it.
+    */
+    private bool recordCoversGraphTransition(hash<auto> record,
+            hash<auto> generation, string context_path,
+            hash<SourceOrderContext> context_info) {
+        # Same graph: the tokens are directly comparable and they did not match.
+        if (record.graph_generation.typeCode() != NT_STRING
+                || record.graph_generation
+                    == graphGeneration(context_path, context_info)) {
+            return False;
+        }
+        if (record.manifest.typeCode() != NT_HASH) {
+            return False;
+        }
+        hash<auto> current = parse_json(generation.manifest);
+        # Members are the component's own identity and carry no graph input, so
+        # they must match exactly -- this is what still catches a source edit.
+        if (make_json(record.manifest.members) != make_json(current.members)) {
+            return False;
+        }
+        hash<string, string> published = {};
+        foreach hash<auto> prerequisite in (record.manifest.prerequisites ?? ()) {
+            foreach hash<auto> provided in (prerequisite.provides ?? ()) {
+                published{provided.output} = provided.contract_digest;
+            }
+        }
+        foreach hash<auto> prerequisite in (current.prerequisites ?? ()) {
+            foreach hash<auto> provided in (prerequisite.provides ?? ()) {
+                *string was = published{provided.output};
+                if (!exists was || was != provided.contract_digest) {
+                    return False;
+                }
+            }
+        }
+        return True;
+    }
+
     #! True when the published generation of \a component matches its sources.
     /** One token comparison validates the component's entire transitive source
         closure, because the token is a Merkle digest over that closure. The
         remaining checks confirm the publication is complete, that the group
         context has not moved since publication, and that no external build input
         has moved since it was published.
+
+        A token that does not match is not automatically stale: see
+        recordCoversGraphTransition() for the one case where the two tokens were
+        computed from different dependency graphs and are not comparable.
     */
     private bool generationCurrentImpl(hash<SourceOrderContext> context_info,
             string context_path, hash<SourceOrderComponents> components, int component,
@@ -3116,8 +3243,11 @@ class SourceOrderEngine {
             if (!exists record) {
                 return False;
             }
-            if (record.generation
-                    != componentGeneration(components, context_info, component).token) {
+            hash<auto> generation =
+                componentGeneration(components, context_info, component);
+            if (record.generation != generation.token
+                    && !recordCoversGraphTransition(record, generation,
+                        context_path, context_info)) {
                 return False;
             }
             *hash<StatInfo> bootstrap_info;

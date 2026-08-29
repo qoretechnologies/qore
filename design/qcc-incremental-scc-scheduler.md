@@ -576,6 +576,148 @@ shells carry enough to execute the initializer, or a subset must be widened to
 include every source whose body a member's constant initialization reaches. Until
 one of those exists, `QORE_QCC_SUBSET_PARSE` stays off by default.
 
+## Two channels decide staleness, and both have to agree about granularity
+
+Once declarations are mode-independent, the remaining question is what a dependency
+*watches*. Two independent things decide whether a component is stale, they are computed from
+different inputs, and narrowing one alone accomplishes nothing because the other still
+invalidates the same set.
+
+**The dependency sink records source files, and only two things put anything in it.**
+Instrumenting the four call sites that reach `qore_aot_note_referenced_decl()` and running a
+whole-group parse of an 875-source group:
+
+|!feeder|!site|!edges recorded
+|folded constant|`ConstantList.cpp`|2262
+|folded constant|`ConstantEntry::get()`|1659
+|body contract|`QoreIRToLLVM.cpp`|0
+|fast entry|`QoreAOT.cpp`|0
+
+371 distinct (consumer, provider) pairs, and nothing else contributes. So the dependency a
+folded value leaves behind is the whole of it: the consumer folded a compile-time constant,
+that leaves no trace in the emitted object, and nothing else would rebuild the consumer when
+the value changes. The dependency is genuinely required — only its **granularity** is wrong.
+Without narrowing it is the provider's source-content digest, so appending a comment to a
+widely required source rebuilds every object that folded any constant from it.
+
+**Channel 1 — the depfile edge, which is what the build tool reads.**
+`--depfile-declaration-contract-stamps` rewrites those source dependencies to the provider's
+`.qo.aggregate-contract.stamp`, after the pass that narrows *imported* providers to their
+compile-contract stamp and before the one that would otherwise reduce them to source digests.
+Two things are deliberately not narrowed: a source the object also defines into (its own bytes
+are what must rebuild it), and a provider it imports with a recorded body-contract hash (the
+link step validates that hash, and a body contract is not part of a declaration contract).
+
+The stamp is written with `write_generated_file_if_changed()`, so an unchanged declaration
+keeps its mtime and the edge does not fire. That is the whole mechanism: the file the build
+tool stats moves only when a declaration moves.
+
+Two invariants make this work, and both were violated by the obvious implementation:
+
+- **The suffix must not be `.compile-contract.stamp`.** That is how `qore-qo-source-order`
+  recognises a REQUIRED edge. Spelling a content dependency that way promotes every resolved
+  declaration to an ordering constraint: on Qorus it collapsed 820 components into 435, one of
+  them with 441 members, and the scheduler then has nothing small left to compile.
+- **Every declaration contract must exist before any depfile is rewritten.** The batch emits
+  its members in parallel and wrote declaration contracts per member, so a consumer narrowed or
+  did not narrow according to whether its provider happened to be earlier in the batch — or, on
+  a clean tree, according to nothing at all. The batch now writes them in the same pre-pass that
+  already wrote the compile contracts, for the same reason.
+
+**Channel 2 — the planner's generation token, which is what the coordinator reads.**
+`memberContractDigest()` hashed each predecessor's `.compile-contract.stamp`. That is what
+makes the *cascade*: a compile contract carries lowering artifacts as well as declarations, an
+875-source parse derives richer interprocedural summaries than a 1-source parse, so recompiling
+one source standalone against shells republishes a compile contract that differs with no
+declaration having changed — and every consumer goes stale, and recompiling *those* moves
+*their* contracts, one ring at a time. It now reads the declaration contract, and falls back to
+the compile contract only where none has been published.
+
+**Neither channel suffices alone, and that is not a coincidence.** Measured separately against
+a baseline of 23 qcc invocations: channel 1 alone gives 22 — it converges and leaves the
+component graph intact, but the token still invalidates the same closure. Channel 2 alone gives
+879 and a plan that does not converge. They address different halves of the same decision and
+have to be applied together.
+
+**Applied together they are still not enough, and what remained was a third thing.** The pair
+removes the cascade — the closure of a comment edit goes from 13 stale components to 0 — which
+then exposes a defect the cascade had been hiding: compiling a component moves the dependency
+graph its own record was published against, so the next pass finds it stale immediately after
+building it. See "Compiling a component is not what makes it stale" below. With that fixed as
+well, on Qorus (875 sources, 820 components, one comment appended to
+`Classes/QorusRestApiHandler.qc`, whose closure is 13 components):
+
+|!`make qorus-core`|!Before|!After
+|first build after a whole-group parse|23 invocations, 5m05|**1 invocation, 1m46**
+|the same edit built again|1 invocation, 1m37|**0 invocations, 11s**
+|the whole-group parse itself|4m01–4m21|3m40
+
+The first build after a full build now costs what the steady state costs, which is what the
+whole line of work was for. The whole-group parse is not slower for the extra per-object work:
+the declaration contract every member must publish before any depfile is rewritten is written
+in the pre-pass that already wrote the compile contracts, and the narrowing itself reads the
+symbol index the passes around it already read.
+
+## Compiling a component is not what makes it stale
+
+A generation token names a component's members **and its prerequisite components**, so it is
+comparable only against a token computed from the same dependency graph. `componentSourceToken()`
+exists for exactly this reason on the publication compare-and-swap. The currency check compared
+full tokens and had no such guard.
+
+A component's predecessors come from its own depfile, and a compile rewrites its own depfile.
+So compiling a component is by itself enough to move the graph its record was published against
+— and it routinely does: a whole-group parse resolves cross-member references it can see in its
+own parse and records a compile-contract prerequisite for each, where the same source compiled
+standalone against shells defers more of them and records fewer. On Qorus the two forms of one
+member's depfile carry 45 and 28 contract edges. The first standalone compile after a group
+parse therefore *drops* prerequisites, and the token it published under the pass's frozen graph
+cannot match the token the next pass computes under the graph its own compile produced.
+
+The coordinator then sees a pass leave stale exactly the set it compiled, correctly calls the
+plan non-convergent by its own rule, and reparses the whole group: 879 invocations for a
+one-line edit.
+
+**This was invisible for as long as the cascade existed.** With the cascade, pass 2's stale set
+was the twelve consumers rather than the component just compiled, so the signature differed, the
+loop had different work to do, and it walked to convergence. Removing the cascade leaves the
+component alone in the stale set, the signature repeats, and the guard fires. Two defects, and
+fixing either one alone leaves the build no better off.
+
+What is comparable across a graph transition is what does not come from the graph. The rule:
+
+- the component's own members must match exactly — this is what still catches a source edit;
+- every prerequisite the **current** graph names must appear in the record with the same
+  contract digest;
+- a prerequisite the record does not name at all is stale: the artifacts were compiled without
+  knowing about it;
+- a prerequisite the record names and the current graph no longer does is **not** a reason to
+  rebuild — the component's own compile is what said it no longer depends on it.
+
+The check only ever accepts records it previously rejected, so it invalidates nothing already
+published: the settling build after applying it recompiled zero objects.
+
+### The bound this narrowing must not cross
+
+A consumer that baked a provider's body-contract hash — 1139 of 24337 import records, across
+280 of 875 objects, on about ten providers — must still be rebuilt when that hash moves, or the
+aggregate link fails with `qo-link hash mismatch` naming an object the build had no recorded
+reason to rebuild. A declaration contract does not carry body-contract hashes, by design.
+
+Channel 1 respects this directly: it excludes any provider the object imports with a
+body-contract hash, and those keep the compile-contract edge the previous pass gave them.
+
+Channel 2 does not, and this is the open edge of the design. The token's prerequisites are the
+required-edge predecessors, which is exactly the imported-provider set; giving all of them the
+declaration digest means a body-contract-only change in a predecessor no longer moves the
+consumer's token. The depfile edge still records it, so the build tool can still see it, but
+the coordinator plans from the token. The correct form is per-consumer — the compile contract
+for a predecessor this consumer baked a body contract from, the declaration contract for every
+other — and the marker for that set is which providers the consumer's own symbol index records
+a `body_contract_hash` for. The failure mode is loud (a build failure, not a silently stale
+object), which is why the measurement below was taken before the guard was built rather than
+after.
+
 ## A pass walks one level of the closure, not the whole closure
 
 A pass compiles the stale set it was planned from. Compiling a component rewrites
@@ -725,12 +867,32 @@ failed for any other reason.
     that wrote it, not to the sources parsed after it. Both rules read the same
     for a parse of one source, which is why both were written as if they were
     about the consumer and the batch.
+12. A dependency watches the narrowest published artifact that still covers what the
+    consumer took from the provider, and the two channels that decide staleness -- the
+    depfile edge and the generation token -- watch the same one. A reference that consumed
+    only declarations watches the declaration contract; one that baked a link-time body
+    hash watches the compile contract. Narrowing one channel while the other still watches
+    source bytes changes nothing, because either is enough to invalidate.
+13. A generation token is only ever compared against a token computed from the same
+    dependency graph. A component's predecessors come from its own depfile, so its own
+    compile can move the graph its record was published against; across that transition
+    only the graph-independent half of the token means anything, and a component is never
+    stale because its own compile dropped a prerequisite.
 
 ## Tests
 
-- `examples/test/ir/AOTSccGeneration.qtest` — decomposition and generation identity
+- `examples/test/ir/AOTSccGeneration.qtest` — decomposition and generation identity,
+  including that a generation follows a predecessor's declaration contract and not its
+  compile contract
 - `examples/test/ir/AOTSccGraphTransition.qtest` — key vs index durability, graph
-  generation naming, freeze semantics, and the 75/76 split
+  generation naming, freeze semantics, the 75/76 split, that a declaration-contract
+  dependency reaches the preload closure without becoming an ordering edge, and that a
+  component whose own compile dropped a prerequisite is current rather than stale (with
+  the three cases that must still be stale: a prerequisite the record never named, a
+  surviving prerequisite whose contract moved, and an edited member source)
+- `examples/test/ir/AOTIncrementalDeps.qtest` — what a compile records as a dependency,
+  including that a folded constant narrows to the provider's declaration contract, that a
+  comment-only provider edit leaves it byte-identical, and that a changed value does not
 - `examples/test/ir/AOTSccIncrementalDriver.qtest` — the driver and coordinator
   against a compiler that rewrites another member's depfile mid-compile; also the
   coordinator's pass loop: a cascade walked to convergence, a pass that changes

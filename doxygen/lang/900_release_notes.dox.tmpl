@@ -649,6 +649,19 @@ int echoed = child.echo(value);
     themselves from a serialized type path, and an object whose metadata length did not fall on
     the emitter's alignment boundary listed every symbol of its compile contract twice.
 
+    The first incremental build after a full build no longer rebuilds the whole consumer closure
+    of whatever was edited.  A consumer that folds a provider's compile-time constant leaves no
+    trace of it in the emitted object, so the build has to record a dependency on the provider
+    for it; that dependency was recorded at source-byte granularity, and the scheduler's own
+    staleness token watched the provider's compile contract, which legitimately differs between a
+    whole-group parse and a standalone one because it also describes how the code was lowered.
+    Both now watch the provider's declaration contract, which is what such a reference actually
+    consumes and which is identical in both modes.  A component is also no longer reported stale
+    because its own compile changed which providers it records, which a build could previously
+    read as a plan that would not converge.  Measured on an 875-source application, appending one
+    comment to a source with a 13-component consumer closure: 23 compiler invocations and 5m05
+    becomes 1 invocation and 1m46, and the build after that is a no-op.
+
     LLVM 16 or later is required for JIT and AOT.  See @ref execution_modes "Execution Modes" for
     complete mode semantics, \c qcc options, artifact types, source-stripping behavior, and debugging
     notes.

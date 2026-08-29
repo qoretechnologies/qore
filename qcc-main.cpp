@@ -760,6 +760,12 @@ static bool depfile_qo_input_content_stamps = false;
 // symbol/body contracts to the provider object's semantic compile-contract
 // stamp. This avoids recompiling callers after source-only provider edits.
 static bool depfile_compile_contract_stamps = false;
+// Rewrite the source dependencies that a folded compile-time value or a resolved type left
+// behind -- the references that produce no import record, and so cannot be narrowed to a
+// compile-contract stamp -- to the provider object's declaration (aggregate) contract stamp.
+// Without this they fall through to source-content digests, and a comment-only provider edit
+// rebuilds every object that folded any constant from it.
+static bool depfile_declaration_contract_stamps = false;
 // Optional tab-separated source -> content-digest map supplied by build-system
 // integrations. After imported sources have been narrowed to compile-contract
 // stamps, remaining source dependencies are rewritten to content-preserving
@@ -1098,6 +1104,13 @@ static void print_usage(const char* prog) {
            "                         provider .qo.compile-contract.stamp sidecars so\n"
            "                         comments and non-imported body edits do not\n"
            "                         recompile consumers.\n");
+    printf("      --depfile-declaration-contract-stamps\n"
+           "                         Replace the source dependencies left by folded\n"
+           "                         compile-time values and resolved types with the\n"
+           "                         provider .qo.aggregate-contract.stamp sidecar, so a\n"
+           "                         provider edit that changes no declaration does not\n"
+           "                         recompile the consumers that folded its constants.\n"
+           "                         Requires --depfile-source-content-map=FILE.\n");
     printf("      --depfile-source-content-map=FILE\n"
            "                         Rewrite remaining source dependencies using a\n"
            "                         tab-separated source/content-digest map so\n"
@@ -1320,6 +1333,7 @@ static struct option long_options[] = {
     {"batch-script-aggregate-manifest-input", required_argument, nullptr, 0x125},
     {"depfile-source-content-map", required_argument, nullptr, 0x126},
     {"aggregate-contract-stamp", required_argument, nullptr, 0x127},
+    {"depfile-declaration-contract-stamps", no_argument, nullptr, 0x128},
     {"from-objects",      no_argument,       nullptr, 'F'},
     {"archive",           no_argument,       nullptr, 'a'},
     {"entry",             required_argument, nullptr, 'e'},
@@ -1535,6 +1549,9 @@ static int parse_options_cmdline(int argc, char** argv) {
                 break;
             case 0x127:  // --aggregate-contract-stamp
                 aggregate_contract_stamp_path = optarg;
+                break;
+            case 0x128:  // --depfile-declaration-contract-stamps
+                depfile_declaration_contract_stamps = true;
                 break;
             case 'F':
                 from_objects = true;
@@ -5945,6 +5962,15 @@ static bool build_aot_declaration_contract_content(
             error = "operation cancelled during AOT aggregate context-contract collection";
             return false;
         }
+        // The feature bitset describes what this blob's LOWERING produced, not what its source declares:
+        // computeFeatureFlags() ORs together the features of every function compiled into it, so a parse
+        // that can lower a direct cross-source call advertises QORE_AOT_FEAT_FAST_CALL where a parse that
+        // cannot does not.  It belongs with the native and body-contract rows this contract already omits
+        // for the same reason -- keeping it made a batch compile and an equivalent standalone compile
+        // spuriously disagree, which is what this contract exists not to do.
+        if (index.context[i].first == "feature_flags") {
+            continue;
+        }
         std::string row = "context\t";
         append_aot_contract_field(row, index.context[i].first);
         append_aot_contract_field(row, index.context[i].second);
@@ -7062,6 +7088,12 @@ static bool add_aot_compile_contract_depfile_inputs(
         return true;
     }
     static constexpr const char suffix[] = ".compile-contract.stamp";
+    // A declaration contract is a published provider interface exactly as a compile contract is,
+    // so --skip-if-manifest-current has to watch it for the same reason: a provider whose
+    // declarations moved must not let this object skip its own recompile.  It is recorded only
+    // where the narrowing that produces it is enabled, so a build that does not use it sees no
+    // change in what its manifests contain.
+    static constexpr const char declaration_suffix[] = ".aggregate-contract.stamp";
     std::vector<std::string> deps;
     read_make_depfile_inputs(depfile, deps);
     for (size_t i = 0; i < deps.size(); ++i) {
@@ -7072,6 +7104,13 @@ static bool add_aot_compile_contract_depfile_inputs(
         if (deps[i].size() >= sizeof(suffix) - 1
                 && deps[i].compare(deps[i].size() - (sizeof(suffix) - 1),
                     sizeof(suffix) - 1, suffix) == 0) {
+            inputs.push_back(deps[i]);
+            continue;
+        }
+        if (depfile_declaration_contract_stamps
+                && deps[i].size() >= sizeof(declaration_suffix) - 1
+                && deps[i].compare(deps[i].size() - (sizeof(declaration_suffix) - 1),
+                    sizeof(declaration_suffix) - 1, declaration_suffix) == 0) {
             inputs.push_back(deps[i]);
         }
     }
@@ -7568,6 +7607,8 @@ static bool build_qcc_manifest_content(const QCCBuildManifest& manifest,
         depfile_qo_input_content_stamps, 4);
     write_json_file_bool_field(f, "depfile_compile_contract_stamps",
         depfile_compile_contract_stamps, 4);
+    write_json_file_bool_field(f, "depfile_declaration_contract_stamps",
+        depfile_declaration_contract_stamps, 4);
     write_json_file_string_field(f, "depfile_module_deps",
         depfile_module_deps_mode_name(), 4);
     write_json_file_string_field(f, "aggregate_symbol", manifest.aggregate_symbol, 4, "");
@@ -8113,6 +8154,152 @@ static bool rewrite_aot_compile_contract_depfile(
     return true;
 }
 
+//! Narrows a folded-value source dependency to the provider's DECLARATION contract.
+/** The parse-time dependency sink records a provider's SOURCE for the references that leave
+    nothing behind in the emitted object: a folded compile-time constant (ConstantList) and a
+    class type resolved during a batch parse.  Neither produces an import record, so
+    rewrite_aot_compile_contract_depfile() cannot narrow them and they fall through to
+    rewrite_depfile_source_content_stamps(), which records the provider's source-content digest.
+
+    That dependency is genuinely required -- a folded value leaves no trace, so nothing else would
+    rebuild this object when the value changes -- but SOURCE-BYTE granularity is wrong for it:
+    appending a comment to a provider rebuilds every object that folded any constant from it, and
+    the consumer closure of a widely included source is most of the group.  The provider's
+    aggregate (declaration) contract is the content-preserving description of exactly what such a
+    reference consumes: build_aot_declaration_contract_content() carries a value_hash for every
+    constant the provider defines and a signature/declaration hash for every type it declares, and
+    omits the lowering artifacts -- native rows, body contracts, the feature bitset -- that make
+    the same source's COMPILE contract differ between a whole-group parse and a standalone one.
+
+    Two classes of dependency are deliberately left alone:
+
+    - a source this object also defines into: an object cannot depend on itself, and its own
+      source bytes are what must rebuild it; and
+    - a source this object imports with a recorded body-contract hash.  `--link-qo` validates that
+      hash against the provider, and a body contract is not part of a declaration contract, so
+      such a consumer must still be rebuilt when the provider's BODY moves.  Those are already
+      narrowed to the provider's compile-contract stamp by the pass before this one, which does
+      carry the body-contract hash; excluding them here keeps this pass from widening what that
+      pass deliberately narrowed.
+
+    The one reference class this cannot distinguish is the transitive body provenance that a batch
+    fast-call records through qore_aot_note_dependency_file(): the file whose body was inlined
+    leaves no import record of its own.  Instrumenting the four dependency feeders over a
+    whole-group parse of an 875-source group recorded 3921 edges from the two folded-constant
+    sites and 0 from either body-contract site, so the class is empty in practice; a build that
+    needs it can leave --depfile-declaration-contract-stamps off.
+
+    @param object_path the generated `.qo` whose symbol index names what it owns and imports
+    @param library_dirs where to look for provider objects when @a known_providers is not given
+    @param depfile the Make-format dependency file to rewrite; a missing file is a no-op
+    @param depfile_target the target written before the colon when the file is rewritten
+    @param error receives a description when the depfile cannot be read back or rewritten
+    @param known_providers a source -> compile-contract-stamp map already built by the caller
+
+    @return true on success, false with @a error set on failure */
+static bool rewrite_aot_declaration_contract_depfile(
+        const std::string& object_path,
+        const std::vector<std::string>& library_dirs,
+        const std::string& depfile, const std::string& depfile_target,
+        std::string& error,
+        const AOTCompileContractProviderMap* known_providers = nullptr) {
+    if (!depfile_declaration_contract_stamps || depfile.empty()
+            || depfile_source_content_stamps.empty() || !is_file(depfile)) {
+        return true;
+    }
+
+    QOLinkInputInfo consumer;
+    if (!collect_qo_link_input(object_path.c_str(), consumer, error)) {
+        return false;
+    }
+
+    std::set<std::string> excluded_sources;
+    for (size_t i = 0; i < consumer.index.defined.size(); ++i) {
+        if (!qo_link_check_cancel(i,
+                "AOT declaration-contract owned-source collection", error)) {
+            return false;
+        }
+        const std::string& source = consumer.index.defined[i].source_file;
+        if (!source.empty() && source.front() != '<') {
+            excluded_sources.insert(canonical_existing_path(source));
+        }
+    }
+    for (size_t i = 0; i < consumer.index.imported.size(); ++i) {
+        if (!qo_link_check_cancel(i,
+                "AOT declaration-contract body-import collection", error)) {
+            return false;
+        }
+        const QoreAOTSymbolIndexRecord& rec = consumer.index.imported[i];
+        if (rec.body_contract_hash.empty()) {
+            continue;
+        }
+        const std::string& provider = rec.provider_source_file;
+        if (!provider.empty() && provider.front() != '<') {
+            excluded_sources.insert(canonical_existing_path(provider));
+        }
+    }
+
+    AOTCompileContractProviderMap local_providers;
+    if (!known_providers) {
+        std::vector<std::string> provider_objects;
+        collect_qo_library_inputs(provider_objects, library_dirs, object_path);
+        if (!build_aot_compile_contract_provider_map(provider_objects,
+                local_providers, error)) {
+            return false;
+        }
+        known_providers = &local_providers;
+    }
+
+    static const std::string compile_suffix = ".compile-contract.stamp";
+    static const std::string declaration_suffix = ".aggregate-contract.stamp";
+
+    std::vector<std::string> deps;
+    read_make_depfile_inputs(depfile, deps);
+    bool changed = false;
+    for (size_t i = 0; i < deps.size(); ++i) {
+        if (!qo_link_check_cancel(i,
+                "AOT declaration-contract depfile rewrite", error)) {
+            return false;
+        }
+        const std::string canon = canonical_existing_path(deps[i]);
+        // Only a member of this build group can be narrowed: the source-content map is the
+        // group's own list of its sources, and a provider outside it publishes no contract here.
+        if (!depfile_source_content_stamps.count(canon)
+                || excluded_sources.count(canon)
+                || known_providers->ambiguous_sources.count(canon)) {
+            continue;
+        }
+        auto stamp = known_providers->stamps.find(canon);
+        if (stamp == known_providers->stamps.end()) {
+            continue;
+        }
+        const std::string& compile_stamp = stamp->second;
+        if (compile_stamp.size() <= compile_suffix.size()
+                || compile_stamp.compare(compile_stamp.size() - compile_suffix.size(),
+                    compile_suffix.size(), compile_suffix)) {
+            continue;
+        }
+        std::string declaration_stamp =
+            compile_stamp.substr(0, compile_stamp.size() - compile_suffix.size())
+            + declaration_suffix;
+        if (!is_file(declaration_stamp)) {
+            continue;
+        }
+        deps[i] = std::move(declaration_stamp);
+        changed = true;
+    }
+    if (!changed) {
+        return true;
+    }
+    std::sort(deps.begin(), deps.end());
+    deps.erase(std::unique(deps.begin(), deps.end()), deps.end());
+    if (!write_depfile_list(depfile.c_str(), depfile_target, deps)) {
+        error = "cannot rewrite AOT declaration-contract depfile '" + depfile + "'";
+        return false;
+    }
+    return true;
+}
+
 static bool rewrite_depfile_source_content_stamps(
         const std::string& depfile, const std::string& depfile_target,
         std::string& error) {
@@ -8466,6 +8653,13 @@ int main(int argc, char** argv) {
     if (depfile_source_content_map_path && !depfile_path && !depfile_dir) {
         fprintf(stderr,
             "error: --depfile-source-content-map requires --depfile or --depfile-dir\n");
+        return 1;
+    }
+    // The map is the group's list of its own sources, and so the only thing that says which
+    // dependency is a group member whose declaration contract may stand in for its source.
+    if (depfile_declaration_contract_stamps && !depfile_source_content_map_path) {
+        fprintf(stderr, "error: --depfile-declaration-contract-stamps requires "
+            "--depfile-source-content-map=FILE\n");
         return 1;
     }
     std::string depfile_source_content_error;
@@ -9397,6 +9591,24 @@ int main(int argc, char** argv) {
                     qore_cleanup();
                     return 1;
                 }
+                // The declaration contract has to exist before ANY member's depfile is
+                // rewritten, for the same reason the compile contract does: the rewrite that
+                // narrows a folded-value dependency to a provider's declaration contract can
+                // only narrow to a stamp that is on disk, and the batch emits its members in
+                // parallel.  Writing it per member as the sidecar loop reaches it would let a
+                // consumer narrow or not narrow according to whether the provider happened to
+                // be earlier in the batch -- or, on a clean tree, according to nothing at all.
+                if (depfile_declaration_contract_stamps) {
+                    std::string declaration_stamp = batch_objects[i]
+                        + ".aggregate-contract.stamp";
+                    if (!write_aot_aggregate_contract_stamp_file(
+                            declaration_stamp.c_str(), batch_objects[i].c_str(),
+                            error)) {
+                        fprintf(stderr, "error: %s\n", error.c_str());
+                        qore_cleanup();
+                        return 1;
+                    }
+                }
             }
             AOTCompileContractProviderMap batch_contract_providers;
             if (!build_aot_compile_contract_provider_map(batch_objects,
@@ -9444,6 +9656,13 @@ int main(int argc, char** argv) {
                     return 1;
                 }
                 if (!rewrite_aot_compile_contract_depfile(object,
+                        {batch_output_dir}, depfile, object + ".stamp",
+                        error, &batch_contract_providers)) {
+                    fprintf(stderr, "error: %s\n", error.c_str());
+                    qore_cleanup();
+                    return 1;
+                }
+                if (!rewrite_aot_declaration_contract_depfile(object,
                         {batch_output_dir}, depfile, object + ".stamp",
                         error, &batch_contract_providers)) {
                     fprintf(stderr, "error: %s\n", error.c_str());
@@ -9905,6 +10124,12 @@ int main(int argc, char** argv) {
                 rc = 1;
             } else if (!rc && depfile_path
                     && !rewrite_aot_compile_contract_depfile(output,
+                        script_lib_dirs, depfile_path,
+                        qcc_depfile_target(output), error)) {
+                fprintf(stderr, "error: %s\n", error.c_str());
+                rc = 1;
+            } else if (!rc && depfile_path
+                    && !rewrite_aot_declaration_contract_depfile(output,
                         script_lib_dirs, depfile_path,
                         qcc_depfile_target(output), error)) {
                 fprintf(stderr, "error: %s\n", error.c_str());
