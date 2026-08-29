@@ -215,8 +215,10 @@ mkdir -p "$(dirname "$bootstrap_stamp")"
 # The lock is held by the process that execs this one, for exactly as long as this
 # script runs.  Everything above this point is argument checking that is safe to do
 # twice; everything below it is the critical section, which is what the lock was
-# always taken for.
-if [ -z "${QORE_QO_LOCK_WAITED:-}" ]; then
+# always taken for.  QORE_QO_LOCK_WAITED is the helper's result and may already be
+# present from an outer lock, so only the private re-exec marker proves this group
+# lock is held.
+if [ "${QORE_QCC_LOCKED_BATCH:-}" != 1 ]; then
     if [ ! -f "$lock_tool" ]; then
         echo "$0: missing qcc lock helper: $lock_tool" >&2
         exit 1
@@ -226,9 +228,11 @@ if [ -z "${QORE_QO_LOCK_WAITED:-}" ]; then
     # helper's shebang.
     if [ -n "${QORE_QCC_QORE_EXECUTABLE:-}" ] \
             && [ -x "$QORE_QCC_QORE_EXECUTABLE" ]; then
-        exec "$QORE_QCC_QORE_EXECUTABLE" "$lock_tool" "$lock_path" "$0" "$@"
+        QORE_QCC_LOCKED_BATCH=1 \
+            exec "$QORE_QCC_QORE_EXECUTABLE" "$lock_tool" "$lock_path" "$0" "$@"
     fi
-    exec "$lock_tool" "$lock_path" "$0" "$@"
+    QORE_QCC_LOCKED_BATCH=1 \
+        exec "$lock_tool" "$lock_path" "$0" "$@"
 fi
 
 # A follower that waited for the lock must re-check what it came to do: the holder

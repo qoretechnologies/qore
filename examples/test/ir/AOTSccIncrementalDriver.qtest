@@ -72,6 +72,8 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testScheduledRecipeBuildsAGroupWithoutASharedParse());
         addTestCase("the bootstrap hands the stale set to the coordinator",
             \testBootstrapHandsTheStaleSetToTheCoordinator());
+        addTestCase("a preset contention signal cannot bypass the batch lock",
+            \testPresetContentionSignalCannotBypassBatchLock());
         addTestCase("the batch is chosen from what a rebuild reaches, not from what is stale",
             \testPlanChoosesTheBatchFromTheConsumerClosure());
         addTestCase("a cascading invalidation is walked to convergence, not escalated",
@@ -351,9 +353,10 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
     }
 
     #! Runs the bootstrap recipe the way CMake's custom command does.
-    private hash<auto> bootstrap(hash<auto> fx) {
+    private hash<auto> bootstrap(hash<auto> fx, *string extra_env) {
         string qo_dir = fx.qo_dir;
-        string command = sprintf("QORE_QCC_QORE_EXECUTABLE=%y %y %y %y %y %y",
+        string command = sprintf("%sQORE_QCC_QORE_EXECUTABLE=%y %y %y %y %y %y",
+            exists extra_env ? extra_env + " " : "",
             qore_bin, tools_dir + DirSep + "qore-qo-batch-bootstrap",
             fx.context, qo_dir + "/.qcc-batch-bootstrap.stamp",
             qo_dir + "/qcc-batch.sh", source_order_tool);
@@ -714,6 +717,28 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         assertEq(before + 1, compiles(fx).size(),
             "one compile, for the one component that was stale: "
                 + compiles(fx).join(", "));
+    }
+
+    #! The lock helper's contention result is data, not a re-exec marker.
+    /** A parent environment can legitimately contain QORE_QO_LOCK_WAITED from an
+        outer lock.  Treating any non-empty value as proof that this process holds
+        the group lock lets even the normal uncontended value 0 bypass the lock.
+        The private batch marker is set only on the lock-helper re-execution; the
+        public contention signal remains free to describe either lock operation.
+    */
+    testPresetContentionSignalCannotBypassBatchLock() {
+        TmpDir tmp("qore-aot-driver-preset-lock-waited-");
+        hash<auto> fx = fixture(tmp.path);
+        writeBatchCompiler(fx);
+
+        string lock = fx.qo_dir + "/.qcc-batch-bootstrap.stamp.lock";
+        assertFalse(is_file(lock), "the group lock file starts absent");
+        hash<auto> result = bootstrap(fx, "QORE_QO_LOCK_WAITED=0");
+        assertEq(0, result.rc, "the bootstrap succeeds: " + result.output);
+        assertTrue(is_file(lock),
+            "a preset contention signal does not bypass the lock helper");
+        assertEq(fx.names.size(), compiles(fx).size(),
+            "the locked shared parse writes every group member");
     }
 
     #! The batch decision must weigh the consumer closure, not the stale set.
