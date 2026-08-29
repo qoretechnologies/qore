@@ -1,0 +1,85 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+string qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+string libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+string qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+    ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : dirname(qore_bin) + "/qcc");
+if (!is_file(qcc_bin)) {
+    qcc_bin = "qcc";
+}
+
+string root = "/tmp/qore-aot-llvm23-terminator-" + string(getpid());
+mkdir(root);
+string source_path = root + "/case.qr";
+string executable_path = root + "/case";
+string source = "%modern
+
+class ReceiverProbe {
+    private {
+        hash<string, string> receivers;
+    }
+
+    string getOrCreateReceiver(string address, *hash<string, string> options) {
+        *string receiver = receivers{address};
+        if (!receiver) {
+            receiver = options.value ?? address;
+            receivers{address} = receiver;
+        }
+        return receiver;
+    }
+}
+
+class ChildProbe {
+}
+
+class ProviderProbe {
+    *ChildProbe getChildProvider(string name) {
+        if (name == \"events\") {
+            return new ChildProbe();
+        }
+        return NOTHING;
+    }
+}
+
+int sub main() {
+    ReceiverProbe receiver_probe();
+    ProviderProbe provider_probe();
+    printf(\"%s:%s:%y:%y\\n\",
+        receiver_probe.getOrCreateReceiver(\"first\", (\"value\": \"created\")),
+        receiver_probe.getOrCreateReceiver(\"first\", NOTHING),
+        provider_probe.getChildProvider(\"events\") !== NOTHING,
+        provider_probe.getChildProvider(\"missing\") !== NOTHING);
+    return 0;
+}
+
+main();
+";
+
+File file();
+file.open2(source_path, O_WRONLY | O_CREAT | O_TRUNC);
+file.write(source);
+file.close();
+
+string env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+string expected = backquote(sprintf("%s %s %s 2>&1", env, qore_bin, source_path));
+string compile_out = backquote(sprintf(
+    "%s %s --strip-debug-info -O3 -o %s %s 2>&1",
+    env, qcc_bin, executable_path, source_path));
+if (!is_file(executable_path)) {
+    printf("AOT compile failed:\n%s", compile_out);
+    exit(2);
+}
+
+string actual = backquote(sprintf("%s %s 2>&1", env, executable_path));
+if (expected != "created:created:True:False\n" || actual != expected) {
+    printf("execution mismatch:\nAST:\n%sAOT:\n%s", expected, actual);
+    exit(2);
+}
+
+unlink(executable_path);
+unlink(source_path);
+rmdir(root);
