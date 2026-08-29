@@ -237,7 +237,8 @@ class AOTQoLockTest inherits QUnit::Test {
         string awkward = tmp.path + DirSep + "a dir with spaces";
         mkdir(awkward, 0777, True);
         string marker = awkward + DirSep + "written by $USER; echo not-a-command";
-        hash<auto> result = run((lockPath(tmp, "l"), "/usr/bin/touch", marker));
+        hash<auto> result = run((lockPath(tmp, "l"), "/bin/sh", "-c",
+            "touch \"$1\"", "qore-qo-lock-test", marker));
         assertEq(0, result.rc, "the command ran: " + result.output);
         assertTrue(is_file(marker),
             "an argument with spaces, a dollar sign and a semicolon arrives whole");
