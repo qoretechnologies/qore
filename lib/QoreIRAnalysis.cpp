@@ -1614,7 +1614,8 @@ void qore_ir_visit_successors(const QoreIRInstruction& inst, const QoreIRBlockVi
     }
 }
 
-QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func) {
+QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func,
+        bool include_exception_edges) {
     blocks.reserve(func.blocks.size());
     size_t check_count = 0;
     for (const auto& block : func.blocks) {
@@ -1637,14 +1638,40 @@ QoreIRControlFlowGraph::QoreIRControlFlowGraph(const QoreIRFunction& func) {
         if (!block || block->instructions.empty()) {
             continue;
         }
-        qore_ir_visit_successors(*block->instructions.back(), [&](QoreIRBasicBlock* successor) {
+        auto add_successor = [&](QoreIRBasicBlock* successor) {
             auto it = block_ids.find(successor);
             if (it == block_ids.end()) {
                 return;
             }
             successors[block_id].push_back(it->second);
             predecessors[it->second].push_back(block_id);
-        });
+        };
+        qore_ir_visit_successors(*block->instructions.back(), add_successor);
+        if (include_exception_edges) {
+            std::unordered_set<size_t> successor_ids(
+                successors[block_id].begin(), successors[block_id].end());
+            auto add_exception_successor = [&](QoreIRBasicBlock* successor) {
+                auto it = block_ids.find(successor);
+                if (it == block_ids.end()
+                        || !successor_ids.insert(it->second).second) {
+                    return;
+                }
+                successors[block_id].push_back(it->second);
+                predecessors[it->second].push_back(block_id);
+            };
+            for (const auto& inst : block->instructions) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR exceptional control-flow analysis")) {
+                    cancelled = true;
+                    return;
+                }
+                add_exception_successor(inst->exception_target);
+                if (const auto* throw_inst =
+                        dynamic_cast<const QoreIRThrowInstruction*>(inst.get())) {
+                    add_exception_successor(throw_inst->exception_target);
+                }
+            }
+        }
     }
 
     reachable.assign(blocks.size(), 0);
@@ -6071,6 +6098,7 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
         }
         ExpressionMap available;
         LoadMap available_loads;
+        bool block_has_exception_edge = false;
         if (cross_block && cfg.reachable[block_id]
                 && cfg.predecessors[block_id].size() == 1) {
             size_t predecessor = cfg.predecessors[block_id][0];
@@ -6102,6 +6130,11 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
                 return {};
             }
             QoreIRInstruction& inst = *inst_ptr;
+            const auto* throw_inst =
+                dynamic_cast<const QoreIRThrowInstruction*>(&inst);
+            block_has_exception_edge = block_has_exception_edge
+                || inst.exception_target
+                || (throw_inst && throw_inst->exception_target);
             if (!qore_ir_rewrite_value_operands(inst, replacements, check_count, true)) {
                 return {};
             }
@@ -6160,8 +6193,13 @@ static QoreIRScalarCSEStats qore_ir_eliminate_common_scalar_expressions(
             replacements.emplace(inst.result.id, available_it->second);
             eliminated.insert(&inst);
         }
-        block_outputs[block_id].expressions = std::move(available);
-        block_outputs[block_id].loads = std::move(available_loads);
+        // An exception can leave a block before later scalar definitions execute.  Since the
+        // block-level state does not distinguish normal and exceptional exits, do not publish
+        // its output for cross-block reuse when either kind of exceptional edge is present.
+        if (!block_has_exception_edge) {
+            block_outputs[block_id].expressions = std::move(available);
+            block_outputs[block_id].loads = std::move(available_loads);
+        }
         processed[block_id] = 1;
     }
 
@@ -9672,9 +9710,43 @@ void qore_ir_optimize(QoreIRFunction& func, QoreIROptimizationStats* stats,
     }
 
     if (!getenv("QORE_DISABLE_IR_CSE")) {
-        QoreIRScalarCSEStats cse_stats = qore_ir_eliminate_common_scalar_expressions(func, cfg);
-        local_stats.scalar_loads_forwarded = cse_stats.loads_forwarded;
-        local_stats.scalar_expressions_eliminated = cse_stats.expressions_eliminated;
+        // Scalar definitions from a normal path are not available when control reaches a catch
+        // handler through an exceptional edge.  Other optimization passes intentionally use the
+        // normal-flow CFG, so build an exception-aware graph specifically for cross-block CSE.
+        bool has_exception_edges = false;
+        for (const auto& block : func.blocks) {
+            for (const auto& inst : block->instructions) {
+                if (qore_ir_analysis_cancelled(check_count,
+                        "IR scalar CSE exception-edge analysis")) {
+                    if (stats) {
+                        *stats = local_stats;
+                    }
+                    return;
+                }
+                const auto* throw_inst =
+                    dynamic_cast<const QoreIRThrowInstruction*>(inst.get());
+                if (inst->exception_target
+                        || (throw_inst && throw_inst->exception_target)) {
+                    has_exception_edges = true;
+                    break;
+                }
+            }
+            if (has_exception_edges) {
+                break;
+            }
+        }
+        std::unique_ptr<QoreIRControlFlowGraph> exception_cfg;
+        const QoreIRControlFlowGraph* cse_cfg = &cfg;
+        if (has_exception_edges) {
+            exception_cfg = std::make_unique<QoreIRControlFlowGraph>(func, true);
+            cse_cfg = exception_cfg.get();
+        }
+        if (!cse_cfg->cancelled) {
+            QoreIRScalarCSEStats cse_stats =
+                qore_ir_eliminate_common_scalar_expressions(func, *cse_cfg);
+            local_stats.scalar_loads_forwarded = cse_stats.loads_forwarded;
+            local_stats.scalar_expressions_eliminated = cse_stats.expressions_eliminated;
+        }
         local_stats.pure_calls_commoned =
             qore_ir_eliminate_common_pure_calls(func, check_count);
     }

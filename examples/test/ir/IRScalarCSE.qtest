@@ -104,6 +104,25 @@ bool sub boxedCallArguments() {
     return output.getData() == <1234abcd5678efab1234abcd5678efab>;
 }
 
+auto sub maybeThrow(bool fail) {
+    if (fail) {
+        throw \"TEST\", \"expected\";
+    }
+    return (\"value\": 1);
+}
+
+bool sub logicalOrAfterCaughtException(bool fail) {
+    try {
+        auto value = maybeThrow(fail);
+        if (value.typeCode() == NT_HASH || value.typeCode() == NT_LIST) {
+            return True;
+        }
+    } catch (hash<ExceptionInfo> ex) {
+    }
+    auto value = (\"value\": 2);
+    return value.typeCode() == NT_HASH || value.typeCode() == NT_LIST;
+}
+
 int removed = 3;
 int removed_before = removed + 1;
 remove removed;
@@ -119,6 +138,8 @@ printf(\"cross:%d:%d:%d:%d:%d:%d\\n\",
     crossBlockMutation(True), crossBlockMutation(False),
     crossBlockReference(True), crossBlockReference(False));
 printf(\"boxed:%y\\n\", boxedCallArguments());
+printf(\"caught:%y:%y\\n\", logicalOrAfterCaughtException(True),
+    logicalOrAfterCaughtException(False));
 printf(\"state:%d:%y:%d:%y:%y\\n\", removed_before, removed.typeCode() == NT_NOTHING,
     deleted_before, deleted.typeCode() == NT_NOTHING, unassigned.typeCode() == NT_NOTHING);
 ";
@@ -148,6 +169,7 @@ string sub runAot() {
 string expected = "values:36:26:445:7.0:True:41
 cross:39:49:410:406:405:404
 boxed:True
+caught:True:True
 state:4:True:5:True:True
 ";
 foreach string mode in (("ast", "ir", "tiered", "jit")) {

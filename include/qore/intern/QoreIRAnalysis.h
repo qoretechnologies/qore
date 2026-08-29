@@ -40,7 +40,8 @@ void qore_ir_visit_successors(const QoreIRInstruction& inst, const QoreIRBlockVi
 struct QoreIRControlFlowGraph {
     //! Build reachability, predecessor, successor, and dominator information.
     //! @param func lowered IR function to analyze
-    explicit QoreIRControlFlowGraph(const QoreIRFunction& func);
+    //! @param include_exception_edges include instruction exception-handler edges in the graph
+    explicit QoreIRControlFlowGraph(const QoreIRFunction& func, bool include_exception_edges = false);
 
     //! @param dominator candidate dominator block ID
     //! @param block candidate dominated block ID
