@@ -2489,6 +2489,12 @@ if (APPLE)
     # on macOS/Darwin.  Must be a global define so it takes effect before the
     # first inclusion of <netinet/in.h> (critical for single-compilation-unit).
     target_compile_definitions(libqore PRIVATE __APPLE_USE_RFC_3542)
+    # SecStaticCodeCheckValidity(), used by the opt-in module-file integrity check
+    # (QORE_VERIFY_MODULE_SIGNATURES): macOS kills a process that maps a damaged
+    # module rather than letting dlopen() fail, so the loader can offer to check first
+    find_library(SECURITY_FRAMEWORK Security REQUIRED)
+    find_library(CORE_FOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
+    target_link_libraries(libqore PRIVATE ${SECURITY_FRAMEWORK} ${CORE_FOUNDATION_FRAMEWORK})
 endif()
 target_compile_definitions(libqore PRIVATE MODULE_DIR="${MODULE_DIR}")
 target_compile_definitions(libqore PRIVATE MODULE_VER_DIR="${MODULE_VER_DIR}")
@@ -2961,7 +2967,7 @@ install(FILES ${CMAKE_BINARY_DIR}/cmake/QoreConfig.cmake ${CMAKE_BINARY_DIR}/cma
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(PROGRAMS tools/qore-qo-incremental tools/qore-qo-source-order
     tools/qore-qo-source-parse-defines tools/qore-qo-batch-bootstrap
-    tools/qore-qo-incremental-plan tools/qore-qo-prune
+    tools/qore-qo-incremental-plan tools/qore-qo-prune tools/qore-qo-lock
         DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}/cmake/Qore
         COMPONENT ${QORE_INSTALL_COMPONENT_BOOTSTRAP})
 install(FILES ${CMAKE_BINARY_DIR}/qore.pc

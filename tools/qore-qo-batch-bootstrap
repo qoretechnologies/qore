@@ -24,8 +24,9 @@ bootstrap_stamp=$2
 batch_script=$3
 source_order_tool=$4
 lock_path="${bootstrap_stamp}.lock"
-lock_candidate="${lock_path}.$$"
-lock_owned=false
+# The helpers are installed side by side, so the group lock helper is found beside
+# this one rather than threaded through every caller's argument list.
+lock_tool=${QORE_QCC_LOCK_HELPER:-$(dirname "$0")/qore-qo-lock}
 outputs_file=
 # The ordering token's state before this run advanced it, and whether the run
 # reached its publication.
@@ -93,15 +94,18 @@ run_source_order() {
 }
 
 #! Removes PATH, tolerating a remover that got there first.
-#  Every lock-reclaim caller below wants a state -- PATH gone -- rather than the
-#  act of removing it, and two waiters inspecting the same abandoned lock decide
-#  to drop it independently.  `rm -f` alone does not express that: it swallows a
-#  path that was already missing when it looked, but busybox reports an ENOENT
-#  unlink that follows a successful lstat and exits non-zero, so the waiter that
-#  loses the race by microseconds fails -- and under `set -e` that ends the
-#  build.  GNU coreutils ignores the same errno, which is why this shape only
-#  ever fails on musl/busybox hosts.  A removal that fails for any other reason
-#  is still an error and is still reported.
+#  The caller wants a state -- PATH gone -- rather than the act of removing it,
+#  and it can race another builder that decided the same thing.  `rm -f` alone
+#  does not express that: it swallows a path that was already missing when it
+#  looked, but busybox reports an ENOENT unlink that follows a successful lstat
+#  and exits non-zero, so the caller that loses the race by microseconds fails --
+#  and under `set -e` that ends the build.  GNU coreutils ignores the same errno,
+#  which is why this shape only ever fails on musl/busybox hosts.  A removal that
+#  fails for any other reason is still an error and is still reported.
+#
+#  The lock paths this used to serve are gone: an fcntl lock is released by the
+#  kernel, so nothing reclaims one and nothing unlinks one.  What is left is the
+#  ordering token, which a run that published nothing must put back.
 remove_raced_path() {
     if rm -f "$1" 2>/dev/null; then
         return 0
@@ -173,10 +177,11 @@ cleanup() {
     if [ -n "$outputs_file" ]; then
         rm -f "$outputs_file"
     fi
-    if [ "$lock_owned" = true ]; then
-        remove_raced_path "$lock_path"
-    fi
-    remove_raced_path "$lock_candidate"
+    # The group lock is not removed here, or anywhere: it is an fcntl lock held by
+    # the process that re-executed this script, and the kernel drops it when that
+    # process exits.  Unlinking the path while another builder holds a lock on the
+    # inode would let the next waiter create a new one and enter the critical
+    # section alongside the holder.
 }
 trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
@@ -195,64 +200,48 @@ if [ ! -x "$source_order_tool" ]; then
 fi
 
 mkdir -p "$(dirname "$bootstrap_stamp")"
-printf '%s\n' "$$" > "$lock_candidate"
-while ! ln "$lock_candidate" "$lock_path" 2>/dev/null; do
-    lock_waited=true
-    if [ -d "$lock_path" ]; then
-        # Migrate a lock directory left by the previous helper version.
-        owner=
-        if [ -r "$lock_path/pid" ]; then
-            IFS= read -r owner < "$lock_path/pid" || true
-        fi
-        case "$owner" in
-            *[!0-9]*|'')
-                remove_raced_path "$lock_path/pid"
-                rmdir "$lock_path" 2>/dev/null || true
-                continue
-                ;;
-            *)
-                if ! kill -0 "$owner" 2>/dev/null; then
-                    remove_raced_path "$lock_path/pid"
-                    rmdir "$lock_path" 2>/dev/null || true
-                    continue
-                fi
-                ;;
-        esac
-    elif [ -r "$lock_path" ]; then
-        owner=
-        IFS= read -r owner < "$lock_path" || true
-        case "$owner" in
-            *[!0-9]*|'')
-                remove_raced_path "$lock_path"
-                continue
-                ;;
-            *)
-                if ! kill -0 "$owner" 2>/dev/null; then
-                    # Recheck the published owner before reclaiming it.  The
-                    # hard link makes initial publication atomic; this check
-                    # keeps two stale-lock waiters from removing a successor's
-                    # lock in the normal PID-distinct case.
-                    current_owner=
-                    IFS= read -r current_owner < "$lock_path" || true
-                    if [ "$current_owner" = "$owner" ]; then
-                        remove_raced_path "$lock_path"
-                        remove_raced_path "$lock_path.$owner"
-                    fi
-                    continue
-                fi
-                ;;
-        esac
-    else
-        # A dangling or otherwise unreadable legacy lock cannot name a live
-        # owner.
-        if [ -e "$lock_path" ] || [ -L "$lock_path" ]; then
-            remove_raced_path "$lock_path"
-            continue
-        fi
+
+# Enter the group's critical section by re-executing this script under an
+# exclusive fcntl lock, rather than by publishing a hard link and polling for it.
+#
+# The poll was not just slow.  A hard link outlives the process that made it, so a
+# waiter had to decide whether an existing lock was abandoned -- read the owner pid
+# out of the record, ask whether it was alive, compare-and-remove if it was not,
+# and recognise the lock shapes older versions of this helper published -- and that
+# reclaim could not be made exclusive, so two waiters removing one abandoned lock
+# had to be defined as normal operation.  An fcntl lock is owned by the kernel and
+# released when its holder exits however it exits, so none of that state exists.
+#
+# The lock is held by the process that execs this one, for exactly as long as this
+# script runs.  Everything above this point is argument checking that is safe to do
+# twice; everything below it is the critical section, which is what the lock was
+# always taken for.  QORE_QO_LOCK_WAITED is the helper's result and may already be
+# present from an outer lock, so only the private re-exec marker proves this group
+# lock is held.
+if [ "${QORE_QCC_LOCKED_BATCH:-}" != 1 ]; then
+    if [ ! -f "$lock_tool" ]; then
+        echo "$0: missing qcc lock helper: $lock_tool" >&2
+        exit 1
     fi
-    sleep 1
-done
-lock_owned=true
+    # Named the same way the source-order helper is: a build that is testing a
+    # qore it has not installed must not reach a different one through the
+    # helper's shebang.
+    if [ -n "${QORE_QCC_QORE_EXECUTABLE:-}" ] \
+            && [ -x "$QORE_QCC_QORE_EXECUTABLE" ]; then
+        QORE_QCC_LOCKED_BATCH=1 \
+            exec "$QORE_QCC_QORE_EXECUTABLE" "$lock_tool" "$lock_path" "$0" "$@"
+    fi
+    QORE_QCC_LOCKED_BATCH=1 \
+        exec "$lock_tool" "$lock_path" "$0" "$@"
+fi
+
+# A follower that waited for the lock must re-check what it came to do: the holder
+# it waited behind may have published exactly that.  The helper reports contention
+# from a non-blocking attempt made before it blocked, so this is observed rather
+# than inferred from how long the wait took.
+if [ "$QORE_QO_LOCK_WAITED" = 1 ]; then
+    lock_waited=true
+fi
 
 outputs_file=$(mktemp "${TMPDIR:-/tmp}/qore-qo-batch-outputs.XXXXXX")
 sed -n 's/^output=//p' "$context" > "$outputs_file"

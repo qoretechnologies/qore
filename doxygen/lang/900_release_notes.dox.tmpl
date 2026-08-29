@@ -627,6 +627,53 @@ int echoed = child.echo(value);
     enum and the @ref Qore::Program::setExecMode() "Program::setExecMode()" /
     @ref Qore::Program::getExecMode() "Program::getExecMode()" methods.
 
+    A damaged binary module is reported rather than fatal when
+    \c QORE_VERIFY_MODULE_SIGNATURES is set: the module loader verifies that a module file is
+    intact before mapping it and raises a \c LOAD-MODULE-ERROR naming the file if it is not.
+    It is off by default because the check hashes the whole file; it is worth enabling when a
+    module load fails inexplicably, since on macOS/Apple Silicon the kernel terminates a
+    process that maps a page whose code signature no longer validates, so a \c .qmod damaged
+    on disk otherwise kills the loading process with no diagnostic at all.  See
+    @ref environment_variables "Environment Variables".
+
+    Compiling a source in a whole-group parse and compiling it against preloaded <tt>.qo</tt>
+    declaration shells now publish the same declarations.  A <tt>.qo</tt> carries declarations
+    rather than executable bodies, so a <tt>qcc -c -L</tt> parse could not run a preloaded
+    provider's constant initializer where a whole-group parse could, and evaluating a constant
+    is what narrows its declared type to its value's type; the shell now records the value the
+    producing parse computed (AOT binary format 15) and the consuming parse reads it.  The
+    value is recorded for compile-time use only: a runtime module load ignores it, and a
+    constant's initializer function remains the only source of its value there.  Three
+    normalization defects went with it -- a constant's value hash depended on whether its
+    strings were stored inline or on the heap, \c callref and \c closure did not read back as
+    themselves from a serialized type path, and an object whose metadata length did not fall on
+    the emitter's alignment boundary listed every symbol of its compile contract twice.
+
+    The first incremental build after a full build no longer rebuilds the whole consumer closure
+    of whatever was edited.  A consumer that folds a provider's compile-time constant leaves no
+    trace of it in the emitted object, so the build has to record a dependency on the provider
+    for it; that dependency was recorded at source-byte granularity, and the scheduler's own
+    staleness token watched the provider's compile contract, which legitimately differs between a
+    whole-group parse and a standalone one because it also describes how the code was lowered.
+    Both now watch the provider's declaration contract, which is what such a reference actually
+    consumes and which is identical in both modes.  A component is also no longer reported stale
+    because its own compile changed which providers it records, which a build could previously
+    read as a plan that would not converge.  Measured on an 875-source application, appending one
+    comment to a source with a 13-component consumer closure: 23 compiler invocations and 5m05
+    becomes 1 invocation and 1m46, and the build after that is a no-op.  A consumer that baked a
+    provider's body contract, which a declaration contract deliberately does not describe, records
+    that contract as a dependency of its own, so narrowing what the build watches does not let a
+    provider's optimised bodies move underneath an object that linked against them.
+
+    %Qore object-group builds no longer poll for their locks.  Both the whole-group parse and each
+    component's compile took a lock by creating a hard link and retrying once a second; a hard link
+    outlives the process that made it, so every waiter also had to decide whether an existing lock
+    had been abandoned by a builder that died, read its owner out of a record, and remove it -- a
+    decision no waiter could make exclusively.  They now run their critical section under an
+    exclusive advisory lock held by the new \c qore-qo-lock helper, which the kernel releases when
+    its holder exits however it exits: a waiter starts the instant the holder finishes, a killed
+    builder blocks nothing, and there is no reclaim path to get wrong.
+
     LLVM 16 or later is required for JIT and AOT.  See @ref execution_modes "Execution Modes" for
     complete mode semantics, \c qcc options, artifact types, source-stripping behavior, and debugging
     notes.

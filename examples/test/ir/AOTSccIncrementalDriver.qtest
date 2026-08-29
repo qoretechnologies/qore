@@ -72,12 +72,20 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testScheduledRecipeBuildsAGroupWithoutASharedParse());
         addTestCase("the bootstrap hands the stale set to the coordinator",
             \testBootstrapHandsTheStaleSetToTheCoordinator());
+        addTestCase("a preset contention signal cannot bypass the batch lock",
+            \testPresetContentionSignalCannotBypassBatchLock());
         addTestCase("the batch is chosen from what a rebuild reaches, not from what is stale",
             \testPlanChoosesTheBatchFromTheConsumerClosure());
+        addTestCase("a cascading invalidation is walked to convergence, not escalated",
+            \testCascadingInvalidationIsWalkedToConvergence());
+        addTestCase("a pass that changes nothing escalates instead of looping",
+            \testAPassThatChangesNothingEscalates());
+        addTestCase("the escalation floor follows what serves the band below it",
+            \testEscalationFloorFollowsThePartialParse());
         addTestCase("concurrent recipes publish one coherent generation",
             \testConcurrentRecipesPublishOneGeneration());
-        addTestCase("a stale lock survives losing the race to reclaim it",
-            \testStaleLockReclaimSurvivesARacingRemover());
+        addTestCase("a lock left by a dead builder does not wedge the build",
+            \testAbandonedLockDoesNotWedgeTheBuild());
 
         set_return_value(main());
     }
@@ -166,7 +174,7 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         while the driver believes a compile is in progress.  That is the window
         a real qcc occupies when it rewrites its own depfile.
     */
-    private string writeCompiler(hash<auto> fx, *string mutation) {
+    private string writeCompiler(hash<auto> fx, *string mutation, *string always) {
         string script = fx.qo_dir + "/qcc-single.sh";
         string log = fx.qo_dir + "/compiles.log";
         string once = fx.qo_dir + "/mutation.pending";
@@ -195,6 +203,12 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             body += "printf 'compiled\\n' > \"$out" + suffix + "\"\n";
         }
         body += "printf '%s\\n' '{\"source_parse_defines\": []}' > \"$out.idx.json\"\n";
+        if (exists always) {
+            # Unlike \a mutation this runs on EVERY compile, and after the
+            # artifacts are written, so it can leave output a settled compiler
+            # would not.
+            body += always + "\n";
+        }
         write(script, body);
         chmod(script, 0755);
         return script;
@@ -275,46 +289,6 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         return trim(result.output);
     }
 
-    #! Writes a `rm` that loses the race to remove a lock, and says so.
-    /** Reclaiming an abandoned lock is a decision followed by a removal, and
-        two waiters that inspected the same lock both decide to remove it.  The
-        loser unlinks a path that is already gone, and what it reports is not
-        the same everywhere: GNU coreutils absorbs an ENOENT unlink under
-        \c -f, while busybox reports it and exits non-zero, because \c -f is
-        consulted only when the preceding \c lstat(2) failed.  The race is not
-        schedulable, so this stands in for the loser's view of it: the lock is
-        removed and then reported missing, exactly as busybox would.
-
-        \return the directory to prepend to PATH.
-    */
-    private string writeRacingRemover(hash<auto> fx) {
-        string dir = fx.root + "/racing-bin";
-        mkdir(dir, 0777, True);
-        # The shim must call the real utility by absolute path, or it re-enters
-        # itself through the PATH it was installed on.
-        string real = trim(backquote("command -v rm"));
-        if (!real.startsWith("/")) {
-            real = "/bin/rm";
-        }
-        write(dir + "/rm",
-            "#!/bin/sh\n"
-            + "for arg in \"$@\"; do\n"
-            + "    case $arg in\n"
-            + "        *.lock)\n"
-            + "            if [ -e \"$arg\" ]; then\n"
-            + "                " + sprintf("%y", real) + " -f \"$arg\"\n"
-            + "                echo \"rm: can't remove '$arg': "
-                + "No such file or directory\" >&2\n"
-            + "                exit 1\n"
-            + "            fi\n"
-            + "            ;;\n"
-            + "    esac\n"
-            + "done\n"
-            + "exec " + sprintf("%y", real) + " \"$@\"\n");
-        chmod(dir + "/rm", 0755);
-        return dir;
-    }
-
     #! Runs the driver the way qore-qo-incremental-plan runs it for a stale component.
     /** \a path_prefix is prepended to PATH, which is how a test replaces one of
         the utilities the driver shells out to.
@@ -346,7 +320,7 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
     }
 
     #! Runs the group coordinator the way the build's plan target does.
-    private hash<auto> plan(hash<auto> fx) {
+    private hash<auto> plan(hash<auto> fx, *string extra_env) {
         string qo_dir = fx.qo_dir;
         # The coordinator refuses to start without a batch script.  A test that
         # expects the shared parse installs a working one first; for every other
@@ -363,8 +337,9 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         if (!is_file(qo_dir + "/.qcc-batch-bootstrap.stamp")) {
             write(qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
         }
-        string command = sprintf("QORE_QCC_QORE_EXECUTABLE=%y QORE_QCC_GRAPH_SNAPSHOT=%y "
+        string command = sprintf("%sQORE_QCC_QORE_EXECUTABLE=%y QORE_QCC_GRAPH_SNAPSHOT=%y "
             "%y %y %y %y %y %y %y %y %y",
+            exists extra_env ? extra_env + " " : "",
             qore_bin, fx.context + ".graph-snapshot.json",
             tools_dir + DirSep + "qore-qo-incremental-plan",
             fx.context, qo_dir + "/.qcc-incremental-plan.stamp",
@@ -378,9 +353,10 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
     }
 
     #! Runs the bootstrap recipe the way CMake's custom command does.
-    private hash<auto> bootstrap(hash<auto> fx) {
+    private hash<auto> bootstrap(hash<auto> fx, *string extra_env) {
         string qo_dir = fx.qo_dir;
-        string command = sprintf("QORE_QCC_QORE_EXECUTABLE=%y %y %y %y %y %y",
+        string command = sprintf("%sQORE_QCC_QORE_EXECUTABLE=%y %y %y %y %y %y",
+            exists extra_env ? extra_env + " " : "",
             qore_bin, tools_dir + DirSep + "qore-qo-batch-bootstrap",
             fx.context, qo_dir + "/.qcc-batch-bootstrap.stamp",
             qo_dir + "/qcc-batch.sh", source_order_tool);
@@ -412,9 +388,17 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
 
         hash<auto> component = componentFor(fx.qo_dir, "d");
         string generation = graphGeneration(fx);
+        string lock = fx.qo_dir + "/.qcc-scc/" + component.key + ".lock";
+        assertFalse(is_file(lock), "no lock exists before the build");
         hash<auto> result = drive(fx, "d", component);
 
         assertEq(0, result.rc, "the driver succeeds: " + result.output);
+        # The compile runs inside a process holding an exclusive fcntl lock on this
+        # file, so the file has to be there afterwards: it is created to be locked,
+        # and never removed, because the lock belongs to the open file description
+        # rather than to the path.
+        assertTrue(is_file(lock),
+            "the component's compile ran under a lock on its own lock file");
         assertEq(("d.qc d.qo",), compiles(fx),
             "the component is compiled exactly once");
         assertEq(-1, result.output.find("moved"),
@@ -735,6 +719,28 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
                 + compiles(fx).join(", "));
     }
 
+    #! The lock helper's contention result is data, not a re-exec marker.
+    /** A parent environment can legitimately contain QORE_QO_LOCK_WAITED from an
+        outer lock.  Treating any non-empty value as proof that this process holds
+        the group lock lets even the normal uncontended value 0 bypass the lock.
+        The private batch marker is set only on the lock-helper re-execution; the
+        public contention signal remains free to describe either lock operation.
+    */
+    testPresetContentionSignalCannotBypassBatchLock() {
+        TmpDir tmp("qore-aot-driver-preset-lock-waited-");
+        hash<auto> fx = fixture(tmp.path);
+        writeBatchCompiler(fx);
+
+        string lock = fx.qo_dir + "/.qcc-batch-bootstrap.stamp.lock";
+        assertFalse(is_file(lock), "the group lock file starts absent");
+        hash<auto> result = bootstrap(fx, "QORE_QO_LOCK_WAITED=0");
+        assertEq(0, result.rc, "the bootstrap succeeds: " + result.output);
+        assertTrue(is_file(lock),
+            "a preset contention signal does not bypass the lock helper");
+        assertEq(fx.names.size(), compiles(fx).size(),
+            "the locked shared parse writes every group member");
+    }
+
     #! The batch decision must weigh the consumer closure, not the stale set.
     /** A component's generation names its own sources and its DIRECT
         predecessors' published compile contracts, so editing one widely
@@ -950,6 +956,167 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         assertTrue(exists record(fx, component.key), "and published");
     }
 
+    #! A pass compiles its stale set; the consumers it invalidates are the next pass.
+    /** A component's generation names its predecessors' published compile
+        contracts, so compiling one leaves its consumers stale -- an invalidation
+        reaches the closure one dependency level per pass.  Capping the walk at
+        two passes threw a converging plan away and reparsed the whole group,
+        which on a large tree is the difference between compiling the closure and
+        compiling everything.
+
+        The fixture is a chain: a <- c <- e <- f.  Editing a makes exactly one
+        component stale, and each pass makes exactly the next link stale.  The
+        closure stays well under the escalation floor throughout, so nothing but
+        the pass count can send this to the shared parse.
+    */
+    testCascadingInvalidationIsWalkedToConvergence() {
+        TmpDir tmp("qore-aot-driver-cascade-");
+        # Singletons only: a component spanning several sources routes to the
+        # shared parse whatever the walk does, which would prove nothing here.
+        hash<auto> fx = fixture(tmp.path, NOTHING, False, ("e", "f"));
+        writeDepfile(fx.qo_dir, "c", "a");
+        writeDepfile(fx.qo_dir, "e", "c");
+        writeDepfile(fx.qo_dir, "f", "e");
+        writeCompiler(fx);
+
+        write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
+        foreach string name in (fx.names) {
+            write(fx.qo_dir + "/" + name + ".qo.stamp", "stamp\n");
+        }
+        assertEq(0, runTool(("--scc-publish-all", fx.context)).rc,
+            "the fixture starts fully published");
+        assertEq((), stalePlan(fx).stale, "and fully current");
+
+        write(fx.src_dir + "/a.qc", isolatedSource("a") + "# edited\n");
+
+        hash<auto> planned = stalePlan(fx);
+        assertEq(1, planned.stale.size(),
+            "one edited source leaves one component stale: " + planned.output);
+        assertEq(4, planned.closure,
+            "and a rebuild of it reaches the whole chain: " + planned.output);
+
+        hash<auto> result = plan(fx);
+        assertEq(0, result.rc, "the coordinator converges: " + result.output);
+        assertEq(-1, result.output.find("selecting the shared-parse batch"),
+            "without ever reaching for the group's own parse: " + result.output);
+        assertEq((), stalePlan(fx).stale, "and leaves the group current");
+
+        # Every link compiled, each exactly once, in dependency order: the walk
+        # follows the chain rather than rebuilding the closure over and over.
+        list<string> built = map $1.split(" ")[0], compiles(fx);
+        assertEq(("a.qc", "c.qc", "e.qc", "f.qc"), built,
+            "the walk follows the chain once: " + built.join(", "));
+    }
+
+    #! Repetition is a reported failure, not a strategy.
+    /** Walking a closure is progress because each pass compiles a set the
+        previous pass did not.  A pass that leaves stale exactly the set it just
+        compiled has made none, and no further pass will: the group's own parse
+        is the answer to that, and the coordinator has to say so rather than lap.
+    */
+    testAPassThatChangesNothingEscalates() {
+        TmpDir tmp("qore-aot-driver-nonconvergent-");
+        hash<auto> fx = fixture(tmp.path, NOTHING, False);
+        writeDepfile(fx.qo_dir, "c", "a");
+        # Only c's compile does this: it emits a complete, publishable object
+        # whose stamp predates the group's last shared parse, which is what "this
+        # was built before the current generation" means -- so compiling c never
+        # makes c current.  a settles on its first compile, so the walk's stale
+        # set is exactly {c} from the second pass on.
+        writeCompiler(fx, NOTHING,
+            "case \"$(basename \"$src\")\" in c.qc) "
+            + "touch -t 200001010000 \"$out.stamp\" ;; esac");
+        # The escalation is a real whole-group parse, so this fixture needs one
+        # that works rather than the stand-in plan() installs.
+        writeBatchCompiler(fx);
+
+        write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
+        foreach string name in (fx.names) {
+            write(fx.qo_dir + "/" + name + ".qo.stamp", "stamp\n");
+        }
+        assertEq(0, runTool(("--scc-publish-all", fx.context)).rc,
+            "the fixture starts fully published");
+        assertEq((), stalePlan(fx).stale, "and fully current");
+
+        write(fx.src_dir + "/a.qc", isolatedSource("a") + "# edited\n");
+
+        hash<auto> result = plan(fx);
+        assertEq(0, result.rc, "the coordinator still finishes: " + result.output);
+        assertTrue(result.output.find("is not converging") >= 0,
+            "and says the walk stopped moving: " + result.output);
+        assertTrue(result.output.find("selecting the shared-parse batch") >= 0,
+            "before falling back to the group's own parse: " + result.output);
+        assertEq((), stalePlan(fx).stale, "which leaves the group current");
+    }
+
+    #! The closure is compared against whatever serves the band below it.
+    /** With a partial parse the band below the whole-group parse is ONE parse
+        over the stale set, so the group's own parse is worth reaching for only
+        when the closure really is most of the group.  Without one it is a walk
+        of standalone compiles, one component at a time, each preloading the
+        whole group, and the group's own parse -- one parse, at the build tool's
+        parallelism -- overtakes it far earlier.  A single floor for both cases
+        was calibrated for the parse that is off by default: on Qorus it put the
+        floor at 410 components while thirteen widely required sources sat at
+        closures of 408 and 409.
+
+        The fixture puts one closure between the two floors and asks each
+        configuration what it does with it.
+    */
+    testEscalationFloorFollowsThePartialParse() {
+        TmpDir tmp("qore-aot-driver-floor-");
+        # Large enough that the percentages, not the absolute minimum of 8,
+        # decide: 5% of 184 is 10 and 50% is 92, so a closure of 31 falls
+        # between them.
+        list<string> extra = ();
+        for (int i = 0; i < 180; ++i) {
+            push extra, sprintf("p%03d", i);
+        }
+        hash<auto> fx = fixture(tmp.path, NOTHING, False, extra);
+        # 30 consumers of d, and 150 components that depend on nothing.
+        for (int i = 0; i < 30; ++i) {
+            writeDepfile(fx.qo_dir, extra[i], "d");
+        }
+        writeCompiler(fx);
+        writeBatchCompiler(fx);
+        string subset = writeSubsetCompiler(fx);
+
+        write(fx.qo_dir + "/.qcc-batch-bootstrap.stamp", "bootstrapped\n");
+        foreach string name in (fx.names) {
+            write(fx.qo_dir + "/" + name + ".qo.stamp", "stamp\n");
+        }
+        assertEq(0, runTool(("--scc-publish-all", fx.context)).rc,
+            "the fixture starts fully published");
+        assertEq((), stalePlan(fx).stale, "and fully current");
+
+        write(fx.src_dir + "/d.qc", isolatedSource("d") + "# edited\n");
+        hash<auto> planned = stalePlan(fx);
+        assertEq(31, planned.closure,
+            "the edit reaches d and its thirty consumers: " + planned.output);
+        assertEq(184, fx.names.size(), "out of a group of 184 components");
+
+        # No partial parse: the band below is the serial walk, so 31 of 184 is
+        # already the group's parse.
+        hash<auto> without = plan(fx);
+        assertEq(0, without.rc, "the coordinator succeeds: " + without.output);
+        assertTrue(without.output.find("selecting the shared-parse batch") >= 0,
+            "and a closure over 5% selects the group's own parse when the walk "
+            "is what it would otherwise do: " + without.output);
+
+        # Same closure, same group, with a partial parse configured: the band
+        # below is one parse over the stale set, and 31 of 184 is nowhere near
+        # enough to reparse the group instead.
+        write(fx.src_dir + "/d.qc", isolatedSource("d") + "# edited again\n");
+        assertEq(1, stalePlan(fx).stale.size(), "one component is stale again");
+        hash<auto> with = plan(fx, sprintf("QORE_QCC_SUBSET_PARSE=1 "
+            "QORE_QCC_SUBSET_SCRIPT=%y", subset));
+        assertEq(0, with.rc, "the coordinator succeeds: " + with.output);
+        assertEq(-1, with.output.find("selecting the shared-parse batch"),
+            "and the same closure does not reach the group's own parse: "
+                + with.output);
+        assertEq((), stalePlan(fx).stale, "either way the group ends current");
+    }
+
     /** The reported failure needed concurrency to become visible, so the fix is
         held to it: eighteen workers resolve identity, take locks, select
         preloads, compile and publish simultaneously, and one of them rewrites
@@ -1047,41 +1214,55 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             "a worker really did move the graph while the others were running");
     }
 
-    #! A builder that loses the reclaim race still acquires the lock it reclaimed.
-    /** Losing that race means the lock is gone, which is the state the reclaim
-        asked for -- so the builder must continue.  It used to fail instead,
-        because the removal reported the loss and the driver runs under
-        \c "set -e"; a whole component then went unbuilt and unpublished with
-        nothing in the log but a `rm` diagnostic.  Only musl/busybox hosts could
-        show it, which is why it read as an unexplained alpine-only failure.
+    #! A lock file left behind by a dead builder is not an obstacle.
+    /** The component lock used to be a hard link, which outlives the process that
+        made it: a builder killed mid-compile left one behind, and every later
+        builder had to decide whether it was abandoned -- read the owner pid out of
+        the record, ask whether it was alive, and compare-and-remove if it was not.
+        That reclaim could not be made exclusive, so two waiters behind one
+        abandoned lock both removed it, and the loser of that race unlinked a path
+        that was already gone; busybox reports that, and the driver runs under
+        \c "set -e", so a whole component went unbuilt with nothing in the log but
+        an `rm` diagnostic -- on musl hosts only.
+
+        The lock is now an fcntl lock, which the kernel releases when its holder
+        exits however it exits.  There is no abandoned state to detect and nothing
+        to reclaim, so the file a dead builder leaves behind carries no ownership at
+        all -- which is what this asserts, using a record in exactly the shape the
+        old protocol published.
+
+        The file itself must SURVIVE the build.  An fcntl lock belongs to the open
+        file description rather than to the path, so a builder that unlinked it
+        while another held it would let the next waiter create a fresh inode and
+        enter the critical section alongside the holder.
     */
-    testStaleLockReclaimSurvivesARacingRemover() {
-        TmpDir tmp("qore-aot-driver-reclaim-");
+    testAbandonedLockDoesNotWedgeTheBuild() {
+        TmpDir tmp("qore-aot-driver-abandoned-lock-");
         hash<auto> fx = fixture(tmp.path);
         writeCompiler(fx);
 
         hash<auto> component = componentFor(fx.qo_dir, "d");
         string lock = fx.qo_dir + "/.qcc-scc/" + component.key + ".lock";
         mkdir(fx.qo_dir + "/.qcc-scc", 0777, True);
-        # A well-formed record naming a pid that cannot be running: the acquire
-        # loop can only get past it by reclaiming it, which is the path under
-        # test.  The number is above every pid_max this runs on, and the test
-        # says so rather than assuming it.
+        # The record the previous protocol published, naming a pid that cannot be
+        # running.  Nothing reads it any more; that is the point.
         assertNeq(0, system("kill -0 " + DeadPid + " 2>/dev/null"),
             sprintf("pid %d names no process", DeadPid));
         write(lock, sprintf("%d abandoned\n", DeadPid));
 
-        hash<auto> result = drive(fx, "d", component, NOTHING,
-            writeRacingRemover(fx));
+        hash<auto> result = drive(fx, "d", component);
 
         assertEq(0, result.rc,
-            "the driver survives losing the reclaim race: " + result.output);
+            "a lock left by a dead builder does not block the build: " + result.output);
         assertEq(("d.qc d.qo",), compiles(fx),
             "the component is compiled exactly once");
         *hash<auto> published = record(fx, component.key);
         assertTrue(exists published, "the component's generation record is published");
         assertEq(component.key, published.scc, "the record names the component");
-        assertFalse(is_file(lock), "no lock is left behind");
+        assertTrue(is_file(lock),
+            "the lock file survives the build: unlinking it would let the next "
+            "waiter create a new inode and enter the critical section alongside "
+            "a holder");
     }
 
     #! Everything the named workers know about why they failed.

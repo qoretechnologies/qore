@@ -46,6 +46,12 @@ class AOTSccGenerationTest inherits QUnit::Test {
             \testDegenerateGroups());
         addTestCase("CMake dependency plan is atomic and content-stable",
             \testCMakePlan());
+        addTestCase("generation tokens follow the declaration contract",
+            \testGenerationFollowsDeclarationContract());
+        addTestCase("a baked body contract is watched by the consumer that baked it",
+            \testBakedBodyContractIsWatched());
+        addTestCase("a regex literal does not hide the namespace of what follows it",
+            \testRegexLiteralNamespaceTracking());
 
         set_return_value(main());
     }
@@ -204,6 +210,52 @@ class AOTSccGenerationTest inherits QUnit::Test {
             "comment-only edits preserve the symbol manifest");
     }
 
+    testRegexLiteralNamespaceTracking() {
+        TmpDir tmp("qore-aot-regex-mask-");
+        # The manifest names each declaration by its namespace path, which the scanner tracks by counting
+        # braces in the masked source.  A regex literal is not a comment and not a string: reading `#`, `//`
+        # or a quote inside one as the start of a comment blanks the rest of the line, and the `{` that opens
+        # the block goes with it.  Brace depth then desynchronises for the whole rest of the file, and every
+        # declaration after that point is recorded without its namespace -- which makes a type deferred to
+        # `hash<Late>` where the same type resolved live is `hash<Ns::Late>`, so a whole-group parse and a
+        # parse against preloaded shells publish different signatures for it.
+        string context_path = writeContext(tmp.path, (
+            "masking": "%new-style\n"
+                "public namespace RegexMaskNs {\n"
+                "    public class RegexMaskEarly {\n"
+                "        static bool comment(string line) {\n"
+                "            if (line =~ /^#/ || !line.size()) {\n"
+                "                return True;\n"
+                "            }\n"
+                "            if (line =~ x/(\\/\\/.*)/) {\n"
+                "                return True;\n"
+                "            }\n"
+                "            if (line =~ s/\"#\"/x/) {\n"
+                "                return True;\n"
+                "            }\n"
+                "            return False;\n"
+                "        }\n"
+                "    }\n"
+                "    public hashdecl RegexMaskLate {\n"
+                "        string name;\n"
+                "    }\n"
+                "    public class RegexMaskLast {\n"
+                "        static string label() { return \"last\"; }\n"
+                "    }\n"
+                "}\n",
+        ));
+        string output_dir = cmakePlan(context_path, "REGEX_MASK_TEST");
+        string symbols = ReadOnlyFile::readTextFile(output_dir + "/source-symbols.manifest");
+        assertTrue(symbols.find("class\tRegexMaskNs::RegexMaskEarly\t") >= 0,
+            "a declaration before the regex literals keeps its namespace: " + symbols);
+        assertTrue(symbols.find("hashdecl\tRegexMaskNs::RegexMaskLate\t") >= 0,
+            "and so does one declared after them: " + symbols);
+        assertTrue(symbols.find("class\tRegexMaskNs::RegexMaskLast\t") >= 0,
+            "through to the end of the file: " + symbols);
+        assertEq(-1, symbols.find("hashdecl\tRegexMaskLate\t"),
+            "the unqualified spelling is not recorded: " + symbols);
+    }
+
     testMutualDependencyComponent() {
         TmpDir tmp("qore-aot-scc-cycle-");
         # a <-> b is a required cycle; c consumes it; d is unrelated.
@@ -324,6 +376,146 @@ class AOTSccGenerationTest inherits QUnit::Test {
                 sprintf("singleton component %y reproduces the existing "
                     "prerequisite closure of %s", component.scc, basename(output)));
         }
+    }
+
+    #! What a consumer's generation watches in its predecessors, and what it ignores.
+    /** A provider publishes two contracts.  The COMPILE contract describes what the
+        compile produced, lowering artifacts included: native rows and body-contract
+        hashes, which are outputs of the interprocedural summary pass over the batch
+        being lowered.  An 875-source parse derives richer summaries than a 1-source
+        parse, so recompiling one source standalone against shells publishes a
+        different compile contract from the one the group's own parse published for
+        it -- with no declaration having changed.  The DECLARATION contract is the
+        same description with those artifacts left out, and is byte-identical across
+        the two modes.
+
+        A consumer's generation must follow the declaration contract, or the first
+        incremental build after every full build walks the whole consumer closure of
+        whatever was edited: each recompile republishes a compile contract that
+        differs only in how it was lowered, and each such difference invalidates the
+        next ring of consumers.  On one real group that turned a one-comment edit
+        into 23 compiles where the same edit, built a second time, needed 1.
+    */
+    testGenerationFollowsDeclarationContract() {
+        TmpDir tmp("qore-aot-scc-decl-contract-");
+        string context_path = writeContext(tmp.path, (
+            "a": callRefSource("a", ()),
+            "c": callRefSource("c", "a"),
+        ));
+        hash<auto> decomposition = componentMap(context_path);
+        string provider = componentFor(decomposition, "a.qo").scc;
+        string consumer = componentFor(decomposition, "c.qo").scc;
+        string compile_stamp = tmp.path + "/qo/a.qo.compile-contract.stamp";
+        string declaration_stamp = tmp.path + "/qo/a.qo.aggregate-contract.stamp";
+
+        # With neither contract published there is nothing to watch yet.
+        string unpublished = token(context_path, consumer);
+
+        # The compile contract is the fallback, and is what a group with no
+        # declaration contracts on disk still resolves against.
+        write(compile_stamp, "compile=1\n");
+        string compile_only = token(context_path, consumer);
+        assertNeq(unpublished, compile_only,
+            "with no declaration contract the compile contract is still watched");
+
+        # Once the provider publishes a declaration contract, that is what counts.
+        write(declaration_stamp, "declaration=1\n");
+        string declared = token(context_path, consumer);
+        assertNeq(compile_only, declared,
+            "the declaration contract takes precedence over the compile contract");
+
+        # THE REGRESSION: recompiling the provider in a different mode republishes a
+        # different compile contract and the same declarations.  That must not move
+        # its consumers.
+        write(compile_stamp, "compile=2\n");
+        assertEq(declared, token(context_path, consumer),
+            "a provider recompiled into a different compile contract, with its "
+            "declarations unchanged, does not move its consumer's generation");
+
+        # ...and a real declaration change must still move them, or a consumer that
+        # folded one of the provider's values keeps a stale literal.
+        write(declaration_stamp, "declaration=2\n");
+        assertNeq(declared, token(context_path, consumer),
+            "a changed declaration contract moves the consumer's generation");
+
+        # Neither contract belongs to the provider's OWN generation: a component is
+        # identified by its member sources, and publishing its own contract would
+        # make it perpetually stale against the record it just wrote.
+        string provider_token = token(context_path, provider);
+        write(declaration_stamp, "declaration=3\n");
+        write(compile_stamp, "compile=3\n");
+        assertEq(provider_token, token(context_path, provider),
+            "publishing a contract does not move the publisher's own generation");
+    }
+
+    #! What the declaration contract cannot say, and who has to hear it.
+    /** A generation watches its predecessors' DECLARATION contracts, which carry no
+        body-contract hashes -- that omission is what makes them identical between a
+        whole-group parse and a standalone one, and what stops a mode transition
+        cascading through the group.
+
+        `--link-qo` does compare body contracts: a consumer that recorded a
+        provider's body hash and was not rebuilt when it moved fails the aggregate
+        link with "qo-link hash mismatch", naming an object the build had no recorded
+        reason to rebuild.  So the consumer records the provider's body contract as a
+        dependency of its own, and only when it baked one.
+
+        Only-when-it-baked-one is the entire design.  On one real 875-source group,
+        856 objects PUBLISH a body contract and 280 consume one: watching it per
+        consumer keeps the other 576 out of a cascade that folding these hashes into
+        the declaration contract would have caused.
+    */
+    testBakedBodyContractIsWatched() {
+        TmpDir tmp("qore-aot-scc-body-contract-");
+        string context_path = writeContext(tmp.path, (
+            "a": callRefSource("a", ()),
+            "c": callRefSource("c", "a"),
+            "e": callRefSource("e", ()),
+        ));
+        hash<auto> decomposition = componentMap(context_path);
+        string provider = componentFor(decomposition, "a.qo").scc;
+        string consumer = componentFor(decomposition, "c.qo").scc;
+        string bystander = componentFor(decomposition, "e.qo").scc;
+        string body_stamp = tmp.path + "/qo/a.qo" + ".body-contract.stamp";
+
+        # a publishes a body contract; nobody has baked one yet.
+        write(body_stamp, "body=1\n");
+        string before = token(context_path, consumer);
+        string bystander_before = token(context_path, bystander);
+
+        # c bakes one: qcc records the provider's body contract in c's depfile.  The
+        # source entry keeps this a realistic depfile; the body-contract entry is the
+        # whole point, and it is deliberately NOT spelled with the compile-contract
+        # suffix, which is what makes a REQUIRED edge.
+        write(tmp.path + "/qo/c.qo.d",
+            tmp.path + "/qo/c.qo.stamp: \\\n    "
+            + tmp.path + "/src/c.qc \\\n    " + body_stamp + "\n");
+        string baked = token(context_path, consumer);
+        assertNeq(before, baked,
+            "recording a provider's body contract changes what the consumer watches");
+        assertEq(3, componentMap(context_path).components.size(),
+            "a body-contract dependency is not an ordering edge and does not "
+            "condense the graph");
+
+        # THE POINT: the provider's declarations did not move, so its declaration
+        # contract is untouched -- and the consumer must still be rebuilt.
+        write(body_stamp, "body=2\n");
+        string moved = token(context_path, consumer);
+        assertNeq(baked, moved,
+            "a provider whose body contract moved invalidates the consumer that "
+            "baked it, with no declaration having changed");
+
+        # ...and nobody else.  A component that baked nothing is unaffected by the
+        # same provider republishing its body contract.
+        assertEq(bystander_before, token(context_path, bystander),
+            "a component that baked no body contract is not invalidated by one");
+
+        # A consumer that stops baking one stops watching it.
+        write(tmp.path + "/qo/c.qo.d",
+            tmp.path + "/qo/c.qo.stamp: \\\n    " + tmp.path + "/src/c.qc\n");
+        assertEq(before, token(context_path, consumer),
+            "dropping the baked body contract restores the generation it had "
+            "before, so the manifest carries nothing when nothing is baked");
     }
 
     testGenerationIdentity() {

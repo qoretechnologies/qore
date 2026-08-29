@@ -394,6 +394,12 @@ function(_QORE_QCC_OBJECT_ARTIFACT_PATHS _out_var _output)
         "${_output}.content.stamp"
         "${_output}.compile-contract.stamp"
         "${_output}.aggregate-contract.stamp"
+        # Published like the other contracts, but not required to exist: a build
+        # configured without --depfile-declaration-contract-stamps never asks for
+        # one, and an object that publishes no body contract still writes an empty
+        # file rather than none.  It is listed here so the pruner recognises it as
+        # this object's rather than as a stale artifact to remove.
+        "${_output}.body-contract.stamp"
         "${_output}.stamp"
         "${_output}.source.manifest.json"
         "${_output}.source-parse-defines"
@@ -845,7 +851,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
             ${_qore_qcc_manifest_input_flags})
         set(_qore_qcc_single_cmd "${_qore_qcc_single_cmd} '${_qore_qcc_arg}'")
     endforeach()
-    set(_qore_qcc_single_cmd "${_qore_qcc_single_cmd} -c -L \"$preload_dir\" --manifest-skip-qo-library-inputs \"$@\" --depfile=\"$out.d\" --depfile-target=\"$out.stamp\" --depfile-compile-contract-stamps --depfile-source-content-map='${_qore_qcc_source_content_map}' --write-index-json=\"$out.idx.json\" --write-status-json=\"$out.status.json\" --success-stamp=\"$out.stamp\" --content-stamp=\"$out.content.stamp\" --compile-contract-stamp=\"$out.compile-contract.stamp\" --aggregate-contract-stamp=\"$out.aggregate-contract.stamp\" --write-manifest=\"$out.source.manifest.json\" --skip-if-manifest-current -o \"$out\" \"$src\"\n")
+    set(_qore_qcc_single_cmd "${_qore_qcc_single_cmd} -c -L \"$preload_dir\" --manifest-skip-qo-library-inputs \"$@\" --depfile=\"$out.d\" --depfile-target=\"$out.stamp\" --depfile-compile-contract-stamps --depfile-declaration-contract-stamps --depfile-source-content-map='${_qore_qcc_source_content_map}' --write-index-json=\"$out.idx.json\" --write-status-json=\"$out.status.json\" --success-stamp=\"$out.stamp\" --content-stamp=\"$out.content.stamp\" --compile-contract-stamp=\"$out.compile-contract.stamp\" --aggregate-contract-stamp=\"$out.aggregate-contract.stamp\" --body-contract-stamp=\"$out.body-contract.stamp\" --write-manifest=\"$out.source.manifest.json\" --skip-if-manifest-current -o \"$out\" \"$src\"\n")
     QORE_WRITE_IF_CHANGED("${_qore_qcc_single_script}" "${_qore_qcc_single_cmd}")
 
     list(LENGTH _qore_qcc_abs_sources _qore_qcc_count)
@@ -900,7 +906,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
         foreach(_qore_qcc_arg ${_qore_qcc_bootstrap_aggregate_flags})
             set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} '${_qore_qcc_arg}'")
         endforeach()
-        set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} --batch-build-sidecars --depfile-compile-contract-stamps --depfile-source-content-map='${_qore_qcc_source_content_map}' --output-dir='${_QORE_QCO_OUTPUT_DIR}' --depfile-dir='${_QORE_QCO_OUTPUT_DIR}' --depfile='${_qore_qcc_bootstrap_stamp}.d' --depfile-target='${_qore_qcc_bootstrap_stamp}'")
+        set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} --batch-build-sidecars --depfile-compile-contract-stamps --depfile-declaration-contract-stamps --depfile-source-content-map='${_qore_qcc_source_content_map}' --output-dir='${_QORE_QCO_OUTPUT_DIR}' --depfile-dir='${_QORE_QCO_OUTPUT_DIR}' --depfile='${_qore_qcc_bootstrap_stamp}.d' --depfile-target='${_qore_qcc_bootstrap_stamp}'")
         foreach(_qore_qcc_source ${_qore_qcc_abs_sources})
             set(_qore_qcc_batch_cmd "${_qore_qcc_batch_cmd} '${_qore_qcc_source}'")
         endforeach()
@@ -934,7 +940,7 @@ function(QORE_QCC_COMPILE_OBJECTS _out_var)
                 ${_qore_qcc_manifest_input_flags})
             set(_qore_qcc_subset_cmd "${_qore_qcc_subset_cmd} '${_qore_qcc_arg}'")
         endforeach()
-        set(_qore_qcc_subset_cmd "${_qore_qcc_subset_cmd} -c -L \"$preload_dir\" --batch-build-sidecars --depfile-compile-contract-stamps --depfile-source-content-map='${_qore_qcc_source_content_map}' --output-dir='${_QORE_QCO_OUTPUT_DIR}' --depfile-dir='${_QORE_QCO_OUTPUT_DIR}' \"$@\"\n")
+        set(_qore_qcc_subset_cmd "${_qore_qcc_subset_cmd} -c -L \"$preload_dir\" --batch-build-sidecars --depfile-compile-contract-stamps --depfile-declaration-contract-stamps --depfile-source-content-map='${_qore_qcc_source_content_map}' --output-dir='${_QORE_QCO_OUTPUT_DIR}' --depfile-dir='${_QORE_QCO_OUTPUT_DIR}' \"$@\"\n")
         QORE_WRITE_IF_CHANGED("${_qore_qcc_subset_script}" "${_qore_qcc_subset_cmd}")
 
         add_custom_command(OUTPUT ${_qore_qcc_bootstrap_stamp}

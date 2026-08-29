@@ -413,6 +413,8 @@ class AOTSmokeTest inherits QUnit::Test {
         addTestCase("AOT closure exception outer", \testClosureExceptionOuter());
         # Regression: corrupt .qmod load must not deadlock inside parse-lock scope
         addTestCase("AOT corrupt qmod load no deadlock", \testCorruptQmodLoadNoDeadlock());
+        addTestCase("AOT corrupt qmod reported rather than fatal when checking is on",
+            \testCorruptQmodSignatureCheck());
         addTestCase("AOT overload default-arg specificity",
             \testAOTOverloadDefaultArgSpecificity());
         # Regression: exceptions escaping catch blocks must unwind catch scopes
@@ -11681,6 +11683,101 @@ exit(0);
     #! ran — and wait waits for parse_count==0.  A malformed .qmod (truncated
     #! AOT metadata) exercises the failure path deterministically; the test
     #! passes when -l exits promptly with a MODULE-LOAD-ERROR instead of hanging.
+    #! An opt-in check turns a fatal corrupt-module load into a reported one.
+    /** macOS kills a process that maps a page whose code signature no longer validates,
+        so a `.qmod` damaged on disk takes the loading process down inside dlopen() with
+        no diagnostic at all -- signal 9, no output, nothing naming the file.
+        QORE_VERIFY_MODULE_SIGNATURES=1 makes the loader verify the file first and raise
+        an ordinary LOAD-MODULE-ERROR instead.
+
+        The damage here is deliberately in the __TEXT segment rather than in the AOT
+        metadata: metadata damage is also caught by the metadata reader once the file can
+        be mapped at all, so it would not show that the signature check is doing anything.
+        Text damage has no other detector.
+
+        Off this platform the check is a no-op and the corrupt module simply fails to load
+        the ordinary way, which is the same assertion.
+    */
+    testCorruptQmodSignatureCheck() {
+        string tmp_dir = sprintf("/tmp/aot_sigcheck_qmod_%d_%d", getpid(), rand());
+        mkdir(tmp_dir);
+        on_exit {
+            backquote(sprintf("rm -rf %s", tmp_dir));
+        }
+
+        string mod_code = "%modern
+
+module SigCheckQmodTest {
+    version = \"1.0\";
+    desc = \"Signature check test\";
+    author = \"Test\";
+    license = \"MIT\";
+}
+
+public namespace SigCheckQmodTest {
+    public int sub one() { return 1; }
+}
+";
+        string qm_path = tmp_dir + "/SigCheckQmodTest.qm";
+        {
+            File f();
+            f.open2(qm_path, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write(mod_code);
+            f.close();
+        }
+        string qmod_path = tmp_dir + "/SigCheckQmodTest.qmod";
+        hash<auto> compile_res = compileModuleFile(qm_path, qmod_path);
+        assertTrue(compile_res.compiled,
+            "sigcheck-qmod: baseline compile succeeded: " + compile_res.compile_out);
+        # no co-located source, or the loader falls back to compiling it
+        unlink(qm_path);
+
+        # Damage a byte well before the AOT metadata, i.e. inside the mapped code.
+        int md_off = aotMetadataOffset(qmod_path, dumpQccInfo(qmod_path, False));
+        assertGt(1024, md_off, "sigcheck-qmod: metadata sits past the byte to damage");
+        {
+            File f();
+            f.open2(qmod_path, O_RDWR);
+            f.setPos(1024);
+            f.write(<FF>);
+            f.close();
+        }
+
+        string script = tmp_dir + "/noop.qr";
+        {
+            File f();
+            f.open2(script, O_WRONLY | O_CREAT | O_TRUNC);
+            f.write("%modern\nprintf(\"ok\\n\");\n");
+            f.close();
+        }
+        if (!timeout_cmd.val()) {
+            testSkip("cannot run the corrupt .qmod signature-check regression without "
+                "timeout, gtimeout, or perl");
+        }
+
+        string cmd = sprintf("LD_LIBRARY_PATH=%s QORE_VERIFY_MODULE_SIGNATURES=1 %s 15 %s "
+            "--exec-mode=ast -l %s %s 2>&1; echo EXIT=$?",
+            libqore_dir, timeout_cmd, qore_bin, qmod_path, script);
+        string out = backquote(cmd);
+
+        assertFalse(out.regex("EXIT=124"),
+            "sigcheck-qmod: the load did not hang: " + out);
+        assertFalse(out.regex("EXIT=137"),
+            "sigcheck-qmod: the loader reported the damaged module instead of being "
+                "killed mapping it: " + out);
+        # The pre-dlopen check is implemented only where the kernel kills the process for mapping a page
+        # that fails signature validation, which is the failure it exists to turn into a diagnostic; see
+        # qore_check_module_file_integrity().  Elsewhere the byte damaged here is an ordinary byte in the
+        # mapped code, the loader is not killed, and there is no signature to disagree with it -- which the
+        # two assertions above are what establishes.
+        if (PlatformOS == "Darwin") {
+            assertTrue(out.regex("(MODULE-LOAD-ERROR|LOAD-MODULE-ERROR)"),
+                "sigcheck-qmod: a module load error names the failure: " + out);
+            assertTrue(out.find("SigCheckQmodTest.qmod") != -1,
+                "sigcheck-qmod: and names the file at fault: " + out);
+        }
+    }
+
     testCorruptQmodLoadNoDeadlock() {
         string tmp_dir = sprintf("/tmp/aot_corrupt_qmod_%d_%d", getpid(), rand());
         mkdir(tmp_dir);
@@ -11738,6 +11835,32 @@ public namespace CorruptQmodTest {
             for (int i = 0; i < md_len; ++i) zeroes += <00>;
             f.write(zeroes);
             f.close();
+        }
+
+        # macOS signs every dylib -- the linker attaches an ad-hoc signature --
+        # and on Apple Silicon the kernel SIGKILLs a process that maps a page
+        # whose signature no longer validates.  A byte-edited .qmod therefore
+        # kills the loader before Qore reads a single byte of its metadata: the
+        # run dies with signal 9 and no diagnostic at all, which is the OS
+        # enforcing its own rule rather than anything this case is about.
+        # Re-signing restores a loadable file with the corruption intact, so
+        # what fails is the AOT metadata -- the path under test.
+        #
+        # (That the OS kill leaves a Qore user with no diagnostic is a real gap,
+        # but it belongs to the module loader, not to this regression: the
+        # loader would have to validate the signature itself before dlopen to
+        # turn it into an error.)
+        if (PlatformOS == "Darwin") {
+            string sign_out = backquote(sprintf("codesign -f -s - %s 2>&1; echo RC=$?",
+                qmod_path));
+            if (sign_out.regex("RC=0")) {
+                assertFalse(sign_out.regex("RC=[1-9]"),
+                    "corrupt-qmod-regression: re-signed the corrupted module: " + sign_out);
+            } else {
+                testSkip("cannot re-sign a corrupted .qmod on this host, and macOS "
+                    "kills the loader on an invalid signature before Qore sees the "
+                    "module: " + sign_out);
+            }
         }
 
         # Load the corrupt .qmod with -l. Before the fix this process

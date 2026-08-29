@@ -223,6 +223,11 @@ static thread_local bool aot_source_parse_active = false;
 static thread_local bool aot_resolved_source_import_recording_active = false;
 static thread_local const QoreAOTSourceSymbolManifest* aot_source_symbol_manifest = nullptr;
 static thread_local const std::unordered_set<std::string>* aot_preloaded_source_labels = nullptr;
+// Canonical labels of the sources this parse is compiling.  Deferral asks "is
+// this symbol provided by some OTHER source of the build group"; a parse that
+// covers several sources has to answer it against its own target set, not
+// against the one consumer whose location is being resolved.
+static thread_local const std::unordered_set<std::string>* aot_parse_source_labels = nullptr;
 static thread_local bool aot_allow_preloaded_source_symbols = false;
 
 void qore_aot_set_dep_sink(std::unordered_set<std::string>* sink) {
@@ -276,6 +281,13 @@ static const std::unordered_set<std::string>* qore_aot_set_preloaded_source_labe
         const std::unordered_set<std::string>* labels) {
     const std::unordered_set<std::string>* old = aot_preloaded_source_labels;
     aot_preloaded_source_labels = labels;
+    return old;
+}
+
+static const std::unordered_set<std::string>* qore_aot_set_parse_source_labels(
+        const std::unordered_set<std::string>* labels) {
+    const std::unordered_set<std::string>* old = aot_parse_source_labels;
+    aot_parse_source_labels = labels;
     return old;
 }
 
@@ -344,6 +356,31 @@ static bool qore_aot_source_provider_is_preloaded(const std::unordered_set<std::
             continue;
         }
         bool found = aot_preloaded_source_labels->count(rp) != 0;
+        free(rp);
+        if (found) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//! True when one of \a providers is a source this parse is compiling.
+/** The mirror of qore_aot_source_provider_is_preloaded(): that one asks whether
+    the declaration is already available from a shell, this one whether the parse
+    is about to make it itself. */
+static bool qore_aot_source_provider_is_in_parse(const std::unordered_set<std::string>& providers) {
+    if (!aot_parse_source_labels) {
+        return false;
+    }
+    for (const std::string& provider : providers) {
+        if (aot_parse_source_labels->count(provider)) {
+            return true;
+        }
+        char* rp = realpath(provider.c_str(), nullptr);
+        if (!rp) {
+            continue;
+        }
+        bool found = aot_parse_source_labels->count(rp) != 0;
         free(rp);
         if (found) {
             return true;
@@ -425,6 +462,16 @@ static bool qore_aot_get_deferred_source_symbol_match(const QoreProgramLocation*
         return false;
     }
     if (aot_allow_preloaded_source_symbols && qore_aot_source_provider_is_preloaded(*providers)) {
+        return false;
+    }
+    // A provider this parse is compiling is not "another source object": its
+    // declaration is made right here, and deferring to a placeholder throws away
+    // the type the parse is about to have.  A parse of ONE source could ask this
+    // of the consumer's own location, which is what the check below does; a parse
+    // of several has to ask it of the whole target set, or one member's
+    // `cast<hash<X>>` yields an erased value while the member that declares X
+    // gets the real type, and a call between the two finds no matching variant.
+    if (qore_aot_source_provider_is_in_parse(*providers)) {
         return false;
     }
     if (qore_aot_loc_is_symbol_provider(loc, *providers)) {
@@ -27159,6 +27206,20 @@ struct AOTPreloadedSourceGuard {
     const std::unordered_set<std::string>* old;
 };
 
+//! Names the canonical sources this parse is compiling.
+/** Armed alongside the source-symbol manifest: the manifest says which source of
+    the build group provides a symbol, and this says which of those sources are
+    in the parse asking. */
+struct AOTParseSourceGuard {
+    explicit AOTParseSourceGuard(const std::unordered_set<std::string>* labels)
+            : old(qore_aot_set_parse_source_labels(labels)) {
+    }
+    ~AOTParseSourceGuard() {
+        qore_aot_set_parse_source_labels(old);
+    }
+    const std::unordered_set<std::string>* old;
+};
+
 //! Sibling `.qo` declarations preloaded from `-L` directories.
 /** Both compile paths need this.  A single-source compile preloads the rest of
     its group so cross-file type references resolve at parse time; a batch that
@@ -27401,6 +27462,10 @@ struct QoreAOTSiblingPreload {
                 return false;
             }
             auto mdes = std::make_unique<QoreAOTBinaryMultiDeserializer>(pgm);
+            // These shells resolve declarations for a compile, so keep the compile-time value each pending
+            // constant recorded: without it this parse cannot evaluate an initializer that folds a sibling's
+            // constant, and it publishes a weaker declared type for the result than a whole-group parse does.
+            mdes->setPreloadParseConstantValues(true);
             bool preload_failed = false;
             std::string deser_error;
             for (auto& frag : extracted_frags) {
@@ -27623,6 +27688,32 @@ bool QoreAOT::compileScriptFilesBatch(
         const char* old;
     };
 
+    //! Restores the program's parse options after one batch source is parsed.
+    /** A batch parses many sources into one program, and a parse directive is a
+        property of the source that wrote it, not of the batch.  `%exec-class`
+        sets PO_NO_TOP_LEVEL_STATEMENTS, so without this the first script in a
+        batch makes every declaration source parsed AFTER it reject a top-level
+        statement it accepts on its own -- a stray `;` after a hashdecl, say.
+        The whole-group parse only escaped that by the order its context happens
+        to list: with the one `.qr` last of 875 sources, nothing followed it.  A
+        parse of PART of a group orders by the plan instead, so it puts the
+        script wherever the dependency order puts it.
+
+        Only parse options are restored.  Module loads, parse defines and module
+        parse commands are batch state by construction -- the commands are already
+        tracked per entry -- and are left alone.
+    */
+    struct AOTBatchParseOptionGuard {
+        explicit AOTBatchParseOptionGuard(QoreProgram& pgm)
+                : pgm(pgm), old(pgm.getParseOptions()) {
+        }
+        ~AOTBatchParseOptionGuard() {
+            qore_program_private::forceReplaceParseOptions(pgm, old);
+        }
+        QoreProgram& pgm;
+        QoreParseOptions old;
+    };
+
     struct AOTBatchResolvedSourceImportGuard {
         AOTBatchResolvedSourceImportGuard()
                 : old(qore_aot_set_resolved_source_import_recording_active(true)) {
@@ -27683,10 +27774,12 @@ bool QoreAOT::compileScriptFilesBatch(
         e.module_cmd_begin = i == 0 ? 0 : batch_pp->module_parse_commands.size();
         {
             AOTBatchDepConsumerGuard consumer_guard(e.canon.c_str());
+            AOTBatchParseOptionGuard parse_option_guard(**qpgm);
             AOTSourceParseGuard source_guard(sibling_parse);
             AOTSourceSymbolGuard source_symbol_guard(parse_source_symbols);
             AOTPreloadedSourceGuard preloaded_source_guard(
                 &sibling_preload.source_labels);
+            AOTParseSourceGuard parse_source_guard(&batch_target_set);
             qpgm->parsePending(e.source.c_str(), e.canon.c_str(),
                 &xsink, &wsink, QP_WARN_DEFAULT);
         }
@@ -27712,6 +27805,7 @@ bool QoreAOT::compileScriptFilesBatch(
         AOTSourceSymbolGuard source_symbol_guard(parse_source_symbols);
         AOTPreloadedSourceGuard preloaded_source_guard(
             &sibling_preload.source_labels);
+        AOTParseSourceGuard parse_source_guard(&batch_target_set);
         std::string resolve_error;
         if (!sibling_preload.mdes->resolveForSourceParse(resolve_error)) {
             error = "sibling .qo cross-resolution failed: " + resolve_error;
@@ -27723,6 +27817,7 @@ bool QoreAOT::compileScriptFilesBatch(
         AOTSourceSymbolGuard source_symbol_guard(parse_source_symbols);
         AOTPreloadedSourceGuard preloaded_source_guard(
             &sibling_preload.source_labels);
+        AOTParseSourceGuard parse_source_guard(&batch_target_set);
         qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
     }
     if (xsink.isException()) {
@@ -27742,6 +27837,7 @@ bool QoreAOT::compileScriptFilesBatch(
         AOTSourceSymbolGuard source_symbol_guard(parse_source_symbols);
         AOTPreloadedSourceGuard preloaded_source_guard(
             &sibling_preload.source_labels);
+        AOTParseSourceGuard parse_source_guard(&batch_target_set);
         std::string resolve_error;
         if (!sibling_preload.mdes->finalizeAfterSourceParse(resolve_error)) {
             error = "sibling .qo finalization failed: " + resolve_error;
@@ -28896,6 +28992,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         AOTSourceParseGuard source_guard(!library_paths.empty() || source_symbol_parse);
         AOTSourceSymbolGuard source_symbol_guard(source_symbols);
         AOTPreloadedSourceGuard preloaded_source_guard(&sibling_source_labels);
+        AOTParseSourceGuard parse_source_guard(&parsed_decl_files_canon);
         qpgm->parsePending(source_text.c_str(), target_canon.c_str(), &xsink,
             &wsink, QP_WARN_DEFAULT);
     }
@@ -28922,6 +29019,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         AOTSourceParseGuard source_guard(!library_paths.empty() || source_symbol_parse);
         AOTSourceSymbolGuard source_symbol_guard(source_symbols);
         AOTPreloadedSourceGuard preloaded_source_guard(&sibling_source_labels);
+        AOTParseSourceGuard parse_source_guard(&parsed_decl_files_canon);
         std::string resolve_error;
         if (!sibling_mdes->resolveForSourceParse(resolve_error)) {
             error = "sibling .qo cross-resolution failed: " + resolve_error;
@@ -28934,6 +29032,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         AOTSourceParseGuard source_guard(!library_paths.empty() || source_symbol_parse);
         AOTSourceSymbolGuard source_symbol_guard(source_symbols);
         AOTPreloadedSourceGuard preloaded_source_guard(&sibling_source_labels);
+        AOTParseSourceGuard parse_source_guard(&parsed_decl_files_canon);
         qpgm->parseCommit(&xsink, &wsink, QP_WARN_DEFAULT);
     }
     if (xsink.isException()) {
@@ -28953,6 +29052,7 @@ bool QoreAOT::compileScriptFile(const char* target_file,
         AOTSourceParseGuard source_guard(!library_paths.empty() || source_symbol_parse);
         AOTSourceSymbolGuard source_symbol_guard(source_symbols);
         AOTPreloadedSourceGuard preloaded_source_guard(&sibling_source_labels);
+        AOTParseSourceGuard parse_source_guard(&parsed_decl_files_canon);
         std::string resolve_error;
         if (!sibling_mdes->finalizeAfterSourceParse(resolve_error)) {
             error = "sibling .qo finalization failed: " + resolve_error;

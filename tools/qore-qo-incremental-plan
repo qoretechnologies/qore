@@ -86,7 +86,36 @@ esac
 # whether to skip the subset parse and reparse everything -- and it scales with
 # the group, so a small group still reaches the whole-group parse early while a
 # large one does not reparse hundreds of current sources to rebuild ten.
-group_batch_percent=${QORE_QCC_INCREMENTAL_GROUP_BATCH_PERCENT:-50}
+#
+# Its default depends on what serves the band below it, because that is what the
+# closure is being compared against:
+#
+#   * with a partial parse, the band below is ONE parse over the stale set, and
+#     the group's own parse is worth reaching for only when the closure really is
+#     most of the group; and
+#   * without one, the band below is a walk of standalone compiles, run one
+#     component at a time, each preloading the whole group.  The group's own
+#     parse compiles every member in one parse and at the build tool's
+#     parallelism, so it overtakes the walk early.
+#
+# What decides the crossover is not one build but the next one.  The group's
+# parse and a standalone compile publish different compile contracts for the
+# same source, so the first incremental build after a group parse walks the
+# whole closure of whatever was edited whatever the size of the edit -- and a
+# build that escalates leaves the tree in the mode that makes the NEXT edit walk
+# it again.  A walk pays that transition once and every edit after it is one
+# compile.  Measured on Qorus (875 sources, 820 components), editing a source
+# whose closure is 13: the walk and the group parse cost the same on the first
+# build (5m03 against 4m54), and the second edit costs 1m38 against another
+# 4m54.  So the floor should sit well above the closures a developer edits
+# through, and only catch the ones a walk could never amortise: at 408
+# components, a walk is an hour of serial compiles against a four-minute parse.
+#
+# 5% puts that boundary at 41 components on that tree.  Left at 50% the floor
+# was 410, and thirteen widely required sources sat at closures of 408 and 409 --
+# exactly the ones the walk cannot amortise.  Set the variable to pin either
+# value.
+group_batch_percent=${QORE_QCC_INCREMENTAL_GROUP_BATCH_PERCENT:-}
 group_batch_minimum=${QORE_QCC_INCREMENTAL_GROUP_BATCH_MINIMUM:-8}
 case "$group_batch_minimum" in
     ''|*[!0-9]*|0)
@@ -95,7 +124,9 @@ case "$group_batch_minimum" in
         ;;
 esac
 case "$group_batch_percent" in
-    ''|*[!0-9]*)
+    '')
+        ;;
+    *[!0-9]*)
         echo "$0: QORE_QCC_INCREMENTAL_GROUP_BATCH_PERCENT must be an integer" >&2
         exit 2
         ;;
@@ -154,6 +185,12 @@ write_stale_plan() {
     # over the stale set needs every member of every one of them.
     stale_count=$(awk -F '\t' '$1 != "rebuild-closure" && !seen[$2]++ { rows++ }
         END { print rows + 0 }' "$stale_file")
+    # The component keys of the stale set, in one comparable string.  A pass that
+    # compiles its whole stale set and finds the same set stale again has not
+    # moved, and no number of further passes will move it; the group's own parse
+    # is the answer to that, not another lap.
+    stale_signature=$(awk -F '\t' '$1 != "rebuild-closure" { print $2 }' \
+        "$stale_file" | sort -u | tr '\n' ' ')
     # How much of the group the stale set will actually reach once it is
     # rebuilt.  Absent only if the helper predates the row, in which case the
     # stale count is the best available answer and the old behaviour stands.
@@ -252,17 +289,68 @@ run_group_batch() {
             "$batch_script" "$source_order_tool"
 }
 
-# Normally one pass is enough.  The second pass handles a source that an
-# external editor replaced while a small plan was compiling, and the dependency
-# graph transition the first pass's own compiles produced; if that still does
-# not converge, the batch helper's established compare-and-rebuild protocol is
-# the single authoritative fallback.
+# have_subset_parse() answers for this group and this environment, so the
+# escalation percentage cannot be resolved with the other knobs at the top of
+# the script.
+if [ -z "$group_batch_percent" ]; then
+    if have_subset_parse; then
+        group_batch_percent=50
+    else
+        group_batch_percent=5
+    fi
+fi
+
+#! The group's own parse, then the verification every plan ends with.
+#  The batch rewrote every depfile in the group, so the frozen generation no
+#  longer describes it.  Re-freeze before verifying, and leave the object
+#  recipes that follow this target the graph the batch published against rather
+#  than the one it superseded.
+escalate_to_group_batch() {
+    run_group_batch
+    freeze_graph || exit 1
+    write_stale_plan
+    if [ "$stale_count" -ne 0 ]; then
+        echo "$0: shared-parse incremental build left stale components" >&2
+        exit 1
+    fi
+    touch "$plan_stamp"
+    exit 0
+}
+
+# One pass compiles the stale set it was planned from, and compiling a component
+# rewrites its compile contract, so the pass leaves that component's consumers
+# stale: an invalidation walks the consumer closure one dependency level per
+# pass, and the plan converges only when it has walked all of them.  The loop
+# therefore runs until the group is current rather than for a fixed number of
+# passes.  A fixed two was a cliff of its own: the first incremental build after
+# a whole-group parse walks a closure several levels deep -- the objects the
+# group's parse emitted record different compile contracts from the ones a
+# standalone or subset compile emits, so the whole closure is crossed once --
+# and capping the walk at two passes threw a converging plan away and reparsed
+# the group.  Measured on Qorus (875 sources, 820 components), `make qorus-core`
+# after one comment appended to a source whose closure is thirteen: three passes
+# and 23 qcc invocations, 4m52, where the capped loop ran 889 and took 7m39.
+#
+# Two conditions end the walk early, and both mean the same thing -- the
+# incremental path is no longer the cheaper answer:
+#
+#   * a pass that leaves exactly the stale set it started from has not moved,
+#     and no further pass will move it; and
+#   * a walk whose compiles have added up to what the whole-group parse would
+#     have compiled anyway has spent the group parse's budget without its
+#     parallelism.
+#
+# The second is also what bounds the loop: every pass compiles at least one
+# component, so the cumulative count reaches the bound in a finite number of
+# passes whatever the graph does.
 #
 # Each pass begins by freezing the graph, so a pass is planned, executed and
 # verified against one immutable decomposition, and a new required edge that a
 # compile discovered is crossed at a defined point rather than mid-pass.
+compiled_total=0
+previous_signature=
 phase=1
-while [ "$phase" -le 2 ]; do
+while :; do
     freeze_graph || exit 1
     write_stale_plan
     if [ "$stale_count" -eq 0 ]; then
@@ -291,19 +379,25 @@ while [ "$phase" -le 2 ]; do
     # several sources always needs a parse: its members are mutually dependent
     # and have no valid internal order.
     if [ "$rebuild_scope" -ge "$group_batch_floor" ]; then
-        run_group_batch
-        # The batch rewrote every depfile in the group, so the frozen generation
-        # no longer describes it.  Re-freeze before verifying, and leave the
-        # object recipes that follow this target the graph the batch published
-        # against rather than the one it superseded.
-        freeze_graph || exit 1
-        write_stale_plan
-        if [ "$stale_count" -ne 0 ]; then
-            echo "$0: shared-parse incremental build left stale components" >&2
-            exit 1
-        fi
-        touch "$plan_stamp"
-        exit 0
+        escalate_to_group_batch
+    fi
+
+    # A pass that changed nothing, and a walk that has already compiled what the
+    # group parse would have compiled: see the loop's comment.  Both are stated
+    # rather than silent -- a build that quietly reparses the group after doing
+    # the incremental work as well is otherwise indistinguishable from one that
+    # simply chose the group parse.
+    if [ "$stale_signature" = "$previous_signature" ]; then
+        echo "$0: pass $phase left the same $stale_count component(s) stale that" \
+            "it compiled; the incremental plan is not converging" >&2
+        escalate_to_group_batch
+    fi
+    previous_signature=$stale_signature
+    if [ "$(( compiled_total + stale_count ))" -gt "$group_batch_floor" ]; then
+        echo "$0: the incremental plan has compiled $compiled_total component(s)" \
+            "over $(( phase - 1 )) pass(es) and $stale_count remain; that is the" \
+            "work the group's own parse does, without its parallelism" >&2
+        escalate_to_group_batch
     fi
     if stale_plan_has_multi_member_component \
             || { have_subset_parse && [ "$stale_count" -ge "$batch_threshold" ]; }; then
@@ -353,6 +447,7 @@ while [ "$phase" -le 2 ]; do
         # The parse rewrote the depfiles of everything it compiled, so the frozen
         # generation no longer describes the graph; the loop's next pass freezes
         # again and picks up whatever the compiles made stale.
+        compiled_total=$((compiled_total + stale_count))
         phase=$((phase + 1))
         continue
     fi
@@ -361,10 +456,20 @@ while [ "$phase" -le 2 ]; do
     # the reason for choosing it are worth stating: a build that quietly serialises
     # on a many-core host is otherwise indistinguishable from one that is simply
     # slow.
-    echo "$0: compiling $stale_count stale component(s) incrementally, one at a" \
-        "time; their consumer closure spans $rebuild_scope component(s), under the" \
-        "QORE_QCC_INCREMENTAL_BATCH_THRESHOLD of $batch_threshold that selects the" \
-        "shared parse"
+    if have_subset_parse; then
+        echo "$0: compiling $stale_count stale component(s) incrementally, one at a" \
+            "time; their consumer closure spans $rebuild_scope component(s), under" \
+            "the QORE_QCC_INCREMENTAL_BATCH_THRESHOLD of $batch_threshold that" \
+            "selects the shared parse"
+    else
+        # Naming the threshold here would be wrong: it was never consulted.  With
+        # no partial parse available the only shared parse this group has is its
+        # own, and that decision was already made from the closure.
+        echo "$0: compiling $stale_count stale component(s) incrementally, one at a" \
+            "time; their consumer closure spans $rebuild_scope component(s), and" \
+            "this group has no partial parse to compile them together" \
+            "(QORE_QCC_SUBSET_PARSE is off)"
+    fi
     tab=$(printf '\t')
     # Each row was resolved from the graph as it stood before this loop began,
     # and every compile in the loop rewrites a depfile that contributes required
@@ -392,6 +497,7 @@ while [ "$phase" -le 2 ]; do
                 QORE_QCC_QORE_EXECUTABLE="${QORE_QCC_QORE_EXECUTABLE:-}" \
                 QORE_QCC_SOURCE_ORDER_HELPER="$source_order_tool" \
                 QORE_QCC_BATCH_BOOTSTRAP_HELPER="$batch_bootstrap_tool" \
+                QORE_QCC_LOCK_HELPER="${QORE_QCC_LOCK_HELPER:-}" \
                 QORE_QCC_GRAPH_SNAPSHOT="$graph_snapshot" \
                 "$incremental_tool" "$output" "$source" "$single_script"; then
             echo "$0: cannot build stale component $component_key" >&2
@@ -399,18 +505,6 @@ while [ "$phase" -le 2 ]; do
         fi
     done < "$stale_file.components"
     rm -f "$stale_file.components"
+    compiled_total=$((compiled_total + stale_count))
     phase=$((phase + 1))
 done
-
-freeze_graph || exit 1
-write_stale_plan
-if [ "$stale_count" -ne 0 ]; then
-    run_group_batch
-    freeze_graph || exit 1
-    write_stale_plan
-fi
-if [ "$stale_count" -ne 0 ]; then
-    echo "$0: incremental plan did not converge" >&2
-    exit 1
-fi
-touch "$plan_stamp"

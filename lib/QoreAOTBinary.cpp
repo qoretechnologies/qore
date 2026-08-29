@@ -2907,7 +2907,23 @@ static std::string getAOTSerializableTypePath(const QoreTypeInfo* ti, bool no_na
         }
     }
 
-    return raw_path ? raw_path : "";
+    if (raw_path) {
+        // `callref` and `closure` are the runtime type names of a call reference and a closure value; the
+        // language deliberately treats both as interchangeable with `code` and resolves either name to
+        // codeTypeInfo (see the do_maps() calls in QoreTypeInfo.cpp), so neither name survives a round trip
+        // through a serialized path.  A constant initialized to a call reference takes its declared type from
+        // its evaluated value, so a whole-group parse published `callref` where a parse resolving the same
+        // declaration from a `.qo` shell published `code` -- the same declaration with two contract hashes.
+        // Emit the name that reads back as itself.
+        if (!strcmp(raw_path, "callref") || !strcmp(raw_path, "closure")) {
+            return "code";
+        }
+        if (!strcmp(raw_path, "*callref") || !strcmp(raw_path, "*closure")) {
+            return "*code";
+        }
+        return raw_path;
+    }
+    return "";
 }
 
 std::string qore_get_aot_serializable_type_path(const QoreTypeInfo* ti, bool no_narrow) {
@@ -6719,13 +6735,11 @@ static bool aotAppendValueHashParts(const QoreValue& value, std::vector<std::str
         parts.push_back(std::to_string(value.getChar()));
         return true;
     }
-    if (value.isShortString()) {
-        char buf[8] = {};
-        value.getShortString(buf);
-        parts.push_back("string");
-        parts.emplace_back(buf, value.shortStringLen());
-        return true;
-    }
+    // A short string is not given its own case: it is NT_STRING like any other, and rendering it separately
+    // made this hash depend on where the bytes are stored rather than on what they are.  A source parse
+    // builds heap strings while AOT deserialization rebuilds the short ones inline, so the same constant
+    // hashed differently depending on how the parse reached it -- which published a different value_hash for
+    // the same value and invalidated every consumer.  The NT_STRING case below covers both.
     if (value.isEnum()) {
         const QoreEnumMember* member = value.getEnumMember();
         const QoreEnumDecl* decl = member ? member->getEnumDecl() : nullptr;
@@ -10050,6 +10064,41 @@ static bool qoreAOTWriteDefaultArgValuePayloadImpl(QoreAOTBinaryWriter& writer, 
     return false;
 }
 
+//! Records the value a pending constant's initializer produced, for parses that resolve against `.qo` shells
+/** A `.qo` carries declarations, not executable bodies, so a `qcc -c -L` parse cannot run a preloaded
+    provider's `__const_init` function; a whole-group parse evaluates the provider's retained initializer
+    during the consumer's parse instead.  Evaluating a constant narrows its declared type to its value's type
+    (ConstantEntry::parseCommitRuntimeInit()), so without this the same source compiled the two ways published
+    different declared types for every constant folded from a sibling, and switching modes invalidated every
+    consumer.  Recording the value the producing parse computed closes that gap.
+
+    Writes a presence byte and, when present, the value.  A value that cannot be serialized without loss (an
+    object, a closure) writes only a 0 byte: the consuming parse then defers exactly as it did before, so this
+    never turns a compile that used to succeed into a failure.  Rolling the payload back can leave type paths
+    the failed attempt interned in the string pool; they are unreferenced, which costs a few bytes and nothing
+    else.  AOT format v15 and later.
+
+    @param writer the binary writer, positioned after the constant's placeholder value
+    @param ce the constant being written; must have a pending init function
+*/
+static void writePendingConstantParseValue(QoreAOTBinaryWriter& writer, const ConstantEntry* ce) {
+    const uint32_t mark = writer.position();
+    ValueHolder parse_value(ce->getReferencedValue(), nullptr);
+    // an initializer whose own evaluation was deferred (it reads a `--stub` constant or an unresolved shell)
+    // has no value to record; `val` is still the entry's own reference node
+    if (parse_value->getType() == NT_RTCONSTREF) {
+        writer.writeU8(0);
+        return;
+    }
+    writer.writeU8(1);
+    writer.current_value_path.clear();
+    writer.value_failure_detail.clear();
+    if (!writer.writeValue(*parse_value)) {
+        writer.truncate(mark);
+        writer.writeU8(0);
+    }
+}
+
 //! Write CLASSES section
 static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeState& state,
         std::string& error) {
@@ -10253,6 +10302,10 @@ static bool writeClassesSection(QoreAOTBinaryWriter& writer, const AOTSerializeS
                         // Class constants with init expressions get NOTHING placeholder
                         bool placeholder_ok = writer.writeValue(QoreValue());
                         assert(placeholder_ok);
+                        std::string old_pending_path = std::move(writer.current_const_path);
+                        writer.current_const_path = getClassConstantPath(priv, ce->getName());
+                        writePendingConstantParseValue(writer, ce);
+                        writer.current_const_path = std::move(old_pending_path);
                     } else {
                         // Use getReferencedValue() for the actual evaluated value
                         ValueHolder actual_val(ce->getReferencedValue(), nullptr);
@@ -10529,6 +10582,7 @@ static bool writeConstantsSection(QoreAOTBinaryWriter& writer, const AOTSerializ
             // by their lowered init function — serialize NOTHING as placeholder
             bool placeholder_ok = writer.writeValue(QoreValue());
             assert(placeholder_ok);
+            writePendingConstantParseValue(writer, ce);
         } else {
             // Use getReferencedValue() to get the actual evaluated value.
             // ce->val may hold a RuntimeConstantRefNode (NT_RTCONSTREF) which is
@@ -15612,6 +15666,11 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
         }
         const bool has_const_pending_flag =
             (reader.getHeader().feature_flags & QORE_AOT_FEAT_CONST_PENDING) != 0;
+        // v15 and later record the compile-time value of a pending constant after its placeholder; the
+        // payload is always walked so the stream stays in step, and only kept when the shells are being
+        // preloaded for a compile (see preload_parse_constant_values)
+        const bool has_const_parse_value =
+            reader.getHeader().version >= QORE_AOT_CONST_PARSE_VALUE_VERSION;
         for (uint32_t j = 0; j < num_consts; ++j) {
             const char* cname = reader.readStringRef(ptr);
             const char* ctype_path = reader.readStringRef(ptr);
@@ -15622,6 +15681,20 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                 error = "class constant '" + std::string(cname ? cname : "(null)") + "': " + error;
                 return false;
             }
+            QoreAOTDeferredValueBlob parse_value_blob;
+            if (cpending && has_const_parse_value) {
+                if (ptr >= end) {
+                    error = "class constant '" + std::string(cname ? cname : "(null)")
+                        + "': truncated compile-time value flag";
+                    return false;
+                }
+                if (QoreAOTBinaryReader::readU8(ptr)
+                        && !readDeferredValueBlob(ptr, end, error, parse_value_blob)) {
+                    error = "class constant '" + std::string(cname ? cname : "(null)")
+                        + "' compile-time value: " + error;
+                    return false;
+                }
+            }
 
             if (!class_already_existed && cname && *cname) {
                 PendingClassConstant pcc;
@@ -15630,6 +15703,9 @@ bool QoreAOTBinaryDeserializer::deserializeClasses(std::string& error) {
                 pcc.access = caccess;
                 pcc.pending_init = (cpending != 0);
                 pcc.value_blob = std::move(value_blob);
+                if (preload_parse_constant_values) {
+                    pcc.parse_value_blob = std::move(parse_value_blob);
+                }
                 class_constants.push_back(std::move(pcc));
             }
         }
@@ -16268,6 +16344,56 @@ bool QoreAOTBinaryDeserializer::registerClassConstantShells(std::string& error) 
     return true;
 }
 
+void QoreAOTBinaryDeserializer::attachAOTParseShellConstantValue(
+        QoreAOTDeferredValueBlob& blob, ConstantEntry* ce) {
+    if (blob.empty() || !ce) {
+        blob.clear();
+        return;
+    }
+    const uint8_t* vptr = blob.data();
+    const uint8_t* vend = vptr + blob.size();
+    std::string value_error;
+    struct ConstRefDeferGuard {
+        const QoreAOTBinaryReader& r;
+        bool prev;
+        ConstRefDeferGuard(const QoreAOTBinaryReader& r_, bool newv)
+            : r(r_), prev(r_.defer_unresolved_const_refs) {
+            r_.defer_unresolved_const_refs = newv;
+        }
+        ~ConstRefDeferGuard() { r.defer_unresolved_const_refs = prev; }
+    } defer_guard(reader, true);
+    QoreValue parse_value = reader.readValue(vptr, vend, value_error);
+    blob.clear();
+    if (!value_error.empty() || vptr != vend) {
+        parse_value.discard(nullptr);
+        return;
+    }
+    ce->setAOTParseShellValue(parse_value);
+    parse_shell_value_entries.push_back(ce->refSelf());
+}
+
+bool QoreAOTBinaryDeserializer::materializeParseShellConstantValuesPhase() {
+    ExceptionSink xsink;
+    for (size_t i = 0; i < parse_shell_value_entries.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr,
+                "AOT preloaded constant value materialization")) {
+            break;
+        }
+        parse_shell_value_entries[i]->materializeAOTParseShellValue(&xsink);
+        if (xsink) {
+            xsink.clear();
+        }
+    }
+    for (ConstantEntry* ce : parse_shell_value_entries) {
+        ce->deref(&xsink);
+    }
+    if (xsink) {
+        xsink.clear();
+    }
+    parse_shell_value_entries.clear();
+    return true;
+}
+
 bool QoreAOTBinaryDeserializer::resolveClassConstantValues(std::string& error) {
     auto resolve_type = [this](const PendingClassConstant& pcc,
             const QoreClass* qc) -> const QoreTypeInfo* {
@@ -16417,6 +16543,11 @@ bool QoreAOTBinaryDeserializer::resolveClassConstantValues(std::string& error) {
             auto& pcc = pending_class_constants[i][j];
             ConstantEntry* ce = priv->constlist.findEntry(pcc.name.c_str());
             if (!ce || ce->aot_shell_pending) {
+                // a pending constant keeps its shell, but a preloaded `.qo` can still supply the value the
+                // producing parse computed so the consuming parse can fold it
+                if (ce && !pcc.parse_value_blob.empty()) {
+                    attachAOTParseShellConstantValue(pcc.parse_value_blob, ce);
+                }
                 continue;
             }
             ce->materializeRuntimeRefs(&xsink);
@@ -17105,6 +17236,9 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
 
     const bool has_pending_flag =
         (reader.getHeader().feature_flags & QORE_AOT_FEAT_CONST_PENDING) != 0;
+    // see the class-constant reader for why the payload is walked unconditionally
+    const bool has_const_parse_value =
+        reader.getHeader().version >= QORE_AOT_CONST_PARSE_VALUE_VERSION;
 
     struct PendingNamespaceConstant {
         QoreAOTStringRef name;
@@ -17115,6 +17249,9 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
         uint8_t pending;
         const QoreTypeInfo* type_info = nullptr;
         QoreAOTDeferredValueBlob value_blob;
+        //! Serialized compile-time value of a pending constant (format v15); empty when the producing parse
+        //! could not record one.  Kept only when preload_parse_constant_values is set.
+        QoreAOTDeferredValueBlob parse_value_blob;
     };
 
     std::vector<PendingNamespaceConstant> pending_constants;
@@ -17140,6 +17277,20 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
         if (!error.empty()) {
             error = "namespace constant '" + std::string(name ? name : "(null)") + "': " + error;
             return false;
+        }
+        QoreAOTDeferredValueBlob parse_value_blob;
+        if (pending && has_const_parse_value) {
+            if (ptr >= end) {
+                error = "namespace constant '" + std::string(name ? name : "(null)")
+                    + "': truncated compile-time value flag";
+                return false;
+            }
+            if (QoreAOTBinaryReader::readU8(ptr)
+                    && !readDeferredValueBlob(ptr, end, error, parse_value_blob)) {
+                error = "namespace constant '" + std::string(name ? name : "(null)")
+                    + "' compile-time value: " + error;
+                return false;
+            }
         }
 
         if (ns_idx >= ns_list.size() || !ns_list[ns_idx]) {
@@ -17196,7 +17347,8 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
         }
 
         pending_constants.push_back({makeDeferredStringRef(name), makeDeferredStringRef(type_path), ns_idx,
-            access, is_pub, pending, ti, std::move(value_blob)});
+            access, is_pub, pending, ti, std::move(value_blob),
+            preload_parse_constant_values ? std::move(parse_value_blob) : QoreAOTDeferredValueBlob()});
     }
 
     static const bool use_pending_constant_lookup =
@@ -17287,11 +17439,13 @@ bool QoreAOTBinaryDeserializer::deserializeConstants(std::string& error) {
             return false;
         }
         auto& pc = pending_constants[i];
-        if (pc.pending) {
-            continue;
-        }
         ConstantEntry* ce = ns_list[pc.ns_idx]->constant.findEntry(pc.name.c_str());
-        if (!ce || ce->aot_shell_pending) {
+        if (!ce || pc.pending || ce->aot_shell_pending) {
+            // see the class-constant path: a pending shell still carries the value the producing parse
+            // computed, for a consuming parse to fold
+            if (ce && !pc.parse_value_blob.empty()) {
+                attachAOTParseShellConstantValue(pc.parse_value_blob, ce);
+            }
             continue;
         }
         ce->materializeRuntimeRefs(&xsink);

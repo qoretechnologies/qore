@@ -71,6 +71,12 @@ class AOTSccGraphTransitionTest inherits QUnit::Test {
             \testFrozenGraphHoldsTheDecompositionStill());
         addTestCase("a frozen graph is discarded when it cannot apply",
             \testFrozenGraphIsDiscardedWhenItCannotApply());
+        addTestCase("a declaration-contract dependency is content, not ordering",
+            \testDeclarationContractDependencyIsContentOnly());
+        addTestCase("a component's own compile does not make it stale",
+            \testOwnCompileGraphTransitionIsNotStaleness());
+        addTestCase("a baked body contract is compared across a graph transition",
+            \testBodyContractIsComparedAcrossAGraphTransition());
 
         set_return_value(main());
     }
@@ -150,14 +156,62 @@ class AOTSccGraphTransitionTest inherits QUnit::Test {
             name, name);
     }
 
+    #! NAME's source, spelled the way qcc spells it in a depfile.
+    /** Canonically -- qcc writes every dependency through canonicalizeDepPath(), so
+        a fixture that reaches the same file as `<qo dir>/../src/NAME.qc` is not
+        writing the depfile the build writes.  The difference is not cosmetic: a
+        group source the currency check does not recognise stops being accounted for
+        by content and is compared by mtime instead, against a rule that requires it
+        to be strictly older than the artifacts -- so on a filesystem that gives a
+        whole fixture one timestamp, the component is stale the instant it is
+        published and can never become current.
+    */
+    private string memberSource(string qo_dir, string name) {
+        return normalize_dir(qo_dir + "/../src") + DirSep + name + ".qc";
+    }
+
     #! Writes NAME's depfile so that it records a compile against \a providers.
     /** This is the shape qcc emits with --depfile-compile-contract-stamps, and
         it is what addDepfileContractEdges() reads back as required edges.
     */
     private writeDepfile(string qo_dir, string name, softlist<string> providers) {
-        list<string> deps = (qo_dir + "/../src/" + name + ".qc",);
+        list<string> deps = (memberSource(qo_dir, name),);
         foreach string provider in (providers) {
             push deps, qo_dir + "/" + provider + ".qo.compile-contract.stamp";
+        }
+        write(qo_dir + "/" + name + ".qo.d",
+            qo_dir + "/" + name + ".qo.stamp:"
+            + join("", (map " \\\n    " + $1, deps)) + "\n");
+    }
+
+    #! Writes NAME's depfile with a required edge and a baked body contract.
+    /** The shape qcc emits for a consumer that both compiled against a provider and
+        recorded its body-contract hash: an ordering edge on the one, and a
+        body-contract dependency on the other.
+    */
+    private writeDepfileWithBodyContract(string qo_dir, string name,
+            softlist<string> providers, string body_provider) {
+        list<string> deps = (memberSource(qo_dir, name),);
+        foreach string provider in (providers) {
+            push deps, qo_dir + "/" + provider + ".qo.compile-contract.stamp";
+        }
+        push deps, qo_dir + "/" + body_provider + ".qo.body-contract.stamp";
+        write(qo_dir + "/" + name + ".qo.d",
+            qo_dir + "/" + name + ".qo.stamp:"
+            + join("", (map " \\\n    " + $1, deps)) + "\n");
+    }
+
+    #! Writes NAME's depfile recording a CONTENT compile against \a providers.
+    /** The shape qcc emits with --depfile-declaration-contract-stamps for the
+        references that leave nothing behind in the object -- a folded constant,
+        a resolved type.  Those need the provider present in a parse, but they do
+        not order one compile before another, so this must reach the preload
+        closure without reaching the required-edge graph.
+    */
+    private writeContentDepfile(string qo_dir, string name, softlist<string> providers) {
+        list<string> deps = (memberSource(qo_dir, name),);
+        foreach string provider in (providers) {
+            push deps, qo_dir + "/" + provider + ".qo.aggregate-contract.stamp";
         }
         write(qo_dir + "/" + name + ".qo.d",
             qo_dir + "/" + name + ".qo.stamp:"
@@ -201,6 +255,11 @@ class AOTSccGraphTransitionTest inherits QUnit::Test {
 
     private string sourceToken(string context_path, string selector) {
         return ok(("--scc-source-token", context_path, selector));
+    }
+
+    #! True when the helper reports the component's publication current.
+    private bool isCurrent(string context_path, string selector) {
+        return run(("--scc-current", context_path, selector)).rc == 0;
     }
 
     #! A four-source group whose depfiles put a and b in one cyclic component.
@@ -547,5 +606,204 @@ class AOTSccGraphTransitionTest inherits QUnit::Test {
         )) + "\n");
         assertEq(live, ok(("--scc-graph-generation", context_path), snapshot),
             "a snapshot with an out-of-range node is discarded");
+    }
+
+    #! A folded-constant edge must reach the preload closure and nothing else.
+    /** qcc records two kinds of dependency in a depfile and the suffix is what
+        tells them apart.  A `.compile-contract.stamp` prerequisite is a REQUIRED
+        edge: the consumer baked a link-time hash, so the provider must be
+        compiled first and the two are ordered.  A declaration-contract
+        prerequisite is a CONTENT dependency: the consumer folded a value or
+        resolved a type, which needs the provider PRESENT in a parse but orders
+        nothing -- so it must not become a required edge.
+        The distinction is not cosmetic.  Spelling a content edge with the
+        required suffix on one real 875-source group collapsed 820 components
+        into 435, one of them with 441 members, because every resolved
+        declaration became an ordering constraint; the incremental scheduler then
+        has nothing small left to compile.
+    */
+    testDeclarationContractDependencyIsContentOnly() {
+        TmpDir tmp("qore-aot-scc-content-edge-");
+        list<string> names = ("a", "b", "c");
+        string context_path = writeContext(tmp.path, names);
+        string qo_dir = tmp.path + "/qo";
+        foreach string name in (names) {
+            writeArtifacts(qo_dir, name);
+        }
+        # b folds a value from a; c bakes a link-time hash from a
+        writeDepfile(qo_dir, "a", ());
+        writeContentDepfile(qo_dir, "b", "a");
+        writeDepfile(qo_dir, "c", "a");
+
+        assertEq(3, parse_json(ok(("--scc-map", context_path))).components.size(),
+            "a content edge leaves every source its own component");
+        assertEq(1, componentFor(context_path, qo_dir, "b").size,
+            "the folding consumer is not condensed with its provider");
+
+        # The required-edge half sees c's edge and not b's.
+        string a_key = componentFor(context_path, qo_dir, "a").key;
+        assertEq("", trim(ok(("--scc-prerequisites", context_path,
+                componentFor(context_path, qo_dir, "b").key))),
+            "a declaration-contract dependency is not an ordering edge");
+        list<string> c_prerequisites = ();
+        foreach string line in (ok(("--scc-prerequisites", context_path,
+                componentFor(context_path, qo_dir, "c").key)).split("\n")) {
+            if (trim(line)) {
+                push c_prerequisites, line.split("\t")[1];
+            }
+        }
+        assertEq((a_key,), c_prerequisites,
+            "a compile-contract dependency still is an ordering edge");
+
+        # The content half sees b's edge: a parse that compiles b must be able to
+        # resolve a, or the value b folded is not there to fold.
+        string keyfile = tmp.path + "/keys";
+        write(keyfile, componentFor(context_path, qo_dir, "b").key + "\n");
+        list<string> preload = ();
+        foreach string line in (ok(("--scc-preload-set", context_path, keyfile)).split("\n")) {
+            if (trim(line)) {
+                push preload, basename(trim(line));
+            }
+        }
+        assertTrue(inlist("a.qo", preload),
+            sprintf("the declaration-contract provider reaches the preload set: %y", preload));
+        assertFalse(inlist("b.qo", preload),
+            sprintf("the preload set excludes what the parse compiles itself: %y", preload));
+    }
+
+    #! Compiling a component must not be what makes that component stale.
+    /** A generation token names a component's members AND its prerequisite
+        components, so it is comparable only against a token computed from the same
+        dependency graph.  A component's predecessors come from its OWN depfile, and
+        a compile rewrites its own depfile -- so compiling a component can move the
+        graph its record was just published against, and the token comparison then
+        reports it stale immediately after building it.
+
+        It is not a hypothetical.  A whole-group parse resolves cross-member
+        references it can see in its own parse and records a compile-contract
+        prerequisite for each, where the same source compiled standalone against
+        shells defers more of them and records fewer; on one real 875-source group
+        the two forms of one member's depfile carry 45 and 28 contract edges.  The
+        coordinator then sees a pass leave stale exactly the set it compiled, calls
+        the plan non-convergent, and reparses the entire group -- 879 qcc
+        invocations for a one-line edit.
+
+        The three negatives are the whole point: a graph transition must excuse
+        losing a prerequisite, and nothing else.
+    */
+    testOwnCompileGraphTransitionIsNotStaleness() {
+        TmpDir tmp("qore-aot-scc-own-compile-");
+        list<string> names = ("a", "b", "c", "d");
+        string context_path = writeContext(tmp.path, names);
+        string qo_dir = tmp.path + "/qo";
+        foreach string name in (names) {
+            writeArtifacts(qo_dir, name);
+        }
+        # a is compiled against b and c, as a whole-group parse would record it
+        writeDepfile(qo_dir, "a", ("b", "c"));
+        writeDepfile(qo_dir, "b", ());
+        writeDepfile(qo_dir, "c", ());
+        writeDepfile(qo_dir, "d", ());
+
+        string key = componentFor(context_path, qo_dir, "a").key;
+        string group_graph = graphGeneration(context_path);
+        ok(("--scc-publish", "--expect", sourceToken(context_path, key),
+            "--expect-graph", group_graph, context_path, key));
+        assertTrue(isCurrent(context_path, key),
+            "the component is current against the graph it published under");
+
+        # THE REGRESSION: a's own compile defers what the group parse resolved, so
+        # a's depfile now records one prerequisite where it recorded two.
+        writeDepfile(qo_dir, "a", "b");
+        assertNeq(group_graph, graphGeneration(context_path),
+            "dropping a prerequisite really is a different graph generation");
+        assertTrue(isCurrent(context_path, key),
+            "losing a prerequisite to its own compile does not make a component stale");
+
+        # A prerequisite the record never named is a different matter: the
+        # artifacts were compiled without knowing about it.
+        writeDepfile(qo_dir, "a", ("b", "d"));
+        assertFalse(isCurrent(context_path, key),
+            "a prerequisite the publication never named leaves the component stale");
+
+        # A prerequisite that is still named, whose published contract moved, is
+        # exactly what the token exists to catch -- graph transition or not.
+        writeDepfile(qo_dir, "a", "b");
+        assertTrue(isCurrent(context_path, key), "back to the narrowed prerequisite set");
+        write(qo_dir + "/b.qo.aggregate-contract.stamp", "b republished its declarations\n");
+        assertFalse(isCurrent(context_path, key),
+            "a surviving prerequisite's new contract still makes the component stale");
+
+        # And a member source edit is never excused by a moved graph.
+        write(qo_dir + "/b.qo.aggregate-contract.stamp",
+            "b" + ".aggregate-contract.stamp\n");
+        assertTrue(isCurrent(context_path, key), "restoring the contract restores currency");
+        write(tmp.path + "/src/a.qc", isolatedSource("a") + "# externally edited\n");
+        assertFalse(isCurrent(context_path, key),
+            "a moved graph does not excuse an edited member source");
+    }
+
+    #! A body contract a member baked is compared across a graph transition too.
+    /** The declaration contract carries no body-contract hashes, so a consumer that
+        baked one records the provider's body contract as a dependency of its own.
+        That dependency comes from the consumer's own depfile, and a compile rewrites
+        its own depfile -- so it moves across exactly the transitions the currency
+        check has to forgive, and must not be forgiven with them: `--link-qo`
+        compares those hashes and fails the aggregate when they disagree.
+
+        The asymmetry is the same as for prerequisites, for the same reason.  One this
+        compile stopped baking is not a reason to rebuild -- the compile is what said
+        it no longer links against it.  One it started baking, or one whose hash
+        moved, is.
+    */
+    testBodyContractIsComparedAcrossAGraphTransition() {
+        TmpDir tmp("qore-aot-scc-body-transition-");
+        list<string> names = ("a", "b", "c");
+        string context_path = writeContext(tmp.path, names);
+        string qo_dir = tmp.path + "/qo";
+        foreach string name in (names) {
+            writeArtifacts(qo_dir, name);
+        }
+        string body_stamp = qo_dir + "/c.qo.body-contract.stamp";
+        write(body_stamp, "body=1\n");
+
+        # a compiles against b, and links against a body contract c publishes.
+        writeDepfileWithBodyContract(qo_dir, "a", "b", "c");
+        writeDepfile(qo_dir, "b", ());
+        writeDepfile(qo_dir, "c", ());
+
+        string key = componentFor(context_path, qo_dir, "a").key;
+        ok(("--scc-publish", "--expect", sourceToken(context_path, key),
+            "--expect-graph", graphGeneration(context_path), context_path, key));
+        assertTrue(isCurrent(context_path, key),
+            "the component is current against what it published");
+
+        # The provider republishes the same declarations and a different body
+        # contract.  Nothing else moves, and the consumer must still be stale.
+        write(body_stamp, "body=2\n");
+        assertFalse(isCurrent(context_path, key),
+            "a moved body contract invalidates the member that baked it");
+
+        write(body_stamp, "body=1\n");
+        assertTrue(isCurrent(context_path, key), "restoring it restores currency");
+
+        # Its own compile dropping the link is not a reason to rebuild.  A
+        # body-contract edge is deliberately NOT a graph edge, so this is decided on
+        # an UNCHANGED graph -- which is why the rule cannot be attached to a graph
+        # transition: a compile decides what it links against, whether or not the
+        # decomposition moved with it.
+        string before_drop = graphGeneration(context_path);
+        writeDepfile(qo_dir, "a", "b");
+        assertEq(before_drop, graphGeneration(context_path),
+            "a body-contract dependency is not an ordering edge, so dropping one "
+            "leaves the dependency graph exactly as it was");
+        assertTrue(isCurrent(context_path, key),
+            "no longer linking against a body contract does not make it stale");
+
+        # Starting to link against one the publication never named does.
+        writeDepfileWithBodyContract(qo_dir, "a", "b", "c");
+        write(body_stamp, "body=3\n");
+        assertFalse(isCurrent(context_path, key),
+            "a body contract the publication never named leaves it stale");
     }
 }

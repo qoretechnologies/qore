@@ -171,8 +171,13 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v12: whole-body and sectioned Zstandard metadata compression are supported
 //! v13: lazy debugger IR is stored in a separate section referenced by SLOT_MAPS ranges
 //! v14: init-function descriptors can target namespace global variables
+//! v15: constants with a pending init function also record the value the producing parse computed, so a
+//!      `qcc -c -L` parse resolving against `.qo` declaration shells can evaluate a constant initializer that
+//!      reads them (see ConstantEntry::setAOTParseShellValue())
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 14;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 15;
+//! First format version recording a compile-time value beside a pending constant's init-function flag.
+constexpr uint16_t QORE_AOT_CONST_PARSE_VALUE_VERSION = 15;
 //! First format version storing lazy debugger IR in a separate section.
 constexpr uint16_t QORE_AOT_SPLIT_DEBUG_IR_VERSION = 13;
 
@@ -2294,6 +2299,34 @@ class QoreAOTBinaryDeserializer {
     QoreAOTTypeResolver* type_resolver = nullptr;
     QoreProgram* pgm = nullptr;
 
+    //! When true, a pending constant's recorded compile-time value (AOT format v15) is deserialized and
+    //! attached to its ConstantEntry so a parse resolving against these shells can evaluate an initializer
+    //! that reads it.
+    /** Set only where `.qo` declaration shells are preloaded for a `qcc -c -L` compile
+        (QoreAOTSiblingPreload::load).  A runtime module load leaves it false and skips the payload: there the
+        `__const_init` function is the only source of a constant's value, so deserializing a second copy at
+        every module load would be pure cost.  See ConstantEntry::setAOTParseShellValue().
+    */
+    bool preload_parse_constant_values = false;
+
+    //! Entries this session attached a shell-supplied compile-time value to, held for the materialization
+    //! pass that runs once every session has registered its constants.  Each entry is referenced while it is
+    //! in this list.
+    std::vector<ConstantEntry*> parse_shell_value_entries;
+
+    //! Attaches the compile-time value a shell recorded for a pending constant to its entry
+    /** Only a `qcc -c -L` parse reads the attached value (ConstantEntry::hasAOTParseShellValue()); it lets
+        the consuming parse evaluate an initializer that folds this constant, which is what gives a
+        shell-resolved parse the same declared types a whole-group parse publishes.
+
+        A payload that cannot be deserialized is dropped rather than failed: the value only improves type
+        fidelity, and a parse without it behaves exactly as it did before the payload existed.
+
+        @param blob the serialized value; cleared on return
+        @param ce the constant entry to attach the value to
+    */
+    void attachAOTParseShellConstantValue(QoreAOTDeferredValueBlob& blob, ConstantEntry* ce);
+
     // Index maps: serialized index → created object
     std::vector<qore_ns_private*> ns_list;
     std::vector<QoreClass*> class_list;
@@ -2427,6 +2460,9 @@ class QoreAOTBinaryDeserializer {
         //! before this blob is deserialized so nested VT_CONST_REF entries can
         //! resolve against same-class or same-module constants.
         QoreAOTDeferredValueBlob value_blob;
+        //! Serialized compile-time value of a pending constant (format v15); empty when the producing parse
+        //! could not record one.  Read only when preload_parse_constant_values is set.
+        QoreAOTDeferredValueBlob parse_value_blob;
     };
     std::vector<std::vector<PendingClassConstant>> pending_class_constants;
 
@@ -2664,6 +2700,14 @@ public:
     bool openAndDeserializeShells(QoreProgram* in_pgm, QoreAOTBinaryReader&& open_reader,
             std::string& error);
 
+    //! Enables deserialization of pending constants' recorded compile-time values
+    /** Must be called before openAndDeserializeShells(): class-constant payloads are read in the shell phase.
+        See preload_parse_constant_values.
+    */
+    void setPreloadParseConstantValues(bool preload) {
+        preload_parse_constant_values = preload;
+    }
+
     //! Swap in a caller-owned type-cache map so this session's
     //! resolver shares lookup results with sibling sessions.
     //! Must be called after openAndDeserializeShells() but before
@@ -2742,6 +2786,13 @@ public:
     bool resolveClassConstantValuesPhase(std::string& error) {
         return resolveClassConstantValues(error);
     }
+
+    //! Phase-split 2a-2d — deep-resolve the compile-time values preloaded shells supplied for constants.
+    /** Must run after every session has registered its constants: a shell's value can reference a constant
+        provided by a sibling fragment, and those references are left deferred while the fragments are still
+        being read.  A no-op unless the shells were preloaded for a compile.
+    */
+    bool materializeParseShellConstantValuesPhase();
 
     //! Phase-split 2a-2 — register class and namespace constants.
     /** Must run across all sessions after resolveTypes() and before
@@ -2975,6 +3026,10 @@ class QoreAOTBinaryMultiDeserializer {
     QoreProgram* pgm = nullptr;
     std::vector<std::unique_ptr<QoreAOTBinaryDeserializer>> sessions;
 
+    //! Propagated to every session added after it is set; see
+    //! QoreAOTBinaryDeserializer::preload_parse_constant_values.
+    bool preload_parse_constant_values = false;
+
     // Shared type-resolver cache across all sessions in the batch.
     // Every addBlob() injects a pointer to this map into the
     // session's type_resolver, so the first session pays for each
@@ -3065,6 +3120,12 @@ public:
         }
     }
 
+    //! Deserialize pending constants' recorded compile-time values in every blob added from now on
+    /** Set before the first addBlob(); see QoreAOTBinaryDeserializer::preload_parse_constant_values. */
+    void setPreloadParseConstantValues(bool preload) {
+        preload_parse_constant_values = preload;
+    }
+
     //! Phase 1: open a new blob and create its shells (namespaces,
     //! class declarations, hashdecl/enum/typedef stubs) in the
     //! target program.  Does NOT run resolution passes — call
@@ -3086,6 +3147,7 @@ public:
             }
         }
         auto deser = std::make_unique<QoreAOTBinaryDeserializer>();
+        deser->setPreloadParseConstantValues(preload_parse_constant_values);
         if (!deser->openAndDeserializeShells(pgm, data, size, error)) {
             return false;
         }
@@ -3195,6 +3257,12 @@ public:
             if (!runSessionPhase("AOT class constant value resolution",
                     [&error](QoreAOTBinaryDeserializer& sess) {
                         return sess.resolveClassConstantValuesPhase(error);
+                    })) return false;
+            // a no-op unless the shells were preloaded for a compile; run here too so the entries it
+            // releases are never held past the resolution they belong to
+            if (!runSessionPhase("AOT preloaded constant value materialization",
+                    [](QoreAOTBinaryDeserializer& sess) {
+                        return sess.materializeParseShellConstantValuesPhase();
                     })) return false;
             if (!runSessionPhase("AOT global resolution",
                     [&error](QoreAOTBinaryDeserializer& sess) {
@@ -3367,6 +3435,12 @@ public:
         if (!runSessionPhase("AOT class constant value resolution",
                 [&error](QoreAOTBinaryDeserializer& sess) {
                     return sess.resolveClassConstantValuesPhase(error);
+                })) {
+            return false;
+        }
+        if (!runSessionPhase("AOT preloaded constant value materialization",
+                [](QoreAOTBinaryDeserializer& sess) {
+                    return sess.materializeParseShellConstantValuesPhase();
                 })) {
             return false;
         }

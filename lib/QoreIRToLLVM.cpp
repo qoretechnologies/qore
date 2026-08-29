@@ -437,6 +437,20 @@ static bool isFastMethodCallEligible(
 #include <cstdio>
 #include <cstring>
 
+// LLVM 23 made getTerminator() assert that the block is already well formed;
+// getTerminatorOrNull() preserves the nullable contract used while lowering.
+static llvm::Instruction* qoreGetTerminator(llvm::BasicBlock* block) {
+#if LLVM_VERSION_MAJOR >= 23
+    return block->getTerminatorOrNull();
+#else
+    return block->getTerminator();
+#endif
+}
+
+static llvm::Instruction* qoreGetTerminator(llvm::BasicBlock& block) {
+    return qoreGetTerminator(&block);
+}
+
 static const type_vec_t* qore_ir_get_call_parsed_arg_types(const QoreValue& expr,
         const QoreParseListNode*& parse_args, const QoreListNode*& args) {
     parse_args = nullptr;
@@ -3142,7 +3156,7 @@ void QoreIRToLLVM::emitLateExitCleanup(llvm::Function* llvm_func,
 
     std::vector<llvm::Instruction*> exits;
     for (llvm::BasicBlock& bb : *llvm_func) {
-        llvm::Instruction* term = bb.getTerminator();
+        llvm::Instruction* term = qoreGetTerminator(bb);
         if (term && (llvm::isa<llvm::ReturnInst>(term)
                 || llvm::isa<llvm::ResumeInst>(term))) {
             exits.push_back(term);
@@ -3245,7 +3259,7 @@ void QoreIRToLLVM::emitLifetimeAnnotations(llvm::Function* llvm_func) {
     // Emit lifetime.end before every ret / resume terminator.
     llvm::IRBuilder<> end_builder(llvm_func->getContext());
     for (llvm::BasicBlock& bb : *llvm_func) {
-        llvm::Instruction* term = bb.getTerminator();
+        llvm::Instruction* term = qoreGetTerminator(bb);
         if (!term) {
             continue;
         }
@@ -3436,7 +3450,7 @@ void QoreIRToLLVM::emitCatchUnwind(llvm::Module& module) {
         return;
     }
 
-    llvm::Instruction* term = builder->GetInsertBlock()->getTerminator();
+    llvm::Instruction* term = qoreGetTerminator(builder->GetInsertBlock());
     assert(term && "catch unwind must be inserted before an exit terminator");
     llvm::Value* active_count = builder->CreateLoad(i64_type, catch_scope_count);
     llvm::Value* has_active_scope = builder->CreateICmpNE(active_count,
@@ -3445,7 +3459,7 @@ void QoreIRToLLVM::emitCatchUnwind(llvm::Module& module) {
     llvm::BasicBlock* current = builder->GetInsertBlock();
     llvm::BasicBlock* continuation = current->splitBasicBlock(term,
             "catch.unwind.cont");
-    current->getTerminator()->eraseFromParent();
+    qoreGetTerminator(current)->eraseFromParent();
     llvm::BasicBlock* unwind = llvm::BasicBlock::Create(ctx, "catch.unwind",
             current->getParent(), continuation);
 
@@ -11092,7 +11106,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
             // If the current block already has a terminator (e.g., from an Invoke that
             // created a conditional branch), skip remaining instructions in this block.
-            if (builder->GetInsertBlock()->getTerminator()) {
+            if (qoreGetTerminator(builder->GetInsertBlock())) {
                 if (getenv("QORE_LLVM_DEBUG")) {
                     fprintf(stderr, "LLVM-SKIP: block %s already has terminator\n",
                             builder->GetInsertBlock()->getName().str().c_str());
@@ -11223,7 +11237,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             }
             if (is_dot_eval_base_release
                     && !inst->operands.empty()
-                    && !builder->GetInsertBlock()->getTerminator()) {
+                    && !qoreGetTerminator(builder->GetInsertBlock())) {
                 uint32_t base_id = inst->operands[0].id;
                 auto uses_it = operand_remaining_uses.find(base_id);
                 if (uses_it != operand_remaining_uses.end() && uses_it->second <= 0) {
@@ -11236,7 +11250,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             // waiting for function exit; otherwise long-running loops keep the
             // referent alive and weak refs never observe deletion.
             if (!weak_load_result_ids.empty()
-                    && !builder->GetInsertBlock()->getTerminator()) {
+                    && !qoreGetTerminator(builder->GetInsertBlock())) {
                 for (const auto& op : inst->operands) {
                     if (!weak_load_result_ids.count(op.id)) {
                         continue;
@@ -11257,7 +11271,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             // closure/call-ref can keep captured values alive until function exit.
             if (inst->opcode == QoreIROpcode::BackgroundInt
                     && !inst->operands.empty()
-                    && !builder->GetInsertBlock()->getTerminator()) {
+                    && !qoreGetTerminator(builder->GetInsertBlock())) {
                 for (const auto& op : inst->operands) {
                     auto uses_it = operand_remaining_uses.find(op.id);
                     if (uses_it != operand_remaining_uses.end() && uses_it->second <= 0) {
@@ -11282,9 +11296,9 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
         // Verify the final insert block has a terminator.
         // Note: the insert block may have changed (e.g., guards create continuation blocks).
         // We check the original block; if it was terminated by Invoke or similar, that's fine.
-        if (!llvm_block->getTerminator()) {
+        if (!qoreGetTerminator(llvm_block)) {
             // The builder may have moved to a guard continuation block; check that too
-            if (!builder->GetInsertBlock()->getTerminator()) {
+            if (!qoreGetTerminator(builder->GetInsertBlock())) {
                 if (getenv("QORE_LLVM_DEBUG")) {
                     fprintf(stderr, "LLVM-NO-TERM: block %s and insert block %s both have no terminator\n",
                             block->name.c_str(), builder->GetInsertBlock()->getName().str().c_str());
@@ -11372,11 +11386,11 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                         final_block_map[inc.block]
                             ? final_block_map[inc.block]->getName().str().c_str() : "NULL",
                         bb->getName().str().c_str(),
-                        bb->getTerminator() ? bb->getTerminator()->getOpcodeName() : "NO_TERM");
+                        qoreGetTerminator(bb) ? qoreGetTerminator(bb)->getOpcodeName() : "NO_TERM");
                 fflush(stderr);
             }
-            if (bb->getTerminator()) {
-                builder->SetInsertPoint(bb->getTerminator());
+            if (qoreGetTerminator(bb)) {
+                builder->SetInsertPoint(qoreGetTerminator(bb));
             } else {
                 builder->SetInsertPoint(bb);
             }
@@ -11511,7 +11525,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
                 if (!catch_reachable_blocks.insert(bb).second) {
                     continue;
                 }
-                llvm::Instruction* term = bb->getTerminator();
+                llvm::Instruction* term = qoreGetTerminator(bb);
                 if (!term) {
                     continue;
                 }
@@ -11525,7 +11539,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
             if (&bb == stack_overflow_bb) {
                 continue;
             }
-            llvm::Instruction* term = bb.getTerminator();
+            llvm::Instruction* term = qoreGetTerminator(bb);
             if (term && (llvm::isa<llvm::ReturnInst>(term)
                     || llvm::isa<llvm::ResumeInst>(term))
                     && (!catch_scope_count
@@ -11554,7 +11568,7 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
 
     // Check all blocks have terminators before LLVM verification
     for (auto& bb : *llvm_func) {
-        if (!bb.getTerminator()) {
+        if (!qoreGetTerminator(bb)) {
             error = "missing terminator in LLVM block '" + bb.getName().str() + "'";
             return false;
         }
@@ -22913,7 +22927,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
                 builder->SetInsertPoint(checked_block);
                 emit_checked_store(val_boxed);
-                if (!builder->GetInsertBlock()->getTerminator()) {
+                if (!qoreGetTerminator(builder->GetInsertBlock())) {
                     builder->CreateBr(cont_block);
                 }
 
@@ -22956,7 +22970,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
                 builder->SetInsertPoint(checked_block);
                 emit_checked_store(val_boxed);
-                if (!builder->GetInsertBlock()->getTerminator()) {
+                if (!qoreGetTerminator(builder->GetInsertBlock())) {
                     builder->CreateBr(cont_block);
                 }
 
@@ -31086,7 +31100,7 @@ bool QoreIRToLLVM::emitFoldLoop(const QoreIRInstruction* inst, llvm::Module& mod
         // We need to fix up the init_bb terminator — replace exit target with box_init_bb
         // The init_bb has a conditional branch: has_more ? loop_bb : exit_bb
         // We need to change exit_bb to box_init_bb
-        llvm::Instruction* init_term = init_bb->getTerminator();
+        llvm::Instruction* init_term = qoreGetTerminator(init_bb);
         for (unsigned i = 0; i < init_term->getNumSuccessors(); ++i) {
             if (init_term->getSuccessor(i) == exit_bb) {
                 init_term->setSuccessor(i, box_init_bb);
@@ -31094,7 +31108,7 @@ bool QoreIRToLLVM::emitFoldLoop(const QoreIRInstruction* inst, llvm::Module& mod
         }
 
         // Similarly redirect loop_bb's branch to exit_bb to box_loop_bb
-        llvm::Instruction* loop_term = loop_bb->getTerminator();
+        llvm::Instruction* loop_term = qoreGetTerminator(loop_bb);
         for (unsigned i = 0; i < loop_term->getNumSuccessors(); ++i) {
             if (loop_term->getSuccessor(i) == exit_bb) {
                 loop_term->setSuccessor(i, box_loop_bb);

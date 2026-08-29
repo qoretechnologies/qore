@@ -27,6 +27,8 @@ class AOTQccBuildSidecarsTest inherits QUnit::Test {
         addTestCase("single source qo sidecars and manifest skip", \testSingleSourceSidecars());
         addTestCase("script preload qo libraries can be omitted from manifest",
             \testScriptPreloadManifestInputs());
+        addTestCase("existing declaration-contract depfiles remain snapshot inputs",
+            \testExistingDeclarationContractSnapshot());
         addTestCase("qo link sidecars and manifest skip", \testQoLinkSidecars());
         addTestCase("script aggregate sidecars and manifest skip", \testScriptAggregateSidecars());
 
@@ -309,6 +311,38 @@ public class QccSidecarConsumer {
         manifest_json = File::readTextFile(manifest);
         assertContains(manifest_json, provider_qo,
             "explicit manifest input records provider .qo");
+    }
+
+    # A depfile can outlive the configuration that produced it.  Until qcc has
+    # rebuilt and replaced that depfile, every contract prerequisite already in
+    # it must be part of the initial input snapshot even when the current command
+    # no longer asks qcc to emit declaration-contract dependencies.
+    testExistingDeclarationContractSnapshot() {
+        TmpDir tmp("qore-aot-qcc-old-declaration-dep-");
+        string src = tmp.path + "/consumer.qc";
+        string qo = tmp.path + "/consumer.qo";
+        string dep = qo + ".d";
+        string declaration_stamp = tmp.path
+            + "/provider.qo.aggregate-contract.stamp";
+        string marker = tmp.path + "/after-input-snapshot.marker";
+
+        write(src, "%new-style\npublic const ExistingDeclarationDep = 1;\n");
+        write(declaration_stamp, "before\n");
+        write(dep, sprintf("%s: %s %s\n", qo, src, declaration_stamp));
+
+        string out = run(sprintf(
+            "{ (i=0; while [ ! -f %s ] && [ $i -lt 500 ]; do sleep 0.01; "
+            "i=$((i + 1)); done; [ -f %s ] && printf 'after\\n' > %s) & watcher=$!; "
+            "QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_MARKER=%s "
+            "QORE_QCC_TEST_AFTER_INPUT_SNAPSHOT_DELAY_MS=500 "
+            "%s %s -c --parse-option=PO_MODERN --depfile=%s "
+            "--depfile-compile-contract-stamps -o %s %s; "
+            "rc=$?; wait $watcher || rc=$?; echo QCC_RC=$rc; }",
+            marker, marker, declaration_stamp, marker, env, qcc_bin, dep, qo, src));
+        assertContains(out, "qcc input changed while building",
+            "an existing declaration-contract prerequisite is validated: " + out);
+        assertContains(out, "QCC_RC=75",
+            "a moved existing declaration contract requests a retry: " + out);
     }
 
     testQoLinkSidecars() {

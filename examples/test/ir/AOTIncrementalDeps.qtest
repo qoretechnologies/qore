@@ -50,6 +50,10 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
         addTestCase("folded class constant", \testClassConstant());
         addTestCase("pure type reference is not a dependency", \testPureTypeNotDep());
         addTestCase("typed global import is a build dependency", \testTypedGlobalImportDep());
+        addTestCase("a folded constant depends on the provider's declaration contract",
+            \testFoldedConstantDeclarationContractDep());
+        addTestCase("declaration-contract dependencies require a source-content map",
+            \testDeclarationContractRequiresSourceContentMap());
         addTestCase("batch depfile directory emits per-output depfiles", \testBatchDepfileDir());
         addTestCase("module depfiles use deterministic dependency forms",
             \testModuleDependencyForms());
@@ -132,6 +136,114 @@ class AOTIncrementalDepsTest inherits QUnit::Test {
             "class UseCc { static int f() { return Ck::CC + 2; } }");
         assertTrue(dep.find("ck.qc") != -1,
             "depfile records the sibling defining the folded class constant: " + dep);
+    }
+
+    # A folded constant leaves nothing behind in the emitted object, so the compile
+    # records the PROVIDER'S SOURCE -- and with --depfile-source-content-map that becomes the
+    # provider's source-content digest, i.e. a dependency at source-byte granularity.  That is
+    # too coarse: appending a comment to a widely required source then rebuilds every object
+    # that folded any constant from it, and on a real 875-source group the consumer closure of
+    # such a source is most of the group.
+    #
+    # --depfile-declaration-contract-stamps narrows the edge to the provider's declaration
+    # contract, which is exactly what a folded value consumes: it carries a value_hash for
+    # every constant the provider defines, and leaves out the lowering artifacts that make the
+    # provider's COMPILE contract differ between a whole-group parse and a standalone one.
+    #
+    # Both halves are asserted, because only the pair is a dependency: the narrowed edge must
+    # NOT move for an edit that changes no declaration, and it MUST move when the folded value
+    # changes -- otherwise the consumer keeps a stale literal with nothing to rebuild it.
+    testFoldedConstantDeclarationContractDep() {
+        TmpDir tmp = initDirs();
+        string prov_src = tmp_dir + "/dck.qc";
+        string cons_src = tmp_dir + "/use_dc.qc";
+        write(prov_src, "%new-style\npublic const DCVAL = 7;\n");
+        write(cons_src,
+            "%new-style\nclass UseDc { static int f() { return DCVAL * 3 + 1; } }\n");
+
+        string prov_obj = lib_dir + "/dck.qo";
+        string decl_stamp = prov_obj + ".aggregate-contract.stamp";
+        string compile_stamp = prov_obj + ".compile-contract.stamp";
+        code compileProvider = sub () {
+            string out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN"
+                + " --compile-contract-stamp=%s --aggregate-contract-stamp=%s -o %s %s",
+                env, qcc_bin, lib_dir, compile_stamp, decl_stamp, prov_obj, prov_src));
+            assertTrue(is_file(prov_obj), "compiled the constant provider: " + out);
+            assertTrue(is_file(decl_stamp), "emitted the declaration contract: " + out);
+        };
+        compileProvider();
+
+        # the source-content map is what tells qcc which dependency is a member of this build
+        # group; its digest sidecars are what a source-byte dependency narrows to
+        hash<string, string> sidecars = {};
+        foreach string src in ((prov_src, cons_src)) {
+            string sidecar = src + ".sha256";
+            write(sidecar, sprintf("sha256=%s\n",
+                digest("sha256", ReadOnlyFile::readBinaryFile(src)).toHex()));
+            sidecars{src} = sidecar;
+        }
+        string map_file = tmp_dir + "/source-content.map";
+        write(map_file, sprintf("%s\t%s\n%s\t%s\n", prov_src, sidecars{prov_src},
+            cons_src, sidecars{cons_src}));
+
+        # BASELINE: without the option the edge is the provider's source-content digest
+        string plain_dep = lib_dir + "/use_dc.plain.d";
+        run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN --depfile=%s"
+            + " --depfile-compile-contract-stamps --depfile-source-content-map=%s"
+            + " -o %s/use_dc.qo %s",
+            env, qcc_bin, lib_dir, plain_dep, map_file, lib_dir, cons_src));
+        string plain = File::readTextFile(plain_dep);
+        assertTrue(plain.find("dck.qc.sha256") != -1,
+            "without the option the folded constant is a source-byte dependency: " + plain);
+        assertEq(-1, plain.find("dck.qo.aggregate-contract.stamp"),
+            "without the option no declaration contract is recorded: " + plain);
+
+        # NARROWED: the same compile with the option records the declaration contract instead
+        string dep_file = lib_dir + "/use_dc.qo.d";
+        string cons_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN --depfile=%s"
+            + " --depfile-compile-contract-stamps --depfile-declaration-contract-stamps"
+            + " --depfile-source-content-map=%s -o %s/use_dc.qo %s",
+            env, qcc_bin, lib_dir, dep_file, map_file, lib_dir, cons_src));
+        assertTrue(is_file(lib_dir + "/use_dc.qo"), "compiled the folding consumer: " + cons_out);
+        string dep = File::readTextFile(dep_file);
+        assertTrue(dep.find("dck.qo.aggregate-contract.stamp") != -1,
+            "the folded-constant edge narrows to the provider's declaration contract: " + dep);
+        assertEq(-1, dep.find("dck.qc.sha256"),
+            "the provider's source-byte edge is replaced, not merely accompanied: " + dep);
+        # the consumer's OWN source must stay a source-byte dependency: its own bytes are what
+        # decide whether it is recompiled, and its own declaration contract cannot say that
+        assertTrue(dep.find("use_dc.qc.sha256") != -1,
+            "the target's own source is still recorded at source-byte granularity: " + dep);
+
+        # An edit that changes no declaration must not move the narrowed edge.  This is the
+        # whole point of the narrowing: under the source-byte edge this rebuilt the consumer.
+        string declared = File::readTextFile(decl_stamp);
+        write(prov_src, "%new-style\npublic const DCVAL = 7;\n# a comment changes no declaration\n");
+        compileProvider();
+        assertEq(declared, File::readTextFile(decl_stamp),
+            "a comment-only provider edit leaves the declaration contract byte-identical");
+
+        # ...and a changed VALUE must move it, or the consumer keeps a stale folded literal
+        write(prov_src, "%new-style\npublic const DCVAL = 8;\n");
+        compileProvider();
+        assertNeq(declared, File::readTextFile(decl_stamp),
+            "changing the folded value moves the declaration contract, so the consumer rebuilds");
+    }
+
+    # The map is the only thing that says which dependency is a member of this build group, so
+    # the option cannot do anything useful without it and says so rather than silently narrowing
+    # nothing.
+    testDeclarationContractRequiresSourceContentMap() {
+        TmpDir tmp = initDirs();
+        string src = tmp_dir + "/dcreq.qc";
+        write(src, "%new-style\npublic const DCREQ = 1;\n");
+        string out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN --depfile=%s"
+            + " --depfile-declaration-contract-stamps -o %s/dcreq.qo %s 2>&1 || true",
+            env, qcc_bin, lib_dir, lib_dir + "/dcreq.qo.d", lib_dir, src));
+        assertTrue(out.find("--depfile-declaration-contract-stamps requires") != -1,
+            "the option is rejected without a source-content map: " + out);
+        assertFalse(is_file(lib_dir + "/dcreq.qo"),
+            "the rejected compile emits no object");
     }
 
     testPureTypeNotDep() {
