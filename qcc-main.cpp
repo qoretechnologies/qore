@@ -7183,9 +7183,10 @@ static bool add_aot_compile_contract_depfile_inputs(
     static constexpr const char suffix[] = ".compile-contract.stamp";
     // A declaration contract is a published provider interface exactly as a compile contract is,
     // so --skip-if-manifest-current has to watch it for the same reason: a provider whose
-    // declarations moved must not let this object skip its own recompile.  It is recorded only
-    // where the narrowing that produces it is enabled, so a build that does not use it sees no
-    // change in what its manifests contain.
+    // declarations moved must not let this object skip its own recompile.  Watch every such
+    // prerequisite already present in the depfile, even when the current invocation no longer
+    // emits declaration-contract dependencies: a depfile from an earlier configuration remains
+    // authoritative until this invocation has actually rebuilt and replaced it.
     static constexpr const char declaration_suffix[] = ".aggregate-contract.stamp";
     std::vector<std::string> deps;
     read_make_depfile_inputs(depfile, deps);
@@ -7200,8 +7201,7 @@ static bool add_aot_compile_contract_depfile_inputs(
             inputs.push_back(deps[i]);
             continue;
         }
-        if (depfile_declaration_contract_stamps
-                && deps[i].size() >= sizeof(declaration_suffix) - 1
+        if (deps[i].size() >= sizeof(declaration_suffix) - 1
                 && deps[i].compare(deps[i].size() - (sizeof(declaration_suffix) - 1),
                     sizeof(declaration_suffix) - 1, declaration_suffix) == 0) {
             inputs.push_back(deps[i]);

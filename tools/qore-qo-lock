@@ -27,8 +27,9 @@
 
     An advisory lock taken with fcntl(2) has none of that.  The kernel owns it: it
     is released when the holder exits, however it exits, so there is no abandoned
-    state to detect, no owner record to parse, no liveness check, and no reclaim.  A
-    waiter is woken when the holder releases rather than when it next looks.
+    state to detect, no owner record to parse, no liveness check, and no reclaim.
+    File::lockBlocking() retries a non-blocking fcntl lock every 50 ms, reducing the
+    old polling latency while retaining kernel-owned release semantics.
     `flock(1)` would give the same thing on Linux, but macOS has no such utility,
     which is what the poll was there to work around; File::lockBlocking() has it on
     every platform %Qore supports.
