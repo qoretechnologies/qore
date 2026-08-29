@@ -68,6 +68,7 @@ class QoreParseListNode;
 struct QoreTypeParamInstantiation;
 class ExceptionSink;
 class RuntimeConstantRefNode;
+class ConstantEntry;
 struct QoreProgramLocation;
 struct AOTCompiledFuncWithSlots;
 
