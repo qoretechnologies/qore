@@ -697,26 +697,47 @@ What is comparable across a graph transition is what does not come from the grap
 The check only ever accepts records it previously rejected, so it invalidates nothing already
 published: the settling build after applying it recompiled zero objects.
 
-### The bound this narrowing must not cross
+### The bound this narrowing must not cross, and the third contract that closes it
 
-A consumer that baked a provider's body-contract hash — 1139 of 24337 import records, across
-280 of 875 objects, on about ten providers — must still be rebuilt when that hash moves, or the
-aggregate link fails with `qo-link hash mismatch` naming an object the build had no recorded
-reason to rebuild. A declaration contract does not carry body-contract hashes, by design.
+A consumer that baked a provider's body-contract hash must still be rebuilt when that hash
+moves, or the aggregate link fails with `qo-link hash mismatch` naming an object the build had
+no recorded reason to rebuild. A declaration contract does not carry body-contract hashes, by
+design — that omission is exactly what makes it identical in both compile modes.
 
 Channel 1 respects this directly: it excludes any provider the object imports with a
 body-contract hash, and those keep the compile-contract edge the previous pass gave them.
 
-Channel 2 does not, and this is the open edge of the design. The token's prerequisites are the
-required-edge predecessors, which is exactly the imported-provider set; giving all of them the
-declaration digest means a body-contract-only change in a predecessor no longer moves the
-consumer's token. The depfile edge still records it, so the build tool can still see it, but
-the coordinator plans from the token. The correct form is per-consumer — the compile contract
-for a predecessor this consumer baked a body contract from, the declaration contract for every
-other — and the marker for that set is which providers the consumer's own symbol index records
-a `body_contract_hash` for. The failure mode is loud (a build failure, not a silently stale
-object), which is why the measurement below was taken before the guard was built rather than
-after.
+Channel 2 cannot, because the token's prerequisites are the required-edge predecessors, which
+is the whole imported-provider set. Measured on the Qorus group:
+
+|!body contracts|!objects|!records
+|objects that PUBLISH one|856 of 877|29576 provided symbols (plus 1273 native)
+|objects that CONSUME one|280 of 877|1116 import records, naming 25 providers
+
+The gap between 856 and 280 is why this cannot be fixed by putting the hashes back into the
+declaration contract: that would make 856 of 877 objects mode-dependent again and restore the
+cascade in full. It has to be watched per consumer.
+
+So a provider publishes a **third** contract, `<object>.qo.body-contract.stamp`: the
+body-contract hash of every symbol it publishes one for, and nothing else — not the whole row,
+so a consumer that fast-called one function does not rebuild for an unrelated change to
+another. A consumer records it as a dependency **only when it actually baked one**, and the
+generation token carries those digests beside its prerequisites.
+
+Three properties keep it cheap and correct:
+
+- it is a **content** dependency, not an ordering one. Ordering already comes from the
+  compile-contract edge recorded for the same provider, and spelling this one with that suffix
+  would promote it to a required edge and collapse the decomposition.
+- it is **covered but not a member artifact**. The generation token accounts for it by content,
+  so an mtime comparison would make a consumer permanently stale behind a provider published
+  later in the same flush; but a publication is not held to have produced one, so a build
+  configured without `--depfile-declaration-contract-stamps`, and every generation published
+  before this existed, is still complete. The manifest omits the list entirely when it is
+  empty, so no token moves for a group that bakes nothing.
+- a member that **stops** baking one is not stale for it. That is its own compile talking, the
+  same asymmetry that applies to prerequisites across a graph transition — except that a
+  body-contract edge is not a graph edge, so it has to be forgiven on an unchanged graph too.
 
 ## A pass walks one level of the closure, not the whole closure
 
@@ -816,6 +837,43 @@ single `rename(2)`. The temporary is named after its target, so concurrent batch
 threads cannot collide, and it does not end in `.d`, so a scan for depfiles cannot
 pick one up mid-write.
 
+## A lock the kernel owns, rather than one the build has to reclaim
+
+Two things in a group build are serialised: the whole-group parse behind its bootstrap stamp,
+and each component's compile behind its own lock. Both used to take the lock by creating a
+hard link and, when that failed, sleeping a second and trying again.
+
+The poll was the smaller half of the cost. A hard link outlives the process that made it, so a
+waiter had to decide whether an existing lock was *abandoned*: read the owner pid out of a
+record, ask whether that pid was alive, compare-and-remove if it was not, and recognise the
+lock shapes older versions of the helpers had published. None of that could be made exclusive —
+every waiter behind one abandoned lock reaches the same conclusion independently — so "two
+builders removed the same lock" had to be defined as normal operation, which is what the
+`remove_raced_path` section below was written for.
+
+An advisory lock taken with `fcntl(2)` has none of that state. The kernel owns it and releases
+it when the holder exits, however it exits: there is nothing to detect, nothing to parse,
+nothing to reclaim, and a waiter is woken when the holder releases rather than when it next
+looks. `flock(1)` would do the same on Linux, but macOS ships no such utility — which is what
+the poll was working around — while `File::lockBlocking()` is available everywhere %Qore is.
+
+A POSIX shell cannot hold an fcntl lock, so `qore-qo-lock LOCKFILE COMMAND...` holds it for as
+long as `COMMAND` runs, and each helper runs its critical section by re-executing itself under
+it. `qore-qo-batch-bootstrap` re-execs whole; `qore-qo-incremental` re-execs one locked attempt
+and keeps its retry loop outside the lock, where it belongs — a 75 or a 76 is answered by
+re-resolving the component's identity, which must happen on the next graph, not this one.
+
+Two details are load-bearing:
+
+- **The lock file is never removed.** An fcntl lock belongs to the open file description, not
+  to the path, so a holder that unlinked it would let the next waiter create a fresh inode,
+  take an uncontended lock on that, and run alongside it.
+- **`QORE_QO_LOCK_WAITED` is observed, not timed.** The helper tries a non-blocking lock first
+  and only then blocks, so it can tell the command whether it was contended. A follower that
+  waited for the group lock re-checks what it came to do, because the holder it waited behind
+  may have published exactly that; that check is what the old `lock_waited` flag drove, and it
+  is preserved exactly.
+
 ## Reclaiming a lock asks for a state, not for an act
 
 A component lock is a hard link whose owner record names a pid and a generation
@@ -833,9 +891,13 @@ build, and the failure surfaced as a component that was compiled but never
 published, with nothing in the log but a `rm` diagnostic — only ever on musl
 hosts, because the same code is silent under coreutils.
 
-Every reclaim path therefore removes through `remove_raced_path`, which succeeds
+Every such removal therefore goes through `remove_raced_path`, which succeeds
 when the path is gone, whoever removed it, and still reports a removal that
 failed for any other reason.
+
+The lock paths that motivated it are gone with the reclaim itself — nothing unlinks a lock any
+more. What is left is the ordering token, which a run that published nothing must put back, and
+which two builders can still race to restore.
 
 ## Invariants
 
@@ -877,7 +939,11 @@ failed for any other reason.
     dependency graph. A component's predecessors come from its own depfile, so its own
     compile can move the graph its record was published against; across that transition
     only the graph-independent half of the token means anything, and a component is never
-    stale because its own compile dropped a prerequisite.
+    stale because its own compile dropped a prerequisite or stopped baking a body contract.
+14. A lock is held by a process, not published as a path. It is released by the kernel when
+    its holder exits, so no builder inspects, reclaims or removes another's lock; the lock
+    file itself is never unlinked, because the lock is a property of the open file
+    description and not of the name.
 
 ## Tests
 
@@ -900,5 +966,9 @@ failed for any other reason.
   whether a partial parse is configured
 - `examples/test/ir/AOTSymbolIndex.qtest` — the symbol index and the source-symbol
   manifest, including a subset parse resolving a provider it compiles itself
+- `examples/test/ir/AOTQoLock.qtest` — the lock helper: status passthrough (including the
+  75/76 the build acts on), the observed contention flag, that two holders do not overlap,
+  that a SIGKILLed holder's lock is free with nothing to reclaim, that the lock file
+  survives, and that arguments are not re-split by a shell
 - `examples/test/ir/AOTDepfileAtomicWrite.qtest` — depfile publication atomicity
 - `examples/test/ir/CMakeBuildHelpers.qtest` — the CMake surface end to end

@@ -82,8 +82,8 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testEscalationFloorFollowsThePartialParse());
         addTestCase("concurrent recipes publish one coherent generation",
             \testConcurrentRecipesPublishOneGeneration());
-        addTestCase("a stale lock survives losing the race to reclaim it",
-            \testStaleLockReclaimSurvivesARacingRemover());
+        addTestCase("a lock left by a dead builder does not wedge the build",
+            \testAbandonedLockDoesNotWedgeTheBuild());
 
         set_return_value(main());
     }
@@ -287,46 +287,6 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
         return trim(result.output);
     }
 
-    #! Writes a `rm` that loses the race to remove a lock, and says so.
-    /** Reclaiming an abandoned lock is a decision followed by a removal, and
-        two waiters that inspected the same lock both decide to remove it.  The
-        loser unlinks a path that is already gone, and what it reports is not
-        the same everywhere: GNU coreutils absorbs an ENOENT unlink under
-        \c -f, while busybox reports it and exits non-zero, because \c -f is
-        consulted only when the preceding \c lstat(2) failed.  The race is not
-        schedulable, so this stands in for the loser's view of it: the lock is
-        removed and then reported missing, exactly as busybox would.
-
-        \return the directory to prepend to PATH.
-    */
-    private string writeRacingRemover(hash<auto> fx) {
-        string dir = fx.root + "/racing-bin";
-        mkdir(dir, 0777, True);
-        # The shim must call the real utility by absolute path, or it re-enters
-        # itself through the PATH it was installed on.
-        string real = trim(backquote("command -v rm"));
-        if (!real.startsWith("/")) {
-            real = "/bin/rm";
-        }
-        write(dir + "/rm",
-            "#!/bin/sh\n"
-            + "for arg in \"$@\"; do\n"
-            + "    case $arg in\n"
-            + "        *.lock)\n"
-            + "            if [ -e \"$arg\" ]; then\n"
-            + "                " + sprintf("%y", real) + " -f \"$arg\"\n"
-            + "                echo \"rm: can't remove '$arg': "
-                + "No such file or directory\" >&2\n"
-            + "                exit 1\n"
-            + "            fi\n"
-            + "            ;;\n"
-            + "    esac\n"
-            + "done\n"
-            + "exec " + sprintf("%y", real) + " \"$@\"\n");
-        chmod(dir + "/rm", 0755);
-        return dir;
-    }
-
     #! Runs the driver the way qore-qo-incremental-plan runs it for a stale component.
     /** \a path_prefix is prepended to PATH, which is how a test replaces one of
         the utilities the driver shells out to.
@@ -425,9 +385,17 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
 
         hash<auto> component = componentFor(fx.qo_dir, "d");
         string generation = graphGeneration(fx);
+        string lock = fx.qo_dir + "/.qcc-scc/" + component.key + ".lock";
+        assertFalse(is_file(lock), "no lock exists before the build");
         hash<auto> result = drive(fx, "d", component);
 
         assertEq(0, result.rc, "the driver succeeds: " + result.output);
+        # The compile runs inside a process holding an exclusive fcntl lock on this
+        # file, so the file has to be there afterwards: it is created to be locked,
+        # and never removed, because the lock belongs to the open file description
+        # rather than to the path.
+        assertTrue(is_file(lock),
+            "the component's compile ran under a lock on its own lock file");
         assertEq(("d.qc d.qo",), compiles(fx),
             "the component is compiled exactly once");
         assertEq(-1, result.output.find("moved"),
@@ -1221,41 +1189,55 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             "a worker really did move the graph while the others were running");
     }
 
-    #! A builder that loses the reclaim race still acquires the lock it reclaimed.
-    /** Losing that race means the lock is gone, which is the state the reclaim
-        asked for -- so the builder must continue.  It used to fail instead,
-        because the removal reported the loss and the driver runs under
-        \c "set -e"; a whole component then went unbuilt and unpublished with
-        nothing in the log but a `rm` diagnostic.  Only musl/busybox hosts could
-        show it, which is why it read as an unexplained alpine-only failure.
+    #! A lock file left behind by a dead builder is not an obstacle.
+    /** The component lock used to be a hard link, which outlives the process that
+        made it: a builder killed mid-compile left one behind, and every later
+        builder had to decide whether it was abandoned -- read the owner pid out of
+        the record, ask whether it was alive, and compare-and-remove if it was not.
+        That reclaim could not be made exclusive, so two waiters behind one
+        abandoned lock both removed it, and the loser of that race unlinked a path
+        that was already gone; busybox reports that, and the driver runs under
+        \c "set -e", so a whole component went unbuilt with nothing in the log but
+        an `rm` diagnostic -- on musl hosts only.
+
+        The lock is now an fcntl lock, which the kernel releases when its holder
+        exits however it exits.  There is no abandoned state to detect and nothing
+        to reclaim, so the file a dead builder leaves behind carries no ownership at
+        all -- which is what this asserts, using a record in exactly the shape the
+        old protocol published.
+
+        The file itself must SURVIVE the build.  An fcntl lock belongs to the open
+        file description rather than to the path, so a builder that unlinked it
+        while another held it would let the next waiter create a fresh inode and
+        enter the critical section alongside the holder.
     */
-    testStaleLockReclaimSurvivesARacingRemover() {
-        TmpDir tmp("qore-aot-driver-reclaim-");
+    testAbandonedLockDoesNotWedgeTheBuild() {
+        TmpDir tmp("qore-aot-driver-abandoned-lock-");
         hash<auto> fx = fixture(tmp.path);
         writeCompiler(fx);
 
         hash<auto> component = componentFor(fx.qo_dir, "d");
         string lock = fx.qo_dir + "/.qcc-scc/" + component.key + ".lock";
         mkdir(fx.qo_dir + "/.qcc-scc", 0777, True);
-        # A well-formed record naming a pid that cannot be running: the acquire
-        # loop can only get past it by reclaiming it, which is the path under
-        # test.  The number is above every pid_max this runs on, and the test
-        # says so rather than assuming it.
+        # The record the previous protocol published, naming a pid that cannot be
+        # running.  Nothing reads it any more; that is the point.
         assertNeq(0, system("kill -0 " + DeadPid + " 2>/dev/null"),
             sprintf("pid %d names no process", DeadPid));
         write(lock, sprintf("%d abandoned\n", DeadPid));
 
-        hash<auto> result = drive(fx, "d", component, NOTHING,
-            writeRacingRemover(fx));
+        hash<auto> result = drive(fx, "d", component);
 
         assertEq(0, result.rc,
-            "the driver survives losing the reclaim race: " + result.output);
+            "a lock left by a dead builder does not block the build: " + result.output);
         assertEq(("d.qc d.qo",), compiles(fx),
             "the component is compiled exactly once");
         *hash<auto> published = record(fx, component.key);
         assertTrue(exists published, "the component's generation record is published");
         assertEq(component.key, published.scc, "the record names the component");
-        assertFalse(is_file(lock), "no lock is left behind");
+        assertTrue(is_file(lock),
+            "the lock file survives the build: unlinking it would let the next "
+            "waiter create a new inode and enter the critical section alongside "
+            "a holder");
     }
 
     #! Everything the named workers know about why they failed.

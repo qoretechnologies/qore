@@ -1,0 +1,130 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#
+# Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+#
+# Runs a command while holding an exclusive lock on a file.
+
+%modern
+
+#! Runs \c COMMAND while holding an exclusive advisory lock on \c LOCKFILE.
+/** The object-group build serialises two things: the whole-group parse behind its
+    bootstrap stamp, and each component's compile behind its own lock.  Both used to
+    take the lock by creating a hard link and, when that failed, sleeping a second
+    and trying again.
+
+    A poll is the wrong shape for a build.  It is not only the latency -- a waiter
+    that could have started the instant the holder finished waits up to a second,
+    and a group with hundreds of components pays that repeatedly -- it is that a
+    hard link outlives the process that made it.  Nothing releases it if the owner
+    is killed, so the loop had to decide whether an existing lock was abandoned:
+    read the owner's pid out of the record, ask whether that pid is alive,
+    compare-and-remove if it is not, and recognise the lock shapes older versions of
+    the helper published.  Every one of those steps is a race that had to be made
+    safe, and the reclaim path could not be made exclusive at all -- two waiters
+    behind one abandoned lock both reclaim it, which had to be defined as normal
+    rather than as an error.
+
+    An advisory lock taken with fcntl(2) has none of that.  The kernel owns it: it
+    is released when the holder exits, however it exits, so there is no abandoned
+    state to detect, no owner record to parse, no liveness check, and no reclaim.  A
+    waiter is woken when the holder releases rather than when it next looks.
+    `flock(1)` would give the same thing on Linux, but macOS has no such utility,
+    which is what the poll was there to work around; File::lockBlocking() has it on
+    every platform %Qore supports.
+
+    The lock is held by THIS process for as long as \c COMMAND runs, so the caller
+    runs its critical section as the command -- typically by re-executing itself
+    with a marker in the environment.  The lock file is created if absent and is
+    never removed: an fcntl lock is a property of the open file description, not of
+    the path, so unlinking it while another process holds it would let the next
+    waiter create a new inode and enter the critical section alongside the holder.
+    An empty lock file is the durable, correct artifact here.
+
+    \c QORE_QO_LOCK_WAITED is exported to the command as 1 when the lock was
+    contended and 0 when it was free.  A follower that waited must re-check what it
+    came to do: the holder it waited for may have published exactly that.  The
+    answer comes from a non-blocking attempt made before blocking, so it reports
+    contention rather than inferring it from elapsed time.
+*/
+%exec-class QoreQoLock
+
+class QoreQoLock {
+    private {
+        #! Exit status for a usage or lock error.
+        /** Distinct from 0 and from the statuses the build's own helpers return for
+            a graph transition (76) or moved sources (75), so a failure to take the
+            lock cannot be read as either. */
+        const ExitLockError = 2;
+    }
+
+    constructor() {
+        if (ARGV.size() < 2) {
+            stderr.printf("usage: %s LOCKFILE COMMAND [ARG...]\n"
+                "\n"
+                "Runs COMMAND while holding an exclusive lock on LOCKFILE and exits with\n"
+                "COMMAND's status.  The lock is released when this process exits, whatever\n"
+                "ends it.  QORE_QO_LOCK_WAITED is 1 in COMMAND's environment when the lock\n"
+                "was contended and 0 when it was free.\n", get_script_name());
+            exit(ExitLockError);
+        }
+        if (!Option::HAVE_FILE_LOCKING) {
+            stderr.printf("%s: this platform provides no file locking\n",
+                get_script_name());
+            exit(ExitLockError);
+        }
+
+        string lock_file = shift ARGV;
+        # Opened, never truncated: another process may hold a lock on this very
+        # inode, and the file's content is not this protocol's business.
+        File f();
+        try {
+            f.open2(lock_file, O_CREAT | O_RDWR, 0644);
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("%s: cannot open lock file %y: %s: %s\n", get_script_name(),
+                lock_file, ex.err, ex.desc);
+            exit(ExitLockError);
+        }
+
+        bool waited = False;
+        try {
+            # Ask first, so "did I wait" is observed rather than timed.
+            if (f.lock(F_WRLCK)) {
+                waited = True;
+                f.lockBlocking(F_WRLCK);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            stderr.printf("%s: cannot lock %y: %s: %s\n", get_script_name(),
+                lock_file, ex.err, ex.desc);
+            exit(ExitLockError);
+        }
+
+        # setenv(), not an assignment to ENV: the command runs in a child process,
+        # so the value has to reach the real environment this process will fork from.
+        if (setenv("QORE_QO_LOCK_WAITED", waited ? "1" : "0")) {
+            stderr.printf("%s: cannot export QORE_QO_LOCK_WAITED\n", get_script_name());
+            exit(ExitLockError);
+        }
+        exit(system(shellCommand(ARGV)));
+    }
+
+    #! One shell word per argument, so nothing the caller passes can be re-read.
+    /** system() takes a command line rather than an argument vector, so the
+        arguments are quoted here rather than left to a shell that would split them
+        on whitespace and expand anything that looked like a glob or a variable.
+        Single quotes suppress every expansion sh performs; the only character they
+        cannot carry is a single quote, which is spliced in as an escaped one.
+
+        The build passes absolute paths through this -- object directories, context
+        files, the script it is re-executing -- and a build tree under a directory
+        with a space in its name is otherwise exactly the kind of thing that works
+        everywhere it is tested and fails on someone's laptop.
+    */
+    private string shellCommand(list<string> args) {
+        list<string> quoted = ();
+        foreach string arg in (args) {
+            push quoted, "'" + replace(arg, "'", "'\\''") + "'";
+        }
+        return quoted.join(" ");
+    }
+}

@@ -91,6 +91,9 @@ component_selector=
 component_size=0
 component_lock=
 component_lock_hint=${QORE_QCC_COMPONENT_LOCK:-}
+# The helpers are installed side by side, so the lock helper is found beside this
+# one rather than threaded through every caller's argument list.
+lock_tool=${QORE_QCC_LOCK_HELPER:-$(dirname "$this_script")/qore-qo-lock}
 planned_stale=${QORE_QCC_PLANNED_STALE:-0}
 
 # True when the group coordinator ran ahead of this recipe.
@@ -456,65 +459,24 @@ accept_current_component() {
     return 0
 }
 
-#! Reads the owner record published at the public lock path.
-#  Prints "PID TOKEN" on success; fails silently when the lock is gone, so a
-#  waiter that loses the race between an existence test and the read simply
-#  retries instead of emitting a shell redirection diagnostic.
-read_output_lock_owner() {
-    _lock_line=
-    # `2>/dev/null` must precede the input redirection: redirections apply left
-    # to right, so with the input first the shell reports a vanished lock on the
-    # inherited stderr before the suppression takes effect — which is exactly
-    # the "No such file or directory" build diagnostic this replaces.
-    if ! IFS= read -r _lock_line 2>/dev/null < "$1"; then
-        return 1
-    fi
-    if [ -z "$_lock_line" ]; then
-        return 1
-    fi
-    printf '%s\n' "$_lock_line"
-}
-
-#! Removes PATH, tolerating a remover that got there first.
-#  Every lock-reclaim caller below wants a state -- PATH gone -- rather than the
-#  act of removing it, and two waiters inspecting the same abandoned lock decide
-#  to drop it independently.  `rm -f` alone does not express that: it swallows a
-#  path that was already missing when it looked, but busybox reports an ENOENT
-#  unlink that follows a successful lstat and exits non-zero, so the waiter that
-#  loses the race by microseconds fails -- and under `set -e` that ends the
-#  build.  GNU coreutils ignores the same errno, which is why this shape only
-#  ever fails on musl/busybox hosts.  A removal that fails for any other reason
-#  is still an error and is still reported.
-remove_raced_path() {
-    if rm -f "$1" 2>/dev/null; then
-        return 0
-    fi
-    if [ ! -e "$1" ] && [ ! -L "$1" ]; then
-        return 0
-    fi
-    # Still there, so this was not the race: repeat the removal without
-    # suppressing it, and let the utility say why it cannot be done.
-    rm -f "$1"
-}
-
-#! Builds the component under its generation lock.
-#  One lock covers every member, so no sibling can publish a new compile
-#  contract while this compile runs — the condition the retry loop existed to
-#  absorb.  Prints the compile outcome; the caller escalates on 75.
-with_component_lock() (
-    output_lock=$1
-    shift
-    output_lock_record=
-    output_lock_token=
+#! Builds the component, with its generation lock already held by the caller.
+#  One lock covers every member, so no sibling can publish a new compile contract
+#  while this compile runs -- the condition the retry loop existed to absorb.
+#  Prints the compile outcome; the caller escalates on 75.
+#
+#  The lock itself is not taken here.  It is an fcntl lock held by the qore-qo-lock
+#  process that executed this script, for exactly as long as this script runs, so
+#  this body has no acquire loop, no owner record, no liveness check and no
+#  reclaim: the kernel releases the lock when its holder exits, however it exits.
+#  What used to be here was a hard link plus a one-second poll, and every piece of
+#  the machinery around it existed only because a hard link outlives its owner.
+run_locked_component() (
     selected_preload_file=
     manifest_input_file=
     compile_plan_file=
     expected_graph=
 
-    # Release only the generation this process acquired: a lock whose record no
-    # longer names our token belongs to a successor, and removing it would
-    # unlock a component another builder is actively publishing.
-    cleanup_output_lock() {
+    cleanup_locked_component() {
         if [ -n "$selected_preload_file" ]; then
             rm -f "$selected_preload_file"
         fi
@@ -524,98 +486,10 @@ with_component_lock() (
         if [ -n "$compile_plan_file" ]; then
             rm -f "$compile_plan_file"
         fi
-        if [ -n "$output_lock_record" ]; then
-            rm -f "$output_lock_record"
-        fi
-        if [ -n "$output_lock_token" ]; then
-            held=$(read_output_lock_owner "$output_lock") || held=
-            if [ "$held" = "$$ $output_lock_token" ]; then
-                remove_raced_path "$output_lock"
-            fi
-        fi
     }
-    trap cleanup_output_lock EXIT
+    trap cleanup_locked_component EXIT
     trap 'exit 1' HUP INT TERM
 
-    # Reclaim a lock shape this protocol never publishes.  Two older ones exist:
-    # flock(1) left an EMPTY regular file here, and the previous protocol
-    # published a DIRECTORY whose `pid` file was written after the directory
-    # existed — a window in which a waiter could see an ownerless lock, and
-    # whose path name carried no generation identity.  Neither is removed by a
-    # plain `rm -f` of a live-lock path, and leaving them would spin the acquire
-    # loop forever, since `ln` keeps failing while no owner record can be read.
-    #
-    # Both tests are shape tests, never "the record was unreadable": a failed
-    # read most often means the lock was released a moment ago, and by the time
-    # this runs a successor may already hold it.  Removing on that signal would
-    # delete a live successor's lock — exactly the ABA this protocol exists to
-    # prevent.  A live lock is a non-empty regular file, so neither branch can
-    # match one.
-    reclaim_foreign_output_lock() {
-        if [ -d "$output_lock" ]; then
-            remove_raced_path "$output_lock/pid"
-            rmdir "$output_lock" 2>/dev/null || true
-        elif [ -e "$output_lock" ] && [ ! -s "$output_lock" ]; then
-            remove_raced_path "$output_lock"
-        fi
-    }
-
-    # The owner record is written in full BEFORE it is published, and published
-    # with a single atomic link(2): there is no state in which the public lock
-    # exists without a complete owner record.  The record names a generation
-    # token as well as a pid, so stale-owner cleanup can tell a dead owner's
-    # lock from a live successor that reused the same path (the ABA case).
-    mkdir -p "$(dirname "$output_lock")"
-    output_lock_record=$(mktemp "$output_lock.XXXXXX")
-    output_lock_token=${output_lock_record##*.}
-    printf '%s %s\n' "$$" "$output_lock_token" > "$output_lock_record"
-    while :; do
-        # `ln FILE DIR` links INTO the directory rather than failing, so a
-        # leftover directory lock would let every waiter "acquire" a distinct
-        # name inside it and enter the critical section together.  Clear that
-        # shape first; this protocol never publishes a directory here, so
-        # removing one is unconditionally safe.
-        if [ -d "$output_lock" ]; then
-            remove_raced_path "$output_lock/pid"
-            rmdir "$output_lock" 2>/dev/null || true
-        fi
-        if ln "$output_lock_record" "$output_lock" 2>/dev/null; then
-            break
-        fi
-        if ! owner=$(read_output_lock_owner "$output_lock"); then
-            # Either the owner released between the failed link and this read —
-            # retry immediately, the next link wins — or the lock is one of the
-            # older shapes, which reclaim recognises by shape rather than by the
-            # failed read.
-            reclaim_foreign_output_lock
-            continue
-        fi
-        owner_pid=${owner%% *}
-        case $owner_pid in
-            ''|*[!0-9]*)
-                # A malformed record cannot be attributed to a live builder;
-                # drop it only if it is still the record we inspected.
-                if [ "$(read_output_lock_owner "$output_lock" || true)" = "$owner" ]; then
-                    remove_raced_path "$output_lock"
-                fi
-                continue
-                ;;
-        esac
-        if ! kill -0 "$owner_pid" 2>/dev/null; then
-            # Compare-and-remove: re-read the record and drop the lock only
-            # while it still names the dead generation we inspected.  A new
-            # owner has a different token, so its lock is left alone.
-            if [ "$(read_output_lock_owner "$output_lock" || true)" = "$owner" ]; then
-                remove_raced_path "$output_lock"
-            fi
-            continue
-        fi
-        sleep 1
-    done
-    # The public link keeps the inode alive; drop the private name so an
-    # interrupted builder cannot leave a second reference behind.
-    rm -f "$output_lock_record"
-    output_lock_record=
 
     # Another waiter may have published this exact component while this process
     # was blocked.  Resolve currency, the compare-and-swap source token, the
@@ -890,6 +764,45 @@ resolve_component_lock() {
     fi
 }
 
+#! Runs one locked attempt at building the component, and returns its status.
+#  The lock has to be held by a process that lives for the whole critical section,
+#  and a POSIX shell cannot hold an fcntl lock, so this re-executes the script
+#  under qore-qo-lock rather than taking a lock and continuing.  The re-execution
+#  is given the identity this process resolved -- not the one the planner passed,
+#  which a graph transition may already have superseded -- so the locked run
+#  resolves exactly the same component without querying the graph again.
+#
+#  Its argument vector is this recipe's own, unchanged, which is what makes the
+#  round trip faithful: OUTPUT, SOURCE, SINGLE_SCRIPT and the preload objects.
+with_component_lock() {
+    if [ ! -f "$lock_tool" ]; then
+        echo "$0: missing qcc lock helper: $lock_tool" >&2
+        return 1
+    fi
+    mkdir -p "$(dirname "$component_lock")"
+    # Named the same way the source-order helper is: a build that is testing a
+    # qore it has not installed must not reach a different one through the
+    # helper's shebang.
+    if [ -n "${QORE_QCC_QORE_EXECUTABLE:-}" ] \
+            && [ -x "$QORE_QCC_QORE_EXECUTABLE" ]; then
+        QORE_QCC_COMPONENT_INDEX="$component_index" \
+        QORE_QCC_COMPONENT_KEY="$component_key" \
+        QORE_QCC_COMPONENT_SIZE="$component_size" \
+        QORE_QCC_COMPONENT_LOCK="$component_lock" \
+        QORE_QCC_LOCKED_COMPONENT=1 \
+            "$QORE_QCC_QORE_EXECUTABLE" "$lock_tool" "$component_lock" \
+            "$this_script" "$output" "$source" "$single_script" "$@"
+        return $?
+    fi
+    QORE_QCC_COMPONENT_INDEX="$component_index" \
+    QORE_QCC_COMPONENT_KEY="$component_key" \
+    QORE_QCC_COMPONENT_SIZE="$component_size" \
+    QORE_QCC_COMPONENT_LOCK="$component_lock" \
+    QORE_QCC_LOCKED_COMPONENT=1 \
+        "$lock_tool" "$component_lock" "$this_script" \
+        "$output" "$source" "$single_script" "$@"
+}
+
 #! Makes the component current, rebuilding the whole component at most once more.
 #  The single rebuild is not a convergence loop.  It answers one of exactly two
 #  conditions, which are deliberately reported apart because they have nothing in
@@ -923,7 +836,7 @@ build_component() {
             # which is 0 whenever an unmatched condition ran no branch -- so the
             # build status has to be captured in an else branch, never read back
             # after the `if` that tested it.
-            if with_component_lock "$component_lock" "$@"; then
+            if with_component_lock "$@"; then
                 rc=0
             else
                 rc=$?
@@ -993,5 +906,15 @@ run_main() {
 
     build_component "$@"
 }
+
+# The locked half of one build attempt, re-executed by with_component_lock() under
+# the component's lock.  It runs exactly one attempt and returns its status; the
+# retry that answers a 75 or a 76 belongs to the unlocked caller, which has to
+# re-resolve the component's identity before trying again.
+if [ "${QORE_QCC_LOCKED_COMPONENT:-}" = 1 ]; then
+    resolve_component || true
+    run_locked_component "$@"
+    exit $?
+fi
 
 run_main "$@"

@@ -75,6 +75,8 @@ class AOTSccGraphTransitionTest inherits QUnit::Test {
             \testDeclarationContractDependencyIsContentOnly());
         addTestCase("a component's own compile does not make it stale",
             \testOwnCompileGraphTransitionIsNotStaleness());
+        addTestCase("a baked body contract is compared across a graph transition",
+            \testBodyContractIsComparedAcrossAGraphTransition());
 
         set_return_value(main());
     }
@@ -163,6 +165,23 @@ class AOTSccGraphTransitionTest inherits QUnit::Test {
         foreach string provider in (providers) {
             push deps, qo_dir + "/" + provider + ".qo.compile-contract.stamp";
         }
+        write(qo_dir + "/" + name + ".qo.d",
+            qo_dir + "/" + name + ".qo.stamp:"
+            + join("", (map " \\\n    " + $1, deps)) + "\n");
+    }
+
+    #! Writes NAME's depfile with a required edge and a baked body contract.
+    /** The shape qcc emits for a consumer that both compiled against a provider and
+        recorded its body-contract hash: an ordering edge on the one, and a
+        body-contract dependency on the other.
+    */
+    private writeDepfileWithBodyContract(string qo_dir, string name,
+            softlist<string> providers, string body_provider) {
+        list<string> deps = (qo_dir + "/../src/" + name + ".qc",);
+        foreach string provider in (providers) {
+            push deps, qo_dir + "/" + provider + ".qo.compile-contract.stamp";
+        }
+        push deps, qo_dir + "/" + body_provider + ".qo.body-contract.stamp";
         write(qo_dir + "/" + name + ".qo.d",
             qo_dir + "/" + name + ".qo.stamp:"
             + join("", (map " \\\n    " + $1, deps)) + "\n");
@@ -708,5 +727,69 @@ class AOTSccGraphTransitionTest inherits QUnit::Test {
         write(tmp.path + "/src/a.qc", isolatedSource("a") + "# externally edited\n");
         assertFalse(isCurrent(context_path, key),
             "a moved graph does not excuse an edited member source");
+    }
+
+    #! A body contract a member baked is compared across a graph transition too.
+    /** The declaration contract carries no body-contract hashes, so a consumer that
+        baked one records the provider's body contract as a dependency of its own.
+        That dependency comes from the consumer's own depfile, and a compile rewrites
+        its own depfile -- so it moves across exactly the transitions the currency
+        check has to forgive, and must not be forgiven with them: `--link-qo`
+        compares those hashes and fails the aggregate when they disagree.
+
+        The asymmetry is the same as for prerequisites, for the same reason.  One this
+        compile stopped baking is not a reason to rebuild -- the compile is what said
+        it no longer links against it.  One it started baking, or one whose hash
+        moved, is.
+    */
+    testBodyContractIsComparedAcrossAGraphTransition() {
+        TmpDir tmp("qore-aot-scc-body-transition-");
+        list<string> names = ("a", "b", "c");
+        string context_path = writeContext(tmp.path, names);
+        string qo_dir = tmp.path + "/qo";
+        foreach string name in (names) {
+            writeArtifacts(qo_dir, name);
+        }
+        string body_stamp = qo_dir + "/c.qo.body-contract.stamp";
+        write(body_stamp, "body=1\n");
+
+        # a compiles against b, and links against a body contract c publishes.
+        writeDepfileWithBodyContract(qo_dir, "a", "b", "c");
+        writeDepfile(qo_dir, "b", ());
+        writeDepfile(qo_dir, "c", ());
+
+        string key = componentFor(context_path, qo_dir, "a").key;
+        ok(("--scc-publish", "--expect", sourceToken(context_path, key),
+            "--expect-graph", graphGeneration(context_path), context_path, key));
+        assertTrue(isCurrent(context_path, key),
+            "the component is current against what it published");
+
+        # The provider republishes the same declarations and a different body
+        # contract.  Nothing else moves, and the consumer must still be stale.
+        write(body_stamp, "body=2\n");
+        assertFalse(isCurrent(context_path, key),
+            "a moved body contract invalidates the member that baked it");
+
+        write(body_stamp, "body=1\n");
+        assertTrue(isCurrent(context_path, key), "restoring it restores currency");
+
+        # Its own compile dropping the link is not a reason to rebuild.  A
+        # body-contract edge is deliberately NOT a graph edge, so this is decided on
+        # an UNCHANGED graph -- which is why the rule cannot be attached to a graph
+        # transition: a compile decides what it links against, whether or not the
+        # decomposition moved with it.
+        string before_drop = graphGeneration(context_path);
+        writeDepfile(qo_dir, "a", "b");
+        assertEq(before_drop, graphGeneration(context_path),
+            "a body-contract dependency is not an ordering edge, so dropping one "
+            "leaves the dependency graph exactly as it was");
+        assertTrue(isCurrent(context_path, key),
+            "no longer linking against a body contract does not make it stale");
+
+        # Starting to link against one the publication never named does.
+        writeDepfileWithBodyContract(qo_dir, "a", "b", "c");
+        write(body_stamp, "body=3\n");
+        assertFalse(isCurrent(context_path, key),
+            "a body contract the publication never named leaves it stale");
     }
 }

@@ -28,6 +28,19 @@ const BATCH_PUBLICATION_SUFFIX = ".publication";
     generation token to watch, and both do.
 */
 const DeclarationContractSuffix = ".aggregate-contract.stamp";
+#! The sidecar carrying the body contracts a member publishes.
+/** What the declaration contract deliberately leaves out, and the only reason
+    leaving it out is safe.  `--link-qo` compares a consumer's recorded import hash
+    against the provider's published body-contract hash and fails the aggregate with
+    "qo-link hash mismatch" when they differ, so a consumer that BAKED one has to be
+    rebuilt when it moves -- and the declaration contract cannot say that it did.
+
+    A consumer records this as a dependency only when it baked one.  On one real
+    875-source group 856 objects PUBLISH a body contract while only 280 consume one,
+    from 25 providers; watching it per consumer is what keeps the other 576 out of
+    the cascade that folding these hashes into the declaration contract would cause.
+*/
+const BodyContractSuffix = ".body-contract.stamp";
 const SOURCE_SYMBOL_CACHE_VERSION = 1;
 const SOURCE_SUMMARY_KEYS = (
     "provides",
@@ -1351,6 +1364,17 @@ class SourceOrderEngine {
         Regex source_content_re = new Regex(
             "((?:\\\\[\\s\\S]|[^\\s])+(?:\\.sha256|\\.aggregate-contract\\.stamp))",
             RE_Global);
+        #! Every provider body contract a depfile names.
+        /** Recorded only by a consumer that baked a provider's body-contract hash,
+            which `--link-qo` validates and the declaration contract cannot describe.
+            Kept apart from the other content prerequisites because it answers a
+            different question -- what this consumer LINKS against, rather than what
+            it compiled against -- and because the preload closure has no use for it:
+            a body-baked provider is already reached over the compile-contract edge
+            recorded for the same provider.
+        */
+        Regex body_contract_re = new Regex(
+            "((?:\\\\[\\s\\S]|[^\\s])+\\.body-contract\\.stamp)", RE_Global);
         #! Every whitespace-separated make prerequisite, escapes included.
         /** Scanning depfiles a byte at a time from Qore made a whole-group
             currency pass the most expensive thing the build ran: 7.8 MB of
@@ -1362,6 +1386,8 @@ class SourceOrderEngine {
         Regex depfile_input_re = new Regex(
             "((?:\\\\[\\s\\S]|[^\\s])+)", RE_Global);
         hash<string, string> contract_digests = {};
+        #! Body-contract digests by provider member output, computed once per process.
+        hash<string, string> body_contract_digests = {};
         #! Group members by object basename, indexed once per process.
         /** contentDependencyOutputs() maps a `.sha256` prerequisite back to the member
             whose object shares its mangled stem, and the preload-set closure calls it once
@@ -2023,6 +2049,47 @@ class SourceOrderEngine {
 
     private list<string> parseMakeDepfileContractInputs(string path) {
         return parseMakeDepfileMatches(path, compile_contract_re);
+    }
+
+    private list<string> parseMakeDepfileBodyContractInputs(string path) {
+        return parseMakeDepfileMatches(path, body_contract_re);
+    }
+
+    #! The provider members whose BODY contracts \a output was linked against.
+    /** Empty for all but the consumers that baked one, which is what makes carrying
+        these in the generation token affordable.
+    */
+    list<string> bodyContractDependencyOutputs(string output) {
+        string depfile = output + ".d";
+        if (!is_file(depfile)) {
+            return ();
+        }
+        hash<string, bool> seen = {};
+        list<string> rv = ();
+        foreach string dependency in (parseMakeDepfileBodyContractInputs(depfile)) {
+            string member = dependency.substr(0,
+                dependency.size() - BodyContractSuffix.size());
+            if (seen{member}) {
+                continue;
+            }
+            seen{member} = True;
+            push rv, member;
+        }
+        return sort(rv);
+    }
+
+    #! The body contract one provider member publishes, digested once per process.
+    private string memberBodyContractDigest(string output) {
+        *string cached = body_contract_digests{output};
+        if (exists cached) {
+            return cached;
+        }
+        string path = output + BodyContractSuffix;
+        string result = is_file(path)
+            ? digest("sha256", ReadOnlyFile::readBinaryFile(path)).toHex()
+            : "";
+        body_contract_digests{output} = result;
+        return result;
     }
 
     private list<string> parseMakeDepfileMatches(string path, Regex re) {
@@ -2999,6 +3066,37 @@ class SourceOrderEngine {
             );
         }
         members = sortByOutput(members);
+        # What this component LINKS against, as opposed to what it compiled against.
+        #
+        # A predecessor contributes its declaration contract above, which says
+        # nothing about body contracts -- deliberately, because that is what makes it
+        # identical between a whole-group parse and a standalone one.  `--link-qo`
+        # does compare body contracts, so a member that baked one has to watch it, or
+        # the aggregate link fails with "qo-link hash mismatch" naming an object the
+        # build had no recorded reason to rebuild.
+        #
+        # Only the members that baked one record the dependency, so this is empty for
+        # most components: on one 875-source group, 856 objects publish a body
+        # contract and 280 consume one.  It is listed apart from the prerequisites
+        # because a body-baked provider need not be a predecessor of this component at
+        # all -- and because the two answer different questions about it.
+        list<hash<auto>> body_contracts = ();
+        hash<string, bool> body_seen = {};
+        foreach int node in (components.members[component]) {
+            foreach string provider in (
+                    bodyContractDependencyOutputs(context_info.outputs[node])) {
+                string canonical_provider = absoluteNormalized(provider);
+                if (body_seen{canonical_provider}) {
+                    continue;
+                }
+                body_seen{canonical_provider} = True;
+                push body_contracts, (
+                    "output": canonical_provider,
+                    "body_contract_digest": memberBodyContractDigest(provider),
+                );
+            }
+        }
+        body_contracts = sortByOutput(body_contracts);
         list<hash<auto>> prerequisites = ();
         foreach int predecessor in (components.predecessors[component]) {
             push prerequisites, (
@@ -3011,12 +3109,19 @@ class SourceOrderEngine {
                 return left.scc < right.scc ? -1 : (left.scc > right.scc ? 1 : 0);
             });
         }
-        string manifest = make_json((
+        # An empty list is omitted rather than recorded, so a group with no baked
+        # body contracts -- and every group built before this was published --
+        # produces exactly the manifest it produced before, and no token moves.
+        hash<auto> preimage = (
             "format": 1,
             "scc": components.component_keys[component],
             "members": members,
             "prerequisites": prerequisites,
-        ));
+        );
+        if (body_contracts) {
+            preimage."body-contracts" = body_contracts;
+        }
+        string manifest = make_json(preimage);
         return (
             "manifest": manifest,
             "token": digest("sha256", manifest).toHex(),
@@ -3118,6 +3223,16 @@ class SourceOrderEngine {
             covered = {};
             for (int index = 0; index < context_info.outputs.size(); ++index) {
                 list<string> paths = memberArtifacts(context_info.outputs[index]);
+                # Covered, but deliberately not a member artifact: the generation
+                # token accounts for it by content, so comparing it by mtime would be
+                # worse than redundant -- a provider's body contract is routinely
+                # newer than a consumer's success stamp, which would make the pair
+                # permanently stale.  It is not in memberArtifacts() because a
+                # publication must not be held to have produced one: a build
+                # configured without --depfile-declaration-contract-stamps never asks
+                # for one, and every generation published before it existed is still
+                # complete.
+                push paths, context_info.outputs[index] + BodyContractSuffix;
                 push paths, context_info.inputs[index];
                 if (context_info.source_content_digests) {
                     push paths, context_info.source_content_digests[index];
@@ -3157,66 +3272,89 @@ class SourceOrderEngine {
         return hstat(context_path).mtime;
     }
 
-    #! True when \a record and \a generation differ only because the graph moved.
-    /** A generation token names a component's members AND its prerequisite
-        components, so it is only comparable against another token computed from
-        the same dependency graph -- the same reason componentSourceToken() exists
-        for the publication compare-and-swap.  A compile rewrites its own depfile,
-        depfile entries are what produce required edges, and a component's
-        predecessors come from its own depfile: so compiling a component is itself
-        enough to move the graph its record was published against.
+    #! True when \a record still covers \a generation despite a differing token.
+    /** A generation token names three things, and only one of them is a plain
+        comparison.
+
+        The component's MEMBERS are its own identity and carry no build state, so
+        they are compared exactly; that is what still catches a source edit.
+
+        Its PREREQUISITES come from the dependency graph, so the token is only
+        comparable against one computed from the same graph -- the same reason
+        componentSourceToken() exists for the publication compare-and-swap.  A
+        compile rewrites its own depfile, depfile entries are what produce required
+        edges, and a component's predecessors come from its own depfile: so compiling
+        a component is itself enough to move the graph its record was published
+        against.
 
         It routinely does.  A whole-group parse resolves cross-member references it
         can see in its own parse and records a compile-contract prerequisite for
         each; the same source compiled standalone against shells defers more of them
         and records fewer.  On one real 875-source group the two forms of one
         member's depfile carry 45 and 28 contract edges, so the FIRST standalone
-        compile after a group parse drops prerequisites -- and comparing the token
-        it published against a token computed from the graph its own compile
-        produced then reports it stale immediately after building it.  The
-        coordinator sees a pass leave stale exactly what it compiled, calls the plan
-        non-convergent, and reparses the whole group.  That was invisible while a
-        mode transition also invalidated the consumer closure, because the next pass
-        then had different work to do and the loop moved on.
+        compile after a group parse drops prerequisites -- and comparing the token it
+        published against a token computed from the graph its own compile produced
+        then reports it stale immediately after building it.  The coordinator sees a
+        pass leave stale exactly what it compiled, calls the plan non-convergent, and
+        reparses the whole group.  That was invisible while a mode transition also
+        invalidated the consumer closure, because the next pass then had different
+        work to do and the loop moved on.
 
-        What is comparable across a graph transition is what does not come from the
-        graph: the component's own member sources, and the published contract of
-        every prerequisite the CURRENT graph still names.  A prerequisite the record
-        does not name at all is not comparable and is treated as stale -- the
-        artifacts were compiled without knowing about it.  A prerequisite the record
-        names and the current graph no longer does is not a reason to rebuild: the
-        component's own compile is what said it no longer depends on it.
+        Its BODY CONTRACTS come from its members' own depfiles rather than from the
+        graph, but the asymmetry is the same and for the same reason: a compile
+        decides what it links against, so one it stopped baking is not a reason to
+        rebuild it, while one it started baking -- or one whose hash moved -- is.
+
+        So: a prerequisite or body contract the CURRENT generation names must appear
+        in the record with the same digest; one the record names and the current
+        generation does not is the compile's own doing and is forgiven.  A
+        prerequisite is only forgiven that way when the graph actually moved, because
+        on an unchanged graph a prerequisite set that shrank did not come from this
+        component's compile.
     */
-    private bool recordCoversGraphTransition(hash<auto> record,
+    private bool recordCoversCurrentGeneration(hash<auto> record,
             hash<auto> generation, string context_path,
             hash<SourceOrderContext> context_info) {
-        # Same graph: the tokens are directly comparable and they did not match.
-        if (record.graph_generation.typeCode() != NT_STRING
-                || record.graph_generation
-                    == graphGeneration(context_path, context_info)) {
-            return False;
-        }
         if (record.manifest.typeCode() != NT_HASH) {
             return False;
         }
         hash<auto> current = parse_json(generation.manifest);
-        # Members are the component's own identity and carry no graph input, so
-        # they must match exactly -- this is what still catches a source edit.
         if (make_json(record.manifest.members) != make_json(current.members)) {
             return False;
         }
-        hash<string, string> published = {};
-        foreach hash<auto> prerequisite in (record.manifest.prerequisites ?? ()) {
-            foreach hash<auto> provided in (prerequisite.provides ?? ()) {
-                published{provided.output} = provided.contract_digest;
+
+        bool graph_moved = record.graph_generation.typeCode() == NT_STRING
+            && record.graph_generation != graphGeneration(context_path, context_info);
+        if (!graph_moved) {
+            if (make_json(record.manifest.prerequisites)
+                    != make_json(current.prerequisites)) {
+                return False;
+            }
+        } else {
+            hash<string, string> published = {};
+            foreach hash<auto> prerequisite in (record.manifest.prerequisites ?? ()) {
+                foreach hash<auto> provided in (prerequisite.provides ?? ()) {
+                    published{provided.output} = provided.contract_digest;
+                }
+            }
+            foreach hash<auto> prerequisite in (current.prerequisites ?? ()) {
+                foreach hash<auto> provided in (prerequisite.provides ?? ()) {
+                    *string was = published{provided.output};
+                    if (!exists was || was != provided.contract_digest) {
+                        return False;
+                    }
+                }
             }
         }
-        foreach hash<auto> prerequisite in (current.prerequisites ?? ()) {
-            foreach hash<auto> provided in (prerequisite.provides ?? ()) {
-                *string was = published{provided.output};
-                if (!exists was || was != provided.contract_digest) {
-                    return False;
-                }
+
+        hash<string, string> published_bodies = {};
+        foreach hash<auto> body in (record.manifest."body-contracts" ?? ()) {
+            published_bodies{body.output} = body.body_contract_digest;
+        }
+        foreach hash<auto> body in (current."body-contracts" ?? ()) {
+            *string was = published_bodies{body.output};
+            if (!exists was || was != body.body_contract_digest) {
+                return False;
             }
         }
         return True;
@@ -3230,8 +3368,9 @@ class SourceOrderEngine {
         has moved since it was published.
 
         A token that does not match is not automatically stale: see
-        recordCoversGraphTransition() for the one case where the two tokens were
-        computed from different dependency graphs and are not comparable.
+        recordCoversCurrentGeneration() for the parts of the token that are not a
+        plain comparison -- what a compile is entitled to have changed about its own
+        prerequisites and its own baked body contracts.
     */
     private bool generationCurrentImpl(hash<SourceOrderContext> context_info,
             string context_path, hash<SourceOrderComponents> components, int component,
@@ -3246,7 +3385,7 @@ class SourceOrderEngine {
             hash<auto> generation =
                 componentGeneration(components, context_info, component);
             if (record.generation != generation.token
-                    && !recordCoversGraphTransition(record, generation,
+                    && !recordCoversCurrentGeneration(record, generation,
                         context_path, context_info)) {
                 return False;
             }

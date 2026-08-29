@@ -660,7 +660,19 @@ int echoed = child.echo(value);
     because its own compile changed which providers it records, which a build could previously
     read as a plan that would not converge.  Measured on an 875-source application, appending one
     comment to a source with a 13-component consumer closure: 23 compiler invocations and 5m05
-    becomes 1 invocation and 1m46, and the build after that is a no-op.
+    becomes 1 invocation and 1m46, and the build after that is a no-op.  A consumer that baked a
+    provider's body contract, which a declaration contract deliberately does not describe, records
+    that contract as a dependency of its own, so narrowing what the build watches does not let a
+    provider's optimised bodies move underneath an object that linked against them.
+
+    %Qore object-group builds no longer poll for their locks.  Both the whole-group parse and each
+    component's compile took a lock by creating a hard link and retrying once a second; a hard link
+    outlives the process that made it, so every waiter also had to decide whether an existing lock
+    had been abandoned by a builder that died, read its owner out of a record, and remove it -- a
+    decision no waiter could make exclusively.  They now run their critical section under an
+    exclusive advisory lock held by the new \c qore-qo-lock helper, which the kernel releases when
+    its holder exits however it exits: a waiter starts the instant the holder finishes, a killed
+    builder blocks nothing, and there is no reclaim path to get wrong.
 
     LLVM 16 or later is required for JIT and AOT.  See @ref execution_modes "Execution Modes" for
     complete mode semantics, \c qcc options, artifact types, source-stripping behavior, and debugging

@@ -497,6 +497,7 @@ while :; do
                 QORE_QCC_QORE_EXECUTABLE="${QORE_QCC_QORE_EXECUTABLE:-}" \
                 QORE_QCC_SOURCE_ORDER_HELPER="$source_order_tool" \
                 QORE_QCC_BATCH_BOOTSTRAP_HELPER="$batch_bootstrap_tool" \
+                QORE_QCC_LOCK_HELPER="${QORE_QCC_LOCK_HELPER:-}" \
                 QORE_QCC_GRAPH_SNAPSHOT="$graph_snapshot" \
                 "$incremental_tool" "$output" "$source" "$single_script"; then
             echo "$0: cannot build stale component $component_key" >&2

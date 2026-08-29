@@ -48,6 +48,8 @@ class AOTSccGenerationTest inherits QUnit::Test {
             \testCMakePlan());
         addTestCase("generation tokens follow the declaration contract",
             \testGenerationFollowsDeclarationContract());
+        addTestCase("a baked body contract is watched by the consumer that baked it",
+            \testBakedBodyContractIsWatched());
         addTestCase("a regex literal does not hide the namespace of what follows it",
             \testRegexLiteralNamespaceTracking());
 
@@ -444,6 +446,76 @@ class AOTSccGenerationTest inherits QUnit::Test {
         write(compile_stamp, "compile=3\n");
         assertEq(provider_token, token(context_path, provider),
             "publishing a contract does not move the publisher's own generation");
+    }
+
+    #! What the declaration contract cannot say, and who has to hear it.
+    /** A generation watches its predecessors' DECLARATION contracts, which carry no
+        body-contract hashes -- that omission is what makes them identical between a
+        whole-group parse and a standalone one, and what stops a mode transition
+        cascading through the group.
+
+        `--link-qo` does compare body contracts: a consumer that recorded a
+        provider's body hash and was not rebuilt when it moved fails the aggregate
+        link with "qo-link hash mismatch", naming an object the build had no recorded
+        reason to rebuild.  So the consumer records the provider's body contract as a
+        dependency of its own, and only when it baked one.
+
+        Only-when-it-baked-one is the entire design.  On one real 875-source group,
+        856 objects PUBLISH a body contract and 280 consume one: watching it per
+        consumer keeps the other 576 out of a cascade that folding these hashes into
+        the declaration contract would have caused.
+    */
+    testBakedBodyContractIsWatched() {
+        TmpDir tmp("qore-aot-scc-body-contract-");
+        string context_path = writeContext(tmp.path, (
+            "a": callRefSource("a", ()),
+            "c": callRefSource("c", "a"),
+            "e": callRefSource("e", ()),
+        ));
+        hash<auto> decomposition = componentMap(context_path);
+        string provider = componentFor(decomposition, "a.qo").scc;
+        string consumer = componentFor(decomposition, "c.qo").scc;
+        string bystander = componentFor(decomposition, "e.qo").scc;
+        string body_stamp = tmp.path + "/qo/a.qo" + ".body-contract.stamp";
+
+        # a publishes a body contract; nobody has baked one yet.
+        write(body_stamp, "body=1\n");
+        string before = token(context_path, consumer);
+        string bystander_before = token(context_path, bystander);
+
+        # c bakes one: qcc records the provider's body contract in c's depfile.  The
+        # source entry keeps this a realistic depfile; the body-contract entry is the
+        # whole point, and it is deliberately NOT spelled with the compile-contract
+        # suffix, which is what makes a REQUIRED edge.
+        write(tmp.path + "/qo/c.qo.d",
+            tmp.path + "/qo/c.qo.stamp: \\\n    "
+            + tmp.path + "/src/c.qc \\\n    " + body_stamp + "\n");
+        string baked = token(context_path, consumer);
+        assertNeq(before, baked,
+            "recording a provider's body contract changes what the consumer watches");
+        assertEq(3, componentMap(context_path).components.size(),
+            "a body-contract dependency is not an ordering edge and does not "
+            "condense the graph");
+
+        # THE POINT: the provider's declarations did not move, so its declaration
+        # contract is untouched -- and the consumer must still be rebuilt.
+        write(body_stamp, "body=2\n");
+        string moved = token(context_path, consumer);
+        assertNeq(baked, moved,
+            "a provider whose body contract moved invalidates the consumer that "
+            "baked it, with no declaration having changed");
+
+        # ...and nobody else.  A component that baked nothing is unaffected by the
+        # same provider republishing its body contract.
+        assertEq(bystander_before, token(context_path, bystander),
+            "a component that baked no body contract is not invalidated by one");
+
+        # A consumer that stops baking one stops watching it.
+        write(tmp.path + "/qo/c.qo.d",
+            tmp.path + "/qo/c.qo.stamp: \\\n    " + tmp.path + "/src/c.qc\n");
+        assertEq(before, token(context_path, consumer),
+            "dropping the baked body contract restores the generation it had "
+            "before, so the manifest carries nothing when nothing is baked");
     }
 
     testGenerationIdentity() {

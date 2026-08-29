@@ -1606,8 +1606,12 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         # The build unit is the provider's strongly connected component, so the
         # lock that serializes its publication is the component generation lock.
         string provider_lock = componentLock(build_dir, provider_object);
-        # qore-qo-incremental formerly used flock(1), which left an empty regular
-        # file at the lock path. The portable lock must migrate it automatically.
+        # An empty regular file at the lock path is what a previous build leaves
+        # behind: the lock is an fcntl lock, taken on this file and released by the
+        # kernel when its holder exits, so nothing removes it and nothing has to.
+        # Writing one here stands in for that, and for the empty file the flock(1)
+        # protocol used to leave -- neither is an obstacle, and neither carries any
+        # ownership for a later builder to interpret.
         write(provider_lock, "");
         string semantic_no_op = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertEq(consumer_mtime, mtime(consumer_object),
@@ -1616,8 +1620,10 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         assertEq(1, semantic_no_op.split("qcc: script-context .qo").size() - 1,
             "concurrent provider requests publish exactly one object generation: "
                 + semantic_no_op);
-        assertFalse(exists hlstat(provider_lock),
-            "incremental compilation migrates and removes a legacy flock file");
+        assertTrue(exists hlstat(provider_lock),
+            "the lock file survives the build it serialised: an fcntl lock belongs "
+            "to the open file description rather than to the path, so unlinking it "
+            "would let the next waiter lock a new inode and run alongside a holder");
         string validated_no_op = run(sprintf("cmake --build %s -- -j33", build_dir));
         assertTrue(validated_no_op.find("qcc -c:") == -1,
             "provider validation converges without repeated qcc recipes: "
@@ -1632,8 +1638,12 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
         string replacement = src_dir + "/provider-replacement.qc";
         string validation_marker = build_dir + "/qcc-input-validation.marker";
         write(replacement, final_provider);
-        mkdir(provider_lock);
-        write(provider_lock + "/pid", "999999999\n");
+        # No lock is fabricated here.  The previous protocol published a DIRECTORY
+        # with a `pid` file in it, and this case used to plant one so the builder had
+        # to reclaim it; an fcntl lock has no such shape and nothing reclaims one, so
+        # planting it now only collides with the real lock file.  What this case is
+        # actually about is below: a provider source edited while qcc is publishing
+        # is rebuilt exactly once.
         string contract_change = run(sprintf(
             "(i=0; while [ ! -f %s ] && [ $i -lt 500 ]; do sleep 0.01; i=$((i + 1)); done; "
             "[ -f %s ] && cp %s %s) & watcher=$!; "
@@ -1657,8 +1667,10 @@ file(WRITE \"${CMAKE_BINARY_DIR}/qo-objects.txt\" \"${QO_OBJECTS}\")
                 + contract_change);
         assertEq(-1, contract_change.find("retrying ("),
             "a moved provider source never enters a retry loop: " + contract_change);
-        assertFalse(exists hlstat(provider_lock),
-            "incremental compilation reclaims an interrupted output lock");
+        assertTrue(exists hlstat(provider_lock),
+            "an interrupted compile leaves its lock file behind and that is correct: "
+            "the lock was released by the kernel when the process ended, and the "
+            "path carries no ownership for the next builder to reclaim");
         string changed_source_out = run(sprintf("cd %s && %s %s",
             src_dir, source_qore, source_runner));
         string changed_static_out = run(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s",
