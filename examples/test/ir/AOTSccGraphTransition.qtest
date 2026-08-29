@@ -156,12 +156,26 @@ class AOTSccGraphTransitionTest inherits QUnit::Test {
             name, name);
     }
 
+    #! NAME's source, spelled the way qcc spells it in a depfile.
+    /** Canonically -- qcc writes every dependency through canonicalizeDepPath(), so
+        a fixture that reaches the same file as `<qo dir>/../src/NAME.qc` is not
+        writing the depfile the build writes.  The difference is not cosmetic: a
+        group source the currency check does not recognise stops being accounted for
+        by content and is compared by mtime instead, against a rule that requires it
+        to be strictly older than the artifacts -- so on a filesystem that gives a
+        whole fixture one timestamp, the component is stale the instant it is
+        published and can never become current.
+    */
+    private string memberSource(string qo_dir, string name) {
+        return normalize_dir(qo_dir + "/../src") + DirSep + name + ".qc";
+    }
+
     #! Writes NAME's depfile so that it records a compile against \a providers.
     /** This is the shape qcc emits with --depfile-compile-contract-stamps, and
         it is what addDepfileContractEdges() reads back as required edges.
     */
     private writeDepfile(string qo_dir, string name, softlist<string> providers) {
-        list<string> deps = (qo_dir + "/../src/" + name + ".qc",);
+        list<string> deps = (memberSource(qo_dir, name),);
         foreach string provider in (providers) {
             push deps, qo_dir + "/" + provider + ".qo.compile-contract.stamp";
         }
@@ -177,7 +191,7 @@ class AOTSccGraphTransitionTest inherits QUnit::Test {
     */
     private writeDepfileWithBodyContract(string qo_dir, string name,
             softlist<string> providers, string body_provider) {
-        list<string> deps = (qo_dir + "/../src/" + name + ".qc",);
+        list<string> deps = (memberSource(qo_dir, name),);
         foreach string provider in (providers) {
             push deps, qo_dir + "/" + provider + ".qo.compile-contract.stamp";
         }
@@ -195,7 +209,7 @@ class AOTSccGraphTransitionTest inherits QUnit::Test {
         closure without reaching the required-edge graph.
     */
     private writeContentDepfile(string qo_dir, string name, softlist<string> providers) {
-        list<string> deps = (qo_dir + "/../src/" + name + ".qc",);
+        list<string> deps = (memberSource(qo_dir, name),);
         foreach string provider in (providers) {
             push deps, qo_dir + "/" + provider + ".qo.aggregate-contract.stamp";
         }

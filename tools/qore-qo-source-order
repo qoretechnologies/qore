@@ -1388,6 +1388,8 @@ class SourceOrderEngine {
         hash<string, string> contract_digests = {};
         #! Body-contract digests by provider member output, computed once per process.
         hash<string, string> body_contract_digests = {};
+        #! Canonical forms of depfile paths, resolved once per process.
+        hash<string, string> canonical_paths = {};
         #! Group members by object basename, indexed once per process.
         /** contentDependencyOutputs() maps a `.sha256` prerequisite back to the member
             whose object shares its mangled stem, and the preload-set closure calls it once
@@ -3205,6 +3207,17 @@ class SourceOrderEngine {
         }
     }
 
+    #! canonical() for a depfile path, resolved once per distinct path per process.
+    private string canonicalCached(string path) {
+        *string cached = canonical_paths{path};
+        if (exists cached) {
+            return cached;
+        }
+        string result = canonical(path);
+        canonical_paths{path} = result;
+        return result;
+    }
+
     #! Build inputs a member's depfile records that the generation token does not cover.
     /** The token is a digest over the source content of the component and its
         transitive predecessors, so every in-context source, digest sidecar, and
@@ -3252,6 +3265,27 @@ class SourceOrderEngine {
         foreach string dependency in (parseMakeDepfileInputs(output + ".d")) {
             if (exists covered{dependency}
                     || exists covered{absoluteNormalized(dependency)}) {
+                continue;
+            }
+            # The covered set indexes every path three ways -- as written, made
+            # absolute, and canonical -- so a lookup that tries only the first two
+            # can miss a path it holds.  absoluteNormalized() prepends the working
+            # directory and nothing else: it does not collapse a `..`, and it does
+            # not resolve a symlink, so the same file spelled either way reaches
+            # here looking foreign.
+            #
+            # What follows for a group source that looks foreign is not a
+            # near-miss.  It stops being accounted for by content and is compared
+            # by mtime instead, against the rule that an input must be strictly
+            # OLDER than the stamp -- and a source written in the same filesystem
+            # tick as the artifacts is then permanently stale, with a build that
+            # rebuilds it every time and never converges.
+            #
+            # qcc canonicalises what it writes, so this is a guard rather than a
+            # daily occurrence; a build tree reached through a symlink is how it
+            # would happen.  The realpath is memoised because a whole-group currency
+            # pass resolves the same 1.9k distinct paths once per member otherwise.
+            if (exists covered{canonicalCached(dependency)}) {
                 continue;
             }
             push external, dependency;
