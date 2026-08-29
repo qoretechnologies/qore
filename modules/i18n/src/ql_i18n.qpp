@@ -1773,6 +1773,9 @@ static bool i18n_string_predicate_match(const std::string& value, const std::str
     if (pattern.isEmpty()) {
         return true;
     }
+    if (text.isEmpty()) {
+        return false;
+    }
 
     UErrorCode status = U_ZERO_ERROR;
     icu::StringSearch search(pattern, text, &collator, nullptr, status);

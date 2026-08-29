@@ -2582,9 +2582,27 @@ public:
         uint32_t param_index = 0;
     };
 
+    //! Function-call default-arg fixups for params whose default is a no-arg call to a
+    //! function declared in the same module, e.g.
+    //!   `constructor(AbstractAuthenticator auth = createDefaultAuthenticator())`
+    /** The FUNCTIONS section is written in `func_list` hash order and each function is
+        registered in its namespace only after its own variants have been read, so a
+        default that calls a sibling function may be read before that sibling exists.
+        Capturing the name here and resolving it in `finalizePostIndex()` — after every
+        function is registered and indexed — removes the ordering dependency.  The name is
+        namespace-qualified: a function outside the root namespace is not reachable from
+        the root function index by its bare identifier.
+    */
+    struct PendingFunctionDefault {
+        std::string func_name;
+        UserVariantBase* uvb = nullptr;
+        uint32_t param_index = 0;
+    };
+
 private:
     std::vector<PendingStaticMethodDefault> pending_smd;
     std::vector<PendingNativeExprDefault> pending_ned;
+    std::vector<PendingFunctionDefault> pending_fd;
 
     //! Legacy owned copies used only for deterministic borrowed-blob A/B tests.
     //! The pointed-to vector buffers remain stable when the outer vector grows.
@@ -2643,6 +2661,8 @@ private:
 
     //! resolves deferred general expression-tree param defaults; see PendingNativeExprDefault
     bool resolveNativeExprDefaults(std::string& error);
+    //! resolves deferred no-arg function-call param defaults; see PendingFunctionDefault
+    bool resolveFunctionCallDefaults(std::string& error);
     bool deserializeHashDecls(std::string& error);
     bool deserializeEnums(std::string& error);
     bool deserializeTypedefs(std::string& error);

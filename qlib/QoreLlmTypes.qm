@@ -80,6 +80,8 @@ module QoreLlmTypes {
     @subsection qorellmtypes_1_0 QoreLlmTypes 1.0
     - Initial release; extracted from the QoreLlmUtils module to break a
       future dependency cycle with LLM provider modules
+    - Fixed OpenAI-compatible streamed function calls so progressive tool-call
+      deltas are accumulated in the final chat response
 */
 
 #! Provider-neutral LLM types and abstract classes (shared with QoreLlmUtils)
@@ -1037,9 +1039,10 @@ public class AbstractLlmProvider {
     #! OpenAI-facade hook: extracts OpenAI tool-call deltas from a provider-native raw event
     /** Returns the list of OpenAI-shaped \c tool_calls deltas (index, id,
         type, function) that should be emitted to the caller for this event.
-        Default returns an empty list (OpenAI streams emit tool calls
-        progressively in \c choices[0].delta.tool_calls which the existing
-        delta accumulator handles directly); Gemini overrides to harvest
+        The default implementation accumulates OpenAI-compatible progressive
+        deltas from \c choices[0].delta.tool_calls into the final response
+        state and returns the original deltas for streaming callers. Gemini
+        overrides this hook to harvest
         \c candidates[0].content.parts[].functionCall entries.
 
         @param state the OpenAI-compatible stream-state hash being accumulated
@@ -1047,7 +1050,73 @@ public class AbstractLlmProvider {
     */
     list<hash<auto>> getOpenAiToolCallDeltas(reference<hash<auto>> state,
             *hash<auto> raw) {
-        return ();
+        if (!raw || raw.choices.typeCode() != NT_LIST || !raw.choices
+                || raw.choices[0].typeCode() != NT_HASH) {
+            return ();
+        }
+        hash<auto> choice = raw.choices[0];
+        if (choice.delta.typeCode() != NT_HASH
+                || choice.delta.tool_calls.typeCode() != NT_LIST) {
+            return ();
+        }
+        if (state.tool_calls.typeCode() != NT_LIST) {
+            state.tool_calls = ();
+        }
+        list<hash<auto>> streamed = ();
+        foreach auto raw_delta in (choice.delta.tool_calls) {
+            if (raw_delta.typeCode() != NT_HASH) {
+                continue;
+            }
+            hash<auto> delta = cast<hash>(raw_delta);
+            # Stream indexes are mandatory in the OpenAI protocol.  Reject
+            # missing, negative, and sparse indexes: accepting a large sparse
+            # index would let an untrusted provider force an unbounded list
+            # allocation, while an omitted index cannot be correlated safely
+            # with an existing progressive tool call.
+            if (delta."index".typeCode() != NT_INT) {
+                continue;
+            }
+            int index = delta."index";
+            if (index < 0 || index > state.tool_calls.size()) {
+                continue;
+            }
+            if (state.tool_calls.size() == index) {
+                state.tool_calls += {
+                    "id": NOTHING,
+                    "type": "function",
+                    "function": {"name": "", "arguments": ""},
+                };
+            }
+
+            hash<auto!> tool_call;
+            tool_call += cast<hash>(state.tool_calls[index]);
+            hash<auto!> function;
+            if (tool_call."function".typeCode() == NT_HASH) {
+                function += cast<hash>(tool_call."function");
+            }
+            if (delta.id.typeCode() == NT_STRING && delta.id.val()) {
+                tool_call.id = delta.id;
+            }
+            if (delta.type.typeCode() == NT_STRING && delta.type.val()) {
+                tool_call.type = delta.type;
+            }
+            if (delta."function".typeCode() == NT_HASH) {
+                hash<auto> function_delta = cast<hash>(delta."function");
+                if (function_delta.name.typeCode() == NT_STRING) {
+                    function.name = (function.name ?? "").toString()
+                        + function_delta.name;
+                }
+                if (function_delta.arguments.typeCode() == NT_STRING) {
+                    function.arguments =
+                        (function.arguments ?? "").toString()
+                        + function_delta.arguments;
+                }
+            }
+            tool_call."function" = function;
+            state.tool_calls[index] = tool_call;
+            streamed += delta;
+        }
+        return streamed;
     }
 }
 

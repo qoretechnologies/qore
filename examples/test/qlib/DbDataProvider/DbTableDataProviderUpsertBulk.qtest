@@ -108,7 +108,14 @@ class DbTableDataProviderUpsertBulkTest inherits QUnit::Test {
             testSkip("no DB connection string; set -c or QORE_DB_CONNSTR_PGSQL");
         }
         Datasource ds(connstr);
-        ds.open();
+        try {
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            # a connection string can be present but unusable (no server, wrong
+            # credentials); that is an environment condition, not a test failure.
+            # Only the connection attempt is guarded - every later error still fails.
+            testSkip(sprintf("no DB connection: %s: %s", ex.err, ex.desc));
+        }
         return ds;
     }
 
