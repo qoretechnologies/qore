@@ -64,6 +64,7 @@ public class MutationObserverPgsqlTest inherits QUnit::Test {
         # mirrors SQL_MUTATION_FAULT_AFTER_EXEC in include/qore/intern/SqlMutationContext.h, which
         # is compiled only in debug builds and so is not exported as a %Qore constant
         const FaultAfterExec = 1;
+        const FaultAfterCommit = 3;
 
         const OpInfo = <SqlMutationInfo>{
             "op_id": "pg-op-1",
@@ -92,6 +93,8 @@ public class MutationObserverPgsqlTest inherits QUnit::Test {
         addTestCase("pgsql prepared statement", \preparedStatementTest());
         addTestCase("pgsql pool", \poolTest());
         addTestCase("pgsql armed abort is replay safe", \armedAbortReplaySafeTest());
+        addTestCase("pgsql armed abort after commit is durable",
+            \armedAbortAfterCommitTest());
 
         set_return_value(main());
     }
@@ -351,6 +354,42 @@ public class MutationObserverPgsqlTest inherits QUnit::Test {
         assertEq(SQL_MUTATION_OUTCOME_COMMIT, obs.outcome().outcome);
         assertEq(2, obs.outcome().info.attempt);
         assertEq(1, ds.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
+        ds.commit();
+    }
+
+    #! a post-commit debug abort proves the durable side of commit ambiguity
+    armedAbortAfterCommitTest() {
+        Datasource ds = setupTable();
+        on_exit dropTable(ds);
+
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            ds.exec(sprintf("insert into %s values (%%v, %%v)", TableName),
+                1, "one");
+            try {
+                call_function("dbg_ds_arm_connection_abort", ds,
+                    OpInfo.op_id, FaultAfterCommit);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "NO-FUNCTION"
+                        || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                    testSkip("debug build required for dbg_ds_arm_connection_abort()");
+                }
+                rethrow;
+            }
+            assertThrows("DBI:DBG:CONNECTION-ABORTED", \ds.commit());
+        }
+
+        hash<SqlMutationEventInfo> out = obs.outcome();
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS, out.outcome);
+        assertFalse(out.replay_safe);
+        assertFalse(ds.currentThreadInTransaction());
+
+        # The driver completed the commit before the connection was closed,
+        # so exact recovery must discover the durable row.
+        obs.reset();
+        ds.open();
+        assertEq(1,
+            ds.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
         ds.commit();
     }
 }

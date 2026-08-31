@@ -170,6 +170,12 @@
     server applied the commit
 */
 #define SQL_MUTATION_FAULT_ON_COMMIT        2
+//! abort the connection after the driver has successfully committed
+/** the transaction is reported with \c COMMIT_AMBIGUOUS even though the debug harness knows that
+    the server applied the commit; this deterministically exercises the durable branch of commit
+    uncertainty without changing production commit handling
+*/
+#define SQL_MUTATION_FAULT_AFTER_COMMIT     3
 ///@}
 
 //! the error code raised by an armed debug connection abort

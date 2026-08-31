@@ -121,6 +121,7 @@ public class MutationObserverTest inherits QUnit::Test {
         const FaultNone = 0;
         const FaultAfterExec = 1;
         const FaultOnCommit = 2;
+        const FaultAfterCommit = 3;
     }
 
     private {
@@ -141,6 +142,8 @@ public class MutationObserverTest inherits QUnit::Test {
         addTestCase("armed abort identity", \armedAbortIdentityTest());
         addTestCase("armed abort is replay safe", \armedAbortReplaySafeTest());
         addTestCase("armed abort on commit is ambiguous", \armedAbortCommitAmbiguousTest());
+        addTestCase("armed abort after commit is durably ambiguous",
+            \armedAbortAfterCommitAmbiguousTest());
         addTestCase("armed abort on a pool", \armedAbortPoolTest());
         addTestCase("armed abort argument checking", \armedAbortArgumentTest());
         addTestCase("armed abort on a prepared statement", \armedAbortStatementTest());
@@ -517,6 +520,35 @@ public class MutationObserverTest inherits QUnit::Test {
         assertEq(SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS, out.outcome);
         assertFalse(out.replay_safe);
         assertEq(SQL_STMT_CLASS_COMMIT, out.stmt_class);
+    }
+
+    #! an armed abort after a successful driver commit is still reported as ambiguous
+    armedAbortAfterCommitAmbiguousTest() {
+        Datasource ds = getDs();
+        {
+            SqlMutationDeclaration decl(ds, OpInfo);
+            armAbort(ds, OpInfo.op_id, FaultAfterCommit);
+            ds.exec("insert into t values (1)");
+            assertThrows("DBI:DBG:CONNECTION-ABORTED", \ds.commit());
+        }
+
+        hash<SqlMutationEventInfo> out = obs.outcome();
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS, out.outcome);
+        assertFalse(out.replay_safe);
+        assertEq(SQL_STMT_CLASS_COMMIT, out.stmt_class);
+        assertFalse(ds.currentThreadInTransaction());
+
+        # The fault is one-shot and the closed connection can be reopened for
+        # the caller's ordinary exact-reconciliation transaction.
+        obs.reset();
+        ds.open();
+        {
+            SqlMutationDeclaration decl(ds,
+                cast<hash<SqlMutationInfo>>(OpInfo + {"attempt": 2}));
+            ds.exec("insert into t values (2)");
+            ds.commit();
+        }
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT, obs.outcome().outcome);
     }
 
     #! a DatasourcePool can be armed, and the abort reaches its allocated connection

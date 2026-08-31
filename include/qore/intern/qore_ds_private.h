@@ -477,6 +477,14 @@ struct qore_ds_private {
         int rc = dbgCheckArmedFault(SQL_MUTATION_FAULT_ON_COMMIT, xsink)
             ? -1
             : qore_dbi_private::get(*dsl)->commit(ds, xsink);
+        // This second debug-only boundary runs only after the driver has
+        // demonstrably committed.  Closing the connection while
+        // commit_in_progress is still set gives recovery tests a
+        // deterministic durable COMMIT_AMBIGUOUS branch.
+        if (!rc && !*xsink
+                && dbgCheckArmedFault(SQL_MUTATION_FAULT_AFTER_COMMIT, xsink)) {
+            rc = -1;
+        }
 #else
         int rc = qore_dbi_private::get(*dsl)->commit(ds, xsink);
 #endif
