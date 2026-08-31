@@ -22,6 +22,68 @@
     To terminate a thread, the @ref thread_exit "thread_exit statement" should be called, as calling the
     @ref Qore::exit() "exit()" function will terminate the entire process (and therefore all threads) immediately.
 
+    @anchor background_object_lifetime
+    @subsection background_and_object_lifetime Object Lifetime and Background Threads
+
+    When a @ref background "background" expression names an object directly, a reference is taken on the object
+    before the new thread is started, and the object's lifetime is prolonged until the background expression has
+    finished executing. An object therefore does not have to be retained by the caller in order to start a thread
+    that uses it; this includes an object that starts a thread from its own @ref class_special_methods "constructor":
+
+    @code{.py}
+%new-style
+%require-types
+%strict-args
+
+class T {
+    constructor() {
+        # the object is guaranteed to live until work() returns in the new thread
+        background work();
+    }
+
+    work() {
+        # ... safe to use members and methods here ...
+    }
+}
+
+# the object is not assigned anywhere, but the new thread still runs to completion
+new T();
+    @endcode
+
+    |!Background expression|!Object's lifetime prolonged|!Reason
+    |<tt><b>background</b> method()</tt>, <tt><b>background</b> self.method()</tt>|yes|an in-object call to a non-static method takes a reference on the object for the duration of the thread
+    |<tt><b>background</b> sub () { ... }()</tt> capturing object scope|yes|captured object scope is validated and referenced before the thread is started
+    |<tt><b>background</b> obj.method()</tt>, <tt><b>background</b> (<b>new</b> T()).method()</tt>|yes|the object expression is evaluated in the starting thread, so the new thread holds an ordinary reference to the result
+    |<tt><b>background</b> f(self)</tt>, <tt><b>background</b> T::sm(self)</tt>|yes|the object is an ordinary reference in the evaluated argument list
+    |<tt><b>background</b> c()</tt> where \c c is a @ref call_reference "call reference" to a method|no|call references do not prolong the lifetime of an object
+    |<tt><b>background</b> T::sm()</tt>|not applicable|a static method call has no object
+
+    A @ref call_reference "call reference" is the exception to the rule: <tt>\\</tt><em>method</em><tt>()</tt> and
+    <tt>\\</tt><em>obj.method</em><tt>()</tt> bind their object weakly by design, so a background expression that
+    reaches an object only through a call reference does not prolong that object's lifetime. If the object is
+    destroyed before the new thread uses it, the thread throws \c OBJECT-ALREADY-DELETED on its first access:
+
+    @code{.py}
+class T {
+    start() {
+        code c = \work();
+        background c();   # does NOT prolong the object's lifetime
+    }
+
+    work() {}
+}
+
+(new T()).start();   # OBJECT-ALREADY-DELETED in the new thread
+    @endcode
+
+    Because the failure depends on when the object's last ordinary reference is released, it can appear only under
+    load or only in production. Where a thread must reach an object through a call reference, keep an ordinary
+    reference to the object alive for at least as long as the thread, or pass the object itself as an argument.
+
+    The @ref delete "delete operator" destroys an object unconditionally and is not deferred by a running background
+    thread; a thread still executing a method of a deleted object throws \c OBJECT-ALREADY-DELETED on its next member
+    or method access.
+
     @section threading_and_variables Threading and Variables
 
     All global variables are shared in %Qore programs, while local variables are

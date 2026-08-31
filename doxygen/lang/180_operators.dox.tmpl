@@ -428,6 +428,14 @@ list<int> l1 = new list<int>(2);
     - it is not possible to pass local variables by reference anywhere in a background expression (a parse exception will be thrown)
     - closure values created in object scope are checked before the new thread is started; if the captured object is valid,
       its scope is prolonged until the background expression has finished executing
+    - an object named directly by the background expression is referenced before the new thread is started, so the object's
+      lifetime is prolonged until the background expression has finished executing; this covers an in-object method call
+      (<tt><b>background</b> method()</tt> or <tt><b>background</b> self.method()</tt>), a method call on an object
+      expression (<tt><b>background</b> obj.method()</tt>), and an object passed as an argument, and it applies to an object
+      that starts a thread from its own @ref class_special_methods "constructor" without being retained anywhere else
+    - an object reached only through a @ref call_reference "call reference" is <b>not</b> referenced, since call references
+      do not prolong the lifetime of an object; the new thread then throws \c OBJECT-ALREADY-DELETED if the object is
+      destroyed before it runs. See @ref background_object_lifetime
 
     @par Syntax
     <tt><b>background</b></tt> <em>@ref expressions "expression"</em>
