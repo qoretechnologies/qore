@@ -95,6 +95,8 @@ public class MutationObserverPgsqlTest inherits QUnit::Test {
         addTestCase("pgsql armed abort is replay safe", \armedAbortReplaySafeTest());
         addTestCase("pgsql armed abort after commit is durable",
             \armedAbortAfterCommitTest());
+        addTestCase("pgsql pool armed abort after commit is durable",
+            \armedAbortAfterCommitPoolTest());
 
         set_return_value(main());
     }
@@ -391,5 +393,50 @@ public class MutationObserverPgsqlTest inherits QUnit::Test {
         assertEq(1,
             ds.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
         ds.commit();
+    }
+
+    #! a pooled connection preserves the same durable post-commit ambiguity semantics
+    armedAbortAfterCommitPoolTest() {
+        Datasource setup = setupTable();
+        on_exit dropTable(setup);
+
+        DatasourcePool dsp;
+        try {
+            dsp = new DatasourcePool(connstr + "{min=1,max=2}");
+            dsp.getServerVersion();
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip("no PostgreSQL connection: " + ex.err + ": " + ex.desc);
+        }
+
+        obs.reset();
+        dsp.setMutationObserver(\obs.event(), SQL_MUTATION_MASK_ALL);
+        {
+            SqlMutationDeclaration decl(dsp, OpInfo);
+            dsp.exec(sprintf("insert into %s values (%%v, %%v)", TableName),
+                1, "one");
+            try {
+                call_function("dbg_ds_arm_connection_abort", dsp,
+                    OpInfo.op_id, FaultAfterCommit);
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err == "NO-FUNCTION"
+                        || ex.err == "UNDEFINED-FUNCTION-CALL") {
+                    testSkip("debug build required for dbg_ds_arm_connection_abort()");
+                }
+                rethrow;
+            }
+            assertThrows("DBI:DBG:CONNECTION-ABORTED", \dsp.commit());
+        }
+
+        hash<SqlMutationEventInfo> out = obs.outcome();
+        assertEq(SQL_MUTATION_OUTCOME_COMMIT_AMBIGUOUS, out.outcome);
+        assertFalse(out.replay_safe);
+        assertFalse(dsp.currentThreadInTransaction());
+
+        # Read through the independent setup connection to prove that the pooled
+        # connection's successful driver commit remained durable after it closed.
+        setup.rollback();
+        assertEq(1,
+            setup.selectRow(sprintf("select count(1) as c from %s", TableName)).c);
+        setup.commit();
     }
 }
