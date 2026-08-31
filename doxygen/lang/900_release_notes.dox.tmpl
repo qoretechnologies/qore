@@ -2519,6 +2519,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
 
     - @ref qlsintro "QLS" module
       - new module providing a Language Server Protocol (LSP) implementation for %Qore
+      - synchronized QLS symbol and file-kind handling with the Qore 3.0 tree-sitter-based
+        @ref astparserintro "astparser" module, including typedefs and all Qore/Qorus source extensions
+      - fixed instance completion and signature help for typed local variables and overloaded builtin methods
 
     - @ref qoreagentstrategiesintro "QoreAgentStrategies" module
       - new module providing configurable agent execution strategies for LLM agents

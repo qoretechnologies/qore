@@ -58,8 +58,14 @@ class InfrastructureTest inherits QUnit::Test {
         addTestCase("completion resolve — no data returns as-is", \testCompletionResolveNoData());
         addTestCase("signature help — builtin function", \testSignatureHelpBuiltinFunction());
         addTestCase("signature help — builtin method", \testSignatureHelpBuiltinMethod());
+        addTestCase("signature help — builtin zero-argument overload",
+            \testSignatureHelpBuiltinZeroArgumentMethod());
+        addTestCase("signature help — rejects incompatible builtin overload",
+            \testSignatureHelpBuiltinInvalidOverload());
         addTestCase("signature help — user function still works", \testSignatureHelpUserFunction());
         addTestCase("no metadata dir — graceful", \testNoMetadataGraceful());
+        addTestCase("document symbols — typedef uses LSP TypeParameter kind",
+            \testDocumentSymbolTypedefKind());
 
         # SymbolInfoKinds tests
         addTestCase("ASTSymbolKind constants", \testASTSymbolKind());
@@ -207,6 +213,18 @@ class InfrastructureTest inherits QUnit::Test {
         return resp.result;
     }
 
+    private list<auto> sendDocumentSymbols(string uri) {
+        hash<auto> req = makeRequest("textDocument/documentSymbol", {
+            "textDocument": {"uri": uri},
+        });
+        softlist<auto> responses = server.handleRequest(make_json(req));
+        if (!responses || !responses[0]) {
+            return ();
+        }
+        hash<auto> resp = parse_json(responses[0]);
+        return resp.result ?? ();
+    }
+
     # ==========================================
     # ParamValidator helpers
     # ==========================================
@@ -326,20 +344,12 @@ class InfrastructureTest inherits QUnit::Test {
         # Complete at line 3, col 6 (after "m.lo")
         # We need a valid expression — complete after "m."
         hash<auto> result = sendCompletion(uri, 3, 6);
-        if (result.items.size()) {
-            hash<string, bool> labels;
-            foreach hash<auto> item in (result.items) {
-                labels{item.label} = True;
-            }
-            if (labels{"lock"}) {
-                assertTrue(True, "lock() found in dot access completion");
-            } else {
-                # Dot completion for builtins depends on type resolution + metadata
-                testSkip("lock not found in dot completions (type resolution may not work for builtins)");
-            }
-        } else {
-            testSkip("no dot completion results");
+        hash<string, bool> labels;
+        foreach hash<auto> item in (result.items) {
+            labels{item.label} = True;
         }
+        assertEq(True, labels{"lock"} ?? False,
+            "lock() should be found from the resolved Mutex metadata");
     }
 
     testCompletionScopeBuiltin() {
@@ -409,16 +419,36 @@ class InfrastructureTest inherits QUnit::Test {
         string text = "%modern\nsub test() {\n    Mutex m();\n    m.lock(500);\n}\n";
         string uri = setupDoc(text);
 
-        # Signature help at line 3, col 11 (after "m.lock(")
+        # Signature help after the timeout argument selects the parameterized overload.
+        hash<auto> result = sendSignatureHelp(uri, 3, 14);
+        assertEq(1, result.signatures.size(), "lock(timeout) signature should be available");
+        hash<auto> sig = result.signatures[0];
+        assertTrue(sig.label.find("lock") >= 0,
+            sprintf("signature label should contain 'lock': got '%s'", sig.label));
+        assertEq(1, sig.parameters.size(), "timeout overload should have one parameter");
+        assertTrue(sig.parameters[0].label.find("timeout") >= 0,
+            "timeout overload should expose the timeout parameter type");
+    }
+
+    testSignatureHelpBuiltinZeroArgumentMethod() {
+        string text = "%modern\nsub test() {\n    Mutex m();\n    m.lock();\n}\n";
+        string uri = setupDoc(text);
+
         hash<auto> result = sendSignatureHelp(uri, 3, 11);
-        if (result.signatures.size()) {
-            hash<auto> sig = result.signatures[0];
-            assertTrue(sig.label.find("lock") >= 0,
-                sprintf("signature label should contain 'lock': got '%s'", sig.label));
-        } else {
-            # Method resolution depends on type inference + metadata
-            testSkip("no signature for lock() (type resolution may not work for builtins)");
-        }
+        assertEq(1, result.signatures.size(), "zero-argument lock() signature should be available");
+        assertEq(0, result.signatures[0].parameters.size(),
+            "zero-argument overload should have no parameters");
+        assertEq(0, result.activeParameter,
+            "empty parameter lists should report a valid active parameter index");
+    }
+
+    testSignatureHelpBuiltinInvalidOverload() {
+        string text = "%modern\nsub test() {\n    Mutex m();\n    m.lock(1, 2);\n}\n";
+        string uri = setupDoc(text);
+
+        hash<auto> result = sendSignatureHelp(uri, 3, 15);
+        assertEq(0, result.signatures.size(),
+            "no signature should be returned when no overload accepts both arguments");
     }
 
     testSignatureHelpUserFunction() {
@@ -492,6 +522,15 @@ class InfrastructureTest inherits QUnit::Test {
         assertEq(Type::List, sigResp.type(), "signature help returns a response list without metadata");
     }
 
+    testDocumentSymbolTypedefKind() {
+        string uri = setupDoc("%modern\ntypedef int UserId;\n");
+        list<auto> symbols = sendDocumentSymbols(uri);
+        assertEq(1, symbols.size(), "typedef document should expose one symbol");
+        assertEq("UserId", symbols[0].name, "typedef symbol name");
+        assertEq(26, symbols[0].kind,
+            "typedef must use LSP SymbolKind.TypeParameter rather than Object");
+    }
+
     # ==========================================
     # SymbolInfoKinds tests
     # ==========================================
@@ -505,6 +544,8 @@ class InfrastructureTest inherits QUnit::Test {
         assertEq(13, QLS::ASTSymbolKind.Variable);
         assertEq(14, QLS::ASTSymbolKind.Constant);
         assertEq(18, QLS::ASTSymbolKind.Array);
+        assertEq(astparser::ASYK_TypeAlias, QLS::ASTSymbolKind.TypeAlias);
+        assertEq(19, QLS::ASTSymbolKind.TypeAlias);
     }
 
     testASTSymbolUsageKind() {
@@ -513,6 +554,12 @@ class InfrastructureTest inherits QUnit::Test {
         assertEq(200, QLS::ASTSymbolUsageKind.AccessVariable);
         assertEq(300, QLS::ASTSymbolUsageKind.ContextStmtName);
         assertEq(316, QLS::ASTSymbolUsageKind.WhileStmtCond);
+        assertEq(astparser::ASUK_TypedefDeclName, QLS::ASTSymbolUsageKind.TypedefDeclName);
+        assertEq(astparser::ASUK_TypedefTypeName, QLS::ASTSymbolUsageKind.TypedefTypeName);
+        assertEq(astparser::ASUK_ModuleDeclName, QLS::ASTSymbolUsageKind.ModuleDeclName);
+        assertEq(astparser::ASUK_HashElement, QLS::ASTSymbolUsageKind.HashElement);
+        assertEq(astparser::ASUK_AssertStmtExpr, QLS::ASTSymbolUsageKind.AssertStmtExpr);
+        assertEq(astparser::ASUK_DebugStmtExpr, QLS::ASTSymbolUsageKind.DebugStmtExpr);
     }
 
     testSymbolUsageStringMap() {
@@ -524,6 +571,12 @@ class InfrastructureTest inherits QUnit::Test {
         assertEq(True, funcDecl.contains(QLS::ASTSymbolKind.Function));
         assertEq(True, funcDecl.contains(QLS::ASTSymbolKind.Method));
         assertEq(True, funcDecl.contains(QLS::ASTSymbolKind.Constructor));
+        assertEq((QLS::ASTSymbolKind.TypeAlias,),
+            QLS::SymbolUsageStringMap.TypedefDeclName);
+        assertEq((QLS::ASTSymbolKind.Module,),
+            QLS::SymbolUsageStringMap.ModuleDeclName);
+        assertEq((QLS::ASTSymbolKind.Variable, QLS::ASTSymbolKind.Constant),
+            QLS::SymbolUsageStringMap.HashElement);
     }
 
     testSymbolUsageFastMap() {
@@ -532,6 +585,8 @@ class InfrastructureTest inherits QUnit::Test {
         string key = string(QLS::ASTSymbolUsageKind.ClassDeclName);
         assertEq(True, QLS::SymbolUsageFastMap.hasKey(key));
         assertEq((QLS::ASTSymbolKind.Class,), QLS::SymbolUsageFastMap{key});
+        assertEq(QLS::ASTSymbolUsageKind.size(), QLS::SymbolUsageFastMap.size(),
+            "every astparser usage kind should have one filtering entry");
     }
 
     # ==========================================

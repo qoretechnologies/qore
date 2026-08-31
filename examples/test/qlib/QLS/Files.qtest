@@ -53,10 +53,16 @@ class FilesTest inherits QUnit::Test {
 
     testQoreExtensions() {
         assertEq(Type::Hash, QLS::Files::QORE_EXTENSIONS.type());
-        assertEq(True, QLS::Files::QORE_EXTENSIONS.hasKey("q"));
-        assertEq(True, QLS::Files::QORE_EXTENSIONS.hasKey("qm"));
-        assertEq(True, QLS::Files::QORE_EXTENSIONS.hasKey("qtest"));
-        assertEq(True, QLS::Files::QORE_EXTENSIONS.hasKey("qr"));
+        const list<string> ExpectedExtensions = (
+            "q", "ql", "qc", "qm", "qr", "qtest",
+            "qclass", "qconn", "qwf", "qsd", "qfd", "qjob", "qconst", "qsm", "qstep", "qmc",
+        );
+        assertEq(ExpectedExtensions.size(), QLS::Files::QORE_EXTENSIONS.size(),
+            "extension table should not contain untested entries");
+        foreach string ext in (ExpectedExtensions) {
+            assertEq(True, QLS::Files::QORE_EXTENSIONS.hasKey(ext),
+                sprintf(".%s should be recognized as Qore source", ext));
+        }
     }
 
     testIsValidByExtension() {

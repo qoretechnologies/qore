@@ -36,7 +36,10 @@
         "qjob",
         "qclass",
         "qconst",
-        "qconn"
+        "qconn",
+        "qsm",
+        "qstep",
+        "qmc"
       ],
       "injection-regex": "qore"
     }

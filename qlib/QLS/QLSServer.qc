@@ -89,6 +89,33 @@ public const SemanticTokenModifiers = (
     "defaultLibrary", # bit 9
 );
 
+#! Explicit astparser-to-LSP SymbolKind conversion table.
+/** Most astparser kinds intentionally match their LSP counterparts, but
+    @ref astparser::ASYK_TypeAlias "ASYK_TypeAlias" does not: LSP value 19 is
+    Object, while a Qore typedef is represented as TypeParameter (26).
+ */
+public const LspDocumentSymbolKindMap = {
+    string(ASTSymbolKind.File): 1,
+    string(ASTSymbolKind.Module): 2,
+    string(ASTSymbolKind.Namespace): 3,
+    string(ASTSymbolKind.Package): 4,
+    string(ASTSymbolKind.Class): 5,
+    string(ASTSymbolKind.Method): 6,
+    string(ASTSymbolKind.Property): 7,
+    string(ASTSymbolKind.Field): 8,
+    string(ASTSymbolKind.Constructor): 9,
+    string(ASTSymbolKind.Enum): 10,
+    string(ASTSymbolKind.Interface): 11,
+    string(ASTSymbolKind.Function): 12,
+    string(ASTSymbolKind.Variable): 13,
+    string(ASTSymbolKind.Constant): 14,
+    string(ASTSymbolKind.String): 15,
+    string(ASTSymbolKind.Number): 16,
+    string(ASTSymbolKind.Boolean): 17,
+    string(ASTSymbolKind.Array): 18,
+    string(ASTSymbolKind.TypeAlias): 26,
+};
+
 #! QLS LSP ServerCapabilities
 public const ServerCapabilities = {
     /**
@@ -1523,8 +1550,16 @@ public class QLSServer {
                 case 'node_info':
                     ret = doc.getNodesInfo();
                     break;
-                default:
+                default: {
                     ret = doc.findSymbols();
+                    if (ret) {
+                        for (int i = 0; i < ret.size(); ++i) {
+                            ret[i] = ret[i] + {
+                                "kind": LspDocumentSymbolKindMap{string(ret[i].kind)} ?? 1,
+                            };
+                        }
+                    }
+                }
             }
             responses += make_jsonrpc_response(jsonRpcVer, request.id, ret ?? ());
             continue;
@@ -1545,6 +1580,7 @@ public class QLSServer {
         "hashdecl": 22,
         "enum": 13,
         "enum_value": 20,
+        "type_parameter": 25,
     };
 
     #! "textDocument/completion" method handler
@@ -2002,6 +2038,9 @@ public class QLSServer {
             });
         }
 
+        string argumentPrefix = prefix.substr(parenPos + 1);
+        int minimumParamCount = commaCount + (argumentPrefix =~ /\S/ ? 1 : 0);
+
         # Look up the callable
         *list<hash<auto>> params;
         *string returnType;
@@ -2028,8 +2067,12 @@ public class QLSServer {
             *list<auto> members = doc.findTypeMembers(typeName, True);
             if (members) {
                 foreach hash<auto> sym in (members) {
-                    if (sym.name == funcName && sym.params) {
-                        params = sym.params;
+                    if (sym.name == funcName
+                            && (sym.kind == ASTSymbolKind.Method
+                                || sym.kind == ASTSymbolKind.Function
+                                || sym.kind == ASTSymbolKind.Constructor)
+                            && (sym.params ? sym.params.size() : 0) >= minimumParamCount) {
+                        params = sym.params ?? ();
                         returnType = sym.returnType;
                         break;
                     }
@@ -2039,8 +2082,12 @@ public class QLSServer {
             *list<auto> members = doc.findTypeMembers(target, True);
             if (members) {
                 foreach hash<auto> sym in (members) {
-                    if (sym.name == funcName && sym.params) {
-                        params = sym.params;
+                    if (sym.name == funcName
+                            && (sym.kind == ASTSymbolKind.Method
+                                || sym.kind == ASTSymbolKind.Function
+                                || sym.kind == ASTSymbolKind.Constructor)
+                            && (sym.params ? sym.params.size() : 0) >= minimumParamCount) {
+                        params = sym.params ?? ();
                         returnType = sym.returnType;
                         break;
                     }
@@ -2051,8 +2098,12 @@ public class QLSServer {
             *list<auto> symbols = doc.findScopeSymbolsDetailed(request.params.position);
             if (symbols) {
                 foreach hash<auto> sym in (symbols) {
-                    if (sym.name == funcName && sym.params) {
-                        params = sym.params;
+                    if (sym.name == funcName
+                            && (sym.kind == ASTSymbolKind.Method
+                                || sym.kind == ASTSymbolKind.Function
+                                || sym.kind == ASTSymbolKind.Constructor)
+                            && (sym.params ? sym.params.size() : 0) >= minimumParamCount) {
+                        params = sym.params ?? ();
                         returnType = sym.returnType;
                         break;
                     }
@@ -2062,7 +2113,7 @@ public class QLSServer {
 
         # metadata fallback for builtins
         *string methodDoc;
-        if (!params && builtinMetadata) {
+        if (!exists params && builtinMetadata) {
             *hash<auto> metaInfo;
             if (isDotAccess && target) {
                 # resolve type from scope symbols
@@ -2082,19 +2133,19 @@ public class QLSServer {
                 if (!typeName) {
                     typeName = target;
                 }
-                metaInfo = findMethodInMetadata(typeName, funcName);
+                metaInfo = findMethodInMetadata(typeName, funcName, minimumParamCount);
             } else if (isScopeAccess && target) {
-                metaInfo = findMethodInMetadata(target, funcName);
+                metaInfo = findMethodInMetadata(target, funcName, minimumParamCount);
             } else {
-                metaInfo = findFunctionInMetadata(funcName);
+                metaInfo = findFunctionInMetadata(funcName, minimumParamCount);
             }
 
             if (metaInfo) {
                 methodDoc = metaInfo.description;
                 returnType = metaInfo.return_type;
                 # build params from metadata
-                if (metaInfo.params && metaInfo.params.size()) {
-                    params = ();
+                params = ();
+                if (metaInfo.params) {
                     foreach hash<auto> mp in (metaInfo.params) {
                         params += {
                             "typeName": mp.type_name ?? "auto",
@@ -2107,7 +2158,7 @@ public class QLSServer {
             }
         }
 
-        if (!params) {
+        if (!exists params) {
             return make_jsonrpc_response(jsonRpcVer, request.id, {
                 "signatures": (),
                 "activeSignature": 0,
@@ -2156,12 +2207,15 @@ public class QLSServer {
         return make_jsonrpc_response(jsonRpcVer, request.id, {
             "signatures": (signature,),
             "activeSignature": 0,
-            "activeParameter": commaCount < paramInfos.size() ? commaCount : paramInfos.size() - 1,
+            "activeParameter": paramInfos.size()
+                ? (commaCount < paramInfos.size() ? commaCount : paramInfos.size() - 1)
+                : 0,
         });
     }
 
     #! Find a method in builtin metadata by class name and method name
-    private *hash<auto> findMethodInMetadata(string className, string methodName) {
+    private *hash<auto> findMethodInMetadata(string className, string methodName,
+            int minimumParamCount = 0) {
         *hash<auto> ci = metaClassByName{className};
         if (!ci) {
             return NOTHING;
@@ -2169,26 +2223,32 @@ public class QLSServer {
         # search instance methods first, then static
         foreach hash<auto> m in (ci.instance_methods) {
             if (m.name == methodName) {
-                return m;
+                if ((m.params ? m.params.size() : 0) >= minimumParamCount) {
+                    return m;
+                }
             }
         }
         foreach hash<auto> m in (ci.static_methods) {
             if (m.name == methodName) {
-                return m;
+                if ((m.params ? m.params.size() : 0) >= minimumParamCount) {
+                    return m;
+                }
             }
         }
         return NOTHING;
     }
 
     #! Find a function in builtin metadata by name
-    private *hash<auto> findFunctionInMetadata(string funcName) {
+    private *hash<auto> findFunctionInMetadata(string funcName, int minimumParamCount = 0) {
         *list<hash<auto>> entries = metaByName{funcName};
         if (!entries) {
             return NOTHING;
         }
         foreach hash<auto> entry in (entries) {
             if (entry.symbol_type == "function") {
-                return entry;
+                if ((entry.params ? entry.params.size() : 0) >= minimumParamCount) {
+                    return entry;
+                }
             }
         }
         return NOTHING;
@@ -3756,6 +3816,7 @@ const CSTSymbolKindMap = {
     string(ASTSymbolKind.Constructor): "method",
     string(ASTSymbolKind.Interface): "hashdecl",
     string(ASTSymbolKind.Module): "namespace",
+    string(ASTSymbolKind.TypeAlias): "type_parameter",
 };
 
 #! Completion provider using CSTSearcher for static analysis
@@ -3913,9 +3974,10 @@ class CSTCompletionProvider inherits QoreCodeCompletion::AbstractCompletionProvi
 
     list<hash<QoreCodeCompletion::CompletionItem>> getInstanceMembers(string target, string prefix) {
         # Resolve the type of the target variable
+        int targetCharacter = position.character - prefix.length() - 2;
         *string typeName = doc.getSymbolType({
             "line": position.line,
-            "character": position.character > 0 ? position.character - 1 : 0,
+            "character": targetCharacter >= 0 ? targetCharacter : 0,
         });
         if (!typeName) {
             # Fall back: try the target name as a type directly

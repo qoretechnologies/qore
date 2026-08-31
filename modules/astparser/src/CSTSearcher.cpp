@@ -1182,7 +1182,8 @@ std::vector<CSTSymbolDetail>* CSTSearcher::findScopeSymbolsDetailed(
 
 std::string CSTSearcher::getSymbolType(
     const AstParseResult* result,
-    uint32_t line, uint32_t col) {
+    uint32_t line, uint32_t col,
+    ExceptionSink* xsink) {
 
     if (!result) {
         return std::string();
@@ -1193,10 +1194,37 @@ std::string CSTSearcher::getSymbolType(
         return std::string();
     }
 
+    // Resolve symbol use sites through the lexical scope before considering
+    // enclosing declarations.  For example, the `obj` in
+    // `int value = obj.getValue()` is nested under the declaration of
+    // `value`; the enclosing declaration's type must not mask `obj`'s type.
+    CSTSymbolInfo symbolInfo = findSymbolInfo(result, line, col);
+    if (!symbolInfo.name.empty()) {
+        std::unique_ptr<std::vector<CSTScopeSymbolInfo>> symbols(
+            findScopeSymbols(result, line, col));
+        if (symbols) {
+            size_t count = 0;
+            for (const auto& symbol : *symbols) {
+                if (++count % 100 == 0
+                        && qore_check_cancel(xsink, "resolving an astparser symbol type")) {
+                    return std::string();
+                }
+                if (symbol.symbol.name == symbolInfo.name) {
+                    // Enrich only the matching symbol instead of every symbol
+                    // in scope; large scopes otherwise make a single type
+                    // lookup unnecessarily expensive.
+                    CSTSymbolDetail detail = enrichSymbol(symbol, result);
+                    if (!detail.typeName.empty()) {
+                        return detail.typeName;
+                    }
+                }
+            }
+        }
+    }
+
     // Check the leaf node and its ancestors
     for (size_t i = 0; i < ancestors.size(); i++) {
         const char* type = ts_node_type(ancestors[i]);
-
         // "self" keyword → find enclosing class
         if (strcmp(type, "self") == 0) {
             for (size_t j = i + 1; j < ancestors.size(); j++) {
@@ -1209,23 +1237,42 @@ std::string CSTSearcher::getSymbolType(
 
         // Check variable_declarator for type from parent
         if (strcmp(type, "variable_declarator") == 0) {
-            return extractTypeName(ancestors[i], result);
+            std::string typeName = extractTypeName(ancestors[i], result);
+            if (!typeName.empty()) {
+                return typeName;
+            }
+            // A bare identifier expression can be represented by a
+            // variable_declarator during error recovery.  Continue inspecting
+            // the remaining ancestors when the node has no declaration type.
+            continue;
         }
 
         // Check local/global variable declaration
         if (strcmp(type, "local_variable_declaration") == 0 ||
             strcmp(type, "global_variable_declaration") == 0) {
-            return getFieldText(ancestors[i], "type", result);
+            std::string typeName = getFieldText(ancestors[i], "type", result);
+            if (!typeName.empty()) {
+                return typeName;
+            }
+            continue;
         }
 
         // Check parameter
         if (strcmp(type, "parameter") == 0) {
-            return getFieldText(ancestors[i], "type", result);
+            std::string typeName = getFieldText(ancestors[i], "type", result);
+            if (!typeName.empty()) {
+                return typeName;
+            }
+            continue;
         }
 
         // Check member_declaration
         if (strcmp(type, "member_declaration") == 0) {
-            return getFieldText(ancestors[i], "type", result);
+            std::string typeName = getFieldText(ancestors[i], "type", result);
+            if (!typeName.empty()) {
+                return typeName;
+            }
+            continue;
         }
 
         // For identifiers, check if they match a known type name

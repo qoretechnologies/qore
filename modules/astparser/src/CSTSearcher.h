@@ -219,7 +219,8 @@ public:
     //! Resolve the type of a symbol at position (0-indexed).
     static std::string getSymbolType(
         const AstParseResult* result,
-        uint32_t line, uint32_t col);
+        uint32_t line, uint32_t col,
+        ExceptionSink* xsink = nullptr);
 
     //! Find members of a named type (class, namespace, hashdecl, enum).
     static std::vector<CSTSymbolDetail>* findTypeMembers(

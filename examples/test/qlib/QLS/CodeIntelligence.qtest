@@ -103,9 +103,10 @@ class TestCSTProvider inherits QoreCodeCompletion::AbstractCompletionProvider {
     }
 
     list<hash<QoreCodeCompletion::CompletionItem>> getInstanceMembers(string target, string prefix) {
+        int targetCharacter = position.character - prefix.length() - 2;
         *string typeName = doc.getSymbolType({
             "line": position.line,
-            "character": position.character > 0 ? position.character - 1 : 0,
+            "character": targetCharacter >= 0 ? targetCharacter : 0,
         });
         if (!typeName) {
             typeName = target;
@@ -584,10 +585,11 @@ single(5);
         QLS::Document doc = makeDoc(VarCompletionSource);
         assertEq(0, doc.getParseErrorCount(), "var source should parse without errors");
 
-        # Try to get type of 'obj' variable -- may or may not resolve depending on CSTSearcher
-        # Just verify it doesn't crash -- type resolution is best-effort
-        doc.getSymbolType({"line": 17, "character": 4});
-        assertTrue(True, "getSymbolType should not crash");
+        *string typeName = doc.getSymbolType({"line": 17, "character": 12});
+        assertEq("Foo", typeName, "obj reference should resolve to its declared type");
+
+        *string noType = doc.getSymbolType({"line": 14, "character": 0});
+        assertNothing(noType, "blank source position should not resolve to a symbol type");
     }
 
     testDocumentFindTypeMembers() {

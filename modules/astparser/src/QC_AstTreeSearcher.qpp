@@ -683,16 +683,24 @@ AstTreeSearcher::constructor() {
 
     @return type name string, or NOTHING if not found
 
+    @throw THREAD-CANCELLED the current thread was cancelled while resolving a large scope
+    @throw PROGRAM-INTERRUPTED the current program was interrupted while resolving a large scope
+
     @since %Qore 2.2
  */
-*string AstTreeSearcher::getSymbolType(astparser::AstTree[AstTreeHolder] tree, int line, int col) {
+*string AstTreeSearcher::getSymbolType(astparser::AstTree[AstTreeHolder] tree, int line, int col)
+        [flags=RET_VALUE_ONLY] {
     AstParseResult* result = tree->get();
     if (!result) {
         return QoreValue();
     }
 
     std::string typeName = CSTSearcher::getSymbolType(
-        result, static_cast<uint32_t>(line), static_cast<uint32_t>(col));
+        result, static_cast<uint32_t>(line), static_cast<uint32_t>(col), xsink);
+
+    if (*xsink) {
+        return QoreValue();
+    }
 
     if (typeName.empty()) {
         return QoreValue();

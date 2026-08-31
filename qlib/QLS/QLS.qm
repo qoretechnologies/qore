@@ -22,7 +22,7 @@
     DEALINGS IN THE SOFTWARE.
 */
 
-%requires qore >= 2.0
+%requires qore >= 3.0
 
 %modern
 
@@ -125,7 +125,7 @@ module QLS {
 
     @code{.json}
 {
-    "qore.executablePath": "/usr/bin/qore",
+    "qore.executable": "/usr/bin/qore",
     "qore.useQLS": true
 }
     @endcode
@@ -152,8 +152,9 @@ server.main();
     The @ref QLS::QLSServer "QLSServer" maintains three document stores:
     - <b>Open documents</b> (@c documents): files currently open in the editor, updated on
       every @c textDocument/didChange notification
-    - <b>Workspace documents</b> (@c workspaceDocs): all @c .qore, @c .qm, @c .qc, and
-      @c .qr files discovered in the workspace root, parsed on initialization
+    - <b>Workspace documents</b> (@c workspaceDocs): Qore and Qorus source files with extensions
+      listed in @ref QLS::Files::QORE_EXTENSIONS, discovered in the workspace root and parsed on
+      initialization
     - <b>Standard module documents</b> (@c stdModuleDocs): %Qore standard library modules,
       parsed from the module path on initialization
 

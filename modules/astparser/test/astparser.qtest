@@ -3,10 +3,9 @@
 
 %modern
 
+%prepend-module-path "${SCRIPT_DIR}/../../../build/modules/astparser"
 %requires ../../../qlib/Util.qm
 %requires ../../../qlib/QUnit.qm
-
-%prepend-module-path "${SCRIPT_DIR}/../../../build/modules/astparser"
 %requires astparser
 
 %define HasAstTreeSearcher
@@ -3382,6 +3381,7 @@ class MyClass {
     }
     string myMethod(float param) {
         int localVar = 1;
+        param;
         return localVar;
     }
 }
@@ -3405,6 +3405,19 @@ class MyClass {
         *string paramType = searcher.getSymbolType(tree, 6, 23);
         assertTrue(exists(paramType), "parameter type found");
         assertEq("float", paramType, "parameter type is float");
+
+        # Resolve the type from local-variable and parameter references, not
+        # only from their declaration sites.
+        *string paramRefType = searcher.getSymbolType(tree, 8, 8);
+        assertTrue(exists(paramRefType), "parameter reference type found");
+        assertEq("float", paramRefType, "parameter reference type is float");
+
+        *string localRefType = searcher.getSymbolType(tree, 9, 15);
+        assertTrue(exists(localRefType), "local variable reference type found");
+        assertEq("int", localRefType, "local variable reference type is int");
+
+        *string unknownType = searcher.getSymbolType(tree, 9, 8);
+        assertNothing(unknownType, "keyword has no symbol type");
     }
 
     testFindTypeMembersClass() {

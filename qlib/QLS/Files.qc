@@ -35,12 +35,16 @@ public const QORE_EXTENSIONS = {
     "qtest":    "Qore unit test",
 
     # Qorus file extensions
+    "qclass":   "Qorus class",
+    "qconn":    "Qorus connection",
     "qwf":      "Qorus workflow definition",
     "qsd":      "Qorus service",
     "qfd":      "Qorus functions",
     "qjob":     "Qorus job",
     "qconst":   "Qorus constant",
     "qsm":      "Qorus schema module",
+    "qstep":    "Qorus workflow step",
+    "qmc":      "Qorus mapper code",
 };
 
 public bool sub is_valid_qore_file(string path) {
