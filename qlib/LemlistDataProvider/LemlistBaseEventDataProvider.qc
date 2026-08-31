@@ -221,7 +221,7 @@ public class LemlistBaseEventDataProvider inherits LemlistDataProviderBase, Data
             "leadId": payload.leadId,
             "leadEmail": payload.leadEmail ?? payload.email,
             "sequenceStepId": payload.sequenceStepId,
-            "createdAt": payload.createdAt ?? now_us().format("YYYY-MM-DDTHH:mm:ss.xxxZ"),
+            "createdAt": payload.createdAt ?? now_us().format("YYYY-MM-DDTHH:mm:SS.msZ"),
         };
 
         notifyObservers(event_type, event_data);

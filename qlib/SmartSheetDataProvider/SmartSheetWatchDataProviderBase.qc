@@ -141,7 +141,7 @@ public class SmartSheetWatchDataProviderBase inherits SmartSheetDataProviderBase
             if (stream_position) {
                 params.streamPosition = stream_position;
             } else {
-                params.since = format_date("YYYY-MM-DDTHH:mm:ss.000Z", now_us() - 5m);
+                params.since = format_date("YYYY-MM-DDTHH:mm:SS.000Z", now_us() - 5m);
             }
 
             hash<auto> response = doGet("events", params);

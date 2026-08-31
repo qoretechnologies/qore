@@ -625,7 +625,7 @@ public class SquareDataProviderBase inherits DataProvider::AbstractDataProvider 
 
     #! Formats a date for Square API parameters (RFC 3339)
     static string formatDateTimeSquare(date dt) {
-        return dt.format("YYYY-MM-DDTHH:mm:ss.xxxZ");
+        return dt.format("YYYY-MM-DDTHH:mm:SS.msZ");
     }
 
     #! Formats a date for Square API date-only parameters (YYYY-MM-DD)

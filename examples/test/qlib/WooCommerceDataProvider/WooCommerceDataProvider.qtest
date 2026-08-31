@@ -83,7 +83,7 @@ public class WooCommerceDataProviderTest inherits QUnit::Test {
 
     constructor() : Test("WooCommerceDataProvider Test", "1.0", \ARGV, MyOpts) {
         logger = new Logger("test", LoggerLevel::getLevelInfo());
-        unique = now_us().format("YYYYMMDDHHmmssxxxxxx");
+        unique = now_us().format("YYYYMMDDHHmmSSxxxxxx");
 
         # Unit tests (always run, no credentials needed)
         addTestCase("sanity tests", \sanityTests());

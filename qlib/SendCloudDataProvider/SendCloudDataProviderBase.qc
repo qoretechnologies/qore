@@ -714,7 +714,7 @@ public class SendCloudDataProviderBase inherits DataProvider::AbstractDataProvid
 
     #! Formats a date as an ISO-8601 UTC datetime string for SendCloud query parameters
     static string formatDateTime(date dt) {
-        return dt.format("YYYY-MM-DDTHH:mm:ssZ");
+        return dt.format("YYYY-MM-DDTHH:mm:SSZ");
     }
 }
 

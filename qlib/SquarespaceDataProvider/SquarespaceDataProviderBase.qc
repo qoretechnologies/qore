@@ -200,7 +200,7 @@ public class SquarespaceDataProviderBase inherits DataProvider::AbstractDataProv
         @return the formatted date string in ISO 8601 UTC format
     */
     static string formatDateTime(date dt) {
-        return dt.format("YYYY-MM-DDTHH:mm:ss.xxxZ");
+        return dt.format("YYYY-MM-DDTHH:mm:SS.msZ");
     }
 
     #! Makes a REST request with retry and rate limit handling

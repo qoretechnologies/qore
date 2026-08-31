@@ -559,7 +559,7 @@ public class GoHighLevelDataProviderTest inherits QUnit::Test {
         GoHighLevelDataProvider::GoHighLevelDataProvider prov(client);
         AbstractDataProvider createAction = prov.getChildProvider("contacts").getChildProvider("create");
 
-        string unique = now_us().format("YYYYMMDDHHmmssxxxxxx");
+        string unique = now_us().format("YYYYMMDDHHmmSSxxxxxx");
         # Use unique phone to avoid GHL duplicate contact rejection
         string phone = sprintf("+1555%s", unique.substr(-7));
         hash<auto> result = createAction.doRequest({

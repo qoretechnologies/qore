@@ -480,7 +480,7 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         if (serializedEvent.typeCode() != NT_HASH) {
             # If not a hash (e.g., formatted string from layout), wrap it
             serializedEvent = {
-                "@timestamp": format_date("YYYY-MM-DDTHH:mm:ss.xxZ", now_us()),
+                "@timestamp": format_date("YYYY-MM-DDTHH:mm:SS.xxZ", now_us()),
                 "message": string(serializedEvent),
             };
         }
@@ -815,7 +815,7 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
 
     private string formatSearchDate(auto value) {
         if (value instanceof date) {
-            return format_date("YYYY-MM-DDTHH:mm:ss.xxZ", value);
+            return format_date("YYYY-MM-DDTHH:mm:SS.xxZ", value);
         }
         return string(value);
     }
@@ -915,7 +915,7 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
     #! Creates an ElasticSearch document from a log event
     private hash<auto> createDocument(Logger::LoggerEvent event) {
         hash<auto> doc = {
-            "@timestamp": format_date("YYYY-MM-DDTHH:mm:ss.xxZ", event.getTimeStamp() ?? now_us()),
+            "@timestamp": format_date("YYYY-MM-DDTHH:mm:SS.xxZ", event.getTimeStamp() ?? now_us()),
             "level": event.getLevel().getStr(),
             "level_value": event.getLevel().getValue(),
             "logger": event.getCategoryName(),

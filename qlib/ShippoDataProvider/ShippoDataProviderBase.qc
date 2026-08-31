@@ -136,7 +136,7 @@ public class ShippoDataProviderBase inherits DataProvider::AbstractDataProvider 
             if (exists val) {
                 # Shippo uses ISO format for dates
                 if (val.typeCode() == NT_DATE) {
-                    val = format_date("YYYY-MM-DDTHH:mm:ssZ", val);
+                    val = format_date("YYYY-MM-DDTHH:mm:SSZ", val);
                 }
                 parts += sprintf("%s=%s", key, encode_url(string(val), True));
             }

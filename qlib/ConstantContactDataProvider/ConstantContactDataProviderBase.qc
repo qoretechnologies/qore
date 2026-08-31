@@ -532,7 +532,7 @@ public class ConstantContactDataProviderBase inherits DataProvider::AbstractData
 
     #! Formats a date for Constant Contact API parameters (ISO-8601)
     static string formatDateTime(date dt) {
-        return dt.format("YYYY-MM-DDTHH:mm:ss.xxxZ");
+        return dt.format("YYYY-MM-DDTHH:mm:SS.msZ");
     }
 }
 

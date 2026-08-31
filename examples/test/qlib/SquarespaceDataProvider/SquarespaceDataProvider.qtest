@@ -573,7 +573,7 @@ public class SquarespaceDataProviderTest inherits QUnit::Test {
         string storePageId = storePages.body.storePages[0].id;
 
         # Create a product
-        string unique = now_us().format("YYYYMMDDHHmmssxxxxxx");
+        string unique = now_us().format("YYYYMMDDHHmmSSxxxxxx");
         string productName = "Test Product " + unique;
 
         AbstractDataProvider createAction = prov.getChildProvider("products")

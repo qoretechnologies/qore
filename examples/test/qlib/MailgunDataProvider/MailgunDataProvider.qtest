@@ -569,7 +569,7 @@ public class MailgunDataProviderTest inherits QUnit::Test {
 
         # Generate unique test email
         string testEmail = sprintf("test_%s_%d@example.com",
-            now_us().format("YYYYMMDDHHmmss"), rand() % 10000);
+            now_us().format("YYYYMMDDHHmmSS"), rand() % 10000);
         string testName = "Test User " + rand() % 10000;
 
         # Test 1: Add mailing list member

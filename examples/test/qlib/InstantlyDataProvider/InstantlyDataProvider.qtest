@@ -488,7 +488,7 @@ public class InstantlyDataProviderTest inherits QUnit::Test {
         {
             # Create a lead list
             hash<auto> leadList = prov.getChildProvider("create-lead-list").doRequest({
-                "name": "Qore Test List " + now_us().format("YYYY-MM-DD HH:mm:ss"),
+                "name": "Qore Test List " + now_us().format("YYYY-MM-DD HH:mm:SS"),
             });
             testLeadListId = leadList.id;
             assertEq(True, leadList.id.val(), "Lead list created with ID");

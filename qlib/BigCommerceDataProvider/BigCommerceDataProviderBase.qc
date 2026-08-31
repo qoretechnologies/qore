@@ -616,12 +616,12 @@ public class BigCommerceDataProviderBase inherits DataProvider::AbstractDataProv
 
     #! Formats a date for BigCommerce V3 API parameters (RFC 3339 / ISO 8601)
     static string formatDateTimeV3(date dt) {
-        return dt.format("YYYY-MM-DDTHH:mm:ssZ");
+        return dt.format("YYYY-MM-DDTHH:mm:SSZ");
     }
 
     #! Formats a date for BigCommerce V2 API parameters (RFC 2822)
     static string formatDateTimeV2(date dt) {
-        return dt.format("Dy, DD Mon YYYY HH:mm:ss +0000");
+        return dt.format("Dy, DD Mon YYYY HH:mm:SS +0000");
     }
 }
 

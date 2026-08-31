@@ -63,7 +63,7 @@ public class SystemeIoWatchContactsDataProvider inherits SystemeIoWatchDataProvi
     list<hash<auto>> fetchRecords(date since) {
         return doPaginatedGet("contacts", {
             "order": "desc",
-            "registeredAfter": format_date("YYYY-MM-DDTHH:mm:ssZ", since),
+            "registeredAfter": format_date("YYYY-MM-DDTHH:mm:SSZ", since),
         });
     }
 

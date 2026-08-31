@@ -880,7 +880,7 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
 
         # Create a test contact
         AbstractDataProvider createContactProvider = prov.getChildProvider("create-contact");
-        string testName = sprintf("Test Contact %s", now_us().format("YYYYMMDDHHmmss"));
+        string testName = sprintf("Test Contact %s", now_us().format("YYYYMMDDHHmmSS"));
 
         try {
             hash<auto> newContact = createContactProvider.doRequest({
@@ -939,7 +939,7 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
         } else {
             # Create a test item
             AbstractDataProvider createItemProvider = prov.getChildProvider("create-item");
-            string testName = sprintf("Test Item %s", now_us().format("YYYYMMDDHHmmss"));
+            string testName = sprintf("Test Item %s", now_us().format("YYYYMMDDHHmmSS"));
 
             try {
                 hash<auto> newItem = createItemProvider.doRequest({
@@ -1122,7 +1122,7 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
 
         # Create a test project
         AbstractDataProvider createProjectProvider = prov.getChildProvider("create-project");
-        string testName = sprintf("Test Project %s", now_us().format("YYYYMMDDHHmmss"));
+        string testName = sprintf("Test Project %s", now_us().format("YYYYMMDDHHmmSS"));
 
         try {
             hash<auto> newProject = createProjectProvider.doRequest({
@@ -1206,7 +1206,7 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
 
         ZohoInvoiceDataProvider::ZohoInvoiceDataProvider prov(client);
         AbstractDataProvider createContactProvider = prov.getChildProvider("create-contact");
-        string testName = sprintf("Full Contact Test %s", now_us().format("YYYYMMDDHHmmss"));
+        string testName = sprintf("Full Contact Test %s", now_us().format("YYYYMMDDHHmmSS"));
 
         try {
             # Create contact with all optional fields
@@ -1285,7 +1285,7 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
 
         ZohoInvoiceDataProvider::ZohoInvoiceDataProvider prov(client);
         AbstractDataProvider createItemProvider = prov.getChildProvider("create-item");
-        string testName = sprintf("Full Item Test %s", now_us().format("YYYYMMDDHHmmss"));
+        string testName = sprintf("Full Item Test %s", now_us().format("YYYYMMDDHHmmSS"));
 
         try {
             # Create item with all optional fields
@@ -1388,7 +1388,7 @@ public class ZohoInvoiceDataProviderTest inherits QUnit::Test {
 
         ZohoInvoiceDataProvider::ZohoInvoiceDataProvider prov(client);
         AbstractDataProvider createProjectProvider = prov.getChildProvider("create-project");
-        string testName = sprintf("Full Project Test %s", now_us().format("YYYYMMDDHHmmss"));
+        string testName = sprintf("Full Project Test %s", now_us().format("YYYYMMDDHHmmSS"));
 
         try {
             # Create project with all optional fields

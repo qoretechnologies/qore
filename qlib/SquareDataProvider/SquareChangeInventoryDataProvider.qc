@@ -132,7 +132,7 @@ public class SquareChangeInventoryDataProvider inherits SquareDataProviderBase {
     }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
-        string occurred_at = req.occurred_at ?? now_us().format("YYYY-MM-DDTHH:mm:ss.uuuuuuZ");
+        string occurred_at = req.occurred_at ?? now_us().format("YYYY-MM-DDTHH:mm:SS.usZ");
 
         hash<auto> change;
         if (req.change_type == "PHYSICAL_COUNT") {

@@ -408,7 +408,7 @@ public class UnbounceDataProviderBase inherits DataProvider::AbstractDataProvide
 
     #! Formats a date for Unbounce API parameters (ISO 8601)
     static string formatDateTime(date dt) {
-        return dt.format("YYYY-MM-DDTHH:mm:ss.xxxZ");
+        return dt.format("YYYY-MM-DDTHH:mm:SS.msZ");
     }
 }
 

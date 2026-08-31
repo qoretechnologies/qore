@@ -726,7 +726,7 @@ public class DatabaseBackend inherits AbstractModelRegistryBackend {
         meta.version_id = string(row.version_id);
         meta.name = name;
         meta.algorithm = string(row.algorithm);
-        meta.created = format_date("YYYY-MM-DDTHH:mm:ssZ", row.created);
+        meta.created = format_date("YYYY-MM-DDTHH:mm:SSZ", row.created);
         meta.description = row.description ? string(row.description) : NOTHING;
         meta.metrics = row.metrics ? parse_json(row.metrics) : NOTHING;
         meta.tags = row.tags ? parse_json(row.tags) : ();

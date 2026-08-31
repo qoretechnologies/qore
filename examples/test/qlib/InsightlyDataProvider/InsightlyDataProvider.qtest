@@ -559,8 +559,8 @@ public class InsightlyDataProviderTest inherits QUnit::Test {
         date end = start + 1h;
         hash<auto> result = create.doRequest({
             "TITLE": "QoreTest Event " + now_us().toString(),
-            "START_DATE_UTC": format_date("YYYY-MM-DDTHH:mm:ssZ", start),
-            "END_DATE_UTC": format_date("YYYY-MM-DDTHH:mm:ssZ", end),
+            "START_DATE_UTC": format_date("YYYY-MM-DDTHH:mm:SSZ", start),
+            "END_DATE_UTC": format_date("YYYY-MM-DDTHH:mm:SSZ", end),
             "DETAILS": "Test calendar event",
         });
         assertEq(True, result.EVENT_ID.val(), "calendar event created with ID");

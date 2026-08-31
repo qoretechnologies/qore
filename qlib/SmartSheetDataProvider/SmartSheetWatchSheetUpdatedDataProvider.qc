@@ -54,7 +54,7 @@ public class SmartSheetWatchSheetUpdatedDataProvider inherits SmartSheetWatchDat
     private auto getExampleEventDataImpl(string event_id) {
         try {
             hash<auto> response = doGet("events", {
-                "since": format_date("YYYY-MM-DDTHH:mm:ss.000Z", now_us() - 24h),
+                "since": format_date("YYYY-MM-DDTHH:mm:SS.000Z", now_us() - 24h),
                 "maxCount": 100,
             });
             if (response.data) {
@@ -74,7 +74,7 @@ public class SmartSheetWatchSheetUpdatedDataProvider inherits SmartSheetWatchDat
             "objectType": "SHEET",
             "action": "UPDATE",
             "objectId": 1234567890,
-            "eventTimestamp": format_date("YYYY-MM-DDTHH:mm:ssZ", now_us()),
+            "eventTimestamp": format_date("YYYY-MM-DDTHH:mm:SSZ", now_us()),
             "userId": 9876543210,
             "requestUserId": 9876543210,
             "source": "WEB_APP",

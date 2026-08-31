@@ -88,7 +88,7 @@ public class BitlyWatchBitlinkClicksDataProvider inherits BitlyWatchDataProvider
         }
 
         # Get recently modified bitlinks
-        string since_str = since.format("YYYY-MM-DDTHH:mm:ssZ");
+        string since_str = since.format("YYYY-MM-DDTHH:mm:SSZ");
         hash<auto> params = {
             "modified_after": since_str,
         };

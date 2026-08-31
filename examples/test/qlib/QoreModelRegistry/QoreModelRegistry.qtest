@@ -1021,14 +1021,14 @@ class ModelRegistryTest inherits QUnit::Test {
         # Register via backend API
         ML::KMeans km = createFittedKMeans();
         binary artifact = ML::ml_serialize(km);
-        string version_id = format_date("YYYYMMDDHHmmss", now()) + "_"
+        string version_id = format_date("YYYYMMDDHHmmSS", now()) + "_"
             + get_random_bytes(4).toHex();
 
         hash<QoreModelRegistry::ModelVersionInfo> metadata({
             "version_id": version_id,
             "name": "direct-test",
             "algorithm": "KMeans",
-            "created": format_date("YYYY-MM-DDTHH:mm:ssZ", now()),
+            "created": format_date("YYYY-MM-DDTHH:mm:SSZ", now()),
             "tags": (),
             "file_size": artifact.size(),
             "format": "qml",
@@ -1852,14 +1852,14 @@ class ModelRegistryTest inherits QUnit::Test {
         # Test: register a model version
         ML::KMeans km = createFittedKMeans();
         binary artifact = ML::ml_serialize(km);
-        string version_id = format_date("YYYYMMDDHHmmss", now()) + "_"
+        string version_id = format_date("YYYYMMDDHHmmSS", now()) + "_"
             + get_random_bytes(4).toHex();
 
         hash<QoreModelRegistry::ModelVersionInfo> meta({
             "version_id": version_id,
             "name": "db-test-model",
             "algorithm": "KMeans",
-            "created": format_date("YYYY-MM-DDTHH:mm:ssZ", now()),
+            "created": format_date("YYYY-MM-DDTHH:mm:SSZ", now()),
             "tags": (),
             "file_size": artifact.size(),
             "format": "qml",
@@ -1905,13 +1905,13 @@ class ModelRegistryTest inherits QUnit::Test {
 
         # Test: register multiple versions and prune
         for (int i = 0; i < 4; ++i) {
-            string v = format_date("YYYYMMDDHHmmss", now()) + "_"
+            string v = format_date("YYYYMMDDHHmmSS", now()) + "_"
                 + get_random_bytes(4).toHex();
             hash<QoreModelRegistry::ModelVersionInfo> m({
                 "version_id": v,
                 "name": "db-test-model",
                 "algorithm": "KMeans",
-                "created": format_date("YYYY-MM-DDTHH:mm:ssZ", now()),
+                "created": format_date("YYYY-MM-DDTHH:mm:SSZ", now()),
                 "tags": (),
                 "file_size": artifact.size(),
                 "format": "qml",

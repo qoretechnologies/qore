@@ -267,7 +267,7 @@ public class GitLabWatchDataProviderBase inherits DataProvider::AbstractTimestam
 
     #! Formats a timestamp the way GitLab's date filters take it
     private static string formatSince(date since) {
-        return format_date("YYYY-MM-DDTHH:mm:ssZ", since);
+        return format_date("YYYY-MM-DDTHH:mm:SSZ", since);
     }
 }
 

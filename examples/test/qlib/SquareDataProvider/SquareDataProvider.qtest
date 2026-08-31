@@ -597,7 +597,7 @@ public class SquareDataProviderTest inherits QUnit::Test {
         SquareDataProvider::SquareDataProvider prov(client);
         AbstractDataProvider createAction = prov.getChildProvider("customers").getChildProvider("create");
 
-        string unique = now_us().format("YYYYMMDDHHmmssxxxxxx");
+        string unique = now_us().format("YYYYMMDDHHmmSSxxxxxx");
         hash<auto> result = createAction.doRequest({
             "given_name": "Test",
             "family_name": "User_" + unique,

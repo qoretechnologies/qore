@@ -239,7 +239,7 @@ public class ModelArtifactInspector {
             "version_id": options.version_id,
             "name": name,
             "algorithm": options.algorithm ?? inferAlgorithm(artifacts),
-            "created": format_date("YYYY-MM-DDTHH:mm:ssZ", now()),
+            "created": format_date("YYYY-MM-DDTHH:mm:SSZ", now()),
             "description": options.description,
             "metrics": options.metrics,
             "tags": options.tags ?? (),

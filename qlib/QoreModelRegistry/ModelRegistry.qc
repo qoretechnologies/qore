@@ -189,7 +189,7 @@ public class ModelRegistry {
             "version_id": version_id,
             "name": name,
             "algorithm": getAlgorithmName(model),
-            "created": format_date("YYYY-MM-DDTHH:mm:ssZ", now()),
+            "created": format_date("YYYY-MM-DDTHH:mm:SSZ", now()),
             "description": options.description,
             "metrics": options.metrics,
             "tags": options.tags ?? (),
@@ -1087,7 +1087,7 @@ public class ModelRegistry {
 
     #! Private: creates a sortable unique version ID
     private static string makeVersionId() {
-        return format_date("YYYYMMDDHHmmss", now()) + "_"
+        return format_date("YYYYMMDDHHmmSS", now()) + "_"
             + get_random_bytes(4).toHex();
     }
 

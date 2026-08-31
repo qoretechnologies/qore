@@ -499,7 +499,7 @@ public class TableauDataProviderTest inherits QUnit::Test {
         AbstractDataProvider createAction = prov.getChildProvider("projects")
             .getChildProvider("create");
 
-        string unique = now_us().format("YYYYMMDDHHmmssxxxxxx");
+        string unique = now_us().format("YYYYMMDDHHmmSSxxxxxx");
         string projectName = "Test_Project_" + unique;
         hash<auto> result = createAction.doRequest({
             "name": projectName,

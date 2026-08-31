@@ -644,7 +644,7 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
         AbstractDataProvider createAction = prov.getChildProvider("contact-lists")
             .getChildProvider("create");
 
-        string unique = now_us().format("YYYYMMDDHHmmssxxxxxx");
+        string unique = now_us().format("YYYYMMDDHHmmSSxxxxxx");
         hash<auto> result = createAction.doRequest({
             "name": "Test List " + unique,
             "description": "Integration test list - safe to delete",
@@ -685,7 +685,7 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
         AbstractDataProvider createAction = prov.getChildProvider("contacts")
             .getChildProvider("create");
 
-        string unique = now_us().format("YYYYMMDDHHmmssxxxxxx");
+        string unique = now_us().format("YYYYMMDDHHmmSSxxxxxx");
 
         hash<auto> req = {
             "email_address": {
@@ -874,7 +874,7 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
         AbstractDataProvider createTag = prov.getChildProvider("tags")
             .getChildProvider("create");
 
-        string unique = now_us().format("YYYYMMDDHHmmssxxxxxx");
+        string unique = now_us().format("YYYYMMDDHHmmSSxxxxxx");
         hash<auto> result;
         try {
             result = createTag.doRequest({
@@ -948,7 +948,7 @@ public class ConstantContactDataProviderTest inherits QUnit::Test {
         AbstractDataProvider createField = prov.getChildProvider("custom-fields")
             .getChildProvider("create");
 
-        string unique = now_us().format("YYYYMMDDHHmmssxxxxxx");
+        string unique = now_us().format("YYYYMMDDHHmmSSxxxxxx");
         hash<auto> result;
         try {
             result = createField.doRequest({

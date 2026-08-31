@@ -90,7 +90,7 @@ public class TableauWebhookEventDataProviderBase inherits TableauDataProviderBas
             "resource_name": "Example Datasource",
             "resource_luid": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
             "site_luid": "f1e2d3c4-b5a6-7890-abcd-ef1234567890",
-            "created_at": now_us().format("YYYY-MM-DDTHH:mm:ssZ"),
+            "created_at": now_us().format("YYYY-MM-DDTHH:mm:SSZ"),
         };
     }
 }

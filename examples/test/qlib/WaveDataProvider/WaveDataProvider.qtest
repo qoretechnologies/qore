@@ -700,7 +700,7 @@ public class WaveDataProviderTest inherits QUnit::Test {
         hash<auto> newCustomer = customers.createRecord({
             "businessId": businessId,
             "name": testCustomerName,
-            "email": "test-" + now_us().format("YYYYMMDDHHmmssuu") + "@example.com",
+            "email": "test-" + now_us().format("YYYYMMDDHHmmSSuu") + "@example.com",
         });
         assertTrue(newCustomer.hasKey("id"));
         assertEq(testCustomerName, newCustomer.name);
@@ -728,7 +728,7 @@ public class WaveDataProviderTest inherits QUnit::Test {
 
         AbstractDataProvider updateCustomerProv = prov.getChildProvider("update-customer");
         string updatedCustomerName = "Updated Customer " + now_us().toString();
-        string updatedCustomerEmail = "updated-" + now_us().format("YYYYMMDDHHmmssuu") + "@example.com";
+        string updatedCustomerEmail = "updated-" + now_us().format("YYYYMMDDHHmmSSuu") + "@example.com";
         hash<auto> updatedCustomer = updateCustomerProv.doRequest({
             "id": newCustomer.id,
             "name": updatedCustomerName,
@@ -779,7 +779,7 @@ public class WaveDataProviderTest inherits QUnit::Test {
 
         # Test email search with non-existent email returns no results
         AbstractDataProviderRecordIterator noEmailIter = customers.searchRecords(
-            NOTHING, {"businessId": businessId, "email": "nonexistent-" + now_us().format("YYYYMMDDHHmmssuu") + "@example.com"});
+            NOTHING, {"businessId": businessId, "email": "nonexistent-" + now_us().format("YYYYMMDDHHmmSSuu") + "@example.com"});
         assertFalse(noEmailIter.next(), "Non-existent email should return no results");
         if (m_options.verbose) {
             printf("Non-existent email correctly returns empty results\n");
@@ -919,7 +919,7 @@ public class WaveDataProviderTest inherits QUnit::Test {
         hash<auto> invoiceCustomer = customers.createRecord({
             "businessId": businessId,
             "name": invoiceCustomerName,
-            "email": "invoice-test-" + now_us().format("YYYYMMDDHHmmssuu") + "@example.com",
+            "email": "invoice-test-" + now_us().format("YYYYMMDDHHmmSSuu") + "@example.com",
         });
 
         # List invoices

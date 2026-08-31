@@ -70,7 +70,7 @@ public class InstantlyCampaignCompletedEventDataProvider inherits InstantlyBaseE
     private hash<auto> getFakeExampleData() {
         return {
             "event_type": WEBHOOK_CAMPAIGN_COMPLETED,
-            "timestamp": now_us().format("YYYY-MM-DDTHH:mm:ss.xxxZ"),
+            "timestamp": now_us().format("YYYY-MM-DDTHH:mm:SS.msZ"),
             "campaign_id": "00000000-0000-0000-0000-000000000000",
             "campaign_name": "Example Campaign",
             "total_leads": 1000,

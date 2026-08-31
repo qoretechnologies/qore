@@ -1,0 +1,174 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+
+%exec-class DateFormatCodeTest
+
+#! Guards the date/time output format codes and their use in the standard modules
+/** Qore's formatter copies any character that is not a format code straight into the output, which is how
+    separators work.  The cost is that a code borrowed from another date library - \c ss for seconds, as used
+    by Java, .NET, moment.js and strftime-alikes, where Qore uses \c SS - is not rejected: it is emitted
+    literally, so a timestamp comes out as \c "15:50:ss" and nothing reports an error.
+
+    That is not hypothetical: it shipped in the ElasticSearch and OpenSearch log appenders and in two dozen
+    data provider modules, which sent malformed timestamps to their servers.  The scan below fails if any
+    date format string in @c qlib/ would emit a letter literally.
+*/
+class DateFormatCodeTest inherits QUnit::Test {
+    public {
+        #! the documented output format codes, longest first, as the formatter matches them
+        const Codes = (
+            "MONTH", "Month", "YYYY", "MON", "Mon", "DAY", "Day", "DY", "Dy", "DN", "Dn", "YY", "MM", "DD",
+            "HH", "hh", "ID", "Id", "IF", "IW", "Iw", "IY", "Iy", "mm", "SS", "us", "uu", "ms", "xx",
+            "M", "D", "H", "h", "I", "m", "S", "u", "x", "y", "z", "Z", "P", "p", "@",
+        );
+
+        #! letters that are conventionally literal in a date format
+        const LiteralLetters = ("T",);
+
+        #! format strings in these locations are not Qore date formats
+        const Exceptions = {
+            # an Oracle date format inside a to_timestamp() call
+            "qlib/OracleSqlUtilBase.qm": True,
+            # "GMT" is a literal in the RFC 2616 date format
+            "qlib/HttpUtil.qm": True,
+            # "%d{...}" is a Logger conversion pattern, not a date format
+            "qlib/Logger.qm": True,
+        };
+
+        const TestDate = 2026-08-31T15:50:07.087630+02:00;
+    }
+
+    private {
+        string qlib_dir;
+    }
+
+    constructor() : QUnit::Test("DateFormatCodeTest", "1.0") {
+        qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
+
+        addTestCase("seconds are SS and not ss", \testSecondCode());
+        addTestCase("sub-second codes", \testSubSecondCodes());
+        addTestCase("an unknown code is emitted literally", \testUnknownCodeIsLiteral());
+        addTestCase("no module emits a date format code literally", \testModuleFormatStrings());
+
+        set_return_value(main());
+    }
+
+    #! \c SS is the seconds code; \c ss is not a code at all
+    private testSecondCode() {
+        assertEq("07", format_date("SS", TestDate), "SS is the zero-padded seconds code");
+        assertEq("7", format_date("S", TestDate), "S is the non-padded seconds code");
+        assertEq("ss", format_date("ss", TestDate),
+            "ss is not a format code and is copied to the output, which is why the mistake is silent");
+        assertEq("2026-08-31T15:50:07.087630+02:00", format_date("YYYY-MM-DDTHH:mm:SS.xxZ", TestDate),
+            "the ISO-8601 format used by the search log appenders");
+    }
+
+    private testSubSecondCodes() {
+        assertEq("087", format_date("ms", TestDate), "ms is zero-padded milliseconds");
+        assertEq("087630", format_date("us", TestDate), "us is zero-padded microseconds");
+        assertEq("087630", format_date("xx", TestDate), "xx is zero-padded microseconds");
+        # a repeated code is matched twice rather than widened, so "xxx" is "xx" followed by "x"
+        assertEq(format_date("xx", TestDate) + format_date("x", TestDate), format_date("xxx", TestDate),
+            "a repeated code is matched greedily in turn, it does not select a field width");
+    }
+
+    private testUnknownCodeIsLiteral() {
+        # this is required behaviour: it is how separators and words in a format string work
+        assertEq("at 15:50", format_date("at HH:mm", TestDate), "unknown characters are literal");
+        # the two ways a borrowed code goes wrong: dd is copied out verbatim like ss ...
+        assertEq("dd", format_date("dd", TestDate), "dd is not a code; Qore uses DD for the day");
+        # ... while yyyy is four y codes in a row, so it expands to fractional seconds four times over
+        string y = format_date("y", TestDate);
+        assertEq(y + y + y + y, format_date("yyyy", TestDate),
+            "yyyy is not a four-digit year; Qore uses YYYY");
+        assertEq("2026", format_date("YYYY", TestDate), "YYYY is the four-digit year");
+    }
+
+    #! Fails if any date format string in qlib/ would put a letter in its own output
+    private testModuleFormatStrings() {
+        if (!is_dir(qlib_dir)) {
+            testSkip(sprintf("qlib directory %y not found", qlib_dir));
+        }
+
+        list<string> bad = ();
+        map bad += checkFile($1), getModuleSources();
+        assertEq((), bad, "every date format string in qlib/ must use documented format codes");
+    }
+
+    #! Returns every Qore source under qlib/
+    private list<string> getModuleSources() {
+        list<string> rv = ();
+        addSources(qlib_dir, \rv);
+        return rv;
+    }
+
+    #! Adds every Qore source in one directory and its subdirectories
+    private addSources(string dir, reference<list<string>> rv) {
+        Dir d();
+        if (!d.chdir(dir)) {
+            return;
+        }
+        map rv += dir + DirSep + $1, d.listFiles("\\.(qm|qc)$");
+        map addSources(dir + DirSep + $1, \rv), d.listDirs();
+    }
+
+    #! Returns a description of every offending format string in one source
+    private list<string> checkFile(string path) {
+        string rel = "qlib" + path.substr(qlib_dir.size());
+        # the exception list is keyed by the module source, not by line
+        foreach string ex in (keys Exceptions) {
+            if (rel.find(basename(ex)) > -1) {
+                return ();
+            }
+        }
+
+        list<string> rv = ();
+        int lno = 0;
+        foreach string line in (ReadOnlyFile::readTextFile(path).split("\n")) {
+            ++lno;
+            if (line !~ /format_date\(|\.format\(/) {
+                continue;
+            }
+            foreach string lit in ((line =~ x/"([^"\\\n]{3,80})"/g) ?? ()) {
+                if (lit !~ /YYYY|HH|DD|SS|mm/) {
+                    continue;
+                }
+                if (*string stray = getStrayLetters(lit)) {
+                    rv += sprintf("%s:%d: format %y emits %y literally", rel, lno, lit, stray);
+                }
+            }
+        }
+        return rv;
+    }
+
+    #! Returns the letters a format string would emit literally, tokenizing as the formatter does
+    private *string getStrayLetters(string fmt) {
+        string stray;
+        int i = 0;
+        while (i < fmt.size()) {
+            bool matched = False;
+            foreach string code in (Codes) {
+                if (fmt.substr(i, code.size()) == code) {
+                    i += code.size();
+                    matched = True;
+                    break;
+                }
+            }
+            if (matched) {
+                continue;
+            }
+            string ch = fmt.substr(i, 1);
+            if (ch =~ /[A-Za-z]/ && !inlist(ch, LiteralLetters)) {
+                stray += ch;
+            }
+            ++i;
+        }
+        return stray;
+    }
+}

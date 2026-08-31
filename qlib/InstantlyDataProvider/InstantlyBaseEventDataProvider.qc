@@ -172,7 +172,7 @@ public class InstantlyBaseEventDataProvider inherits InstantlyDataProviderBase, 
     private hash<auto> getFakeExampleData() {
         return {
             "event_type": getWebhookEventType(),
-            "timestamp": now_us().format("YYYY-MM-DDTHH:mm:ss.xxxZ"),
+            "timestamp": now_us().format("YYYY-MM-DDTHH:mm:SS.msZ"),
             "campaign_id": "00000000-0000-0000-0000-000000000000",
             "campaign_name": "Example Campaign",
         };
@@ -217,7 +217,7 @@ public class InstantlyBaseEventDataProvider inherits InstantlyDataProviderBase, 
         # Transform to standard format
         hash<auto> transformed = {
             "event_type": getWebhookEventType(),
-            "timestamp": payload.timestamp ?? now_us().format("YYYY-MM-DDTHH:mm:ss.xxxZ"),
+            "timestamp": payload.timestamp ?? now_us().format("YYYY-MM-DDTHH:mm:SS.msZ"),
             "campaign_id": payload.campaign_id,
             "campaign_name": payload.campaign_name,
         };

@@ -740,7 +740,7 @@ public class LinearDataProviderTest inherits QUnit::Test {
         }
 
         AbstractDataProvider labels = prov.getChildProvider("labels");
-        string testLabelName = "test-label-" + now_us().format("YYYYMMDDHHmmssuu");
+        string testLabelName = "test-label-" + now_us().format("YYYYMMDDHHmmSSuu");
         hash<auto> newLabel = labels.createRecord({
             "teamId": teamId,
             "name": testLabelName,

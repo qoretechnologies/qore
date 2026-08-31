@@ -913,7 +913,7 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
 
         # Create a test contact
         AbstractDataProvider createContactProvider = prov.getChildProvider("create-contact");
-        string testName = sprintf("Test Contact %s", now_us().format("YYYYMMDDHHmmss"));
+        string testName = sprintf("Test Contact %s", now_us().format("YYYYMMDDHHmmSS"));
 
         try {
             hash<auto> newContact = createContactProvider.doRequest({
@@ -1023,14 +1023,14 @@ public class ZohoInventoryDataProviderTest inherits QUnit::Test {
 
         # Create a test item
         AbstractDataProvider createItemProvider = prov.getChildProvider("create-item");
-        string testName = sprintf("Test Item %s", now_us().format("YYYYMMDDHHmmss"));
+        string testName = sprintf("Test Item %s", now_us().format("YYYYMMDDHHmmSS"));
 
         try {
             hash<auto> newItem = createItemProvider.doRequest({
                 "name": testName,
                 "rate": 100.00,
                 "item_type": "inventory",
-                "sku": sprintf("TST-%s", now_us().format("YYYYMMDDHHmmss")),
+                "sku": sprintf("TST-%s", now_us().format("YYYYMMDDHHmmSS")),
             });
 
             if (newItem.item_id) {

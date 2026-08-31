@@ -731,7 +731,7 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
 
         # Generate unique test order number
         string testOrderNumber = sprintf("TEST_%s_%d",
-            now_us().format("YYYYMMDDHHmmss"), rand() % 10000);
+            now_us().format("YYYYMMDDHHmmSS"), rand() % 10000);
 
         # Test 1: Create order
         if (m_options.verbose) {
@@ -844,7 +844,7 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
 
         # Generate unique test order number/key
         string testOrderKey = sprintf("UPDATE_TEST_%s_%d",
-            now_us().format("YYYYMMDDHHmmss"), rand() % 10000);
+            now_us().format("YYYYMMDDHHmmSS"), rand() % 10000);
 
         # Create an order with a known orderKey
         AbstractDataProvider createOrderProvider = prov.getChildProvider("create-order");
@@ -979,7 +979,7 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
 
         # Create a test order
         string testOrderNumber = sprintf("TAG_TEST_%s_%d",
-            now_us().format("YYYYMMDDHHmmss"), rand() % 10000);
+            now_us().format("YYYYMMDDHHmmSS"), rand() % 10000);
 
         AbstractDataProvider createOrderProvider = prov.getChildProvider("create-order");
         hash<auto> createRequest = {
@@ -1484,7 +1484,7 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
 
         ShipStationDataProvider::ShipStationDataProvider prov(client);
 
-        string warehouseName = sprintf("Test Warehouse %s", now_us().format("YYYYMMDDHHmmss"));
+        string warehouseName = sprintf("Test Warehouse %s", now_us().format("YYYYMMDDHHmmSS"));
         *int createdWarehouseId;
 
         try {
@@ -1679,7 +1679,7 @@ public class ShipStationDataProviderTest inherits QUnit::Test {
 
         # Create a test order
         string testOrderNumber = sprintf("USER_ASSIGN_TEST_%s_%d",
-            now_us().format("YYYYMMDDHHmmss"), rand() % 10000);
+            now_us().format("YYYYMMDDHHmmSS"), rand() % 10000);
 
         AbstractDataProvider createOrderProvider = prov.getChildProvider("create-order");
         hash<auto> createRequest = {

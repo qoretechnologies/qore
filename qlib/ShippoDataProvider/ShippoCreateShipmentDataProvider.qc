@@ -88,7 +88,7 @@ public class ShippoCreateShipmentDataProvider inherits ShippoDataProviderBase {
             body.address_return = req.address_return;
         }
         if (exists req.shipment_date) {
-            body.shipment_date = format_date("YYYY-MM-DDTHH:mm:ssZ", req.shipment_date);
+            body.shipment_date = format_date("YYYY-MM-DDTHH:mm:SSZ", req.shipment_date);
         }
         if (exists req.extra) {
             body.extra = req.extra;

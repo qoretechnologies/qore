@@ -70,7 +70,7 @@ public class InstantlyEmailBouncedEventDataProvider inherits InstantlyBaseEventD
     private hash<auto> getFakeExampleData() {
         return {
             "event_type": WEBHOOK_EMAIL_BOUNCED,
-            "timestamp": now_us().format("YYYY-MM-DDTHH:mm:ss.xxxZ"),
+            "timestamp": now_us().format("YYYY-MM-DDTHH:mm:SS.msZ"),
             "campaign_id": "00000000-0000-0000-0000-000000000000",
             "campaign_name": "Example Campaign",
             "lead_email": "bounced@example.com",

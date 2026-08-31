@@ -453,7 +453,7 @@ public class CloseDataProviderTest inherits QUnit::Test {
         }
 
         CloseDataProvider::CloseDataProvider prov(client);
-        string ts = now_us().format("YYYY-MM-DD HH:mm:ss");
+        string ts = now_us().format("YYYY-MM-DD HH:mm:SS");
 
         # --- Lead CRUD ---
         AbstractDataProvider leads = prov.getChildProvider("leads");

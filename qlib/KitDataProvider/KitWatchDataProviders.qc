@@ -44,7 +44,7 @@ public class KitWatchSubscriberActivateDataProvider inherits KitWatchDataProvide
     *string getDesc() { return "Watch for new subscriber activations in Kit"; }
 
     private list<hash<auto>> fetchRecords(date since) {
-        string since_str = since.format("YYYY-MM-DDTHH:mm:ssZ");
+        string since_str = since.format("YYYY-MM-DDTHH:mm:SSZ");
         return fetchAllPages("subscribers", "subscribers", {
             "created_after": since_str,
             "sort_field": "created_at",
@@ -87,7 +87,7 @@ public class KitWatchSubscriberUnsubscribeDataProvider inherits KitWatchDataProv
     *string getDesc() { return "Watch for subscriber unsubscribes in Kit"; }
 
     private list<hash<auto>> fetchRecords(date since) {
-        string since_str = since.format("YYYY-MM-DDTHH:mm:ssZ");
+        string since_str = since.format("YYYY-MM-DDTHH:mm:SSZ");
         return fetchAllPages("subscribers", "subscribers", {
             "updated_after": since_str,
             "state": "cancelled",
@@ -133,7 +133,7 @@ public class KitWatchSubscriberBounceDataProvider inherits KitWatchDataProviderB
     *string getDesc() { return "Watch for subscriber bounces in Kit"; }
 
     private list<hash<auto>> fetchRecords(date since) {
-        string since_str = since.format("YYYY-MM-DDTHH:mm:ssZ");
+        string since_str = since.format("YYYY-MM-DDTHH:mm:SSZ");
         return fetchAllPages("subscribers", "subscribers", {
             "updated_after": since_str,
             "state": "bounced",
@@ -179,7 +179,7 @@ public class KitWatchSubscriberComplainDataProvider inherits KitWatchDataProvide
     *string getDesc() { return "Watch for subscriber complaints in Kit"; }
 
     private list<hash<auto>> fetchRecords(date since) {
-        string since_str = since.format("YYYY-MM-DDTHH:mm:ssZ");
+        string since_str = since.format("YYYY-MM-DDTHH:mm:SSZ");
         return fetchAllPages("subscribers", "subscribers", {
             "updated_after": since_str,
             "state": "complained",
@@ -225,7 +225,7 @@ public class KitWatchFormSubscribeDataProvider inherits KitWatchDataProviderBase
     *string getDesc() { return "Watch for new form subscriptions in Kit"; }
 
     private list<hash<auto>> fetchRecords(date since) {
-        string since_str = since.format("YYYY-MM-DDTHH:mm:ssZ");
+        string since_str = since.format("YYYY-MM-DDTHH:mm:SSZ");
         return fetchAllPages("subscribers", "subscribers", {
             "created_after": since_str,
             "sort_field": "created_at",
@@ -268,7 +268,7 @@ public class KitWatchCourseSubscribeDataProvider inherits KitWatchDataProviderBa
     *string getDesc() { return "Watch for new course subscriptions in Kit"; }
 
     private list<hash<auto>> fetchRecords(date since) {
-        string since_str = since.format("YYYY-MM-DDTHH:mm:ssZ");
+        string since_str = since.format("YYYY-MM-DDTHH:mm:SSZ");
         return fetchAllPages("subscribers", "subscribers", {
             "created_after": since_str,
             "sort_field": "created_at",

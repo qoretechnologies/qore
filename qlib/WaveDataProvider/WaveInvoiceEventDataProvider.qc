@@ -160,7 +160,7 @@ public class WaveInvoiceEventDataProvider inherits WaveDataProviderBase, DataPro
                     return {
                         "business_id": bid,
                         "event": WaveActionCreated,
-                        "triggered_at": now_us().format("YYYY-MM-DDTHH:mm:ss.xxxZ"),
+                        "triggered_at": now_us().format("YYYY-MM-DDTHH:mm:SS.msZ"),
                         "data": flattenEdges(data.business.invoices.edges[0].node),
                     };
                 }

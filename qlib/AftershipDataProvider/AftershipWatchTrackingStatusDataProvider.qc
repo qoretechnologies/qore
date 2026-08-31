@@ -56,7 +56,7 @@ public class AftershipWatchTrackingStatusDataProvider inherits AftershipWatchDat
 
     #! Fetches recently updated trackings
     private list<hash<auto>> fetchRecords(date since) {
-        string since_str = since.format("YYYY-MM-DDTHH:mm:ssZ");
+        string since_str = since.format("YYYY-MM-DDTHH:mm:SSZ");
         string path = "trackings?updated_at_min=" + encode_url(since_str, True)
             + "&limit=" + MaxPageSize;
         hash<auto> response = doTrackingCommand("GET", path);

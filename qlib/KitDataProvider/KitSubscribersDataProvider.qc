@@ -181,16 +181,16 @@ public class KitSubscribersDataProvider inherits KitDataProviderBase {
             params.tag_id = search_options.tag_id;
         }
         if (search_options.created_after) {
-            params.created_after = search_options.created_after.format("YYYY-MM-DDTHH:mm:ssZ");
+            params.created_after = search_options.created_after.format("YYYY-MM-DDTHH:mm:SSZ");
         }
         if (search_options.created_before) {
-            params.created_before = search_options.created_before.format("YYYY-MM-DDTHH:mm:ssZ");
+            params.created_before = search_options.created_before.format("YYYY-MM-DDTHH:mm:SSZ");
         }
         if (search_options.updated_after) {
-            params.updated_after = search_options.updated_after.format("YYYY-MM-DDTHH:mm:ssZ");
+            params.updated_after = search_options.updated_after.format("YYYY-MM-DDTHH:mm:SSZ");
         }
         if (search_options.updated_before) {
-            params.updated_before = search_options.updated_before.format("YYYY-MM-DDTHH:mm:ssZ");
+            params.updated_before = search_options.updated_before.format("YYYY-MM-DDTHH:mm:SSZ");
         }
         if (search_options.sort_field) {
             params.sort_field = search_options.sort_field;

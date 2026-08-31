@@ -206,7 +206,7 @@ public class DeelDataProviderBase inherits DataProvider::AbstractDataProvider {
 
     #! Formats a date/time for Deel API parameters (ISO 8601)
     static string formatDateTime(date dt) {
-        return dt.format("YYYY-MM-DDTHH:mm:ssZ");
+        return dt.format("YYYY-MM-DDTHH:mm:SSZ");
     }
 
     #! Formats a date for Deel API date-only parameters (YYYY-MM-DD)

@@ -113,7 +113,7 @@ class TestMcpServerHandler inherits McpServerHandler {
         return {
             "version": "1.0",
             "features": ("tools", "resources", "prompts", "tasks"),
-            "timestamp": now_us().format("YYYY-MM-DD HH:mm:ss"),
+            "timestamp": now_us().format("YYYY-MM-DD HH:mm:SS"),
         };
     }
 

@@ -404,7 +404,7 @@ public class CloseDataProviderBase inherits DataProvider::AbstractDataProvider {
 
     #! Formats a date for Close API parameters (ISO 8601)
     static string formatDateTime(date dt) {
-        return dt.format("YYYY-MM-DDTHH:mm:ss.xxxZ");
+        return dt.format("YYYY-MM-DDTHH:mm:SS.msZ");
     }
 }
 

@@ -733,7 +733,7 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
 
         # Generate unique test identifiers
         string testEmail = sprintf("test_%s_%d@example.com",
-            now_us().format("YYYYMMDDHHmmss"), rand() % 10000);
+            now_us().format("YYYYMMDDHHmmSS"), rand() % 10000);
 
         # Step 1: Create customer
         if (m_options.verbose) {
@@ -859,7 +859,7 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
 
         # Generate unique coupon ID
         string couponId = sprintf("TEST_COUPON_%s_%d",
-            now_us().format("YYYYMMDDHHmmss"), rand() % 10000);
+            now_us().format("YYYYMMDDHHmmSS"), rand() % 10000);
 
         # Step 1: Create coupon
         if (m_options.verbose) {
@@ -984,7 +984,7 @@ public class ChargebeeDataProviderTest inherits QUnit::Test {
 
         # Create a temporary customer for credit operations
         string testEmail = sprintf("promo_test_%s_%d@example.com",
-            now_us().format("YYYYMMDDHHmmss"), rand() % 10000);
+            now_us().format("YYYYMMDDHHmmSS"), rand() % 10000);
 
         AbstractDataProvider createCustomerProvider = prov.getChildProvider("create-customer");
         *string customerId;

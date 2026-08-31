@@ -571,7 +571,7 @@ public class LemlistDataProviderTest inherits QUnit::Test {
         LemlistDataProvider::LemlistDataProvider prov(client);
 
         # Create a new test campaign
-        string campaignName = sprintf("QoreTest-%s", now_us().format("YYYYMMDDHHmmss"));
+        string campaignName = sprintf("QoreTest-%s", now_us().format("YYYYMMDDHHmmSS"));
         AbstractDataProvider createCampaign = prov.getChildProvider("create-campaign");
         hash<auto> createResp = createCampaign.doRequest({"name": campaignName});
 
@@ -701,7 +701,7 @@ public class LemlistDataProviderTest inherits QUnit::Test {
     private testContactRoundTrip() {
         LemlistDataProvider::LemlistDataProvider prov(client);
         string contactEmail = sprintf("qore-contact-%s@test.example.com",
-            now_us().format("YYYYMMDDHHmmssxxx"));
+            now_us().format("YYYYMMDDHHmmSSxxx"));
 
         # --- Create contact ---
         AbstractDataProvider createContact = prov.getChildProvider("create-contact");
@@ -753,7 +753,7 @@ public class LemlistDataProviderTest inherits QUnit::Test {
     private testLeadRoundTrip() {
         LemlistDataProvider::LemlistDataProvider prov(client);
         # Use millisecond precision to avoid graveyard collisions across test runs
-        string testEmail = sprintf("qore-test-%s@test.example.com", now_us().format("YYYYMMDDHHmmssxxx"));
+        string testEmail = sprintf("qore-test-%s@test.example.com", now_us().format("YYYYMMDDHHmmSSxxx"));
 
         # Save email for use in contact tests (contacts are accessible by lead email)
         testLeadEmail = testEmail;

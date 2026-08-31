@@ -636,7 +636,7 @@ public class JotformDataProviderTest inherits QUnit::Test {
         }
 
         # Generate unique test value
-        string testValue = sprintf("IntegrationTest_%s_%d", now_us().format("YYYYMMDDHHmmss"), rand() % 10000);
+        string testValue = sprintf("IntegrationTest_%s_%d", now_us().format("YYYYMMDDHHmmSS"), rand() % 10000);
 
         # Test 1: Create submission using create-submission action provider
         if (m_options.verbose) {
@@ -703,7 +703,7 @@ public class JotformDataProviderTest inherits QUnit::Test {
                 printf("\nTest 2: Update submission via update-submission action...\n");
             }
 
-            string updatedValue = sprintf("UpdatedTest_%s_%d", now_us().format("YYYYMMDDHHmmss"), rand() % 10000);
+            string updatedValue = sprintf("UpdatedTest_%s_%d", now_us().format("YYYYMMDDHHmmSS"), rand() % 10000);
 
             AbstractDataProvider updateProvider = prov.getChildProvider("update-submission");
             hash<auto> updateRequest = {

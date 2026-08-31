@@ -723,14 +723,14 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
 
         # Step 1: Create a test client
         AbstractDataProvider createClientProvider = prov.getChildProvider("create-client");
-        string testOrgName = sprintf("Test Org %s", now_us().format("YYYYMMDDHHmmss"));
+        string testOrgName = sprintf("Test Org %s", now_us().format("YYYYMMDDHHmmSS"));
 
         try {
             hash<auto> newClient = createClientProvider.doRequest({
                 "account_id": accountId,
                 "fname": "IntTest",
                 "lname": "Client",
-                "email": sprintf("inttest-%s@example.com", now_us().format("YYYYMMDDHHmmss")),
+                "email": sprintf("inttest-%s@example.com", now_us().format("YYYYMMDDHHmmSS")),
                 "organization": testOrgName,
                 "note": "Created by FreshBooks integration test",
             });
@@ -761,7 +761,7 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
 
             # Step 3: Update the client
             AbstractDataProvider updateClientProvider = prov.getChildProvider("update-client");
-            string updatedOrg = sprintf("Updated Org %s", now_us().format("YYYYMMDDHHmmss"));
+            string updatedOrg = sprintf("Updated Org %s", now_us().format("YYYYMMDDHHmmSS"));
             updateClientProvider.doRequest({
                 "account_id": accountId,
                 "id": testClientId,
@@ -815,7 +815,7 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
 
         # Step 1: Create a test expense
         AbstractDataProvider createExpenseProvider = prov.getChildProvider("create-expense");
-        string testNotes = sprintf("Test expense %s", now_us().format("YYYYMMDDHHmmss"));
+        string testNotes = sprintf("Test expense %s", now_us().format("YYYYMMDDHHmmSS"));
         string expenseDate = now().format("YYYY-MM-DD");
 
         try {
@@ -926,7 +926,7 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
 
         # Step 1: Create a test item
         AbstractDataProvider createItemProvider = prov.getChildProvider("create-item");
-        string testItemName = sprintf("Test Item %s", now_us().format("YYYYMMDDHHmmss"));
+        string testItemName = sprintf("Test Item %s", now_us().format("YYYYMMDDHHmmSS"));
 
         try {
             hash<auto> newItem = createItemProvider.doRequest({
@@ -961,7 +961,7 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
 
             # Step 3: Update the item
             AbstractDataProvider updateItemProvider = prov.getChildProvider("update-item");
-            string updatedName = sprintf("Updated Item %s", now_us().format("YYYYMMDDHHmmss"));
+            string updatedName = sprintf("Updated Item %s", now_us().format("YYYYMMDDHHmmSS"));
             updateItemProvider.doRequest({
                 "account_id": accountId,
                 "id": testItemId,
@@ -1008,7 +1008,7 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
 
         # Step 1: Create a test service
         AbstractDataProvider createServiceProvider = prov.getChildProvider("create-service");
-        string testServiceName = sprintf("Test Service %s", now_us().format("YYYYMMDDHHmmss"));
+        string testServiceName = sprintf("Test Service %s", now_us().format("YYYYMMDDHHmmSS"));
 
         try {
             hash<auto> newService = createServiceProvider.doRequest({
@@ -1045,7 +1045,7 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
             # Step 3: Update the service
             AbstractDataProvider updateServiceProvider = prov.getChildProvider("update-service");
             string updatedServiceName = sprintf("Updated Svc %s",
-                now_us().format("YYYYMMDDHHmmss"));
+                now_us().format("YYYYMMDDHHmmSS"));
             updateServiceProvider.doRequest({
                 "business_id": businessId,
                 "id": testServiceId,
@@ -1215,7 +1215,7 @@ public class FreshBooksDataProviderTest inherits QUnit::Test {
         # Step 1: Create a test estimate
         AbstractDataProvider createEstimateProvider = prov.getChildProvider("create-estimate");
         string estimateDate = now().format("YYYY-MM-DD");
-        string testNotes = sprintf("Test estimate %s", now_us().format("YYYYMMDDHHmmss"));
+        string testNotes = sprintf("Test estimate %s", now_us().format("YYYYMMDDHHmmSS"));
 
         try {
             hash<auto> newEstimate = createEstimateProvider.doRequest({

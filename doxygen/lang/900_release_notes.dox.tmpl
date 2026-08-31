@@ -3006,6 +3006,17 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
     - @ref utilintro "Util" module
       - fixed the @ref Util::glob_to_regex() "glob_to_regex()" function
         (<a href="https://github.com/qoretechnologies/qore/issues/4996">issue 4996</a>)
+    - Date formatting in standard modules
+      - fixed the seconds in every timestamp written by the
+        <a href="../../modules/ElasticSearchLoggerAppender/html/index.html">ElasticSearchLoggerAppender</a> and
+        <a href="../../modules/OpenSearchLoggerAppender/html/index.html">OpenSearchLoggerAppender</a> modules and
+        by two dozen data provider modules: the format strings used \c "ss" for the seconds, which is the
+        convention in other date libraries but is not a @ref date_formatting "Qore format code", so it was
+        copied into the output literally and timestamps were written as \c "2026-08-31T15:50:ss.087630+02:00".
+        Several of the same format strings also used \c "xxx" and \c "uuuuuu" for fractional seconds, which are
+        repeats of the \c "xx" and \c "uu" codes rather than a field width, and produced a run of digits
+        instead of milliseconds or microseconds.  Search servers reject or misindex such timestamps, and the
+        affected data providers sent them to their remote APIs
 
     @section qore_2_2_1 Qore 2.2.1
 
