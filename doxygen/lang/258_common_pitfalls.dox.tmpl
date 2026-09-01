@@ -29,6 +29,7 @@
     |<tt>PARSE-EXCEPTION: hard keyword 'enum' cannot be used after '.'</tt>|a dot member name collided with a @ref keywords "hard keyword"|@ref pitfalls_keywords
     |<tt>PARSE-EXCEPTION: 'C()' names class 'C', not a function</tt>|an object constructor was written without \c new|@ref pitfalls_new
     |a character loop truncates non-ASCII text|@ref <string>::size() "size()" counts bytes, not characters|@ref pitfalls_size_length
+    |<tt>OBJECT-ALREADY-DELETED</tt> thrown in a thread started with <tt>background</tt>|the thread reached the object through a @ref call_reference "call reference", which does not prolong the object's lifetime|@ref pitfalls_background_lifetime "background threads and object lifetime"
 
     @section pitfalls_types Types and Declarations
 
@@ -117,6 +118,20 @@
     references a <tt>private:internal</tt> parent member gets no parse error: the name simply does
     not resolve to that member, so a loop over it iterates zero times and a lookup always reports
     "not found".  See @ref private_methods.
+
+    @section pitfalls_threading Threading
+
+    @anchor pitfalls_background_lifetime
+    @subsection pitfalls_background_callref A background thread keeps its object alive, but a call reference does not
+    A @ref background "background" expression that names an object directly — <tt>background method()</tt>,
+    <tt>background self.method()</tt>, <tt>background obj.method()</tt>, or an object passed as an argument —
+    references the object before the thread starts, so the object survives until the thread finishes even if
+    the caller never retains it, including when the thread is started from the object's own
+    @ref class_special_methods "constructor".  A @ref call_reference "call reference" is the exception: it binds
+    its object weakly, so <tt>background c()</tt> for a <tt>code c = \\method();</tt> does not prolong anything
+    and the new thread throws <tt>OBJECT-ALREADY-DELETED</tt> on its first access.  Because the outcome depends
+    on when the last ordinary reference is released, the same code can pass a test and fail in production.  See
+    @ref background_object_lifetime.
 
     @section pitfalls_syntax Syntax and Keywords
 

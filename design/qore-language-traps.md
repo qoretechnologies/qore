@@ -28,6 +28,8 @@ and would have been documented as true if they had not been re-run.
 | a declared capability/option key reads as absent | [5](#5-presence-emptiness-and-absence-are-three-different-things) |
 | a remote call exceeds an interval limit only in some time zones | [8](#8-days-and-months-are-calendar-units) |
 | a character loop truncates non-ASCII text or reads past the end | [13](#13-size-counts-bytes-length-counts-characters) |
+| `OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted`, thrown in a `background` thread | [16](#16-background-keeps-an-object-alive-but-a-method-call-reference-does-not) |
+| `OBJECT-ALREADY-DELETED: attempt to access member 'X' of an already-deleted object of class 'C'`, thrown in a `background` thread | [16](#16-background-keeps-an-object-alive-but-a-method-call-reference-does-not) |
 
 ## Parser and tool feedback
 
@@ -311,6 +313,8 @@ Separately: never take a call reference on a temporary object
 (`\obj.getChild("x").doRequest()`) — the temporary is released before the call runs and you get
 `OBJECT-ALREADY-DELETED`. Bind the receiver to a local first. This matters most in `assertThrows()`,
 where the whole call is written as a reference.
+The same weak reference is what breaks a `background` thread reached through a call reference; see
+[trap 16](#16-background-keeps-an-object-alive-but-a-method-call-reference-does-not).
 
 ## 12. A read-only local needs an explicit type
 
@@ -364,6 +368,53 @@ it cannot be used to detect whether the caller passed one. Return a `{found, val
 separate flag parameter, when the distinction matters.
 
 Direct checks of an optional local reference receive the opt-in `EXISTS-OPTIONAL-REFERENCE-VALUE` warning.
+
+---
+
+## 16. `background` keeps an object alive, but a method call reference does not
+
+```qore
+class T {
+    public { string name; }
+    constructor(string n) { name = n; }
+    destructor() { printf("destroyed %y\n", name); }
+    work() { usleep(250ms); printf("still alive: %y\n", name); }
+
+    startGood() { background work(); }
+    startBad()  { code c = \work(); background c(); }
+}
+
+(new T("good")).startGood();   # still alive: "good"   <- then destroyed
+(new T("bad")).startBad();     # destroyed "bad"       <- then, in the new thread:
+# OBJECT-ALREADY-DELETED: cannot call a method on an object that has already been deleted
+```
+
+`background` extends the object's lifetime for every form that names the object directly, including
+from a constructor — an object created only to start a thread (`(new T()).startGood();`, or a `background`
+call in `T::constructor()`) survives until that thread returns. It does **not** extend the lifetime
+when the thread reaches the object through a **call reference**: `\method()` and `\obj.method()` hold
+only a weak reference to their object by design, so the object is destroyed on schedule and the thread
+fails on its first member or method access.
+
+This is the same weak reference that breaks a call reference taken on a temporary receiver — see
+[trap 11](#11-constructing-an-object-in-an-expression-requires-new) — reached here on a different path.
+
+| Background expression | Object kept alive | Why |
+|---|---|---|
+| `background method()`, `background self.method()` | yes | a non-static self call takes a real reference on the object for the thread's duration |
+| `background sub () { ... }()` capturing object scope | yes | captured object scope is checked and referenced before the thread starts |
+| `background obj.method()`, `background (new T()).method()` | yes | the object expression is evaluated in the *starting* thread; the result is a strong reference held by the copied expression |
+| `background f(self)`, `background T::sm(self)` | yes | `self` is an ordinary strong reference in the evaluated argument list |
+| `background c()` where `c` is `\method()` or `\obj.method()` | **no** | a method call reference holds a weak reference only |
+| `background call_function_args(\method(), args)` | **no** | same — the call reference is the only link to the object |
+| any of the above while another thread runs `delete obj` | **no** | `delete` destroys the object unconditionally |
+
+`background T::staticMethod()` correctly takes no reference: a static call has no object.
+
+The failure is timing-dependent — it appears only when the object's last ordinary reference goes away
+before the thread finishes, so a test that keeps the object in scope passes and production fails. When a
+thread must reach an object through a call reference, keep an ordinary reference to the object alive for at
+least as long as the thread, or pass the object itself as an argument.
 
 ---
 

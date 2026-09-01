@@ -51,6 +51,95 @@ class StaleSelfCaptureTest {
     }
 }
 
+# runs a call reference in a new thread; nothing here names the object
+sub run_call_ref(code<string()> c, Queue gate, Queue result) {
+    gate.get();
+    try {
+        result.push(c());
+    } catch (hash<ExceptionInfo> ex) {
+        result.push(ex.err);
+    }
+}
+
+# an object that starts a thread on itself from its own constructor
+class BgLifetimeCtor {
+    private {
+        string value;
+    }
+
+    constructor(string v, Queue gate, Queue result) {
+        value = v;
+        # a self call takes a real reference on the object for the duration of the thread
+        background work(gate, result);
+    }
+
+    private work(Queue gate, Queue result) {
+        # the caller has dropped its last reference by the time the gate is released
+        gate.get();
+        try {
+            result.push(value);
+        } catch (hash<ExceptionInfo> ex) {
+            result.push(ex.err);
+        }
+    }
+}
+
+# an object reached by the new thread only through a call reference
+class BgLifetimeCallRef {
+    private {
+        string value;
+    }
+
+    constructor(string v) {
+        value = v;
+    }
+
+    string get() {
+        return value;
+    }
+
+    # a call reference binds its object weakly, so this does not prolong the object's lifetime
+    startViaCallRef(Queue gate, Queue result) {
+        code<string()> c = \get();
+        background run_call_ref(c, gate, result);
+    }
+
+    # a self call does prolong it, for the same object and the same member access
+    startViaSelfCall(Queue gate, Queue result) {
+        background work(gate, result);
+    }
+
+    private work(Queue gate, Queue result) {
+        gate.get();
+        try {
+            result.push(value);
+        } catch (hash<ExceptionInfo> ex) {
+            result.push(ex.err);
+        }
+    }
+}
+
+# signals when the thread is inside the method so the object can be deleted underneath it
+class BgLifetimeDelete {
+    private {
+        string value;
+    }
+
+    constructor(string v) {
+        value = v;
+    }
+
+    work(Queue started, Queue gate, Queue result) {
+        started.push(True);
+        gate.get();
+        try {
+            result.push(value);
+        } catch (hash<ExceptionInfo> ex) {
+            result.push(ex.err);
+        }
+    }
+}
+
 class Test inherits QUnit::Test {
     public {
         BGTest test();
@@ -76,6 +165,7 @@ class T {
         addTestCase("issue 2701", \issue2701());
         addTestCase("issue 2444", \issue2444());
         addTestCase("stale self capture", \staleSelfCapture());
+        addTestCase("background object lifetime", \backgroundObjectLifetime());
         set_return_value(main());
     }
 
@@ -242,6 +332,75 @@ class T {
         }
 
         assertEq("inline", inline_q.get(5s));
+    }
+
+    # see design/qore-language-traps.md trap 16 and @ref background_object_lifetime
+    backgroundObjectLifetime() {
+        # a background self call from a constructor keeps an otherwise unreferenced object alive
+        {
+            Queue gate();
+            Queue result();
+            # the object is not retained anywhere: it is released when this statement completes
+            new BgLifetimeCtor("ctor", gate, result);
+            gate.push(True);
+            assertEq("ctor", result.get(5s));
+        }
+
+        # a background self call from a method keeps an otherwise unreferenced object alive
+        {
+            Queue gate();
+            Queue result();
+            (new BgLifetimeCallRef("self-call")).startViaSelfCall(gate, result);
+            gate.push(True);
+            assertEq("self-call", result.get(5s));
+        }
+
+        # a method call on an object expression keeps the object alive after it leaves scope
+        {
+            Queue gate();
+            Queue result();
+            {
+                BgLifetimeDelete obj("obj-expr");
+                Queue started();
+                background obj.work(started, gate, result);
+                assertTrue(started.get(5s));
+            }
+            gate.push(True);
+            assertEq("obj-expr", result.get(5s));
+        }
+
+        # a call reference does NOT prolong the object's lifetime
+        {
+            Queue gate();
+            Queue result();
+            (new BgLifetimeCallRef("call-ref")).startViaCallRef(gate, result);
+            gate.push(True);
+            assertEq("OBJECT-ALREADY-DELETED", result.get(5s));
+        }
+
+        # the same call reference works while an ordinary reference to the object is held
+        {
+            Queue gate();
+            Queue result();
+            BgLifetimeCallRef obj("call-ref-live");
+            code<string()> c = \obj.get();
+            background run_call_ref(c, gate, result);
+            gate.push(True);
+            assertEq("call-ref-live", result.get(5s));
+        }
+
+        # delete is unconditional: it is not deferred by a running background thread
+        {
+            Queue started();
+            Queue gate();
+            Queue result();
+            BgLifetimeDelete obj("deleted");
+            background obj.work(started, gate, result);
+            assertTrue(started.get(5s));
+            delete obj;
+            gate.push(True);
+            assertEq("OBJECT-ALREADY-DELETED", result.get(5s));
+        }
     }
 
     private static checkStackSize(Queue q) {
