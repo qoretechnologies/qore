@@ -142,6 +142,9 @@ resp = rc.restGet("/api/data");
     @section restclientio_relnotes Release Notes
 
     @subsection restclientio_v1_0 Version 1.0
+    - Fixed @ref RestClientIo::RestClientIo::copyWithUrl() "copyWithUrl()" children losing their
+      shared connection manager when the originating client was destroyed; internally created
+      managers now remain active until the last related client is destroyed
     - Initial release of RestClientIo module
     - Implements @ref RestClient::AbstractRestClient "AbstractRestClient" interface
     - HTTP/1.1, HTTP/2, and HTTP/3 support via @ref HttpClientIo::HttpClientConnectionManager
@@ -157,6 +160,34 @@ resp = rc.restGet("/api/data");
 
 #! Main namespace for the RestClientIo module
 public namespace RestClientIo {
+    #! Shared lifetime owner for an internally created connection manager
+    /** The manager can retain internal event resources that defer its own destructor, so a
+        separate owner closes it deterministically when the last related
+        @ref RestClientIo::RestClientIo "RestClientIo" is destroyed.  Every client created through
+        @ref RestClientIo::RestClientIo::copyWithUrl() "copyWithUrl()" shares this owner; clients
+        constructed with an explicit shared manager do not use it, because the caller retains
+        ownership in that case.
+    */
+    class RestClientIoConnectionManagerOwner {
+        private {
+            #! The connection manager to close when the last owner reference is released
+            HttpClientIo::HttpClientConnectionManager mgr;
+        }
+
+        constructor(HttpClientIo::HttpClientConnectionManager mgr) {
+            self.mgr = mgr;
+        }
+
+        #! Closes the manager without allowing cleanup errors to escape
+        destructor() {
+            try {
+                mgr.closeAll();
+            } catch () {
+                # Destructors must not propagate cleanup exceptions.
+            }
+        }
+    }
+
     #! Future wrapper that deserializes HTTP responses into RestResponseInfo
     /** Wraps a raw HTTP response Future from @ref HttpClientIo and applies
         response deserialization when @ref get() is called.
@@ -460,6 +491,13 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
 
             #! True if this instance owns the connection manager (should close on close())
             bool owns_mgr = True;
+
+            #! Shared lifetime owner for an internally created connection manager
+            /** This reference is copied to every @ref copyWithUrl() sibling so destruction of
+                the originating client cannot shut down a manager that another client still uses.
+                It is absent when @ref mgr was supplied explicitly by the caller.
+            */
+            *RestClientIoConnectionManagerOwner mgr_owner;
 
             #! Constructor options hash, kept for @ref copyWithUrl() and @ref getConstructorOptions()
             /** Captured verbatim in the constructor so that a sibling instance can be
@@ -1161,31 +1199,13 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                 owns_mgr = False;
             } else {
                 mgr = buildConnectionManager(opts);
+                mgr_owner = new RestClientIoConnectionManagerOwner(mgr);
             }
 
             # Acquire initial OAuth2 token if configured; skip_login defers to the first
             # request (for non-blocking ping operations that use the existing token as-is)
             if (!opts.skip_login) {
                 checkLogin();
-            }
-        }
-
-        #! Closes connections owned by this client before it is destroyed
-        /** A client that creates its own connection manager owns that manager's
-            sockets and event notifier.  Releasing the Qore object without first
-            closing the manager can otherwise retain one descriptor per
-            short-lived client until process shutdown.  This is particularly
-            visible in bounded worker loops that construct one client per task.
-
-            Clients constructed with a shared manager keep the existing
-            ownership contract: @ref close() is a no-op for the manager, so its
-            caller remains responsible for closing it.
-        */
-        destructor() {
-            try {
-                close();
-            } catch () {
-                # Destructors must not propagate cleanup exceptions.
             }
         }
 
@@ -1263,6 +1283,12 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
             parent's access token via the captured options. If the parent's token
             is not valid for the new URL, the copy will refresh on the first
             request via the normal 401 retry path.
+
+            @note When this client owns an internally created connection manager, the copy shares
+                its lifetime owner and can safely outlive this client.  Calling @ref close()
+                explicitly on this owning client still shuts down the manager immediately and
+                invalidates every related copy.  A manager supplied explicitly to the constructor
+                remains caller-owned.
         */
         RestClient::AbstractRestClient copyWithUrl(string new_url) {
             hash<auto> opts = saved_opts + {
@@ -1284,7 +1310,21 @@ RestClientIo rest2({"url": "https://api.example.com", "data": "xml"}, shared_mgr
                     }
                 }
             }
-            return copySelf(opts);
+            RestClientIo copy = cast<RestClientIo>(copySelf(opts));
+            # An override may intentionally construct the copy with a different manager; only
+            # propagate this lifetime owner when the manager itself was actually shared.
+            if (copy.getConnectionManager() == mgr) {
+                copy.setConnectionManagerOwner(mgr_owner);
+            }
+            return copy;
+        }
+
+        #! Shares the internally created manager's lifetime owner with a copied client
+        /** @param mgr_owner the originating client's shared manager lifetime owner, or
+            @ref nothing when the manager was supplied explicitly by the caller
+        */
+        private setConnectionManagerOwner(*RestClientIoConnectionManagerOwner mgr_owner) {
+            self.mgr_owner = mgr_owner;
         }
 
         #! Constructs a sibling instance of this client's own class from resolved options

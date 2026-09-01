@@ -691,6 +691,10 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # copyWithUrl + restDoRawRequest (Phase RS-1)
         addTestCase("copyWithUrl returns sibling instance with new URL",
             \testCopyWithUrl());
+        addTestCase("copyWithUrl child outlives its parent",
+            \testCopyWithUrlOutlivesParent());
+        addTestCase("copyWithUrl owner close shuts down children",
+            \testCopyWithUrlOwnerClose());
         addTestCase("copyWithUrl inherits token from parent", \testCopyWithUrlInheritsToken());
         addTestCase("copyWithUrl preserves the subclass", \testCopyWithUrlPreservesClass());
         addTestCase("getConstructorOptions returns original caller opts",
@@ -4117,6 +4121,49 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # The child must be able to make real requests
         hash<RestClient::RestResponseInfo> resp = child.restGet("/api/test");
         assertEq(200, resp.status_code);
+    }
+
+    #! A copied client keeps an internally created manager alive after its parent is destroyed
+    testCopyWithUrlOutlivesParent() {
+        HttpClientIo::HttpClientConnectionManager mgr;
+        {
+            RestClientIo::RestClientIo grandchild;
+            {
+                RestClientIo::RestClientIo parent = createClient();
+                mgr = parent.getConnectionManager();
+                {
+                    RestClientIo::RestClientIo child = parent.copyWithUrl(
+                        sprintf("https://127.0.0.1:%d/child", port));
+                    grandchild = child.copyWithUrl(
+                        sprintf("https://127.0.0.1:%d/grandchild", port));
+                }
+            }
+
+            assertEq(mgr, grandchild.getConnectionManager(),
+                "all copy generations share the same connection manager");
+            hash<RestClient::RestResponseInfo> resp = grandchild.restGet("/api/test");
+            assertEq(200, resp.status_code,
+                "the last copy remains usable after its ancestors are destroyed");
+        }
+
+        # Keeping a direct manager reference must not keep its logical lifetime open: once the
+        # last related client is gone, the shared lifetime owner closes the manager.
+        RestClientIo::RestClientIo probe({
+            "url": sprintf("https://127.0.0.1:%d", port),
+            "data": "json",
+            "error_passthru": True,
+        }, mgr);
+        assertThrows("HTTPCLIENT-SHUTDOWN", sub () { probe.restGet("/api/test"); });
+    }
+
+    #! Explicitly closing the original owner still intentionally shuts down every copy
+    testCopyWithUrlOwnerClose() {
+        RestClientIo::RestClientIo parent = createClient();
+        RestClientIo::RestClientIo child = parent.copyWithUrl(
+            sprintf("https://127.0.0.1:%d", port));
+
+        parent.close();
+        assertThrows("HTTPCLIENT-SHUTDOWN", sub () { child.restGet("/api/test"); });
     }
 
     testCopyWithUrlPreservesClass() {

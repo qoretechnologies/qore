@@ -1651,6 +1651,12 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         @ref restclientiointro "RestClientIo"
         (<a href="https://github.com/qoretechnologies/qore/issues/5365">issue 5365</a>)
 
+    - @ref restclientiointro "RestClientIo" module
+      - fixed @ref RestClientIo::RestClientIo::copyWithUrl() "copyWithUrl()" children becoming
+        unusable when the originating client was destroyed: internally created connection managers
+        now remain active until the last related client is destroyed, while explicitly shared
+        managers retain their caller-owned lifecycle
+
     - @ref salesforcerestclientintro "SalesforceRestClient" module
       - added @ref SalesforceRestClient::SalesforceRestClientBase::getInstanceUrl() "getInstanceUrl()",
         @ref SalesforceRestClient::SalesforceRestClientBase::getIdServiceUrl() "getIdServiceUrl()" and
