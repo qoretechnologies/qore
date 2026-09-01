@@ -3416,7 +3416,16 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
                 } else {
                     body = cx."header-info".body.toString();
                 }
-            } else if (hdr."content-length") {
+            } else if (hdr."content-length" && !is_multiplexed) {
+                # HTTP/1.x only: the request body is read from the raw socket here.
+                #
+                # HTTP/2 and HTTP/3 bodies never arrive as raw socket bytes; they are
+                # delivered as DATA frames by the multiplexed session and surface either
+                # in cx."header-info".body (pre-read by the I/O controller) or through
+                # the body_streaming branch above, where the handler reads the stream
+                # itself.  Reaching a synchronous socket read on a multiplexed connection
+                # would raise SOCKET-NON-BLOCK-ERROR against the async I/O controller
+                # that still owns the socket, turning a valid request into a 400.
                 # Pre-read Content-Length check against max body size limit
                 if (max_body > 0 && hdr."content-length" > max_body) {
                     string etxt = sprintf("Content-Length %d exceeds maximum allowed body size %d",
