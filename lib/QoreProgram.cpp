@@ -1238,7 +1238,13 @@ void qore_program_private_base::copyExternalData() {
     {
         AutoLocker al(p_pgm->priv->plock);
         for (auto& i : p_pgm->priv->extmap) {
-            extmap.insert(extmap_t::value_type(i.first, i.second->copy(pgm)));
+            // External data whose state belongs to the parent alone returns nullptr rather than a copy (the AOT
+            // script data does: a child Program runs its own AOT load).  Storing that null would crash the
+            // init() loop below, and again when the child's teardown calls doDeref() on it.
+            AbstractQoreProgramExternalData* copy = i.second->copy(pgm);
+            if (copy) {
+                extmap.insert(extmap_t::value_type(i.first, copy));
+            }
         }
     }
     for (auto& i : extmap) {

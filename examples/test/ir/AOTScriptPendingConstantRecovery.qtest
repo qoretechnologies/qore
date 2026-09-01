@@ -1,0 +1,192 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTScriptPendingConstantRecoveryTest
+
+#! A deferred constant of an AOT-compiled script must recover on its first read, exactly as a module's does
+/** Load runs the generated \c __const_init functions in serialization order with a fix-point retry.  An
+    initializer no round could run leaves the constant an unpopulated shell; the recovery record attached to the
+    entry is what lets the first read run the initializer instead of raising \c AOT-PENDING-CONSTANT forever.
+
+    Those records used to be registered only for module loads, so in a compiled executable — where every
+    constant of the program is loaded as one script batch — an ordering the fix-point could not satisfy was
+    permanent: the constant raised \c AOT-PENDING-CONSTANT on every read for the life of the process, and the
+    only cure was a rebuild that happened to order the initializers differently.
+
+    \c QORE_AOT_TEST_DEFER_CONSTANT_INIT leaves every constant uninitialized at load, which is the only
+    deterministic way to reach the first-read path: real loads satisfy the order nearly always.
+*/
+class AOTScriptPendingConstantRecoveryTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+
+        #! values every run must produce, whether initialized at load or on first read
+        const ExpectedResults = {
+            "child": "7",
+            "base": "True",
+            "derived": "[\"extra\", \"alpha\", \"beta\"]",
+            "nested": "\"third\"",
+            "ns": "\"third\"",
+        };
+    }
+
+    constructor() : QUnit::Test("AOTScriptPendingConstantRecoveryTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("script-batch constants recover on first read",
+            \testDeferredScriptConstantsRecoverOnRead());
+
+        set_return_value(main());
+    }
+
+    #! a class constant whose initializer is not foldable, so the compiler emits a `__const_init` function
+    private string baseCode() {
+        return '%new-style
+public class OptionBase {
+    public {
+        const RawOptions = {
+            "alpha": {"desc": "first"},
+            "beta": {"desc": "second"},
+        };
+
+        const Options = {} + (map {$1.key: $1.value + {"readonly": True}}, RawOptions.pairIterator());
+    }
+
+    hash<auto> getOptions() {
+        return Options;
+    }
+}
+';
+    }
+
+    #! a deferred class constant in another compilation unit that depends on a deferred constant in the first
+    private string derivedCode() {
+        return '%new-style
+public class OptionDerived inherits OptionBase {
+    public {
+        const Options = {"extra": {"desc": "third", "readonly": False}}
+            + (map {$1.key: $1.value}, OptionBase::Options.pairIterator());
+    }
+
+    hash<auto> getOptions() {
+        return Options;
+    }
+}
+';
+    }
+
+    #! a deferred namespace constant, so both constant kinds are covered
+    private string nsCode() {
+        return '%new-style
+public namespace OptTest {
+    public const AllOptions = {}
+        + (map {$1.key: $1.value.desc}, OptionDerived::Options.pairIterator());
+}
+';
+    }
+
+    #! reads through a compiled method body, a nested path, and a namespace constant
+    /** The child Program is created before any constant is read, so it inherits the Program data of a Program
+        that still holds unrun initializers — the state that owns their execution contexts.
+    */
+    private string mainCode() {
+        return '%new-style
+int sub main() {
+    Program child();
+    child.parse("int sub childMain() { return 7; }", "child");
+    printf("child=%y\n", child.callFunction("childMain"));
+
+    printf("base=%y\n", (new OptionBase()).getOptions().alpha.readonly);
+    printf("derived=%y\n", (new OptionDerived()).getOptions().keys());
+    printf("nested=%y\n", OptionDerived::Options.extra.desc);
+    printf("ns=%y\n", OptTest::AllOptions.extra);
+    return 0;
+}
+';
+    }
+
+    private writeSource(string path, string source) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(source);
+        f.close();
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    #! parses the "key=value" lines the compiled program emits
+    private hash<string, string> parseResults(string output) {
+        hash<string, string> rv;
+        foreach string line in (output.split("\n")) {
+            int pos = line.find("=");
+            if (pos <= 0) {
+                continue;
+            }
+            rv{line.substr(0, pos)} = line.substr(pos + 1);
+        }
+        return rv;
+    }
+
+    testDeferredScriptConstantsRecoverOnRead() {
+        TmpDir tmp("qore-aot-script-pending-constant-");
+        string root = tmp.path;
+        string obj_dir = root + "/obj";
+        mkdir(obj_dir);
+
+        writeSource(root + "/base.qc", baseCode());
+        writeSource(root + "/derived.qc", derivedCode());
+        writeSource(root + "/nsconst.qc", nsCode());
+        writeSource(root + "/main.q", mainCode());
+
+        string exe = root + "/script-pending-constant";
+        string env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        string compile_out = run(sprintf("%s %s -c --output-dir=%s -O3 --parse-option=PO_MODERN "
+            "%s/base.qc %s/derived.qc %s/nsconst.qc %s/main.q",
+            env, qcc_bin, obj_dir, root, root, root, root));
+        string link_out = run(sprintf("%s %s -O3 -o %s %s/*.qo", env, qcc_bin, exe, obj_dir));
+        assertTrue(is_file(exe), "compiled the multi-source executable: " + compile_out + link_out);
+
+        # the run that initializes every constant at load establishes the expected values
+        hash<string, string> loaded = parseResults(run(sprintf("%s %s", env, exe)));
+        foreach hash<auto> i in (ExpectedResults.pairIterator()) {
+            assertEq(i.value, loaded{i.key}, "initialized at load: " + i.key);
+        }
+
+        # the same program with every initializer left pending at load must produce the same values by
+        # running the initializers from the first read of each constant
+        string deferred_out = run(sprintf("%s QORE_AOT_TEST_DEFER_CONSTANT_INIT=1 %s", env, exe));
+        assertEq(-1, deferred_out.find("AOT-PENDING-CONSTANT"),
+            "reading a deferred script constant does not report it as unpopulated: " + deferred_out);
+        hash<string, string> deferred = parseResults(deferred_out);
+        foreach hash<auto> i in (ExpectedResults.pairIterator()) {
+            assertEq(i.value, deferred{i.key},
+                "script batch with initialization deferred to first read: " + i.key);
+        }
+
+        # the assertions above are only meaningful if initialization really was deferred: without the trace, a
+        # build that ignored the test hook would pass them by initializing everything at load
+        string trace = run(sprintf("%s QORE_AOT_TEST_DEFER_CONSTANT_INIT=1 QORE_AOT_INIT_TRACE=1 %s",
+            env, exe));
+        assertTrue(trace.find("[aot-init] lazy constant init") >= 0,
+            "the deferred run initialized constants from the first read: " + trace);
+        assertTrue(trace.find("item=Options") >= 0 && trace.find("item=AllOptions") >= 0,
+            "both class and namespace constants recovered from their first read: " + trace);
+    }
+}

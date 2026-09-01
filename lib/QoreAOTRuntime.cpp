@@ -13907,9 +13907,17 @@ static int aotStoreConstantInitResult(const AOTInitFuncDescriptor& desc, QoreVal
 */
 struct AOTPendingConstantInit {
     AOTInitFuncDescriptor desc;
-    QoreAOTContext* ctx = nullptr;      //!< owned by this record
+    QoreAOTContext* ctx = nullptr;      //!< owned by this record, unless a script load handed it to the Program
     AotFunctionPtr fn_ptr = nullptr;
+    //! the module Program the record names, or nullptr for a script load
+    /** A module Program lives for the process, so a record can name it and adopt its value.  A script Program
+        cannot be named: `qore_aot_script_register()` is a host API that may be given a Program the host later
+        destroys, and the record outlives this call.  A script record therefore keeps no Program pointer at all —
+        the first read already runs in the Program that owns the entry, which is the only Program its initializer
+        may touch — and its retained context is owned by that Program (see AotScriptPendingConstantState).
+    */
     QoreProgram* pgm = nullptr;
+    //! the module's own Program, or nullptr for a script load; see @ref pgm
     QoreProgram* shadow_pgm = nullptr;
     bool write_shadow = false;
     std::string mod_name;
@@ -13946,13 +13954,19 @@ static std::vector<std::unique_ptr<AOTPendingConstantInit>>& aotPendingConstantI
     the value the module's own program already holds or by running the initializer that has not run yet.
 
     @param rec the record to attach; a record already attached to the module's own entry is reused instead
+    @param lookup_pgm the Program whose entries the record is attached to.  It is passed separately from
+        @ref AOTPendingConstantInit::pgm because a script record deliberately stores no Program pointer, yet its
+        entries still have to be found here, while the load that creates it is running.
+
+    @return the record now attached to the entries, or nullptr if the constant was not found
 */
-static void aotRegisterPendingConstantInit(std::unique_ptr<AOTPendingConstantInit> rec) {
+static AOTPendingConstantInit* aotRegisterPendingConstantInit(std::unique_ptr<AOTPendingConstantInit> rec,
+        QoreProgram* lookup_pgm) {
     ConstantEntry* target_ce = nullptr;
     ConstantEntry* shadow_ce = nullptr;
-    aotFindInitConstantEntries(rec->desc, rec->pgm, rec->shadow_pgm, target_ce, shadow_ce);
+    aotFindInitConstantEntries(rec->desc, lookup_pgm, rec->shadow_pgm, target_ce, shadow_ce);
     if (!target_ce && !shadow_ce) {
-        return;
+        return nullptr;
     }
     if (aotInitTraceEnabled()) {
         fprintf(stderr, "[aot-init] recoverable constant module=%s ns=%s item=%s target_ce=%p shadow_ce=%p "
@@ -13981,6 +13995,7 @@ static void aotRegisterPendingConstantInit(std::unique_ptr<AOTPendingConstantIni
     if (shadow_ce && shadow_ce != target_ce) {
         shadow_ce->aot_pending_init = raw;
     }
+    return raw;
 }
 
 //! Test hook: leave every AOT constant uninitialized at module load so the first-read path is always taken
@@ -13993,6 +14008,63 @@ static bool aotDeferConstantInitTestHook() {
 static QoreRecursiveThreadLock& aotLazyConstantInitLock() {
     static QoreRecursiveThreadLock lck;
     return lck;
+}
+
+namespace {
+//! Owns the execution contexts a script Program's unrun constant initializers retain
+/** Recovery records live for the process, because a record is reachable from every copy of the entry it is
+    attached to and nothing can say when the last copy is gone.  A module's retained context may live that long
+    too: its Program does.  A script Program does not — `qore_aot_script_register()` is a host API that may be
+    given a Program the host destroys — and a context is bound to the Program whose objects its slots name, so
+    running one after that Program is gone would execute against freed state.
+
+    Binding the context to the Program removes the question: when the Program goes, every record it created is
+    neutralized, and a copy of a still-pending entry that outlived it reports the constant as unpopulated
+    instead of running dead code.  The record itself stays valid and keeps reporting the load-time failure.
+*/
+class AotScriptPendingConstantState : public AbstractQoreProgramExternalData {
+public:
+    void add(AOTPendingConstantInit* rec) {
+        records.push_back(rec);
+    }
+
+    //! a child Program runs its own AOT load; there is nothing to inherit
+    AbstractQoreProgramExternalData* copy(QoreProgram*) const override {
+        return nullptr;
+    }
+
+    void doDeref() override {
+        delete this;
+    }
+
+    ~AotScriptPendingConstantState() {
+        // taken in the same order as qore_aot_run_pending_constant_init, so a concurrent first-read either
+        // finishes before the contexts go or never sees them
+        AutoLocker lazy_al(aotLazyConstantInitLock());
+        AutoLocker al(aotPendingConstantInitLock());
+        for (AOTPendingConstantInit* rec : records) {
+            rec->fn_ptr = nullptr;
+            delete rec->ctx;
+            rec->ctx = nullptr;
+        }
+    }
+
+private:
+    std::vector<AOTPendingConstantInit*> records;
+};
+
+constexpr const char* kAotScriptPendingConstantKey = "qore_aot_script_pending_constants";
+}  // anonymous namespace
+
+//! Hands a script load's retained execution context to the Program that owns the state it runs against
+static void aotAdoptScriptPendingConstantContext(QoreProgram* pgm, AOTPendingConstantInit* rec) {
+    assert(pgm);
+    AbstractQoreProgramExternalData* ext = pgm->getExternalData(kAotScriptPendingConstantKey);
+    if (!ext) {
+        ext = new AotScriptPendingConstantState;
+        pgm->setExternalData(kAotScriptPendingConstantKey, ext);
+    }
+    static_cast<AotScriptPendingConstantState*>(ext)->add(rec);
 }
 
 int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) {
@@ -14059,10 +14131,20 @@ int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) 
             rec->mod_name.c_str(), rec->desc.ns_path.c_str(), rec->desc.item_name.c_str());
     }
 
+    // A script record names no Program (see AOTPendingConstantInit::pgm): the read that got here already runs in
+    // the Program that owns the entry, which is the only Program the initializer may touch.
+    QoreProgram* init_pgm = rec->pgm ? rec->pgm : ::getProgram();
+    if (!init_pgm) {
+        return 0;
+    }
+
     ExceptionSink init_xsink;
     QoreValue result;
     {
-        ProgramThreadCountContextHelper program_ctx(&init_xsink, rec->pgm, false);
+        std::unique_ptr<ProgramThreadCountContextHelper> program_ctx;
+        if (rec->pgm) {
+            program_ctx.reset(new ProgramThreadCountContextHelper(&init_xsink, rec->pgm, false));
+        }
         if (init_xsink) {
             xsink->assimilate(init_xsink);
             return -1;
@@ -14084,24 +14166,24 @@ int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) 
         }
         std::unique_ptr<QoreParseClassHelper> parse_ctx;
         if (rec->desc.target_type == AOTCompiledInitFunc::CLASS_CONSTANT) {
-            QoreProgram* class_pgm = shadow_ctx && rec->shadow_pgm ? rec->shadow_pgm : rec->pgm;
+            QoreProgram* class_pgm = shadow_ctx && rec->shadow_pgm ? rec->shadow_pgm : init_pgm;
             const qore_ns_private* found_ns = nullptr;
             const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
                 *qore_program_private::get(*class_pgm)->RootNS, rec->desc.ns_path.c_str(), found_ns);
-            if (!qc && class_pgm != rec->pgm) {
+            if (!qc && class_pgm != init_pgm) {
                 qc = qore_root_ns_private::runtimeFindClass(
-                    *qore_program_private::get(*rec->pgm)->RootNS, rec->desc.ns_path.c_str(), found_ns);
+                    *qore_program_private::get(*init_pgm)->RootNS, rec->desc.ns_path.c_str(), found_ns);
             }
             if (qc) {
                 parse_ctx.reset(new QoreParseClassHelper(const_cast<QoreClass*>(qc)));
             }
         } else {
-            QoreProgram* ns_pgm = shadow_ctx && rec->shadow_pgm ? rec->shadow_pgm : rec->pgm;
+            QoreProgram* ns_pgm = shadow_ctx && rec->shadow_pgm ? rec->shadow_pgm : init_pgm;
             qore_ns_private* ns = findNamespaceByPath(
                 qore_ns_private::get(*qore_program_private::get(*ns_pgm)->RootNS), rec->desc.ns_path);
-            if (!ns && ns_pgm != rec->pgm) {
+            if (!ns && ns_pgm != init_pgm) {
                 ns = findNamespaceByPath(
-                    qore_ns_private::get(*qore_program_private::get(*rec->pgm)->RootNS), rec->desc.ns_path);
+                    qore_ns_private::get(*qore_program_private::get(*init_pgm)->RootNS), rec->desc.ns_path);
             }
             if (ns) {
                 parse_ctx.reset(new QoreParseClassHelper(nullptr, ns));
@@ -14137,10 +14219,13 @@ int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) 
         ce->setRuntimeValue(result.refSelf(), &store_xsink);
         initialized.push_back(ce);
     }
-    // then the module's own entry, so compiled module code resolving against the shadow Program sees it too
-    aotStoreConstantInitResult(rec->desc, result, rec->pgm, rec->shadow_pgm, rec->write_shadow,
-        rec->mod_name.c_str(), [&initialized](ConstantEntry* entry) { initialized.push_back(entry); },
-        store_xsink);
+    // then the module's own entry, so compiled module code resolving against the shadow Program sees it too; a
+    // script record names no Program, and the entry read above is the only one there is
+    if (rec->pgm || rec->shadow_pgm) {
+        aotStoreConstantInitResult(rec->desc, result, rec->pgm, rec->shadow_pgm, rec->write_shadow,
+            rec->mod_name.c_str(), [&initialized](ConstantEntry* entry) { initialized.push_back(entry); },
+            store_xsink);
+    }
     result.discard(&store_xsink);
     for (ConstantEntry* entry : initialized) {
         entry->materializeRuntimeRefs(&store_xsink);
@@ -14793,43 +14878,54 @@ static int executeInitFunctions(
         }
     }
 
-    // Attach a recovery record to every constant this module initializes.  Two things can leave a constant an
+    // Attach a recovery record to every constant this load initializes.  Two things can leave a constant an
     // unpopulated shell that no later load repairs: an initializer this pass could not run at all, and an entry
     // this Program created from the module's entry before that entry held a value.  Both used to be permanent —
     // every read of the constant raised AOT-PENDING-CONSTANT for the life of the process.  With the record, the
     // first read adopts the module's value or runs the initializer.
     //
-    // The record outlives this call, so it refers to the module's own Program, which the module owns for the
-    // life of the process; a script Program is not, so script-level AOT registers nothing.
+    // A script load gets a record too.  It used to get none, on the grounds that the record outlives this call
+    // while a script Program need not: but that argument only rules out naming the Program in the record, and a
+    // script record does not name one (see AOTPendingConstantInit::pgm) — the first read already runs in the
+    // Program that owns the entry.  Skipping registration instead made every ordering the load-time fix-point
+    // could not satisfy permanent in a compiled executable, where the whole program is one script batch: the
+    // constant raised AOT-PENDING-CONSTANT on every read for the life of the process, and only a rebuild that
+    // happened to order the initializers differently cured it.
     //
     // This is finalization and is deliberately not cancellable: it hands ownership of retained execution
     // contexts to their records, and the loop below frees exactly the contexts no record took.
-    if (shadow_pgm) {
-        for (size_t di = 0; di < descriptors.size(); ++di) {
-            const AOTInitFuncDescriptor& desc = descriptors[di];
-            if (desc.target_type != AOTCompiledInitFunc::NS_CONSTANT
-                    && desc.target_type != AOTCompiledInitFunc::CLASS_CONSTANT) {
-                continue;
-            }
-            auto it = exec_map.find(desc.name);
-            auto rec = std::make_unique<AOTPendingConstantInit>();
-            rec->desc = desc;
-            rec->pgm = shadow_pgm;
-            rec->shadow_pgm = shadow_pgm;
-            rec->write_shadow = write_shadow;
-            rec->mod_name = mod_name ? mod_name : "";
-            rec->mod_path = mod_path ? mod_path : "";
-            rec->load_err = last_error[di];
-            rec->load_desc = last_desc[di];
-            // Only an initializer that did not run is kept executable; keeping every context alive would retain
-            // the compiled context of every constant of every loaded module for nothing.
-            if (!desc_done[di] && it != exec_map.end() && it->second->fn_ptr && it->second->ctx
-                    && deferred_contexts.find(it->second->ctx) == deferred_contexts.end()) {
-                rec->ctx = it->second->ctx;
-                rec->fn_ptr = it->second->fn_ptr;
-                deferred_contexts.insert(it->second->ctx);
-            }
-            aotRegisterPendingConstantInit(std::move(rec));
+    for (size_t di = 0; di < descriptors.size(); ++di) {
+        const AOTInitFuncDescriptor& desc = descriptors[di];
+        if (desc.target_type != AOTCompiledInitFunc::NS_CONSTANT
+                && desc.target_type != AOTCompiledInitFunc::CLASS_CONSTANT) {
+            continue;
+        }
+        auto it = exec_map.find(desc.name);
+        auto rec = std::make_unique<AOTPendingConstantInit>();
+        rec->desc = desc;
+        rec->pgm = shadow_pgm;
+        rec->shadow_pgm = shadow_pgm;
+        rec->write_shadow = write_shadow;
+        rec->mod_name = mod_name ? mod_name : "";
+        rec->mod_path = mod_path ? mod_path : "";
+        rec->load_err = last_error[di];
+        rec->load_desc = last_desc[di];
+        // Only an initializer that did not run is kept executable; keeping every context alive would retain
+        // the compiled context of every constant of every loaded module for nothing.
+        bool retained_ctx = false;
+        if (!desc_done[di] && it != exec_map.end() && it->second->fn_ptr && it->second->ctx
+                && deferred_contexts.find(it->second->ctx) == deferred_contexts.end()) {
+            rec->ctx = it->second->ctx;
+            rec->fn_ptr = it->second->fn_ptr;
+            deferred_contexts.insert(it->second->ctx);
+            retained_ctx = true;
+        }
+        AOTPendingConstantInit* attached = aotRegisterPendingConstantInit(std::move(rec),
+            shadow_pgm ? shadow_pgm : pgm);
+        // a context retained for a script load is bound to the Program whose state it runs against, so the
+        // Program's teardown neutralizes the record rather than leaving it able to run against freed state
+        if (attached && retained_ctx && !shadow_pgm) {
+            aotAdoptScriptPendingConstantContext(pgm, attached);
         }
     }
 
