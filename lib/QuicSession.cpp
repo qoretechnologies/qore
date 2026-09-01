@@ -1812,6 +1812,7 @@ int64_t QuicSession::submitRequest(const char* method, const char* path,
     // hop-by-hop headers from HTTP/1.x per RFC 9114 Section 4.2)
     std::vector<std::string> lower_keys;
     lower_keys.reserve(headers.size());
+    bool has_content_length = false;
     for (const auto& h : headers) {
         if (h.first.empty() || h.first[0] == ':' || strcasecmp(h.first.c_str(), "host") == 0) {
             continue;
@@ -1823,9 +1824,23 @@ int64_t QuicSession::submitRequest(const char* method, const char* path,
         if (h3_forbidden_headers.count(lower_key)) {
             continue;
         }
+        if (lower_key == "content-length") {
+            has_content_length = true;
+        }
         lower_keys.push_back(std::move(lower_key));
         add_nv(lower_keys.back().c_str(), lower_keys.back().size(),
                 h.second.c_str(), h.second.size());
+    }
+
+    // Match the HTTP/1.x request semantics from qore#4983: send an exact
+    // length for methods that can carry a body, including zero for a bodyless
+    // POST, while leaving bodyless GET, HEAD, and TRACE requests without the
+    // header.  Streaming HTTP/3 requests use a separate submission path.
+    std::string content_length;
+    if (!has_content_length && (body_len > 0 || (strcasecmp(method, "GET")
+            && strcasecmp(method, "HEAD") && strcasecmp(method, "TRACE")))) {
+        content_length = std::to_string(body_len);
+        add_nv("content-length", 14, content_length.c_str(), content_length.size());
     }
 
     // Set up body data reader

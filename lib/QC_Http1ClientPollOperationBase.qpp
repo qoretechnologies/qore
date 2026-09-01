@@ -2361,7 +2361,9 @@ int64_t Http1ClientPollOperationPriv::submitRequest(const char* method, const ch
     if (streaming_send_flag) {
         // Streaming send: use chunked TE - body will be pushed via pushSendData()
         req->concat("Transfer-Encoding: chunked\r\n");
-    } else if (body_len > 0 && !has_content_length) {
+    } else if (!has_content_length
+            && (body_len > 0 || (strcasecmp(method, "GET")
+                && strcasecmp(method, "HEAD") && strcasecmp(method, "TRACE")))) {
         req->sprintf("Content-Length: %lu\r\n", (unsigned long)body_len);
     }
     req->concat("\r\n");

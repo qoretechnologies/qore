@@ -1179,9 +1179,13 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
 
     // Build complete header hash with pseudo-headers
     ReferenceHolder<QoreHashNode> req_headers(new QoreHashNode(autoTypeInfo), xsink);
+    bool has_content_length = false;
     if (user_headers) {
         ConstHashIterator hi(user_headers);
         while (hi.next()) {
+            if (!strcasecmp(hi.getKey(), "content-length")) {
+                has_content_length = true;
+            }
             req_headers->setKeyValue(hi.getKey(), hi.get().refSelf(), xsink);
         }
     }
@@ -1227,18 +1231,18 @@ int64_t Http2ClientPollOperationPriv::submitRequest(const char* method, const ch
         }
     }
 
-    // Add Content-Length when a one-shot request body is present.  The
+    // Add Content-Length for one-shot requests when a body is present or the
+    // method semantics anticipate a body.  The
     // `streaming` parameter indicates request-body streaming (chunked TE
     // where the caller pushes body data incrementally via pushSendData),
     // NOT response streaming (SSE/Channel delivery).  For one-shot bodies
     // (streaming == false) the full size is known upfront.
-    if (body_len > 0 && !streaming) {
-        if (req_headers->getKeyValue("content-length").isNullOrNothing()
-                && req_headers->getKeyValue("Content-Length").isNullOrNothing()) {
-            QoreStringNode* cl = new QoreStringNode();
-            cl->sprintf("%zu", body_len);
-            req_headers->setKeyValue("content-length", cl, xsink);
-        }
+    if (!streaming && (body_len > 0 || (strcasecmp(method, "GET")
+            && strcasecmp(method, "HEAD") && strcasecmp(method, "TRACE")))
+            && !has_content_length) {
+        QoreStringNode* cl = new QoreStringNode();
+        cl->sprintf("%zu", body_len);
+        req_headers->setKeyValue("content-length", cl, xsink);
     }
 
     // Check for errors from header construction before acquiring lock

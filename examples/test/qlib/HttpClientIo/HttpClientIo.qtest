@@ -88,6 +88,15 @@ class EchoHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! Reports request framing information for Content-Length tests
+class RequestFramingHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, sprintf("method=%s content-length=%s body-size=%d",
+            hdr.method, exists hdr."content-length" ? string(hdr."content-length") : "absent",
+            body ? body.size() : 0), {"Content-Type": "text/plain"});
+    }
+}
+
 #! Handler that delays before responding
 class SlowHandler inherits AbstractHttpRequestHandler {
     hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
@@ -450,6 +459,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         # End-to-end tests via unified API (forced H2 protocol)
         addTestCase("unified basic GET request", \testUnifiedBasicGet());
         addTestCase("unified POST request with body", \testUnifiedPostWithBody());
+        addTestCase("one-shot request Content-Length framing",
+            \testOneShotRequestContentLengthFraming());
         addTestCase("unified error response", \testUnifiedErrorResponse());
         addTestCase("unified large response", \testUnifiedLargeResponse());
         addTestCase("unified concurrent multiplexed", \testUnifiedConcurrentRequests());
@@ -604,6 +615,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         mServer.setHandler("simple", "/simple", NOTHING, new SimpleGetHandler());
         mServer.setHandler("large", "/large", NOTHING, new LargeResponseHandler());
         mServer.setHandler("echo", "/echo", NOTHING, new EchoHandler());
+        mServer.setHandler("request-framing", "/request-framing", NOTHING,
+            new RequestFramingHandler());
         mServer.setHandler("slow", "/slow", NOTHING, new SlowHandler());
         mServer.setHandler("error", "/error", NOTHING, new ErrorHandler());
         mServer.setHandler("streaming", "/streaming", NOTHING, new StreamingHandler());
@@ -1261,6 +1274,56 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         response = stream.request("POST", "/echo", {"content-type": "application/octet-stream"}, <48656c6c6f>);
         assertEq(200, response.status_code, "unified POST binary status code");
         assertRegex("body=Hello", response.body, "unified POST binary body content");
+    }
+
+    #! Verifies qore#4983 framing consistently across HttpClientIo protocols
+    testOneShotRequestContentLengthFraming() {
+        testOneShotRequestContentLengthFramingIntern("h1", mHttpUrl);
+        testOneShotRequestContentLengthFramingIntern("h2", mSslUrl);
+        if (mQuicUrl) {
+            testOneShotRequestContentLengthFramingIntern("h3", mQuicUrl);
+        }
+    }
+
+    private testOneShotRequestContentLengthFramingIntern(string protocol,
+            string url) {
+        HttpClientIo::HttpClientConnectionManager mgr(
+                <HttpClientIo::HttpClientConnectionManagerOptions>{
+            "accept_all_certs": True,
+            "protocol": protocol,
+            "logger": mLogger,
+        });
+
+        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(url);
+        hash<auto> response = stream.request("POST", "/request-framing");
+        assertEq(200, response.status_code,
+            protocol + " bodyless POST status code");
+        string response_body = response.body.typeCode() == NT_BINARY
+            ? response.body.toString() : response.body;
+        assertRegex("method=POST content-length=0 body-size=0", response_body,
+            protocol + " bodyless POST sends Content-Length: 0");
+
+        stream = mgr.acquireStream(url);
+        response = stream.request("GET", "/request-framing");
+        response_body = response.body.typeCode() == NT_BINARY
+            ? response.body.toString() : response.body;
+        assertRegex("method=GET content-length=absent body-size=0", response_body,
+            protocol + " bodyless GET omits Content-Length");
+
+        stream = mgr.acquireStream(url);
+        response = stream.request("POST", "/request-framing",
+            {"content-length": "0"});
+        response_body = response.body.typeCode() == NT_BINARY
+            ? response.body.toString() : response.body;
+        assertRegex("method=POST content-length=0 body-size=0", response_body,
+            protocol + " preserves explicit Content-Length: 0");
+
+        stream = mgr.acquireStream(url);
+        response = stream.request("POST", "/request-framing", NOTHING, "abc");
+        response_body = response.body.typeCode() == NT_BINARY
+            ? response.body.toString() : response.body;
+        assertRegex("method=POST content-length=3 body-size=3", response_body,
+            protocol + " sends the exact nonempty Content-Length");
     }
 
     testUnifiedErrorResponse() {
