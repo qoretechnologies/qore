@@ -172,16 +172,36 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         return rv;
     }
 
+    #! Serializes one Google Discovery API query value for a request target
+    /** @param key query argument name, used in validation errors
+        @param type declared Discovery API field type
+        @param val value to serialize and percent-encode
+
+        @return the serialized query value, percent-encoded exactly once
+
+        @throw QUERY-ERROR if val cannot be serialized as required by
+            a type
+
+        @par Example
+        A natural-language Calendar argument remains one query value even when
+        it contains spaces and a delimiter:
+        @code{.qore}
+        string value = provider.getQueryValue("text",
+            AbstractDataProviderTypeMap."string", "Lunch at A&B");
+        # value == "Lunch%20at%20A%26B"
+        @endcode
+    */
     string getQueryValue(string key, AbstractDataProviderType type, auto val) {
         switch (type.getBaseTypeCode()) {
-            case NT_BOOLEAN: return val ? "true" : "false";
+            case NT_BOOLEAN:
+                return val ? "true" : "false";
             default:
                 if (!val.strp()) {
                     throw "QUERY-ERROR", sprintf("query arg %y cannot be serialized to a string from type %y; arg "
                         "requires type %y", key, val.fullType(), type.getName());
                 }
         }
-        return val.toString();
+        return encode_url(val.toString(), True);
     }
 
     #! Returns the given word capitalized

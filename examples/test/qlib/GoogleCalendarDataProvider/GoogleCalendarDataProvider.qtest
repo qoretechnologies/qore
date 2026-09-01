@@ -17,6 +17,25 @@
 
 %exec-class GoogleDataProviderTest
 
+#! Exposes Discovery query serialization without requiring a remote connection
+class GoogleQueryEncoder inherits GoogleDataProviderBase {
+    string encode(string key, AbstractDataProviderType type, auto value) {
+        return getQueryValue(key, type, value);
+    }
+
+    string getName() {
+        return "google-query-encoder-test";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "name": getName(),
+            "type": "GoogleQueryEncoder",
+            "supports_request": False,
+        };
+    }
+}
+
 public class GoogleDataProviderTest inherits QUnit::Test {
     private {
         GoogleDataProviderBase gdp;
@@ -30,6 +49,7 @@ public class GoogleDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("GoogleDataProviderTest Test", "1.0", \ARGV, MyOpts) {
+        addTestCase("Discovery query value encoding", \queryValueEncodingTest());
         addTestCase("test", \googleDataProviderTest());
         addTestCase("calendar test", \googleCalendarTest());
 
@@ -45,6 +65,25 @@ public class GoogleDataProviderTest inherits QUnit::Test {
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
+    }
+
+    queryValueEncodingTest() {
+        GoogleQueryEncoder encoder();
+        AbstractDataProviderType string_type = AbstractDataProviderTypeMap."string";
+        AbstractDataProviderType bool_type = AbstractDataProviderTypeMap."bool";
+
+        assertEq("Lunch%20at%20A%26B%3F%2050%25%20caf%C3%A9",
+            encoder.encode("text", string_type, "Lunch at A&B? 50% café"));
+        assertEq("a%2Fb%3Dc%2Bd", encoder.encode("text", string_type, "a/b=c+d"));
+        assertEq("a%2520b", encoder.encode("text", string_type, "a%20b"),
+            "a raw percent sequence is encoded exactly once as data");
+        assertEq("", encoder.encode("text", string_type, ""));
+        assertEq("true", encoder.encode("enabled", bool_type, True));
+        assertEq("false", encoder.encode("enabled", bool_type, False));
+        assertEq(("first%20value", "second%26value"),
+            map encoder.encode("items", string_type, $1),
+                ("first value", "second&value"),
+            "repeated values retain order and receive independent encoding");
     }
 
     googleDataProviderTest() {
