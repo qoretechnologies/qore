@@ -231,6 +231,11 @@
       tensor-backed ONNX inference, and DataProvider-native package/artifact
       creation workflows
     - cryptography: new @ref qorecryptointro "QoreCrypto" envelope-encryption module
+      providing AES-256-GCM encryption with mandatory authenticated data,
+      per-record data-encryption keys wrapped by pluggable key providers, key
+      rotation by rewrapping or re-encryption, keyed blind indexes for equality
+      lookups over encrypted data, and bounded retry with a fail-closed circuit
+      breaker around key providers
     - existing modules updated extensively (DataProvider, RestClient, HttpServer,
       WebSocketClient/Handler/Util, Logger, SqlUtil, etc.) — see
       @ref qore_3_0_0_updated_modules "Updated Modules"

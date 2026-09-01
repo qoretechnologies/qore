@@ -27,7 +27,7 @@
 %modern
 
 module QoreCrypto {
-    version = "1.0.0";
+    version = "1.1.0";
     desc = "user module providing generic envelope encryption helpers";
     author = "Qore Technologies, s.r.o.";
     url = "http://qore.org";
@@ -50,6 +50,9 @@ module QoreCrypto {
     - key-provider-managed wrapping of DEKs
     - a versioned ciphertext envelope suitable for YAML/JSON serialization
     - deterministic canonicalization for structured AAD
+    - key rotation by rewrapping DEKs or re-encrypting records
+    - keyed blind indexes for equality lookups over encrypted columns
+    - bounded retry and a fail-closed circuit breaker around key providers
 
     @par Example
     @code{.py}
@@ -70,7 +73,146 @@ string plaintext = cipher.decryptToString(
 );
     @endcode
 
+    @section qorecrypto_aad AAD Is Mandatory
+
+    Every envelope is bound to structured AAD that is authenticated but not
+    encrypted.  AAD should identify the record: its logical table or
+    collection, its record id, its tenant or instance scope, and a schema
+    version.  Binding those fields means a ciphertext cannot be silently moved
+    to a different row, a different tenant, or a different schema generation
+    and still decrypt.
+
+    AAD is canonicalized deterministically - hash keys are sorted recursively
+    and every value is length-prefixed - so the same logical AAD always
+    produces the same bytes regardless of hash insertion order.
+
+    @subsection qorecrypto_aad_stability AAD Field Stability
+
+    AAD fields must be stable for the life of the record.  If any AAD field
+    changes - a primary key is resequenced, a tenant is renamed, a schema
+    version is bumped - the record cannot be rewrapped; it must be decrypted
+    under the old AAD and encrypted again under the new AAD with
+    @ref QoreCrypto::EnvelopeCipher::reencrypt() "EnvelopeCipher::reencrypt()".
+    Rewrapping across an AAD change produces a record that will never decrypt
+    again.
+
+    @section qorecrypto_rotation Key Rotation
+
+    A ciphertext envelope records the key provider and the key generation that
+    wrapped its DEK, which is what makes rotation possible after the fact.  A
+    provider that reports a constant key id across KEK changes cannot be
+    rotated at all: nothing in the stored data distinguishes one generation
+    from the next, so there is no dual-read window and no way to tell which
+    records still need work.  Providers must issue a distinct key id per KEK
+    generation from the first record they write.
+
+    There are two rotation paths and they are not interchangeable:
+
+    |!Path|!Method|!Cost|!When
+    |Rewrap|@ref QoreCrypto::EnvelopeCipher::rewrap() "rewrap()"|key metadata only; content ciphertext is untouched and the record is never decrypted|a new KEK generation, or a move to a new key provider, with unchanged AAD
+    |Re-encrypt|@ref QoreCrypto::EnvelopeCipher::reencrypt() "reencrypt()"|full decrypt and encrypt under a fresh DEK|any AAD change, or a content-key compromise
+
+    Rewrapping does not need the record AAD: the wrapping AAD is rebuilt from
+    the AAD digest already stored in the envelope, so a rotation job can walk a
+    table without reconstructing per-row AAD and without ever holding record
+    plaintext.
+
+    @ref QoreCrypto::EnvelopeCipher::needsRewrap() "needsRewrap()" reports
+    whether a record is still on an older generation using envelope metadata
+    alone, so progress can be measured cheaply over a whole table.
+
+    A rotation keeps working only while retired generations remain available
+    for unwrapping.  Construct the provider with a keyring covering every live
+    generation, retire a generation from the keyring only once no record
+    references it, and use
+    @ref QoreCrypto::EnvelopeCipher::rewrapAcross() "rewrapAcross()" to move
+    records between providers.
+
+    @section qorecrypto_blind_index Blind Indexes
+
+    @ref QoreCrypto::BlindIndex "BlindIndex" produces keyed HMAC-SHA256 tokens
+    for equality lookups over encrypted columns, so a caller can find a row by
+    an exact value without storing that value in plaintext.
+
+    Blind index keys are separate from KEKs and rotate independently, because
+    the costs differ sharply: rewrapping a DEK touches key metadata only, while
+    rotating a blind index key means recomputing every stored token from
+    plaintext.  Tokens carry the generation that produced them, so a rotation
+    can proceed row by row while
+    @ref QoreCrypto::BlindIndex::indexAll() "indexAll()" keeps lookups matching
+    across every live generation.
+
+    A blind index reveals equality, and therefore value frequency.  It is not
+    suitable for low-entropy values whose distribution is itself sensitive, and
+    it is never an authenticator.
+
+    @section qorecrypto_resilience Key Provider Failures
+
+    Key providers fail closed.  A record whose DEK cannot be unwrapped does not
+    decrypt, and a write whose DEK cannot be wrapped does not fall back to
+    storing plaintext.
+
+    @ref QoreCrypto::ResilientKeyProvider "ResilientKeyProvider" wraps a
+    provider with bounded retry, exponential backoff, and a per-key-generation
+    circuit breaker, so that a provider outage fails fast instead of pushing
+    its latency onto every caller.  An open circuit still fails closed: it
+    throws \c QORE-CRYPTO-PROVIDER-UNAVAILABLE rather than degrading.
+
+    Only transient failures are retried.  A deterministic cryptographic failure
+    - the wrong key, mismatched AAD, a tampered record - is neither retried nor
+    counted toward opening the circuit, so a single corrupt row cannot present
+    as a provider-wide outage.
+
+    @section qorecrypto_zeroization Zeroization Limits
+
+    %Qore is garbage-collected, and plaintext DEK buffers cannot be reliably
+    zeroized from %Qore code: a binary value may be copied by the runtime, and
+    its memory is released on collection rather than at a point the caller
+    controls.  This module therefore does not claim to zeroize key material.
+
+    What it does guarantee is narrower and enforceable: plaintext DEKs and
+    unwrapped key material are never logged, never serialized into an envelope,
+    and never held in a long-lived cache.  A DEK exists only for the duration of
+    a single encrypt, decrypt, or rewrap call.
+
+    Callers that require guaranteed zeroization need a C++ implementation; that
+    is out of scope for this module.
+
+    @section qorecrypto_fips FIPS Posture
+
+    This module performs no cryptography of its own.  AES-256-GCM, HMAC-SHA256,
+    SHA-256, and random byte generation all come from %Qore core primitives,
+    which use the OpenSSL build %Qore was compiled against.  A FIPS-constrained
+    deployment is therefore a property of that OpenSSL build and of the key
+    providers in use, not of this module.
+
+    The algorithms selected here - AES-256-GCM for content and key wrapping,
+    HMAC-SHA256 for blind indexes - are FIPS-approved, so no algorithm change is
+    required for a FIPS deployment.  Provider backends that reach external key
+    management systems must be assessed individually.
+
     @section qorecrypto_relnotes QoreCrypto Module Release Notes
+
+    @subsection qorecrypto_1_1 QoreCrypto Module Version 1.1
+    - added key rotation support:
+      - @ref QoreCrypto::StaticKeyProvider "StaticKeyProvider" and
+        @ref QoreCrypto::FileKeyProvider "FileKeyProvider" hold a keyring of KEK
+        generations, so retired generations stay available for unwrapping
+      - @ref QoreCrypto::EnvelopeCipher::rewrap() "EnvelopeCipher::rewrap()" and
+        @ref QoreCrypto::EnvelopeCipher::rewrapAcross() "rewrapAcross()" rotate
+        stored ciphertext without decrypting record content
+      - @ref QoreCrypto::EnvelopeCipher::reencrypt() "EnvelopeCipher::reencrypt()"
+        handles rotations that change AAD
+      - @ref QoreCrypto::EnvelopeCipher::needsRewrap() "EnvelopeCipher::needsRewrap()"
+        reports rotation progress from envelope metadata alone
+    - added @ref QoreCrypto::BlindIndex "BlindIndex" for equality lookups over
+      encrypted columns, with independently rotatable keys
+    - added @ref QoreCrypto::ResilientKeyProvider "ResilientKeyProvider"
+      providing bounded retry with backoff and a fail-closed per-key circuit
+      breaker
+    - documented @ref qorecrypto_aad_stability "AAD field stability",
+      @ref qorecrypto_zeroization "zeroization limits", and
+      @ref qorecrypto_fips "FIPS posture"
 
     @subsection qorecrypto_1_0 QoreCrypto Module Version 1.0
     - Initial release with @ref QoreCrypto::EnvelopeCipher "EnvelopeCipher",

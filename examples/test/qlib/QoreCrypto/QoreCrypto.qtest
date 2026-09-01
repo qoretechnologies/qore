@@ -31,6 +31,44 @@ public class QoreCryptoTest inherits QUnit::Test {
         addTestCase("invalid key length rejected", \invalidKeyLengthTest());
         addTestCase("file key provider", \fileKeyProviderTest());
         addTestCase("envelope options are persisted", \envelopeOptionsTest());
+        addTestCase("envelope leaks neither plaintext nor DEK", \noPlaintextInEnvelopeTest());
+        addTestCase("keyring provider holds multiple generations", \keyringProviderTest());
+        addTestCase("keyring provider validates its keyring", \keyringValidationTest());
+        addTestCase("file key provider keyring", \fileKeyProviderKeyringTest());
+        addTestCase("rewrap rotates without touching ciphertext", \rewrapTest());
+        addTestCase("rewrap needs no record AAD", \rewrapWithoutAadTest());
+        addTestCase("retiring a generation fails closed for unrotated records",
+            \retiredGenerationTest());
+        addTestCase("rewrap across providers", \rewrapAcrossProvidersTest());
+        addTestCase("rewrap cannot carry a record across an AAD change",
+            \rewrapAcrossAadChangeTest());
+        addTestCase("reencrypt carries descriptor and metadata", \reencryptMetadataTest());
+        addTestCase("rewrap to an unknown generation fails closed",
+            \rewrapUnknownGenerationTest());
+        addTestCase("rotation interrupted mid-batch resumes", \rotationRestartTest());
+        addTestCase("blind index matches and does not match", \blindIndexMatchTest());
+        addTestCase("blind index is scoped by index id", \blindIndexScopeTest());
+        addTestCase("blind index keys rotate independently", \blindIndexRotationTest());
+        addTestCase("blind index truncation", \blindIndexTruncationTest());
+        addTestCase("blind index token validation", \blindIndexTokenValidationTest());
+        addTestCase("blind index rejects invalid construction", \blindIndexConstructionTest());
+        addTestCase("transient provider failures are retried", \resilienceRetryTest());
+        addTestCase("exhausting the retry budget fails closed", \resilienceFailClosedTest());
+        addTestCase("an open circuit does not reach the provider", \resilienceOpenCircuitTest());
+        addTestCase("a half-open trial closes the circuit on success",
+            \resilienceHalfOpenRecoveryTest());
+        addTestCase("a failed half-open trial reopens the circuit",
+            \resilienceHalfOpenReopenTest());
+        addTestCase("deterministic crypto errors are not retried",
+            \resilienceDeterministicErrorTest());
+        addTestCase("circuits are tracked per key generation", \resiliencePerKeyCircuitTest());
+        addTestCase("backoff grows and is capped", \resilienceBackoffTest());
+        addTestCase("resilience options are validated", \resilienceOptionValidationTest());
+        addTestCase("only one half-open trial call is admitted",
+            \resilienceSingleTrialTest());
+        addTestCase("a deterministic error releases the trial slot",
+            \resilienceTrialSlotReleaseTest());
+        addTestCase("resilient provider round trip", \resilienceRoundTripTest());
         set_return_value(main());
     }
 
@@ -164,5 +202,858 @@ public class QoreCryptoTest inherits QUnit::Test {
         assertEq("qonsole_chat_messages:v1", env.aad_descriptor);
         assertEq(1, env.metadata.schema);
         assertEq("test", env.metadata.purpose);
+    }
+
+    #! writes a 32-byte key file and returns its path; the caller unlinks it
+    private string writeKeyFile(binary key) {
+        string path = tmp_location() + DirSep + "qorecrypto-key-" + get_random_string(8);
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+        f.write(key);
+        return path;
+    }
+
+    noPlaintextInEnvelopeTest() {
+        EnvelopeCipher cipher = makeCipher();
+        hash<auto> aad = makeAad();
+        string plaintext = "an unmistakable plaintext marker";
+        hash<CiphertextEnvelope> env = cipher.encrypt(plaintext, aad);
+
+        # the whole serialized envelope must carry neither the plaintext nor the KEK
+        string serialized = sprintf("%y", env);
+        assertEq(-1, serialized.find(plaintext));
+        assertEq(-1, serialized.find(make_base64_string(TestKey)));
+        assertEq(-1, serialized.find(TestKey.toHex()));
+    }
+
+    keyringProviderTest() {
+        StaticKeyProvider provider({"g1": TestKey, "g2": OtherKey}, "g2", "test-provider");
+
+        assertEq(("g1", "g2"), provider.getKeyIds());
+        assertEq("g2", provider.getCurrentKeyId());
+        assertTrue(provider.hasKey("g1"));
+        assertFalse(provider.hasKey("g3"));
+
+        # new records are written under the current generation
+        EnvelopeCipher cipher(provider);
+        hash<auto> aad = makeAad();
+        hash<CiphertextEnvelope> env = cipher.encrypt("secret", aad);
+        assertEq("g2", env.key_id);
+        assertEq("secret", cipher.decryptToString(env, aad));
+
+        # a record written under the retired generation still reads
+        EnvelopeCipher old_cipher(new StaticKeyProvider(TestKey, "test-provider", "g1"));
+        hash<CiphertextEnvelope> old_env = old_cipher.encrypt("older secret", aad);
+        assertEq("g1", old_env.key_id);
+        assertEq("older secret", cipher.decryptToString(old_env, aad));
+    }
+
+    keyringValidationTest() {
+        assertThrows("QORE-CRYPTO-KEY-ERROR", "at least one key",
+            sub () {
+                new StaticKeyProvider(cast<hash<string, data>>({}), "g1");
+            }
+        );
+        assertThrows("QORE-CRYPTO-KEY-ERROR", "is not present in the keyring",
+            sub () {
+                new StaticKeyProvider({"g1": TestKey}, "g2");
+            }
+        );
+        assertThrows("QORE-CRYPTO-KEY-ERROR", "exactly 32 bytes",
+            sub () {
+                new StaticKeyProvider({"g1": "short"}, "g1");
+            }
+        );
+    }
+
+    fileKeyProviderKeyringTest() {
+        string p1 = writeKeyFile(TestKey);
+        on_exit unlink(p1);
+        string p2 = writeKeyFile(OtherKey);
+        on_exit unlink(p2);
+
+        FileKeyProvider provider({"g1": p1, "g2": p2}, "g2", "file-provider");
+        assertEq(("g1", "g2"), provider.getKeyIds());
+        assertEq(p2, provider.getPath());
+        assertEq({"g1": p1, "g2": p2}, provider.getPaths());
+
+        EnvelopeCipher cipher(provider);
+        hash<auto> aad = {"record": "file"};
+        hash<CiphertextEnvelope> env = cipher.encrypt("file secret", aad);
+        assertEq("g2", env.key_id);
+        assertEq("file secret", cipher.decryptToString(env, aad));
+    }
+
+    rewrapTest() {
+        hash<auto> aad = makeAad();
+        EnvelopeCipher old_cipher(new StaticKeyProvider(TestKey, "test-provider", "g1"));
+        hash<CiphertextEnvelope> env = old_cipher.encrypt("secret text", aad);
+
+        EnvelopeCipher cipher(new StaticKeyProvider({"g1": TestKey, "g2": OtherKey}, "g2",
+            "test-provider"));
+        assertTrue(cipher.needsRewrap(env));
+
+        hash<CiphertextEnvelope> rewrapped = cipher.rewrap(env);
+
+        # the cheap path rotates key metadata only
+        assertEq("g2", rewrapped.key_id);
+        assertEq(env.ciphertext, rewrapped.ciphertext);
+        assertEq(env.iv, rewrapped.iv);
+        assertEq(env.tag, rewrapped.tag);
+        assertEq(env.aad_digest, rewrapped.aad_digest);
+        # the DEK itself is rewrapped, so the wrapped key material must change
+        assertNeq(env.wrapped_dek, rewrapped.wrapped_dek);
+
+        assertFalse(cipher.needsRewrap(rewrapped));
+        assertEq("secret text", cipher.decryptToString(rewrapped, aad));
+    }
+
+    rewrapWithoutAadTest() {
+        # a rotation job must be able to rewrap without reconstructing record AAD
+        hash<auto> aad = makeAad();
+        EnvelopeCipher old_cipher(new StaticKeyProvider(TestKey, "test-provider", "g1"));
+        hash<CiphertextEnvelope> env = old_cipher.encrypt("secret text", aad);
+
+        EnvelopeCipher cipher(new StaticKeyProvider({"g1": TestKey, "g2": OtherKey}, "g2",
+            "test-provider"));
+        # note: no AAD argument is available to rewrap() at all
+        hash<CiphertextEnvelope> rewrapped = cipher.rewrap(env);
+        assertEq("secret text", cipher.decryptToString(rewrapped, aad));
+    }
+
+    retiredGenerationTest() {
+        hash<auto> aad = makeAad();
+        EnvelopeCipher old_cipher(new StaticKeyProvider(TestKey, "test-provider", "g1"));
+        hash<CiphertextEnvelope> env = old_cipher.encrypt("secret text", aad);
+
+        EnvelopeCipher both(new StaticKeyProvider({"g1": TestKey, "g2": OtherKey}, "g2",
+            "test-provider"));
+        hash<CiphertextEnvelope> rewrapped = both.rewrap(env);
+
+        # once the old generation is retired, only rotated records remain readable
+        EnvelopeCipher retired(new StaticKeyProvider({"g2": OtherKey}, "g2", "test-provider"));
+        assertEq("secret text", retired.decryptToString(rewrapped, aad));
+        assertThrows("QORE-CRYPTO-KEY-ERROR", "is not available",
+            sub () {
+                retired.decryptToString(env, aad);
+            }
+        );
+    }
+
+    rewrapAcrossProvidersTest() {
+        hash<auto> aad = makeAad();
+        StaticKeyProvider from(TestKey, "old-provider", "g1");
+        StaticKeyProvider to(OtherKey, "new-provider", "g1");
+        hash<CiphertextEnvelope> env = (new EnvelopeCipher(from)).encrypt("secret text", aad);
+
+        hash<CiphertextEnvelope> moved = EnvelopeCipher::rewrapAcross(from, to, env);
+        assertEq("new-provider", moved.key_provider);
+        assertEq(env.ciphertext, moved.ciphertext);
+
+        EnvelopeCipher new_cipher(to);
+        assertEq("secret text", new_cipher.decryptToString(moved, aad));
+
+        # the old provider can no longer read the migrated record
+        assertThrows("QORE-CRYPTO-KEY-ERROR", "does not match provider",
+            sub () {
+                (new EnvelopeCipher(from)).decryptToString(moved, aad);
+            }
+        );
+    }
+
+    rewrapAcrossAadChangeTest() {
+        # AAD-field stability: a changed AAD field is not a rewrap
+        EnvelopeCipher cipher(new StaticKeyProvider({"g1": TestKey, "g2": OtherKey}, "g2",
+            "test-provider"));
+        hash<auto> old_aad = makeAad();
+        hash<auto> new_aad = old_aad + {"record_id": "msg-2"};
+        hash<CiphertextEnvelope> env = cipher.encrypt("secret text", old_aad,
+            <EnvelopeEncryptOptions>{"key_id": "g1"});
+
+        # rewrapping keeps the old AAD digest, so the record is unreadable under the new AAD
+        hash<CiphertextEnvelope> rewrapped = cipher.rewrap(env);
+        assertThrows("QORE-CRYPTO-AAD-ERROR", "AAD does not match",
+            sub () {
+                cipher.decryptToString(rewrapped, new_aad);
+            }
+        );
+
+        # reencrypt is the path that an AAD change requires
+        hash<CiphertextEnvelope> reencrypted = cipher.reencrypt(env, old_aad, new_aad);
+        assertEq("secret text", cipher.decryptToString(reencrypted, new_aad));
+        assertNeq(env.aad_digest, reencrypted.aad_digest);
+        assertNeq(env.ciphertext, reencrypted.ciphertext);
+        assertEq("g2", reencrypted.key_id);
+
+        # and the re-encrypted record no longer reads under the old AAD
+        assertThrows("QORE-CRYPTO-AAD-ERROR", "AAD does not match",
+            sub () {
+                cipher.decryptToString(reencrypted, old_aad);
+            }
+        );
+    }
+
+    reencryptMetadataTest() {
+        EnvelopeCipher cipher = makeCipher();
+        hash<auto> aad = makeAad();
+        hash<CiphertextEnvelope> env = cipher.encrypt("secret", aad, <EnvelopeEncryptOptions>{
+            "aad_descriptor": "qonsole_chat_messages:v1",
+            "metadata": {"schema": 1},
+        });
+
+        # carried over by default
+        hash<CiphertextEnvelope> kept = cipher.reencrypt(env, aad, aad);
+        assertEq("qonsole_chat_messages:v1", kept.aad_descriptor);
+        assertEq(1, kept.metadata.schema);
+
+        # and replaceable
+        hash<CiphertextEnvelope> replaced = cipher.reencrypt(env, aad, aad,
+            <EnvelopeEncryptOptions>{
+                "aad_descriptor": "qonsole_chat_messages:v2",
+                "metadata": {"schema": 2},
+            });
+        assertEq("qonsole_chat_messages:v2", replaced.aad_descriptor);
+        assertEq(2, replaced.metadata.schema);
+        assertEq("secret", cipher.decryptToString(replaced, aad));
+    }
+
+    rewrapUnknownGenerationTest() {
+        EnvelopeCipher cipher = makeCipher();
+        hash<CiphertextEnvelope> env = cipher.encrypt("secret", makeAad());
+
+        assertThrows("QORE-CRYPTO-KEY-ERROR", "is not available",
+            sub () {
+                cipher.rewrap(env, "no-such-generation");
+            }
+        );
+    }
+
+    rotationRestartTest() {
+        # a rotation that stops mid-batch must leave every record readable, and
+        # resuming must complete without re-doing finished work
+        const int RecordCount = 10;
+        const int BatchSize = 4;
+
+        hash<auto> base_aad = makeAad();
+        EnvelopeCipher writer(new StaticKeyProvider(TestKey, "test-provider", "g1"));
+        list<hash<CiphertextEnvelope>> rows = ();
+        list<hash<auto>> aads = ();
+        for (int i = 0; i < RecordCount; ++i) {
+            hash<auto> aad = base_aad + {"record_id": sprintf("msg-%d", i)};
+            push aads, aad;
+            push rows, writer.encrypt(sprintf("secret %d", i), aad);
+        }
+
+        EnvelopeCipher cipher(new StaticKeyProvider({"g1": TestKey, "g2": OtherKey}, "g2",
+            "test-provider"));
+
+        # first batch, then an interruption
+        for (int i = 0; i < BatchSize; ++i) {
+            rows[i] = cipher.rewrap(rows[i]);
+        }
+
+        # every record is readable across the mixed generations
+        for (int i = 0; i < RecordCount; ++i) {
+            assertEq(sprintf("secret %d", i), cipher.decryptToString(rows[i], aads[i]));
+        }
+
+        # progress is measurable from envelope metadata alone
+        int remaining = 0;
+        foreach hash<CiphertextEnvelope> row in (rows) {
+            if (cipher.needsRewrap(row)) {
+                ++remaining;
+            }
+        }
+        assertEq(RecordCount - BatchSize, remaining);
+
+        # resume: only the unfinished rows are touched
+        for (int i = 0; i < RecordCount; ++i) {
+            if (cipher.needsRewrap(rows[i])) {
+                rows[i] = cipher.rewrap(rows[i]);
+            }
+        }
+        foreach hash<CiphertextEnvelope> row in (rows) {
+            assertFalse(cipher.needsRewrap(row));
+        }
+
+        # and the old generation can now be retired without losing a record
+        EnvelopeCipher retired(new StaticKeyProvider({"g2": OtherKey}, "g2", "test-provider"));
+        for (int i = 0; i < RecordCount; ++i) {
+            assertEq(sprintf("secret %d", i), retired.decryptToString(rows[i], aads[i]));
+        }
+    }
+
+    blindIndexMatchTest() {
+        BlindIndex idx(TestKey, "ai_conversation_messages.author");
+        string token = idx.index("alice@example.com");
+
+        # deterministic under the same key
+        assertEq(token, idx.index("alice@example.com"));
+        assertNeq(token, idx.index("bob@example.com"));
+        assertTrue(idx.matches(token, "alice@example.com"));
+        assertFalse(idx.matches(token, "bob@example.com"));
+
+        # the token carries no plaintext
+        assertEq(-1, token.find("alice"));
+
+        # a different key over the same value gives a different token
+        BlindIndex other(OtherKey, "ai_conversation_messages.author");
+        assertNeq(token, other.index("alice@example.com"));
+        assertFalse(other.matches(token, "alice@example.com"));
+
+        # structured values index deterministically
+        assertEq(idx.index({"a": 1, "b": 2}), idx.index({"b": 2, "a": 1}));
+    }
+
+    blindIndexScopeTest() {
+        # the same value in two columns must not produce the same token
+        BlindIndex author(TestKey, "ai_conversation_messages.author");
+        BlindIndex subject(TestKey, "ai_conversation_messages.subject");
+        assertNeq(author.index("alice@example.com"), subject.index("alice@example.com"));
+    }
+
+    blindIndexRotationTest() {
+        BlindIndex old_idx(TestKey, "tbl.email", "b1");
+        string old_token = old_idx.index("alice@example.com");
+        assertEq("b1", BlindIndex::parseToken(old_token).key_id);
+
+        BlindIndex idx({"b1": TestKey, "b2": OtherKey}, "b2", "tbl.email");
+        assertEq(("b1", "b2"), idx.getKeyIds());
+        assertEq("b2", idx.getCurrentKeyId());
+
+        # new tokens use the current generation
+        string new_token = idx.index("alice@example.com");
+        assertEq("b2", BlindIndex::parseToken(new_token).key_id);
+        assertNeq(old_token, new_token);
+
+        # a token written under the retired generation still matches
+        assertTrue(idx.matches(old_token, "alice@example.com"));
+        assertFalse(idx.matches(old_token, "bob@example.com"));
+
+        # a lookup covering every live generation finds both
+        list<string> all = idx.indexAll("alice@example.com");
+        assertEq(2, all.size());
+        assertTrue(inlist(old_token, all));
+        assertTrue(inlist(new_token, all));
+
+        # once the generation is retired, its tokens no longer match
+        BlindIndex retired({"b2": OtherKey}, "b2", "tbl.email");
+        assertFalse(retired.matches(old_token, "alice@example.com"));
+
+        # blind index keys are independent of encryption keys: rotating the KEK
+        # leaves index tokens untouched
+        assertEq(new_token, idx.index("alice@example.com"));
+    }
+
+    blindIndexTruncationTest() {
+        BlindIndex full(TestKey, "tbl.email");
+        BlindIndex short_idx(TestKey, "tbl.email", "current", BLIND_INDEX_MIN_BYTES);
+
+        assertEq(BLIND_INDEX_MAX_BYTES, full.getIndexBytes());
+        assertEq(BLIND_INDEX_MIN_BYTES, short_idx.getIndexBytes());
+
+        string full_token = full.index("alice@example.com");
+        string short_token = short_idx.index("alice@example.com");
+        assertEq(BLIND_INDEX_MAX_BYTES * 2, BlindIndex::parseToken(full_token).index.size());
+        assertEq(BLIND_INDEX_MIN_BYTES * 2, BlindIndex::parseToken(short_token).index.size());
+
+        # a truncated index is a prefix of the full one, and still matches
+        assertTrue(full_token.find(BlindIndex::parseToken(short_token).index) != -1);
+        assertTrue(short_idx.matches(short_token, "alice@example.com"));
+        assertFalse(short_idx.matches(short_token, "bob@example.com"));
+    }
+
+    blindIndexTokenValidationTest() {
+        BlindIndex idx(TestKey, "tbl.email");
+        hash<BlindIndexToken> parsed = BlindIndex::parseToken(idx.index("alice@example.com"));
+        assertEq(BLIND_INDEX_VERSION, parsed.version);
+        assertEq("current", parsed.key_id);
+
+        assertThrows("QORE-CRYPTO-BLIND-INDEX-ERROR", "malformed",
+            sub () {
+                BlindIndex::parseToken("not-a-token");
+            }
+        );
+        assertThrows("QORE-CRYPTO-BLIND-INDEX-ERROR", "non-numeric version",
+            sub () {
+                BlindIndex::parseToken("x:current:abcdef0123456789abcdef0123456789");
+            }
+        );
+        assertThrows("QORE-CRYPTO-BLIND-INDEX-ERROR", "unsupported blind index token version",
+            sub () {
+                BlindIndex::parseToken("99:current:abcdef0123456789abcdef0123456789");
+            }
+        );
+        assertThrows("QORE-CRYPTO-BLIND-INDEX-ERROR", "lowercase hex",
+            sub () {
+                BlindIndex::parseToken("1:current:ZZZZZZZZZZZZZZZZ");
+            }
+        );
+        assertThrows("QORE-CRYPTO-BLIND-INDEX-ERROR", "invalid index length",
+            sub () {
+                BlindIndex::parseToken("1:current:abcd");
+            }
+        );
+
+        # a corrupt stored token is loud, not silently a non-match
+        assertThrows("QORE-CRYPTO-BLIND-INDEX-ERROR", "malformed",
+            sub () {
+                idx.matches("garbage", "alice@example.com");
+            }
+        );
+    }
+
+    blindIndexConstructionTest() {
+        assertThrows("QORE-CRYPTO-KEY-ERROR", "exactly 32 bytes",
+            sub () {
+                new BlindIndex("short", "tbl.email");
+            }
+        );
+        assertThrows("QORE-CRYPTO-BLIND-INDEX-ERROR", "index_id must not be empty",
+            sub () {
+                new BlindIndex(TestKey, "");
+            }
+        );
+        assertThrows("QORE-CRYPTO-BLIND-INDEX-ERROR", "index_bytes must be between",
+            sub () {
+                new BlindIndex(TestKey, "tbl.email", "current", 4);
+            }
+        );
+        # a key id containing the token separator would make tokens unparseable
+        assertThrows("QORE-CRYPTO-BLIND-INDEX-ERROR", "must not contain",
+            sub () {
+                new BlindIndex(TestKey, "tbl.email", "a:b");
+            }
+        );
+        assertThrows("QORE-CRYPTO-BLIND-INDEX-ERROR", "is not present in the keyring",
+            sub () {
+                new BlindIndex({"b1": TestKey}, "b2", "tbl.email");
+            }
+        );
+    }
+
+    #! builds a resilient provider over a controllable flaky delegate
+    private hash<auto> makeResilient(*hash<KeyProviderResilienceOptions> options) {
+        FlakyKeyProvider flaky({"k1": TestKey, "k2": OtherKey}, "k1", "flaky-provider");
+        TestClock tc(2026-01-01T00:00:00Z);
+        # note: set the handlers field by field; adding a second hashdecl hash would
+        # overwrite the caller's options with that hash's defaults
+        hash<KeyProviderResilienceOptions> opts = options ?? <KeyProviderResilienceOptions>{};
+        opts.delay_handler = nothing sub (int delay_ms) { tc.recordDelay(delay_ms); };
+        opts.clock = date sub () { return tc.getNow(); };
+        ResilientKeyProvider provider(flaky, opts);
+        return {
+            "flaky": flaky,
+            "clock": tc,
+            "provider": provider,
+            "cipher": new EnvelopeCipher(provider),
+        };
+    }
+
+    resilienceRetryTest() {
+        hash<auto> ctx = makeResilient(<KeyProviderResilienceOptions>{
+            "max_attempts": 3, "failure_threshold": 5, "initial_delay_ms": 10,
+        });
+        ctx.flaky.fail_count = 2;
+
+        hash<auto> aad = makeAad();
+        hash<CiphertextEnvelope> env = ctx.cipher.encrypt("secret", aad);
+
+        # two transient failures inside a three-attempt budget still succeed
+        assertEq("secret", ctx.cipher.decryptToString(env, aad));
+        assertEq((10, 20), ctx.clock.getDelays());
+        assertEq(KEY_PROVIDER_CIRCUIT_CLOSED, ctx.provider.getCircuitState("k1").state);
+        assertEq(0, ctx.provider.getCircuitState("k1").consecutive_failures);
+    }
+
+    resilienceFailClosedTest() {
+        hash<auto> ctx = makeResilient(<KeyProviderResilienceOptions>{
+            "max_attempts": 3, "failure_threshold": 10, "initial_delay_ms": 10,
+        });
+        ctx.flaky.fail_count = 100;
+
+        # the budget is bounded, and running out throws rather than degrading
+        assertThrows("QORE-CRYPTO-PROVIDER-UNAVAILABLE", "after 3 attempts",
+            sub () {
+                ctx.cipher.encrypt("secret", makeAad());
+            }
+        );
+        assertEq(3, ctx.flaky.calls);
+        assertEq(3, ctx.provider.getCircuitState("k1").consecutive_failures);
+    }
+
+    resilienceOpenCircuitTest() {
+        hash<auto> ctx = makeResilient(<KeyProviderResilienceOptions>{
+            "max_attempts": 5, "failure_threshold": 2, "initial_delay_ms": 10,
+            "open_ms": 30000,
+        });
+        ctx.flaky.fail_count = 100;
+
+        assertThrows("QORE-CRYPTO-PROVIDER-UNAVAILABLE", "circuit open",
+            sub () {
+                ctx.cipher.encrypt("secret", makeAad());
+            }
+        );
+        # the breaker cut the retry loop short at the failure threshold
+        assertEq(2, ctx.flaky.calls);
+        assertEq(KEY_PROVIDER_CIRCUIT_OPEN, ctx.provider.getCircuitState("k1").state);
+
+        # while open, no call reaches the provider at all
+        int calls = ctx.flaky.calls;
+        assertThrows("QORE-CRYPTO-PROVIDER-UNAVAILABLE", "failing closed",
+            sub () {
+                ctx.cipher.encrypt("secret", makeAad());
+            }
+        );
+        assertEq(calls, ctx.flaky.calls);
+    }
+
+    resilienceHalfOpenRecoveryTest() {
+        hash<auto> ctx = makeResilient(<KeyProviderResilienceOptions>{
+            "max_attempts": 2, "failure_threshold": 1, "initial_delay_ms": 10,
+            "open_ms": 5000,
+        });
+        ctx.flaky.fail_count = 100;
+        assertThrows("QORE-CRYPTO-PROVIDER-UNAVAILABLE", "",
+            sub () {
+                ctx.cipher.encrypt("secret", makeAad());
+            }
+        );
+        assertEq(KEY_PROVIDER_CIRCUIT_OPEN, ctx.provider.getCircuitState("k1").state);
+        assertEq(1, ctx.provider.getCircuitState("k1").open_count);
+
+        # the cooldown has not elapsed yet
+        ctx.clock.advance(4s);
+        assertThrows("QORE-CRYPTO-PROVIDER-UNAVAILABLE", "failing closed",
+            sub () {
+                ctx.cipher.encrypt("secret", makeAad());
+            }
+        );
+
+        # after it elapses, a trial call is allowed through and success closes the circuit
+        ctx.clock.advance(2s);
+        ctx.flaky.fail_count = 0;
+        hash<auto> aad = makeAad();
+        hash<CiphertextEnvelope> env = ctx.cipher.encrypt("secret", aad);
+        assertEq(KEY_PROVIDER_CIRCUIT_CLOSED, ctx.provider.getCircuitState("k1").state);
+        assertEq("secret", ctx.cipher.decryptToString(env, aad));
+    }
+
+    resilienceHalfOpenReopenTest() {
+        hash<auto> ctx = makeResilient(<KeyProviderResilienceOptions>{
+            "max_attempts": 1, "failure_threshold": 1, "open_ms": 5000,
+        });
+        ctx.flaky.fail_count = 100;
+        assertThrows("QORE-CRYPTO-PROVIDER-UNAVAILABLE", "",
+            sub () {
+                ctx.cipher.encrypt("secret", makeAad());
+            }
+        );
+
+        # a failed trial call reopens immediately rather than serving more traffic
+        ctx.clock.advance(6s);
+        int calls = ctx.flaky.calls;
+        assertThrows("QORE-CRYPTO-PROVIDER-UNAVAILABLE", "",
+            sub () {
+                ctx.cipher.encrypt("secret", makeAad());
+            }
+        );
+        assertEq(calls + 1, ctx.flaky.calls);
+        assertEq(KEY_PROVIDER_CIRCUIT_OPEN, ctx.provider.getCircuitState("k1").state);
+        assertEq(2, ctx.provider.getCircuitState("k1").open_count);
+    }
+
+    resilienceDeterministicErrorTest() {
+        hash<auto> ctx = makeResilient(<KeyProviderResilienceOptions>{
+            "max_attempts": 5, "failure_threshold": 1,
+        });
+        ctx.flaky.fail_count = 100;
+        ctx.flaky.fail_err = "QORE-CRYPTO-KEY-ERROR";
+
+        # a tampered record or a wrong key is deterministic: retrying is pointless,
+        # and it must not present as a provider outage
+        assertThrows("QORE-CRYPTO-KEY-ERROR", "simulated",
+            sub () {
+                ctx.cipher.encrypt("secret", makeAad());
+            }
+        );
+        assertEq(1, ctx.flaky.calls);
+        assertEq((), ctx.clock.getDelays());
+        assertEq(KEY_PROVIDER_CIRCUIT_CLOSED, ctx.provider.getCircuitState("k1").state);
+        assertEq(0, ctx.provider.getCircuitState("k1").consecutive_failures);
+    }
+
+    resiliencePerKeyCircuitTest() {
+        hash<auto> ctx = makeResilient(<KeyProviderResilienceOptions>{
+            "max_attempts": 1, "failure_threshold": 1, "open_ms": 30000,
+        });
+
+        # write a record under each generation while the provider is healthy
+        hash<auto> aad = makeAad();
+        hash<CiphertextEnvelope> e1 = ctx.cipher.encrypt("one", aad,
+            <EnvelopeEncryptOptions>{"key_id": "k1"});
+        hash<CiphertextEnvelope> e2 = ctx.cipher.encrypt("two", aad,
+            <EnvelopeEncryptOptions>{"key_id": "k2"});
+
+        # now only k1 fails
+        ctx.flaky.fail_count = 100;
+        ctx.flaky.fail_key_id = "k1";
+        assertThrows("QORE-CRYPTO-PROVIDER-UNAVAILABLE", "",
+            sub () {
+                ctx.cipher.decryptToString(e1, aad);
+            }
+        );
+        assertEq(KEY_PROVIDER_CIRCUIT_OPEN, ctx.provider.getCircuitState("k1").state);
+
+        # a revoked or unreplicated generation must not take down the rest of the keyring
+        assertEq(KEY_PROVIDER_CIRCUIT_CLOSED, ctx.provider.getCircuitState("k2").state);
+        assertEq("two", ctx.cipher.decryptToString(e2, aad));
+
+        # administrative recovery clears the breaker
+        ctx.flaky.fail_count = 0;
+        ctx.provider.resetCircuits();
+        assertEq(KEY_PROVIDER_CIRCUIT_CLOSED, ctx.provider.getCircuitState("k1").state);
+        assertEq("one", ctx.cipher.decryptToString(e1, aad));
+    }
+
+    resilienceBackoffTest() {
+        hash<auto> ctx = makeResilient(<KeyProviderResilienceOptions>{
+            "max_attempts": 6, "failure_threshold": 100, "initial_delay_ms": 10,
+            "max_delay_ms": 40, "backoff_multiplier": 2.0,
+        });
+        ctx.flaky.fail_count = 100;
+
+        assertThrows("QORE-CRYPTO-PROVIDER-UNAVAILABLE", "after 6 attempts",
+            sub () {
+                ctx.cipher.encrypt("secret", makeAad());
+            }
+        );
+        # the delay grows geometrically and is capped
+        assertEq((10, 20, 40, 40, 40), ctx.clock.getDelays());
+    }
+
+    resilienceOptionValidationTest() {
+        StaticKeyProvider inner(TestKey, "inner", "k1");
+        assertThrows("QORE-CRYPTO-RESILIENCE-ERROR", "max_attempts",
+            sub () {
+                new ResilientKeyProvider(inner, <KeyProviderResilienceOptions>{"max_attempts": 0});
+            }
+        );
+        assertThrows("QORE-CRYPTO-RESILIENCE-ERROR", "failure_threshold",
+            sub () {
+                new ResilientKeyProvider(inner,
+                    <KeyProviderResilienceOptions>{"failure_threshold": 0});
+            }
+        );
+        assertThrows("QORE-CRYPTO-RESILIENCE-ERROR", "backoff_multiplier",
+            sub () {
+                new ResilientKeyProvider(inner,
+                    <KeyProviderResilienceOptions>{"backoff_multiplier": 0.5});
+            }
+        );
+        assertThrows("QORE-CRYPTO-RESILIENCE-ERROR", "max_delay_ms",
+            sub () {
+                new ResilientKeyProvider(inner, <KeyProviderResilienceOptions>{
+                    "initial_delay_ms": 100, "max_delay_ms": 10,
+                });
+            }
+        );
+    }
+
+    resilienceSingleTrialTest() {
+        hash<auto> ctx = makeResilient(<KeyProviderResilienceOptions>{
+            "max_attempts": 1, "failure_threshold": 1, "open_ms": 5000,
+        });
+        hash<auto> aad = makeAad();
+        ctx.flaky.fail_count = 100;
+        assertThrows("QORE-CRYPTO-PROVIDER-UNAVAILABLE", "",
+            sub () {
+                ctx.cipher.encrypt("secret", aad);
+            }
+        );
+        assertEq(KEY_PROVIDER_CIRCUIT_OPEN, ctx.provider.getCircuitState("k1").state);
+
+        # the cooldown elapses; the next call becomes the trial and is held inside
+        # the provider so that a second caller arrives while it is still in flight
+        ctx.clock.advance(6s);
+        ctx.flaky.fail_count = 0;
+        Counter entered(1);
+        Queue release();
+        ctx.flaky.gate_entered = entered;
+        ctx.flaky.gate_release = release;
+
+        Queue results();
+        code trial = sub () {
+            try {
+                ctx.cipher.encrypt("trial", aad);
+                results.push("ok");
+            } catch (hash<ExceptionInfo> ex) {
+                results.push(ex.err);
+            }
+        };
+        background trial();
+
+        # wait for the trial call to be inside the provider
+        assertEq(0, entered.waitForZero(30s));
+        assertTrue(ctx.provider.getCircuitState("k1").trial_in_flight);
+
+        # a second caller must not be admitted alongside the trial
+        assertThrows("QORE-CRYPTO-PROVIDER-UNAVAILABLE", "already in flight",
+            sub () {
+                ctx.cipher.encrypt("second", aad);
+            }
+        );
+
+        # releasing the trial closes the circuit
+        release.push("go");
+        assertEq("ok", results.get(30s));
+        assertEq(KEY_PROVIDER_CIRCUIT_CLOSED, ctx.provider.getCircuitState("k1").state);
+        assertFalse(ctx.provider.getCircuitState("k1").trial_in_flight);
+    }
+
+    resilienceTrialSlotReleaseTest() {
+        hash<auto> ctx = makeResilient(<KeyProviderResilienceOptions>{
+            "max_attempts": 1, "failure_threshold": 1, "open_ms": 5000,
+        });
+        hash<auto> aad = makeAad();
+        ctx.flaky.fail_count = 100;
+        assertThrows("QORE-CRYPTO-PROVIDER-UNAVAILABLE", "",
+            sub () {
+                ctx.cipher.encrypt("secret", aad);
+            }
+        );
+
+        # the trial call fails deterministically, which says nothing about provider
+        # health; it must not leave the circuit wedged with a phantom trial
+        ctx.clock.advance(6s);
+        ctx.flaky.fail_err = "QORE-CRYPTO-KEY-ERROR";
+        assertThrows("QORE-CRYPTO-KEY-ERROR", "simulated",
+            sub () {
+                ctx.cipher.encrypt("trial", aad);
+            }
+        );
+        assertEq(KEY_PROVIDER_CIRCUIT_HALF_OPEN, ctx.provider.getCircuitState("k1").state);
+        assertFalse(ctx.provider.getCircuitState("k1").trial_in_flight);
+
+        # so the next caller becomes the trial and can close the circuit
+        ctx.flaky.fail_count = 0;
+        hash<CiphertextEnvelope> env = ctx.cipher.encrypt("secret", aad);
+        assertEq(KEY_PROVIDER_CIRCUIT_CLOSED, ctx.provider.getCircuitState("k1").state);
+        assertEq("secret", ctx.cipher.decryptToString(env, aad));
+    }
+
+    resilienceRoundTripTest() {
+        # the decorator is transparent when the provider is healthy
+        ResilientKeyProvider provider(new StaticKeyProvider(TestKey, "test-provider", "k1"));
+        EnvelopeCipher cipher(provider);
+        hash<auto> aad = makeAad();
+        hash<CiphertextEnvelope> env = cipher.encrypt("secret text", aad);
+
+        assertEq("test-provider", provider.getProviderId());
+        assertEq("k1", provider.getCurrentKeyId());
+        assertEq("test-provider", env.key_provider);
+        assertEq("k1", env.key_id);
+        assertEq("secret text", cipher.decryptToString(env, aad));
+
+        # and it still fails closed on a real cryptographic error
+        assertThrows("QORE-CRYPTO-AAD-ERROR", "AAD does not match",
+            sub () {
+                cipher.decryptToString(env, makeAad() + {"record_id": "msg-2"});
+            }
+        );
+    }
+}
+
+#! Test clock and delay recorder, so retry and circuit timing are deterministic
+class TestClock {
+    private {
+        date now;
+        list<int> delays = ();
+    }
+
+    constructor(date now) {
+        self.now = now;
+    }
+
+    date getNow() {
+        return now;
+    }
+
+    advance(date offset) {
+        now += offset;
+    }
+
+    recordDelay(int delay_ms) {
+        push delays, delay_ms;
+    }
+
+    list<int> getDelays() {
+        return delays;
+    }
+}
+
+#! Key provider whose failures are driven by the test
+class FlakyKeyProvider inherits QoreCrypto::AbstractKeyProvider {
+    public {
+        #! remaining failures to inject
+        int fail_count = 0;
+        #! error code to throw; transient unless the test says otherwise
+        string fail_err = "KMS-TIMEOUT";
+        #! if set, only this key generation fails
+        *string fail_key_id;
+        #! delegate calls made
+        int calls = 0;
+        #! if set, decremented once the first gated call is inside the provider
+        *Counter gate_entered;
+        #! if set, the first gated call blocks here until the test releases it
+        *Queue gate_release;
+    }
+
+    private {
+        QoreCrypto::StaticKeyProvider inner;
+    }
+
+    constructor(hash<string, data> keyring, string current_key_id, string provider_id) {
+        inner = new QoreCrypto::StaticKeyProvider(keyring, current_key_id, provider_id);
+    }
+
+    string getProviderId() {
+        return inner.getProviderId();
+    }
+
+    string getCurrentKeyId() {
+        return inner.getCurrentKeyId();
+    }
+
+    hash<QoreCrypto::WrappedKeyInfo> wrapKey(binary dek, *string key_id, string aad) {
+        ++calls;
+        maybeFail(key_id ?? inner.getCurrentKeyId());
+        return inner.wrapKey(dek, key_id, aad);
+    }
+
+    binary unwrapKey(hash<QoreCrypto::WrappedKeyInfo> info, string aad) {
+        ++calls;
+        maybeFail(info.key_id);
+        return inner.unwrapKey(info, aad);
+    }
+
+    private maybeFail(string key_id) {
+        if (exists gate_entered) {
+            Counter entered = gate_entered;
+            Queue release = gate_release;
+            # gate only the first call through
+            remove gate_entered;
+            remove gate_release;
+            entered.dec();
+            release.get(30s);
+        }
+        if (fail_count <= 0) {
+            return;
+        }
+        if (exists fail_key_id && fail_key_id != key_id) {
+            return;
+        }
+        --fail_count;
+        throw fail_err, sprintf("simulated provider failure for key %y", key_id);
     }
 }
