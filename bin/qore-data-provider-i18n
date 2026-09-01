@@ -294,8 +294,11 @@ class QoreDataProviderI18nCmd {
     private checkSourceTree(string output, list<string> extra_modules,
             list<string> explicit_owners, list<string> required_locales,
             bool require_complete_locales, *int verbose) {
+        list<string> source_roots = providerSourceRoots(output);
         list<hash<auto>> roots = ();
-        collectRootCatalogs(output, \roots);
+        foreach string source_root in (source_roots) {
+            collectRootCatalogs(source_root, \roots);
+        }
         if (!roots) {
             throw "DATA-PROVIDER-I18N-ERROR", sprintf(
                 "no source-owned provider root catalogs found below %y",
@@ -307,7 +310,9 @@ class QoreDataProviderI18nCmd {
         # until its first root catalog exists.  Discover exact source-level
         # registration owners as well, so --check-source-tree reports that
         # missing catalog instead of silently accepting an incomplete tree.
-        collectProviderSourceOwners(output, \owner_modules);
+        foreach string source_root in (source_roots) {
+            collectProviderSourceOwners(source_root, \owner_modules);
+        }
         list<hash<auto>> unresolved_roots = ();
         list<hash<auto>> owned_roots = ();
         foreach hash<auto> root in (roots) {
@@ -426,6 +431,36 @@ class QoreDataProviderI18nCmd {
         }
         printf("verified %d owner module(s), %d catalog domain(s), %d translation(s)\n",
             owner_modules.size(), roots.size(), translation_count);
+    }
+
+    #! Returns the production library roots below a source-tree path
+    /** A repository can contain examples, tests, build trees, and other Qore
+        sources that deliberately exercise provider registration APIs without
+        defining production provider metadata.  Repository-level verification
+        therefore follows the structural Qore library layout instead of
+        interpreting every source file below the repository as production.
+
+        A narrow library or generated-catalog path has no direct production
+        library child, so it remains its own discovery root.  This preserves
+        explicit-owner checks for noncanonical trees.
+
+        @param path source-tree path supplied to --output
+        @return direct production library roots, or the supplied path
+    */
+    private list<string> providerSourceRoots(string path) {
+        Dir dir();
+        if (!dir.chdir(path)) {
+            throw "DATA-PROVIDER-I18N-ERROR",
+                sprintf("cannot read provider source tree directory %y",
+                    path);
+        }
+        list<string> roots = ();
+        foreach string child in (dir.listDirs()) {
+            if (child == "qlib" || child.startsWith("qlib-")) {
+                roots += path + DirSep + child;
+            }
+        }
+        return roots ? roots : (path,);
     }
 
     #! Finds provider owner modules before their first catalog exists

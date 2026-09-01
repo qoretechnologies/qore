@@ -740,9 +740,9 @@ class DataProviderPresentationTest inherits QUnit::Test {
                 root + DirSep + "qlib"),
             "recursive catalog validation covers every Qore provider without an app or locale list");
         assertEq(0, runSourceCatalogTreeCheck(root, qore_bin,
-                root + DirSep + "qlib", (), True, True),
-            "source-tree validation infers and verifies every Qore provider "
-                "owner module with complete standard locales");
+                root, (), True, True),
+            "repository source-tree validation infers and verifies every "
+                "production Qore provider owner module with complete standard locales");
     }
 
     sourceCatalogTranslationCheckTest() {
@@ -1053,10 +1053,10 @@ class DataProviderPresentationTest inherits QUnit::Test {
             bool require_standard_locales = False,
             bool require_complete_locales = False) {
         list<string> module_path = (
+            root + DirSep + "qlib",
             output,
             root + DirSep + "build/modules/i18n",
-            root + DirSep + "build/modules/json",
-            root + DirSep + "qlib"
+            root + DirSep + "build/modules/json"
         );
         if (exists ENV.QORE_MODULE_DIR) {
             module_path += ENV.QORE_MODULE_DIR;
