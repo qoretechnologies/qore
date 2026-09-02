@@ -42,7 +42,7 @@
 %endtry
 
 module OpenAiDataProvider {
-    version = "1.6";
+    version = "1.7";
     desc = "user module providing a data provider API for OpenAI services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -527,6 +527,30 @@ module OpenAiDataProvider {
             ),
             "output_type": OpenAiCreateImageResponseType,
         });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": OpenAiDataProvider::AppName,
+            "path": "/transcribe-audio",
+            "action": "transcribe-audio",
+            "display_name": "Transcribe Audio",
+            "short_desc": "Transcribe an audio file into text",
+            "desc": "Transcribe an audio file into text using an OpenAI speech-to-text model such as "
+                "`gpt-4o-transcribe` or `whisper-1`",
+            "action_code": DPAT_API,
+            "mutates_state": False,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiTranscribeAudioRequestType::Fields{"file", "model"}, {
+                    "preselected": True,
+                    "required": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiTranscribeAudioRequestType::Fields{"language", "response_format"}, {
+                    "preselected": True,
+                }
+            ) + DataProviderActionCatalog::getActionOptionFromFields(
+                OpenAiTranscribeAudioRequestType::Fields - ("file", "model", "language", "response_format")
+            ),
+            "output_type": OpenAiTranscribeAudioDataProvider::ResponseType,
+        });
     };
 }
 
@@ -780,6 +804,12 @@ hash<auto> items = conversations.getChildProvider("items").getChildProvider("lis
     items on a follow-up request that sets \c previous_response_id or reuses the same \c conversation.
 
     @section openaidataprovider_relnotes Release Notes
+
+    @subsection openaidataprovider_v1_7 OpenAiDataProvider v1.7
+    - added the \c transcribe-audio data provider and the <b>Transcribe Audio</b> action implementing the OpenAI
+      audio transcription (speech-to-text) API; the audio file is uploaded as \c multipart/form-data and the
+      \c gpt-4o-transcribe, \c gpt-4o-mini-transcribe, and \c whisper-1 models are supported with the \c json,
+      \c text, \c srt, \c verbose_json, and \c vtt response formats
 
     @subsection openaidataprovider_v1_6 OpenAiDataProvider v1.6
     - added the \c conversations data provider tree implementing the OpenAI Conversations API

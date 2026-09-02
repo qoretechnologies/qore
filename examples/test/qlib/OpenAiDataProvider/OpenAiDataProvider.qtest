@@ -25,6 +25,10 @@ class FakeOpenAiRestClient inherits OpenAiRestClient::OpenAiRestClientIo {
         hash<auto> response_body;
         hash<auto> last_stream_request;
         list<hash<SseMessageInfo>> stream_events;
+        # raw (pre-serialized) requests: multipart uploads
+        *data last_raw_body;
+        # raw response body; a string for text response formats
+        auto raw_response_body;
     }
 
     constructor() : OpenAiRestClientIo({"token": "x"}) {
@@ -53,6 +57,17 @@ class FakeOpenAiRestClient inherits OpenAiRestClient::OpenAiRestClientIo {
         return <RestClient::RestResponseInfo>{
             "status_code": 200,
             "body": response_body,
+        };
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body, *hash<auto> hdr) {
+        last_method = method;
+        last_path = path;
+        last_raw_body = body;
+        last_hdr = hdr;
+        return <RestClient::RestResponseInfo>{
+            "status_code": 200,
+            "body": raw_response_body ?? response_body,
         };
     }
 
@@ -177,6 +192,8 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         addTestCase("assistants API still functional", \assistantsApiStillFunctionalTest());
         addTestCase("function call output input", \functionCallOutputInputTest());
         addTestCase("conversation reference data", \conversationReferenceDataTest());
+        addTestCase("transcribe audio", \transcribeAudioTest());
+        addTestCase("transcribe audio action catalog", \transcribeAudioActionCatalogTest());
 
         try {
             setupConnection();
@@ -224,7 +241,7 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         }
         foreach string read_only_action in (("multi-chat", "simple-chat", "get-conversation",
                 "list-conversation-items", "get-conversation-item", "list-response-input-items",
-                "create-image")) {
+                "create-image", "transcribe-audio")) {
             assertFalse(DataProviderActionCatalog::actionMutatesState(
                     DataProviderActionCatalog::getAppActionEx(OpenAiDataProvider::AppName, read_only_action)),
                 read_only_action + " is read-only by its producer contract");
@@ -1467,6 +1484,158 @@ public class OpenAiDataProviderTest inherits QUnit::Test {
         assertThrows("RUNTIME-TYPE-ERROR", "call_id", \prov.doRequest(), ({
             "input": ({"function_call_output": {"output": "x"}},),
         },));
+    }
+
+    transcribeAudioTest() {
+        checkModule();
+        FakeOpenAiRestClient rest();
+        OpenAiDataProvider root(rest);
+        AbstractDataProvider prov = root.getChildProvider("transcribe-audio");
+        assertEq("transcribe-audio", prov.getName());
+        assertEq(OpenAiTranscribeAudioRequestType, prov.getRequestType());
+        assertEq(OpenAiTranscriptionDataType, prov.getResponseType());
+
+        # binary audio content; must survive the base64 round trip and the multipart encoding byte for byte
+        binary audio = <52494646000000005741564500ff01fe>;
+
+        # JSON response format: the file, the model, and every optional field with a value are sent as parts
+        rest.raw_response_body = {
+            "text": "hello world",
+            "usage": {
+                "type": "tokens",
+                "input_tokens": 14,
+                "output_tokens": 3,
+                "total_tokens": 17,
+            },
+        };
+        hash<auto> resp = prov.doRequest({
+            "file": {
+                "name": "greeting.mp3",
+                "content": audio,
+            },
+            "model": "gpt-4o-transcribe",
+            "language": "en",
+            "prompt": "A short greeting",
+            "temperature": 0.2,
+        });
+        assertEq("POST", rest.last_method);
+        assertEq("audio/transcriptions", rest.last_path);
+        # no JSON request must have been made
+        assertNothing(rest.last_request);
+        assertRegex("^multipart/form-data; boundary=", rest.last_hdr."Content-Type");
+        hash<string, hash<FormDataMessageInfo>> parts = MultiPartFormDataMessage::parseMessage(
+            rest.last_hdr."Content-Type", rest.last_raw_body.toString());
+        assertEq(("file", "language", "model", "prompt", "response_format", "temperature"), sort(keys parts));
+        assertEq("greeting.mp3", parts.file.filename);
+        assertEq("audio/mpeg", parts.file.hdr."content-type");
+        assertEq(audio, binary(parts.file.body));
+        assertEq("gpt-4o-transcribe", parts.model.body.toString());
+        assertEq("en", parts.language.body.toString());
+        assertEq("A short greeting", parts.prompt.body.toString());
+        # the default response format is sent explicitly
+        assertEq("json", parts.response_format.body.toString());
+        assertEq("0.2", parts.temperature.body.toString());
+        assertEq("hello world", resp.text);
+        assertEq("tokens", resp.usage.type);
+        assertEq(17, resp.usage.total_tokens);
+
+        # verbose JSON response: the parsed body is returned as-is
+        rest.raw_response_body = {
+            "task": "transcribe",
+            "language": "english",
+            "duration": 1.5,
+            "text": "hello world",
+            "words": (
+                {"word": "hello", "start": 0.0, "end": 0.7},
+                {"word": "world", "start": 0.8, "end": 1.5},
+            ),
+        };
+        resp = prov.doRequest({
+            "file": {
+                "name": "greeting.wav",
+                "content": audio,
+            },
+            "model": "whisper-1",
+            "response_format": "verbose_json",
+        });
+        parts = MultiPartFormDataMessage::parseMessage(rest.last_hdr."Content-Type", rest.last_raw_body.toString());
+        assertEq(("file", "model", "response_format"), keys parts);
+        assertEq("greeting.wav", parts.file.filename);
+        assertEq("audio/x-wav", parts.file.hdr."content-type");
+        assertEq("whisper-1", parts.model.body.toString());
+        assertEq("verbose_json", parts.response_format.body.toString());
+        assertEq("english", resp.language);
+        assertEq(2, resp.words.lsize());
+        assertEq("world", resp.words[1].word);
+
+        # text response format: the raw body is returned in the "text" key; the MIME type given is used
+        rest.raw_response_body = "hello world\n";
+        resp = prov.doRequest({
+            "file": {
+                "name": "greeting.ogg",
+                "content": make_base64_string(audio),
+                "mime_type": "audio/ogg",
+            },
+            "model": "whisper-1",
+            "response_format": "text",
+        });
+        parts = MultiPartFormDataMessage::parseMessage(rest.last_hdr."Content-Type", rest.last_raw_body.toString());
+        assertEq("greeting.ogg", parts.file.filename);
+        assertEq("audio/ogg", parts.file.hdr."content-type");
+        assertEq(audio, binary(parts.file.body));
+        assertEq("text", parts.response_format.body.toString());
+        assertEq({"text": "hello world\n"}, resp);
+
+        # a missing file is rejected by the request type before any request is made
+        rest.last_method = "";
+        assertThrows("INVALID-REQUEST", "mandatory hash field \"file\"", \prov.doRequest(), ({"model": "whisper-1"},));
+        # the file name must have a supported audio extension
+        assertThrows("TRANSCRIBE-AUDIO-ERROR", "notes.txt", \prov.doRequest(), ({
+            "file": {
+                "name": "notes.txt",
+                "content": "not audio",
+            },
+            "model": "whisper-1",
+        },));
+        # the file content is mandatory
+        assertThrows("RUNTIME-TYPE-ERROR", "content", \prov.doRequest(), ({
+            "file": {
+                "name": "greeting.mp3",
+            },
+            "model": "whisper-1",
+        },));
+        assertEq("", rest.last_method);
+    }
+
+    transcribeAudioActionCatalogTest() {
+        hash<DataProviderActionInfo> action = DataProviderActionCatalog::getAppAction(
+            OpenAiDataProvider::AppName, "transcribe-audio"
+        );
+        assertEq("/transcribe-audio", action.path);
+        assertEq(DPAT_API, action.action_code);
+        assertEq("Transcribe Audio", action.display_name);
+        assertFalse(action.mutates_state);
+        assertEq(OpenAiTranscribeAudioDataProvider::ResponseType, action.output_type);
+        # every request field is exposed as an action option; required and preselected options come first
+        assertEq(sort(keys OpenAiTranscribeAudioRequestType::Fields), sort(keys action.options));
+        assertEq(("file", "model", "language", "response_format"), (keys action.options)[0..3]);
+        assertTrue(action.options.file.required);
+        assertEq(FileDataType, action.options.file.type);
+        assertTrue(action.options.model.required);
+        assertEq("gpt-4o-transcribe", action.options.model.default_value);
+        assertEq(("gpt-4o-transcribe", "gpt-4o-mini-transcribe", "whisper-1"),
+            map $1.value, action.options.model.allowed_values);
+        assertFalse(action.options.language.required ?? False);
+        assertTrue(action.options.language.preselected);
+        assertEq(("json", "text", "srt", "verbose_json", "vtt"),
+            map $1.value, action.options.response_format.allowed_values);
+        assertFalse(action.options.temperature.required ?? False);
+
+        # the action path must resolve in the root provider's child tree
+        FakeOpenAiRestClient rest();
+        OpenAiDataProvider root(rest);
+        assertEq("OpenAiTranscribeAudioDataProvider", root.getChildProviderPath("transcribe-audio").className());
+        assertTrue(inlist("transcribe-audio", root.getChildProviderNames()));
     }
 
     private usageIntern() {

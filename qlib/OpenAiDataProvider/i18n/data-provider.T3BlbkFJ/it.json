@@ -2783,6 +2783,154 @@
           "source": "Stream a response from a model",
           "message": "Invia una risposta in streaming da un modello"
         },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.desc": {
+          "source": "Transcribe an audio file into text using an OpenAI speech-to-text model such as `gpt-4o-transcribe` or `whisper-1`",
+          "message": "Trascrivere un file audio in testo utilizzando un modello OpenAI di riconoscimento vocale come `gpt-4o-transcribe` o `whisper-1`"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.display_name": {
+          "source": "Transcribe Audio",
+          "message": "Trascrivi audio"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.ZmlsZQ.desc": {
+          "source": "The audio file to transcribe, in one of the following formats: `flac`, `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `ogg`, `wav`, or `webm`; the file name must have a matching extension. The maximum file size is 25 MB",
+          "message": "Il file audio da trascrivere, in uno dei seguenti formati: `flac`, `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `ogg`, `wav` o `webm`; il nome del file deve avere un'estensione corrispondente. La dimensione massima del file è 25 MB"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.ZmlsZQ.display_name": {
+          "source": "Audio File",
+          "message": "File audio"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.ZmlsZQ.short_desc": {
+          "source": "The audio file to transcribe",
+          "message": "Il file audio da trascrivere"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bGFuZ3VhZ2U.desc": {
+          "source": "The language of the input audio in [ISO-639-1](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) format (for example `en`); supplying the input language improves accuracy and latency",
+          "message": "La lingua dell'audio di input nel formato [ISO-639-1](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) (ad esempio `en`); specificare la lingua di input migliora l'accuratezza e la latenza"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Lingua"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "The language of the input audio as an ISO-639-1 code",
+          "message": "La lingua dell'audio di input come codice ISO-639-1"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOmdwdC00by10cmFuc2NyaWJl.desc": {
+          "source": "The most accurate speech-to-text model; supports the `json` response format only",
+          "message": "Il modello di riconoscimento vocale più accurato; supporta solo il formato di risposta `json`"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOmdwdC00by10cmFuc2NyaWJl.display_name": {
+          "source": "GPT-4o Transcribe",
+          "message": "GPT-4o Transcribe"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOmdwdC00by1taW5pLXRyYW5zY3JpYmU.desc": {
+          "source": "A faster and cheaper speech-to-text model; supports the `json` response format only",
+          "message": "Un modello di riconoscimento vocale più veloce ed economico; supporta solo il formato di risposta `json`"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOmdwdC00by1taW5pLXRyYW5zY3JpYmU.display_name": {
+          "source": "GPT-4o Mini Transcribe",
+          "message": "GPT-4o Mini Transcribe"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOndoaXNwZXItMQ.desc": {
+          "source": "The open source Whisper V2 model; supports all response formats",
+          "message": "Il modello open source Whisper V2; supporta tutti i formati di risposta"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOndoaXNwZXItMQ.display_name": {
+          "source": "Whisper",
+          "message": "Whisper"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.desc": {
+          "source": "The speech-to-text model to use for the transcription",
+          "message": "Il modello di riconoscimento vocale da utilizzare per la trascrizione"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Modello"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.short_desc": {
+          "source": "The speech-to-text model to use",
+          "message": "Il modello di riconoscimento vocale da utilizzare"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cHJvbXB0.desc": {
+          "source": "Optional text to guide the model's style or to continue a previous audio segment; the prompt should match the audio language",
+          "message": "Testo facoltativo per guidare lo stile del modello o per continuare un segmento audio precedente; il prompt deve corrispondere alla lingua dell'audio"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cHJvbXB0.short_desc": {
+          "source": "Optional text to guide the model's style or continue a previous audio segment",
+          "message": "Testo facoltativo per guidare lo stile del modello o continuare un segmento audio precedente"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "A JSON object with the transcribed text",
+          "message": "Un oggetto JSON con il testo trascritto"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnNydA.desc": {
+          "source": "SubRip subtitles with timestamps (`whisper-1` only)",
+          "message": "Sottotitoli SubRip con marcature temporali (solo `whisper-1`)"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnNydA.display_name": {
+          "source": "SRT Subtitles",
+          "message": "Sottotitoli SRT"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "The transcribed text only (`whisper-1` only)",
+          "message": "Solo il testo trascritto (solo `whisper-1`)"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Testo semplice"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnZ0dA.desc": {
+          "source": "Web Video Text Tracks subtitles with timestamps (`whisper-1` only)",
+          "message": "Sottotitoli Web Video Text Tracks con marcature temporali (solo `whisper-1`)"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnZ0dA.display_name": {
+          "source": "WebVTT Subtitles",
+          "message": "Sottotitoli WebVTT"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnZlcmJvc2VfanNvbg.desc": {
+          "source": "A JSON object with the transcribed text, language, duration, and timestamped segments (`whisper-1` only)",
+          "message": "Un oggetto JSON con il testo trascritto, la lingua, la durata e i segmenti con marcature temporali (solo `whisper-1`)"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnZlcmJvc2VfanNvbg.display_name": {
+          "source": "Verbose JSON",
+          "message": "JSON dettagliato"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "The format of the transcription output.\n\n**Note**: `gpt-4o-transcribe` and `gpt-4o-mini-transcribe` support only `json`; the `text`, `srt`, `verbose_json`, and `vtt` formats require `whisper-1`. Non-JSON output is returned in the `text` field of the response",
+          "message": "Il formato dell'output della trascrizione.\n\n**Nota**: `gpt-4o-transcribe` e `gpt-4o-mini-transcribe` supportano solo `json`; i formati `text`, `srt`, `verbose_json` e `vtt` richiedono `whisper-1`. L'output non JSON viene restituito nel campo `text` della risposta"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Formato della risposta"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "The format of the transcription output",
+          "message": "Il formato dell'output della trascrizione"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "The sampling temperature, between `0` and `1`; higher values like `0.8` make the output more random, while lower values like `0.2` make it more focused and deterministic. If set to `0`, the model uses log probability to automatically increase the temperature until certain thresholds are hit",
+          "message": "La temperatura di campionamento, compresa tra `0` e `1`; valori più alti come `0.8` rendono l'output più casuale, mentre valori più bassi come `0.2` lo rendono più mirato e deterministico. Se impostata su `0`, il modello utilizza la probabilità logaritmica per aumentare automaticamente la temperatura fino al raggiungimento di determinate soglie"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Temperatura di campionamento"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature between 0 and 1",
+          "message": "La temperatura di campionamento compresa tra 0 e 1"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.short_desc": {
+          "source": "Transcribe an audio file into text",
+          "message": "Trascrivere un file audio in testo"
+        },
         "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.desc": {
           "source": "Update an assistant",
           "message": "Aggiorna un assistente"

@@ -53,6 +53,7 @@ public class OpenAiDataProvider inherits OpenAiDataProviderCommon {
             "responses": Class::forName("OpenAiDataProvider::OpenAiResponsesDataProvider"),
             "simple-chat": Class::forName("OpenAiDataProvider::OpenAiSimpleChatCompletionDataProvider"),
             "threads": Class::forName("OpenAiDataProvider::OpenAiThreadsDataProvider"),
+            "transcribe-audio": Class::forName("OpenAiDataProvider::OpenAiTranscribeAudioDataProvider"),
             "upload-file": Class::forName("OpenAiDataProvider::OpenAiFileUploadDataProvider"),
             "upload-file-from-location":
                 Class::forName("OpenAiDataProvider::OpenAiFileUploadFromLocationDataProvider"),
