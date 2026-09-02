@@ -3,6 +3,322 @@
   "locales": {
     "ko": {
       "messages": {
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.desc": {
+          "source": "Creates a new draft email from the supplied recipient addresses, subject, body, and attachments, and stores it in Gmail's drafts folder without sending it, so that a person can review and send it, or so that `send-draft` can send it later. Set `thread_id` and `in_reply_to` to draft a reply within an existing conversation",
+          "message": "제공된 수신자 주소, 제목, 본문 및 첨부 파일로 새 임시보관 메일을 만들어 보내지 않고 Gmail 임시보관함에 저장합니다. 이를 통해 사람이 검토한 후 보내거나 나중에 `send-draft`(으)로 보낼 수 있습니다. 기존 대화 안에서 답장을 작성하려면 `thread_id`와 `in_reply_to`을(를) 설정하세요."
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.display_name": {
+          "source": "Create a Draft",
+          "message": "임시보관 메일 만들기"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Y2M.desc": {
+          "source": "One or more `Cc:` addresses for the email",
+          "message": "이메일의 하나 이상의 `Cc:` 주소"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "참조"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Y2M.short_desc": {
+          "source": "Carbon copy addresses",
+          "message": "참조(CC) 주소"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YXR0YWNobWVudHM.desc": {
+          "source": "Any attachments for the message",
+          "message": "메시지의 모든 첨부 파일"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "첨부 파일"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "Message attachments",
+          "message": "메시지 첨부 파일"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keQ.desc": {
+          "source": "The message body",
+          "message": "메시지 본문"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "메시지 본문"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keQ.short_desc": {
+          "source": "The message body",
+          "message": "메시지 본문"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "콘텐츠 인코딩 없음(권장하지 않음)"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "없음"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "콘텐츠 인코딩 없음(권장하지 않음)"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.desc": {
+          "source": "Ideal for binary data",
+          "message": "바이너리 데이터에 적합"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.display_name": {
+          "source": "Base64",
+          "message": "Base64"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.short_desc": {
+          "source": "Ideal for binary data",
+          "message": "바이너리 데이터에 적합"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "`quoted-printable` for string data, `base64` for binary data",
+          "message": "문자열 데이터의 경우 `quoted-printable`, 바이너리 데이터의 경우 `base64`"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Auto",
+          "message": "자동"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "'quoted-printable' for string data, 'base64' for binary data",
+          "message": "문자열 데이터의 경우 'quoted-printable', 바이너리 데이터의 경우 'base64'"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.desc": {
+          "source": "Ideal for string data",
+          "message": "문자열 데이터에 적합"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.display_name": {
+          "source": "Quoted Printable",
+          "message": "Quoted Printable"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.short_desc": {
+          "source": "Ideal for string data",
+          "message": "문자열 데이터에 적합"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.desc": {
+          "source": "The encoding to use for the attachment:\n- `default`: `quoted-printable` for string data, `base64` for binary data\n- `none`: no content encoding (not recommended)\n- `quoted-printable`: quoted printable encoding \n- `base64`: base64 encoding",
+          "message": "첨부 파일에 사용할 인코딩:\n- `default`: 문자열 데이터의 경우 `quoted-printable`, 바이너리 데이터의 경우 `base64`\n- `none`: 콘텐츠 인코딩 없음(권장되지 않음)\n- `quoted-printable`: quoted printable 인코딩\n- `base64`: base64 인코딩"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.display_name": {
+          "source": "Body Encoding",
+          "message": "본문 인코딩"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.short_desc": {
+          "source": "The encoding to use for the attachment",
+          "message": "첨부 파일에 사용할 인코딩"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTML 텍스트"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTML 텍스트"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "일반 텍스트"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "일반 텍스트"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.desc": {
+          "source": "The MIME type of the message body",
+          "message": "메시지 본문의 MIME 유형"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.display_name": {
+          "source": "Body Mime Type",
+          "message": "본문 MIME 유형"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.short_desc": {
+          "source": "The MIME type of the message body",
+          "message": "메시지 본문의 MIME 유형"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YmNj.desc": {
+          "source": "One or more `Bcc:` addresses for the email",
+          "message": "이메일의 하나 이상의 `Bcc:` 주소"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "숨은 참조"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YmNj.short_desc": {
+          "source": "Blind carbon copy addresses",
+          "message": "숨은 참조 주소"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.aW5fcmVwbHlfdG8.desc": {
+          "source": "The `Message-ID` header value of the message being answered, including the angle brackets; sent as the `In-Reply-To` header and, unless `references` is set, also as the `References` header, so that mail clients and Gmail thread the reply under the original message. Watch events carry this value as `Message-ID`",
+          "message": "답장하는 메시지의 `Message-ID` 헤더 값이며 꺾쇠괄호를 포함합니다. `In-Reply-To` 헤더로 전송되고, `references`이(가) 설정되지 않은 경우 `References` 헤더로도 전송되므로 메일 클라이언트와 Gmail이 답장을 원본 메시지 아래에 스레드로 묶습니다. 감시 이벤트는 이 값을 `Message-ID`(으)로 전달합니다."
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.aW5fcmVwbHlfdG8.display_name": {
+          "source": "In Reply To",
+          "message": "답장 대상"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.aW5fcmVwbHlfdG8.short_desc": {
+          "source": "The Message-ID header value of the message being answered",
+          "message": "답장하는 메시지의 Message-ID 헤더 값"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.c2VuZGVy.desc": {
+          "source": "The sender's address for the email",
+          "message": "이메일 발신자 주소"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "발신자"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.c2VuZGVy.short_desc": {
+          "source": "The sender's address for the email",
+          "message": "이메일 발신자 주소"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.c3ViamVjdA.desc": {
+          "source": "The subject for the email",
+          "message": "이메일 제목"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "제목"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.c3ViamVjdA.short_desc": {
+          "source": "The subject for the email",
+          "message": "이메일 제목"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.cmVmZXJlbmNlcw.desc": {
+          "source": "The `References` header value: the `Message-ID` values of the messages in the conversation being answered, oldest first, separated by spaces and including the angle brackets. If not set, `in_reply_to` is used. Watch events carry the original message's `References` header",
+          "message": "`References` 헤더 값입니다. 답장하는 대화에 포함된 메시지들의 `Message-ID` 값을 가장 오래된 것부터 공백으로 구분하고 꺾쇠괄호를 포함하여 지정합니다. 설정하지 않으면 `in_reply_to`이(가) 사용됩니다. 감시 이벤트는 원본 메시지의 `References` 헤더를 전달합니다."
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.cmVmZXJlbmNlcw.display_name": {
+          "source": "References",
+          "message": "참조"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.cmVmZXJlbmNlcw.short_desc": {
+          "source": "The Message-ID header values of the conversation being answered",
+          "message": "답장하는 대화의 Message-ID 헤더 값"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.dG8.desc": {
+          "source": "One or more `To:` addresses for the email",
+          "message": "이메일의 하나 이상의 `To:` 주소"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.dG8.display_name": {
+          "source": "To",
+          "message": "받는 사람"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.dG8.short_desc": {
+          "source": "Message recipient addresses",
+          "message": "메시지 수신자 주소"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.dGhyZWFkX2lk.desc": {
+          "source": "The ID of the Gmail thread to add the message to; set this to reply within an existing conversation. Gmail only honors it when `subject` matches the thread's subject and `in_reply_to` (or `references`) names a message in the thread. Watch events carry this value as `threadId`",
+          "message": "메시지를 추가할 Gmail 스레드의 ID입니다. 기존 대화 안에서 답장하려면 이 값을 설정하세요. Gmail은 `subject`이(가) 스레드의 제목과 일치하고 `in_reply_to`(또는 `references`)가 스레드 내 메시지를 가리킬 때만 이 값을 적용합니다. 감시 이벤트는 이 값을 `threadId`(으)로 전달합니다."
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.dGhyZWFkX2lk.display_name": {
+          "source": "Thread ID",
+          "message": "스레드 ID"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.dGhyZWFkX2lk.short_desc": {
+          "source": "The ID of the Gmail thread to add the message to",
+          "message": "메시지를 추가할 Gmail 스레드의 ID"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.short_desc": {
+          "source": "Create a new draft email in Gmail without sending it",
+          "message": "보내지 않고 Gmail에 새 임시보관 메일을 만듭니다"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.desc": {
+          "source": "Creates a new user label in the account and returns it with the ID that `modify-message-labels` takes",
+          "message": "계정에 새 사용자 라벨을 만들고 `modify-message-labels`이(가) 사용하는 ID와 함께 반환합니다."
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.display_name": {
+          "source": "Create a Label",
+          "message": "라벨 만들기"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmxhYmVsSGlkZQ.desc": {
+          "source": "Do not show the label in the label list",
+          "message": "라벨 목록에 라벨을 표시하지 않습니다"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmxhYmVsSGlkZQ.display_name": {
+          "source": "Hide",
+          "message": "숨기기"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmxhYmVsU2hvd0lmVW5yZWFk.desc": {
+          "source": "Show the label in the label list only while it has unread messages",
+          "message": "읽지 않은 메시지가 있는 동안에만 라벨 목록에 라벨을 표시합니다"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmxhYmVsU2hvd0lmVW5yZWFk.display_name": {
+          "source": "Show If Unread",
+          "message": "읽지 않은 항목이 있을 때 표시"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmxhYmVsU2hvdw.desc": {
+          "source": "Show the label in the label list",
+          "message": "라벨 목록에 라벨을 표시합니다"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmxhYmVsU2hvdw.display_name": {
+          "source": "Show",
+          "message": "표시"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.desc": {
+          "source": "Whether the label is shown in the label list of the Gmail web interface",
+          "message": "Gmail 웹 인터페이스의 라벨 목록에 라벨을 표시할지 여부"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.display_name": {
+          "source": "Label List Visibility",
+          "message": "라벨 목록 표시 여부"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.short_desc": {
+          "source": "Whether the label is shown in the label list",
+          "message": "라벨을 라벨 목록에 표시할지 여부"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.allowed-value.c3RyaW5nOmhpZGU.desc": {
+          "source": "Do not show messages with the label in the message list",
+          "message": "이 라벨이 있는 메시지를 메시지 목록에 표시하지 않습니다"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.allowed-value.c3RyaW5nOmhpZGU.display_name": {
+          "source": "Hide",
+          "message": "숨기기"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.allowed-value.c3RyaW5nOnNob3c.desc": {
+          "source": "Show messages with the label in the message list",
+          "message": "이 라벨이 있는 메시지를 메시지 목록에 표시합니다"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.allowed-value.c3RyaW5nOnNob3c.display_name": {
+          "source": "Show",
+          "message": "표시"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.desc": {
+          "source": "Whether messages with the label are shown in the message list of the Gmail web interface",
+          "message": "Gmail 웹 인터페이스의 메시지 목록에 이 라벨이 있는 메시지를 표시할지 여부"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.display_name": {
+          "source": "Message List Visibility",
+          "message": "메시지 목록 표시 여부"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.short_desc": {
+          "source": "Whether messages with the label are shown in the message list",
+          "message": "이 라벨이 있는 메시지를 메시지 목록에 표시할지 여부"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.desc": {
+          "source": "The display name of the label; use `/` to nest a label under another, ex: `Projects/Alpha`",
+          "message": "라벨의 표시 이름입니다. 라벨을 다른 라벨 아래에 중첩하려면 `/`을(를) 사용하세요(예: `Projects/Alpha`)."
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.display_name": {
+          "source": "Label Name",
+          "message": "라벨 이름"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.short_desc": {
+          "source": "The display name of the label",
+          "message": "라벨의 표시 이름"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.short_desc": {
+          "source": "Create a new user label in the account",
+          "message": "계정에 새 사용자 라벨을 만듭니다"
+        },
         "app.R21haWw.action.Z2V0.desc": {
           "source": "Retrieve a message",
           "message": "메시지 가져오기"
@@ -63,6 +379,90 @@
           "source": "Retrieve an attachment",
           "message": "첨부 파일 가져오기"
         },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.desc": {
+          "source": "Retrieves a draft and the message it holds in the requested `format`",
+          "message": "임시보관 메일과 여기에 포함된 메시지를 요청한 `format`(으)로 가져옵니다."
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.display_name": {
+          "source": "Retrieve a Draft",
+          "message": "임시보관 메일 가져오기"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1ldGFkYXRh.desc": {
+          "source": "Message IDs, labels, snippet, and headers only; no body",
+          "message": "메시지 ID, 라벨, 스니펫 및 헤더만 포함하며 본문은 포함하지 않습니다."
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1ldGFkYXRh.display_name": {
+          "source": "Metadata",
+          "message": "메타데이터"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1ldGFkYXRh.short_desc": {
+          "source": "Message IDs, labels, snippet, and headers only",
+          "message": "메시지 ID, 라벨, 스니펫 및 헤더만"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1pbmltYWw.desc": {
+          "source": "Message IDs and labels only; no headers and no body",
+          "message": "메시지 ID와 라벨만 포함하며 헤더와 본문은 포함하지 않습니다."
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "Minimal",
+          "message": "최소"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1pbmltYWw.short_desc": {
+          "source": "Message IDs and labels only",
+          "message": "메시지 ID와 라벨만"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOmZ1bGw.desc": {
+          "source": "The complete message including all headers and the MIME body parts; attachment data is not included and must be retrieved with `get-attachment`",
+          "message": "모든 헤더와 MIME 본문 파트를 포함한 전체 메시지입니다. 첨부 파일 데이터는 포함되지 않으므로 `get-attachment`(으)로 가져와야 합니다."
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "Full",
+          "message": "전체"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOmZ1bGw.short_desc": {
+          "source": "The complete message including all headers and the body",
+          "message": "모든 헤더와 본문을 포함한 전체 메시지"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOnJhdw.desc": {
+          "source": "The complete message as base64url-encoded MIME data in `raw`; the body is not parsed",
+          "message": "`raw`에 base64url로 인코딩된 MIME 데이터 형태로 담긴 전체 메시지입니다. 본문은 파싱되지 않습니다."
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOnJhdw.display_name": {
+          "source": "Raw",
+          "message": "원본"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOnJhdw.short_desc": {
+          "source": "The complete message as base64url-encoded MIME data",
+          "message": "base64url로 인코딩된 MIME 데이터 형태의 전체 메시지"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.desc": {
+          "source": "How much of the draft's message to retrieve; if not set, the complete message is returned",
+          "message": "임시보관 메일의 메시지를 어느 범위까지 가져올지입니다. 설정하지 않으면 전체 메시지가 반환됩니다."
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.display_name": {
+          "source": "Message Format",
+          "message": "메시지 형식"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.short_desc": {
+          "source": "How much of the draft's message to retrieve",
+          "message": "임시보관 메일의 메시지를 어느 범위까지 가져올지"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.aWQ.desc": {
+          "source": "The ID of the draft to retrieve; `list-drafts` and `create-draft` return this value as `id`",
+          "message": "가져올 임시보관 메일의 ID입니다. `list-drafts`와 `create-draft`은(는) 이 값을 `id`(으)로 반환합니다."
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.aWQ.display_name": {
+          "source": "Draft ID",
+          "message": "임시보관 메일 ID"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.aWQ.short_desc": {
+          "source": "The ID of the draft to retrieve",
+          "message": "가져올 임시보관 메일의 ID"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.short_desc": {
+          "source": "Retrieve a draft",
+          "message": "임시보관 메일을 가져옵니다"
+        },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.desc": {
           "source": "Permanently deletes a message. **This cannot be undone**: the message does not go to the trash and no copy remains, so use `trash-message` unless the message must be destroyed immediately.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed.\n\nThe Gmail API returns no content for this call",
           "message": "메시지를 영구적으로 삭제합니다. **이 작업은 취소할 수 없습니다**: 메시지가 휴지통으로 이동하지 않으며 복사본도 남지 않으므로, 즉시 파기해야 하는 경우가 아니라면 `trash-message`을(를) 사용하세요.\n\n처리가 성공한 후 이벤트가 전달하는 `message_id`을(를) 사용하여 `watch` 또는 `watch-attachment` 이벤트의 컨슈머에서 이 작업을 사용하세요. `delete_messages`을(를) 사용하여 감시(watch) 자체에서 삭제하면 컨슈머의 성공 여부와 관계없이 이벤트가 발생하는 즉시 메시지가 삭제됩니다.\n\nGmail API는 이 호출에 대해 응답 본문을 반환하지 않습니다."
@@ -86,6 +486,30 @@
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
           "source": "Permanently delete a message; this cannot be undone",
           "message": "메시지를 영구적으로 삭제합니다(취소할 수 없음)."
+        },
+        "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.desc": {
+          "source": "Permanently deletes a draft. **This cannot be undone**: the draft does not go to the trash and no copy remains.\n\nThe Gmail API returns no content for this call",
+          "message": "임시보관 메일을 영구적으로 삭제합니다. **이 작업은 취소할 수 없습니다**: 임시보관 메일은 휴지통으로 이동하지 않으며 복사본도 남지 않습니다.\n\nGmail API는 이 호출에 대해 아무 내용도 반환하지 않습니다."
+        },
+        "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.display_name": {
+          "source": "Delete a Draft",
+          "message": "임시보관 메일 삭제"
+        },
+        "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.option.aWQ.desc": {
+          "source": "The ID of the draft to delete permanently; `list-drafts` and `create-draft` return this value as `id`",
+          "message": "영구적으로 삭제할 임시보관 메일의 ID입니다. `list-drafts`와 `create-draft`은(는) 이 값을 `id`(으)로 반환합니다."
+        },
+        "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.option.aWQ.display_name": {
+          "source": "Draft ID",
+          "message": "임시보관 메일 ID"
+        },
+        "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.option.aWQ.short_desc": {
+          "source": "The ID of the draft to delete permanently",
+          "message": "영구적으로 삭제할 임시보관 메일의 ID"
+        },
+        "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.short_desc": {
+          "source": "Permanently delete a draft; this cannot be undone",
+          "message": "임시보관 메일을 영구적으로 삭제합니다. 이 작업은 취소할 수 없습니다"
         },
         "app.R21haWw.action.bGlzdA.desc": {
           "source": "Search for messages in the account",
@@ -158,6 +582,246 @@
         "app.R21haWw.action.bGlzdA.short_desc": {
           "source": "Search for messages",
           "message": "메시지 검색"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.desc": {
+          "source": "Search for messages in the account and return each matching message with its metadata, instead of the bare message and thread IDs that `list` returns. Each match is retrieved separately in the requested `format`, so a page of `maxResults` messages costs `maxResults` + 1 API requests; keep `maxResults` small and use `pageToken` to walk further pages",
+          "message": "계정에서 메시지를 검색하고, `list`이(가) 반환하는 메시지 ID와 스레드 ID만이 아니라 일치하는 각 메시지를 메타데이터와 함께 반환합니다. 일치하는 각 메시지는 요청한 `format`(으)로 개별 조회되므로 `maxResults`개의 메시지가 있는 한 페이지에는 `maxResults` + 1회의 API 요청이 필요합니다. `maxResults`을(를) 작게 유지하고 다음 페이지는 `pageToken`(으)로 조회하세요."
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.display_name": {
+          "source": "Search for Messages with Metadata",
+          "message": "메타데이터와 함께 메시지 검색"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1ldGFkYXRh.desc": {
+          "source": "Message IDs, labels, snippet, and the headers named in `metadata_headers` only; no body",
+          "message": "메시지 ID, 라벨, 스니펫 및 `metadata_headers`에 지정된 헤더만 포함하며 본문은 포함하지 않습니다."
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1ldGFkYXRh.display_name": {
+          "source": "Metadata",
+          "message": "메타데이터"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1ldGFkYXRh.short_desc": {
+          "source": "Message IDs, labels, snippet, and the requested headers only",
+          "message": "메시지 ID, 라벨, 스니펫 및 요청한 헤더만"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.allowed-value.c3RyaW5nOmZ1bGw.desc": {
+          "source": "The complete message including all headers and the MIME body parts; attachment data is not included and must be retrieved with `get-attachment`",
+          "message": "모든 헤더와 MIME 본문 파트를 포함한 전체 메시지입니다. 첨부 파일 데이터는 포함되지 않으므로 `get-attachment`(으)로 가져와야 합니다."
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "Full",
+          "message": "전체"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.allowed-value.c3RyaW5nOmZ1bGw.short_desc": {
+          "source": "The complete message including all headers and the body",
+          "message": "모든 헤더와 본문을 포함한 전체 메시지"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.desc": {
+          "source": "How much of each matching message to retrieve",
+          "message": "일치하는 각 메시지를 어느 범위까지 가져올지"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.display_name": {
+          "source": "Message Format",
+          "message": "메시지 형식"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.short_desc": {
+          "source": "How much of each matching message to retrieve",
+          "message": "일치하는 각 메시지를 어느 범위까지 가져올지"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.aW5jbHVkZVNwYW1UcmFzaA.desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "검색 시 스팸 및 휴지통 폴더를 포함할까요?"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.aW5jbHVkZVNwYW1UcmFzaA.display_name": {
+          "source": "Include Spam and Trash?",
+          "message": "스팸 및 휴지통 포함 여부"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.aW5jbHVkZVNwYW1UcmFzaA.short_desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "검색 시 스팸 및 휴지통 폴더를 포함할까요?"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bGFiZWxJZHM.desc": {
+          "source": "Only return messages with labels that match all of the specified label IDs. Messages in a thread might have labels that other messages in the same thread don't have",
+          "message": "지정된 모든 레이블 ID와 일치하는 레이블이 있는 메시지만 반환합니다. 스레드의 특정 메시지에는 동일한 스레드의 다른 메시지에는 없는 레이블이 포함되어 있을 수 있습니다."
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bGFiZWxJZHM.display_name": {
+          "source": "Labels",
+          "message": "라벨"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bGFiZWxJZHM.short_desc": {
+          "source": "Only return messages with labels that match all of the specified label IDs",
+          "message": "지정된 모든 레이블 ID와 일치하는 레이블이 있는 메시지만 반환"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of results to return; each message returned costs one additional API request",
+          "message": "반환할 최대 결과 수입니다. 반환되는 메시지마다 API 요청이 한 번 추가로 필요합니다."
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "최대 결과 수"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of results to return",
+          "message": "반환할 최대 결과 수"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bWV0YWRhdGFfaGVhZGVycw.desc": {
+          "source": "The message headers to retrieve for each matching message; ignored unless `format` is `metadata`",
+          "message": "일치하는 각 메시지에 대해 가져올 메시지 헤더입니다. `format`이(가) `metadata`이(가) 아니면 무시됩니다."
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bWV0YWRhdGFfaGVhZGVycw.display_name": {
+          "source": "Metadata Headers",
+          "message": "메타데이터 헤더"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bWV0YWRhdGFfaGVhZGVycw.short_desc": {
+          "source": "The message headers to retrieve for each matching message",
+          "message": "일치하는 각 메시지에 대해 가져올 메시지 헤더"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.cGFnZVRva2Vu.desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "목록에서 특정 결과 페이지를 가져오기 위한 페이지 토큰"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "페이지 토큰"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "목록에서 특정 결과 페이지를 가져오기 위한 페이지 토큰"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.cQ.desc": {
+          "source": "The gmail search criteria for retrieving the messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
+          "message": "메시지를 가져오기 위한 Gmail 검색 기준(예: `in:inbox to:me@gmail.com subject:hello is:unread`)"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "검색 기준"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.cQ.short_desc": {
+          "source": "The gmail search criteria for retrieving the messages",
+          "message": "메시지를 가져오기 위한 Gmail 검색 기준"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.short_desc": {
+          "source": "Search for messages and return each match with its headers",
+          "message": "메시지를 검색하고 일치하는 각 메시지를 헤더와 함께 반환합니다"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.desc": {
+          "source": "Search for drafts in the account; each draft is returned with its ID and the ID and thread ID of the message it holds. Use `get-draft` to retrieve a draft's content",
+          "message": "계정에서 임시보관 메일을 검색합니다. 각 임시보관 메일은 자체 ID와 함께 포함된 메시지의 ID 및 스레드 ID를 함께 반환합니다. 임시보관 메일의 내용을 가져오려면 `get-draft`을(를) 사용하세요."
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.display_name": {
+          "source": "Search for Drafts",
+          "message": "임시보관 메일 검색"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.aW5jbHVkZVNwYW1UcmFzaA.desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "검색 시 스팸 및 휴지통 폴더를 포함할까요?"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.aW5jbHVkZVNwYW1UcmFzaA.display_name": {
+          "source": "Include Spam and Trash?",
+          "message": "스팸 및 휴지통 포함 여부"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.aW5jbHVkZVNwYW1UcmFzaA.short_desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "검색 시 스팸 및 휴지통 폴더를 포함할까요?"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of results to return",
+          "message": "반환할 최대 결과 수"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "최대 결과 수"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of results to return",
+          "message": "반환할 최대 결과 수"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.cGFnZVRva2Vu.desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "목록에서 특정 결과 페이지를 가져오기 위한 페이지 토큰"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "페이지 토큰"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "목록에서 특정 결과 페이지를 가져오기 위한 페이지 토큰"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.cQ.desc": {
+          "source": "The gmail search criteria for retrieving the drafts; ex: `to:me@gmail.com subject:hello`; if not set, all drafts are returned",
+          "message": "임시보관 메일을 가져오기 위한 Gmail 검색 기준입니다(예: `to:me@gmail.com subject:hello`). 설정하지 않으면 모든 임시보관 메일이 반환됩니다."
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "검색 기준"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.cQ.short_desc": {
+          "source": "The gmail search criteria for retrieving the drafts",
+          "message": "임시보관 메일을 가져오기 위한 Gmail 검색 기준"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.short_desc": {
+          "source": "Search for drafts",
+          "message": "임시보관 메일을 검색합니다"
+        },
+        "app.R21haWw.action.bGlzdC1sYWJlbHM.desc": {
+          "source": "Lists all labels in the account, both Gmail's system labels (`INBOX`, `UNREAD`, `STARRED`, and so on) and user-created labels, each with the ID that `modify-message-labels` and the `labelIds` search option take",
+          "message": "계정의 모든 라벨을 나열합니다. Gmail 시스템 라벨(`INBOX`, `UNREAD`, `STARRED` 등)과 사용자가 만든 라벨을 모두 포함하며, 각 라벨은 `modify-message-labels` 및 검색 옵션 `labelIds`이(가) 사용하는 ID와 함께 반환됩니다."
+        },
+        "app.R21haWw.action.bGlzdC1sYWJlbHM.display_name": {
+          "source": "List Labels",
+          "message": "라벨 목록"
+        },
+        "app.R21haWw.action.bGlzdC1sYWJlbHM.short_desc": {
+          "source": "List all labels in the account",
+          "message": "계정의 모든 라벨을 나열합니다"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.desc": {
+          "source": "Adds the labels in `addLabelIds` to and removes the labels in `removeLabelIds` from the message identified by `id` in one call. Gmail's system labels are changed the same way: remove `UNREAD` to mark a message as read, remove `INBOX` to archive it, or add `STARRED` to star it. Use `list-labels` to find a label's ID or `create-label` to make a new one",
+          "message": "한 번의 호출로 `id`(으)로 지정된 메시지에 `addLabelIds`의 라벨을 추가하고 `removeLabelIds`의 라벨을 제거합니다. Gmail 시스템 라벨도 같은 방식으로 변경됩니다. `UNREAD`을(를) 제거하면 읽음으로 표시되고, `INBOX`을(를) 제거하면 보관 처리되며, `STARRED`을(를) 추가하면 별표가 표시됩니다. 라벨 ID를 찾으려면 `list-labels`을(를), 새 라벨을 만들려면 `create-label`을(를) 사용하세요."
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.display_name": {
+          "source": "Change a Message's Labels",
+          "message": "메시지 라벨 변경"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.YWRkTGFiZWxJZHM.desc": {
+          "source": "The IDs of the labels to add to the message; a label is identified by its ID (ex: `INBOX`, `STARRED`, `Label_12`), not its name",
+          "message": "메시지에 추가할 라벨의 ID입니다. 라벨은 이름이 아니라 ID(예: `INBOX`, `STARRED`, `Label_12`)로 식별됩니다."
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.YWRkTGFiZWxJZHM.display_name": {
+          "source": "Labels to Add",
+          "message": "추가할 라벨"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.YWRkTGFiZWxJZHM.short_desc": {
+          "source": "The IDs of the labels to add to the message",
+          "message": "메시지에 추가할 라벨의 ID"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.aWQ.desc": {
+          "source": "The ID of the message to relabel; watch events carry this value as `message_id`",
+          "message": "라벨을 변경할 메시지의 ID입니다. 감시 이벤트는 이 값을 `message_id`(으)로 전달합니다."
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "메시지 ID"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.aWQ.short_desc": {
+          "source": "The ID of the message to relabel",
+          "message": "라벨을 변경할 메시지의 ID"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.cmVtb3ZlTGFiZWxJZHM.desc": {
+          "source": "The IDs of the labels to remove from the message; a label is identified by its ID (ex: `INBOX`, `UNREAD`, `Label_12`), not its name",
+          "message": "메시지에서 제거할 라벨의 ID입니다. 라벨은 이름이 아니라 ID(예: `INBOX`, `UNREAD`, `Label_12`)로 식별됩니다."
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.cmVtb3ZlTGFiZWxJZHM.display_name": {
+          "source": "Labels to Remove",
+          "message": "제거할 라벨"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.cmVtb3ZlTGFiZWxJZHM.short_desc": {
+          "source": "The IDs of the labels to remove from the message",
+          "message": "메시지에서 제거할 라벨의 ID"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.short_desc": {
+          "source": "Add labels to and remove labels from a message",
+          "message": "메시지에 라벨을 추가하고 메시지에서 라벨을 제거합니다"
         },
         "app.R21haWw.action.bWFrZS1hcGktY2FsbA.desc": {
           "source": "Make a custom HTTP / REST API call to **Gmail** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
@@ -483,9 +1147,33 @@
           "source": "Make a custom API call to Gmail",
           "message": "Gmail에 커스텀 API 호출 수행"
         },
+        "app.R21haWw.action.c2VuZC1kcmFmdA.desc": {
+          "source": "Sends the draft identified by `id` as it is to the recipients it names; Gmail removes the draft and returns the sent message. Use `get-draft` first to review what will be sent",
+          "message": "`id`(으)로 지정된 임시보관 메일을 그 안에 지정된 수신자에게 그대로 보냅니다. Gmail은 임시보관 메일을 삭제하고 보낸 메시지를 반환합니다. 무엇이 전송될지 확인하려면 먼저 `get-draft`을(를) 사용하세요."
+        },
+        "app.R21haWw.action.c2VuZC1kcmFmdA.display_name": {
+          "source": "Send a Draft",
+          "message": "임시보관 메일 보내기"
+        },
+        "app.R21haWw.action.c2VuZC1kcmFmdA.option.aWQ.desc": {
+          "source": "The ID of the draft to send; `list-drafts` and `create-draft` return this value as `id`",
+          "message": "보낼 임시보관 메일의 ID입니다. `list-drafts`와 `create-draft`은(는) 이 값을 `id`(으)로 반환합니다."
+        },
+        "app.R21haWw.action.c2VuZC1kcmFmdA.option.aWQ.display_name": {
+          "source": "Draft ID",
+          "message": "임시보관 메일 ID"
+        },
+        "app.R21haWw.action.c2VuZC1kcmFmdA.option.aWQ.short_desc": {
+          "source": "The ID of the draft to send",
+          "message": "보낼 임시보관 메일의 ID"
+        },
+        "app.R21haWw.action.c2VuZC1kcmFmdA.short_desc": {
+          "source": "Send an existing draft as it is",
+          "message": "기존 임시보관 메일을 그대로 보냅니다"
+        },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.desc": {
-          "source": "Creates a new outgoing email from the supplied recipient addresses, subject, body, and attachments, and transmits that new email through Gmail.",
-          "message": "제공된 수신자 주소, 제목, 본문 및 첨부 파일로 새 발신 이메일을 생성하고 Gmail을 통해 전송합니다."
+          "source": "Creates a new outgoing email from the supplied recipient addresses, subject, body, and attachments, and transmits that new email through Gmail. Set `thread_id` and `in_reply_to` to send the email as a reply within an existing conversation",
+          "message": "제공된 수신자 주소, 제목, 본문 및 첨부 파일로 새 발신 이메일을 생성하고 Gmail을 통해 전송합니다. 기존 대화 안에서 답장으로 보내려면 `thread_id`와 `in_reply_to`을(를) 설정하세요."
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
           "source": "Send a Message",
@@ -635,6 +1323,18 @@
           "source": "Blind carbon copy addresses",
           "message": "숨은 참조 주소"
         },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.aW5fcmVwbHlfdG8.desc": {
+          "source": "The `Message-ID` header value of the message being answered, including the angle brackets; sent as the `In-Reply-To` header and, unless `references` is set, also as the `References` header, so that mail clients and Gmail thread the reply under the original message. Watch events carry this value as `Message-ID`",
+          "message": "답장하는 메시지의 `Message-ID` 헤더 값이며 꺾쇠괄호를 포함합니다. `In-Reply-To` 헤더로 전송되고, `references`이(가) 설정되지 않은 경우 `References` 헤더로도 전송되므로 메일 클라이언트와 Gmail이 답장을 원본 메시지 아래에 스레드로 묶습니다. 감시 이벤트는 이 값을 `Message-ID`(으)로 전달합니다."
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.aW5fcmVwbHlfdG8.display_name": {
+          "source": "In Reply To",
+          "message": "답장 대상"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.aW5fcmVwbHlfdG8.short_desc": {
+          "source": "The Message-ID header value of the message being answered",
+          "message": "답장하는 메시지의 Message-ID 헤더 값"
+        },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c2VuZGVy.desc": {
           "source": "The sender's address for the email",
           "message": "이메일 발신자 주소"
@@ -659,6 +1359,18 @@
           "source": "The subject for the email",
           "message": "이메일 제목"
         },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.cmVmZXJlbmNlcw.desc": {
+          "source": "The `References` header value: the `Message-ID` values of the messages in the conversation being answered, oldest first, separated by spaces and including the angle brackets. If not set, `in_reply_to` is used. Watch events carry the original message's `References` header",
+          "message": "`References` 헤더 값입니다. 답장하는 대화에 포함된 메시지들의 `Message-ID` 값을 가장 오래된 것부터 공백으로 구분하고 꺾쇠괄호를 포함하여 지정합니다. 설정하지 않으면 `in_reply_to`이(가) 사용됩니다. 감시 이벤트는 원본 메시지의 `References` 헤더를 전달합니다."
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.cmVmZXJlbmNlcw.display_name": {
+          "source": "References",
+          "message": "참조"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.cmVmZXJlbmNlcw.short_desc": {
+          "source": "The Message-ID header values of the conversation being answered",
+          "message": "답장하는 대화의 Message-ID 헤더 값"
+        },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.desc": {
           "source": "One or more `To:` addresses for the email",
           "message": "이메일의 하나 이상의 `To:` 주소"
@@ -670,6 +1382,18 @@
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.short_desc": {
           "source": "Message recipient addresses",
           "message": "메시지 수신자 주소"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dGhyZWFkX2lk.desc": {
+          "source": "The ID of the Gmail thread to add the message to; set this to reply within an existing conversation. Gmail only honors it when `subject` matches the thread's subject and `in_reply_to` (or `references`) names a message in the thread. Watch events carry this value as `threadId`",
+          "message": "메시지를 추가할 Gmail 스레드의 ID입니다. 기존 대화 안에서 답장하려면 이 값을 설정하세요. Gmail은 `subject`이(가) 스레드의 제목과 일치하고 `in_reply_to`(또는 `references`)가 스레드 내 메시지를 가리킬 때만 이 값을 적용합니다. 감시 이벤트는 이 값을 `threadId`(으)로 전달합니다."
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dGhyZWFkX2lk.display_name": {
+          "source": "Thread ID",
+          "message": "스레드 ID"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dGhyZWFkX2lk.short_desc": {
+          "source": "The ID of the Gmail thread to add the message to",
+          "message": "메시지를 추가할 Gmail 스레드의 ID"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {
           "source": "Create and transmit a new outgoing email through Gmail",
@@ -1030,6 +1754,30 @@
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
           "source": "Place an existing stored Gmail message in the recoverable trash folder",
           "message": "기존 저장된 Gmail 메시지를 복구 가능한 휴지통 폴더로 이동"
+        },
+        "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.desc": {
+          "source": "Moves the message identified by `id` out of Gmail's trash folder and back into the mailbox, undoing `trash-message`; a message that Gmail has already purged from the trash cannot be restored",
+          "message": "`id`(으)로 지정된 메시지를 Gmail 휴지통에서 메일함으로 다시 이동하여 `trash-message`을(를) 되돌립니다. Gmail이 이미 휴지통에서 완전히 삭제한 메시지는 복원할 수 없습니다."
+        },
+        "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.display_name": {
+          "source": "Restore a Message from the Trash",
+          "message": "휴지통에서 메시지 복원"
+        },
+        "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.option.aWQ.desc": {
+          "source": "The ID of the message to restore from the trash; watch events carry this value as `message_id`",
+          "message": "휴지통에서 복원할 메시지의 ID입니다. 감시 이벤트는 이 값을 `message_id`(으)로 전달합니다."
+        },
+        "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "메시지 ID"
+        },
+        "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.option.aWQ.short_desc": {
+          "source": "The ID of the message to restore from the trash",
+          "message": "휴지통에서 복원할 메시지의 ID"
+        },
+        "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.short_desc": {
+          "source": "Move a message from the trash back into the mailbox",
+          "message": "휴지통에 있는 메시지를 메일함으로 다시 이동합니다"
         },
         "app.R21haWw.desc": {
           "source": "Gmail services",

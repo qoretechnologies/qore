@@ -169,6 +169,14 @@ public class GmailMessageEventDataType inherits HashDataType {
                 "desc": "A unique ID for this email",
                 "type": AbstractDataProviderTypeMap."*string",
             },
+            "In-Reply-To": {
+                "display_name": "In Reply To",
+                "short_desc": "The Message-ID of the email this email replies to",
+                "desc": "The `Message-ID` of the email this email replies to, including the angle brackets; to "
+                    "answer this email in its thread, pass its own `Message-ID` as `in_reply_to` and its "
+                    "`threadId` as `thread_id` to the `send-message` or `create-draft` action",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
             "References": {
                 "display_name": "Email Reference ID",
                 "short_desc": "A unique ID for any email this email is in reply to",
