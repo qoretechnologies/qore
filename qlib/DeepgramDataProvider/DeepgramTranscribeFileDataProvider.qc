@@ -50,8 +50,9 @@ public class DeepgramTranscribeFileDataProvider inherits DeepgramDataProviderCom
     private hash<DataProviderInfo> getStaticInfoImpl() { return ProviderInfo; }
 
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        # value presence, not key presence: an unset option can arrive as a key with no value
         bool has_url = req.url.val();
-        bool has_audio = exists req.audio;
+        bool has_audio = req.audio.val();
         if (has_url == has_audio) {
             throw "DEEPGRAM-TRANSCRIBE-ERROR", sprintf("exactly one of \"url\" or \"audio\" must be "
                 "provided; got %s", has_url ? "both" : "neither");

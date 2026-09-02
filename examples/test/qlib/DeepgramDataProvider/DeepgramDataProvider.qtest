@@ -306,6 +306,16 @@ public class DeepgramDataProviderTest inherits QUnit::Test {
             ({"audio": {"name": "clip.wav"}},));
         # nothing was sent
         assertFalse(exists fake.last_method);
+
+        # an unset option can arrive as a key with no value; it must not count as an audio source
+        fake.response = <RestClient::RestResponseInfo>{
+            "body": {"results": {}},
+            "headers": {},
+        };
+        prov.doRequest({"url": "https://example.com/a.wav", "audio": NOTHING, "model": "nova-3"});
+        assertEq("POST", fake.last_method);
+        assertFalse(fake.last_raw);
+        assertEq("https://example.com/a.wav", fake.last_body.url);
     }
 
     #! Proves that the real REST client sends the audio bytes verbatim
