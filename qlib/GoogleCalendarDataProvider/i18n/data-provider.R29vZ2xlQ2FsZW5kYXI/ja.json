@@ -27,6 +27,42 @@
           "source": "Create an event in a calendar",
           "message": "カレンダーに予定を作成します"
         },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.desc": {
+          "source": "Retrieve a single event from a calendar by its event ID",
+          "message": "予定 ID を指定してカレンダーから 1 件の予定を取得します"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.display_name": {
+          "source": "Get Event",
+          "message": "イベントを取得"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.Y2FsZW5kYXI.desc": {
+          "source": "The calendar containing the event",
+          "message": "予定を含むカレンダー"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.Y2FsZW5kYXI.display_name": {
+          "source": "Calendar",
+          "message": "カレンダー"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.Y2FsZW5kYXI.short_desc": {
+          "source": "The calendar containing the event",
+          "message": "予定を含むカレンダー"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.ZXZlbnRJZA.desc": {
+          "source": "The ID of the event to retrieve; event IDs are returned in the `id` field of the events returned by the `list-events` action",
+          "message": "取得する予定の ID。予定 ID は、`list-events` アクションが返す予定の `id` フィールドで返されます"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.ZXZlbnRJZA.display_name": {
+          "source": "Event ID",
+          "message": "予定 ID"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.ZXZlbnRJZA.short_desc": {
+          "source": "The ID of the event to retrieve",
+          "message": "取得する予定の ID"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.short_desc": {
+          "source": "Retrieve an event from a calendar",
+          "message": "カレンダーから予定を取得します"
+        },
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.desc": {
           "source": "Delete an event from a calendar",
           "message": "カレンダーから予定を削除します"
@@ -50,6 +86,182 @@
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.short_desc": {
           "source": "Delete an event from a calendar",
           "message": "カレンダーから予定を削除します"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.desc": {
+          "source": "List the calendars in the authenticated user's calendar list; the `id` of each entry can be used as the calendar for the event actions",
+          "message": "認証済みユーザーのカレンダーリストにあるカレンダーを一覧表示します。各エントリの `id` は、予定に関するアクションのカレンダーとして使用できます"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.display_name": {
+          "source": "List Calendars",
+          "message": "カレンダーを一覧表示"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of calendar list entries to return on one result page; incomplete pages can be detected by a non-empty `nextPageToken` field in the response. The default is `100`; the page size can never be larger than `250`",
+          "message": "1 ページの結果として返すカレンダーリストのエントリの最大数。不完全なページは、レスポンスの `nextPageToken` フィールドが空でないことで検出できます。デフォルトは `100` で、ページサイズが `250` を超えることはありません"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Maximum Results",
+          "message": "最大結果数"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of calendars to return on one result page",
+          "message": "1 ページの結果として返すカレンダーの最大数"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.c2hvd0hpZGRlbg.desc": {
+          "source": "If `True`, hidden calendar list entries are included in the result. The default is `False`",
+          "message": "`True` の場合、非表示のカレンダーリストのエントリが結果に含まれます。デフォルトは `False` です"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.c2hvd0hpZGRlbg.display_name": {
+          "source": "Show Hidden",
+          "message": "非表示を表示"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.c2hvd0hpZGRlbg.short_desc": {
+          "source": "Include hidden calendar list entries in the result",
+          "message": "非表示のカレンダーリストのエントリを結果に含めます"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.cGFnZVRva2Vu.desc": {
+          "source": "Token specifying which result page to return; use the `nextPageToken` value from the previous response to retrieve the next page",
+          "message": "返す結果ページを指定するトークン。次のページを取得するには、前のレスポンスの `nextPageToken` の値を使用します"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "ページトークン"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Token specifying which result page to return",
+          "message": "返す結果ページを指定するトークン"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.short_desc": {
+          "source": "List the calendars in the user's calendar list",
+          "message": "ユーザーのカレンダーリストにあるカレンダーを一覧表示します"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.desc": {
+          "source": "List events in a calendar; the result can be restricted to a time window, filtered with free-text search terms, and paged with `maxResults` and `pageToken`",
+          "message": "カレンダーの予定を一覧表示します。結果は時間範囲で絞り込んだり、フリーテキストの検索語でフィルタしたり、`maxResults` と `pageToken` でページ分割したりできます"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.display_name": {
+          "source": "List Events",
+          "message": "イベントを一覧表示"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.Y2FsZW5kYXI.desc": {
+          "source": "The calendar to list events from",
+          "message": "予定を一覧表示するカレンダー"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.Y2FsZW5kYXI.display_name": {
+          "source": "Calendar",
+          "message": "カレンダー"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.Y2FsZW5kYXI.short_desc": {
+          "source": "The calendar to list events from",
+          "message": "予定を一覧表示するカレンダー"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.allowed-value.c3RyaW5nOnN0YXJ0VGltZQ.desc": {
+          "source": "Order by the start date/time (ascending); this is only available when `singleEvents` is `True`",
+          "message": "開始日時で並べ替え（昇順）。`singleEvents` が `True` の場合にのみ使用できます"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.allowed-value.c3RyaW5nOnVwZGF0ZWQ.desc": {
+          "source": "Order by last modification time (ascending)",
+          "message": "最終更新時刻で並べ替え（昇順）"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.desc": {
+          "source": "The order of the events returned in the result; the default is an unspecified, stable order.\nAcceptable values are:\n- `startTime`: Order by the start date/time (ascending); this is only available when `singleEvents` is `True`\n- `updated`: Order by last modification time (ascending)",
+          "message": "結果として返される予定の順序。デフォルトは未指定の安定した順序です。\n指定可能な値:\n- `startTime`: 開始日時で並べ替え（昇順）。`singleEvents` が `True` の場合にのみ使用できます\n- `updated`: 最終更新時刻で並べ替え（昇順）"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.display_name": {
+          "source": "Order By",
+          "message": "並べ替え順"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.short_desc": {
+          "source": "The order of the events returned in the result",
+          "message": "結果として返される予定の順序"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of events to return on one result page; the page may contain fewer events than this value, or none at all, even if more events match the query. Incomplete pages can be detected by a non-empty `nextPageToken` field in the response. The default is `250`; the page size can never be larger than `2500`",
+          "message": "1 ページの結果として返す予定の最大数。クエリに一致する予定がさらにあっても、ページに含まれる予定はこの値より少ないか、まったく含まれない場合があります。不完全なページは、レスポンスの `nextPageToken` フィールドが空でないことで検出できます。デフォルトは `250` で、ページサイズが `2500` を超えることはありません"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Maximum Results",
+          "message": "最大結果数"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of events to return on one result page",
+          "message": "1 ページの結果として返す予定の最大数"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2hvd0RlbGV0ZWQ.desc": {
+          "source": "If `True`, deleted events (with `status` equal to `cancelled`) are included in the result. Cancelled instances of recurring events (but not the underlying recurring event) are still included if `showDeleted` and `singleEvents` are both `False`; if both are `True`, only single instances of deleted events are returned. The default is `False`",
+          "message": "`True` の場合、削除された予定（`status` が `cancelled` のもの）が結果に含まれます。繰り返しの予定のキャンセルされたインスタンス（元になる繰り返しの予定は除く）は、`showDeleted` と `singleEvents` がどちらも `False` の場合でも含まれます。どちらも `True` の場合は、削除された予定の個々のインスタンスのみが返されます。デフォルトは `False` です"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2hvd0RlbGV0ZWQ.display_name": {
+          "source": "Show Deleted",
+          "message": "削除済みを表示"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2hvd0RlbGV0ZWQ.short_desc": {
+          "source": "Include deleted events in the result",
+          "message": "削除された予定を結果に含めます"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2luZ2xlRXZlbnRz.desc": {
+          "source": "If `True`, recurring events are expanded into their individual instances, and only single one-off events and instances of recurring events are returned, but not the underlying recurring events themselves. If `False`, each recurring event is returned once with its recurrence rule instead of its instances. Must be `True` to order the result by start time",
+          "message": "`True` の場合、繰り返しの予定は個々のインスタンスに展開され、単発の予定と繰り返しの予定のインスタンスのみが返され、元になる繰り返しの予定自体は返されません。`False` の場合、各繰り返しの予定はインスタンスの代わりに繰り返しルールとともに 1 回だけ返されます。結果を開始時刻で並べ替えるには `True` である必要があります"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2luZ2xlRXZlbnRz.display_name": {
+          "source": "Expand Recurring Events",
+          "message": "繰り返しの予定を展開"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2luZ2xlRXZlbnRz.short_desc": {
+          "source": "Expand recurring events into their individual instances",
+          "message": "繰り返しの予定を個々のインスタンスに展開します"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cGFnZVRva2Vu.desc": {
+          "source": "Token specifying which result page to return; use the `nextPageToken` value from the previous response to retrieve the next page",
+          "message": "返す結果ページを指定するトークン。次のページを取得するには、前のレスポンスの `nextPageToken` の値を使用します"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "ページトークン"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Token specifying which result page to return",
+          "message": "返す結果ページを指定するトークン"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cQ.desc": {
+          "source": "Free-text search terms to find events that match these terms in the `summary`, `description`, and `location` fields, in attendee and organizer display names and email addresses, and in working location properties",
+          "message": "`summary`、`description`、`location` の各フィールド、参加者と主催者の表示名およびメールアドレス、勤務場所のプロパティでこれらの語に一致する予定を検索するためのフリーテキストの検索語"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cQ.display_name": {
+          "source": "Search Terms",
+          "message": "検索語"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cQ.short_desc": {
+          "source": "Free-text search terms to find matching events",
+          "message": "一致する予定を検索するためのフリーテキストの検索語"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1heA.desc": {
+          "source": "Upper bound (exclusive) for an event's start time; only events that start before this time are returned. The default is not to filter by start time",
+          "message": "予定の開始時刻の上限（この値を含まない）。この時刻より前に開始する予定のみが返されます。デフォルトでは開始時刻によるフィルタは行われません"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1heA.display_name": {
+          "source": "End Time",
+          "message": "終了時刻"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1heA.short_desc": {
+          "source": "Only return events that start before this time",
+          "message": "この時刻より前に開始する予定のみを返します"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1pbg.desc": {
+          "source": "Lower bound (exclusive) for an event's end time; only events that end after this time are returned. The default is not to filter by end time",
+          "message": "予定の終了時刻の下限（この値を含まない）。この時刻より後に終了する予定のみが返されます。デフォルトでは終了時刻によるフィルタは行われません"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1pbg.display_name": {
+          "source": "Start Time",
+          "message": "開始時刻"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1pbg.short_desc": {
+          "source": "Only return events that end after this time",
+          "message": "この時刻より後に終了する予定のみを返します"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.short_desc": {
+          "source": "List events in a calendar",
+          "message": "カレンダーの予定を一覧表示します"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bWFrZS1hcGktY2FsbA.desc": {
           "source": "Make a custom HTTP / REST API call to **Google Calendar** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",

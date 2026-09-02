@@ -64,6 +64,7 @@ public class GoogleDataProviderTest inherits QUnit::Test {
     constructor() : Test("GoogleDataProviderTest Test", "1.0", \ARGV, MyOpts) {
         addTestCase("Discovery query value encoding", \queryValueEncodingTest());
         addTestCase("Discovery request target encoding", \requestTargetEncodingTest());
+        addTestCase("action catalog", \googleCalendarActionCatalogTest());
         addTestCase("test", \googleDataProviderTest());
         addTestCase("calendar test", \googleCalendarTest());
 
@@ -105,6 +106,14 @@ public class GoogleDataProviderTest inherits QUnit::Test {
             "a boolean-like string is rendered as the Discovery boolean string");
         assertEq("true", encoder.encode("singleEvents", string_type, bool_string_type.acceptsValue(True)),
             "the rendered Discovery boolean survives query encoding unchanged");
+        # Google APIs take timestamps as RFC 3339 strings (ex: timeMin / timeMax in events.list)
+        AbstractDataProviderType date_type = AbstractDataProviderTypeMap."date";
+        assertEq("2026-09-02T10%3A00%3A00%2B02%3A00",
+            encoder.encode("timeMin", date_type, 2026-09-02T10:00:00+02:00),
+            "date query values are serialized as RFC 3339 with the UTC offset");
+        assertEq("2026-09-02T08%3A00%3A00%2B00%3A00",
+            encoder.encode("timeMin", AbstractDataProviderTypeMap."*softdate", 2026-09-02T08:00:00Z),
+            "UTC dates carry an explicit zero offset, which RFC 3339 permits");
         assertEq(("first%20value", "second%26value"),
             map encoder.encode("items", string_type, $1),
                 ("first value", "second&value"),
@@ -170,6 +179,77 @@ public class GoogleDataProviderTest inherits QUnit::Test {
         return rv;
     }
 
+    #! The read-only calendar actions must be usable from the catalog alone
+    /** A consumer reading events or calendars needs first-class read actions with the filters the Google
+        Calendar API offers; each must be classified as read-only so the platform can offer it where mutating
+        actions are not allowed.
+    */
+    googleCalendarActionCatalogTest() {
+        hash<DataProviderActionInfo> list_events = DataProviderActionCatalog::getAppAction(
+            GoogleCalendarDataProvider::CalendarAppName, "list-events"
+        );
+        assertEq("/calendars/{calendar}/events/list", list_events.path);
+        assertEq("primary", list_events.path_vars.calendar.example_value, "the calendar path var has an example");
+        assertEq(DPAT_API, list_events.action_code);
+        assertEq(False, list_events.mutates_state, "listing events is read-only");
+        assertFalse(DataProviderActionCatalog::actionMutatesState(list_events),
+            "the catalog classifies listing events as read-only");
+        assertEq(("timeMin", "timeMax", "maxResults", "singleEvents", "orderBy", "q", "pageToken", "showDeleted"),
+            keys list_events.options, "the list action exposes the Google Calendar events.list filters");
+        assertTrue(list_events.options.timeMin.preselected, "the time window lower bound is offered upfront");
+        assertEq("*date", list_events.options.timeMin.type.getName(), "the time window is entered as dates");
+        assertEq("*date", list_events.options.timeMax.type.getName());
+        assertTrue(list_events.options.maxResults.preselected, "the page size is offered upfront");
+        assertEq("*int", list_events.options.maxResults.type.getName());
+        assertEq(20, list_events.options.maxResults.example_value);
+        assertEq(True, list_events.options.singleEvents.default_value,
+            "recurring events are expanded into instances by default");
+        assertEq("*bool", list_events.options.singleEvents.type.getName());
+        assertEq(("startTime", "updated"), map $1.value, list_events.options.orderBy.allowed_values,
+            "the ordering is offered as a dropdown");
+        assertTrue(list_events.options.orderBy.allowed_values[0].desc.find("`singleEvents`") >= 0,
+            "ordering by start time documents its dependency on expanded recurring events");
+        assertEq("*bool", list_events.options.showDeleted.type.getName());
+        map assertFalse(list_events.options{$1}.required, $1 + " is optional"), keys list_events.options;
+        assertOutputType(list_events, "Events");
+
+        hash<DataProviderActionInfo> get_event = DataProviderActionCatalog::getAppAction(
+            GoogleCalendarDataProvider::CalendarAppName, "get-event"
+        );
+        assertEq("/calendars/{calendar}/events/get", get_event.path);
+        assertEq("primary", get_event.path_vars.calendar.example_value);
+        assertEq(DPAT_API, get_event.action_code);
+        assertEq(False, get_event.mutates_state, "retrieving an event is read-only");
+        assertFalse(DataProviderActionCatalog::actionMutatesState(get_event));
+        assertEq(("eventId",), keys get_event.options, "the get action takes the event ID");
+        assertTrue(get_event.options.eventId.required, "the event ID is required");
+        assertTrue(get_event.options.eventId.preselected);
+        assertEq("string", get_event.options.eventId.type.getName());
+        assertOutputType(get_event, "Event");
+
+        hash<DataProviderActionInfo> list_calendars = DataProviderActionCatalog::getAppAction(
+            GoogleCalendarDataProvider::CalendarAppName, "list-calendars"
+        );
+        assertEq("/calendarList/list", list_calendars.path);
+        assertNothing(list_calendars.path_vars, "the calendar list is a root path");
+        assertEq(DPAT_API, list_calendars.action_code);
+        assertEq(False, list_calendars.mutates_state, "listing calendars is read-only");
+        assertFalse(DataProviderActionCatalog::actionMutatesState(list_calendars));
+        assertEq(("maxResults", "pageToken", "showHidden"), keys list_calendars.options,
+            "the calendar list action exposes the Google Calendar calendarList.list options");
+        assertEq("*int", list_calendars.options.maxResults.type.getName());
+        assertEq("*bool", list_calendars.options.showHidden.type.getName());
+        map assertFalse(list_calendars.options{$1}.required, $1 + " is optional"), keys list_calendars.options;
+        assertTrue(list_calendars.options.maxResults.preselected || list_calendars.options.showHidden.preselected,
+            "an action without required options still offers something upfront");
+        assertOutputType(list_calendars, "CalendarList");
+
+        # the mutating actions keep their classification
+        map assertTrue(DataProviderActionCatalog::actionMutatesState(
+            DataProviderActionCatalog::getAppAction(GoogleCalendarDataProvider::CalendarAppName, $1)),
+            $1 + " mutates state"), ("quick-add-event", "create-event", "update-event", "delete-event");
+    }
+
     googleDataProviderTest() {
         if (!gdp) {
             testSkip("no connection");
@@ -187,8 +267,10 @@ public class GoogleDataProviderTest inherits QUnit::Test {
         assertEq("calendarList", prov.getName());
         prov = prov.getChildProviderEx("list");
         assertEq("list", prov.getName());
-        hash<auto> h = prov.doRequest();
+        hash<auto> h = prov.doRequest({"maxResults": 250, "showHidden": True});
         assertEq(Type::String, h.etag.type());
+        assertEq("calendar#calendarList", h.kind);
+        assertTrue(exists (select h."items", $1.primary)[0], "the calendar list carries the primary calendar");
 
         # create, update and delete calendar events
         prov = gdp.getChildProviderPath("calendars/primary/events/quickAdd");
@@ -236,6 +318,38 @@ public class GoogleDataProviderTest inherits QUnit::Test {
             string desc = "today's lunch appointment";
             h = prov.doRequest({"eventId": h.id, "description": desc});
             assertEq(desc, h.description);
+
+            # the event must be listed in a time window around it (the "list-events" action path)
+            string event_id = h.id;
+            prov = gdp.getChildProviderPath("calendars/primary/events/list");
+            h = prov.doRequest({
+                "timeMin": start - 1h,
+                "timeMax": end + 1h,
+                "singleEvents": True,
+                "orderBy": "startTime",
+                "maxResults": 250,
+            });
+            assertEq("calendar#events", h.kind);
+            assertEq(Type::List, h."items".type());
+            assertTrue(exists (select h."items", $1.id == event_id)[0],
+                "the inserted event is listed in the time window around it");
+            # the search terms must find the event as well
+            h = prov.doRequest({
+                "timeMin": start - 1h,
+                "timeMax": end + 1h,
+                "singleEvents": True,
+                "q": "Burger Bar",
+            });
+            assertTrue(exists (select h."items", $1.id == event_id)[0],
+                "the inserted event is found by free-text search");
+
+            # the event must be retrievable by ID (the "get-event" action path)
+            prov = gdp.getChildProviderPath("calendars/primary/events/get");
+            h = prov.doRequest({"eventId": event_id});
+            assertEq("calendar#event", h.kind);
+            assertEq(event_id, h.id);
+            assertEq("Lunch at Burger Bar", h.summary);
+            assertEq(desc, h.description);
         }
 
         # test the free/busy calendar API
@@ -269,6 +383,18 @@ public class GoogleDataProviderTest inherits QUnit::Test {
             assertEq("calendar#calendar", h.kind);
             assertEq(summary, h.summary);
             assertEq("Europe/Prague", h.timeZone);
+        }
+    }
+
+    #! Asserts that an action declares its output type from the Discovery schema
+    /** The catalog resolves \c get_output_type callbacks lazily; the callback fetches the Discovery document,
+        so with network access the resolved type is checked, and without it the callback must still be present.
+    */
+    private assertOutputType(hash<DataProviderActionInfo> action, string type_name) {
+        if (action.output_type) {
+            assertEq(type_name, action.output_type.getName(), action.action + " resolves its output type");
+        } else {
+            assertEq(Type::Closure, action.get_output_type.type(), action.action + " declares its output type");
         }
     }
 

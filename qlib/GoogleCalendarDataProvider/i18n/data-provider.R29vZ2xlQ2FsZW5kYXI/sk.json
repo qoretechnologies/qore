@@ -27,6 +27,42 @@
           "source": "Create an event in a calendar",
           "message": "Vytvoriť udalosť v kalendári"
         },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.desc": {
+          "source": "Retrieve a single event from a calendar by its event ID",
+          "message": "Načítať jednu udalosť z kalendára podľa jej ID"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.display_name": {
+          "source": "Get Event",
+          "message": "Získať udalosť"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.Y2FsZW5kYXI.desc": {
+          "source": "The calendar containing the event",
+          "message": "Kalendár obsahujúci udalosť"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.Y2FsZW5kYXI.display_name": {
+          "source": "Calendar",
+          "message": "Kalendár"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.Y2FsZW5kYXI.short_desc": {
+          "source": "The calendar containing the event",
+          "message": "Kalendár obsahujúci udalosť"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.ZXZlbnRJZA.desc": {
+          "source": "The ID of the event to retrieve; event IDs are returned in the `id` field of the events returned by the `list-events` action",
+          "message": "ID udalosti, ktorá sa má načítať; ID udalostí sú vracané v poli `id` udalostí vrátených akciou `list-events`"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.ZXZlbnRJZA.display_name": {
+          "source": "Event ID",
+          "message": "ID udalosti"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.ZXZlbnRJZA.short_desc": {
+          "source": "The ID of the event to retrieve",
+          "message": "ID udalosti, ktorá sa má načítať"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.short_desc": {
+          "source": "Retrieve an event from a calendar",
+          "message": "Načítať udalosť z kalendára"
+        },
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.desc": {
           "source": "Delete an event from a calendar",
           "message": "Odstrániť udalosť z kalendára"
@@ -50,6 +86,182 @@
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.short_desc": {
           "source": "Delete an event from a calendar",
           "message": "Odstrániť udalosť z kalendára"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.desc": {
+          "source": "List the calendars in the authenticated user's calendar list; the `id` of each entry can be used as the calendar for the event actions",
+          "message": "Zobraziť kalendáre v zozname kalendárov overeného používateľa; `id` každej položky možno použiť ako kalendár pre akcie s udalosťami"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.display_name": {
+          "source": "List Calendars",
+          "message": "Zobraziť kalendáre"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of calendar list entries to return on one result page; incomplete pages can be detected by a non-empty `nextPageToken` field in the response. The default is `100`; the page size can never be larger than `250`",
+          "message": "Maximálny počet položiek zoznamu kalendárov vrátených na jednej stránke výsledkov; neúplné stránky možno rozpoznať podľa neprázdneho poľa `nextPageToken` v odpovedi. Predvolená hodnota je `100`; veľkosť stránky nikdy nemôže byť väčšia ako `250`"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Maximum Results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of calendars to return on one result page",
+          "message": "Maximálny počet kalendárov vrátených na jednej stránke výsledkov"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.c2hvd0hpZGRlbg.desc": {
+          "source": "If `True`, hidden calendar list entries are included in the result. The default is `False`",
+          "message": "Ak je `True`, do výsledku sú zahrnuté skryté položky zoznamu kalendárov. Predvolená hodnota je `False`"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.c2hvd0hpZGRlbg.display_name": {
+          "source": "Show Hidden",
+          "message": "Zobraziť skryté"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.c2hvd0hpZGRlbg.short_desc": {
+          "source": "Include hidden calendar list entries in the result",
+          "message": "Zahrnúť skryté položky zoznamu kalendárov do výsledku"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.cGFnZVRva2Vu.desc": {
+          "source": "Token specifying which result page to return; use the `nextPageToken` value from the previous response to retrieve the next page",
+          "message": "Token určujúci, ktorá stránka výsledkov sa má vrátiť; na načítanie ďalšej stránky použite hodnotu `nextPageToken` z predchádzajúcej odpovede"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "Token stránky"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Token specifying which result page to return",
+          "message": "Token určujúci, ktorá stránka výsledkov sa má vrátiť"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.short_desc": {
+          "source": "List the calendars in the user's calendar list",
+          "message": "Zobraziť kalendáre v zozname kalendárov používateľa"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.desc": {
+          "source": "List events in a calendar; the result can be restricted to a time window, filtered with free-text search terms, and paged with `maxResults` and `pageToken`",
+          "message": "Zobraziť udalosti v kalendári; výsledok možno obmedziť na časové okno, filtrovať fulltextovými hľadanými výrazmi a stránkovať pomocou `maxResults` a `pageToken`"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.display_name": {
+          "source": "List Events",
+          "message": "Zobraziť udalosti"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.Y2FsZW5kYXI.desc": {
+          "source": "The calendar to list events from",
+          "message": "Kalendár, z ktorého sa majú zobraziť udalosti"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.Y2FsZW5kYXI.display_name": {
+          "source": "Calendar",
+          "message": "Kalendár"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.Y2FsZW5kYXI.short_desc": {
+          "source": "The calendar to list events from",
+          "message": "Kalendár, z ktorého sa majú zobraziť udalosti"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.allowed-value.c3RyaW5nOnN0YXJ0VGltZQ.desc": {
+          "source": "Order by the start date/time (ascending); this is only available when `singleEvents` is `True`",
+          "message": "Zoradiť podľa dátumu/času začiatku (vzostupne); k dispozícii iba vtedy, keď je `singleEvents` `True`"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.allowed-value.c3RyaW5nOnVwZGF0ZWQ.desc": {
+          "source": "Order by last modification time (ascending)",
+          "message": "Zoradiť podľa času poslednej zmeny (vzostupne)"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.desc": {
+          "source": "The order of the events returned in the result; the default is an unspecified, stable order.\nAcceptable values are:\n- `startTime`: Order by the start date/time (ascending); this is only available when `singleEvents` is `True`\n- `updated`: Order by last modification time (ascending)",
+          "message": "Poradie udalostí vrátených vo výsledku; predvolené je nešpecifikované, stabilné poradie.\nPrijateľné hodnoty sú:\n- `startTime`: Zoradiť podľa dátumu/času začiatku (vzostupne); k dispozícii iba vtedy, keď je `singleEvents` `True`\n- `updated`: Zoradiť podľa času poslednej zmeny (vzostupne)"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.display_name": {
+          "source": "Order By",
+          "message": "Zoradiť podľa"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.short_desc": {
+          "source": "The order of the events returned in the result",
+          "message": "Poradie udalostí vrátených vo výsledku"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of events to return on one result page; the page may contain fewer events than this value, or none at all, even if more events match the query. Incomplete pages can be detected by a non-empty `nextPageToken` field in the response. The default is `250`; the page size can never be larger than `2500`",
+          "message": "Maximálny počet udalostí vrátených na jednej stránke výsledkov; stránka môže obsahovať menej udalostí ako táto hodnota alebo žiadne, aj keď dopytu zodpovedá viac udalostí. Neúplné stránky možno rozpoznať podľa neprázdneho poľa `nextPageToken` v odpovedi. Predvolená hodnota je `250`; veľkosť stránky nikdy nemôže byť väčšia ako `2500`"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Maximum Results",
+          "message": "Maximálny počet výsledkov"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of events to return on one result page",
+          "message": "Maximálny počet udalostí vrátených na jednej stránke výsledkov"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2hvd0RlbGV0ZWQ.desc": {
+          "source": "If `True`, deleted events (with `status` equal to `cancelled`) are included in the result. Cancelled instances of recurring events (but not the underlying recurring event) are still included if `showDeleted` and `singleEvents` are both `False`; if both are `True`, only single instances of deleted events are returned. The default is `False`",
+          "message": "Ak je `True`, do výsledku sú zahrnuté odstránené udalosti (so `status` rovným `cancelled`). Zrušené inštancie opakujúcich sa udalostí (nie však samotná opakujúca sa udalosť) sú zahrnuté aj vtedy, keď sú `showDeleted` aj `singleEvents` obe `False`; ak sú obe `True`, vrátené sú iba jednotlivé inštancie odstránených udalostí. Predvolená hodnota je `False`"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2hvd0RlbGV0ZWQ.display_name": {
+          "source": "Show Deleted",
+          "message": "Zobraziť odstránené"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2hvd0RlbGV0ZWQ.short_desc": {
+          "source": "Include deleted events in the result",
+          "message": "Zahrnúť odstránené udalosti do výsledku"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2luZ2xlRXZlbnRz.desc": {
+          "source": "If `True`, recurring events are expanded into their individual instances, and only single one-off events and instances of recurring events are returned, but not the underlying recurring events themselves. If `False`, each recurring event is returned once with its recurrence rule instead of its instances. Must be `True` to order the result by start time",
+          "message": "Ak je `True`, opakujúce sa udalosti sa rozvinú na jednotlivé inštancie a vrátené sú iba jednorazové udalosti a inštancie opakujúcich sa udalostí, nie samotné opakujúce sa udalosti. Ak je `False`, každá opakujúca sa udalosť je vrátená raz s pravidlom opakovania namiesto svojich inštancií. Musí byť `True`, aby bolo možné výsledok zoradiť podľa času začiatku"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2luZ2xlRXZlbnRz.display_name": {
+          "source": "Expand Recurring Events",
+          "message": "Rozvinúť opakujúce sa udalosti"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2luZ2xlRXZlbnRz.short_desc": {
+          "source": "Expand recurring events into their individual instances",
+          "message": "Rozvinúť opakujúce sa udalosti na ich jednotlivé inštancie"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cGFnZVRva2Vu.desc": {
+          "source": "Token specifying which result page to return; use the `nextPageToken` value from the previous response to retrieve the next page",
+          "message": "Token určujúci, ktorá stránka výsledkov sa má vrátiť; na načítanie ďalšej stránky použite hodnotu `nextPageToken` z predchádzajúcej odpovede"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "Token stránky"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Token specifying which result page to return",
+          "message": "Token určujúci, ktorá stránka výsledkov sa má vrátiť"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cQ.desc": {
+          "source": "Free-text search terms to find events that match these terms in the `summary`, `description`, and `location` fields, in attendee and organizer display names and email addresses, and in working location properties",
+          "message": "Fulltextové hľadané výrazy na nájdenie udalostí, ktoré týmto výrazom zodpovedajú v poliach `summary`, `description` a `location`, v zobrazovaných menách a e-mailových adresách účastníkov a organizátorov a vo vlastnostiach pracovného miesta"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cQ.display_name": {
+          "source": "Search Terms",
+          "message": "Hľadané výrazy"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cQ.short_desc": {
+          "source": "Free-text search terms to find matching events",
+          "message": "Fulltextové hľadané výrazy na nájdenie zodpovedajúcich udalostí"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1heA.desc": {
+          "source": "Upper bound (exclusive) for an event's start time; only events that start before this time are returned. The default is not to filter by start time",
+          "message": "Horná hranica (exkluzívna) času začiatku udalosti; vrátené sú iba udalosti, ktoré sa začínajú pred týmto časom. Predvolene sa podľa času začiatku nefiltruje"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1heA.display_name": {
+          "source": "End Time",
+          "message": "Čas konca"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1heA.short_desc": {
+          "source": "Only return events that start before this time",
+          "message": "Vrátiť iba udalosti, ktoré sa začínajú pred týmto časom"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1pbg.desc": {
+          "source": "Lower bound (exclusive) for an event's end time; only events that end after this time are returned. The default is not to filter by end time",
+          "message": "Dolná hranica (exkluzívna) času konca udalosti; vrátené sú iba udalosti, ktoré sa končia po tomto čase. Predvolene sa podľa času konca nefiltruje"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1pbg.display_name": {
+          "source": "Start Time",
+          "message": "Čas začiatku"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1pbg.short_desc": {
+          "source": "Only return events that end after this time",
+          "message": "Vrátiť iba udalosti, ktoré sa končia po tomto čase"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.short_desc": {
+          "source": "List events in a calendar",
+          "message": "Zobraziť udalosti v kalendári"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bWFrZS1hcGktY2FsbA.desc": {
           "source": "Make a custom HTTP / REST API call to **Google Calendar** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
