@@ -23,19 +23,84 @@
 */
 
 public namespace DeepgramDataProvider {
-#! Transcribe-file request: URL submission with model + ASR options
+#! File type for the transcribe-file \c audio input that also accepts raw audio bytes
+/** Upstream steps commonly produce raw @ref binary audio (the output of a recording or
+    download step, for example); wrapping it in a @ref DataProvider::FileDataType "file"
+    hash by hand would be needless friction, so a bare @ref binary value is accepted and
+    treated as the \c content of a file named
+    @ref DeepgramAudioFileDataType::RawAudioName "RawAudioName"; as that name has no
+    extension, the MIME type falls back to \c application/octet-stream
+
+    @since DeepgramDataProvider 1.1
+*/
+public class DeepgramAudioFileDataType inherits DataProvider::FileOrNothingDataType {
+    public {
+        #! Placeholder file name given to raw audio bytes (a file value requires a name)
+        const RawAudioName = "audio";
+    }
+
+    #! Creates the type
+    constructor() : FileOrNothingDataType() {}
+
+    #! Returns a hash of types accepted by this type; keys are type names
+    hash<string, bool> getAcceptTypeHash(*bool simple) {
+        return FileOrNothingDataType::getAcceptTypeHash(simple) + {
+            Type::Binary: True,
+        };
+    }
+
+    #! Returns the value if the value can be assigned to the type
+    /** @param value a @ref DataProvider::FileDataType "file" hash or raw @ref binary audio
+
+        @return the file hash; raw binary is wrapped as \c {"name": RawAudioName, "content": value}
+        before the file validation runs (which base64-encodes the content)
+
+        @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
+    */
+    auto acceptsValue(auto value) {
+        if (value.typeCode() == NT_BINARY) {
+            # the file validation replaces the content with its base64 encoding, so the wrapper must
+            # be a hash<auto>, not the hash<string, binary> a bare literal would create
+            return FileOrNothingDataType::acceptsValue({} + {"name": RawAudioName, "content": value});
+        }
+        return FileOrNothingDataType::acceptsValue(value);
+    }
+}
+
+#! Transcribe-file request: URL or uploaded audio with model + ASR options
 public class DeepgramTranscribeFileRequestDataType inherits HashDataType {
     public {
         const Fields = {
             "url": {
                 "display_name": "Audio URL",
                 "short_desc": "Public URL of the audio file to transcribe",
-                "type": AbstractDataProviderTypeMap."string",
+                "type": AbstractDataProviderTypeMap."*string",
                 "desc": "Public URL of the audio file to transcribe.  Deepgram fetches "
                     "the file from this URL; it must be reachable from the public "
-                    "internet.",
-                "required": True,
+                    "internet.\n\n"
+                    "Exactly one of `url` or `audio` must be provided.",
                 "example_value": "https://example.com/audio.wav",
+                "attr": {
+                    "required_groups": ("audio_source",),
+                    "exclusive_with": "audio",
+                },
+            },
+            "audio": {
+                "display_name": "Audio File",
+                "short_desc": "Audio file to upload for transcription",
+                "type": new DeepgramAudioFileDataType(),
+                "desc": "The audio file to transcribe, uploaded as the request body; used "
+                    "when `url` is not given.  The file's `mime_type` (e.g. `audio/wav`, "
+                    "`audio/mpeg`, `audio/flac`) is sent as the request `Content-Type`; "
+                    "when it is `auto`, it is derived from the file `name`, falling back "
+                    "to `application/octet-stream`.  Upstream steps can pass either a "
+                    "file hash (`name`, `content`, `mime_type`) or the raw audio bytes "
+                    "as a `binary` value.\n\n"
+                    "Exactly one of `url` or `audio` must be provided.",
+                "attr": {
+                    "required_groups": ("audio_source",),
+                    "exclusive_with": "url",
+                },
             },
             "model": {
                 "display_name": "Model",

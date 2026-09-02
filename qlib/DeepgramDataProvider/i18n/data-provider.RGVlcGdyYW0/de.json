@@ -452,8 +452,8 @@
           "message": "Sprache aus Text über Deepgram TTS (Aura-Modelle) synthetisieren"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.desc": {
-          "source": "Submits a public audio URL to Deepgram's `/v1/listen` endpoint and returns the JSON transcript.  Supports the Nova model family with smart formatting, diarization, summarization, and language detection.\n\n**Note**: this action submits via URL only.  For raw-audio uploads and realtime WebSocket streaming, use @ref DeepgramRestClient::DeepgramRestClientIo \"DeepgramRestClientIo\" directly.",
-          "message": "Übermittelt eine öffentliche Audio-URL an den `/v1/listen`-Endpunkt von Deepgram und gibt das JSON-Transkript zurück. Unterstützt die Nova-Modellfamilie mit intelligenter Formatierung, Diarisierung, Zusammenfassung und Spracherkennung.\n\n**Hinweis**: Diese Aktion übermittelt nur per URL. Für Roh-Audio-Uploads und Echtzeit-WebSocket-Streaming verwenden Sie direkt @ref DeepgramRestClient::DeepgramRestClientIo \"DeepgramRestClientIo\"."
+          "source": "Submits audio to Deepgram's `/v1/listen` endpoint and returns the JSON transcript.  The audio is given either as a public `url` that Deepgram fetches or as an `audio` file whose bytes are uploaded as the request body; exactly one of the two must be provided.  Supports the Nova model family with smart formatting, diarization, summarization, and language detection.",
+          "message": "Übermittelt Audio an den `/v1/listen`-Endpunkt von Deepgram und gibt das JSON-Transkript zurück. Das Audio wird entweder als öffentliche `url`, die Deepgram abruft, oder als `audio`-Datei angegeben, deren Bytes als Anfragetext hochgeladen werden; genau eines von beiden muss angegeben werden. Unterstützt die Nova-Modellfamilie mit intelligenter Formatierung, Diarisierung, Zusammenfassung und Spracherkennung."
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.display_name": {
           "source": "Transcribe File",
@@ -470,6 +470,18 @@
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.Y2FsbGJhY2s.short_desc": {
           "source": "Webhook URL for async transcript delivery",
           "message": "Webhook-URL für asynchrone Transkriptübermittlung"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.desc": {
+          "source": "The audio file to transcribe, uploaded as the request body; used when `url` is not given.  The file's `mime_type` (e.g. `audio/wav`, `audio/mpeg`, `audio/flac`) is sent as the request `Content-Type`; when it is `auto`, it is derived from the file `name`, falling back to `application/octet-stream`.  Upstream steps can pass either a file hash (`name`, `content`, `mime_type`) or the raw audio bytes as a `binary` value.\n\nExactly one of `url` or `audio` must be provided.",
+          "message": "Die zu transkribierende Audiodatei, hochgeladen als Anfragetext; wird verwendet, wenn keine `url` angegeben ist. Der `mime_type` der Datei (z. B. `audio/wav`, `audio/mpeg`, `audio/flac`) wird als `Content-Type` der Anfrage gesendet; bei `auto` wird er aus dem Dateinamen `name` abgeleitet, andernfalls wird `application/octet-stream` verwendet. Vorgelagerte Schritte können entweder einen Datei-Hash (`name`, `content`, `mime_type`) oder die rohen Audio-Bytes als `binary`-Wert übergeben.\n\nGenau eines von `url` oder `audio` muss angegeben werden."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.display_name": {
+          "source": "Audio File",
+          "message": "Audiodatei"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.short_desc": {
+          "source": "Audio file to upload for transcription",
+          "message": "Für die Transkription hochzuladende Audiodatei"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGV0ZWN0X2xhbmd1YWdl.desc": {
           "source": "When `True`, ignores the `language` parameter and detects the language automatically.",
@@ -592,8 +604,8 @@
           "message": "Interpunktion zum Transkript hinzufügen"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXJs.desc": {
-          "source": "Public URL of the audio file to transcribe.  Deepgram fetches the file from this URL; it must be reachable from the public internet.",
-          "message": "Öffentliche URL der zu transkribierenden Audiodatei. Deepgram ruft die Datei von dieser URL ab; sie muss über das öffentliche Internet erreichbar sein."
+          "source": "Public URL of the audio file to transcribe.  Deepgram fetches the file from this URL; it must be reachable from the public internet.\n\nExactly one of `url` or `audio` must be provided.",
+          "message": "Öffentliche URL der zu transkribierenden Audiodatei. Deepgram ruft die Datei von dieser URL ab; sie muss über das öffentliche Internet erreichbar sein.\n\nGenau eines von `url` oder `audio` muss angegeben werden."
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXJs.display_name": {
           "source": "Audio URL",
@@ -616,8 +628,8 @@
           "message": "Transkriptwörter in Äußerungen gruppieren"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.short_desc": {
-          "source": "Transcribe an audio file by URL via Deepgram ASR",
-          "message": "Eine Audiodatei per URL über Deepgram ASR transkribieren"
+          "source": "Transcribe an audio file by URL or upload via Deepgram ASR",
+          "message": "Eine Audiodatei per URL oder Upload über Deepgram ASR transkribieren"
         },
         "app.RGVlcGdyYW0.desc": {
           "source": "Provides access to [Deepgram](https://deepgram.com) — a speech AI platform offering automatic speech recognition (ASR) and text-to-speech (TTS) APIs.\n\n**Common use cases**:\n- **Transcription**: convert recorded audio (PSTN calls, meeting recordings, podcasts) into searchable text with the Nova model family\n- **Voice synthesis**: generate natural-sounding speech from text via the Aura voice models — for voice agents, IVR, and accessibility\n- **Conversational AI**: pair Deepgram TTS with any LLM to build end-to-end voice conversation pipelines",
