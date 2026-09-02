@@ -1881,9 +1881,10 @@ QoreValue qore_root_ns_private::parseResolveReferencedScopedReferenceIntern(cons
         }
         source_class_path += nscope[i];
     }
-    std::string deferred_source_class_path = qore_aot_get_deferred_source_symbol_path(loc, source_class_path.c_str(),
-        QoreAOTSourceSymbolKind::Class);
-    const bool defer_source_class_member = !deferred_source_class_path.empty();
+    // Only whether to defer: the matched path itself must not be substituted for
+    // the written scope here -- see the DeferredStaticClassMemberRefNode below.
+    const bool defer_source_class_member = qore_aot_should_defer_source_symbol(loc,
+        source_class_path.c_str(), QoreAOTSourceSymbolKind::Class);
 
     if (!defer_source_class_member) {
         // try to check in current namespace first
@@ -1941,8 +1942,29 @@ QoreValue qore_root_ns_private::parseResolveReferencedScopedReferenceIntern(cons
     if (qore_aot_source_parse_active() && nscope.size() >= 2) {
         typeInfo = autoTypeInfo;
         found = true;
-        return new DeferredStaticClassMemberRefNode(loc,
-            defer_source_class_member ? deferred_source_class_path.c_str() : source_class_path.c_str(),
+        // Defer with the scope the SOURCE wrote, never with the manifest's class path.
+        //
+        // Unlike `new Ns::Thing()` or a static method receiver, the scope of a
+        // constant or static variable reference is not necessarily a class: in
+        // `A::B` -- the only shape that reaches here -- `A` may equally be a
+        // namespace.  The manifest lookup asks only about CLASSES, and when the
+        // written scope has no `::` its fallback matches one by terminal
+        // identifier alone, across namespaces.  So a namespace-qualified constant
+        // `Fsm::FSM_EXEC_STATUS_RUNNING` matched an unrelated class `Fsm::Fsm` and
+        // was rewritten to `Fsm::Fsm::FSM_EXEC_STATUS_RUNNING`, which resolves to
+        // nothing and throws STATIC-VAR-ERROR at runtime -- naming a symbol whose
+        // own file was never edited.  It only bit an incremental build, because a
+        // whole-group parse has the provider in the parse set and does not defer
+        // at all, so discarding the object cache "fixed" it.
+        //
+        // The match still decides WHETHER to defer.  It cannot improve the path:
+        // an exact match makes the substitution a no-op, so the fallback is the
+        // only case it changes, and that is the unsound one.  The runtime resolver
+        // tries a global variable, then a namespace constant, then a class static
+        // member/constant on the path it is handed, and finds an unqualified class
+        // name by namespace priority -- so the written form resolves everything
+        // the rewritten one did, and the namespace cases besides.
+        return new DeferredStaticClassMemberRefNode(loc, source_class_path.c_str(),
             nscope.getIdentifier());
     }
 

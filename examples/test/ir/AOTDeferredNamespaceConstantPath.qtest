@@ -1,0 +1,170 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTDeferredNamespaceConstantPathTest
+
+# Regression test: a NAMESPACE-qualified constant reference must not be rewritten
+# into a CLASS path by the AOT deferred-source-symbol lookup.
+#
+# `A::B` is the only shape that reaches
+# qore_root_ns_private::parseResolveReferencedScopedReferenceIntern(), and unlike
+# `new A::B()` or a static method receiver its scope `A` is not necessarily a
+# class -- it may be a namespace.  The source-symbol manifest only records
+# classes, and when the written scope carries no `::` the lookup's fallback
+# matches a class by terminal identifier alone, across namespaces.
+#
+# So a reference to the namespace constant `Fsm::FSM_EXEC_STATUS_RUNNING`, in a
+# program that also has a class `Fsm` inside namespace `Fsm`, matched that class
+# and was emitted as `Fsm::Fsm::FSM_EXEC_STATUS_RUNNING` -- which resolves to
+# nothing:
+#
+#   STATIC-VAR-ERROR: cannot resolve static variable 'Fsm::Fsm::FSM_EXEC_STATUS_RUNNING'
+#
+# It only bit an incremental build: a whole-group parse has the provider in the
+# parse set and does not defer at all, so discarding the .qo cache appeared to
+# fix a compiler bug, and the error named a file that had not been edited in
+# weeks.
+class AOTDeferredNamespaceConstantPathTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+
+        const ProviderCode = "%new-style
+public namespace Fsm {
+    public const FSM_EXEC_STATUS_RUNNING = \"RUNNING\";
+    # a class whose terminal identifier collides with its own namespace: this is
+    # what the class-only manifest lookup matches when asked about the scope `Fsm`
+    public class Fsm {
+        static string tag() { return \"fsm\"; }
+    }
+}
+";
+
+        const ConsumerCode = "%new-style
+public class Consumer {
+    static string status() {
+        return Fsm::FSM_EXEC_STATUS_RUNNING;
+    }
+}
+";
+
+        const MainCode = "%new-style
+int sub main() {
+    printf(\"status=%s\\n\", Consumer::status());
+    printf(\"tag=%s\\n\", Fsm::Fsm::tag());
+    return 0;
+}
+";
+    }
+
+    constructor() : QUnit::Test("AOTDeferredNamespaceConstantPathTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("a deferred namespace constant keeps the written scope",
+            \testDeferredNamespaceConstantPath());
+        addTestCase("a deferred namespace constant resolves at runtime",
+            \testDeferredNamespaceConstantResolves());
+
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private string env() {
+        return sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+    }
+
+    #! The hex encoding of \a str, as it appears in a hex dump of an object file.
+    private static string needle(string str) {
+        return make_hex_string(str.toBinary());
+    }
+
+    private static writeSource(string path, string contents) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(contents);
+    }
+
+    #! Compiles the consumer against a manifest that only knows the colliding class.
+    /** Returns the consumer object path. */
+    private string compileDeferredConsumer(string root, string lib_dir) {
+        string provider = root + "/provider.qc";
+        string consumer = root + "/consumer.qc";
+        writeSource(provider, ProviderCode);
+        writeSource(consumer, ConsumerCode);
+
+        # the manifest records CLASSES only -- the namespace constant is not in it,
+        # which is precisely why the class fallback was reached
+        writeSource(root + "/symbols.manifest",
+            sprintf("format=1\nclass\tFsm::Fsm\t%s\n", provider));
+
+        string provider_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/provider.qo %s",
+            env(), qcc_bin, lib_dir, lib_dir, provider));
+        assertTrue(is_file(lib_dir + "/provider.qo"),
+            "compiled the provider unit: " + provider_out);
+
+        string consumer_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN "
+            "--source-symbol-manifest=%s/symbols.manifest -o %s/consumer.qo %s",
+            env(), qcc_bin, lib_dir, root, lib_dir, consumer));
+        assertTrue(is_file(lib_dir + "/consumer.qo"),
+            "compiled the deferring consumer unit: " + consumer_out);
+        return lib_dir + "/consumer.qo";
+    }
+
+    testDeferredNamespaceConstantPath() {
+        TmpDir tmp("qore-aot-deferred-ns-const-path-");
+        string lib_dir = tmp.path + "/aotlib";
+        mkdir(lib_dir);
+
+        string obj = compileDeferredConsumer(tmp.path, lib_dir);
+        # the emitted class-path operand is a plain NUL-terminated string in the
+        # object; compare in hex so an ELF's non-text bytes cannot break decoding
+        string blob = make_hex_string(ReadOnlyFile::readBinaryFile(obj));
+
+        assertEq(-1, blob.find(needle("Fsm::Fsm::FSM_EXEC_STATUS_RUNNING")),
+            "the namespace scope is not rewritten into the colliding class path");
+        assertNeq(-1, blob.find(needle("Fsm::FSM_EXEC_STATUS_RUNNING")),
+            "the deferred reference keeps the scope the source wrote");
+    }
+
+    testDeferredNamespaceConstantResolves() {
+        TmpDir tmp("qore-aot-deferred-ns-const-run-");
+        string lib_dir = tmp.path + "/aotlib";
+        mkdir(lib_dir);
+
+        compileDeferredConsumer(tmp.path, lib_dir);
+        writeSource(tmp.path + "/main.q", MainCode);
+
+        string main_out = run(sprintf("%s %s -c -L %s --parse-option=PO_MODERN -o %s/main.qo %s/main.q",
+            env(), qcc_bin, lib_dir, lib_dir, tmp.path));
+        assertTrue(is_file(lib_dir + "/main.qo"), "compiled the entry point: " + main_out);
+
+        string exe = tmp.path + "/deferred-ns-const";
+        string link_out = run(sprintf("%s %s -O3 -o %s %s/*.qo", env(), qcc_bin, exe, lib_dir));
+        assertTrue(is_file(exe), "linked the multi-source executable: " + link_out);
+
+        string out = run(sprintf("%s %s", env(), exe));
+        assertEq(-1, out.find("STATIC-VAR-ERROR"),
+            "the deferred namespace constant resolves without STATIC-VAR-ERROR: " + out);
+        assertNeq(-1, out.find("status=RUNNING"),
+            "the deferred namespace constant has its declared value: " + out);
+        # the colliding class is still reachable by its own path
+        assertNeq(-1, out.find("tag=fsm"),
+            "the class sharing the namespace's name still resolves: " + out);
+    }
+}
