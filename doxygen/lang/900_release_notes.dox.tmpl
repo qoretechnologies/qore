@@ -1521,6 +1521,18 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - added per-database-driver SVG logo registry with logos for PostgreSQL, MySQL, Oracle, SQL Server
         (FreeTDS), SQLite, and ODBC; unknown drivers fall back to the generic database logo
 
+    - @ref deepgramdataproviderintro "DeepgramDataProvider" module
+      - the \c transcribe-file action accepts audio content directly through the new \c audio option (a
+        file value or raw binary data, sent as the request body with the file's MIME type), so audio
+        obtained from an upstream step can be transcribed without a public URL; the \c url option is now
+        optional, and exactly one of \c url or \c audio must be given
+
+    - @ref deepgramrestclientintro "DeepgramRestClient" module
+      - fixed a bug where the \c Authorization header built from the \c apikey option was placed in an
+        unread \c default_headers option, so requests and the connection ping were sent without
+        authentication and failed with HTTP 401
+        (<a href="https://github.com/qoretechnologies/qorus/issues/523">qorus#523</a>)
+
     - @ref elasticsearchdataproviderintro "ElasticSearchDataProvider" module
       - added Bulk API support with NDJSON format and partial failure handling
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
@@ -1552,6 +1564,26 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - message watches persist the last delivered timestamp and same-second message IDs when the host
         application configures checkpoint storage, preventing retained messages from being processed again
         after a service reload
+      - added the \c create-draft, \c list-drafts, \c get-draft, \c send-draft, and \c delete-draft actions,
+        so a flow can compose a message for human review instead of sending it immediately
+      - added the \c modify-message-labels, \c list-labels, \c create-label, and \c untrash-message actions,
+        so messages can be filed, marked read or unread, and restored without destroying them
+      - added \c thread_id, \c in_reply_to, and \c references options to \c send-message (and to
+        \c create-draft), so replies stay in the conversation they answer; message watch events carry the
+        \c In-Reply-To header and attachment watch events carry the source \c thread_id
+      - added the \c list-with-metadata action, which returns each matching message's headers, snippet,
+        labels, and thread ID in one step instead of only IDs
+      - the \c list, \c get, and \c get-attachment actions are now classified as read-only
+        (\c mutates_state = \c False)
+
+    - @ref googlecalendardataproviderintro "GoogleCalendarDataProvider" module
+      - added the \c list-events, \c get-event, and \c list-calendars read actions, so a calendar can be
+        read as a first-class step (with \c timeMin / \c timeMax windows, single-event expansion,
+        ordering, free-text search, and paging) instead of through a hand-written generic API call
+
+    - @ref googledataproviderintro "GoogleDataProvider" module
+      - date values in query arguments are serialized as RFC 3339 timestamps, as Google APIs require
+        (ex: \c timeMin / \c timeMax in Calendar \c events.list), instead of an unparseable digit string
 
     - @ref grokrestclientintro "GrokRestClient" module
       - registers @ref QoreLlmUtils::LlmProviderRegistry "LlmProviderRegistry" mode
@@ -1585,6 +1617,11 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - added memory-based backpressure to \c LoggerAppenderQueue to prevent unbounded memory growth when
         producers outpace consumers — configurable memory limit, push timeout/drop control, and monitoring
       - added a \c max_bytes parameter to \c LoggerAppenderQueueThreadPool for memory-limited pool logging
+
+    - @ref openaidataproviderintro "OpenAiDataProvider" module
+      - added the \c transcribe-audio action (the \c /v1/audio/transcriptions API), which uploads an audio
+        file and returns its transcript, so audio obtained from an upstream step can be transcribed with the
+        \c gpt-4o-transcribe, \c gpt-4o-mini-transcribe, or \c whisper-1 models
 
     - @ref openairestclientintro "OpenAiRestClient" module
       - @ref OpenAiRestClient::OpenAiLlmProvider "OpenAiLlmProvider" is now formally the
