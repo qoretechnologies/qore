@@ -34,7 +34,7 @@
 %requires(reexport) GoogleRestClient
 
 module GoogleDataProvider {
-    version = "2.0";
+    version = "2.1";
     desc = "user module providing a base data provider API for Google REST cloud services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -55,6 +55,10 @@ module GoogleDataProvider {
     - <a href="../../modules/GoogleCalendarDataProvider/html/index.html">GoogleCalendarDataProvider</a>: Google Calendars
 
     @section googledataprovider_relnotes Release Notes
+
+    @subsection googledataprovider_v2_1 GoogleDataProvider v2.1
+    - date values in query arguments are serialized as RFC 3339 timestamps (ex: `2026-09-02T10:00:00+02:00`),
+      as Google APIs require for arguments such as `timeMin` / `timeMax`, instead of an unparseable digit string
 
     @subsection googledataprovider_v2_0 GoogleDataProvider v2.0
     - split off calendar API to a separate module
