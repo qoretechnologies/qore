@@ -2805,6 +2805,7 @@ set_target_properties(qcc PROPERTIES BUILD_RPATH ${CMAKE_BINARY_DIR})
 set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOT.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTBinary.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTExprNodeRegistry.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTExprRegistry.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTExprSlotRegistry.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOTInstRegistry.h
@@ -2815,6 +2816,7 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRExprRegistry.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRLowering.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRToLLVM.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRVerifier.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreOpcodeRegistry.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreCastOperatorNode.h
     ${CMAKE_SOURCE_DIR}/include/qore/intern/Function.h
@@ -2823,6 +2825,8 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/lib/QoreAOT.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTBinary.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTExprHandlers.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreAOTExprNodeHandlers.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreAOTExprNodeRegistry.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTExprRegistry.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTExprSlotHandlers.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreAOTExprSlotRegistry.cpp
@@ -2836,8 +2840,62 @@ set(_qcc_format_sources
     ${CMAKE_SOURCE_DIR}/lib/QoreIRExprRegistry.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRLowering.cpp
     ${CMAKE_SOURCE_DIR}/lib/QoreIRToLLVM.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRVerifier.cpp
     ${CMAKE_SOURCE_DIR}/qcc-main.cpp
 )
+
+# AOT/IR sources deliberately kept OUT of the fingerprint above.
+#
+# The fingerprint answers one question: would qcc, run again, produce a
+# different object?  A file that cannot change the answer must stay out, or
+# every edit to it rebuilds the whole .qo cache of every consumer for nothing.
+# A file that CAN change the answer must go in, or a consumer keeps objects
+# built by a compiler that no longer exists -- a failure that surfaces as a
+# link or deferred-resolution error naming a file nobody touched.
+#
+#   QoreIRInterpreter  executes IR in the interpreted/JIT tiers; it emits no
+#                      object content.  It is only out because the one helper
+#                      the AOT compiler shared with it, extractLValueBaseVarRef(),
+#                      now lives in QoreIRAnalysis.cpp -- if the compiler ever
+#                      calls into the interpreter again, this decision changes.
+#   QoreIRPrinter      diagnostic IR dumps to stderr behind a debug flag.
+set(_qcc_format_excluded_sources
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRInterpreter.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIRPrinter.h
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRInterpreter.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIRPrinter.cpp
+)
+
+# The curated list drifts silently: a new codegen file compiles, links and
+# works, and only its ABSENCE from the fingerprint is wrong -- with no symptom
+# until a consumer somewhere keeps a stale object.  QoreAOTExprNodeRegistry.cpp
+# went un-fingerprinted for three months that way, and its 256-entry kind table
+# IS the on-disk expression-tree format.  So make the partition total: every
+# AOT/IR source is either fingerprinted or explicitly excused, and adding one
+# fails the configure until someone decides which.
+file(GLOB _qcc_format_audit_sources
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreAOT*.h
+    ${CMAKE_SOURCE_DIR}/include/qore/intern/QoreIR*.h
+    ${CMAKE_SOURCE_DIR}/lib/QoreAOT*.cpp
+    ${CMAKE_SOURCE_DIR}/lib/QoreIR*.cpp
+)
+set(_qcc_format_unclassified)
+foreach(_qcc_format_audit_source IN LISTS _qcc_format_audit_sources)
+    if (NOT _qcc_format_audit_source IN_LIST _qcc_format_sources
+            AND NOT _qcc_format_audit_source IN_LIST _qcc_format_excluded_sources)
+        list(APPEND _qcc_format_unclassified ${_qcc_format_audit_source})
+    endif ()
+endforeach()
+if (_qcc_format_unclassified)
+    string(REPLACE ";" "\n  " _qcc_format_unclassified_text
+        "${_qcc_format_unclassified}")
+    message(FATAL_ERROR
+        "AOT/IR sources are neither in _qcc_format_sources nor in "
+        "_qcc_format_excluded_sources:\n  ${_qcc_format_unclassified_text}\n"
+        "Add each to _qcc_format_sources if it can change what qcc emits or "
+        "how an emitted object is read back, otherwise to "
+        "_qcc_format_excluded_sources with the reason.")
+endif ()
 
 # Build settings can alter generated code without changing any source file.
 # Keep them in a separate input so the fingerprint also changes when a new

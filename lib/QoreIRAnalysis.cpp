@@ -12,7 +12,19 @@
 #include <qore/intern/QoreIRAnalysis.h>
 #include <qore/intern/LocalVar.h>
 #include <qore/intern/QoreJITIncludes.h>
+#include <qore/intern/QoreBinaryLValueOperatorNode.h>
+#include <qore/intern/QoreDeleteOperatorNode.h>
+#include <qore/intern/QoreHashObjectDereferenceOperatorNode.h>
+#include <qore/intern/QorePostDecrementOperatorNode.h>
+#include <qore/intern/QorePostIncrementOperatorNode.h>
+#include <qore/intern/QorePreDecrementOperatorNode.h>
+#include <qore/intern/QorePreIncrementOperatorNode.h>
+#include <qore/intern/QoreRemoveOperatorNode.h>
+#include <qore/intern/QoreShiftOperatorNode.h>
+#include <qore/intern/QoreSpliceOperatorNode.h>
 #include <qore/intern/QoreSquareBracketsOperatorNode.h>
+#include <qore/intern/QoreSquareBracketsRangeOperatorNode.h>
+#include <qore/intern/QoreUnshiftOperatorNode.h>
 #include <qore/intern/typed_hash_decl_private.h>
 
 #include <algorithm>
@@ -26,7 +38,63 @@ static bool qore_ir_analysis_cancelled(size_t& count, const char* operation) {
     return ++count % 100 == 0 && qore_check_cancel(nullptr, operation);
 }
 
-extern const VarRefNode* extractLValueBaseVarRef(const QoreValue& lvalue);
+//! Extract the base VarRefNode from a (possibly complex) lvalue expression tree.
+/** Walks the tree by following the "left" / "base" operand of operator nodes that
+    can serve as lvalue wrappers (square brackets, hash deref, shift, splice, etc.).
+    Returns nullptr when the tree cannot be resolved to a simple variable reference.
+*/
+const VarRefNode* extractLValueBaseVarRef(const QoreValue& lvalue) {
+    if (!lvalue.hasNode()) {
+        return nullptr;
+    }
+    const AbstractQoreNode* node = lvalue.getInternalNode();
+    if (auto* var = dynamic_cast<const VarRefNode*>(node)) {
+        return var;
+    }
+    if (auto* op = dynamic_cast<const QoreBinaryLValueOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getLeft());
+    }
+    if (auto* op = dynamic_cast<const QoreBinaryIntLValueOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getLeft());
+    }
+    if (auto* op = dynamic_cast<const QoreSquareBracketsOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getLeft());
+    }
+    if (auto* op = dynamic_cast<const QoreSquareBracketsRangeOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->get(0));
+    }
+    if (auto* op = dynamic_cast<const QoreHashObjectDereferenceOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getLeft());
+    }
+    if (auto* op = dynamic_cast<const QoreShiftOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getExp());
+    }
+    if (auto* op = dynamic_cast<const QoreUnshiftOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getLeft());
+    }
+    if (auto* op = dynamic_cast<const QoreSpliceOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getLValue());
+    }
+    if (auto* op = dynamic_cast<const QorePreIncrementOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getExp());
+    }
+    if (auto* op = dynamic_cast<const QorePostIncrementOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getExp());
+    }
+    if (auto* op = dynamic_cast<const QorePreDecrementOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getExp());
+    }
+    if (auto* op = dynamic_cast<const QorePostDecrementOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getExp());
+    }
+    if (auto* op = dynamic_cast<const QoreRemoveOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getExp());
+    }
+    if (auto* op = dynamic_cast<const QoreDeleteOperatorNode*>(node)) {
+        return extractLValueBaseVarRef(op->getExp());
+    }
+    return nullptr;
+}
 
 static bool qore_ir_is_ast_lvalue_mutation(QoreIROpcode opcode) {
     switch (opcode) {

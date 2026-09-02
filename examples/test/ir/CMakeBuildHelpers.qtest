@@ -51,6 +51,10 @@ class CMakeBuildHelpersTest inherits QUnit::Test {
             \testManagedQccOutputPruning());
         addTestCase("source qmod links reject stale format artifacts",
             \testSourceQmodSymlinkFreshness());
+        addTestCase("qcc format fingerprint covers every AOT format source",
+            \testFormatFingerprintCoverage());
+        addTestCase("qcc build inputs track libqore for an installed qore",
+            \testQccDepsTrackInstalledLibqore());
         addTestCase("cyclic source components build as one atomic generation",
             \testCyclicComponentBuilds());
 
@@ -533,6 +537,188 @@ find_package(Qore REQUIRED)
         }
         throw "COMPONENT-NOT-FOUND", sprintf("%y is not a member of any component "
             "in %y", object, build_dir + "/qo-scripts/scc-map.cmake");
+    }
+
+    #! Returns the files listed in a `set(<name> ...)` block of the qore CMakeLists.txt.
+    private list<string> cmakeSourceList(string cmakelists, string name) {
+        list<string> out = ();
+        bool in_list = False;
+        foreach string line in (cmakelists.split("\n")) {
+            if (!in_list) {
+                if (line.equalPartial("set(" + name)) {
+                    in_list = True;
+                }
+                continue;
+            }
+            string trimmed = trim(line);
+            if (trimmed == ")") {
+                break;
+            }
+            # entries are ${CMAKE_SOURCE_DIR}-relative
+            *list<*string> m = trimmed.regexExtract('^\$\{CMAKE_SOURCE_DIR\}/(.+)$');
+            if (exists m) {
+                push out, m[0];
+            }
+        }
+        return out;
+    }
+
+    #! Every AOT/IR source relative to the qore source root.
+    private list<string> aotSourceUniverse(string src) {
+        list<string> out = ();
+        hash<string, bool> seen = {};
+        foreach string pattern in ((
+                "lib/QoreAOT*.cpp", "lib/QoreIR*.cpp",
+                "include/qore/intern/QoreAOT*.h", "include/qore/intern/QoreIR*.h")) {
+            foreach string path in (glob(src + "/" + pattern)) {
+                string rel = path.substr(src.size() + 1);
+                if (!seen{rel}) {
+                    seen{rel} = True;
+                    push out, rel;
+                }
+            }
+        }
+        return sort(out);
+    }
+
+    testFormatFingerprintCoverage() {
+        string src = normalize_dir(get_script_dir() + "/../../..");
+        if (!is_file(src + "/CMakeLists.txt")) {
+            testSkip("the qore source tree is not available beside the test");
+        }
+        string cmakelists = read(src + "/CMakeLists.txt");
+
+        list<string> tracked = cmakeSourceList(cmakelists, "_qcc_format_sources");
+        list<string> excused = cmakeSourceList(cmakelists, "_qcc_format_excluded_sources");
+        assertGt(20, tracked.size(), "the curated fingerprint list was parsed");
+        assertGt(0, excused.size(), "the deliberate-exclusion list was parsed");
+
+        hash<string, bool> tracked_set = map {$1: True}, tracked;
+        hash<string, bool> excused_set = map {$1: True}, excused;
+
+        # The partition must be total.  A codegen source that is in neither list is
+        # the silent-staleness bug this guards: it compiles and works, and only a
+        # consumer somewhere keeps objects built by a compiler that no longer exists.
+        list<string> unclassified = map $1, aotSourceUniverse(src),
+            !tracked_set{$1} && !excused_set{$1};
+        assertEq((), unclassified,
+            "every AOT/IR source is either fingerprinted or explicitly excused");
+        list<string> both = map $1, keys tracked_set, excused_set{$1};
+        assertEq((), both, "no source is both fingerprinted and excused");
+
+        # These define the ON-DISK expression-tree format: the 256-entry kind table
+        # in QoreAOTExprNodeRegistry.cpp is positional, so its order IS the wire
+        # format, and the handlers beside it are how a .qo is read back.  A change
+        # here against an un-invalidated cache is silent misinterpretation, because
+        # the load-time check only rejects a version NEWER than the reader's.
+        foreach string required in ((
+                "lib/QoreAOTExprNodeRegistry.cpp",
+                "lib/QoreAOTExprNodeHandlers.cpp",
+                "include/qore/intern/QoreAOTExprNodeRegistry.h",
+                "lib/QoreAOTBinary.cpp",
+                "include/qore/intern/QoreAOTBinary.h")) {
+            assertTrue(tracked_set{required},
+                "the AOT binary format contract is fingerprinted: " + required);
+        }
+        # QoreIRVerifier gates whether a body is lowered natively at all, so it
+        # changes which symbols an object exports.
+        assertTrue(tracked_set{"lib/QoreIRVerifier.cpp"},
+            "the IR verifier gates native lowering, so it is fingerprinted");
+
+        # The interpreter is excused only because the AOT compiler no longer calls
+        # into it.  extractLValueBaseVarRef() decides outlining in QoreAOT.cpp; while
+        # it lived in the interpreter, editing it changed emitted objects without
+        # moving the fingerprint.
+        assertTrue(excused_set{"lib/QoreIRInterpreter.cpp"},
+            "the IR interpreter is excused from the fingerprint");
+        assertEq(-1, read(src + "/lib/QoreIRInterpreter.cpp").find(
+                "const VarRefNode* extractLValueBaseVarRef(const QoreValue& lvalue) {"),
+            "the excused interpreter does not define an AOT-contract helper");
+        assertNeq(-1, read(src + "/lib/QoreIRAnalysis.cpp").find(
+                "const VarRefNode* extractLValueBaseVarRef(const QoreValue& lvalue) {"),
+            "the outlining helper lives in a fingerprinted file");
+
+        # ...and the list actually reaches the digest qcc publishes.
+        string stamp_path = qore_build_dir + "/qcc-format.stamp";
+        if (is_file(stamp_path)) {
+            string stamp = read(stamp_path);
+            foreach string required in ((
+                    "QoreAOTExprNodeRegistry.cpp", "QoreAOTExprNodeHandlers.cpp",
+                    "QoreIRVerifier.cpp")) {
+                assertNeq(-1, stamp.find(required),
+                    "the published fingerprint hashes " + required);
+            }
+            assertEq(-1, stamp.find("QoreIRInterpreter.cpp"),
+                "the published fingerprint does not hash the excused interpreter");
+        }
+    }
+
+    testQccDepsTrackInstalledLibqore() {
+        string src = normalize_dir(get_script_dir() + "/../../..");
+        string macros = src + "/cmake/QoreMacros.cmake";
+        if (!is_file(macros)) {
+            testSkip("QoreMacros.cmake is not available beside the test");
+        }
+
+        TmpDir tmp("qore-qcc-deps-libqore-");
+        string src_dir = tmp.path + "/src";
+        string build_dir = tmp.path + "/build";
+        mkdir(src_dir);
+
+        # A stand-in for each tracked file; only the decision is under test.
+        string stamp = src_dir + "/qcc-format.stamp";
+        string library = src_dir + "/libqore.so";
+        string qcc = src_dir + "/qcc";
+        write(stamp, "format=1\n");
+        write(library, "not really a library\n");
+        write(qcc, "#!/bin/sh\n");
+        chmod(qcc, 0755);
+
+        write(src_dir + "/CMakeLists.txt", sprintf(
+"cmake_minimum_required(VERSION 3.5)
+project(QoreQccDepsProbe NONE)
+set(QORE_QCC_EXECUTABLE \"%s\")
+set(QORE_QCC_FORMAT_STAMP \"%s\")
+set(QORE_LIBRARY \"%s\")
+include(\"%s\")
+
+set(QORE_IN_BUILD_TREE TRUE)
+qore_get_qcc_deps(IN_TREE_DEPS QCC_COMMAND \"${QORE_QCC_EXECUTABLE}\")
+set(QORE_IN_BUILD_TREE FALSE)
+qore_get_qcc_deps(INSTALLED_DEPS QCC_COMMAND \"${QORE_QCC_EXECUTABLE}\")
+file(WRITE \"${CMAKE_BINARY_DIR}/deps.txt\"
+    \"in_tree=${IN_TREE_DEPS}\\n\"
+    \"installed=${INSTALLED_DEPS}\\n\")
+", qcc, stamp, library, macros));
+
+        string configure = run(sprintf("cd %s && cmake -S . -B %s",
+            shellQuote(src_dir), shellQuote(build_dir)));
+        assertTrue(is_file(build_dir + "/deps.txt"),
+            "the probe project configured: " + configure);
+
+        hash<string, string> deps = {};
+        foreach string line in (read(build_dir + "/deps.txt").split("\n")) {
+            *list<*string> m = line.regexExtract("^([a-z_]+)=(.*)$");
+            if (exists m) {
+                deps{m[0]} = m[1];
+            }
+        }
+
+        # Both forms track the fingerprint...
+        assertNeq(-1, deps.in_tree.find(stamp),
+            "an in-tree qore tracks the format fingerprint: " + deps.in_tree);
+        assertNeq(-1, deps.installed.find(stamp),
+            "an installed qore tracks the format fingerprint: " + deps.installed);
+
+        # ...but only an installed qore also tracks the library.  The fingerprint is
+        # a curated source list and libqore's codegen is larger than it; the branch
+        # that adds the library used to sit in the same if/elseif chain as the
+        # fingerprint lookup, so setting QORE_QCC_FORMAT_STAMP -- which
+        # QoreConfig.cmake always does -- made it unreachable for every consumer.
+        assertNeq(-1, deps.installed.find(library),
+            "an installed qore tracks libqore itself: " + deps.installed);
+        assertEq(-1, deps.in_tree.find(library),
+            "an in-tree qore keeps the curated list alone: " + deps.in_tree);
     }
 
     testExportedHelpers() {

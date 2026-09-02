@@ -39,6 +39,9 @@ if (_qore_this_cmake_dir_real STREQUAL _qore_build_cmake_dir_real)
 else()
     set(_qore_in_build_tree FALSE)
 endif()
+# Exported so consumers can tell an in-tree qore from an installed one.  The AOT
+# build-input contract differs between them: see QORE_GET_QCC_DEPS().
+set(QORE_IN_BUILD_TREE ${_qore_in_build_tree})
 # Build-tree mode: point consumers at build outputs for local debugging without install.
 # Limitations: assumes single-config generators and default output dirs; multi-config/custom
 # output layouts may need explicit Qore_DIR or manual overrides.
