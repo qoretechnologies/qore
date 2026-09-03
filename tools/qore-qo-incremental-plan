@@ -300,6 +300,19 @@ if [ -z "$group_batch_percent" ]; then
     fi
 fi
 
+#! Names the components of the current stale plan, one per line, with a source.
+#  A post-condition that reports only that components are stale leaves whoever
+#  is triaging it with nothing to look at: the message names no component, no
+#  source and no line, so it cannot be told apart from a parse error without
+#  reconstructing the plan by hand.  The component key is what every other
+#  helper addresses a component by, and one of its members locates it in the
+#  tree.
+report_stale_components() {
+    awk -F '\t' '$1 != "rebuild-closure" && !seen[$2]++ {
+            printf "    %s (%d source(s), including %s)\n", $2, $3, $4
+        }' "$stale_file" >&2
+}
+
 #! The group's own parse, then the verification every plan ends with.
 #  The batch rewrote every depfile in the group, so the frozen generation no
 #  longer describes it.  Re-freeze before verifying, and leave the object
@@ -310,7 +323,12 @@ escalate_to_group_batch() {
     freeze_graph || exit 1
     write_stale_plan
     if [ "$stale_count" -ne 0 ]; then
-        echo "$0: shared-parse incremental build left stale components" >&2
+        echo "$0: shared-parse incremental build left $stale_count stale" \
+            "component(s):" >&2
+        # A diagnostic decides nothing, so it must not be able to change what
+        # this reports: under `set -e` a failure inside it would end the script
+        # with its own status instead of the one below.
+        report_stale_components || :
         exit 1
     fi
     touch "$plan_stamp"

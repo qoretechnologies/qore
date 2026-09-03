@@ -86,6 +86,14 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             \testConcurrentRecipesPublishOneGeneration());
         addTestCase("a lock left by a dead builder does not wedge the build",
             \testAbandonedLockDoesNotWedgeTheBuild());
+        addTestCase("a recipe that must have the group's parse is not handed the stale set",
+            \testTheGroupParseIsNotAnsweredWithAHandOff());
+        addTestCase("an escalation behind a contended group lock still parses the group",
+            \testEscalationBehindAContendedLockParsesTheGroup());
+        addTestCase("a plan that cannot converge names the components it left stale",
+            \testAnUnconvergedPlanNamesTheStaleComponents());
+        addTestCase("adopting a current tree never reads as a partly stale one",
+            \testAdoptingACurrentTreeIsNeverTorn());
 
         set_return_value(main());
     }
@@ -320,7 +328,12 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
     }
 
     #! Runs the group coordinator the way the build's plan target does.
-    private hash<auto> plan(hash<auto> fx, *string extra_env) {
+    /** \a batch_bootstrap_helper replaces the helper the coordinator starts its
+        group parse with, which is how a test puts something between that parse
+        and the verification that follows it.
+    */
+    private hash<auto> plan(hash<auto> fx, *string extra_env,
+            *string batch_bootstrap_helper) {
         string qo_dir = fx.qo_dir;
         # The coordinator refuses to start without a batch script.  A test that
         # expects the shared parse installs a working one first; for every other
@@ -345,7 +358,7 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             fx.context, qo_dir + "/.qcc-incremental-plan.stamp",
             qo_dir + "/.qcc-batch-bootstrap.stamp", qo_dir + "/qcc-batch.sh",
             qo_dir + "/qcc-single.sh", source_order_tool, incremental_tool,
-            tools_dir + DirSep + "qore-qo-batch-bootstrap");
+            batch_bootstrap_helper ?? (tools_dir + DirSep + "qore-qo-batch-bootstrap"));
         string output = backquote("{ " + command + "; } 2>&1; echo \"rc=$?\"");
         int marker = output.rfind("rc=");
         return ("output": output.substr(0, marker),
@@ -1263,6 +1276,263 @@ class AOTSccIncrementalDriverTest inherits QUnit::Test {
             "the lock file survives the build: unlinking it would let the next "
             "waiter create a new inode and enter the critical section alongside "
             "a holder");
+    }
+
+    #! The hand-off has exactly one recipient, and only one caller has it.
+    /** qore-qo-batch-bootstrap answers a partly stale group by handing the stale
+        set to the group coordinator: it touches the current members' stamps,
+        leaves the stale ones older than the ordering token, compiles nothing and
+        exits 0.  That is right for the CMake bootstrap recipe, which is
+        scheduled BEFORE the coordinator.
+
+        It is wrong for every caller that reached the bootstrap by asking for the
+        group's own parse, because those callers read a successful exit as proof
+        that the parse ran and there is no coordinator downstream of them to
+        receive anything.  This is the object recipe for a component that spans
+        several sources: such a component has no standalone builder at all, so a
+        hand-off leaves the recipe exiting 0 with its object not compiled and its
+        component not published -- a silent no-build.
+    */
+    testTheGroupParseIsNotAnsweredWithAHandOff() {
+        TmpDir tmp("qore-aot-driver-forced-parse-");
+        # a and b are mutually dependent, so {a,b} is one component spanning two
+        # sources; c and d are singletons that stay current.
+        hash<auto> fx = fixture(tmp.path);
+        writeCompiler(fx);
+        writeBatchCompiler(fx);
+        assertEq(0, plan(fx).rc, "the coordinator brings the group current");
+        assertEq((), stalePlan(fx).stale, "the group starts current");
+
+        hash<auto> component = componentFor(fx.qo_dir, "a");
+        assertEq(2, component.size.toInt(), "{a,b} spans two sources");
+        # One component stale in a group of three: the shape that reads as
+        # "partly stale" and used to be answered with the hand-off.
+        unlink(fx.qo_dir + "/.qcc-scc/" + component.key + ".generation.json");
+        assertEq(1, stalePlan(fx).stale.size(), "exactly one component is stale");
+
+        int before = compiles(fx).size();
+        hash<auto> result = recipe(fx, "a", component);
+        assertEq(0, result.rc, "the scheduled recipe succeeds: " + result.output);
+        assertTrue(result.output.find("one shared parse") >= 0,
+            "the recipe reaches the parse it cannot replace: " + result.output);
+        assertTrue(compiles(fx).size() > before,
+            "the recipe compiles rather than returning success having done "
+            "nothing: " + compiles(fx).join(", "));
+        assertTrue(exists record(fx, component.key),
+            "and publishes the component it was asked for");
+        assertEq((), stalePlan(fx).stale,
+            "which leaves nothing stale: " + stalePlan(fx).output);
+    }
+
+    #! A stand-in lock helper that reports the group lock as contended.
+    /** The condition is ordinary in a parallel build and cannot be produced by
+        one process: CMake's Makefile generator duplicates the bootstrap recipe
+        into every independent target that depends on the group's stamp, and an
+        object recipe for a component spanning several sources takes the same
+        lock, so the coordinator's escalation regularly waits behind one of them.
+        What reaches the bootstrap from that is one bit -- the lock helper's
+        contention result -- and this supplies it while taking the real lock, so
+        the bootstrap runs its critical section exactly as it does in a build.
+    */
+    private string writeContendedLockHelper(hash<auto> fx) {
+        string path = fx.qo_dir + "/contended-lock.q";
+        write(path,
+            "#!/usr/bin/env qore\n"
+            "%modern\n"
+            "%exec-class ContendedLock\n"
+            "class ContendedLock {\n"
+            "    constructor() {\n"
+            "        string lock_file = shift ARGV;\n"
+            "        File f();\n"
+            "        f.open2(lock_file, O_CREAT | O_RDWR, 0644);\n"
+            "        f.lockBlocking(F_WRLCK);\n"
+            "        setenv(\"QORE_QO_LOCK_WAITED\", \"1\");\n"
+            "        list<string> quoted = ();\n"
+            "        foreach string arg in (ARGV) {\n"
+            "            push quoted, \"'\" + replace(arg, \"'\", \"'\\\\''\") + \"'\";\n"
+            "        }\n"
+            "        exit(system(quoted.join(\" \")));\n"
+            "    }\n"
+            "}\n");
+        chmod(path, 0755);
+        return path;
+    }
+
+    #! The coordinator decides from the closure; the bootstrap must not re-decide.
+    /** The coordinator selects the group's own parse from the rebuild CLOSURE,
+        which is the work the build ends up doing.  The bootstrap's re-check --
+        which a follower that waited for the group lock performs, because the
+        holder it waited behind may have published what it came to do -- weighs
+        the STALE SET instead, and a small stale set in a large group reads as
+        "partly stale".
+
+        Answering that with the hand-off returns success having compiled nothing
+        to the very coordinator the set was handed to.  The coordinator then
+        verifies, finds the components it asked to have parsed still stale, and
+        fails the build -- naming no source, no symbol and no line, on a tree
+        that builds on the next attempt.  Only a caller that has to wait for the
+        lock can reach it, which is what made it an intermittent hard failure of
+        a parallel build.
+    */
+    testEscalationBehindAContendedLockParsesTheGroup() {
+        TmpDir tmp("qore-aot-driver-contended-escalation-");
+        list<string> extra = ();
+        for (int i = 0; i < 10; ++i) {
+            push extra, sprintf("p%02d", i);
+        }
+        # Every component a singleton, and ten of them require d: editing d
+        # leaves ONE component stale whose rebuild closure is eleven.  That is
+        # the shape the two decisions disagree about -- broad by closure, partial
+        # by stale set.
+        hash<auto> fx = fixture(tmp.path, NOTHING, False, extra);
+        foreach string name in (extra) {
+            writeDepfile(fx.qo_dir, name, "d");
+        }
+        writeCompiler(fx);
+        writeBatchCompiler(fx);
+        assertEq(0, plan(fx).rc, "the coordinator brings the group current");
+        assertEq((), stalePlan(fx).stale, "the group starts current");
+
+        write(fx.src_dir + "/d.qc", isolatedSource("d") + "# edited\n");
+        hash<auto> planned = stalePlan(fx);
+        assertEq(1, planned.stale.size(),
+            "one component is stale: " + planned.output);
+        assertEq(extra.size() + 1, planned.closure,
+            "and its rebuild closure is the group minus the untouched ones: "
+                + planned.output);
+
+        int before = compiles(fx).size();
+        hash<auto> result = plan(fx,
+            sprintf("QORE_QCC_LOCK_HELPER=%y", writeContendedLockHelper(fx)));
+        assertEq(0, result.rc,
+            "the coordinator succeeds behind a contended lock: " + result.output);
+        assertTrue(result.output.find("selecting the shared-parse batch") >= 0,
+            "it still selects the group's parse: " + result.output);
+        assertTrue(result.output.find("one shared parse") >= 0,
+            "and the bootstrap runs it rather than handing the set back: "
+                + result.output);
+        assertEq(-1, result.output.find("left stale components"),
+            "so the post-condition is not reported against a parse that never "
+            "ran: " + result.output);
+        assertEq(fx.names.size(), compiles(fx).size() - before,
+            "the group is parsed once, writing every member: "
+                + compiles(fx).join(", "));
+        assertEq((), stalePlan(fx).stale, "and nothing is left stale");
+        assertTrue(is_file(fx.qo_dir + "/.qcc-incremental-plan.stamp"),
+            "the plan publishes its barrier");
+    }
+
+    #! A post-condition that reports no component cannot be triaged.
+    /** "left stale components" named nothing at all -- no component, no source,
+        no line -- so it could not be told apart from a parse or resolution error
+        without reconstructing the plan by hand.  What the coordinator holds at
+        that point is the stale plan it has just read, and the component key is
+        what every other helper in this build addresses a component by.
+
+        The condition itself is reached only when something moves between the
+        group's parse and the verification of it, so it is provoked that way: a
+        wrapper around the bootstrap invalidates one component after the parse
+        has published the group, which is what a concurrent builder does to a
+        tree this coordinator has already verified.
+    */
+    testAnUnconvergedPlanNamesTheStaleComponents() {
+        TmpDir tmp("qore-aot-driver-stale-report-");
+        list<string> extra = ();
+        for (int i = 0; i < 10; ++i) {
+            push extra, sprintf("p%02d", i);
+        }
+        hash<auto> fx = fixture(tmp.path, NOTHING, False, extra);
+        foreach string name in (extra) {
+            writeDepfile(fx.qo_dir, name, "d");
+        }
+        writeCompiler(fx);
+        writeBatchCompiler(fx);
+        assertEq(0, plan(fx).rc, "the coordinator brings the group current");
+
+        write(fx.src_dir + "/d.qc", isolatedSource("d") + "# edited\n");
+        hash<auto> stale = stalePlan(fx);
+        assertEq(1, stale.stale.size(), "one component is stale: " + stale.output);
+        string key = stale.stale[0].key;
+
+        string wrapper = fx.qo_dir + "/bootstrap-then-invalidate.sh";
+        write(wrapper, "#!/bin/sh\nset -e\n"
+            + sprintf("%y \"$@\"\n", tools_dir + DirSep + "qore-qo-batch-bootstrap")
+            + sprintf("rm -f %y\n",
+                fx.qo_dir + "/.qcc-scc/" + key + ".generation.json"));
+        chmod(wrapper, 0755);
+
+        hash<auto> result = plan(fx, NOTHING, wrapper);
+        assertEq(1, result.rc, "the plan fails: " + result.output);
+        assertTrue(result.output.find("left 1 stale component(s)") >= 0,
+            "the count is reported: " + result.output);
+        assertTrue(result.output.find(key) >= 0,
+            "the component is named: " + result.output);
+        assertTrue(result.output.find("d.qc") >= 0,
+            "and located by one of its sources: " + result.output);
+    }
+
+    #! An adopt must not be observable half-done.
+    /** Currency treats a member whose stamp is older than the group's ordering
+        token as belonging to a previous bootstrap.  A run that adopts a tree it
+        found current advances that token and then touches every member stamp, so
+        between the two it publishes a group in which every member it has not
+        reached yet reads as stale -- which is indistinguishable, to every reader,
+        from the hand-off that deliberately encodes a stale set exactly that way.
+
+        The readers are not hypothetical.  CMake's Makefile generator duplicates
+        the bootstrap recipe into every independent target that depends on the
+        group's stamp, so a copy of it adopts the tree while the coordinator is
+        verifying a parse it has just completed; the coordinator then reports
+        components stale that the parse left current, and fails the build.
+
+        This measures the window rather than racing it: a stand-in `touch` reads
+        the group's currency immediately before each of the adopt's own touches,
+        which is exactly what a concurrent reader would have seen at that
+        instant.  None of those reads may report a stale component.
+    */
+    testAdoptingACurrentTreeIsNeverTorn() {
+        TmpDir tmp("qore-aot-driver-adopt-");
+        hash<auto> fx = fixture(tmp.path, NOTHING, False);
+        writeCompiler(fx);
+        assertEq(0, plan(fx).rc, "the coordinator brings the group current");
+        assertEq((), stalePlan(fx).stale, "the group starts current");
+
+        string bin = fx.qo_dir + "/shim";
+        mkdir(bin, 0777, True);
+        string real_touch = trim(backquote("command -v touch"));
+        assertTrue(is_file(real_touch), "the real touch is found: " + real_touch);
+        string reads = fx.qo_dir + "/currency-reads";
+        mkdir(reads, 0777, True);
+        write(bin + "/touch",
+            "#!/bin/sh\n"
+            + sprintf("n=$(ls %y | wc -l)\n", reads)
+            + sprintf("%y %y --scc-source-stale --batch-stamp %y %y "
+                "> \"%s/$n\" 2>&1 || :\n",
+                qore_bin, source_order_tool,
+                fx.qo_dir + "/.qcc-batch-bootstrap.stamp", fx.context, reads)
+            + sprintf("exec %y \"$@\"\n", real_touch));
+        chmod(bin + "/touch", 0755);
+
+        hash<auto> result = bootstrap(fx,
+            sprintf("PATH=%y", bin + ":" + ENV.PATH));
+        assertEq(0, result.rc, "the bootstrap adopts the tree: " + result.output);
+        assertEq(-1, result.output.find("one shared parse"),
+            "without parsing anything: " + result.output);
+
+        list<string> observed = sort(glob(reads + "/*") ?? ());
+        assertTrue(observed.size() > 1,
+            "the adopt touched more than one path, so there is a window to "
+            "measure: " + observed.size());
+        list<string> torn = ();
+        foreach string path in (observed) {
+            if (trim(read(path))) {
+                push torn, basename(path) + ": " + trim(read(path));
+            }
+        }
+        assertEq((), torn,
+            "no reader of the group sees a stale component while it is adopted:\n"
+                + torn.join("\n"));
+        assertEq((), stalePlan(fx).stale, "and the adopted tree is current");
     }
 
     #! Everything the named workers know about why they failed.

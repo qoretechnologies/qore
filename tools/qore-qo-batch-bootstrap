@@ -73,6 +73,7 @@ subset_preloads=
 subset_preload_dir=
 current_stamps=
 currency_file=
+member_stamps=
 # Set by qore-qo-incremental when the group holds a component that spans several
 # sources. It does NOT skip the currency check -- doing so made every member of
 # one component force its own redundant batch -- it only says that a batch
@@ -83,6 +84,40 @@ require_batch=${QORE_QCC_REQUIRE_BATCH:-0}
 # must recheck because the preceding owner may have completed the same build.
 force_batch=${QORE_QCC_FORCE_BATCH:-0}
 lock_waited=false
+# Whether this run may answer a partly stale group by handing the stale set to
+# the group coordinator instead of parsing the group.
+#
+# It may only do so for the CMake bootstrap recipe, which is scheduled BEFORE
+# the coordinator: for that caller the hand-off is the whole point, because the
+# coordinator is a separate process that runs next and decides how to rebuild
+# the set it was given.
+#
+# Every other caller reached here by asking for the group's own parse and reads
+# a successful exit as proof that it ran.  There is no coordinator downstream of
+# them to receive a hand-off -- one of them IS the coordinator -- so answering
+# them with one returns success having compiled nothing:
+#
+#   * qore-qo-incremental-plan escalates to the group's parse from the rebuild
+#     CLOSURE, then verifies.  Handed its own stale set back, it finds the
+#     components it asked to have parsed still stale and fails the build with
+#     "shared-parse incremental build left stale components" -- a hard failure
+#     naming no source, on a tree that builds on the next attempt.
+#   * qore-qo-incremental reaches the group's parse for a component that spans
+#     several sources, which has no standalone builder at all.  Handed its own
+#     stale set back, that recipe exits 0 without compiling or publishing
+#     anything, and the object it was asked for is silently not built.
+#
+# The two callers reach the re-check by different routes -- the coordinator only
+# when it waited for the group lock, the object recipe on every run -- but the
+# answer is the same for both: a caller that asked for the group's parse gets
+# it.  Note that this does not skip the re-check, only its hand-off outcome: a
+# follower that finds the group CURRENT still adopts the tree the holder it
+# waited behind published, which is what keeps concurrent callers to one parse.
+if [ "$force_batch" = 1 ] || [ "$require_batch" = 1 ]; then
+    handoff_available=false
+else
+    handoff_available=true
+fi
 
 run_source_order() {
     if [ -n "${QORE_QCC_QORE_EXECUTABLE:-}" ] \
@@ -167,6 +202,9 @@ cleanup() {
     fi
     if [ -n "${current_stamps:-}" ]; then
         rm -f "$current_stamps"
+    fi
+    if [ -n "${member_stamps:-}" ]; then
+        rm -f "$member_stamps"
     fi
     if [ -n "${subset_preloads:-}" ]; then
         rm -f "$subset_preloads"
@@ -266,11 +304,58 @@ adopt_generation() {
     fi
 }
 
+#! Writes the group's member success stamps, one path per line, once.
+member_stamp_list() {
+    if [ -n "$member_stamps" ]; then
+        return 0
+    fi
+    member_stamps=$(mktemp "${TMPDIR:-/tmp}/qore-qo-batch-stamps.XXXXXX")
+    awk 'NF { print $0 ".stamp" }' "$outputs_file" > "$member_stamps"
+}
+
+#! Dates every member success stamp.
+#  One pass and one touch: a group with hundreds of members would otherwise
+#  spend more time forking than the currency scan it is answering took, and
+#  every fork widens the interval in which the group is half dated.
 touch_member_stamps() {
-    while IFS= read -r output; do
-        [ -n "$output" ] || continue
-        touch "$output.stamp"
-    done < "$outputs_file"
+    member_stamp_list
+    # Never hand xargs an empty list: GNU xargs runs the command anyway, and
+    # `touch` with no operand is an error that `set -e` turns into a failed
+    # build.  BSD xargs does not, and only one of the two has -r.
+    if [ -s "$member_stamps" ]; then
+        tr '\n' '\0' < "$member_stamps" | xargs -0 touch
+    fi
+}
+
+#! Adopts a tree this run found current: every member first, the token last.
+#  Currency treats a member whose stamp is older than the ordering token as
+#  belonging to a previous bootstrap, so a run that advances the token BEFORE it
+#  dates the member stamps publishes an interval -- the whole sweep wide -- in
+#  which every member it has not reached yet reads as stale to anything looking
+#  at the group.  That is the same encoding the hand-off uses deliberately, so a
+#  reader cannot tell the two apart: it sees a partly stale group and acts on it.
+#
+#  The readers are not hypothetical, and neither is the cost.  CMake's Makefile
+#  generator duplicates this recipe into every independent target that depends on
+#  the stamp, so a copy of it adopts the tree while the group coordinator is
+#  verifying a whole-group parse it has just completed -- and the coordinator
+#  then reports components stale that its own parse left current and fails the
+#  build, naming no source and no line, on a tree that builds on the next
+#  attempt.
+#
+#  Doing it the other way round removes the interval rather than narrowing it: at
+#  no point in an adopt is any member of the group older than the token.  The
+#  token is dated from the first stamp the sweep touched, which is the earliest
+#  of them, and that is all this touch was ever for -- the token has to be newer
+#  than the prerequisites that made the build tool run the recipe, not newer than
+#  the tree it is adopting.
+adopt_member_stamps() {
+    touch_member_stamps
+    if [ -s "$member_stamps" ]; then
+        touch -r "$(head -n 1 "$member_stamps")" "$bootstrap_stamp"
+    else
+        touch "$bootstrap_stamp"
+    fi
 }
 
 #! Compiles the components the plan names, in one parse, and publishes them.
@@ -416,7 +501,7 @@ if [ "$force_batch" != 1 ] || [ "$lock_waited" = true ]; then
         END { print n + 0 }' "$currency_file")
     if [ "$stale_components" -eq 0 ]; then
         current=true
-    elif [ "$group_components" -gt 0 ] \
+    elif [ "$handoff_available" = true ] && [ "$group_components" -gt 0 ] \
             && [ "$stale_components" -lt "$group_components" ]; then
         partial=true
     fi
@@ -428,9 +513,8 @@ if [ "$current" = true ] && [ -f "$bootstrap_stamp" ]; then
     # that dependency generation once for the whole group; otherwise every
     # member stamp remains older than the helper and Make launches the
     # standalone wrapper for every source.
-    touch "$bootstrap_stamp"
     adopt_generation
-    touch_member_stamps
+    adopt_member_stamps
     rm -f "$currency_file"
     exit 0
 fi
@@ -483,21 +567,24 @@ if [ -n "${currency_file:-}" ]; then
     rm -f "$currency_file"
 fi
 
+if [ "$current" = true ]; then
+    # Adopt an already-current tree whose marker was missing, without rewriting
+    # any object or contract content.
+    #
+    # Ahead of the ordering token below, not behind it: an adopt has nothing to
+    # mark stale, and advancing the token first would make the whole group read
+    # as stale for the length of the sweep.  See adopt_member_stamps().
+    adopt_generation
+    adopt_member_stamps
+    exit 0
+fi
+
 # The marker has to precede every member success stamp: a member whose stamp is
 # older than the marker is treated as belonging to a previous bootstrap.  Record
 # what it was first: from here the run either publishes the whole group or must
 # put the marker back, because everything below it is now stale by that rule.
 save_ordering_token
 touch "$bootstrap_stamp"
-
-if [ "$current" = true ]; then
-    # Adopt an already-current tree whose marker was missing, without rewriting
-    # any object or contract content.
-    adopt_generation
-    touch_member_stamps
-    commit_ordering_token
-    exit 0
-fi
 
 # One shared parse for the whole group. This message is emitted exactly once per
 # batch that actually runs, which is what makes "a component was built as one
