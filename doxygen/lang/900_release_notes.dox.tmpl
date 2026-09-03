@@ -2865,6 +2865,13 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         on Linux.  The JIT singleton is now allocated once and never destroyed, so it outlives every \c Program it
         serves; its background compile thread is still stopped at exit
         (<a href="https://github.com/qoretechnologies/qore/issues/5392">issue 5392</a>)
+      - fixed tiered JIT promotion repeatedly lowering hot functions without ever compiling them when no synchronous
+        JIT path had initialized LLVM first.  Every call after the native-promotion threshold released and reclaimed
+        the compile slot, repeated interprocedural batch discovery and IR lowering, and then rejected the background
+        work; large Qore user-module workloads therefore became progressively slower in the same process.  The first
+        accepted background promotion now initializes LLVM once on the compilation worker and completes native
+        promotion
+        (<a href="https://github.com/qoretechnologies/qore/issues/5412">issue 5412</a>)
       - fixed a potential crash when a running @ref Qore::Program "Program" loaded a module while other threads
         resolved functions, classes, namespaces, constants, or global and static variables in the same Program;
         runtime module application and committed namespace lookups are now synchronized without stopping unrelated

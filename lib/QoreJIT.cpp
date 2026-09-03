@@ -1695,6 +1695,24 @@ void QoreJIT::bgCompileThreadLoop() {
             bg_in_progress = &work;
         }
 
+        // Tiered execution can reach a hot function before any synchronous JIT
+        // compilation has initialized LLVM.  Initialize it here so that the
+        // first background promotion can make progress; otherwise enqueueing
+        // rejects the work and resets the variant's compile state, causing every
+        // subsequent call above the threshold to repeat batch discovery and IR
+        // lowering indefinitely.
+        std::call_once(init_flag, [this]() {
+            init_success = initialize(init_error);
+        });
+        if (!init_success) {
+            if (work.uvb) {
+                UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(work.uvb);
+                mutable_uvb->jit_compile_state.store(2, std::memory_order_release);
+            }
+            finishBgCompileWork(work);
+            continue;
+        }
+
         // Acquire compile lock (blocking is OK here — this is a dedicated background thread)
         std::lock_guard<std::mutex> lock(compile_mutex);
 
@@ -1829,21 +1847,6 @@ void QoreJIT::enqueueBgCompile(const AbstractQoreFunctionVariant* variant, const
     if (!bg_accept_work.load(std::memory_order_acquire)
             || qore_shutdown.load(std::memory_order_acquire)
             || qore_exiting.load(std::memory_order_acquire)) {
-        if (uvb) {
-            const_cast<UserVariantBase*>(uvb)->jit_compile_state.store(0, std::memory_order_release);
-        }
-        return;
-    }
-
-    // Skip if LLVM is not initialized.  This is expected in tiered/jit mode at
-    // parse-commit time: LLVM is not brought up until the first synchronous
-    // compile (e.g. the top-level block via executeWithFallback).  The caller
-    // already claimed the compile slot (jit_compile_state 0→1); release it here so
-    // the function can be re-submitted on a later call once LLVM is available
-    // (via the execution-count threshold), instead of being stuck at the IR tier
-    // forever — the CAS 0→1 in attemptJITCompilation would otherwise never
-    // succeed again.
-    if (!jit) {
         if (uvb) {
             const_cast<UserVariantBase*>(uvb)->jit_compile_state.store(0, std::memory_order_release);
         }

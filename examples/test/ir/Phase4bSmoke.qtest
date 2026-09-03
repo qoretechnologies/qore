@@ -6,8 +6,8 @@
 %modern
 %no-child-restrictions
 
-%requires QUnit
 %prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
 %requires FsUtil
 
 %exec-class Phase4bSmokeTest
@@ -24,6 +24,7 @@ class Phase4bSmokeTest inherits QUnit::Test {
         addTestCase("type profiling float correctness", \testTypeProfilingFloat());
         addTestCase("type profiling mixed types", \testTypeProfilingMixed());
         addTestCase("type profiling guard promotion", \testTypeProfilingGuardPromotion());
+        addTestCase("tiered background JIT initializes LLVM", \testTieredBackgroundJitInitialization());
         # Profile-informed JIT guard tests
         addTestCase("profiled guard int fast-path", \testProfiledGuardIntFastPath());
         addTestCase("profiled guard float fast-path", \testProfiledGuardFloatFastPath());
@@ -43,14 +44,14 @@ class Phase4bSmokeTest inherits QUnit::Test {
         set_return_value(main());
     }
 
-    private string runScript(string code, *string exec_mode, *string extra_opts) {
+    private string runScript(string code, *string exec_mode, *string extra_opts, *string environment) {
         string mode = exec_mode ?? "tiered";
         TmpFile tmp(NOTHING, ".qr");
         tmp.file.write(code);
         tmp.file.close();
         string path = tmp.path;
-        string cmd = sprintf("%s --enable-debug --exec-mode=%s %s %s 2>&1",
-            qore_bin, mode, extra_opts ?? "", path);
+        string cmd = sprintf("%s %s --enable-debug --exec-mode=%s %s %s 2>&1",
+            environment ?? "", qore_bin, mode, extra_opts ?? "", path);
         return backquote(cmd);
     }
 
@@ -132,6 +133,46 @@ printf(\"%d\\n\", total);
         string result = trim(runScript(code, "tiered", "--jit-ir-threshold=5 --jit-jit-threshold=100"));
         # Sum of i^2 from 0 to 499 = 499*500*999/6 = 41541750
         assertEq("41541750", result, "type profiling guard promotion: sum of squares correct");
+    }
+
+    testTieredBackgroundJitInitialization() {
+        # Load the hot function from a user module so the main program does not
+        # compile it synchronously or inline it.  In a fresh process this reaches
+        # background promotion before any other path has initialized LLVM.
+        TmpDir module_dir("qore-tiered-background-init-");
+        string module_path = module_dir.path + DirSep + "TieredBackgroundInitModule.qm";
+        File module();
+        module.open2(module_path, O_WRONLY | O_CREAT | O_TRUNC);
+        module.write("%modern\n\n"
+            + "module TieredBackgroundInitModule {\n"
+            + "    version = \"1.0\";\n"
+            + "    desc = \"tiered background JIT initialization test module\";\n"
+            + "    author = \"Qore Technologies, s.r.o.\";\n"
+            + "    license = \"MIT\";\n"
+            + "}\n\n"
+            + "public class TieredBackgroundInitRunner {\n"
+            + "    static int hot(int value) {\n"
+            + "        if (!value) {\n"
+            + "            return 1;\n"
+            + "        }\n"
+            + "        return TieredBackgroundInitRunner::hot(value - 1) + 1;\n"
+            + "    }\n"
+            + "}\n");
+        module.close();
+        string code = "%modern\n%requires " + module_path + "\n\n"
+            + "int result = 0;\n"
+            + "for (int i = 0; i < 10000; ++i) {\n"
+            + "    result += TieredBackgroundInitRunner::hot(2);\n"
+            + "}\n"
+            + "printf(\"RESULT=%d\\n\", result);\n";
+        string output = runScript(code, "tiered", "--jit-ir-threshold=1 --jit-jit-threshold=2",
+            "QORE_JIT_TIMING=1");
+        assertTrue(output =~ /RESULT=30000/, "tiered module workload completed: " + output);
+        *list<string> enqueued = (output =~ x/(\[BG-JIT\] enqueued compilation of 'hot@)/g);
+        assertEq(1, enqueued.size(), "hot function was enqueued exactly once: " + output);
+        *list<string> promoted = (output
+            =~ x/(\[BG-JIT\] compiled 'hot@[^\n]* and promoted to JIT tier)/g);
+        assertEq(1, promoted.size(), "hot function reached the native tier exactly once: " + output);
     }
 
     # --- Profile-informed guard fast-path tests ---
