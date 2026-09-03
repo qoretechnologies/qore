@@ -59,6 +59,8 @@ class VoyageEmbedderTest inherits QUnit::Test {
             \testPlainBatchOmitsInputType());
         addTestCase("unsupported input type fails locally",
             \testUnsupportedInputType());
+        addTestCase("preferred batch size reflects provider guidance",
+            \testPreferredBatchSize());
         set_return_value(main());
     }
 
@@ -121,5 +123,11 @@ class VoyageEmbedderTest inherits QUnit::Test {
         }
         assertEq(request_count, handler.requests.size(),
             "invalid input_type must fail before an HTTP request");
+    }
+
+    testPreferredBatchSize() {
+        VoyageEmbedder emb = makeEmbedder();
+        assertEq(128, emb.getPreferredBatchSize(),
+            "Voyage advertises its documented conservative batch size");
     }
 }

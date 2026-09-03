@@ -368,6 +368,12 @@ public class VoyageEmbedder inherits AbstractEmbedder {
     public {
         const DefaultModel = VoyageRestClient::VoyageRestClientBase::DefaultEmbeddingModel;
         const Backend = "voyage";
+
+        #! Conservative Voyage embeddings request size
+        /** Voyage accepts substantially larger requests, but 128 inputs is
+            the provider's documented conservative batching example and keeps
+            token-based limits and rate-limit recovery bounded. */
+        const PreferredBatchSize = 128;
     }
 
     private {
@@ -453,6 +459,10 @@ public class VoyageEmbedder inherits AbstractEmbedder {
             push result, vec;
         }
         return result;
+    }
+
+    int getPreferredBatchSize() {
+        return PreferredBatchSize;
     }
 
     int getDimension() {

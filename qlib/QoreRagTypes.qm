@@ -553,6 +553,19 @@ public class AbstractEmbedder {
     */
     abstract list<list<float>> encodeBatch(list<string> texts, *hash<auto> opts);
 
+    #! Returns the preferred number of texts per bulk embedding request
+    /** This is an advisory provider-request size for callers that own a large
+        corpus and need to split it before calling @ref encodeBatch().  It is
+        deliberately conservative by default: concrete providers should
+        override it only when their documented service limits support a larger
+        request.  It is independent of vector-store write batch sizes.
+
+        @return a positive preferred input count; the default is 10
+    */
+    int getPreferredBatchSize() {
+        return 10;
+    }
+
     #! Returns the embedding dimension produced by this backend
     /** Used by callers to size vector store columns / Qdrant collections.
 

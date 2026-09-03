@@ -162,6 +162,8 @@ public class RagProviderRegistryTest inherits QUnit::Test {
             QoreRagUtils::RagProviderRegistry::createEmbedder(
                 <QoreRagUtils::EmbedderConfig>{"backend": "test-fake-embedder"});
         assertEq(1, e.getDimension());
+        assertEq(10, e.getPreferredBatchSize(),
+            "embedders inherit the conservative request-size preference");
     }
 
     embedderCreateEmbedderRequiresBackendTest() {
