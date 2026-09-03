@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file ElasticSearchLoggerAppender.qm Qore ElasticSearch Logger Appender Module
 
-/** ElasticSearchLoggerAppender.qm Copyright 2025 Qore Technologies, s.r.o.
+/** ElasticSearchLoggerAppender.qm Copyright 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -28,11 +28,17 @@
 # requires the Logger module
 %requires Logger
 
+# requires the Util module for get_random_string()
+%requires Util
+
 # requires the RestClientIo module
 %requires RestClientIo
 
 # assume local var scope, do not use "$" for vars, members, and method calls
 %modern
+
+# allow the weak assignment operator; the flush timer callback must not hold a strong reference to the appender
+%allow-weak-references
 
 # requires json module for make_json()
 %requires json
@@ -233,14 +239,23 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         #! Mutex for thread-safe buffer access
         Mutex bufferMutex();
 
-        #! Mutex for timer thread synchronization
+        #! Mutex protecting the periodic flush timer state
         Mutex timerMutex();
 
-        #! Timer thread ID for periodic flushing
-        *int timerTid;
+        #! ID of the currently-scheduled periodic flush timer, if any
+        *int flushTimerId;
 
-        #! Flag to signal timer thread to stop
-        bool stopTimer = False;
+        #! Generation of the current timer schedule
+        /** Incremented by startFlushTimer() and stopFlushTimer() so that a timer callback that has already been
+            dispatched to a worker thread can detect that it is stale and return without flushing
+        */
+        int flushTimerGeneration = 0;
+
+        #! Whether periodic flushing is currently stopped
+        bool timerStopped = True;
+
+        #! Unique async I/O controller owner tag for this appender's flush timers
+        string timerOwner = "elasticsearch-logger-appender-" + get_random_string(12);
 
         #! WaitGroup for tracking active flush operations
         WaitGroup flushCounter();
@@ -261,6 +276,9 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
             - \c allow_search_index_override: allow trusted search callers to override \c index (default: False)
             - \c connect_timeout: Connection timeout in milliseconds (optional)
             - \c timeout: Request timeout in milliseconds (optional)
+
+        @throw ELASTICSEARCH-APPENDER-ERROR the \c url or \c index option is missing, or the \c batch_size or
+            \c flush_interval_ms option is less than \c 1
     */
     constructor(*string name, Logger::LoggerLayout layout, hash<auto> options)
             : LoggerAppenderWithLayout(name, layout) {
@@ -275,8 +293,7 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         rest = new RestClientIo::RestClientIo(rest_opts);
 
         indexPattern = options.index;
-        batchSize = options.batch_size ?? DefaultBatchSize;
-        flushIntervalMs = options.flush_interval_ms ?? DefaultFlushIntervalMs;
+        setBatchOptions(options);
         pipeline = options.pipeline;
         allowSearchIndexOverride = options.allow_search_index_override ?? False;
     }
@@ -291,6 +308,9 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
             - \c flush_interval_ms: Flush interval in milliseconds (default: 5000)
             - \c pipeline: Ingest pipeline name (optional)
             - \c allow_search_index_override: allow trusted search callers to override \c index (default: False)
+
+        @throw ELASTICSEARCH-APPENDER-ERROR the \c index option is missing, or the \c batch_size or
+            \c flush_interval_ms option is less than \c 1
     */
     constructor(*string name, Logger::LoggerLayout layout, RestClientIo::RestClientIo rest, hash<auto> options)
             : LoggerAppenderWithLayout(name, layout) {
@@ -300,8 +320,7 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
 
         self.rest = rest;
         indexPattern = options.index;
-        batchSize = options.batch_size ?? DefaultBatchSize;
-        flushIntervalMs = options.flush_interval_ms ?? DefaultFlushIntervalMs;
+        setBatchOptions(options);
         pipeline = options.pipeline;
         allowSearchIndexOverride = options.allow_search_index_override ?? False;
     }
@@ -500,58 +519,109 @@ public class ElasticSearchLoggerAppender inherits Logger::LoggerAppenderWithLayo
         }
     }
 
-    #! Starts the background flush timer
-    private startFlushTimer() {
-        {
-            AutoLock al(timerMutex);
-            stopTimer = False;
-            timerTid = background timerLoop();
+    #! Applies and validates the batching options common to both constructors
+    /** @param options the option hash passed to the constructor
+
+        @throw ELASTICSEARCH-APPENDER-ERROR the \c batch_size or \c flush_interval_ms option is less than \c 1
+    */
+    private:internal setBatchOptions(hash<auto> options) {
+        batchSize = options.batch_size ?? DefaultBatchSize;
+        if (batchSize < 1) {
+            throw "ELASTICSEARCH-APPENDER-ERROR", sprintf("option 'batch_size' must be >= 1; got %d", batchSize);
+        }
+        flushIntervalMs = options.flush_interval_ms ?? DefaultFlushIntervalMs;
+        if (flushIntervalMs < 1) {
+            throw "ELASTICSEARCH-APPENDER-ERROR", sprintf("option 'flush_interval_ms' must be >= 1; got %d",
+                flushIntervalMs);
         }
     }
 
-    #! Stops the background flush timer
+    #! Starts periodic flushing
+    /** Periodic flushes are driven by @ref Qore::AsyncIoController "AsyncIoController" timers rather than by a
+        dedicated background thread.  A background thread would hold a reference to this object for its entire
+        lifetime, and %Qore @ref Qore::Program "Program" termination waits for all background threads to exit
+        before destroying objects; since it is this object's destructor that stops the timer, a background timer
+        thread would deadlock program shutdown for any caller that did not close the appender explicitly.
+    */
+    private startFlushTimer() {
+        AutoLock al(timerMutex);
+        timerStopped = False;
+        scheduleFlushTimerLocked(++flushTimerGeneration);
+    }
+
+    #! Stops periodic flushing and drains any timer callback that has already been dispatched
     private stopFlushTimer() {
         {
             AutoLock al(timerMutex);
-            stopTimer = True;
-        }
-        # Wait for the timer thread to exit
-        int waited = 0;
-        while (waited < flushIntervalMs + 1000) {
-            {
-                AutoLock al(timerMutex);
-                if (!timerTid) {
-                    break;
-                }
+            if (timerStopped) {
+                return;
             }
-            usleep(100000);  # 100ms
-            waited += 100;
+            timerStopped = True;
+            # invalidate any callback already dispatched to a worker thread
+            ++flushTimerGeneration;
+            if (flushTimerId) {
+                try {
+                    AsyncIoController::cancelTimer(flushTimerId);
+                } catch (hash<ExceptionInfo> ex) {
+                    # the controller may already be torn down at process exit
+                }
+                remove flushTimerId;
+            }
+        }
+        # deterministically drain a timer callback that fired but has not run yet; this is safe to call from a
+        # callback worker, where it returns immediately
+        try {
+            AsyncIoController::flushCallbacksByOwner(timerOwner);
+        } catch (hash<ExceptionInfo> ex) {
+            # the controller may already be torn down at process exit
         }
     }
 
-    #! Background timer loop for periodic flushing
-    private timerLoop() {
-        on_exit {
+    #! Schedules the next periodic flush; \a timerMutex must be held by the caller
+    /** @param generation the timer generation that this schedule belongs to; the timer is not scheduled if the
+        generation is stale or if periodic flushing has been stopped
+    */
+    private scheduleFlushTimerLocked(int generation) {
+        if (timerStopped || generation != flushTimerGeneration) {
+            return;
+        }
+        # the callback holds only a weak reference to this object, so a pending timer can never keep the appender
+        # (or its Program) alive; if the appender is deleted first, the call throws OBJECT-ALREADY-DELETED
+        ElasticSearchLoggerAppender wself;
+        wself := self;
+        flushTimerId = AsyncIoController::addTimer(now_us() + milliseconds(flushIntervalMs), sub () {
+            try {
+                wself.flushTimerCallback(generation);
+            } catch (hash<ExceptionInfo> ex) {
+                # OBJECT-ALREADY-DELETED: the appender was deleted before the callback ran; nothing to flush
+            }
+        }, timerOwner);
+    }
+
+    #! Periodic flush timer callback; runs on an async I/O controller worker thread
+    /** @param generation the timer generation that scheduled this callback
+    */
+    private flushTimerCallback(int generation) {
+        # register the callback with the flush WaitGroup so that closeImpl() waits for it to complete
+        flushCounter.add();
+        on_exit flushCounter.done();
+
+        {
             AutoLock al(timerMutex);
-            delete timerTid;
+            if (timerStopped || generation != flushTimerGeneration) {
+                return;
+            }
+            remove flushTimerId;
         }
 
-        while (!stopTimer) {
-            # Sleep in small increments to check stopTimer more often
-            int slept = 0;
-            while (!stopTimer && slept < flushIntervalMs) {
-                usleep(100000);  # 100ms
-                slept += 100;
-            }
-
-            if (!stopTimer) {
-                try {
-                    flush();
-                } catch () {
-                    # Ignore errors in timer thread
-                }
-            }
+        try {
+            flush();
+        } catch (hash<ExceptionInfo> ex) {
+            # errors are reported by handleError(); a transient failure must not stop periodic flushing
         }
+
+        AutoLock al(timerMutex);
+        scheduleFlushTimerLocked(generation);
     }
 
     #! Flushes a batch of events to ElasticSearch

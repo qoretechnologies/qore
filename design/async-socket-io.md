@@ -242,6 +242,63 @@ immediately (provided `tid != 0`). This is correct — there is nothing to wait 
 
 Cancel a single operation by socket unique hash or custom key.
 
+### Periodic work owned by a Qore object
+
+`AsyncIoController::addTimer(date deadline, auto user_data, string owner)` is the correct mechanism
+for a recurring task owned by a Qore object (a heartbeat, a keep-alive ping, a buffered-log flush).
+A dedicated `background` thread is **not**, because of a shutdown cycle:
+
+- a `background` call keeps a reference to the object for the life of the thread, so the object's
+  destructor cannot run while the thread is alive;
+- `qore_program_private::waitForTerminationAndClear()` waits for **all** program background threads
+  to terminate *before* it destroys the program's objects;
+- if it is the destructor that stops the thread, the program can never exit.
+
+`OpenSearchLoggerAppender`/`ElasticSearchLoggerAppender` hit exactly this (issue #5406): any program
+that opened a search-log appender and did not call `close()` explicitly hung forever in shutdown.
+Controller timers do not have this problem — they are dispatched by the controller's own worker
+threads, which are library threads and not program background threads, so program termination is
+never blocked by a pending timer.
+
+The pattern:
+
+```qore
+private scheduleTimerLocked(int generation) {
+    if (stopped || generation != timerGeneration) {
+        return;
+    }
+    # a strong reference here would keep the object (and so its Program) alive until the timer fires
+    MyClass wself;
+    wself := self;
+    timerId = AsyncIoController::addTimer(now_us() + milliseconds(interval_ms), sub () {
+        try {
+            wself.timerCallback(generation);
+        } catch (hash<ExceptionInfo> ex) {
+            # OBJECT-ALREADY-DELETED: the owner is gone; nothing to do
+        }
+    }, timerOwner);
+}
+```
+
+Three properties are required and each has a reason:
+
+- **weak self-reference** (`:=`, needs `%allow-weak-references`): the controller holds the callback
+  closure, so a strong capture would keep the object alive until the timer fired — which for a
+  self-rescheduling timer means forever. With a weak reference, dropping the last user reference
+  runs the destructor immediately, and a callback that loses the race throws `OBJECT-ALREADY-DELETED`
+  and exits.
+- **generation counter**: `cancelTimer()` cannot recall a callback that has already been dispatched
+  to a worker. The callback re-checks its generation under the object's lock and returns if the
+  timer has since been stopped or restarted.
+- **owner tag + `flushCallbacksByOwner()`** on teardown: this drains a callback that fired but has
+  not run yet, closing the window between `cancelTimer()` and the destructor returning. It is safe
+  from a destructor, including one running on a callback worker, where `waitForOwnerIdle()` returns
+  immediately.
+
+Teardown then also has to wait for a callback that is already *inside* the work (a `WaitGroup`
+incremented for the callback's whole duration is enough), so that the object is not destroyed under
+an in-progress flush.
+
 ## Http2ClientIo Module
 
 The Http2ClientIo module provides a full HTTP/2 client multiplexing stack that integrates with

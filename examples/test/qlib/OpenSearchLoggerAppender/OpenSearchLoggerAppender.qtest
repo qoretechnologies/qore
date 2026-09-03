@@ -6,6 +6,7 @@
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %requires Util
+%requires FsUtil
 %requires QUnit
 %requires Logger
 %requires RestClientIo
@@ -22,6 +23,21 @@ class FakeOpenSearchRestClientIo inherits RestClientIo::RestClientIo {
         *auto last_body;
         *hash<auto> last_headers;
         bool throw_on_search = False;
+
+        #! Each bulk request pushes its body here, so tests can wait for a flush deterministically
+        Queue bulk_requests();
+
+        #! When set, each bulk request blocks until an entry is pushed to this queue
+        *Queue bulk_gate;
+
+        #! Each bulk request signals here before it blocks on bulk_gate
+        Queue flush_started();
+
+        #! Records the order in which the flush and close operations complete
+        list<string> event_order = ();
+
+        #! Serializes access to event_order
+        Mutex order_mutex();
         hash<auto> search_response = {
             "hits": {
                 "total": {"value": 10},
@@ -75,10 +91,26 @@ class FakeOpenSearchRestClientIo inherits RestClientIo::RestClientIo {
 
     hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body, *hash<auto> hdr) {
         record(method, path, body, hdr);
+        if (path == "_bulk") {
+            addEvent("flush-start");
+            flush_started.push(True);
+            if (bulk_gate) {
+                # block the flush until the test releases it
+                bulk_gate.get();
+            }
+            addEvent("flush-end");
+            bulk_requests.push(body.toString());
+        }
         return <RestClient::RestResponseInfo>{
             "body": {"errors": False, "items": ()},
             "status_code": 200,
         };
+    }
+
+    #! Appends an event to the ordered event log
+    addEvent(string event) {
+        AutoLock al(order_mutex);
+        push event_order, event;
     }
 
     hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
@@ -111,6 +143,15 @@ public class OpenSearchLoggerAppenderTest inherits QUnit::Test {
         };
 
         const int OptionColumn = 22;
+
+        #! Maximum time to wait for a timer-driven flush in tests
+        const int TimerWaitMs = 30000;
+
+        #! Flush interval used by the shutdown subprocess; far longer than ShutdownWatchdogSecs
+        const int ShutdownFlushIntervalMs = 300000;
+
+        #! Hard deadline for the shutdown subprocess
+        const int ShutdownWatchdogSecs = 60;
     }
 
     static checkModule(Test test) {
@@ -123,6 +164,9 @@ public class OpenSearchLoggerAppenderTest inherits QUnit::Test {
         addTestCase("searchQueryTranslationTest", \searchQueryTranslationTest());
         addTestCase("searchValidationTest", \searchValidationTest());
         addTestCase("batchingTest", \batchingTest());
+        addTestCase("flushTimerTest", \flushTimerTest());
+        addTestCase("concurrentFlushCloseTest", \concurrentFlushCloseTest());
+        addTestCase("shutdownWithoutCloseTest", \shutdownWithoutCloseTest());
         addTestCase("negativeTests", \negativeTests());
 
         setupConnection();
@@ -457,7 +501,186 @@ public class OpenSearchLoggerAppenderTest inherits QUnit::Test {
                 "batch_size": 1,
             }
         );
-        assertTrue(True);  # Construction succeeded
+        assertEq("test-logs", appender.getIndexPattern());
+        assertEq(1, appender.getBatchSize());
+        assertEq(OpenSearchLoggerAppender::OpenSearchLoggerAppender::DefaultFlushIntervalMs,
+            appender.getFlushIntervalMs());
+
+        # a non-positive flush interval would schedule a timer that fires immediately in a tight loop
+        try {
+            new OpenSearchLoggerAppender::OpenSearchLoggerAppender("test", new LoggerLayoutPattern("%m%n"), {
+                "url": "http://localhost:9200",
+                "index": "test-logs",
+                "flush_interval_ms": 0,
+            });
+            fail("expected an exception for a non-positive flush interval");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("OPENSEARCH-APPENDER-ERROR", ex.err);
+            assertTrue(ex.desc.find("flush_interval_ms") >= 0, ex.desc);
+        }
+
+        # a non-positive batch size would flush an empty buffer on every event
+        try {
+            new OpenSearchLoggerAppender::OpenSearchLoggerAppender("test", new LoggerLayoutPattern("%m%n"), {
+                "url": "http://localhost:9200",
+                "index": "test-logs",
+                "batch_size": -1,
+            });
+            fail("expected an exception for a non-positive batch size");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("OPENSEARCH-APPENDER-ERROR", ex.err);
+            assertTrue(ex.desc.find("batch_size") >= 0, ex.desc);
+        }
+    }
+
+    #! Tests that the periodic flush timer flushes buffered events and stops when the appender is closed
+    private flushTimerTest() {
+        checkModule(self);
+        FakeOpenSearchRestClientIo fake();
+        OpenSearchLoggerAppender::OpenSearchLoggerAppender appender("timer-test",
+            new LoggerLayoutPattern("%m%n"), fake, {
+                "index": "timer-test-logs",
+                # a batch size larger than the event count so only the timer can trigger the flush
+                "batch_size": 100,
+                "flush_interval_ms": 100,
+            });
+
+        appender.open();
+        Logger logger("TimerTest", LoggerLevel::getLevelInfo());
+        logger.addAppender(appender);
+        logger.info("timer message 1");
+        logger.info("timer message 2");
+
+        # the timer must flush the partial batch with no explicit flush() call
+        string body = fake.bulk_requests.get(TimerWaitMs);
+        assertTrue(body.find("timer message 1") >= 0, "the timer flushed the first buffered event");
+        assertTrue(body.find("timer message 2") >= 0, "the timer flushed the second buffered event");
+        assertEq("POST", fake.last_method);
+        assertEq("_bulk", fake.last_path);
+
+        appender.close();
+
+        # after close() the timer must no longer flush anything
+        logger.info("message after close");
+        try {
+            string extra = fake.bulk_requests.get(TimerWaitMs);
+            fail(sprintf("the flush timer was still running after close(): %y", extra));
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("QUEUE-TIMEOUT", ex.err);
+        }
+    }
+
+    #! Tests that closing the appender waits for a flush that is already in progress
+    private concurrentFlushCloseTest() {
+        checkModule(self);
+        Queue gate();
+        FakeOpenSearchRestClientIo fake();
+        fake.bulk_gate = gate;
+
+        OpenSearchLoggerAppender::OpenSearchLoggerAppender appender("concurrent-test",
+            new LoggerLayoutPattern("%m%n"), fake, {
+                "index": "concurrent-test-logs",
+                "batch_size": 100,
+                "flush_interval_ms": 100,
+            });
+
+        appender.open();
+        Logger logger("ConcurrentTest", LoggerLevel::getLevelInfo());
+        logger.addAppender(appender);
+        logger.info("event flushed by the timer");
+
+        # wait until the timer flush is blocked inside the REST call, so that close() is guaranteed to run
+        # while a flush is in progress
+        fake.flush_started.get(TimerWaitMs);
+
+        Counter closed(1);
+        background sub () {
+            # the flush is in progress; close() must not return until it completes
+            try {
+                appender.close();
+                fake.addEvent("close-end");
+            } catch (hash<ExceptionInfo> ex) {
+                fake.addEvent("close-error: " + ex.err);
+            }
+            closed.dec();
+        }();
+
+        # release the in-progress flush and wait for close() to return
+        gate.push(True);
+        closed.waitForZero(TimerWaitMs);
+        assertEq(0, closed.getCount(), "close() returned while a flush was in progress");
+
+        list<string> order = fake.event_order;
+        assertEq("flush-start", order[0]);
+        assertEq("flush-end", order[1]);
+        assertEq("close-end", order[order.size() - 1], sprintf("event order: %y", order));
+    }
+
+    #! Tests that a program that never closes the appender still exits (issue #5406)
+    private shutdownWithoutCloseTest() {
+        checkModule(self);
+        TmpDir tmp_dir("opensearch-appender-shutdown-");
+        string marker = tmp_dir.path + "/done.txt";
+        string script = tmp_dir.path + "/shutdown.qr";
+        string out_path = tmp_dir.path + "/out.txt";
+
+        # the appender is opened and used but deliberately never closed; the flush interval is far longer than
+        # the watchdog below, so the process can only exit if the flush timer does not block program shutdown
+        File f();
+        f.open2(script, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(sprintf("%%modern\n"
+            "%%prepend-module-path %s\n"
+            "%%requires Logger\n"
+            "%%requires OpenSearchLoggerAppender\n"
+            "OpenSearchLoggerAppender::OpenSearchLoggerAppender appender(\"shutdown-test\",\n"
+            "    new LoggerLayoutPattern(\"%%m%%n\"), {\n"
+            "        \"url\": \"http://localhost:1\",\n"
+            "        \"index\": \"shutdown-test-logs\",\n"
+            "        \"flush_interval_ms\": %d,\n"
+            "    });\n"
+            "appender.open();\n"
+            "Logger logger(\"ShutdownTest\", LoggerLevel::getLevelInfo());\n"
+            "logger.addAppender(appender);\n"
+            "logger.info(\"buffered at exit\");\n"
+            "File marker();\n"
+            "marker.open2(%y, O_CREAT | O_WRONLY | O_TRUNC);\n"
+            "marker.write(\"done\");\n",
+            getQlibDir(), ShutdownFlushIntervalMs, marker));
+        delete f;
+
+        date start = now_us();
+        int rc = runWithWatchdog(sprintf("%s %s > %s 2>&1", shellQuote(getQoreBinary()), shellQuote(script),
+            shellQuote(out_path)), ShutdownWatchdogSecs);
+        date elapsed = now_us() - start;
+
+        assertEq(0, rc, sprintf("the subprocess exited normally in %y: %s", elapsed,
+            is_file(out_path) ? ReadOnlyFile::readTextFile(out_path) : ""));
+        assertTrue(is_file(marker), "the subprocess ran to the end of the script");
+        assertTrue(elapsed < milliseconds(ShutdownFlushIntervalMs),
+            sprintf("the subprocess exited without waiting for the flush interval (%y)", elapsed));
+    }
+
+    #! Returns the qlib directory used by this test
+    private string getQlibDir() {
+        return normalize_dir(get_script_dir() + "/../../../../qlib");
+    }
+
+    #! Returns the qore binary to use for subprocess tests
+    private string getQoreBinary() {
+        return ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+    }
+
+    #! Quotes a string for safe use in a POSIX shell command
+    private string shellQuote(string val) {
+        return "'" + replace(val, "'", "'\\''") + "'";
+    }
+
+    #! Runs a shell command and kills it if it does not exit within \a secs seconds
+    /** @return the command's exit status; non-zero if the watchdog had to kill it
+    */
+    private int runWithWatchdog(string cmd, int secs) {
+        return system(sprintf("%s & cmd_pid=$!; (sleep %d; kill -9 $cmd_pid) > /dev/null 2>&1 & dog_pid=$!; "
+            "wait $cmd_pid; rc=$?; kill $dog_pid > /dev/null 2>&1; exit $rc", cmd, secs));
     }
 
     private usageIntern() {
