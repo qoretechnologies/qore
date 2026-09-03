@@ -192,12 +192,6 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         @endcode
     */
     string getQueryValue(string key, AbstractDataProviderType type, auto val) {
-        # the Discovery API requires "true" and "false" for boolean query args; the declared type cannot be used
-        # to detect them, because Discovery boolean parameters are declared as soft boolean-or-string types whose
-        # base type code is NT_STRING, so a boolean value would otherwise be serialized as "1" or "0"
-        if (val.typeCode() == NT_BOOLEAN) {
-            return val ? "true" : "false";
-        }
         switch (type.getBaseTypeCode()) {
             case NT_BOOLEAN:
                 return val ? "true" : "false";

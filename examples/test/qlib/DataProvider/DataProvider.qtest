@@ -500,6 +500,26 @@ class StringTestType inherits Type {
     }
 }
 
+#! A type that implements its own value conversion, like the SoftBool*StringType classes in REST providers
+class BoolStringTestType inherits Type {
+    #! Creates the object
+    constructor() : Type("*softstring") {
+    }
+
+    #! Returns the type name
+    string getName() {
+        return "boolteststring";
+    }
+
+    #! Returns the value after any conversions by the type
+    auto acceptsValue(auto value) {
+        if (!exists value || value === NULL) {
+            return;
+        }
+        return parse_boolean(value) ? "true" : "false";
+    }
+}
+
 #! Test processor using the new return-based API
 class ReturnBasedProcessor inherits AbstractDataProcessor {
     private *auto processRecordImpl(auto record) {
@@ -876,6 +896,7 @@ public class DataProviderTest inherits QUnit::Test {
         addTestCase("action deregister cleanup", \actionDeregisterCleanupTest());
         addTestCase("pending app module context", \pendingAppModuleContextTest());
         addTestCase("string test", \stringTest());
+        addTestCase("custom type conversion test", \customTypeConversionTest());
         addTestCase("data test", \dataTest());
         addTestCase("compat test", \compatTest());
         addTestCase("filtered hash map type hint test", \filteredHashMapTypeHintTest());
@@ -2288,6 +2309,22 @@ public class DataProviderTest inherits QUnit::Test {
     stringTest() {
         AbstractDataProviderType t = AbstractDataProviderType::get(new StringTestType());
         assertEq("1", t.acceptsValue(1));
+    }
+
+    customTypeConversionTest() {
+        # a wrapped type that implements its own conversion must be honored; the generic string conversion in
+        # QoreStringDataTypeBase would otherwise render True as "1" and silently defeat the override
+        AbstractDataProviderType t = AbstractDataProviderType::get(new BoolStringTestType());
+        assertEq("QoreStringDataTypeBase", get_class_name(t));
+        assertEq("true", t.acceptsValue(True));
+        assertEq("false", t.acceptsValue(False));
+        assertEq("true", t.acceptsValue("yes"));
+        assertEq("false", t.acceptsValue(0));
+
+        # a subclass that does not override acceptsValue() keeps the generic string conversion
+        AbstractDataProviderType plain = AbstractDataProviderType::get(new StringTestType());
+        assertEq("1", plain.acceptsValue(1));
+        assertEq("1", plain.acceptsValue(True));
     }
 
     dataTest() {

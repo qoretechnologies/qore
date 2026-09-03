@@ -43,8 +43,9 @@ class GoogleRequestTargetProbe inherits GoogleApiDataProvider {
         : GoogleApiDataProvider(rest, api, resource_action, path_args) {
     }
 
+    #! Mirrors AbstractDataProvider::doRequest(), which converts the request with the request type first
     string getRequestTarget(auto req) {
-        return prepareRequestForSchema(req).pathstr;
+        return prepareRequestForSchema(getRequestType().acceptsValue(req)).pathstr;
     }
 }
 
@@ -93,12 +94,17 @@ public class GoogleDataProviderTest inherits QUnit::Test {
         assertEq("", encoder.encode("text", string_type, ""));
         assertEq("true", encoder.encode("enabled", bool_type, True));
         assertEq("false", encoder.encode("enabled", bool_type, False));
-        # the Discovery schema declares boolean parameters as soft boolean-or-string types, so a boolean value
-        # has to be recognized from the value itself; otherwise it is serialized as "1" or "0" and rejected
-        assertEq("true", encoder.encode("singleEvents", string_type, True),
-            "a boolean value is serialized as a Discovery boolean with a non-boolean declared type");
-        assertEq("false", encoder.encode("singleEvents", string_type, False),
-            "False is serialized as a Discovery boolean with a non-boolean declared type");
+        # Discovery boolean parameters are rendered to the strings "true"/"false" by the module's own
+        # SoftBool*StringType classes before they reach getQueryValue(); the wrapping data provider type must
+        # honor that conversion instead of applying the generic string conversion, which produces "1"/"0"
+        AbstractDataProviderType bool_string_type = SoftBoolOrNothingDataProviderStringType;
+        assertEq("true", bool_string_type.acceptsValue(True), "True is rendered as the Discovery boolean string");
+        assertEq("false", bool_string_type.acceptsValue(False),
+            "False is rendered as the Discovery boolean string");
+        assertEq("true", bool_string_type.acceptsValue("yes"),
+            "a boolean-like string is rendered as the Discovery boolean string");
+        assertEq("true", encoder.encode("singleEvents", string_type, bool_string_type.acceptsValue(True)),
+            "the rendered Discovery boolean survives query encoding unchanged");
         assertEq(("first%20value", "second%26value"),
             map encoder.encode("items", string_type, $1),
                 ("first value", "second&value"),
@@ -118,28 +124,50 @@ public class GoogleDataProviderTest inherits QUnit::Test {
             testSkip(sprintf("cannot retrieve the Google Discovery schema: %s: %s", ex.err, ex.desc));
         }
 
+        # the schema supplies defaults for some query args, so the path is compared without the query string
         assertEq("/calendar/v3/calendars/en.usa%23holiday%40group.v.calendar.google.com/events",
-            holiday.getRequestTarget({}), "a reserved character in a path arg stays inside its path segment");
+            getTargetPath(holiday.getRequestTarget({})),
+            "a reserved character in a path arg stays inside its path segment");
 
         # a path arg is a single path segment, so a "/" in the value must not add a segment
         GoogleRequestTargetProbe event(rest, "calendar", "events/get", {"calendarId": "primary"});
         assertEq("/calendar/v3/calendars/primary/events/a%2Fb%20c",
-            event.getRequestTarget({"eventId": "a/b c"}),
+            getTargetPath(event.getRequestTarget({"eventId": "a/b c"})),
             "a path arg is encoded as a single path segment");
 
         # query values are encoded, but the query separators and the request target itself are not; the query
         # argument order follows the Discovery schema, which is not stable, so the arguments are compared as a hash
         GoogleRequestTargetProbe list(rest, "calendar", "events/list", {"calendarId": "primary"});
         string target = list.getRequestTarget({"q": "Lunch at A&B", "maxResults": 5, "singleEvents": True});
-        *list<*string> parts = (target =~ x/^([^?]+)\?(.+)$/);
-        assertEq("/calendar/v3/calendars/primary/events", parts[0], "the query separator is not encoded");
-        hash<string, string> query_args = map {
-            ($1 =~ x/^([^=]+)=(.*)$/)[0]: ($1 =~ x/^([^=]+)=(.*)$/)[1],
-        }, parts[1].split("&");
+        assertEq("/calendar/v3/calendars/primary/events", getTargetPath(target),
+            "the query separator is not encoded");
+        hash<string, string> query_args = getTargetQueryArgs(target);
         assertEq("Lunch%20at%20A%26B", query_args.q,
             "the query value is encoded once and its delimiters do not split the query");
         assertEq("5", query_args.maxResults, "a numeric query value is serialized without encoding damage");
-        assertEq("true", query_args.singleEvents, "boolean query values keep their Discovery serialization");
+        assertEq("true", query_args.singleEvents,
+            "a boolean query arg reaches the request target as \"true\", not as \"1\"");
+    }
+
+    #! Returns the path portion of a request target
+    private string getTargetPath(string target) {
+        return (target =~ x/^([^?]*)/)[0];
+    }
+
+    #! Returns the query arguments of a request target as a hash of still-encoded values
+    private hash<string, string> getTargetQueryArgs(string target) {
+        *string query = (target =~ x/\?(.*)$/)[0];
+        if (!query) {
+            return {};
+        }
+        hash<string, string> rv;
+        foreach string pair in (query.split("&")) {
+            *list<*string> kv = (pair =~ x/^([^=]+)=(.*)$/);
+            if (kv) {
+                rv{kv[0]} = kv[1] ?? "";
+            }
+        }
+        return rv;
     }
 
     googleDataProviderTest() {

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore QoreStringDataTypeBase class definition
 
-/** QoreStringDataTypeBase.qc Copyright 2023 - 2025 Qore Technologies, s.r.o.
+/** QoreStringDataTypeBase.qc Copyright 2023 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -51,6 +51,15 @@ public class QoreStringDataTypeBase inherits QoreDataType {
                 "desc": "if an empty string should be converted to no value",
             },
         };
+
+        #! whether the wrapped type implements its own value conversion
+        /** A user-defined @ref Qore::Reflection::Type "Type" subclass overrides
+            @ref Qore::Reflection::Type::acceptsValue() "Type::acceptsValue()" to implement conversion semantics
+            that the generic string conversion in this class does not know about; ex: the \c SoftBool*StringType
+            classes used by REST data providers to render a boolean as the string \c "true" or \c "false" for a
+            query argument
+        */
+        bool custom_type_conversion;
     }
 
     #! creates the object with the given options
@@ -67,6 +76,27 @@ public class QoreStringDataTypeBase inherits QoreDataType {
         if (options."string.encoding" || options."string.empty_to_nothing") {
             remove base_type_hash{NT_STRING};
         }
+
+        custom_type_conversion = QoreStringDataTypeBase::hasCustomConversion(type);
+    }
+
+    #! Returns @ref True "True" if the given type overrides @ref Qore::Reflection::Type::acceptsValue()
+    /** @param type the wrapped type to check
+
+        @return @ref True "True" if a class other than the base @ref Qore::Reflection::Type "Type" class declares
+        \c acceptsValue(), meaning that the type implements its own value conversion
+    */
+    private:internal static bool hasCustomConversion(Type type) {
+        # only a user-defined subclass can override the method; this check keeps the common case cheap
+        if (get_class_name(type) == "Type") {
+            return False;
+        }
+        foreach AbstractMethod m in (Class::getClass(type).getMethods()) {
+            if (m.getName() == "acceptsValue" && m.getClass().getName() != "Type") {
+                return True;
+            }
+        }
+        return False;
     }
 
     #! returns the value if the value can be assigned to the type
@@ -77,6 +107,11 @@ public class QoreStringDataTypeBase inherits QoreDataType {
         @throw RUNTIME-TYPE-ERROR value cannot be assigned to type
     */
     auto acceptsValue(auto value) {
+        # the wrapped type defines its own conversion; the generic string conversion below would silently
+        # discard it and produce, for example, "1" instead of "true" for a boolean rendered as a string
+        if (custom_type_conversion) {
+            return QoreDataType::acceptsValue(value);
+        }
         if (_flexible_type_handling && exists value && value.typeCode() != NT_STRING) {
             return SuperSoftStringDataType::getStringValue(value);
         }
