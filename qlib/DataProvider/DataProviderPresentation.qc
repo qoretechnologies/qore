@@ -89,6 +89,34 @@ public class DataProviderPresentation {
         return explicit.val() ? explicit : appCatalogDomain(app);
     }
 
+    #! Resolves the source-app identity used for action presentation message IDs
+    /** This identity affects catalog lookup only.  The action's @c app member
+        remains its exact executable application identity.
+
+        @param app provider application metadata
+        @param action provider action metadata
+        @return the action-level source-app override, or the executable app
+            identity
+
+        @throw DATA-PROVIDER-PRESENTATION-ERROR if the selected identity is
+            empty
+
+        @par Example
+        A remote projection of a locally owned action can retain executable
+        app @c QorusRemote while using @c Qorus action message IDs.
+
+        @note Authorization, routing, and execution must use @c action.app;
+            this value is presentation provenance only.
+    */
+    static string actionCatalogApp(hash<auto> app, hash<auto> action) {
+        *string explicit = action.presentation_catalog_app;
+        string catalog_app = explicit.val() ? explicit : app.name.toString();
+        # Reuse the stable identity validation boundary without exposing an
+        # encoded segment as part of this API.
+        appMessageId(catalog_app, "display_name");
+        return catalog_app;
+    }
+
     #! Resolves the producer locale for an app without assuming a source language
     /** @param app provider application metadata
         @return canonical producer BCP 47 locale, or \c und when it is not declared
@@ -282,8 +310,10 @@ public class DataProviderPresentation {
     }
 
     #! Builds root native catalogs for one provider app and its actions
-    /** The returned hash is keyed by catalog domain. Every message id is derived from exact technical identity and
-        every source string remains producer-owned. Action-level catalog-domain overrides are honored.
+    /** The returned hash is keyed by catalog domain. Every message id is
+        derived from an exact source-owned technical identity and every source
+        string remains producer-owned. Action-level catalog-domain and
+        source-app overrides are honored without changing executable identity.
 
         @param app provider app metadata
         @param actions provider action metadata
@@ -312,13 +342,16 @@ public class DataProviderPresentation {
                         action.action, action.app, app.name);
             }
             string domain = actionCatalogDomain(app, action);
+            string catalog_app = actionCatalogApp(app, action);
             addRecordMessages(\domain_messages{domain}, action,
                 *string sub (string field) {
-                    return actionMessageId(app.name, action.action, field);
+                    return actionMessageId(catalog_app, action.action, field);
                 });
-            addOptionMapMessages(\domain_messages{domain}, app, action,
+            addOptionMapMessages(\domain_messages{domain}, catalog_app,
+                action,
                 action.path_vars);
-            addOptionMapMessages(\domain_messages{domain}, app, action,
+            addOptionMapMessages(\domain_messages{domain}, catalog_app,
+                action,
                 action.options);
         }
 
@@ -621,7 +654,7 @@ public class DataProviderPresentation {
     }
 
     private static addOptionMapMessages(reference<hash<auto>> messages,
-            hash<auto> app, hash<auto> action, auto option_map) {
+            string catalog_app, hash<auto> action, auto option_map) {
         if (option_map.typeCode() != NT_HASH) {
             return;
         }
@@ -643,7 +676,7 @@ public class DataProviderPresentation {
             }
             addRecordMessages(\messages, option,
                 *string sub (string field) {
-                    return optionMessageId(app.name, action.action,
+                    return optionMessageId(catalog_app, action.action,
                         option_name, field);
                 });
             foreach string allowed_values_key in (
@@ -660,7 +693,7 @@ public class DataProviderPresentation {
                     hash<auto> value = allowed_value;
                     addRecordMessages(\messages, value,
                         *string sub (string field) {
-                            return allowedValueMessageId(app.name,
+                            return allowedValueMessageId(catalog_app,
                                 action.action, option_name, value.value,
                                 field);
                         });
@@ -910,10 +943,12 @@ public class DataProviderPresentationCatalog {
         @throw I18N-LOCALE-ERROR if the producer source locale is invalid
     */
     hash<auto> projectAction(hash<auto> app, hash<auto> action) {
+        string catalog_app =
+            DataProviderPresentation::actionCatalogApp(app, action);
         return project(action, action.action,
             DataProviderPresentation::actionSourceLocale(app, action),
             string sub (string field) {
-                return DataProviderPresentation::actionMessageId(app.name,
+                return DataProviderPresentation::actionMessageId(catalog_app,
                     action.action, field);
             });
     }
@@ -930,10 +965,12 @@ public class DataProviderPresentationCatalog {
     */
     hash<auto> projectOption(hash<auto> app, hash<auto> action,
             string option_name, hash<auto> option) {
+        string catalog_app =
+            DataProviderPresentation::actionCatalogApp(app, action);
         return project(option, option_name,
             DataProviderPresentation::actionSourceLocale(app, action),
             string sub (string field) {
-                return DataProviderPresentation::optionMessageId(app.name,
+                return DataProviderPresentation::optionMessageId(catalog_app,
                     action.action, option_name, field);
             });
     }
@@ -961,11 +998,13 @@ public class DataProviderPresentationCatalog {
         if (!value_identity) {
             return projectUntranslatableValue(allowed_value, source_locale);
         }
+        string catalog_app =
+            DataProviderPresentation::actionCatalogApp(app, action);
         return project(allowed_value, allowed_value.value.toString(),
             source_locale,
             string sub (string field) {
                 return DataProviderPresentation::allowedValueMessageId(
-                    app.name, action.action, option_name,
+                    catalog_app, action.action, option_name,
                     allowed_value.value, field);
             });
     }
@@ -1190,8 +1229,9 @@ public class DataProviderPresentationEmbeddingCatalog {
         }
         # Validate the exact action identity even when no locale catalog is
         # installed.
-        DataProviderPresentation::actionMessageId(app.name, action.action,
-            "display_name");
+        DataProviderPresentation::actionMessageId(
+            DataProviderPresentation::actionCatalogApp(app, action),
+            action.action, "display_name");
 
         list<hash<auto>> rv = ();
         list<string> lines = ();

@@ -456,6 +456,21 @@ public hashdecl DataProviderActionInfo {
     */
     *string presentation_catalog_domain;
 
+    #! Optional source-app identity for action presentation message IDs
+    /** Set this only when the action is an exact structural projection of an
+        action owned by another application.  Catalog lookup then uses the
+        source application's action, option, and allowed-value message IDs
+        while @c app remains the unchanged executable application identity.
+
+        An action referring to another application's catalog should also set
+        @c presentation_catalog_domain and @c presentation_source_locale
+        explicitly so lookup and producer-language attribution do not depend
+        on the executable application's presentation policy.
+
+        @since %DataProvider 3.7
+    */
+    *string presentation_catalog_app;
+
     #! Optional BCP 47 locale overriding the app producer-presentation locale
     /** @since %DataProvider 3.7
     */

@@ -38,6 +38,7 @@ class DataProviderPresentationTest inherits QUnit::Test {
         const Option = "宛先";
         const PathVar = "アカウント";
         const AllowedValue = "doručit";
+        const CatalogApp = "処理元";
         const Domain = "test.data-provider.presentation";
     }
 
@@ -46,6 +47,8 @@ class DataProviderPresentationTest inherits QUnit::Test {
             \stableIdentityTest());
         addTestCase("catalog projection is locale-aware and identity-safe",
             \localizedProjectionTest());
+        addTestCase("mirrored actions use explicit source-app presentation identity",
+            \presentationCatalogAppTest());
         addTestCase("catalog projection preserves literal braces",
             \literalPresentationTest());
         addTestCase("owner fragments reject order-dependent conflicts",
@@ -336,6 +339,125 @@ class DataProviderPresentationTest inherits QUnit::Test {
         assertEq("Odeslat zprávu", source_action.display_name,
             "a source-language regional fallback uses producer text");
         assertEq("cs-CZ", source_action.presentation_language);
+    }
+
+    presentationCatalogAppTest() {
+        hash<auto> executable_app = app() + {
+            "presentation_source_locale": "ja",
+        };
+        hash<auto> mirrored_action = action() + {
+            "presentation_catalog_app": CatalogApp,
+            "presentation_catalog_domain": Domain,
+            "presentation_source_locale": "cs-CZ",
+            "options": {
+                Option: option() + {
+                    "allowed_values": ({
+                        "value": AllowedValue,
+                        "display_name": "Doručit",
+                    },),
+                },
+            },
+        };
+        string action_id = DataProviderPresentation::actionMessageId(
+            CatalogApp, Action, "display_name");
+        string action_short_id = DataProviderPresentation::actionMessageId(
+            CatalogApp, Action, "short_desc");
+        string action_desc_id = DataProviderPresentation::actionMessageId(
+            CatalogApp, Action, "desc");
+        string option_id = DataProviderPresentation::optionMessageId(
+            CatalogApp, Action, Option, "display_name");
+        string value_id = DataProviderPresentation::allowedValueMessageId(
+            CatalogApp, Action, Option, AllowedValue, "display_name");
+        hash<auto> alias_messages = {
+            action_id: {
+                "source": "Odeslat zprávu",
+                "message": "転送されたメッセージを送信",
+            },
+            action_short_id: {
+                "source": "Odešle jednu zprávu",
+                "message": "転送されたメッセージを1件送信します",
+            },
+            action_desc_id: {
+                "source": "Odešle zprávu přes vybraný účet.",
+                "message": "選択したアカウントで転送されたメッセージを送信します。",
+            },
+            option_id: {
+                "source": "Příjemce",
+                "message": "転送先",
+            },
+            value_id: {
+                "source": "Doručit",
+                "message": "転送する",
+            },
+        };
+
+        string root = make_tmp_dir("data-provider-presentation-alias-");
+        on_exit remove_tree(root);
+        mkdir(root + DirSep + Domain);
+        writeJson(root + DirSep + Domain + DirSep + "ja.json", {
+            "schema_version": I18n::get_catalog_schema_version(),
+            "locales": {"ja": {"messages": alias_messages}},
+        });
+
+        DataProviderPresentationCatalog catalog(Domain, "ja",
+            {"search_path": (root,)});
+        hash<auto> projected_action = catalog.projectAction(executable_app,
+            mirrored_action);
+        hash<auto> projected_option = catalog.projectOption(executable_app,
+            mirrored_action, Option, option());
+        hash<auto> projected_value = catalog.projectAllowedValue(executable_app,
+            mirrored_action, Option, {
+                "value": AllowedValue,
+                "display_name": "Doručit",
+            });
+        assertEq(App, projected_action.app,
+            "catalog provenance cannot change the executable app identity");
+        assertEq(Action, projected_action.action,
+            "catalog provenance cannot change the executable action identity");
+        assertEq("転送されたメッセージを送信",
+            projected_action.display_name,
+            "action presentation uses the explicit source-app identity");
+        assertEq("cs-CZ", projected_action.producer_presentation.language,
+            "action presentation uses the explicit source producer locale");
+        assertEq("転送先", projected_option.display_name,
+            "option presentation uses the explicit source-app identity");
+        assertEq(AllowedValue, projected_value.value,
+            "localized allowed values preserve the exact executable scalar");
+        assertEq("転送する", projected_value.display_name,
+            "allowed-value presentation uses the source-app identity");
+        assertFalse(exists projected_action.presentation_incomplete,
+            "the complete aliased projection is not marked incomplete");
+
+        hash<string, hash<auto>> catalogs =
+            DataProviderPresentation::buildSourceCatalogs(executable_app,
+                (mirrored_action,));
+        hash<auto> source_messages = catalogs{Domain}.locales.root.messages;
+        assertTrue(exists source_messages{action_id},
+            "source extraction emits the declared source-app action ID");
+        assertTrue(exists source_messages{option_id},
+            "source extraction emits the declared source-app option ID");
+        assertTrue(exists source_messages{value_id},
+            "source extraction emits the declared source-app value ID");
+        assertFalse(exists source_messages{
+                DataProviderPresentation::actionMessageId(App, Action,
+                    "display_name")},
+            "source extraction does not duplicate the executable app ID");
+
+        DataProviderPresentationEmbeddingCatalog embedding(executable_app, {
+            "search_path": (root,),
+        });
+        list<hash<auto>> documents =
+            embedding.projectActionDocuments(mirrored_action);
+        assertEq(2, documents.size(),
+            "the aliased action contributes one translated locale document");
+        assertEq("cs-CZ", documents[0].embedding_language,
+            "canonical embedding language follows source presentation provenance");
+        assertEq("ja", documents[1].embedding_language);
+        assertTrue(documents[1].embedding_text.find(
+                "転送されたメッセージを送信") >= 0,
+            "embedding projection uses the same source-app provenance");
+        assertTrue(documents[1].embedding_text.find(App) >= 0,
+            "embedding routing retains the executable app identity");
     }
 
     literalPresentationTest() {
