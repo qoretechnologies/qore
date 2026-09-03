@@ -155,7 +155,10 @@ public class GoogleApiDataProvider inherits GoogleDataProviderBase {
         string path = info.path;
         foreach string var in (path =~ x/\{([^\}]*)}/g) {
             if (exists (*string value = path_args{var} ?? req_info.path{var})) {
-                path = replace(path, "{" + var + "}", value);
+                # RestClientIo sends the request target verbatim, so each Discovery API path parameter must be
+                # percent-encoded here as a single path segment; without this a value containing a reserved
+                # character (ex: the "#" in a Google holiday calendar ID) corrupts the request target
+                path = replace(path, "{" + var + "}", encode_url(value, True));
             } else {
                 throw "GOOGLE-REQUEST-ERROR", sprintf("%s API %s requires missing path arg %y; path args: %y",
                     api, resource_action, var, path_args);

@@ -11,6 +11,7 @@
 %requires DataProvider
 %requires ConnectionProvider
 %requires RestClient
+%requires RestClientIo
 %requires GoogleRestClient
 %requires GoogleDataProvider
 %requires GoogleCalendarDataProvider
@@ -36,6 +37,17 @@ class GoogleQueryEncoder inherits GoogleDataProviderBase {
     }
 }
 
+#! Exposes Discovery request target construction without requiring a remote connection
+class GoogleRequestTargetProbe inherits GoogleApiDataProvider {
+    constructor(RestClientIo::RestClientIo rest, string api, string resource_action, *hash<auto> path_args)
+        : GoogleApiDataProvider(rest, api, resource_action, path_args) {
+    }
+
+    string getRequestTarget(auto req) {
+        return prepareRequestForSchema(req).pathstr;
+    }
+}
+
 public class GoogleDataProviderTest inherits QUnit::Test {
     private {
         GoogleDataProviderBase gdp;
@@ -50,6 +62,7 @@ public class GoogleDataProviderTest inherits QUnit::Test {
 
     constructor() : Test("GoogleDataProviderTest Test", "1.0", \ARGV, MyOpts) {
         addTestCase("Discovery query value encoding", \queryValueEncodingTest());
+        addTestCase("Discovery request target encoding", \requestTargetEncodingTest());
         addTestCase("test", \googleDataProviderTest());
         addTestCase("calendar test", \googleCalendarTest());
 
@@ -80,10 +93,53 @@ public class GoogleDataProviderTest inherits QUnit::Test {
         assertEq("", encoder.encode("text", string_type, ""));
         assertEq("true", encoder.encode("enabled", bool_type, True));
         assertEq("false", encoder.encode("enabled", bool_type, False));
+        # the Discovery schema declares boolean parameters as soft boolean-or-string types, so a boolean value
+        # has to be recognized from the value itself; otherwise it is serialized as "1" or "0" and rejected
+        assertEq("true", encoder.encode("singleEvents", string_type, True),
+            "a boolean value is serialized as a Discovery boolean with a non-boolean declared type");
+        assertEq("false", encoder.encode("singleEvents", string_type, False),
+            "False is serialized as a Discovery boolean with a non-boolean declared type");
         assertEq(("first%20value", "second%26value"),
             map encoder.encode("items", string_type, $1),
                 ("first value", "second&value"),
             "repeated values retain order and receive independent encoding");
+    }
+
+    requestTargetEncodingTest() {
+        # no API call is made here, but creating the provider retrieves the Google Discovery schema over the
+        # network, so the test is skipped when that schema cannot be retrieved
+        RestClientIo::RestClientIo rest({"url": "https://www.googleapis.com", "data": "json"});
+        GoogleRequestTargetProbe holiday;
+        try {
+            # a Google holiday calendar ID contains "#", which would otherwise truncate the request target
+            holiday = new GoogleRequestTargetProbe(rest, "calendar", "events/list",
+                {"calendarId": "en.usa#holiday@group.v.calendar.google.com"});
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("cannot retrieve the Google Discovery schema: %s: %s", ex.err, ex.desc));
+        }
+
+        assertEq("/calendar/v3/calendars/en.usa%23holiday%40group.v.calendar.google.com/events",
+            holiday.getRequestTarget({}), "a reserved character in a path arg stays inside its path segment");
+
+        # a path arg is a single path segment, so a "/" in the value must not add a segment
+        GoogleRequestTargetProbe event(rest, "calendar", "events/get", {"calendarId": "primary"});
+        assertEq("/calendar/v3/calendars/primary/events/a%2Fb%20c",
+            event.getRequestTarget({"eventId": "a/b c"}),
+            "a path arg is encoded as a single path segment");
+
+        # query values are encoded, but the query separators and the request target itself are not; the query
+        # argument order follows the Discovery schema, which is not stable, so the arguments are compared as a hash
+        GoogleRequestTargetProbe list(rest, "calendar", "events/list", {"calendarId": "primary"});
+        string target = list.getRequestTarget({"q": "Lunch at A&B", "maxResults": 5, "singleEvents": True});
+        *list<*string> parts = (target =~ x/^([^?]+)\?(.+)$/);
+        assertEq("/calendar/v3/calendars/primary/events", parts[0], "the query separator is not encoded");
+        hash<string, string> query_args = map {
+            ($1 =~ x/^([^=]+)=(.*)$/)[0]: ($1 =~ x/^([^=]+)=(.*)$/)[1],
+        }, parts[1].split("&");
+        assertEq("Lunch%20at%20A%26B", query_args.q,
+            "the query value is encoded once and its delimiters do not split the query");
+        assertEq("5", query_args.maxResults, "a numeric query value is serialized without encoding damage");
+        assertEq("true", query_args.singleEvents, "boolean query values keep their Discovery serialization");
     }
 
     googleDataProviderTest() {
