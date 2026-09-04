@@ -11736,8 +11736,8 @@ struct AotModuleState {
     std::shared_ptr<QoreAOTBinaryReader> init_reader;
     //! Debug metadata shared by regular and deferred-init contexts.
     std::shared_ptr<const QoreAOTDebugMetadata> debug_metadata;
-    //! Init function descriptors (target type, ns path, item name) read during module_init
-    std::vector<AOTInitFuncDescriptor> init_descriptors;
+    //! Immutable init function descriptors (target type, ns path, item name) read during module_init
+    std::shared_ptr<const std::vector<AOTInitFuncDescriptor>> init_descriptors;
     //! Module path/label used for get_module_context_path() during deferred module init
     std::string path;
     //! Progress of the one-time initialization of the shared shadow (module-own) Program's
@@ -12143,7 +12143,7 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
     std::shared_ptr<const std::vector<uint8_t>> init_metadata;
     std::shared_ptr<QoreAOTBinaryReader> cached_init_reader;
     std::shared_ptr<const QoreAOTDebugMetadata> cached_debug_metadata;
-    std::vector<AOTInitFuncDescriptor> init_descriptors;
+    std::shared_ptr<const std::vector<AOTInitFuncDescriptor>> init_descriptor_snapshot;
     std::string mod_path;
     // whether this run is the one that populates the shared shadow (module-own) Program; set
     // exactly once per module under the state lock (see AotModuleState::shadow_init_state)
@@ -12155,13 +12155,14 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
         if (aotInitTraceEnabled()) {
             fprintf(stderr, "[aot-init] ns_init module=%s map_found=%d descriptors=%zu metadata=%zu funcs=%d\n",
                 mod_name.c_str(), it != aot_module_map.end(),
-                it != aot_module_map.end() ? it->second.init_descriptors.size() : 0,
+                it != aot_module_map.end() && it->second.init_descriptors
+                    ? it->second.init_descriptors->size() : 0,
                 it != aot_module_map.end() && it->second.metadata
                     ? it->second.metadata->size() : 0,
                 it != aot_module_map.end() ? it->second.num_funcs : 0);
         }
         if (it == aot_module_map.end()
-                || it->second.init_descriptors.empty()
+                || !it->second.init_descriptors || it->second.init_descriptors->empty()
                 || (!it->second.init_reader && !it->second.metadata)
                 || target_pp->merged_aot_modules.find(mod_name)
                     == target_pp->merged_aot_modules.end()
@@ -12180,7 +12181,7 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
         init_metadata = it->second.metadata;
         cached_init_reader = it->second.init_reader;
         cached_debug_metadata = it->second.debug_metadata;
-        init_descriptors = it->second.init_descriptors;
+        init_descriptor_snapshot = it->second.init_descriptors;
         mod_path = it->second.path;
 
         // Coordinate the one-time population of the shared shadow Program.  Only the first
@@ -12217,6 +12218,9 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
             break;
         }
     }
+
+    assert(init_descriptor_snapshot);
+    const std::vector<AOTInitFuncDescriptor>& init_descriptors = *init_descriptor_snapshot;
 
     // RAII backstop: if this run claimed the one-time shadow population but does not reach
     // finish() below (C++ unwind), release the claim and wake any waiters so a concurrent
@@ -12419,7 +12423,7 @@ static void retryPendingAOTModuleInitsForProgram(QoreProgram* tpgm,
             AutoLocker aot_state_al(get_aot_module_state_lock());
             for (const auto& entry : aot_module_map) {
                 const AotModuleState& state = entry.second;
-                if (!state.init_descriptors.empty()
+                if (state.init_descriptors && !state.init_descriptors->empty()
                         && (state.init_reader || state.metadata)
                         && target_pp->merged_aot_modules.find(entry.first)
                             != target_pp->merged_aot_modules.end()
@@ -14011,6 +14015,7 @@ struct AOTPendingConstantInit {
     AOTInitFuncDescriptor desc;
     QoreAOTContext* ctx = nullptr;      //!< owned by this record, unless a script load handed it to the Program
     AotFunctionPtr fn_ptr = nullptr;
+    bool owns_ctx = true;               //!< false while eager module init borrows the execution context
     //! the module Program the record names, or nullptr for a script load
     /** A module Program lives for the process, so a record can name it and adopt its value.  A script Program
         cannot be named: `qore_aot_script_register()` is a host API that may be given a Program the host later
@@ -14031,7 +14036,9 @@ struct AOTPendingConstantInit {
     bool running = false;
 
     DLLLOCAL ~AOTPendingConstantInit() {
-        delete ctx;
+        if (owns_ctx) {
+            delete ctx;
+        }
     }
 };
 
@@ -14084,6 +14091,7 @@ static AOTPendingConstantInit* aotRegisterPendingConstantInit(std::unique_ptr<AO
         // an earlier registration had nothing to run; keep the initializer this one carries
         existing->ctx = rec->ctx;
         existing->fn_ptr = rec->fn_ptr;
+        existing->owns_ctx = rec->owns_ctx;
         rec->ctx = nullptr;
     }
     AOTPendingConstantInit* raw = existing;
@@ -14111,6 +14119,14 @@ static QoreRecursiveThreadLock& aotLazyConstantInitLock() {
     static QoreRecursiveThreadLock lck;
     return lck;
 }
+
+//! Target Programs visible only while this thread is eagerly initializing their constants
+/** Recovery records cannot retain an importing Program because the Program can be destroyed before the
+    process-lifetime record. This thread-local overlay lets recursive eager initialization populate both the
+    importing Program and the module shadow without adding a dangling Program pointer to the record.
+*/
+static thread_local std::unordered_map<AOTPendingConstantInit*, std::vector<QoreProgram*>>
+    aotEagerConstantInitPrograms;
 
 namespace {
 //! Owns the execution contexts a script Program's unrun constant initializers retain
@@ -14235,7 +14251,9 @@ int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) 
 
     // A script record names no Program (see AOTPendingConstantInit::pgm): the read that got here already runs in
     // the Program that owns the entry, which is the only Program the initializer may touch.
-    QoreProgram* init_pgm = rec->pgm ? rec->pgm : ::getProgram();
+    auto eager_pgm = aotEagerConstantInitPrograms.find(rec);
+    bool eager_init = eager_pgm != aotEagerConstantInitPrograms.end() && !eager_pgm->second.empty();
+    QoreProgram* init_pgm = eager_init ? eager_pgm->second.back() : (rec->pgm ? rec->pgm : ::getProgram());
     if (!init_pgm) {
         return 0;
     }
@@ -14244,7 +14262,7 @@ int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) 
     QoreValue result;
     {
         std::unique_ptr<ProgramThreadCountContextHelper> program_ctx;
-        if (rec->pgm) {
+        if (!eager_init && rec->pgm) {
             program_ctx.reset(new ProgramThreadCountContextHelper(&init_xsink, rec->pgm, false));
         }
         if (init_xsink) {
@@ -14257,7 +14275,7 @@ int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) 
 
         std::unique_ptr<ProgramThreadCountContextHelper> shadow_ctx;
         std::unique_ptr<ProgramCallContextHelper> shadow_call_ctx;
-        if (rec->shadow_pgm && rec->shadow_pgm != rec->pgm) {
+        if (rec->shadow_pgm && rec->shadow_pgm != init_pgm) {
             shadow_ctx.reset(new ProgramThreadCountContextHelper(&init_xsink, rec->shadow_pgm, true));
             if (init_xsink.isException()) {
                 init_xsink.clear();
@@ -14323,8 +14341,8 @@ int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) 
     }
     // then the module's own entry, so compiled module code resolving against the shadow Program sees it too; a
     // script record names no Program, and the entry read above is the only one there is
-    if (rec->pgm || rec->shadow_pgm) {
-        aotStoreConstantInitResult(rec->desc, result, rec->pgm, rec->shadow_pgm, rec->write_shadow,
+    if (init_pgm || rec->shadow_pgm) {
+        aotStoreConstantInitResult(rec->desc, result, init_pgm, rec->shadow_pgm, rec->write_shadow,
             rec->mod_name.c_str(), [&initialized](ConstantEntry* entry) { initialized.push_back(entry); },
             store_xsink);
     }
@@ -14503,6 +14521,71 @@ static int executeInitFunctions(
     std::vector<std::string> last_error(descriptors.size());
     std::vector<std::string> last_desc(descriptors.size());
     std::vector<bool> last_error_pending(descriptors.size(), false);
+    // Attach constant recovery records before executing any initializer. Generated init code reads constants
+    // through RuntimeConstantRefNode, so a forward dependency can now run recursively on first read instead of
+    // raising AOT-PENDING-CONSTANT and forcing another complete fixpoint round. The contexts stay owned by
+    // exec_infos during eager execution; only an initializer left pending at the end transfers ownership.
+    std::vector<AOTPendingConstantInit*> active_constant_inits(descriptors.size(), nullptr);
+    struct EagerConstantInitProgramGuard {
+        std::vector<AOTPendingConstantInit*>& records;
+        QoreProgram* pgm;
+        ~EagerConstantInitProgramGuard() {
+            for (AOTPendingConstantInit* rec : records) {
+                auto i = aotEagerConstantInitPrograms.find(rec);
+                if (i != aotEagerConstantInitPrograms.end() && !i->second.empty()
+                        && i->second.back() == pgm) {
+                    i->second.pop_back();
+                    if (i->second.empty()) {
+                        aotEagerConstantInitPrograms.erase(i);
+                    }
+                }
+            }
+        }
+    } eager_pgm_guard{active_constant_inits, pgm};
+    for (size_t di = 0; di < descriptors.size(); ++di) {
+        if (di && !(di % 100) && qore_check_cancel(failure_sink,
+                "AOT initializer dependency registration")) {
+            std::unordered_set<QoreAOTContext*> deleted;
+            for (size_t ci = 0; ci < active_constant_inits.size(); ++ci) {
+                AOTPendingConstantInit* rec = active_constant_inits[ci];
+                auto ei = exec_map.find(descriptors[ci].name);
+                if (rec && ei != exec_map.end() && rec->ctx == ei->second->ctx && !rec->owns_ctx) {
+                    rec->ctx = nullptr;
+                    rec->fn_ptr = nullptr;
+                    rec->owns_ctx = true;
+                }
+            }
+            for (auto& info : exec_infos) {
+                if (deleted.insert(info.ctx).second) {
+                    delete info.ctx;
+                }
+            }
+            return -1;
+        }
+        const AOTInitFuncDescriptor& desc = descriptors[di];
+        if (desc.target_type != AOTCompiledInitFunc::NS_CONSTANT
+                && desc.target_type != AOTCompiledInitFunc::CLASS_CONSTANT) {
+            continue;
+        }
+        auto rec = std::make_unique<AOTPendingConstantInit>();
+        rec->desc = desc;
+        rec->pgm = shadow_pgm;
+        rec->shadow_pgm = shadow_pgm;
+        rec->write_shadow = write_shadow;
+        rec->mod_name = mod_name ? mod_name : "";
+        rec->mod_path = mod_path ? mod_path : "";
+        auto ei = exec_map.find(desc.name);
+        if (ei != exec_map.end() && ei->second->fn_ptr && ei->second->ctx) {
+            rec->ctx = ei->second->ctx;
+            rec->fn_ptr = ei->second->fn_ptr;
+            rec->owns_ctx = false;
+        }
+        active_constant_inits[di] = aotRegisterPendingConstantInit(std::move(rec),
+            shadow_pgm ? shadow_pgm : pgm);
+        if (active_constant_inits[di]) {
+            aotEagerConstantInitPrograms[active_constant_inits[di]].push_back(pgm);
+        }
+    }
     std::vector<ConstantEntry*> initialized_constants;
     auto remember_initialized_constant = [&initialized_constants](ConstantEntry* ce) {
         if (ce) {
@@ -14554,6 +14637,14 @@ static int executeInitFunctions(
         // variables in pass 0, but must not repeat module-registration or other external side effects in pass 1.
         if (is_module_init && !write_shadow) {
             desc_done[di] = true;
+            continue;
+        }
+        if ((desc.target_type == AOTCompiledInitFunc::NS_CONSTANT
+                || desc.target_type == AOTCompiledInitFunc::CLASS_CONSTANT)
+                && !aotInitDescriptorNeedsExecution(desc, pgm, shadow_pgm, write_shadow)) {
+            desc_done[di] = true;
+            ++executed;
+            ++this_round_executed;
             continue;
         }
         if (aotInitTraceEnabled()) {
@@ -14980,7 +15071,7 @@ static int executeInitFunctions(
         }
     }
 
-    // Attach a recovery record to every constant this load initializes.  Two things can leave a constant an
+    // Finalize the recovery records attached before eager execution. Two things can leave a constant an
     // unpopulated shell that no later load repairs: an initializer this pass could not run at all, and an entry
     // this Program created from the module's entry before that entry held a value.  Both used to be permanent —
     // every read of the constant raised AOT-PENDING-CONSTANT for the life of the process.  With the record, the
@@ -15003,31 +15094,29 @@ static int executeInitFunctions(
             continue;
         }
         auto it = exec_map.find(desc.name);
-        auto rec = std::make_unique<AOTPendingConstantInit>();
-        rec->desc = desc;
-        rec->pgm = shadow_pgm;
-        rec->shadow_pgm = shadow_pgm;
-        rec->write_shadow = write_shadow;
-        rec->mod_name = mod_name ? mod_name : "";
-        rec->mod_path = mod_path ? mod_path : "";
+        AOTPendingConstantInit* rec = active_constant_inits[di];
+        if (!rec) {
+            continue;
+        }
         rec->load_err = last_error[di];
         rec->load_desc = last_desc[di];
         // Only an initializer that did not run is kept executable; keeping every context alive would retain
         // the compiled context of every constant of every loaded module for nothing.
         bool retained_ctx = false;
-        if (!desc_done[di] && it != exec_map.end() && it->second->fn_ptr && it->second->ctx
-                && deferred_contexts.find(it->second->ctx) == deferred_contexts.end()) {
-            rec->ctx = it->second->ctx;
-            rec->fn_ptr = it->second->fn_ptr;
+        if (!desc_done[di] && it != exec_map.end() && rec->ctx == it->second->ctx
+                && rec->fn_ptr && deferred_contexts.find(rec->ctx) == deferred_contexts.end()) {
+            rec->owns_ctx = true;
             deferred_contexts.insert(it->second->ctx);
             retained_ctx = true;
+        } else if (it != exec_map.end() && rec->ctx == it->second->ctx && !rec->owns_ctx) {
+            rec->ctx = nullptr;
+            rec->fn_ptr = nullptr;
+            rec->owns_ctx = true;
         }
-        AOTPendingConstantInit* attached = aotRegisterPendingConstantInit(std::move(rec),
-            shadow_pgm ? shadow_pgm : pgm);
         // a context retained for a script load is bound to the Program whose state it runs against, so the
         // Program's teardown neutralizes the record rather than leaving it able to run against freed state
-        if (attached && retained_ctx && !shadow_pgm) {
-            aotAdoptScriptPendingConstantContext(pgm, attached);
+        if (retained_ctx && !shadow_pgm) {
+            aotAdoptScriptPendingConstantContext(pgm, rec);
         }
     }
 
@@ -15424,11 +15513,14 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         state.funcs = functions;
         state.num_funcs = num_functions;
         state.reexport_deps = std::move(reexport_deps);
-        state.init_descriptors = std::move(init_descriptors);
+        if (!init_descriptors.empty()) {
+            state.init_descriptors = std::make_shared<const std::vector<AOTInitFuncDescriptor>>(
+                std::move(init_descriptors));
+        }
         state.path = module_context_path ? module_context_path : "";
         // Keep the open reader and debug payload alive for deferred init instead
         // of copying the complete module metadata again.
-        if (!state.init_descriptors.empty()) {
+        if (state.init_descriptors) {
             static const bool cache_init_reader =
                 std::getenv("QORE_DISABLE_AOT_INIT_READER_CACHE") == nullptr;
             if (cache_init_reader) {
