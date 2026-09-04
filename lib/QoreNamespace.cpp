@@ -4004,6 +4004,14 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
 void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
     printd(5, "qore_ns_private::copyMergeCommittedNamespace() this: %p '%s'\n", this, name.c_str());
 
+    const size_t old_constant_size = constant.size();
+    const size_t old_class_size = classList.size();
+    const size_t old_hashdecl_size = hashDeclList.size();
+    const size_t old_function_size = func_list.size();
+    const size_t old_var_size = var_list.vmap.size();
+    const size_t old_enum_size = enumList.size();
+    const size_t old_typedef_size = typedefMap.size();
+
     // merge in source constants
     constant.mergeUserPublic(mns.constant);
 
@@ -4108,9 +4116,16 @@ void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
     }
 
     // Namespace merges only add committed objects, so existing root-map entries remain valid. Reindex this
-    // destination namespace now instead of walking the complete, growing target tree after the merge.
+    // destination namespace now instead of walking the complete, growing target tree after the merge.  A repeated
+    // diamond import that added no direct item needs no reindexing at all.
     qore_root_ns_private* rns = getRoot();
-    if (rns) {
+    if (rns && (constant.size() != old_constant_size
+            || classList.size() != old_class_size
+            || hashDeclList.size() != old_hashdecl_size
+            || func_list.size() != old_function_size
+            || var_list.vmap.size() != old_var_size
+            || enumList.size() != old_enum_size
+            || typedefMap.size() != old_typedef_size)) {
         rns->rebuildIndexes(this);
     }
 

@@ -554,6 +554,10 @@ public:
         return cnemap.empty();
     }
 
+    DLLLOCAL size_t size() const {
+        return cnemap.size();
+    }
+
     DLLLOCAL cnemap_t::iterator end() {
         return cnemap.end();
     }

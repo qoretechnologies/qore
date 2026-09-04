@@ -93,6 +93,10 @@ public:
 
     DLLLOCAL void mergeUserPublic(const QoreClassList& old, qore_ns_private* ns);
 
+    DLLLOCAL size_t size() const {
+        return hm.size();
+    }
+
     // returns the number of classes imported
     DLLLOCAL int importSystemClasses(const QoreClassList& source, qore_ns_private* ns, ExceptionSink* xsink);
 

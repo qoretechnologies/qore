@@ -36,11 +36,14 @@
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_aot_deps.h"
+#include "qore/intern/xxhash.h"
 
 #include <algorithm>
 #include <atomic>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
+#include <unordered_set>
 #include <vector>
 
 // parse-time thread-local depth of constant value initialization in progress (see ConstantList.h)
@@ -866,7 +869,29 @@ bool ConstantList::inList(const std::string& name) const {
 
 void ConstantList::mergeUserPublic(const ConstantList& src) {
     cnemap.reserve(cnemap.size() + src.cnemap.size());
+    // Constant lists are normally small, where the compact vector's linear lookup wins.  Large repeated module
+    // merges are different: a target/source Cartesian scan can perform millions of strcmp() calls.  Build a
+    // transient content-keyed index only when that scan is large enough to amortize hashing the destination.
+    std::unique_ptr<std::unordered_set<const char*, qore_hash_str, eqstr>> name_index;
+    if (!cnemap.empty() && src.cnemap.size() > 256 / cnemap.size()) {
+        name_index = std::make_unique<std::unordered_set<const char*, qore_hash_str, eqstr>>();
+        name_index->reserve(cnemap.size() + src.cnemap.size());
+        size_t count = 0;
+        for (const auto& i : cnemap) {
+            if (count && !(count % 100) && qore_check_cancel(nullptr, "constant merge index build")) {
+                return;
+            }
+            name_index->insert(i.first);
+            ++count;
+        }
+    }
+
+    size_t count = 0;
     for (cnemap_t::const_iterator i = src.cnemap.begin(), e = src.cnemap.end(); i != e; ++i) {
+        if (count && !(count % 100) && qore_check_cancel(nullptr, "constant merge")) {
+            return;
+        }
+        ++count;
         if (!i->second->isUserPublic()) {
             continue;
         }
@@ -874,7 +899,7 @@ void ConstantList::mergeUserPublic(const ConstantList& src) {
         // skip constants that already exist (same module re-imported via different dependency paths,
         // e.g. QUnit -> Util and FsUtil -> Util); scanMergeCommittedNamespace already validated
         // that any existing constant has the same identity
-        if (inList(i->first)) {
+        if (name_index ? !name_index->insert(i->first).second : inList(i->first)) {
             continue;
         }
 

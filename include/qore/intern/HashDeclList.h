@@ -104,6 +104,10 @@ public:
         return hm.empty();
     }
 
+    DLLLOCAL size_t size() const {
+        return hm.size();
+    }
+
     //! Updates parentHashDecl pointers after copying to point to hashdecls in this list
     /** Phase 1 of parent pointer resolution - handles same-namespace parents only.
         This is safe to call during namespace copy construction because it only looks
