@@ -14769,20 +14769,42 @@ static void rebuildAOTRootIndexes(QoreProgram* pgm) {
     rpriv->rebuildAllIndexes();
 }
 
+bool QoreAOTBinaryDeserializer::rebuildRootIndexes(std::string& error, IndexPhase phase) {
+    qore_program_private* pp_idx = qore_program_private::get(*pgm);
+    qore_root_ns_private* rpriv = static_cast<qore_root_ns_private*>(
+        qore_ns_private::get(*pp_idx->RootNS));
+    for (size_t i = 0; i < ns_list.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT namespace index rebuild")) {
+            error = "operation cancelled during AOT namespace index rebuild";
+            return false;
+        }
+        if (phase == IndexPhase::Functions) {
+            rpriv->rebuildAOTFunctionIndexes(ns_list[i]);
+        } else {
+            rpriv->rebuildAOTTypeAndValueIndexes(ns_list[i]);
+        }
+    }
+    return true;
+}
+
 bool QoreAOTBinaryDeserializer::resolveTypesAndMembers(std::string& error) {
     if (!resolveTypes(error)
             || !resolveConstants(error)
             || !resolveStaticsAndConstants(error)) {
         return false;
     }
-    rebuildAOTRootIndexes(pgm);
+    if (!rebuildRootIndexes(error, IndexPhase::TypeAndValue)) {
+        return false;
+    }
     if (!deserializeFunctionsAndMethods(error)) {
         return false;
     }
     // Function deserialization mutates namespace function lists. Rebuild before
     // materializing member default expression ASTs that resolve through the
     // root runtime indexes.
-    rebuildAOTRootIndexes(pgm);
+    if (!rebuildRootIndexes(error, IndexPhase::Functions)) {
+        return false;
+    }
     return resolveStaticMembersPhase(error)
         && resolveMembers(error);
 }
@@ -15208,12 +15230,8 @@ bool QoreAOTBinaryDeserializer::finalize(std::string& error) {
     if (!finalizePreIndex(error)) {
         return false;
     }
-    // Rebuild root namespace indexes (fmap, varmap, clmap, etc.) so that
-    // runtime lookups like runtimeFindFunctionEntry() can find the
-    // deserialized functions, classes, etc.
-    {
-        rebuildAOTRootIndexes(pgm);
-    }
+    // All namespace objects have already been indexed at the type/value and function phase boundaries. Class commit
+    // and finalizePreIndex() only mutate the objects behind those entries, so another index rebuild is unnecessary.
     return finalizePostIndex(error);
 }
 

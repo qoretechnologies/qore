@@ -2677,6 +2677,11 @@ private:
     bool resolveTypedefs(std::string& error);
     bool resolveEnumBaseTypes(std::string& error);
     bool resolveBCAExpressions(std::string& error);
+    enum class IndexPhase {
+        TypeAndValue,
+        Functions,
+    };
+    bool rebuildRootIndexes(std::string& error, IndexPhase phase);
 
     //! resolves deferred general expression-tree param defaults; see PendingNativeExprDefault
     bool resolveNativeExprDefaults(std::string& error);
