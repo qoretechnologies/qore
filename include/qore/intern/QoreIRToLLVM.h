@@ -511,8 +511,16 @@ private:
     // function finalization, when both factors are known, and only when their
     // product exceeds getCleanupPhiBudget() -- every other function keeps the
     // inline triples and full SSA promotion of its locals.
-    llvm::AllocaInst* local_cleanup_array = nullptr;
-    unsigned local_cleanup_array_count = 0;
+    llvm::AllocaInst* boxed_exit_cleanup_array = nullptr;
+    unsigned boxed_exit_cleanup_array_count = 0;
+
+    // Entry-block array of pointers to iterator_cleanup_allocas slots.  Same
+    // problem and same remedy as local_cleanup_array: emitLateExitCleanup()
+    // repeats the per-iterator load/release/clear sequence at every return and
+    // resume, so once SROA promotes the slots the merged common return needs
+    // (iterators x exits) PHI operands.  Prepared at function finalization.
+    llvm::AllocaInst* iterator_cleanup_array = nullptr;
+    unsigned iterator_cleanup_array_count = 0;
 
     // Allocas for Invoke/ConstString results that need cleanup at function exit.
     // qore_rt_invoke_expr returns +1 ref; these allocas track the results so they
@@ -1024,20 +1032,44 @@ private:
     // Emit qore_rt_uninstantiate_local calls for all function locals at current insert point
     void emitLocalUninstantiation(llvm::Module& module);
 
-    //! Route owned IR-only local cleanup through qore_rt_cleanup_run_allocas() when
-    //! the inline per-local triples would need (locals x exit_edges) PHIs.
+    //! The boxed slots emitPreinstantiatedCleanup() releases, in emission order.
+    /** Pre-instantiated entry cleanup slots, then fast-entry parameter slots, then
+        the IR-only locals that own their value directly.
+    */
+    std::vector<llvm::AllocaInst*> getBoxedExitCleanupSlots() const;
+
+    //! Route boxed exit cleanup through qore_rt_cleanup_run_allocas() when the
+    //! inline per-slot triples would need (slots x exit_edges) PHIs.
     /** @param llvm_func the function being finalized
         @param exit_edges the number of edges reaching the shared cleanup block
 
         @return true if the array was prepared; emitPreinstantiatedCleanup() then
-        emits a single runtime call in place of the per-local triples
+        emits a single runtime call in place of the per-slot triples
     */
-    bool prepareOwnedIrLocalCleanupArray(llvm::Function* llvm_func, size_t exit_edges);
+    bool prepareBoxedExitCleanupArray(llvm::Function* llvm_func, size_t exit_edges);
+
+    //! Route iterator cleanup through qore_rt_iterator_cleanup_allocas() when the
+    //! inline per-iterator sequence would need (iterators x exits) PHIs.
+    /** @param llvm_func the function being finalized
+        @param exits the number of return/resume sites that repeat the sequence
+
+        @return true if the array was prepared; emitIteratorCleanup() then emits a
+        single runtime call in place of the per-iterator sequence
+    */
+    bool prepareIteratorCleanupArray(llvm::Function* llvm_func, size_t exits);
 
     //! PHI-operand budget above which local cleanup switches to the array form.
     /** Overridable with QORE_JIT_CLEANUP_PHI_BUDGET; 0 disables the array form.
     */
     static size_t getCleanupPhiBudget();
+
+    //! Tracked-local count at which the temp-boundary reload-chain flush switches
+    //! from inline branches to runtime helper calls.
+    /** The inline form costs two basic blocks per tracked local at every temp
+        boundary.  Overridable with QORE_JIT_RELOAD_CHAIN_CALL_THRESHOLD; 0 keeps
+        the inline form for every function.
+    */
+    static size_t getReloadChainCallThreshold();
 
     // Emit qore_rt_exec_on_block_exit call to execute registered on_block_exit handlers
     void emitOnBlockExitExec(llvm::Module& module);

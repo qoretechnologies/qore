@@ -321,6 +321,15 @@ uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink);
 //! Run all cleanup actions from an array of pointers to NaN-boxed cleanup slots.
 void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, int32_t count, ExceptionSink* xsink);
 
+//! Release every active iterator recorded in an array of cleanup slots.
+void qore_rt_iterator_cleanup_allocas(void*** slots, int32_t count);
+
+//! Rotate one local reload-chain entry at a temp boundary (no-op for an empty tracker).
+void qore_rt_reload_chain_rotate(uint64_t* tracker, uint64_t* deferred, ExceptionSink* xsink);
+
+//! Clear one local reload-chain slot at a temp boundary (no-op for an empty slot).
+void qore_rt_reload_chain_clear(uint64_t* slot, ExceptionSink* xsink);
+
 //! Clear caller-owned argument cleanup slots after callee ownership has been established.
 void qore_rt_clear_arg_cleanups(uint64_t** arg_cleanups, int32_t count, ExceptionSink* xsink);
 
