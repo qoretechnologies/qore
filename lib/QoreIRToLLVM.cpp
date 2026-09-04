@@ -2626,6 +2626,83 @@ void QoreIRToLLVM::emitLocalUninstantiation(llvm::Module& module) {
     }
 }
 
+size_t QoreIRToLLVM::getCleanupPhiBudget() {
+    static const size_t budget = []() -> size_t {
+        constexpr size_t default_budget = 4096;
+        const char* env = getenv("QORE_JIT_CLEANUP_PHI_BUDGET");
+        if (!env || !*env) {
+            return default_budget;
+        }
+        char* end = nullptr;
+        unsigned long long value = strtoull(env, &end, 10);
+        if (!end || end == env || *end
+                || value > static_cast<unsigned long long>(
+                    std::numeric_limits<size_t>::max())) {
+            return default_budget;
+        }
+        return static_cast<size_t>(value);
+    }();
+    return budget;
+}
+
+bool QoreIRToLLVM::prepareOwnedIrLocalCleanupArray(llvm::Function* llvm_func,
+        size_t exit_edges) {
+    local_cleanup_array = nullptr;
+    local_cleanup_array_count = 0;
+    const size_t count = owned_ir_local_allocas.size();
+    const size_t budget = getCleanupPhiBudget();
+    if (!llvm_func || !budget || !count || !exit_edges) {
+        return false;
+    }
+    if (count > static_cast<size_t>(std::numeric_limits<unsigned>::max())) {
+        return false;
+    }
+    // The inline form costs one PHI per local for every edge reaching the shared
+    // cleanup block once SROA promotes the slots, so that product -- not either
+    // factor alone -- is what makes code generation superlinear.  Below the
+    // budget the locals keep full SSA promotion.
+    if (exit_edges <= budget / count) {
+        // overflow-safe form of (count * exit_edges <= budget)
+        return false;
+    }
+    llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+    llvm::Instruction* term = qoreGetTerminator(entry);
+    if (!term) {
+        return false;
+    }
+    // Emitted in the entry block, after every local alloca it refers to, so each
+    // slot address dominates its store.
+    llvm::IRBuilder<> ab(term);
+    llvm::AllocaInst* array = ab.CreateAlloca(ptr_type,
+            llvm::ConstantInt::get(i32_type, static_cast<unsigned>(count)),
+            "local_cleanup_slots");
+    // qore_rt_cleanup_run_allocas() releases slots in LIFO order; store the
+    // addresses in reverse so the values are released in exactly the order the
+    // inline load/store/decref sequence this replaces used.
+    for (size_t i = 0; i < count; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr, "JIT local cleanup slot registration")) {
+            // the stores written so far address a slot array nothing reads, so
+            // dropping the array here leaves the inline per-local cleanup intact
+            local_cleanup_array = nullptr;
+            local_cleanup_array_count = 0;
+            return false;
+        }
+        llvm::Value* gep = ab.CreateGEP(ptr_type, array,
+                llvm::ConstantInt::get(i32_type,
+                    static_cast<unsigned>(count - 1 - i)),
+                "local_cleanup_slot_ptr");
+        ab.CreateStore(owned_ir_local_allocas[i], gep);
+    }
+    local_cleanup_array = array;
+    local_cleanup_array_count = static_cast<unsigned>(count);
+    if (getenv("QORE_IR_OPT_STATS")) {
+        fprintf(stderr, "IR-OPT-LLVM: array-local-cleanup locals=%zu exit-edges=%zu\n",
+            count, exit_edges);
+    }
+    return true;
+}
+
 void QoreIRToLLVM::emitPreInstClosureReInstantiation(llvm::Module& module) {
     if (closure_pre_inst_flags.empty()) {
         return;
@@ -2849,12 +2926,24 @@ void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module) {
     }
 
     // Boxed IR-only locals not represented on the runtime stack own their
-    // current alloca value directly.
-    for (llvm::AllocaInst* alloca : owned_ir_local_allocas) {
-        llvm::Value* val = builder->CreateLoad(i64_type, alloca);
-        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
-                alloca);
-        builder->CreateCall(helper, {val, xsink_arg});
+    // current alloca value directly.  prepareOwnedIrLocalCleanupArray() switches
+    // this to a single runtime call for functions where the per-local triples
+    // would need one PHI per local for every edge into the shared cleanup block.
+    if (local_cleanup_array
+            && local_cleanup_array_count == owned_ir_local_allocas.size()) {
+        auto run_helper = module.getOrInsertFunction("qore_rt_cleanup_run_allocas",
+                llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type},
+                    false));
+        builder->CreateCall(run_helper, {local_cleanup_array,
+                llvm::ConstantInt::get(i32_type, local_cleanup_array_count),
+                xsink_arg});
+    } else {
+        for (llvm::AllocaInst* alloca : owned_ir_local_allocas) {
+            llvm::Value* val = builder->CreateLoad(i64_type, alloca);
+            builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                    alloca);
+            builder->CreateCall(helper, {val, xsink_arg});
+        }
     }
 }
 
@@ -9605,6 +9694,8 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     invoke_result_allocas.clear();
     persistent_cleanup_allocas.clear();
     temp_cleanup_marks.clear();
+    local_cleanup_array = nullptr;
+    local_cleanup_array_count = 0;
     invoke_cleanup_array = nullptr;
     invoke_cleanup_array_capacity = estimateInvokeCleanupArrayCapacity(func);
     invoke_cleanup_array_count = 0;
@@ -11445,6 +11536,16 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // clean up before returning NOTHING for boxed entries or a neutral native
     // scalar for fast entries.  ExceptionSink remains authoritative.
     if (error_return_block) {
+        // Choose how IR-only local cleanup is emitted before writing any of it:
+        // every exception and thread-exit check in the function branches here, so
+        // with many locals the inline per-local triples need one PHI per local for
+        // every one of those edges, and PHI elimination then expands each into a
+        // COPY.  That product is what makes LLVM's register coalescer and
+        // allocator superlinear on large function bodies.
+        prepareOwnedIrLocalCleanupArray(llvm_func,
+                static_cast<size_t>(std::distance(
+                    llvm::pred_begin(error_return_block),
+                    llvm::pred_end(error_return_block))));
         builder->SetInsertPoint(error_return_block);
         emitOnBlockExitExec(module);
         emitIteratorCleanup(module);

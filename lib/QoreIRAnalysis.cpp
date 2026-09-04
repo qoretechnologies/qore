@@ -7228,6 +7228,68 @@ static bool qore_ir_is_list_push_instruction(const QoreIRInstruction& inst) {
                 == QoreIROpcode::ListPush);
 }
 
+//! Dense bit-vector lattice element for local-variable dataflow analyses.
+/** Using a hash set as the lattice element copies one node per element on every
+    merge and every block transfer, so a function with L candidate locals and B
+    basic blocks pays O(B * L) node allocations -- quadratic in the size of the
+    function body, and the dominant cost of lowering a very large one.  A dense
+    bit vector makes the same merges and copies word-parallel and
+    allocation-free.
+*/
+class QoreIRLocalBitSet {
+public:
+    QoreIRLocalBitSet() = default;
+
+    QoreIRLocalBitSet(size_t bits, bool set_all) : bit_count(bits),
+            words((bits + 63) / 64,
+                set_all ? ~static_cast<uint64_t>(0) : static_cast<uint64_t>(0)) {
+        maskTail();
+    }
+
+    bool test(size_t i) const {
+        assert(i < bit_count);
+        return (words[i >> 6] >> (i & 63)) & 1;
+    }
+
+    void set(size_t i) {
+        assert(i < bit_count);
+        words[i >> 6] |= static_cast<uint64_t>(1) << (i & 63);
+    }
+
+    void reset(size_t i) {
+        assert(i < bit_count);
+        words[i >> 6] &= ~(static_cast<uint64_t>(1) << (i & 63));
+    }
+
+    //! meet operator for this "must" analysis
+    void intersect(const QoreIRLocalBitSet& other) {
+        assert(words.size() == other.words.size());
+        for (size_t i = 0, e = words.size(); i < e; ++i) {
+            words[i] &= other.words[i];
+        }
+    }
+
+    bool operator==(const QoreIRLocalBitSet& other) const {
+        return words == other.words;
+    }
+
+    bool operator!=(const QoreIRLocalBitSet& other) const {
+        return !(*this == other);
+    }
+
+private:
+    size_t bit_count = 0;
+    std::vector<uint64_t> words;
+
+    //! clear the padding bits so equality never depends on them
+    void maskTail() {
+        const size_t rem = bit_count & 63;
+        if (rem && !words.empty()) {
+            words.back() &= (static_cast<uint64_t>(1) << rem) - 1;
+        }
+    }
+};
+
 static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
         const QoreIRControlFlowGraph& cfg, const QoreIRScalarUses& uses,
         size_t& check_count,
@@ -7393,7 +7455,21 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
         return found;
     };
 
-    using FreshLocalSet = std::unordered_set<LocalVar*>;
+    // Dense index over the candidate locals so the dataflow lattice can be a bit
+    // vector rather than a hash set; see QoreIRLocalBitSet.
+    std::unordered_map<const LocalVar*, size_t> candidate_index;
+    candidate_index.reserve(candidate_locals.size());
+    for (LocalVar* candidate_local : candidate_locals) {
+        const size_t next_index = candidate_index.size();
+        if (next_index && !(next_index % 100)
+                && qore_ir_analysis_cancelled(check_count,
+                    "IR local dataflow candidate indexing")) {
+            return 0;
+        }
+        candidate_index.emplace(candidate_local, next_index);
+    }
+
+    using FreshLocalSet = QoreIRLocalBitSet;
     bool cancelled = false;
     auto transfer_block = [&](size_t block_id, FreshLocalSet state, bool mark,
             size_t& changed) -> FreshLocalSet {
@@ -7405,7 +7481,9 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
             QoreIRInstruction& inst = *inst_ptr;
             if (!qore_ir_visit_value_operands(inst, [&](QoreIRValue operand) {
                 LocalVar* local = get_loaded_local(operand);
-                if (!local || !candidate_locals.count(local)) {
+                auto candidate = local ? candidate_index.find(local)
+                    : candidate_index.end();
+                if (candidate == candidate_index.end()) {
                     return;
                 }
                 bool preserves_freshness = is_read_only_list_use(inst, operand)
@@ -7413,7 +7491,7 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
                         && !inst.operands.empty() && inst.operands[0].id == operand.id
                         && get_paired_push_store(inst, local));
                 if (!preserves_freshness) {
-                    state.erase(local);
+                    state.reset(candidate->second);
                 }
             }, &check_count, "IR local list push escape analysis")) {
                 cancelled = true;
@@ -7442,8 +7520,12 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
                     }
                 }
                 const QoreIRValueFacts* facts = func.getValueFacts(inst.operands[0]);
+                auto fresh_candidate = local ? candidate_index.find(local)
+                    : candidate_index.end();
                 if (mark && enable_in_place && inst.opcode == QoreIROpcode::ListPush
-                        && !inst.list_push_in_place && store && state.count(local) && facts
+                        && !inst.list_push_in_place && store
+                        && fresh_candidate != candidate_index.end()
+                        && state.test(fresh_candidate->second) && facts
                         && facts->assigned_state == QoreIRAssignedState::Assigned
                         && facts->never_nothing && QoreTypeInfo::isListType(facts->type_info)) {
                     inst.list_push_in_place = true;
@@ -7455,15 +7537,17 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
             }
             if (inst.opcode == QoreIROpcode::StoreLocal) {
                 auto& store = static_cast<QoreIRLocalInstruction&>(inst);
-                if (store.local && candidate_locals.count(store.local)) {
+                auto stored_candidate = store.local
+                    ? candidate_index.find(store.local) : candidate_index.end();
+                if (stored_candidate != candidate_index.end()) {
                     if (is_exclusive_fresh_store(store)) {
-                        state.insert(store.local);
+                        state.set(stored_candidate->second);
                     } else {
                         auto def_it = store.operands.empty()
                             ? definitions.end() : definitions.find(store.operands[0].id);
                         if (def_it == definitions.end()
                                 || !get_paired_push_store(*def_it->second, store.local)) {
-                            state.erase(store.local);
+                            state.reset(stored_candidate->second);
                         }
                     }
                 }
@@ -7472,8 +7556,9 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
         return state;
     };
 
-    std::vector<FreshLocalSet> fresh_in(cfg.blocks.size(), candidate_locals);
-    std::vector<FreshLocalSet> fresh_out(cfg.blocks.size(), candidate_locals);
+    const FreshLocalSet all_fresh(candidate_index.size(), true);
+    std::vector<FreshLocalSet> fresh_in(cfg.blocks.size(), all_fresh);
+    std::vector<FreshLocalSet> fresh_out(cfg.blocks.size(), all_fresh);
     std::vector<size_t> worklist;
     std::vector<uint8_t> queued(cfg.blocks.size(), 0);
     for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
@@ -7493,7 +7578,8 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
         size_t block_id = worklist.back();
         worklist.pop_back();
         queued[block_id] = 0;
-        FreshLocalSet input;
+        // no reachable predecessor leaves nothing fresh on entry to the block
+        FreshLocalSet input(candidate_index.size(), false);
         if (block_id) {
             bool first = true;
             for (size_t predecessor : cfg.predecessors[block_id]) {
@@ -7508,16 +7594,7 @@ static size_t qore_ir_mark_local_list_pushes(QoreIRFunction& func,
                     first = false;
                     continue;
                 }
-                for (auto it = input.begin(); it != input.end();) {
-                    if (qore_ir_analysis_cancelled(check_count, "IR local list push dataflow")) {
-                        return 0;
-                    }
-                    if (!fresh_out[predecessor].count(*it)) {
-                        it = input.erase(it);
-                    } else {
-                        ++it;
-                    }
-                }
+                input.intersect(fresh_out[predecessor]);
             }
         }
         fresh_in[block_id] = input;
@@ -7676,7 +7753,21 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
             && use_it->second[0].inst == &store;
     };
 
-    using FreshLocalSet = std::unordered_set<LocalVar*>;
+    // Dense index over the candidate locals so the dataflow lattice can be a bit
+    // vector rather than a hash set; see QoreIRLocalBitSet.
+    std::unordered_map<const LocalVar*, size_t> candidate_index;
+    candidate_index.reserve(candidate_locals.size());
+    for (LocalVar* candidate_local : candidate_locals) {
+        const size_t next_index = candidate_index.size();
+        if (next_index && !(next_index % 100)
+                && qore_ir_analysis_cancelled(check_count,
+                    "IR local dataflow candidate indexing")) {
+            return 0;
+        }
+        candidate_index.emplace(candidate_local, next_index);
+    }
+
+    using FreshLocalSet = QoreIRLocalBitSet;
     bool cancelled = false;
     auto transfer_block = [&](size_t block_id, FreshLocalSet state, bool mark,
             size_t& changed) -> FreshLocalSet {
@@ -7689,7 +7780,9 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
             QoreIRInstruction& inst = *inst_ptr;
             if (!qore_ir_visit_value_operands(inst, [&](QoreIRValue operand) {
                 LocalVar* local = get_loaded_local(operand);
-                if (!local || !candidate_locals.count(local)) {
+                auto candidate = local ? candidate_index.find(local)
+                    : candidate_index.end();
+                if (candidate == candidate_index.end()) {
                     return;
                 }
                 bool preserves_freshness =
@@ -7699,7 +7792,7 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                         && inst.operands[0].id == operand.id
                         && get_paired_append_store(inst, local));
                 if (!preserves_freshness) {
-                    state.erase(local);
+                    state.reset(candidate->second);
                 }
             }, &check_count, "IR in-place string append escape analysis")) {
                 cancelled = true;
@@ -7734,9 +7827,12 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                 }
                 const QoreIRValueFacts* facts =
                     func.getValueFacts(inst.operands[0]);
+                auto fresh_candidate = local ? candidate_index.find(local)
+                    : candidate_index.end();
                 if (mark && !inst.string_append_in_place && store
                         && local_cow
-                        && state.count(local) && facts
+                        && fresh_candidate != candidate_index.end()
+                        && state.test(fresh_candidate->second) && facts
                         && facts->assigned_state == QoreIRAssignedState::Assigned
                         && facts->never_nothing
                         && QoreTypeInfo::parseReturns(
@@ -7749,9 +7845,11 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
             }
             if (inst.opcode == QoreIROpcode::StoreLocal) {
                 auto& store = static_cast<QoreIRLocalInstruction&>(inst);
-                if (store.local && candidate_locals.count(store.local)) {
+                auto stored_candidate = store.local
+                    ? candidate_index.find(store.local) : candidate_index.end();
+                if (stored_candidate != candidate_index.end()) {
                     if (is_exclusive_fresh_store(store)) {
-                        state.insert(store.local);
+                        state.set(stored_candidate->second);
                     } else {
                         auto def_it = store.operands.empty()
                             ? definitions.end()
@@ -7759,7 +7857,7 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                         if (def_it == definitions.end()
                                 || !get_paired_append_store(
                                     *def_it->second, store.local)) {
-                            state.erase(store.local);
+                            state.reset(stored_candidate->second);
                         }
                     }
                 }
@@ -7768,8 +7866,9 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
         return state;
     };
 
-    std::vector<FreshLocalSet> fresh_in(cfg.blocks.size(), candidate_locals);
-    std::vector<FreshLocalSet> fresh_out(cfg.blocks.size(), candidate_locals);
+    const FreshLocalSet all_fresh(candidate_index.size(), true);
+    std::vector<FreshLocalSet> fresh_in(cfg.blocks.size(), all_fresh);
+    std::vector<FreshLocalSet> fresh_out(cfg.blocks.size(), all_fresh);
     std::vector<size_t> worklist;
     std::vector<uint8_t> queued(cfg.blocks.size(), 0);
     for (size_t block_id = 0; block_id < cfg.blocks.size(); ++block_id) {
@@ -7791,7 +7890,8 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
         size_t block_id = worklist.back();
         worklist.pop_back();
         queued[block_id] = 0;
-        FreshLocalSet input;
+        // no reachable predecessor leaves nothing fresh on entry to the block
+        FreshLocalSet input(candidate_index.size(), false);
         if (block_id) {
             bool first = true;
             for (size_t predecessor : cfg.predecessors[block_id]) {
@@ -7807,17 +7907,7 @@ static size_t qore_ir_mark_in_place_string_appends(QoreIRFunction& func,
                     first = false;
                     continue;
                 }
-                for (auto it = input.begin(); it != input.end();) {
-                    if (qore_ir_analysis_cancelled(check_count,
-                            "IR in-place string append dataflow")) {
-                        return 0;
-                    }
-                    if (!fresh_out[predecessor].count(*it)) {
-                        it = input.erase(it);
-                    } else {
-                        ++it;
-                    }
-                }
+                input.intersect(fresh_out[predecessor]);
             }
         }
         fresh_in[block_id] = input;

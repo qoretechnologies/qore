@@ -501,6 +501,19 @@ private:
     std::vector<llvm::AllocaInst*> owned_ir_local_allocas;
     std::unordered_set<const void*> owned_ir_local_alloca_keys;
 
+    // Entry-block array of pointers to owned_ir_local_allocas slots.  The inline
+    // cleanup emits one load/store/decref triple per IR-only local in the shared
+    // error-return block; once SROA promotes those slots, every local needs a PHI
+    // for every edge reaching that block, so the PHI count is
+    // (locals x exit edges) and code generation becomes superlinear.  Storing the
+    // slot addresses here keeps them in memory, so the cleanup is a single
+    // qore_rt_cleanup_run_allocas() call and no PHI is required.  Prepared at
+    // function finalization, when both factors are known, and only when their
+    // product exceeds getCleanupPhiBudget() -- every other function keeps the
+    // inline triples and full SSA promotion of its locals.
+    llvm::AllocaInst* local_cleanup_array = nullptr;
+    unsigned local_cleanup_array_count = 0;
+
     // Allocas for Invoke/ConstString results that need cleanup at function exit.
     // qore_rt_invoke_expr returns +1 ref; these allocas track the results so they
     // can be decref'd at exit (matching the IR interpreter's cleanup vector).
@@ -1010,6 +1023,21 @@ private:
 
     // Emit qore_rt_uninstantiate_local calls for all function locals at current insert point
     void emitLocalUninstantiation(llvm::Module& module);
+
+    //! Route owned IR-only local cleanup through qore_rt_cleanup_run_allocas() when
+    //! the inline per-local triples would need (locals x exit_edges) PHIs.
+    /** @param llvm_func the function being finalized
+        @param exit_edges the number of edges reaching the shared cleanup block
+
+        @return true if the array was prepared; emitPreinstantiatedCleanup() then
+        emits a single runtime call in place of the per-local triples
+    */
+    bool prepareOwnedIrLocalCleanupArray(llvm::Function* llvm_func, size_t exit_edges);
+
+    //! PHI-operand budget above which local cleanup switches to the array form.
+    /** Overridable with QORE_JIT_CLEANUP_PHI_BUDGET; 0 disables the array form.
+    */
+    static size_t getCleanupPhiBudget();
 
     // Emit qore_rt_exec_on_block_exit call to execute registered on_block_exit handlers
     void emitOnBlockExitExec(llvm::Module& module);
