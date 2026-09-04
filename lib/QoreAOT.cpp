@@ -1878,11 +1878,11 @@ static bool appendModulePathListSections(QoreAOTBinaryWriter& writer,
     return true;
 }
 
-//! Append producer/build diagnostics to the AOT metadata blob.  This section is
-//! intentionally informational: runtimes ignore it, while qcc --dump-info can
-//! use it to identify stale or shadowed AOT binaries without executing them.
+//! Append producer/build diagnostics and an optional source stat fingerprint to the AOT metadata blob.
+/** BUILD_INFO is informational. The fixed-width fingerprint lets supporting runtimes avoid reading an unchanged
+    source file; older runtimes safely ignore its unknown optional section. */
 static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* binary_kind,
-        const char* target_triple, int opt_level, bool include_source) {
+        const char* target_triple, int opt_level, bool include_source, const char* source_path = nullptr) {
     std::vector<std::pair<std::string, std::string>> info;
     auto add = [&info](const char* key, const std::string& value) {
         info.emplace_back(key, value);
@@ -1904,8 +1904,12 @@ static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* bina
     add("debug-info", getenv("QORE_AOT_NO_DEBUG_INFO") ? "false" : "true");
     const char* big_fn = getenv("QORE_AOT_BIG_FN_THRESHOLD");
     add("big-fn-threshold", big_fn ? big_fn : "");
-
     serializeBuildInfo(writer, info);
+
+    QoreAOTSourceStatFingerprint source_fingerprint;
+    if (getAOTSourceStatFingerprint(source_path, source_fingerprint)) {
+        serializeAOTSourceStatFingerprint(writer, source_fingerprint);
+    }
 }
 
 //! Compute xxHash64 of source file bytes
@@ -23203,7 +23207,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
             error = "operation cancelled during AOT module command serialization";
             return false;
         }
-        appendBuildInfoSection(writer, "script", target_triple, opt_level, include_source);
+        appendBuildInfoSection(writer, "script", target_triple, opt_level, include_source, label);
 
         // Serialize dependencies from the parsed program's feature lists.
         // This captures ALL module dependencies including those from %include'd files,
@@ -25402,7 +25406,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             error = "operation cancelled during AOT module command serialization";
             return false;
         }
-        appendBuildInfoSection(writer, "module", target_triple, opt_level, include_source);
+        appendBuildInfoSection(writer, "module", target_triple, opt_level, include_source, label);
 
         // Serialize successfully-loaded dependencies so they can be loaded at
         // runtime before deserializing the namespace tree. Failed %try-module
@@ -25883,7 +25887,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 error = "operation cancelled during AOT module command serialization";
                 return false;
             }
-            appendBuildInfoSection(writer, "split-module", target_triple, opt_level, include_source);
+            appendBuildInfoSection(writer, "split-module", target_triple, opt_level, include_source, qm_path.c_str());
 
             // Serialize successfully-loaded dependencies so failed %try-module
             // directives do not become hard AOT dependencies.
@@ -26537,7 +26541,8 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
             error = "operation cancelled during AOT module command serialization";
             return false;
         }
-        appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source);
+        appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source,
+            target_canon.c_str());
 
         // Every script fragment carries the full program-wide dependency set.
         // This is conservative but harmless: already-loaded modules are no-ops,
@@ -29230,7 +29235,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             error = "operation cancelled during AOT module command serialization";
             return false;
         }
-        appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source);
+        appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source,
+            target_canon.c_str());
 
         // Every script fragment carries the full program-wide dependency set.
         // This is conservative but harmless: already-loaded modules are no-ops,
@@ -29808,7 +29814,8 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 error = "operation cancelled during AOT module command serialization";
                 return false;
             }
-            appendBuildInfoSection(writer, "module-fragment", target_triple, opt_level, include_source);
+            appendBuildInfoSection(writer, "module-fragment", target_triple, opt_level, include_source,
+                qm_path.c_str());
 
             std::vector<std::string> reexport_mods;
             std::vector<std::string> explicit_deps = extractAllDependencies(combined_source.c_str(),
@@ -30276,7 +30283,8 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                 error = "operation cancelled during AOT module command serialization";
                 return false;
             }
-            appendBuildInfoSection(writer, "aggregated-module", target_triple, opt_level, include_source);
+            appendBuildInfoSection(writer, "aggregated-module", target_triple, opt_level, include_source,
+                qm_path.c_str());
 
             std::vector<std::string> reexport_mods;
             std::vector<std::string> explicit_deps = extractAllDependencies(combined_source.c_str(),
@@ -30760,7 +30768,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 error = "operation cancelled during AOT module command serialization";
                 return false;
             }
-            appendBuildInfoSection(writer, "archive", target_triple, opt_level, include_source);
+            appendBuildInfoSection(writer, "archive", target_triple, opt_level, include_source, qm_path.c_str());
 
             std::vector<std::string> reexport_mods;
             std::vector<std::string> explicit_deps = extractAllDependencies(combined_source.c_str(),

@@ -168,6 +168,7 @@
 #include <set>
 #include <sstream>
 #include <cstdlib>
+#include <sys/stat.h>
 #include <typeinfo>
 #include <unordered_set>
 #include <zlib.h>
@@ -20253,6 +20254,62 @@ void serializeBuildInfo(QoreAOTBinaryWriter& writer,
         writer.writeStringRef(value.c_str());
     }
     writer.endSection(sec_idx);
+}
+
+bool getAOTSourceStatFingerprint(const char* path, QoreAOTSourceStatFingerprint& fingerprint) {
+    if (!path || !*path) {
+        return false;
+    }
+
+    struct stat sb;
+    if (stat(path, &sb) || !S_ISREG(sb.st_mode) || sb.st_size < 0 || sb.st_mtime < 0) {
+        return false;
+    }
+
+    long mtime_nsec = 0;
+#ifdef HAVE_STRUCT_STAT_ST_TIM
+    mtime_nsec = sb.st_mtim.tv_nsec;
+#elif defined(HAVE_STRUCT_STAT_ST_TIMESPEC)
+    mtime_nsec = sb.st_mtimespec.tv_nsec;
+#endif
+    if (mtime_nsec < 0 || mtime_nsec >= 1000000000L) {
+        return false;
+    }
+
+    uint64_t mtime_sec = static_cast<uint64_t>(sb.st_mtime);
+    constexpr uint64_t ns_per_sec = 1000000000ULL;
+    if (mtime_sec > (std::numeric_limits<uint64_t>::max()
+            - static_cast<uint64_t>(mtime_nsec)) / ns_per_sec) {
+        return false;
+    }
+
+    fingerprint.size = static_cast<uint64_t>(sb.st_size);
+    fingerprint.mtime_ns = mtime_sec * ns_per_sec + static_cast<uint64_t>(mtime_nsec);
+    return true;
+}
+
+void serializeAOTSourceStatFingerprint(QoreAOTBinaryWriter& writer,
+        const QoreAOTSourceStatFingerprint& fingerprint) {
+    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::SOURCE_STAT_FINGERPRINT);
+    writer.writeU64(fingerprint.size);
+    writer.writeU64(fingerprint.mtime_ns);
+    writer.endSection(sec_idx);
+}
+
+bool readAOTSourceStatFingerprint(const QoreAOTBinaryReader& reader,
+        QoreAOTSourceStatFingerprint& fingerprint) {
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SOURCE_STAT_FINGERPRINT);
+    if (!sec || sec->size != 16) {
+        return false;
+    }
+
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr) {
+        return false;
+    }
+    fingerprint.size = QoreAOTBinaryReader::readU64(ptr);
+    fingerprint.mtime_ns = QoreAOTBinaryReader::readU64(ptr);
+    return true;
 }
 
 bool readBuildInfo(const QoreAOTBinaryReader& reader,

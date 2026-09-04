@@ -39,6 +39,7 @@
 
 #include <qore/ModuleManager.h>
 #include <qore/QoreThreadLock.h>
+#include <qore/QoreSandboxManager.h>
 #include "qore/intern/QoreAOT.h"
 #include "qore/intern/QoreAOTBinary.h"
 #include "qore/intern/qore_program_private.h"
@@ -190,6 +191,7 @@
 
 #include <cassert>
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstring>
 #include <string>
@@ -12872,6 +12874,101 @@ static std::string stripRequiresDirectives(const char* source, int source_len,
     return result;
 }
 
+static bool aotSourceAccessAllowed(const QoreProgram& pgm, const char* label) {
+    if ((pgm.getParseOptions() & PO_NO_FILESYSTEM) || !label || !*label) {
+        return false;
+    }
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (!smh) {
+        return true;
+    }
+    ExceptionSink xsink;
+    if (smh->checkFilesystemAccess(label, QSEC_READ, &xsink)) {
+        return true;
+    }
+    xsink.clear();
+    return false;
+}
+
+static bool aotHashSourceFile(const char* label, uint64_t& hash) {
+    if (qore_check_cancel(nullptr, "AOT source staleness hashing")) {
+        return false;
+    }
+    std::ifstream source(label, std::ios::binary);
+    if (!source.is_open()) {
+        return false;
+    }
+
+    XXH64_state_t state;
+    XXH64_reset(&state, 0);
+    std::array<char, 64 * 1024> buffer;
+    bool have_data = false;
+    while (source) {
+        if (qore_check_cancel(nullptr, "AOT source staleness hashing")) {
+            return false;
+        }
+        source.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+        std::streamsize count = source.gcount();
+        if (count > 0) {
+            XXH64_update(&state, buffer.data(), static_cast<size_t>(count));
+            have_data = true;
+        }
+    }
+    if (source.bad() || !have_data) {
+        return false;
+    }
+
+    hash = XXH64_digest(&state);
+    return true;
+}
+
+//! Perform the advisory source staleness check without reading an unchanged source file.
+static void checkAOTSourceStaleness(const QoreAOTBinaryReader& reader,
+        const QoreProgram& pgm, const char* label) {
+    const QoreAOTBinaryHeader& header = reader.getHeader();
+    if (!header.source_hash || qore_check_cancel(nullptr, "AOT source staleness check")) {
+        return;
+    }
+    if (!aotSourceAccessAllowed(pgm, label)) {
+        return;
+    }
+
+    static const bool trace = getenv("QORE_AOT_SOURCE_CHECK_TRACE") != nullptr;
+    QoreAOTSourceStatFingerprint recorded;
+    QoreAOTSourceStatFingerprint current;
+    if (readAOTSourceStatFingerprint(reader, recorded)
+            && getAOTSourceStatFingerprint(label, current)
+            && recorded.size == current.size
+            && recorded.mtime_ns == current.mtime_ns) {
+        if (trace) {
+            fprintf(stderr, "[aot-source-check] stat-hit '%s'\n", label);
+        }
+        return;
+    }
+
+    if (trace) {
+        fprintf(stderr, "[aot-source-check] hash-fallback '%s'\n", label);
+    }
+    uint64_t live_hash;
+    if (!aotHashSourceFile(label, live_hash)) {
+        return;
+    }
+    if (live_hash == header.source_hash) {
+        if (trace) {
+            fprintf(stderr, "[aot-source-check] hash-match '%s'\n", label);
+        }
+        return;
+    }
+    if (trace) {
+        fprintf(stderr, "[aot-source-check] hash-mismatch '%s'\n", label);
+    }
+    printd(0, "AOT WARNING: binary source hash mismatch for '%s' "
+        "(compiled=0x%016llx, current=0x%016llx); source has changed\n",
+        label,
+        static_cast<unsigned long long>(header.source_hash),
+        static_cast<unsigned long long>(live_hash));
+}
+
 //! C ABI entry point for AOT binaries (v3 - full 128-bit parse options)
 //! Wrapper around qore_aot_run_v2, accepting parse_options as two int64_t values
 extern "C" DLLEXPORT int qore_aot_run_v3(
@@ -13065,28 +13162,7 @@ extern "C" DLLEXPORT int qore_aot_run_v3(
         // Advisory source staleness check.  Feature compatibility is a hard
         // error in QoreAOTBinaryDeserializer::openAndDeserializeShells()
         // before schema-dependent metadata is read.
-        {
-            const QoreAOTBinaryHeader& aot_hdr = deserializer.getReader().getHeader();
-            if (aot_hdr.source_hash != 0 && label != nullptr) {
-                std::ifstream sf(label, std::ios::binary | std::ios::ate);
-                if (sf.is_open()) {
-                    auto sz = sf.tellg();
-                    if (sz > 0) {
-                        std::vector<char> src(static_cast<size_t>(sz));
-                        sf.seekg(0);
-                        sf.read(src.data(), sz);
-                        uint64_t live_hash = XXH64(src.data(), static_cast<size_t>(sz), 0);
-                        if (live_hash != aot_hdr.source_hash) {
-                            printd(0, "AOT WARNING: binary source hash mismatch for '%s' "
-                                "(compiled=0x%016llx, current=0x%016llx); source has changed\n",
-                                label,
-                                (unsigned long long)aot_hdr.source_hash,
-                                (unsigned long long)live_hash);
-                        }
-                    }
-                }
-            }
-        }
+        checkAOTSourceStaleness(deserializer.getReader(), **qpgm, label);
 
         // Register pre-compiled function pointers
         QoreProgram* fallback_pgm = nullptr;
@@ -15639,28 +15715,7 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
     // Advisory source staleness check.  Feature compatibility is a hard error
     // in QoreAOTBinaryDeserializer::openAndDeserializeShells() before
     // schema-dependent metadata is read.
-    {
-        const QoreAOTBinaryHeader& aot_hdr = deserializer.getReader().getHeader();
-        if (aot_hdr.source_hash != 0 && label != nullptr) {
-            std::ifstream sf(label, std::ios::binary | std::ios::ate);
-            if (sf.is_open()) {
-                auto sz = sf.tellg();
-                if (sz > 0) {
-                    std::vector<char> src(static_cast<size_t>(sz));
-                    sf.seekg(0);
-                    sf.read(src.data(), sz);
-                    uint64_t live_hash = XXH64(src.data(), static_cast<size_t>(sz), 0);
-                    if (live_hash != aot_hdr.source_hash) {
-                        printd(0, "AOT WARNING: binary source hash mismatch for '%s' "
-                            "(compiled=0x%016llx, current=0x%016llx); source has changed\n",
-                            label,
-                            (unsigned long long)aot_hdr.source_hash,
-                            (unsigned long long)live_hash);
-                    }
-                }
-            }
-        }
-    }
+    checkAOTSourceStaleness(deserializer.getReader(), *local_pgm, label);
 
     // Register pre-compiled AOT functions using slot maps (v3 uses metadata
     // deserialization — no AST available, must use slot map path)
