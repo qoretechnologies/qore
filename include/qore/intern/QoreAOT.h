@@ -281,6 +281,12 @@ struct QoreAOTContext {
     const QoreProgramLocation** locs = nullptr;
     int num_locs = 0;
 
+    //! Native function whose PC-to-source map is attached on first execution.
+    using PcLocFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
+    PcLocFunctionPtr pc_loc_fn = nullptr;
+    //! Published after the global PC map contains this function's complete range.
+    std::atomic<bool> pc_loc_map_attached{false};
+
     //! Locations referenced only by the lazy PC->loc map, for code inlined into this function
     /** LLVM inlines AOT functions into one another, and an inlined body's locations belong to the
         callee's table, not this function's.  The PC map carries such locations literally and
@@ -373,6 +379,9 @@ struct QoreAOTContext {
         }
     }
 };
+
+//! Attach a context's deferred native PC-to-source map before its function executes.
+DLLLOCAL void qore_aot_ensure_pc_loc_map(QoreAOTContext* ctx);
 
 //! Compile-time slot assignment map for AOT pointer indirection.
 /** Assigns monotonically increasing slot indices to each unique pointer encountered

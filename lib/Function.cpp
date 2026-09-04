@@ -6480,6 +6480,7 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // through to the normal xsink-set path below.
                 try {
                     if (cached_aot_ctx && cached_aot_fn) {
+                        qore_aot_ensure_pc_loc_map(cached_aot_ctx);
                         result_bits = cached_aot_fn(cached_aot_ctx, xsink);
                     } else {
                         assert(jit_fn);

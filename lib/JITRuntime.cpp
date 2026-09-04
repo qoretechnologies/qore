@@ -9711,6 +9711,9 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
 
     bool fn_invalidated = false;
     uint64_t result_bits = 0;
+    if (has_aot) {
+        qore_aot_ensure_pc_loc_map(uvb->getCachedAOTContext());
+    }
     try {
         result_bits = exec_fn(xsink, fn_invalidated);
     } catch (const QoreJITException&) {
@@ -14307,7 +14310,9 @@ extern "C" DLLEXPORT QoreAOTContext* qore_rt_get_aot_call_target_context(
         }
         return nullptr;
     }
-    return uvb->getCachedAOTContext();
+    QoreAOTContext* target_ctx = uvb->getCachedAOTContext();
+    qore_aot_ensure_pc_loc_map(target_ctx);
+    return target_ctx;
 }
 
 extern "C" DLLEXPORT QoreAOTContext* qore_rt_try_get_aot_call_target_context(

@@ -54,6 +54,7 @@ struct QoreAOTLazyClosureIR;
 struct QoreAOTLazyFunctionIR;
 using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
 using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
+DLLLOCAL void qore_aot_ensure_pc_loc_map(QoreAOTContext* ctx);
 
 // these data structures are all private to the library
 
@@ -1099,6 +1100,7 @@ public:
     DLLLOCAL uint64_t execCachedFunction(ExceptionSink* xsink, bool& invalidated) const {
         invalidated = false;
         if (cached_aot_ctx && cached_aot_fn) {
+            qore_aot_ensure_pc_loc_map(cached_aot_ctx);
             // C++ EH prototype: the AOT code body is now emitted with
             // invoke/landingpad EH under QORE_AOT_EH=1. Per-function landing
             // pads resume the in-flight exception so it propagates up through

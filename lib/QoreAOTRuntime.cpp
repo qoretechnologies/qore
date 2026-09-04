@@ -3266,6 +3266,7 @@ struct AotPcRange {
 };
 
 QoreThreadLock g_aot_pcmap_lock;  // guards all registry state below
+QoreThreadLock g_aot_pc_attach_lock;  // serializes first-execution attachment per context
 //! One symbol's lazy PC->loc data: the (offset -> loc-index) rows plus the literal locations that
 //! indices at or above the function's loc-table size address (code inlined from another function).
 struct AotSymEntry {
@@ -3616,6 +3617,18 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
             g_aot_pc_ranges.back().offmap.size(),
             g_aot_pc_ranges.size());
     }
+}
+
+void qore_aot_ensure_pc_loc_map(QoreAOTContext* ctx) {
+    if (!ctx || ctx->pc_loc_map_attached.load(std::memory_order_acquire)) {
+        return;
+    }
+    AutoLocker al(g_aot_pc_attach_lock);
+    if (ctx->pc_loc_map_attached.load(std::memory_order_relaxed)) {
+        return;
+    }
+    aotAttachPcLocMap(ctx->pc_loc_fn, ctx);
+    ctx->pc_loc_map_attached.store(true, std::memory_order_release);
 }
 
 namespace {
@@ -7213,8 +7226,14 @@ static QoreAOTContext* buildContextFromSlotMap(
         return nullptr;
     }
 
-    // Register this function's lazy PC->loc map (no-op if the artifact has no trailer).
-    aotAttachPcLocMap(aot_func.fn_ptr, ctx);
+    // Defer the native PC->loc map until first execution. Most module functions
+    // are never called by a short-lived loader process, and the map is needed
+    // only before this function can contribute a frame to an exception.
+    ctx->pc_loc_fn = aot_func.fn_ptr;
+    static const bool eager_pc_loc_attach = getenv("QORE_AOT_LOC_EAGER_ATTACH") != nullptr;
+    if (eager_pc_loc_attach) {
+        qore_aot_ensure_pc_loc_map(ctx);
+    }
 
     return ctx;
 }
@@ -14454,6 +14473,7 @@ int qore_aot_run_pending_constant_init(ConstantEntry* ce, ExceptionSink* xsink) 
         const char* old_name = set_module_context_name(rec->mod_name.empty() ? nullptr : rec->mod_name.c_str());
         const char* old_path = set_module_context_path(rec->mod_path.empty() ? nullptr : rec->mod_path.c_str());
         uint64_t raw_result = 0;
+        qore_aot_ensure_pc_loc_map(rec->ctx);
         try {
             raw_result = rec->fn_ptr(rec->ctx, &init_xsink);
         } catch (const QoreJITException&) {
@@ -14875,6 +14895,7 @@ static int executeInitFunctions(
             const char* init_mod_path = is_module_init && !desc.item_name.empty()
                 ? desc.item_name.c_str() : mod_path;
             ModuleInitNamePathContextHelper module_ctx(init_mod_name, init_mod_path);
+            qore_aot_ensure_pc_loc_map(info->ctx);
             if (is_module_init) {
                 // The compiled closure body expects its body locals to be
                 // pre-instantiated on the thread's lvstack (mimicking evalTiered's

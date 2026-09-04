@@ -817,6 +817,7 @@ int TopLevelStatementBlock::execImpl(RuntimeConfig& rc, QoreValue& return_value,
             }
 
             uint64_t result_bits = 0;
+            qore_aot_ensure_pc_loc_map(cached_toplevel_aot_ctx);
             try {
                 result_bits = cached_toplevel_aot_fn(cached_toplevel_aot_ctx, xsink);
             } catch (const QoreJITException&) {
