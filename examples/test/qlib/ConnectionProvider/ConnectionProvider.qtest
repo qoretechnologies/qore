@@ -11,6 +11,8 @@
 %requires FsUtil
 %requires QUnit
 %requires AsyncSocketIo
+%requires FtpClientIo
+%requires HttpClientIo
 %requires ConnectionProvider
 %requires ProviderIndexUtil
 
@@ -111,6 +113,11 @@ public class ConnectionProviderTest inherits QUnit::Test {
         AbstractDataProvider prov = fc.getDataProvider();
         assertEq("ftp", prov.getName());
 
+        FtpClientIo::FtpClientPollOperation async_fc = fc.getAsync(False, {"path": "/"});
+        driveFtpOperation(async_fc);
+        assertTrue(async_fc.isLoggedIn(), "async FTP connection is logged in");
+        assertEq(250, async_fc.getCommandResult().code, "async FTP connection selected its runtime path");
+
         # issue #3696: test connection serialization
         FtpConnection conn2 = Serializable::deserialize(fc.serialize());
         assertEq(fc.url, conn2.url);
@@ -141,6 +148,11 @@ public class ConnectionProviderTest inherits QUnit::Test {
         assertEq(url, hc.url);
         assertEq("name", hc.name);
         assertEq("desc", hc.desc);
+
+        HttpClientIo::HttpClientConnectionManager async_hc = hc.getAsync(False);
+        assertEq("auto", async_hc.getProtocolMode(), "async HTTP connection uses automatic protocol selection");
+        assertEq(45000, async_hc.getConnectTimeout(), "async HTTP connection preserves the connect timeout");
+        assertEq(45000, async_hc.getRequestTimeout(), "async HTTP connection preserves the request timeout");
 
         hash<ConnectionSchemeInfo> scheme_info = hc.getConnectionSchemeInfo();
         assertFalse(scheme_info.options.firstValue().freeform);
@@ -773,6 +785,28 @@ public class ConnectionProviderTest inherits QUnit::Test {
         assertFalse(pcm.running(), "monitor stopped after stopClear()");
         assertFalse(pcm.getInfo().connections.val(),
             "connections cleared after stopClear()");
+    }
+
+    #! Drives an async FTP composite operation to completion
+    private driveFtpOperation(FtpClientIo::FtpClientPollOperation op, timeout tmout = 30s) {
+        int deadline = clock_getmicros_monotonic() + (tmout * 1000);
+        while (True) {
+            AbstractPollOperation cur = op.getCurrentPollOp();
+            *hash<SocketPollInfo> pi = cur.continuePoll();
+            if (op.currentOpReady()) {
+                if (op.advancePhase()) {
+                    return;
+                }
+                continue;
+            }
+            if (pi) {
+                int remaining_ms = (deadline - clock_getmicros_monotonic()) / 1000;
+                if (remaining_ms <= 0) {
+                    throw "TIMEOUT", sprintf("FTP operation timed out in state %y", cur.getState());
+                }
+                Socket::poll((pi,), remaining_ms);
+            }
+        }
     }
 }
 

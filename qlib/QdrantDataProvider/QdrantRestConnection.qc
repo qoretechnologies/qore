@@ -155,8 +155,8 @@ public class QdrantRestConnection inherits RestClient::RestConnection {
     }
 
     #! Returns connection options with API key header set if configured
-    private hash<auto> getConnectionOptions() {
-        hash<auto> opts = RestConnection::getConnectionOptions();
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        hash<auto> opts = RestConnection::getConnectionOptions(rtopts);
         if (opts.api_key) {
             opts.headers."api-key" = remove opts.api_key;
         }

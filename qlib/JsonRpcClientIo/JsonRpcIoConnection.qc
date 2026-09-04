@@ -128,6 +128,16 @@ public class JsonRpcIoConnection inherits ConnectionProvider::HttpBasedConnectio
         return new JsonRpcClientIo(http_url, client_opts);
     }
 
+    #! Returns a JSON-RPC client backed by HttpClientIo
+    /** @param connect ignored; connections are established on demand
+        @param rtopts this connection type does not accept runtime options
+
+        @return an async-I/O-capable @ref JsonRpcClientIo object
+    */
+    private JsonRpcClientIo getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return getImpl(connect, rtopts);
+    }
+
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;

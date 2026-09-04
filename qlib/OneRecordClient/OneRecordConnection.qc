@@ -127,6 +127,16 @@ public class OneRecordConnection inherits ConnectionProvider::HttpBasedConnectio
         return client;
     }
 
+    #! Returns a ONE Record client backed by HttpClientIo
+    /** @param connect if \c True, then server information is fetched before returning
+        @param rtopts this connection type does not accept runtime options
+
+        @return an async-I/O-capable @ref OneRecordClient object
+    */
+    private OneRecordClient getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return getImpl(connect, rtopts);
+    }
+
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;

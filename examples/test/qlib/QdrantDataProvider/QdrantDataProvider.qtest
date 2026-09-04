@@ -2024,6 +2024,14 @@ public class QdrantDataProviderTest inherits QUnit::Test {
         assertEq("/collections", conn.opts.ping_path);
         assertEq("GET", conn.opts.ping_method);
 
+        QdrantRestConnection auth_conn("test-async-auth", "test", "qdrantrest://localhost:6333", {}, {
+            "api_key": "test-key",
+        });
+        RestClientIo async_client = auth_conn.getAsync(False);
+        hash<auto> async_opts = async_client.getConstructorOptions();
+        assertEq("test-key", async_opts.headers."api-key",
+            "async Qdrant connections preserve API-key authentication");
+
         # an explicitly set ping_path must still win: a default change must not silently retarget
         # connections that chose their own ping endpoint
         QdrantRestConnection conn_explicit("test-ping-explicit", "test", "qdrantrest://localhost:6333",

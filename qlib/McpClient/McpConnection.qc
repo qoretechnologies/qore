@@ -146,6 +146,16 @@ public class McpConnection inherits ConnectionProvider::HttpBasedConnection {
         return client;
     }
 
+    #! Returns an MCP client backed by HttpClientIo
+    /** @param connect if \c True, then the client is initialized before returning
+        @param rtopts this connection type does not accept runtime options
+
+        @return an async-I/O-capable @ref McpClient object
+    */
+    private McpClient getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return getImpl(connect, rtopts);
+    }
+
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;

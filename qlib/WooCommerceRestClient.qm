@@ -438,6 +438,21 @@ public class WooCommerceRestConnection inherits RestClient::RestConnection {
         return new WooCommerceRestClient(getConnectionOptions(rtopts), !connect);
     }
 
+    #! Returns an async WooCommerce REST client backed by RestClientIo
+    /** @param connect ignored; RestClientIo establishes connections lazily
+        @param rtopts runtime connection options
+
+        @return an async-I/O-capable @ref RestClientIo::RestClientIo object with the WooCommerce URL and HTTP Basic
+            authentication options applied
+
+        @since WooCommerceRestClient 1.0
+    */
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        load_module("RestClientIo");
+        return create_object("RestClientIo::RestClientIo",
+            WooCommerceRestClient::getOptions(getConnectionOptions(rtopts)));
+    }
+
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;

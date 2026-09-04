@@ -31,6 +31,8 @@
 %requires Logger
 %requires(reexport) DataProvider
 %requires AsyncSocketIo
+%requires FtpClientIo
+%requires HttpClientIo
 %requires reflection
 %requires ProviderIndexUtil
 
@@ -130,6 +132,11 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     @section connectionproviderrelnotes Release Notes
 
     @subsection connectionprovider_3_1 ConnectionProvider 3.1
+    - added async connection acquisition for the built-in connection types that have native async transports:
+      - @ref ConnectionProvider::HttpConnection::getAsync() "HttpConnection::getAsync()" returns a
+        @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager"
+      - @ref ConnectionProvider::FtpConnection::getAsync() "FtpConnection::getAsync()" returns a
+        @ref FtpClientIo::FtpClientPollOperation "FtpClientPollOperation"
     - added support for named-connection file locations (\c "conn://" in the \c FileLocationHandler module):
       - @ref ConnectionProvider::FileLocationRedirect "FileLocationRedirect"
       - @ref ConnectionProvider::AbstractConnection::getFileLocationRedirect()

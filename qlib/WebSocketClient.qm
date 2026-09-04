@@ -4244,6 +4244,21 @@ public class WebSocketConnectionObject inherits ConnectionProvider::AbstractConn
         return ws;
     }
 
+    #! Returns a WebSocket client using the global async socket I/O controller
+    /** WebSocket I/O is always asynchronous; therefore the synchronous and async acquisition paths return the same
+        client type.
+
+        @param connect if \c True, then the client is connected before returning
+        @param rtopts runtime connection options
+
+        @return an async-I/O-capable @ref WebSocketClientWithSerialization object
+
+        @since WebSocketClient 2.5
+    */
+    private WebSocketClientWithSerialization getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return getImpl(connect, rtopts);
+    }
+
     #! returns an WebSocketClientDelayedDataProvider object for this connection
     /** @param constructor_options any additional constructor options for the data provider
 

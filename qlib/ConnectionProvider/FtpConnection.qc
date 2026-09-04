@@ -265,6 +265,43 @@ public class FtpConnection inherits AbstractConnectionWithInfo {
         return fc;
     }
 
+    #! Returns an async FTP client operation
+    /** The returned object performs no blocking I/O. Its current poll operation can be submitted to an async I/O
+        controller or driven directly; after each phase completes, call
+        @ref FtpClientIo::FtpClientPollOperation::advancePhase() "advancePhase()" as documented by
+        @ref FtpClientIo::FtpClientPollOperation "FtpClientPollOperation".
+
+        FTP login and any runtime initial directory are performed lazily when the poll operation is driven, so
+        \a connect is accepted for API compatibility but has no effect.
+
+        @param connect ignored; the connection is established when the operation is driven
+        @param rtopts supports the same \c path and \c path_add runtime options as @ref get()
+
+        @return a @ref FtpClientIo::FtpClientPollOperation "FtpClientPollOperation"
+
+        @since ConnectionProvider 3.1
+    */
+    private FtpClientIo::FtpClientPollOperation getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        *string rtpath = rtopts.path ?* urlh.path;
+        if (rtopts.path_add.val()) {
+            if (rtpath !~ /\/$/ && rtopts.path_add !~ /^\//) {
+                rtpath += "/";
+            }
+            rtpath += rtopts.path_add;
+        }
+
+        *string username = urlh.username;
+        *string password = urlh.password;
+        if (opts.username.val() && opts.password.val() && (!username.val() || !password.val())) {
+            username = opts.username;
+            password = opts.password;
+        }
+
+        bool secure = urlh.protocol == "ftps";
+        return new FtpClientIo::FtpClientPollOperation(urlh.host, urlh.port ?? 21, secure, secure,
+            username, password, rtpath);
+    }
+
     #! Returns an \c "ftp" or \c "ftps" scheme redirect for the given path
     /** @param path the path relative to any path in the connection URL
         @param write @ref True if the location will be written to

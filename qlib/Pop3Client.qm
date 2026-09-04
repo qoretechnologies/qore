@@ -2589,6 +2589,18 @@ public class Pop3Connection inherits ConnectionProvider::AbstractConnectionWithI
         return sc;
     }
 
+    #! Returns a POP3 client whose socket operations use the global async I/O controller
+    /** @param connect if \c True, then the client is connected before returning
+        @param rtopts runtime connection options
+
+        @return an async-I/O-capable @ref Pop3Client object
+
+        @since Pop3Client 2.1
+    */
+    private Pop3Client getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return getImpl(connect, rtopts);
+    }
+
     #! Execute a polling operation synchronously through the global AsyncIoController
     private static execPollOperation(Qore::AbstractPollOperation op, string owner, timeout to = 30s) {
         *hash<SocketPollInfo> pi = op.continuePoll();

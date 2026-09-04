@@ -31,6 +31,7 @@ public const FTP_OP_GET = "get";
 public const FTP_OP_PUT = "put";
 public const FTP_OP_LIST = "list";
 public const FTP_OP_COMMAND = "command";
+public const FTP_OP_CWD = "cwd";
 
 #! FTP transfer result
 public hashdecl FtpTransferResult {
@@ -110,6 +111,9 @@ public class FtpClientPollOperation {
             has been read, and that cannot happen until the transfer command has been sent.
         */
         bool awaiting_data_connect = False;
+
+        #! Initial directory requested by a connection provider
+        *string initial_path;
     }
 
     public {
@@ -129,13 +133,15 @@ public class FtpClientPollOperation {
         @param secure_data encrypt data channel
         @param user FTP username
         @param pass FTP password
+        @param initial_path optional directory to select after login
     */
     constructor(string host, int port = 21, bool secure = False, bool secure_data = False,
-            *string user, *string pass) {
+            *string user, *string pass, *string initial_path) {
         self.host = host;
         self.port = port;
         self.secure = secure;
         self.secure_data = secure_data;
+        self.initial_path = initial_path;
         ctrl = new FtpControlPollOperation(host: host, port: port, secure: secure, secure_data: secure_data,
             username: user, password: pass);
         current_poll_op = ctrl;
@@ -263,7 +269,21 @@ public class FtpClientPollOperation {
     bool advancePhase() {
         switch (op_type) {
             case FTP_OP_LOGIN:
+                if (initial_path.val()) {
+                    op_type = FTP_OP_CWD;
+                    ctrl.submitCommand(command: "CWD", argument: initial_path);
+                    current_poll_op = ctrl;
+                    return False;
+                }
                 return True;  # Login is handled entirely by ctrl op
+            case FTP_OP_CWD: {
+                hash<auto> resp = ctrl.getOutput();
+                if ((resp.code / 100) != 2) {
+                    throw "FTP-CWD-ERROR", sprintf("CWD failed: %s", resp.message);
+                }
+                remove initial_path;
+                return True;
+            }
             case FTP_OP_COMMAND:
                 return True;  # Simple command done
             case FTP_OP_GET:

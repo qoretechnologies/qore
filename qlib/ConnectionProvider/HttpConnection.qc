@@ -382,6 +382,19 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
 
         #! HttpConnection object connection options
         const hash<string, bool> Options = map {$1: True}, keys ConnectionScheme.options;
+
+        #! Maps HTTPClient HTTP version options to HttpClientIo protocol modes
+        /** HttpClientIo implements HTTP/1.1 for both legacy HTTP/1.x selections.
+
+            @since ConnectionProvider 3.1
+        */
+        const hash<string, string> AsyncHttpVersionMap = {
+            "auto": "auto",
+            "1.0": "h1",
+            "1.1": "h1",
+            "2.0": "h2",
+            "3.0": "h3",
+        };
     }
 
     #! Creates the HttpConnection object
@@ -532,6 +545,80 @@ public class HttpConnection inherits AbstractConnectionWithInfo {
         }
 
         return sc;
+    }
+
+    #! Returns an async HTTP connection manager
+    /** The manager uses the process-wide async I/O controller and establishes and pools connections lazily.
+        Therefore \a connect is accepted for API compatibility but has no effect. Pass this connection's
+        @ref url to the manager's request methods; the manager uses URLs per request so that one manager can pool
+        connections for multiple endpoints.
+
+        HTTPClient options that have HttpClientIo equivalents are preserved, including protocol selection,
+        connect and request timeouts, proxy and redirect handling, TLS verification, and mutual TLS credentials.
+
+        @param connect ignored; connections are established on demand
+        @param rtopts this connection type does not accept runtime options
+
+        @return a @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager"
+
+        @since ConnectionProvider 3.1
+    */
+    private HttpClientIo::HttpClientConnectionManager getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        checkRawHttpNegotiateUnsupported();
+
+        hash<HttpClientIo::HttpClientConnectionManagerOptions> async_opts =
+            <HttpClientIo::HttpClientConnectionManagerOptions>{
+                "connect_timeout": opts.connect_timeout,
+                "request_timeout": opts.timeout,
+                "protocol": AsyncHttpVersionMap{opts.http_version ?? "auto"},
+                # HTTPClient's ssl_verify_cert defaults to False, whereas HttpClientIo verifies by default
+                "ssl_verify_mode": opts.ssl_verify_cert ? SSL_VERIFY_PEER : SSL_VERIFY_NONE,
+                "redirect_passthru": opts.redirect_passthru,
+                "logger": logger,
+            };
+        if (exists opts.max_redirects) {
+            async_opts.max_redirects = opts.max_redirects;
+        }
+        if (opts.proxy.val()) {
+            async_opts.proxy_url = opts.proxy;
+        }
+
+        *SSLCertificate cert = getAsyncSslCertificate();
+        if (cert) {
+            async_opts.client_cert = cert;
+        }
+        *SSLPrivateKey key = getAsyncSslPrivateKey();
+        if (key) {
+            async_opts.client_pk = key;
+        }
+
+        return new HttpClientIo::HttpClientConnectionManager(async_opts);
+    }
+
+    #! Loads the configured client certificate for HttpClientIo
+    private *SSLCertificate getAsyncSslCertificate() {
+        *data cert_data = opts.ssl_cert_data;
+        if (!exists cert_data && opts.ssl_cert_path.val()) {
+            cert_data = getAsyncSslFileData(opts.ssl_cert_path);
+        }
+        return exists cert_data ? new SSLCertificate(cert_data) : NOTHING;
+    }
+
+    #! Loads the configured client private key for HttpClientIo
+    private *SSLPrivateKey getAsyncSslPrivateKey() {
+        *data key_data = opts.ssl_key_data;
+        if (!exists key_data && opts.ssl_key_path.val()) {
+            key_data = getAsyncSslFileData(opts.ssl_key_path);
+        }
+        return exists key_data ? new SSLPrivateKey(key_data, opts.ssl_key_password) : NOTHING;
+    }
+
+    #! Loads string data through FileLocationHandler without introducing a static module dependency
+    private static string getAsyncSslFileData(string location) {
+        load_module("FileLocationHandler");
+        Class c = Class::forName("FileLocationHandler");
+        StaticMethod m = c.getStaticMethod("getTextFileFromLocation");
+        return m.call(location);
     }
 
     #! Rejects Kerberos/SPNEGO authentication for raw HTTPClient paths

@@ -123,6 +123,16 @@ public class A2aConnection inherits ConnectionProvider::HttpBasedConnection {
         return client;
     }
 
+    #! Returns an A2A client backed by HttpClientIo
+    /** @param connect if \c True, then the agent card is fetched before returning
+        @param rtopts this connection type does not accept runtime options
+
+        @return an async-I/O-capable @ref A2aClient object
+    */
+    private A2aClient getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return getImpl(connect, rtopts);
+    }
+
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;

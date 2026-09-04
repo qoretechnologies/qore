@@ -1,0 +1,77 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires A2aClient
+%requires AgUi
+%requires ImapClient
+%requires JsonRpcClientIo
+%requires McpClient
+%requires OneRecordClient
+%requires Pop3Client
+%requires RestClientIo
+%requires ServerSentEventClient
+%requires SmtpClient
+%requires WebSocketClient
+%requires WooCommerceRestClient
+
+%exec-class AsyncConnectionTypesTest
+
+public class AsyncConnectionTypesTest inherits QUnit::Test {
+    constructor() : Test("AsyncConnectionTypesTest", "1.0") {
+        addTestCase("HttpClientIo-backed connections", \httpClientIoConnectionsTest());
+        addTestCase("async socket I/O connections", \asyncSocketConnectionsTest());
+        set_return_value(main());
+    }
+
+    httpClientIoConnectionsTest() {
+        A2aClient::A2aConnection a2a("a2a", "", "a2a://127.0.0.1");
+        assertTrue(a2a.getAsync(False) instanceof A2aClient::A2aClient);
+
+        AgUi::AgUiConnection agui("agui", "", "agui://127.0.0.1");
+        assertTrue(agui.getAsync(False) instanceof AgUi::AgUiHttpAgent);
+
+        JsonRpcClientIo::JsonRpcIoConnection jsonrpc("jsonrpc", "", "jsonrpcio://127.0.0.1");
+        assertTrue(jsonrpc.getAsync(False) instanceof JsonRpcClientIo::JsonRpcClientIo);
+
+        McpClient::McpConnection mcp("mcp", "", "mcp://127.0.0.1");
+        assertTrue(mcp.getAsync(False) instanceof McpClient::McpClient);
+
+        OneRecordClient::OneRecordConnection one_record("one-record", "", "1r://127.0.0.1");
+        assertTrue(one_record.getAsync(False) instanceof OneRecordClient::OneRecordClient);
+
+        ServerSentEventClient::ServerSentEventConnection sse("sse", "", "sse://127.0.0.1");
+        ServerSentEventClient::ServerSentEventClientIo async_sse = sse.getAsync(False);
+        assertEq("http://127.0.0.1", async_sse.getUrl());
+
+        WooCommerceRestClient::WooCommerceRestConnection woo("woo", "", "woocommerce://127.0.0.1", {}, {
+            "store_url": "https://shop.example.com",
+            "consumer_key": "ck_test",
+            "consumer_secret": "cs_test",
+        });
+        RestClientIo::RestClientIo async_woo = woo.getAsync(False);
+        hash<auto> woo_opts = async_woo.getConstructorOptions();
+        assertEq("https://shop.example.com/wp-json/wc/v3/", woo_opts.url);
+        assertEq("ck_test", woo_opts.username);
+        assertEq("cs_test", woo_opts.password);
+    }
+
+    asyncSocketConnectionsTest() {
+        ImapClient::ImapConnection imap("imap", "", "imap://user:pass@127.0.0.1");
+        assertTrue(imap.getAsync(False) instanceof ImapClient::ImapClient);
+
+        Pop3Client::Pop3Connection pop3("pop3", "", "pop3://user:pass@127.0.0.1");
+        assertTrue(pop3.getAsync(False) instanceof Pop3Client::Pop3Client);
+
+        SmtpClient::SmtpConnection smtp("smtp", "", "smtp://user:pass@127.0.0.1");
+        assertTrue(smtp.getAsync(False) instanceof SmtpClient::SmtpClient);
+
+        WebSocketClient::WebSocketConnectionObject ws("ws", "", "ws://127.0.0.1");
+        assertTrue(ws.getAsync(False) instanceof WebSocketClient::WebSocketClientWithSerialization);
+    }
+}

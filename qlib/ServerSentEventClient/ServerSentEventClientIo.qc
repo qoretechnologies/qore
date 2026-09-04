@@ -141,8 +141,10 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         url =~ s/^sse:/http:/;
         url =~ s/^sses:/https:/;
 
+        logger = opts.logger;
+
         timeout connect_timeout = opts.connect_timeout ?? 30s;
-        if (opts.timeout) {
+        if (exists opts.timeout) {
             timeout_ms = opts.timeout;
         }
         if (opts.reconnect) {
@@ -154,8 +156,8 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         if (exists opts.max_reconnect_retries) {
             max_reconnect_retries = opts.max_reconnect_retries;
         }
-        if (opts.serialization) {
-            serialization = opts.serialization;
+        if (opts.serialization || opts.data) {
+            serialization = opts.serialization ?? opts.data;
             if (!ServerSentEventClient::DataSerializationSupport{serialization}) {
                 throw "SSE-ERROR", sprintf("unsupported serialization %y; valid values: %y",
                     serialization, keys ServerSentEventClient::DataSerializationSupport);
@@ -163,6 +165,26 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
         }
         yield = opts.yield;
         start_thread = opts.start_thread;
+
+        if (exists opts.last_event_id) {
+            last_event_id = opts.last_event_id.toString();
+        }
+
+        connect_headers = {} + (opts.headers ?? {});
+        if (opts.token.val() && !connect_headers.Authorization) {
+            connect_headers.Authorization = sprintf("%s %s", opts.token_type ?? "Bearer", opts.token);
+        } else if (!connect_headers.Authorization) {
+            hash<UrlInfo> url_info = parse_url(url);
+            *string username = url_info.username;
+            *string password = url_info.password;
+            if ((!username.val() || !password.val()) && opts.username.val() && opts.password.val()) {
+                username = opts.username;
+                password = opts.password;
+            }
+            if (username.val() && password.val()) {
+                connect_headers.Authorization = "Basic " + (username + ":" + password).toBase64();
+            }
+        }
 
         configureAsyncApiOptions(opts);
 
@@ -179,14 +201,45 @@ public class ServerSentEventClientIo inherits Logger::LoggerWrapper, ConnectionP
             request_body = opts.body;
         }
 
-        # Use "auto" for HTTPS (H2 via ALPN), "h1" for plain HTTP
-        string protocol = url =~ /^https/i ? "auto" : "h1";
-        mgr = new HttpClientIo::HttpClientConnectionManager(
+        hash<HttpClientIo::HttpClientConnectionManagerOptions> manager_opts =
             <HttpClientIo::HttpClientConnectionManagerOptions>{
                 "connect_timeout": connect_timeout,
                 "request_timeout": timeout_ms,
-                "protocol": protocol,
-            });
+                "protocol": ConnectionProvider::HttpConnection::AsyncHttpVersionMap{
+                    opts.http_version ?? "auto"},
+                "ssl_verify_mode": opts.ssl_verify_cert ? SSL_VERIFY_PEER : SSL_VERIFY_NONE,
+                "redirect_passthru": opts.redirect_passthru,
+                "logger": opts.logger,
+            };
+        if (exists opts.max_redirects) {
+            manager_opts.max_redirects = opts.max_redirects;
+        }
+        if (opts.proxy.val()) {
+            manager_opts.proxy_url = opts.proxy;
+        }
+        *data cert_data = opts.ssl_cert_data;
+        if (!exists cert_data && opts.ssl_cert_path.val()) {
+            cert_data = getSslFileData(opts.ssl_cert_path);
+        }
+        if (exists cert_data) {
+            manager_opts.client_cert = new SSLCertificate(cert_data);
+        }
+        *data key_data = opts.ssl_key_data;
+        if (!exists key_data && opts.ssl_key_path.val()) {
+            key_data = getSslFileData(opts.ssl_key_path);
+        }
+        if (exists key_data) {
+            manager_opts.client_pk = new SSLPrivateKey(key_data, opts.ssl_key_password);
+        }
+        mgr = new HttpClientIo::HttpClientConnectionManager(manager_opts);
+    }
+
+    #! Loads string data through FileLocationHandler without introducing a static module dependency
+    private static string getSslFileData(string location) {
+        load_module("FileLocationHandler");
+        Class c = Class::forName("FileLocationHandler");
+        StaticMethod m = c.getStaticMethod("getTextFileFromLocation");
+        return m.call(location);
     }
 
     #! Destroys the client

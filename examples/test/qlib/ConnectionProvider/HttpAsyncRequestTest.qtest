@@ -11,6 +11,7 @@
 %requires Logger
 %requires DataProvider
 %requires ConnectionProvider
+%requires HttpClientIo
 %requires HttpServerUtil
 %requires HttpServerAsyncIo
 %requires HttpServer
@@ -49,6 +50,7 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
         addTestCase("AbstractConnection async request API", \abstractConnectionApiTest());
         addTestCase("HttpBasedConnection async request", \httpBasedConnectionTest());
         addTestCase("HttpRequestPollOperation error handling", \asyncErrorTest());
+        addTestCase("HttpConnection getAsync", \asyncConnectionTest());
 
         set_return_value(main());
     }
@@ -157,5 +159,24 @@ public class HttpAsyncRequestTest inherits QUnit::Test {
         # test connection to a port that will reject
         HttpRequestPollOperation poller("http://127.0.0.1:1", "GET", "/");
         assertThrows("SOCKET-CONNECT-ERROR", \drivePoll(), poller);
+    }
+
+    asyncConnectionTest() {
+        string url = "http://127.0.0.1:" + port;
+        HttpConnection conn("test-async-http", "test async HTTP connection", url, {}, {
+            "connect_timeout": 5s,
+            "timeout": 10s,
+            "http_version": "1.1",
+        });
+        HttpClientIo::HttpClientConnectionManager client = conn.getAsync();
+        assertEq("h1", client.getProtocolMode());
+        assertEq(5000, client.getConnectTimeout());
+        assertEq(10000, client.getRequestTimeout());
+
+        hash<auto> result = client.request(url, "GET", "/api/async");
+        assertEq(200, result.status_code);
+        hash<auto> body = parse_json(result.body);
+        assertEq("GET", body.method);
+        assertEq("api/async", body.path);
     }
 }

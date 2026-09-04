@@ -2062,6 +2062,18 @@ public class SmtpConnection inherits ConnectionProvider::AbstractConnectionWithI
         return sc;
     }
 
+    #! Returns an SMTP client whose socket operations use the global async I/O controller
+    /** @param connect if \c True, then the client is connected before returning
+        @param rtopts runtime connection options
+
+        @return an async-I/O-capable @ref SmtpClient object
+
+        @since SmtpClient 2.2
+    */
+    private SmtpClient getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return getImpl(connect, rtopts);
+    }
+
     #! Execute a polling operation synchronously through the global AsyncIoController
     private static execPollOperation(Qore::AbstractPollOperation op, string owner, timeout to = 30s) {
         *hash<SocketPollInfo> pi = op.continuePoll();

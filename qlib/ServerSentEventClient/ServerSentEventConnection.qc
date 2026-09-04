@@ -237,6 +237,29 @@ public class ServerSentEventConnection inherits ConnectionProvider::AbstractConn
         return sse;
     }
 
+    #! Returns an SSE client backed by HttpClientIo
+    /** @param connect if \c True, then the asynchronous event loop is started before returning
+        @param rtopts supports the same runtime options as @ref getImpl()
+
+        @return an async-I/O-capable @ref ServerSentEventClientIo object
+    */
+    private ServerSentEventClientIo getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        if (rtopts) {
+            rtopts = {} + rtopts;
+        }
+        hash<auto> async_opts = {"url": url} + rtopts{"logger", "reconnect", "yield", "start_thread"}
+            + self.opts;
+        if (!async_opts.logger && logger) {
+            async_opts.logger = logger;
+        }
+
+        ServerSentEventClientIo sse(async_opts);
+        if (connect) {
+            sse.connect();
+        }
+        return sse;
+    }
+
     #! returns an ServerSentEventClientDataProvider object for this connection
     /** @param constructor_options any additional constructor options for the data provider
 

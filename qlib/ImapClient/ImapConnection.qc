@@ -214,6 +214,16 @@ public class ImapConnection inherits ConnectionProvider::AbstractConnectionWithI
         return client;
     }
 
+    #! Returns an IMAP client whose socket operations use the global async I/O controller
+    /** @param connect if \c True, then the client is connected before returning
+        @param rtopts runtime connection options
+
+        @return an async-I/O-capable @ref ImapClient::ImapClient "ImapClient" object
+    */
+    private ImapClient getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return getImpl(connect, rtopts);
+    }
+
     #! Executes a polling operation synchronously through the global AsyncIoController
     private static execPollOperation(Qore::AbstractPollOperation op, string owner, timeout to = 30s) {
         *hash<SocketPollInfo> pi = op.continuePoll();

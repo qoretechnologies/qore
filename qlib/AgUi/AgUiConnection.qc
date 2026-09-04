@@ -304,6 +304,16 @@ public class AgUiConnection inherits ConnectionProvider::HttpBasedConnection {
         return new AgUiHttpAgent(http_url, real_opts);
     }
 
+    #! Returns an AG-UI HTTP agent backed by HttpClientIo
+    /** @param connect ignored; requests are made when an agent run is started
+        @param rtopts this connection type does not accept runtime options
+
+        @return an async-I/O-capable @ref AgUiHttpAgent object
+    */
+    private AgUiHttpAgent getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return getImpl(connect, rtopts);
+    }
+
     #! Returns the ConnectionSchemeInfo hash for this object
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
