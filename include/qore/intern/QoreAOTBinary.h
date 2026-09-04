@@ -175,12 +175,16 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v15: constants with a pending init function also record the value the producing parse computed, so a
 //!      `qcc -c -L` parse resolving against `.qo` declaration shells can evaluate a constant initializer that
 //!      reads them (see ConstantEntry::setAOTParseShellValue())
+//! v16: native function descriptors encode whether their contexts contain closures, allowing closure-free
+//!      ordinary function contexts to be reconstructed safely on first execution
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 15;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 16;
 //! First format version recording a compile-time value beside a pending constant's init-function flag.
 constexpr uint16_t QORE_AOT_CONST_PARSE_VALUE_VERSION = 15;
 //! First format version storing lazy debugger IR in a separate section.
 constexpr uint16_t QORE_AOT_SPLIT_DEBUG_IR_VERSION = 13;
+//! First format version encoding context-laziness safety flags in native function descriptors.
+constexpr uint16_t QORE_AOT_LAZY_CONTEXT_FLAGS_VERSION = 16;
 
 constexpr uint8_t QORE_AOT_COMPRESSION_NONE = 0;
 constexpr uint8_t QORE_AOT_COMPRESSION_ZLIB = 1;
@@ -1167,6 +1171,16 @@ public:
         return string_pool + offset;
     }
 
+    //! Get the decoded string-pool bytes.
+    const uint8_t* getStringPoolData() const {
+        return reinterpret_cast<const uint8_t*>(string_pool);
+    }
+
+    //! Get the decoded string-pool size.
+    uint32_t getStringPoolSize() const {
+        return string_pool_size;
+    }
+
     //! Get the source label from the header
     const char* getLabel() const {
         return getString(header.label_offset);
@@ -1992,6 +2006,7 @@ struct AOTSlotIdentities {
     std::vector<AOTLVPathSlotId> lv_path_insts;  //!< indexed by lv_path slot index
     bool has_unsupported_exprs = false;   //!< true if any expression cannot be serialized without fallback
     bool has_closure_exprs = false;       //!< true if any expression is CLOSURE_CREATE
+    bool has_closure_locals = false;      //!< true if any local uses closure/reference storage
     bool uses_argv = true;                //!< function requires the caller's implicit argv context
     bool uses_self = true;                //!< function requires the caller's implicit self context
     std::vector<std::string> unsupported_expr_details; //!< compile-time diagnostics for unsupported expression slots

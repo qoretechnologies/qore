@@ -1195,6 +1195,9 @@ static uint32_t encodeAOTRegexCountAndContext(
     if (!slot_ids.uses_self) {
         encoded |= QORE_AOT_FUNC_NO_SELF_CONTEXT;
     }
+    if (slot_ids.has_closure_exprs || slot_ids.has_closure_locals) {
+        encoded |= QORE_AOT_FUNC_HAS_CLOSURE_CONTEXT;
+    }
     return encoded;
 }
 
@@ -35067,6 +35070,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
     }
     out.has_unsupported_exprs = false;
     out.has_closure_exprs = false;
+    out.has_closure_locals = false;
     // Snapshot (bits, slot) pairs before iterating: classifyExpression
     // runs an ExprTreeSerializer dry-run that can call getExprSlot() and
     // register additional expr slots, rehashing slots.expr_slots and
@@ -35179,6 +35183,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         }
         if (lv->closureUse()) {
             lid.flags |= 0x02; // is_closure
+            out.has_closure_locals = true;
         }
         if (lv->isReadOnly()) {
             lid.flags |= 0x10; // read-only binding
@@ -35211,6 +35216,9 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         blid.name = lv->getName();
         blid.type_path = getSlotTypePath(lv->getTypeInfoForLValue());
         blid.is_closure = lv->closureUse();
+        if (blid.is_closure) {
+            out.has_closure_locals = true;
+        }
         blid.read_only = lv->isReadOnly();
         auto slot_it = func.local_var_slots.find(lv);
         blid.slot_id = slot_it != func.local_var_slots.end() ? slot_it->second : UINT32_MAX;

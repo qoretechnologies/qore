@@ -9616,6 +9616,9 @@ static void execJITWithDeopt(const UserVariantBase* uvb, const std::string& call
         QoreProgram* caller_pgm = nullptr, const QoreTypeInfo* receiver_type_info = nullptr,
         QoreProgram* exec_pgm = nullptr) {
     QoreProgram* runtime_pgm = exec_pgm ? exec_pgm : uvb->pgm;
+    if (uvb->hasCachedAOT() && !uvb->ensureAOTContext(call_name.c_str(), xsink)) {
+        return;
+    }
     // Get AST-visible body locals: for AOT use all_body_locals (separate optimization),
     // for IR use filtered ast_visible_body_locals (excludes IR-only locals that
     // are never accessed by AST callbacks).
@@ -14308,6 +14311,9 @@ extern "C" DLLEXPORT QoreAOTContext* qore_rt_get_aot_call_target_context(
             xsink->raiseException("AOT-ERROR",
                 "missing cached AOT context for direct-call slot %d", slot);
         }
+        return nullptr;
+    }
+    if (!uvb->ensureAOTContext("<direct AOT call target>", xsink)) {
         return nullptr;
     }
     QoreAOTContext* target_ctx = uvb->getCachedAOTContext();

@@ -102,6 +102,7 @@ std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_closure_ir(
 
 /** Materialize a lazily retained source-stripped function body and its slot context.
     @param lazy_ir immutable serialized slot-map and debug-IR metadata
+    @param entry_index descriptor-table entry for this function
     @param uvb function variant receiving the reconstructed IR
     @param xsink exception sink
     @param context receives the newly allocated AOT context on success
@@ -109,8 +110,20 @@ std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_closure_ir(
     @return reconstructed IR, or nullptr on error
 */
 std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_function_ir(
-    const QoreAOTLazyFunctionIR& lazy_ir, UserVariantBase* uvb,
+    const QoreAOTLazyFunctionIR& lazy_ir, uint32_t entry_index, UserVariantBase* uvb,
     ExceptionSink* xsink, QoreAOTContext*& context, std::string& error);
+
+/** Materialize a lazily retained native function slot context.
+    @param lazy_ir immutable serialized slot-map metadata and native descriptor
+    @param entry_index descriptor-table entry for this function
+    @param uvb function variant receiving the reconstructed context
+    @param xsink exception sink
+    @param error output for structural or resolution errors
+    @return newly allocated context, or nullptr on error
+*/
+QoreAOTContext* qore_aot_materialize_lazy_function_context(
+    const QoreAOTLazyFunctionIR& lazy_ir, uint32_t entry_index, UserVariantBase* uvb,
+    ExceptionSink* xsink, std::string& error);
 
 //! Resolve an AOT-serialized function name during runtime metadata reconstruction.
 const FunctionEntry* qore_aot_resolve_function_entry_for_slot(QoreProgram* pgm, const char* name);
@@ -502,10 +515,11 @@ struct QoreAOTFunc {
     int num_regex_cases = 0;                    //!< number of regex case slots (SwitchRegexMatch)
 };
 
-//! QoreAOTFunc::num_regex_cases keeps its ABI-sized i32 while carrying context-elision metadata.
+//! QoreAOTFunc::num_regex_cases keeps its ABI-sized i32 while carrying context metadata.
 constexpr uint32_t QORE_AOT_FUNC_NO_ARGV_CONTEXT = 1U << 30;
 constexpr uint32_t QORE_AOT_FUNC_NO_SELF_CONTEXT = 1U << 31;
-constexpr uint32_t QORE_AOT_FUNC_REGEX_COUNT_MASK = (1U << 30) - 1;
+constexpr uint32_t QORE_AOT_FUNC_HAS_CLOSURE_CONTEXT = 1U << 29;
+constexpr uint32_t QORE_AOT_FUNC_REGEX_COUNT_MASK = (1U << 29) - 1;
 
 inline int qore_aot_func_num_regex_cases(const QoreAOTFunc& func) {
     return static_cast<int>(static_cast<uint32_t>(func.num_regex_cases)
@@ -518,6 +532,10 @@ inline bool qore_aot_func_uses_argv(const QoreAOTFunc& func) {
 
 inline bool qore_aot_func_uses_self(const QoreAOTFunc& func) {
     return !(static_cast<uint32_t>(func.num_regex_cases) & QORE_AOT_FUNC_NO_SELF_CONTEXT);
+}
+
+inline bool qore_aot_func_has_closure_context(const QoreAOTFunc& func) {
+    return static_cast<uint32_t>(func.num_regex_cases) & QORE_AOT_FUNC_HAS_CLOSURE_CONTEXT;
 }
 
 //! C ABI entry point called by AOT-compiled binaries from their generated main()

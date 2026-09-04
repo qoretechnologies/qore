@@ -2999,9 +2999,18 @@ static void finalizeDeserializedDebugIR(QoreIRFunction& ir, QoreProgram* pgm);
 
 struct QoreAOTDebugMetadata {
     std::vector<uint8_t> metadata;
+    mutable std::unique_ptr<QoreAOTBinaryReader> reader;
+    mutable std::mutex reader_mutex;
 
     QoreAOTDebugMetadata(const QoreAOTBinaryReader& reader, const uint8_t* data, uint32_t size) {
+        if (!data || !size) {
+            return;
+        }
         if (reader.getHeader().compression != QORE_AOT_COMPRESSION_NONE) {
+            metadata.assign(data, data + size);
+            return;
+        }
+        if (size < QORE_AOT_HEADER_SIZE || !reader.getStringPoolData()) {
             metadata.assign(data, data + size);
             return;
         }
@@ -3017,27 +3026,14 @@ struct QoreAOTDebugMetadata {
         // Serialized plugin values resolve their module through this section.
         retainSection(QoreAOTSectionType::PLUGIN_IMPORTS);
 
-        uint64_t pool_size_offset = QORE_AOT_HEADER_SIZE
-            + static_cast<uint64_t>(reader.getSectionCount()) * sizeof(QoreAOTSectionHeader);
-        if (pool_size_offset > size || size - pool_size_offset < sizeof(uint32_t)) {
-            metadata.assign(data, data + size);
-            return;
-        }
-        const uint8_t* pool_size_ptr = data + pool_size_offset;
-        const uint8_t* pool_size_read_ptr = pool_size_ptr;
-        uint32_t pool_size = QoreAOTBinaryReader::readU32(pool_size_read_ptr);
-        uint64_t pool_end_offset = pool_size_offset + sizeof(uint32_t) + pool_size;
-        if (pool_end_offset > size) {
-            metadata.assign(data, data + size);
-            return;
-        }
+        uint32_t pool_size = reader.getStringPoolSize();
 
         uint64_t compact_size = QORE_AOT_HEADER_SIZE + sizeof(uint32_t) + pool_size
             + retained_sections.size() * sizeof(QoreAOTSectionHeader);
         for (const QoreAOTSectionHeader* sec : retained_sections) {
             compact_size += sec->size;
         }
-        if (compact_size >= size || compact_size > UINT32_MAX) {
+        if (compact_size > UINT32_MAX) {
             metadata.assign(data, data + size);
             return;
         }
@@ -3049,6 +3045,8 @@ struct QoreAOTDebugMetadata {
         metadata[17] = static_cast<uint8_t>(section_count >> 8);
         metadata[18] = static_cast<uint8_t>(section_count >> 16);
         metadata[19] = static_cast<uint8_t>(section_count >> 24);
+        metadata[34] = QORE_AOT_COMPRESSION_NONE;
+        metadata[35] = QORE_AOT_COMPRESSION_NONE;
 
         auto writeU16 = [this](uint16_t value) {
             metadata.push_back(static_cast<uint8_t>(value));
@@ -3068,7 +3066,9 @@ struct QoreAOTDebugMetadata {
             writeU32(sec->size);
             offset += sec->size;
         }
-        metadata.insert(metadata.end(), pool_size_ptr, pool_size_read_ptr + pool_size);
+        writeU32(pool_size);
+        const uint8_t* pool_data = reader.getStringPoolData();
+        metadata.insert(metadata.end(), pool_data, pool_data + pool_size);
         for (const QoreAOTSectionHeader* sec : retained_sections) {
             const uint8_t* section_data = reader.getSectionData(*sec);
             if (!section_data) {
@@ -3078,6 +3078,39 @@ struct QoreAOTDebugMetadata {
             metadata.insert(metadata.end(), section_data, section_data + sec->size);
         }
         assert(metadata.size() == compact_size);
+
+        auto retained_reader = std::make_unique<QoreAOTBinaryReader>();
+        std::string open_error;
+        if (retained_reader->open(metadata.data(), static_cast<uint32_t>(metadata.size()), open_error)) {
+            this->reader = std::move(retained_reader);
+        }
+    }
+
+    const QoreAOTBinaryReader* getReader(std::string& error) const {
+        std::lock_guard<std::mutex> lock(reader_mutex);
+        if (reader) {
+            return reader.get();
+        }
+        auto retained_reader = std::make_unique<QoreAOTBinaryReader>();
+        if (!retained_reader->open(metadata.data(), static_cast<uint32_t>(metadata.size()), error)) {
+            return nullptr;
+        }
+        // Force retained sections to decode before publishing the reader for
+        // concurrent immutable access.
+        constexpr QoreAOTSectionType retained_types[] = {
+            QoreAOTSectionType::SLOT_MAPS,
+            QoreAOTSectionType::DEBUG_IR,
+            QoreAOTSectionType::PLUGIN_IMPORTS,
+        };
+        for (QoreAOTSectionType type : retained_types) {
+            const QoreAOTSectionHeader* sec = retained_reader->findSection(type);
+            if (sec && !retained_reader->getSectionData(*sec)) {
+                error = "could not decode retained AOT metadata section";
+                return nullptr;
+            }
+        }
+        reader = std::move(retained_reader);
+        return reader.get();
     }
 };
 
@@ -3094,17 +3127,31 @@ struct QoreAOTLazyClosureIR {
 };
 
 struct QoreAOTLazyFunctionIR {
+    struct Entry {
+        uint32_t slot_entry_offset = 0;
+        const qore_class_private* class_ctx = nullptr;
+        const QoreAOTFunc* aot_func = nullptr;
+        std::string source_name;
+    };
+
+    explicit QoreAOTLazyFunctionIR(QoreProgram* pgm)
+        : pgm(pgm), resolution_cache{pgm}, type_resolver(pgm) {
+    }
+
     std::shared_ptr<const QoreAOTDebugMetadata> metadata;
-    uint32_t slot_entry_offset = 0;
-    QoreProgram* pgm = nullptr;
-    const qore_class_private* class_ctx = nullptr;
-    std::string name;
+    QoreProgram* pgm;
+    QoreProgram* local_owner_pgm = nullptr;
+    std::vector<Entry> entries;
+    mutable std::mutex resolution_mutex;
+    mutable AOTSlotResolutionCache resolution_cache;
+    mutable QoreAOTTypeResolver type_resolver;
 };
 
 static std::shared_ptr<const QoreAOTDebugMetadata> makeAOTDebugMetadata(
         const QoreAOTBinaryReader& reader, const uint8_t* metadata, int metadata_len) {
-    if ((reader.getHeader().feature_flags
-            & (QORE_AOT_FEAT_DEBUG_IR | QORE_AOT_FEAT_NATIVE_CLOSURE_BODY)) == 0
+    if ((reader.getHeader().version < QORE_AOT_LAZY_CONTEXT_FLAGS_VERSION
+                && (reader.getHeader().feature_flags
+                    & (QORE_AOT_FEAT_DEBUG_IR | QORE_AOT_FEAT_NATIVE_CLOSURE_BODY)) == 0)
             || !metadata || metadata_len <= 0) {
         return nullptr;
     }
@@ -3199,13 +3246,13 @@ std::unique_ptr<QoreIRFunction> QoreAOTContext::materializeDebugIR(
         return nullptr;
     }
 
-    QoreAOTBinaryReader reader;
     std::string open_error;
-    if (!reader.open(debug_metadata->metadata.data(),
-            static_cast<uint32_t>(debug_metadata->metadata.size()), open_error)) {
+    const QoreAOTBinaryReader* retained_reader = debug_metadata->getReader(open_error);
+    if (!retained_reader) {
         error = "metadata open failed: " + open_error;
         return nullptr;
     }
+    const QoreAOTBinaryReader& reader = *retained_reader;
 
     QoreAOTSectionType section_type = debug_ir_separate_section
         ? QoreAOTSectionType::DEBUG_IR : QoreAOTSectionType::SLOT_MAPS;
@@ -8875,13 +8922,13 @@ std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_closure_ir(
         return nullptr;
     }
 
-    QoreAOTBinaryReader reader;
     std::string open_error;
-    if (!reader.open(lazy_ir.metadata->metadata.data(),
-            static_cast<uint32_t>(lazy_ir.metadata->metadata.size()), open_error)) {
+    const QoreAOTBinaryReader* retained_reader = lazy_ir.metadata->getReader(open_error);
+    if (!retained_reader) {
         error = "metadata open failed: " + open_error;
         return nullptr;
     }
+    const QoreAOTBinaryReader& reader = *retained_reader;
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SLOT_MAPS);
     const uint8_t* section_data = sec ? reader.getSectionData(*sec) : nullptr;
     if (!sec || !section_data) {
@@ -8935,38 +8982,40 @@ std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_closure_ir(
     return ir;
 }
 
-std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_function_ir(
-        const QoreAOTLazyFunctionIR& lazy_ir, UserVariantBase* uvb,
-        ExceptionSink* xsink, QoreAOTContext*& context, std::string& error) {
-    context = nullptr;
-    if (!lazy_ir.metadata || !lazy_ir.pgm || !uvb) {
+QoreAOTContext* qore_aot_materialize_lazy_function_context(
+        const QoreAOTLazyFunctionIR& lazy_ir, uint32_t entry_index, UserVariantBase* uvb,
+        ExceptionSink* xsink, std::string& error) {
+    if (!lazy_ir.metadata || !lazy_ir.pgm || !uvb || entry_index >= lazy_ir.entries.size()) {
         error = "incomplete lazy function metadata";
         return nullptr;
     }
+    const QoreAOTLazyFunctionIR::Entry& lazy_entry = lazy_ir.entries[entry_index];
+    const char* expected_name = lazy_entry.aot_func
+        ? lazy_entry.aot_func->name : lazy_entry.source_name.c_str();
 
-    QoreAOTBinaryReader reader;
     std::string open_error;
-    if (!reader.open(lazy_ir.metadata->metadata.data(),
-            static_cast<uint32_t>(lazy_ir.metadata->metadata.size()), open_error)) {
+    const QoreAOTBinaryReader* retained_reader = lazy_ir.metadata->getReader(open_error);
+    if (!retained_reader) {
         error = "metadata open failed: " + open_error;
         return nullptr;
     }
+    const QoreAOTBinaryReader& reader = *retained_reader;
     const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SLOT_MAPS);
     const uint8_t* section_data = sec ? reader.getSectionData(*sec) : nullptr;
     if (!sec || !section_data) {
         error = "metadata has no valid SLOT_MAPS section";
         return nullptr;
     }
-    if (lazy_ir.slot_entry_offset > sec->size
-            || sec->size - lazy_ir.slot_entry_offset < sizeof(uint32_t)) {
+    if (lazy_entry.slot_entry_offset > sec->size
+            || sec->size - lazy_entry.slot_entry_offset < sizeof(uint32_t)) {
         error = "serialized function slot entry exceeds SLOT_MAPS section";
         return nullptr;
     }
 
-    const uint8_t* entry_start = section_data + lazy_ir.slot_entry_offset;
+    const uint8_t* entry_start = section_data + lazy_entry.slot_entry_offset;
     const uint8_t* ptr = entry_start;
     uint32_t entry_size = QoreAOTBinaryReader::readU32(ptr);
-    if (entry_size > static_cast<uint32_t>(sec->size - lazy_ir.slot_entry_offset - sizeof(uint32_t))) {
+    if (entry_size > static_cast<uint32_t>(sec->size - lazy_entry.slot_entry_offset - sizeof(uint32_t))) {
         error = "serialized function slot entry size exceeds SLOT_MAPS section";
         return nullptr;
     }
@@ -8985,31 +9034,63 @@ std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_function_ir(
     uint16_t num_stmts = QoreAOTBinaryReader::readU16(counts);
     uint16_t num_regex_cases = QoreAOTBinaryReader::readU16(counts);
     (void)QoreAOTBinaryReader::readU16(counts);  // body-local count
-    if (!serialized_name || lazy_ir.name != serialized_name) {
+    if (!serialized_name || !expected_name || strcmp(expected_name, serialized_name)) {
         error = "serialized function slot entry name does not match its binding";
         return nullptr;
     }
 
-    QoreAOTFunc aot_func{
-        serialized_name, nullptr, num_locals, num_globals, num_exprs, num_stmts,
-        num_regex_cases
-    };
+    QoreAOTFunc aot_func = lazy_entry.aot_func
+        ? *lazy_entry.aot_func
+        : QoreAOTFunc{serialized_name, nullptr, num_locals, num_globals,
+            num_exprs, num_stmts, num_regex_cases};
+
+    ExceptionSink local_xsink;
+    ExceptionSink* build_xsink = xsink ? xsink : &local_xsink;
+    std::lock_guard<std::mutex> resolution_lock(lazy_ir.resolution_mutex);
+    const bool use_resolution_cache = getenv("QORE_DISABLE_AOT_RESOLUTION_CACHE") == nullptr;
+    AOTSlotResolutionCacheScope resolution_cache_scope(
+        use_resolution_cache ? &lazy_ir.resolution_cache : nullptr);
+    ProgramRuntimeParseContextHelper pch(build_xsink, lazy_ir.pgm);
+    if (*build_xsink) {
+        if (!xsink) {
+            local_xsink.clear();
+        }
+        error = "could not acquire the program parse context";
+        return nullptr;
+    }
     std::string build_error;
     QoreAOTContext* ctx = buildContextFromSlotMap(reader, ptr, entry_end,
-        uvb, lazy_ir.pgm, aot_func, serialized_name, entry_end, nullptr,
-        &build_error, lazy_ir.metadata, section_data, lazy_ir.class_ctx,
-        nullptr, nullptr, lazy_ir.pgm);
+        uvb, lazy_ir.pgm, aot_func, serialized_name, entry_end, &lazy_ir.type_resolver,
+        &build_error, lazy_ir.metadata, section_data, lazy_entry.class_ctx,
+        nullptr, nullptr, lazy_ir.local_owner_pgm ? lazy_ir.local_owner_pgm : lazy_ir.pgm);
     if (!ctx) {
         error = build_error.empty() ? "could not reconstruct the AOT slot context" : build_error;
         return nullptr;
     }
+    if (lazy_entry.aot_func && std::getenv("QORE_AOT_LAZY_CONTEXT_TRACE")) {
+        fprintf(stderr, "[aot-lazy-context] materialized %s\n", serialized_name);
+    }
+    return ctx;
+}
 
-    std::unique_ptr<QoreIRFunction> ir = ctx->materializeDebugIR(serialized_name, error);
-    if (!ir) {
-        delete ctx;
+std::unique_ptr<QoreIRFunction> qore_aot_materialize_lazy_function_ir(
+        const QoreAOTLazyFunctionIR& lazy_ir, uint32_t entry_index, UserVariantBase* uvb,
+        ExceptionSink* xsink, QoreAOTContext*& context, std::string& error) {
+    context = qore_aot_materialize_lazy_function_context(
+        lazy_ir, entry_index, uvb, xsink, error);
+    if (!context) {
         return nullptr;
     }
-    context = ctx;
+
+    const QoreAOTLazyFunctionIR::Entry& lazy_entry = lazy_ir.entries[entry_index];
+    const char* name = lazy_entry.aot_func
+        ? lazy_entry.aot_func->name : lazy_entry.source_name.c_str();
+    std::unique_ptr<QoreIRFunction> ir = context->materializeDebugIR(name, error);
+    if (!ir) {
+        delete context;
+        context = nullptr;
+        return nullptr;
+    }
     return ir;
 }
 
@@ -9067,12 +9148,13 @@ bool QoreAOTBinaryDeserializer::installSourceParseIRFallbacks(std::string& error
         if (!uvb || uvb->getStatementBlock() || uvb->getCachedIR() || uvb->hasCachedFunction()) {
             continue;
         }
-        auto lazy_ir = std::make_shared<QoreAOTLazyFunctionIR>();
+        auto lazy_ir = std::make_shared<QoreAOTLazyFunctionIR>(pgm);
         lazy_ir->metadata = metadata;
-        lazy_ir->slot_entry_offset = static_cast<uint32_t>(entry_start - section_data);
-        lazy_ir->pgm = pgm;
-        lazy_ir->class_ctx = class_ctx;
-        lazy_ir->name = name;
+        QoreAOTLazyFunctionIR::Entry lazy_entry;
+        lazy_entry.slot_entry_offset = static_cast<uint32_t>(entry_start - section_data);
+        lazy_entry.class_ctx = class_ctx;
+        lazy_entry.source_name = name;
+        lazy_ir->entries.push_back(std::move(lazy_entry));
         uvb->setLazyAOTFunctionIR(std::move(lazy_ir));
     }
     return true;
@@ -9327,6 +9409,18 @@ static void registerAOTFunctionsFromSlotMaps(
     const uint8_t* end = ptr + sec->size;
 
     uint32_t num_funcs = QoreAOTBinaryReader::readU32(ptr);
+    const bool lazy_contexts = reader.getHeader().version >= QORE_AOT_LAZY_CONTEXT_FLAGS_VERSION
+        && debug_metadata
+        && !(pgm->getParseOptions() & PO_ALLOW_DEBUGGER)
+        && std::getenv("QORE_DISABLE_AOT_LAZY_FUNCTION_CONTEXTS") == nullptr
+        && std::getenv("QORE_AOT_LOC_EAGER_ATTACH") == nullptr;
+    std::shared_ptr<QoreAOTLazyFunctionIR> lazy_context_table;
+    if (lazy_contexts) {
+        lazy_context_table = std::make_shared<QoreAOTLazyFunctionIR>(pgm);
+        lazy_context_table->metadata = debug_metadata;
+        lazy_context_table->local_owner_pgm = local_owner_pgm;
+        lazy_context_table->entries.reserve(num_funcs);
+    }
 
     // Keep init-function registration diagnostics behind the slot-registration trace switch.
     if (init_func_contexts) {
@@ -9882,6 +9976,31 @@ static void registerAOTFunctionsFromSlotMaps(
             ++registered;
             func_map.erase(it);
             printd(2, "AOT slot-reg: '%s' already registered (shared variant), skipping\n", func_name);
+            ptr = entry_end;
+            continue;
+        }
+
+        // Closure-free ordinary functions can publish their native pointer now
+        // and reconstruct the slot context on first execution.  Functions with
+        // closure expressions remain eager: context reconstruction marks captured
+        // parameters as closure variables, and that must happen before the caller
+        // binds arguments.  Top-level, init, and debugger-enabled contexts are
+        // handled eagerly too; ProgramControl's file/line index covers every body.
+        if (lazy_contexts && uvb && !is_init_func && !is_native_closure
+                && !qore_aot_func_has_closure_context(*aot_func)) {
+            uint32_t entry_index = static_cast<uint32_t>(lazy_context_table->entries.size());
+            QoreAOTLazyFunctionIR::Entry lazy_entry;
+            lazy_entry.slot_entry_offset = static_cast<uint32_t>(entry_start - slot_maps_start);
+            lazy_entry.class_ctx = variant_class_ctx;
+            lazy_entry.aot_func = aot_func;
+            lazy_context_table->entries.push_back(std::move(lazy_entry));
+            uvb->registerLazyPrecompiledAOTFunction(aot_func->fn_ptr, lazy_context_table,
+                entry_index, qore_aot_func_uses_argv(*aot_func), qore_aot_func_uses_self(*aot_func));
+            ++registered;
+            func_map.erase(it);
+            if (std::getenv("QORE_AOT_LAZY_CONTEXT_TRACE")) {
+                fprintf(stderr, "[aot-lazy-context] deferred %s\n", func_name);
+            }
             ptr = entry_end;
             continue;
         }
@@ -10454,7 +10573,7 @@ static void retargetFallbackClosureFunctionTypes(QoreFunction* func, QoreAOTType
             retargetFallbackStatementBlockTypes(uvb->getStatementBlock(), type_resolver, hashdecl_map, seen);
         }
 
-        if (uvb && uvb->hasCachedAOT()) {
+        if (uvb && uvb->hasMaterializedAOTContext()) {
             const std::vector<LocalVar*>& body_locals = uvb->getBodyLocals();
             for (LocalVar* lv : body_locals) {
                 retargetFallbackLocalVarType(lv, type_resolver, hashdecl_map);

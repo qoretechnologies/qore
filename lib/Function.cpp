@@ -4856,7 +4856,7 @@ UserVariantBase::UserVariantBase(StatementBlock *b, int n_sig_first_line, int n_
 }
 
 UserVariantBase::~UserVariantBase() {
-    delete cached_aot_ctx;
+    delete cached_aot_ctx.load(std::memory_order_relaxed);
     delete cached_ir;
     delete gate;
     delete aot_entry_statement;
@@ -4881,14 +4881,15 @@ QoreParseOptions UserVariantBase::getParseOptions(const QoreParseOptions& po) co
 
 void UserVariantBase::registerPrecompiledAOTFunction(
         AotFunctionPtr fn, QoreAOTContext* ctx) {
-    if (cached_aot_ctx != ctx) {
-        delete cached_aot_ctx;
+    QoreAOTContext* old_ctx = cached_aot_ctx.exchange(ctx, std::memory_order_acq_rel);
+    if (old_ctx != ctx) {
+        delete old_ctx;
     }
     cached_aot_fn = fn;
-    cached_aot_ctx = ctx;
     {
         std::lock_guard<std::mutex> lock(aot_lazy_function_ir_mutex);
         aot_lazy_function_ir.reset();
+        aot_lazy_function_ir_index = 0;
         has_aot_lazy_function_ir.store(false, std::memory_order_release);
     }
     if (ctx) {
@@ -4904,24 +4905,89 @@ void UserVariantBase::registerPrecompiledAOTFunction(
     current_tier.store(TIER_JIT, std::memory_order_release);
 }
 
+void UserVariantBase::registerLazyPrecompiledAOTFunction(AotFunctionPtr fn,
+        std::shared_ptr<const QoreAOTLazyFunctionIR> lazy_ir,
+        uint32_t entry_index, bool context_uses_argv, bool context_uses_self) {
+    QoreAOTContext* old_ctx = cached_aot_ctx.exchange(nullptr, std::memory_order_acq_rel);
+    delete old_ctx;
+    cached_aot_fn = fn;
+    {
+        std::lock_guard<std::mutex> lock(aot_lazy_function_ir_mutex);
+        aot_lazy_function_ir = std::move(lazy_ir);
+        aot_lazy_function_ir_index = entry_index;
+        has_aot_lazy_function_ir.store(true, std::memory_order_release);
+    }
+    if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+        uses_argv = signature.argvid != nullptr;
+        uses_self = signature.selfid != nullptr;
+    } else {
+        uses_argv = context_uses_argv;
+        uses_self = context_uses_self;
+    }
+    jit_compile_state.store(2, std::memory_order_relaxed);
+    current_tier.store(TIER_JIT, std::memory_order_release);
+}
+
+bool UserVariantBase::ensureAOTContext(const char* name, ExceptionSink* xsink) const {
+    if (cached_aot_ctx.load(std::memory_order_acquire)) {
+        return true;
+    }
+    std::lock_guard<std::mutex> lock(aot_lazy_function_ir_mutex);
+    if (cached_aot_ctx.load(std::memory_order_relaxed)) {
+        return true;
+    }
+    if (!cached_aot_fn || !aot_lazy_function_ir) {
+        if (xsink) {
+            xsink->raiseException("AOT-CONTEXT-ERROR",
+                "native AOT function '%s' has no context metadata",
+                name ? name : "<function>");
+        }
+        return false;
+    }
+
+    ExceptionSink local_xsink;
+    ExceptionSink* build_xsink = xsink ? xsink : &local_xsink;
+    std::string error;
+    QoreAOTContext* ctx = qore_aot_materialize_lazy_function_context(
+        *aot_lazy_function_ir, aot_lazy_function_ir_index,
+        const_cast<UserVariantBase*>(this), build_xsink, error);
+    if (!ctx) {
+        if (!*build_xsink) {
+            build_xsink->raiseException("AOT-CONTEXT-ERROR",
+                "could not materialize native AOT context for '%s': %s",
+                name ? name : "<function>", error.empty() ? "unknown error" : error.c_str());
+        }
+        if (!xsink) {
+            local_xsink.clear();
+        }
+        return false;
+    }
+
+    cached_aot_ctx.store(ctx, std::memory_order_release);
+    aot_lazy_function_ir.reset();
+    aot_lazy_function_ir_index = 0;
+    has_aot_lazy_function_ir.store(false, std::memory_order_release);
+    return true;
+}
+
 const std::vector<LocalVar*>& UserVariantBase::getBodyLocals() const {
-    if (cached_aot_ctx) {
-        return cached_aot_ctx->all_body_locals;
+    if (QoreAOTContext* ctx = cached_aot_ctx.load(std::memory_order_acquire)) {
+        return ctx->all_body_locals;
     }
     assert(cached_ir);
     return cached_ir->all_body_locals;
 }
 
 bool UserVariantBase::areAllBodyLocalsIROnly() const {
-    if (cached_aot_ctx) {
-        return cached_aot_ctx->all_body_locals_ir_only;
+    if (QoreAOTContext* ctx = cached_aot_ctx.load(std::memory_order_acquire)) {
+        return ctx->all_body_locals_ir_only;
     }
     return all_body_locals_ir_only;
 }
 
 const std::vector<LocalVar*>& UserVariantBase::getASTVisibleBodyLocals() const {
-    if (cached_aot_ctx) {
-        return cached_aot_ctx->all_body_locals;
+    if (QoreAOTContext* ctx = cached_aot_ctx.load(std::memory_order_acquire)) {
+        return ctx->all_body_locals;
     }
     assert(cached_ir);
     return cached_ir->ast_visible_body_locals;
@@ -4999,16 +5065,20 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
 }
 
 bool UserVariantBase::materializeAOTDebugIR(const char* name, ExceptionSink* xsink) const {
+    if (cached_aot_fn && !ensureAOTContext(name, xsink)) {
+        return false;
+    }
     std::lock_guard<std::mutex> lock(aot_debug_ir_mutex);
     if (cached_ir) {
         return true;
     }
-    if (!cached_aot_ctx || !cached_aot_ctx->hasLazyDebugIR()) {
+    QoreAOTContext* ctx = cached_aot_ctx.load(std::memory_order_acquire);
+    if (!ctx || !ctx->hasLazyDebugIR()) {
         return false;
     }
 
     std::string error;
-    std::unique_ptr<QoreIRFunction> ir = cached_aot_ctx->materializeDebugIR(name, error);
+    std::unique_ptr<QoreIRFunction> ir = ctx->materializeDebugIR(name, error);
     if (!ir) {
         xsink->raiseException("AOT-DEBUG-IR-ERROR",
             "could not materialize source-stripped AOT debug IR for '%s': %s",
@@ -5050,9 +5120,13 @@ bool UserVariantBase::materializeLazyAOTClosureIR(const char* name, ExceptionSin
 }
 
 bool UserVariantBase::materializeLazyAOTFunctionIR(const char* name, ExceptionSink* xsink) const {
+    if (cached_aot_fn) {
+        return ensureAOTContext(name, xsink);
+    }
     std::lock_guard<std::mutex> lock(aot_lazy_function_ir_mutex);
     if (cached_ir || hasCachedAOT()) {
         aot_lazy_function_ir.reset();
+        aot_lazy_function_ir_index = 0;
         has_aot_lazy_function_ir.store(false, std::memory_order_release);
         return true;
     }
@@ -5063,7 +5137,8 @@ bool UserVariantBase::materializeLazyAOTFunctionIR(const char* name, ExceptionSi
     std::string error;
     QoreAOTContext* context = nullptr;
     std::unique_ptr<QoreIRFunction> ir = qore_aot_materialize_lazy_function_ir(
-        *aot_lazy_function_ir, const_cast<UserVariantBase*>(this), xsink, context, error);
+        *aot_lazy_function_ir, aot_lazy_function_ir_index,
+        const_cast<UserVariantBase*>(this), xsink, context, error);
     if (!ir) {
         if (!*xsink) {
             xsink->raiseException("AOT-SOURCE-IR-ERROR",
@@ -5073,9 +5148,10 @@ bool UserVariantBase::materializeLazyAOTFunctionIR(const char* name, ExceptionSi
         return false;
     }
 
-    cached_aot_ctx = context;
+    cached_aot_ctx.store(context, std::memory_order_release);
     setCachedIR(ir.release());
     aot_lazy_function_ir.reset();
+    aot_lazy_function_ir_index = 0;
     has_aot_lazy_function_ir.store(false, std::memory_order_release);
     return true;
 }
@@ -6395,8 +6471,12 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     // Load cached_jit_fn atomically; if it was invalidated by recompilation, fall through to IR tier
     JitFunctionPtr jit_fn = cached_jit_fn.load(std::memory_order_acquire);
     if (tier == TIER_JIT && (jit_fn || cached_aot_fn)) {
+        if (cached_aot_fn && !ensureAOTContext(name, xsink)) {
+            return QoreValue();
+        }
+        QoreAOTContext* aot_ctx = cached_aot_ctx.load(std::memory_order_acquire);
         printd(3, "evalTiered JIT/AOT '%s' exec_count=%lu aot_ctx=%p\n",
-            name, exec_count.load(), (void*)cached_aot_ctx);
+            name, exec_count.load(), static_cast<void*>(aot_ctx));
 
         // self might be 0 if instantiated by a constructor call
         // Only instantiate if actually used in the function body
@@ -6437,8 +6517,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // Get AST-visible body locals: for AOT use all_body_locals (separate optimization),
                 // for IR use filtered ast_visible_body_locals (excludes IR-only locals that
                 // are never accessed by AST callbacks).
-                const std::vector<LocalVar*>& body_locals = cached_aot_ctx
-                    ? cached_aot_ctx->all_body_locals
+                const std::vector<LocalVar*>& body_locals = aot_ctx
+                    ? aot_ctx->all_body_locals
                     : cached_ir->ast_visible_body_locals;
 
                 // Instantiate AST-visible body locals so that AST Invoke callbacks
@@ -6479,9 +6559,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // at the original raise site, so return 0 bits and fall
                 // through to the normal xsink-set path below.
                 try {
-                    if (cached_aot_ctx && cached_aot_fn) {
-                        qore_aot_ensure_pc_loc_map(cached_aot_ctx);
-                        result_bits = cached_aot_fn(cached_aot_ctx, xsink);
+                    if (aot_ctx && cached_aot_fn) {
+                        qore_aot_ensure_pc_loc_map(aot_ctx);
+                        result_bits = cached_aot_fn(aot_ctx, xsink);
                     } else {
                         assert(jit_fn);
                         result_bits = jit_fn(xsink);
@@ -6809,8 +6889,8 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
             // AOT dispatch: always use evalTiered when a cached AOT function is
             // available (tier==TIER_JIT && cached_aot_fn). This covers both
             // strip-source (no AST body) and normal AOT with AST body.
-            // The AOT context is valid because registerPrecompiledAOTFunction()
-            // set it up during program initialization.
+            // evalTiered() materializes any deferred AOT context before binding
+            // arguments or executing the native function.
             if (has_aot) {
                 return evalTiered(name, argv, self, xsink, true);
             }
