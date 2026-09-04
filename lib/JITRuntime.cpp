@@ -375,6 +375,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_instantiate_local_aot", reinterpret_cast<void*>(&qore_rt_instantiate_local_aot) },
     { "qore_rt_uninstantiate_local_aot", reinterpret_cast<void*>(&qore_rt_uninstantiate_local_aot) },
     { "qore_rt_pop_closure_var_aot", reinterpret_cast<void*>(&qore_rt_pop_closure_var_aot) },
+    { "qore_rt_pop_closure_var", reinterpret_cast<void*>(&qore_rt_pop_closure_var) },
+    { "qore_rt_load_local_weak", reinterpret_cast<void*>(&qore_rt_load_local_weak) },
+    { "qore_rt_load_local_weak_aot", reinterpret_cast<void*>(&qore_rt_load_local_weak_aot) },
     { "qore_rt_load_global_aot", reinterpret_cast<void*>(&qore_rt_load_global_aot) },
     { "qore_rt_load_global_int_aot", reinterpret_cast<void*>(&qore_rt_load_global_int_aot) },
     { "qore_rt_store_global_aot", reinterpret_cast<void*>(&qore_rt_store_global_aot) },
@@ -1731,6 +1734,44 @@ static QoreValue qore_rt_deref_loaded_var_value(QoreValue result, bool owned, Ex
         deref = deref.refSelf();
     }
     return deref;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_load_local_weak(LocalVar* var, int8_t* owned_out,
+        ExceptionSink* xsink) {
+    // Load for a weak-assigned local.  LocalVar::eval() returns the target of a weak reference
+    // with needs_deref = false: a borrow.  The WeakReferenceNode held by the local owns a tRef on
+    // the target, and tRefs keep the QoreObject allocation valid independently of the strong
+    // reference count, so the borrowed pointer cannot dangle while the local is in scope; once the
+    // last strong reference goes, the target is marked deleted and access to it throws
+    // OBJECT-ALREADY-DELETED rather than touching freed memory.
+    //
+    // The borrow must be preserved.  Upgrading it to a strong reference (what qore_rt_load_local()
+    // does for an ordinary load) lets a frame that only holds a weak reference become the last
+    // strong reference holder and therefore run the target's destructor -- which is exactly what a
+    // weak reference must never do, and which deadlocks any object whose destructor waits on the
+    // thread doing the borrowing.  The IR interpreter keeps the borrow for the same reason.
+    if (owned_out) {
+        *owned_out = 0;
+    }
+    if (!var) {
+        return toBits(QoreValue());
+    }
+    bool needs_deref = true;
+    QoreValue result = var->eval(needs_deref, xsink);
+    if (xsink && *xsink) {
+        return toBits(QoreValue());
+    }
+    if (!needs_deref && result.getType() != NT_REFERENCE) {
+        return toBits(result);
+    }
+    // The local does not currently hold a weak reference (ex: it was assigned normally, or holds a
+    // reference that has to be evaluated): fall back to the owning load and tell the caller that
+    // the value has to be dereferenced.
+    QoreValue rv = qore_rt_deref_loaded_var_value(result, needs_deref, xsink);
+    if (owned_out && rv.hasNode()) {
+        *owned_out = 1;
+    }
+    return toBits(rv);
 }
 
 extern "C" DLLEXPORT uint64_t qore_rt_load_local(LocalVar* var, ExceptionSink* xsink) {
@@ -10497,6 +10538,20 @@ extern "C" DLLEXPORT uint64_t qore_rt_call_self_recursive(const AbstractQoreFunc
         return toBits(QoreValue());
     }
 
+    // A non-closure self-recursive call must not inherit the caller's closure runtime
+    // environment.  If the recursive call is made from a nested closure that captured
+    // this function's locals, the same LocalVar* would otherwise resolve to the outer
+    // frame's captured CVV and skip instantiating this recursive frame's own CVV.
+    ThreadSafeLocalVarRuntimeEnvironmentHelper closure_env_clear(nullptr);
+
+    // Recursive calls need a frame boundary so closure-use locals are resolved in the
+    // current recursive frame instead of reusing the caller frame's closure variable.
+    // Without it every recursion level shares one closure-variable frame and the
+    // name-based lookup returns another level's variable, so a value written through a
+    // closure in one frame is read back as NOTHING in the frame that declared it.
+    // qore_rt_call_self_recursive_aot_impl() does the same; this path was missed.
+    ThreadFrameBoundaryHelper tfbh(true);
+
     // Instantiate parameter locals directly from NaN-boxed args
     if (instantiateFastCallParams(sig, num_params, nargs, args, xsink) < 0) {
         return toBits(QoreValue());
@@ -11313,6 +11368,12 @@ extern "C" DLLEXPORT uint64_t qore_rt_load_local_aot(QoreAOTContext* ctx, int32_
     return qore_rt_load_local(ctx->locals[idx], xsink);
 }
 
+extern "C" DLLEXPORT uint64_t qore_rt_load_local_weak_aot(QoreAOTContext* ctx, int32_t idx,
+        int8_t* owned_out, ExceptionSink* xsink) {
+    assert(ctx && idx >= 0 && idx < ctx->num_locals);
+    return qore_rt_load_local_weak(ctx->locals[idx], owned_out, xsink);
+}
+
 extern "C" DLLEXPORT void qore_rt_reload_local_if_stale_aot(QoreAOTContext* ctx, int32_t idx,
         uint64_t* cache, uint64_t* tracker, uint64_t* deferred, uint64_t* valid_epoch,
         uint64_t epoch, ExceptionSink* xsink) {
@@ -11444,6 +11505,20 @@ extern "C" DLLEXPORT void qore_rt_pop_closure_var_aot(QoreAOTContext* ctx, int32
     // pop would touch an outer frame's CVV (dangling for the outer's closure
     // captures) and crash on the outer's return.
     LocalVar* var = ctx->locals[idx];
+    if (thread_try_find_closure_var_in_current_frame(var->getName())) {
+        qore_rt_uninstantiate_local(var, xsink);
+    }
+}
+
+extern "C" DLLEXPORT void qore_rt_pop_closure_var(LocalVar* var, ExceptionSink* xsink) {
+    // JIT counterpart of qore_rt_pop_closure_var_aot(): the variable may never have been
+    // instantiated on the path being executed (ex: a return placed before its declaration),
+    // and it must only be popped when its CVV belongs to the current frame -- popping an
+    // outer frame's CVV leaves that frame's closure captures dangling and corrupts the
+    // cvstack, which surfaces later as a null entry where a frame boundary is expected.
+    if (!var) {
+        return;
+    }
     if (thread_try_find_closure_var_in_current_frame(var->getName())) {
         qore_rt_uninstantiate_local(var, xsink);
     }

@@ -8,6 +8,9 @@
 
 %exec-class ClosuresTest
 
+#! Repetitions needed to reach the JIT tier and to drive the closure-variable stack past a block
+const ClosureRecursionIterations = 2000;
+
 list<auto> sub closures(string x) {
     int a = 1;
 
@@ -20,6 +23,37 @@ list<auto> sub closures(string x) {
     };
 
     return (inc, dec);
+}
+
+#! Recursive function with closure-captured locals declared after an early return
+/** Exercises three things that the IR, JIT, and AOT tiers each got wrong:
+    - the early return leaves the function before \c v and \c flag are instantiated, while
+      scope-exit cleanup is emitted for them on every path, so a tier that pops a closure
+      variable it never pushed corrupts an enclosing frame's closure-variable stack
+    - each recursive call needs its own closure-variable frame; without one the name-based
+      lookup resolves to another level's variable and the closure's write is lost
+    - the closure must see the same variables the function returns
+*/
+auto sub earlyReturnClosureVars(int depth, string arg) {
+    # returns before "v" and "flag" exist
+    if (*list pc = (arg =~ x/^\%(STR|EVAL)=(.*)$/s)) {
+        return pc[1];
+    }
+
+    auto v;
+    bool flag;
+
+    code do_val = sub (auto x) {
+        v = x;
+        flag = True;
+    };
+
+    if (depth > 0) {
+        do_val(earlyReturnClosureVars(depth - 1, arg));
+    } else {
+        do_val(0);
+    }
+    return flag ? v : "closure write lost";
 }
 
 code<string()> sub nestedClosureFactory() {
@@ -49,6 +83,8 @@ public class ClosuresTest inherits QUnit::Test {
         addTestCase("Second test", \testPart2(), NOTHING);
         addTestCase("Nested transitive capture", \testNestedTransitiveCapture(), NOTHING);
         addTestCase("Captured closure value", \testCapturedClosureValue(), NOTHING);
+        addTestCase("Recursive closure vars after an early return", \testEarlyReturnClosureVars(),
+            NOTHING);
 
         # Return for compatibility with test harness that checks return value.
         set_return_value(main());
@@ -83,6 +119,18 @@ public class ClosuresTest inherits QUnit::Test {
 
         assertEq("nested-3", c(), "first nested closure call");
         assertEq("nested-4", c(), "second nested closure call");
+    }
+
+    #! Closure variables in a recursive function with an early return before their declaration
+    /** Repeated so that the recursion is JIT-compiled and the self-recursive fast call path is
+        taken, and so that a surplus closure-variable pop reaches a frame boundary rather than
+        silently consuming an enclosing frame's entry.
+    */
+    testEarlyReturnClosureVars() {
+        for (int i = 0; i < ClosureRecursionIterations; ++i) {
+            assertEq("early", earlyReturnClosureVars(4, "%STR=early"));
+            assertEq(0, earlyReturnClosureVars(4, "plain"));
+        }
     }
 
     testCapturedClosureValue() {

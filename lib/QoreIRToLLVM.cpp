@@ -12731,27 +12731,68 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             // Weak-assigned locals must be read through LocalVar::eval() on
             // every load.  The raw alloca/runtime slot contains a
-            // WeakReferenceNode; evaluating it returns the current target with
-            // a temporary strong ref, or NOTHING after the target is deleted.
+            // WeakReferenceNode; evaluating it borrows the current target, or
+            // returns NOTHING after the target is deleted.  The borrow is kept
+            // (see qore_rt_load_local_weak()): taking a strong reference here
+            // would let a frame holding only a weak reference run the target's
+            // destructor.
             if (linst->local && weak_assigned_locals.count(key)) {
                 llvm::Value* result;
+                llvm::AllocaInst* owned_flag = nullptr;
+                {
+                    llvm::Type* i8_type = llvm::Type::getInt8Ty(module.getContext());
+                    llvm::BasicBlock* entry_bb = &llvm_func->getEntryBlock();
+                    llvm::IRBuilder<> alloca_builder(entry_bb, entry_bb->begin());
+                    owned_flag = alloca_builder.CreateAlloca(i8_type, nullptr, "weak_load_owned");
+                    alloca_builder.CreateStore(llvm::ConstantInt::get(i8_type, 0), owned_flag);
+                }
                 if (aot_mode) {
-                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local_aot",
-                        llvm::FunctionType::get(i64_type, {ptr_type, i32_type, ptr_type}, false));
+                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local_weak_aot",
+                        llvm::FunctionType::get(i64_type,
+                            {ptr_type, i32_type, ptr_type, ptr_type}, false));
                     int32_t slot = const_cast<AOTSlotMap*>(aot_slots)->getLocalSlot(key);
                     result = builder->CreateCall(load_fn,
-                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), xsink_arg});
+                        {aot_ctx_arg, llvm::ConstantInt::get(i32_type, slot), owned_flag, xsink_arg});
                 } else {
-                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local",
-                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type}, false));
+                    // Preserve the borrow: qore_rt_load_local() would upgrade the weak target to a
+                    // strong reference, which lets this frame become the last strong reference
+                    // holder and run the target's destructor.  qore_rt_load_local_weak() hands back
+                    // the borrowed target and reports through owned_flag whether an owning value had
+                    // to be returned instead (the local did not hold a weak reference).
+                    auto load_fn = module.getOrInsertFunction("qore_rt_load_local_weak",
+                        llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
                     llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
                         reinterpret_cast<uint64_t>(linst->local));
                     llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
-                    result = builder->CreateCall(load_fn, {var_as_ptr, xsink_arg});
+                    result = builder->CreateCall(load_fn, {var_as_ptr, owned_flag, xsink_arg});
                 }
                 values[inst->result.id] = result;
                 nanboxed_values.insert(inst->result.id);
                 trackResultForCleanup(result, inst->result.id, llvm_func);
+                if (owned_flag) {
+                    // A borrowed value must not be dereferenced.  The cleanup slot holds the value
+                    // only in the owning fallback; for a borrow it holds NOTHING, so the pending
+                    // release becomes a no-op while the value itself stays usable.  This is emitted
+                    // as a select rather than a branch: trackResultForCleanup() above may have
+                    // registered the current basic block for SSA-direct cleanup, and splitting that
+                    // block here would leave the cleanup registered against a block that no longer
+                    // ends the value's live range.
+                    auto alloca_it = invoke_alloca_map.find(inst->result.id);
+                    if (alloca_it != invoke_alloca_map.end()) {
+                        llvm::Value* cleanup_alloca = alloca_it->second
+                            ? alloca_it->second
+                            : promoteSsaEntryToAlloca(inst->result.id, module, llvm_func);
+                        if (cleanup_alloca) {
+                            llvm::Type* i8_type = llvm::Type::getInt8Ty(module.getContext());
+                            llvm::Value* owned = builder->CreateLoad(i8_type, owned_flag);
+                            llvm::Value* is_owned = builder->CreateICmpNE(owned,
+                                llvm::ConstantInt::get(i8_type, 0));
+                            llvm::Value* cleanup_val = builder->CreateSelect(is_owned, result,
+                                llvm::ConstantInt::get(i64_type, VAL_NOTHING));
+                            builder->CreateStore(cleanup_val, cleanup_alloca);
+                        }
+                    }
+                }
                 weak_load_result_ids.insert(inst->result.id);
                 return true;
             }
@@ -13854,12 +13895,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             builder->CreateCall(uninst_helper, {aot_ctx_arg,
                                     llvm::ConstantInt::get(i32_type, slot), xsink_arg});
                         } else {
-                            // qore_rt_uninstantiate_local handles both loop-body and
+                            // qore_rt_pop_closure_var handles both loop-body and
                             // block-exit cases: it clears the CVV only when the
                             // refcount drops to 1, matching the cycle-aware semantics
                             // needed for both (DGC handles cycle collection when
-                            // other references keep the CVV alive).
-                            auto uninst_helper = module.getOrInsertFunction("qore_rt_uninstantiate_local",
+                            // other references keep the CVV alive).  Like the AOT
+                            // helper above it pops only when the variable is on the
+                            // current frame's cvstack: a closure-use local that
+                            // evalTiered does not pre-instantiate is pushed by the
+                            // code that instantiates it, which a path reaching this
+                            // scope exit need never have executed.
+                            auto uninst_helper = module.getOrInsertFunction("qore_rt_pop_closure_var",
                                     llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
                             llvm::Value* var_ptr = llvm::ConstantInt::get(i64_type,
                                     reinterpret_cast<uint64_t>(linst->local));

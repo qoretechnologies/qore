@@ -1229,6 +1229,27 @@ void qore_rt_uninstantiate_local_aot(QoreAOTContext* ctx, int32_t idx, Exception
 //! Used for closure-use vars that are NOT pre-instantiated by evalTiered.
 void qore_rt_pop_closure_var_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
+//! Pops a closure-use local from the cvstack only if it is on the current frame's cvstack
+/** The JIT counterpart of qore_rt_pop_closure_var_aot(); see that function for the rationale.
+    A closure-use local that evalTiered does not pre-instantiate reaches the cvstack only when
+    the code that instantiates it actually runs, while UninstantiateLocal is emitted at every
+    scope exit, so an unconditional pop on a path that never instantiated the variable removes
+    an entry belonging to an enclosing frame.
+*/
+void qore_rt_pop_closure_var(LocalVar* var, ExceptionSink* xsink);
+
+//! Loads a weak-assigned local, preserving the borrow instead of taking a strong reference
+/** \a owned_out is set to 1 only when the local did not hold a weak reference and an owning value
+    had to be returned, in which case the caller must dereference it.
+*/
+uint64_t qore_rt_load_local_weak(LocalVar* var, int8_t* owned_out, ExceptionSink* xsink);
+
+//! Loads a weak-assigned local through an AOT context slot, preserving the borrow
+/** @see qore_rt_load_local_weak()
+*/
+uint64_t qore_rt_load_local_weak_aot(QoreAOTContext* ctx, int32_t idx, int8_t* owned_out,
+        ExceptionSink* xsink);
+
 //! Load from a global variable via AOT context slot
 uint64_t qore_rt_load_global_aot(QoreAOTContext* ctx, int32_t idx, ExceptionSink* xsink);
 
