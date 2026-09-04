@@ -23,6 +23,8 @@ class AotBinarySymbolResolutionTest inherits QUnit::Test {
 
         addTestCase("AOT qmods resolve PLT symbols before module init",
             \testAotQmodSymbolsAreResolvedBeforeInit());
+        addTestCase("AOT qmods are mapped once while resolving symbols",
+            \testAotQmodIsMappedOnce());
         set_return_value(main());
     }
 
@@ -101,6 +103,120 @@ extern \"C\" DLLEXPORT void LazyAotResolveFail_qore_module_desc(QoreModuleInfo& 
                 p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
                 p.loadModule(qmod_path, WARN_MODULES);
             });
+    }
+
+    testAotQmodIsMappedOnce() {
+        string cxx = ENV.CXX ?? backquote("command -v c++ 2>/dev/null || command -v g++ 2>/dev/null || true");
+        trim cxx;
+        if (!cxx) {
+            testSkip("no C++ compiler found");
+            return;
+        }
+
+        string tmp_dir = make_tmp_dir();
+        on_exit remove_tree(tmp_dir);
+
+        string src_root = realpath(get_script_dir() + "/../../../../..");
+        string cpp_path = tmp_dir + "/AotSingleMap.cpp";
+        string qmod_path = tmp_dir + "/AotSingleMap.qmod";
+        string counter_path = tmp_dir + "/load-count.txt";
+
+        File f();
+        f.open2(cpp_path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write("#include <qore/Qore.h>
+#include <cstdio>
+#include <cstdlib>
+
+struct AotLoadCounter {
+    AotLoadCounter() {
+        const char* path = std::getenv(\"QORE_AOT_LOAD_COUNTER_FILE\");
+        if (!path) {
+            return;
+        }
+        FILE* f = std::fopen(path, \"a\");
+        if (f) {
+            std::fputs(\"load\\n\", f);
+            std::fclose(f);
+        }
+    }
+};
+
+static AotLoadCounter load_counter;
+
+static void aotSingleMapInit(QoreModuleInitContext&, ExceptionSink&) {
+}
+
+static void aotSingleMapNsInit(QoreNamespace*, QoreNamespace*, ExceptionSink&) {
+}
+
+static void aotSingleMapDelete() {
+}
+
+extern \"C\" DLLEXPORT void AotSingleMap_qore_module_desc(QoreModuleInfo& mod_info) {
+    mod_info.name = \"AotSingleMap\";
+    mod_info.version = \"1.0\";
+    mod_info.desc = \"AOT single native mapping regression module\";
+    mod_info.author = \"Qore Technologies, s.r.o.\";
+    mod_info.url = \"https://qore.org\";
+    mod_info.api_major = QORE_MODULE_API_MAJOR;
+    mod_info.api_minor = QORE_MODULE_API_MINOR;
+    mod_info.init = aotSingleMapInit;
+    mod_info.ns_init = aotSingleMapNsInit;
+    mod_info.del = aotSingleMapDelete;
+    mod_info.license = QL_MIT;
+    mod_info.license_str = \"MIT\";
+    mod_info.is_aot = true;
+    mod_info.aot_abi_version = QORE_AOT_MODULE_ABI_VERSION;
+}
+");
+        f.close();
+
+        string build_cmd = sprintf(
+            "%s -std=c++17 -shared -fPIC -I%s/include -I%s/include -o %s %s -L%s -Wl,-rpath,%s -lqore 2>&1",
+            shellQuote(cxx), shellQuote(src_root), shellQuote(libqore_dir), shellQuote(qmod_path),
+            shellQuote(cpp_path), shellQuote(libqore_dir), shellQuote(libqore_dir));
+        string build_out = backquote(build_cmd);
+        assertTrue(is_file(qmod_path), "compiled single-map qmod: " + build_out);
+
+        setenv("QORE_AOT_LOAD_COUNTER_FILE", counter_path);
+        on_exit unsetenv("QORE_AOT_LOAD_COUNTER_FILE");
+
+        appendAotDependencyTrailer(qmod_path, "WrongAotName");
+        assertThrows("LOAD-MODULE-ERROR", "dependency metadata.*WrongAotName.*expecting 'AotSingleMap'", sub () {
+            Program p(PO_NEW_STYLE);
+            p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
+            p.loadModule(qmod_path, WARN_MODULES);
+        });
+        assertFalse(is_file(counter_path), "mismatched metadata is rejected before mapping the qmod");
+
+        # Re-link to discard the intentionally mismatched trailer, then add the
+        # metadata that lets the loader resolve eagerly in a single mapping.
+        build_out = backquote(build_cmd);
+        assertTrue(is_file(qmod_path), "recompiled single-map qmod: " + build_out);
+        appendAotDependencyTrailer(qmod_path, "AotSingleMap");
+
+        Program p(PO_NEW_STYLE);
+        p.disableParseOptions(PO_NO_TOP_LEVEL_STATEMENTS);
+        p.loadModule(qmod_path, WARN_MODULES);
+
+        assertEq("load\n", ReadOnlyFile::readTextFile(counter_path),
+            "AOT qmod native constructors run once");
+    }
+
+    private static appendAotDependencyTrailer(string qmod_path, string module_name) {
+        BinaryOutputStream output();
+        StreamWriter writer(output);
+        writer.writei4LSB(module_name.size());
+        writer.write(module_name);
+        writer.writei4LSB(0);
+        writer.writei8LSB(8 + module_name.size());
+        writer.writei4LSB(0x444d4151);
+        writer.writei4LSB(1);
+
+        File trailer();
+        trailer.open2(qmod_path, O_WRONLY | O_APPEND);
+        trailer.write(output.getData());
+        trailer.close();
     }
 
     private static string shellQuote(string arg) {

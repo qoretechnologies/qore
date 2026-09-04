@@ -509,6 +509,8 @@ struct DLHelper {
     }
 };
 
+class ModuleLoadMapHelper;
+
 class QoreModuleManager {
     friend class QoreAbstractModule;
     friend class ModuleLoadMapHelper;
@@ -817,7 +819,12 @@ protected:
 
     DLLLOCAL QoreAbstractModule* loadBinaryModuleFromDesc(ExceptionSink& xsink, DLHelper* dlh,
             QoreModuleInfo& mod_info, const char* path, const char* feature = nullptr, bool reexport = false,
-            QoreProgram* mpgm = nullptr, QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE);
+            QoreProgram* mpgm = nullptr, QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
+            ModuleLoadMapHelper* load_guard = nullptr);
+
+    //! Load AOT dependency providers while the parent module owns a load-map reservation.
+    DLLLOCAL int loadAOTBinaryModuleDependencies(ExceptionSink& xsink,
+            const std::vector<std::string>& dependencies, QoreProgram* path_pgm);
 
     DLLLOCAL QoreAbstractModule* loadUserModuleFromPath(ExceptionSink& xsink, ExceptionSink& wsink, const char* path,
             const char* feature = nullptr, QoreProgram* tpgm = nullptr, bool reexport = false,

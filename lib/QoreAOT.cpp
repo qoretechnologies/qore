@@ -25560,6 +25560,11 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     if (!writeAndVerifyPcLocTrailer(output_path, emitted_func_slots, error)) {
         return false;
     }
+    if (!compile_only && !target_triple
+            && !qoreAOTAppendModuleDependenciesTrailer(
+                output_path, mod_info.name, mod_info.dependencies, error)) {
+        return false;
+    }
 
     reportAOTArtifactStats("module compilation", opt_level, include_source,
         compiled_count, total_funcs, failed_count, target_triple,
@@ -26032,6 +26037,11 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
 
         // Append the lazy PC->loc trailer to the final loaded artifact.
         if (!writeAndVerifyPcLocTrailer(output_path, emitted_func_slots, error)) {
+            return false;
+        }
+        if (!compile_only && !target_triple
+                && !qoreAOTAppendModuleDependenciesTrailer(
+                    output_path, mod_info.name, mod_info.dependencies, error)) {
             return false;
         }
 
@@ -30416,6 +30426,12 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         // a `qore_aot_pcloc` ELF section (added in emitObjectFile), and the linker
         // concatenates them into the linked artifact — so lazy on-throw locations work
         // for aggregate-resident functions automatically.
+        if (!target_triple
+                && !qoreAOTAppendModuleDependenciesTrailer(
+                    output_path, mod_info.name, mod_info.dependencies, error)) {
+            remove(glue_obj.c_str());
+            return false;
+        }
 
         if (!target_triple) {
             remove(glue_obj.c_str());

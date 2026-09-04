@@ -18,12 +18,15 @@ business in the core language library.
 
 A direct reference to another module's exported symbol already *resolves* on both Linux and macOS:
 
-- `lib/ModuleManager.cpp:44` opens modules with `RTLD_LAZY|RTLD_GLOBAL`, so a module's
-  `DLLEXPORT` symbols are process-global once loaded.
+- Ordinary C++ modules and legacy AOT qmods are initially opened with
+  `RTLD_LAZY|RTLD_GLOBAL`, so a module's `DLLEXPORT` symbols are process-global once loaded.
+  Current AOT qmods carry preflight dependency metadata and are opened once with
+  `RTLD_NOW|RTLD_GLOBAL` after those providers are loaded.
 - `cmake/QoreMacros.cmake:378` already links module bundles with `-Wl,-undefined
   -Wl,dynamic_lookup` on macOS.
-- The `RTLD_NOW` reopen in `reopen_aot_binary_module_now()` (`lib/ModuleManager.cpp:2763`) is
-  AOT-only, so ordinary C++ modules keep lazy binding.
+- The `RTLD_NOW` path is AOT-only: current qmods use the single-map preflight path, while
+  `reopen_aot_binary_module_now()` preserves eager resolution for legacy qmods without the
+  metadata trailer. Ordinary C++ modules keep lazy binding.
 
 The problem is how it *fails*. Binding is lazy, so a header/ABI mismatch between two independently
 released repositories is a process abort at the first call rather than a load error. There is no

@@ -2123,6 +2123,40 @@ bool qoreAOTAppendPcLocTrailer(const std::string& path, const std::vector<uint8_
 //! leaves `out` empty) when the file has no valid trailer.
 bool qoreAOTReadPcLocTrailer(const std::string& path, std::vector<AOTPcLocFuncEntry>& out);
 
+//! AOT module dependency trailer appended after any PC->loc trailer.
+/** The fixed footer is the same 16-byte shape as the PC->loc footer:
+    uint64 payload_len; uint32 magic('QAMD'); uint32 version.  The payload is:
+    uint32 module_name_len; char[module_name_len] module_name; uint32 num_dependencies;
+    repeat: uint32 dependency_len; char[dependency_len] dependency.
+
+    The loader reads this metadata before dlopen() so dependencies can be loaded before
+    mapping the AOT qmod once with RTLD_NOW.  Artifacts without the trailer use the legacy
+    RTLD_LAZY discovery and reopen path.
+*/
+static constexpr uint32_t QORE_AOT_MODULE_DEPS_MAGIC = 0x444d4151u;  //!< 'QAMD' little-endian
+static constexpr uint32_t QORE_AOT_MODULE_DEPS_VERSION = 1u;
+
+//! Append module identity and dependency metadata to an AOT qmod.
+/** @param path AOT qmod path
+    @param module_name module feature name
+    @param dependencies exact dependency list from the module descriptor
+    @param error receives a validation or I/O diagnostic
+    @return true on success, false on error
+*/
+bool qoreAOTAppendModuleDependenciesTrailer(const std::string& path, const std::string& module_name,
+        const std::vector<std::string>& dependencies, std::string& error);
+
+//! Read module dependency metadata without loading the native image.
+/** @param path AOT qmod path
+    @param module_name receives the serialized module name
+    @param dependencies receives the serialized dependency list
+    @param error receives a corruption or I/O diagnostic
+    @return 1 when a valid trailer was read, 0 when no trailer is present or the file cannot be opened,
+        -1 for an invalid trailer
+*/
+int qoreAOTReadModuleDependenciesTrailer(const std::string& path, std::string& module_name,
+        std::vector<std::string>& dependencies, std::string& error);
+
 //! ELF section name carrying the PC->loc map. Unlike the EOF trailer (which is
 //! dropped whenever a .qo is RE-LINKED into another artifact — e.g. qorus links its
 //! per-file .qo's into the qorus-core executable via the system linker), a real ELF
