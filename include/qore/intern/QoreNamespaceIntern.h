@@ -45,6 +45,7 @@
 
 #include <atomic>
 #include <map>
+#include <unordered_map>
 #include <vector>
 #include <list>
 
@@ -1058,17 +1059,28 @@ protected:
     // map from depth to namespace
     typedef std::multimap<unsigned, qore_ns_private*> nsdmap_t;
     nsdmap_t nsdmap;
+    std::unordered_map<qore_ns_private*, nsdmap_t::iterator> nsmap;
 
 public:
     DLLLOCAL NamespaceDepthList() {
     }
 
     DLLLOCAL void add(qore_ns_private* ns) {
-        nsdmap.insert(nsdmap_t::value_type(ns->depth, ns));
+        auto i = nsmap.find(ns);
+        if (i != nsmap.end()) {
+            if (i->second->first == ns->depth) {
+                return;
+            }
+            nsdmap.erase(i->second);
+            i->second = nsdmap.insert(nsdmap_t::value_type(ns->depth, ns));
+        } else {
+            nsmap.emplace(ns, nsdmap.insert(nsdmap_t::value_type(ns->depth, ns)));
+        }
     }
 
     DLLLOCAL void clear() {
         nsdmap.clear();
+        nsmap.clear();
     }
 };
 
@@ -2837,9 +2849,6 @@ public:
 
     DLLLOCAL static void copyMergeCommittedNamespace(RootQoreNamespace& ns, const RootQoreNamespace& mns) {
         ns.priv->copyMergeCommittedNamespace(*(mns.priv));
-
-        // rebuild root indexes - only for committed objects
-        ns.rpriv->rebuildAllIndexes();
     }
 
     DLLLOCAL static Var* runtimeFindGlobalVar(const RootQoreNamespace& rns, const char* vname, const qore_ns_private*& vns) {

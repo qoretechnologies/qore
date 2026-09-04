@@ -12044,6 +12044,90 @@ struct AOTModuleInitRunResult {
 static void retryPendingAOTModuleInitsForProgram(QoreProgram* tpgm,
         ExceptionSink& xsink);
 
+static void aotFindInitConstantEntries(const AOTInitFuncDescriptor& desc, QoreProgram* pgm,
+        QoreProgram* shadow_pgm, ConstantEntry*& target_ce, ConstantEntry*& shadow_ce);
+
+//! Returns true if an init descriptor still has target or shadow state to populate
+static bool aotInitDescriptorNeedsExecution(const AOTInitFuncDescriptor& desc, QoreProgram* pgm,
+        QoreProgram* shadow_pgm, bool write_shadow) {
+    qore_program_private* pp = qore_program_private::get(*pgm);
+    qore_program_private* shadow_pp = shadow_pgm ? qore_program_private::get(*shadow_pgm) : nullptr;
+
+    switch (desc.target_type) {
+        case AOTCompiledInitFunc::NS_CONSTANT:
+        case AOTCompiledInitFunc::CLASS_CONSTANT: {
+            ConstantEntry* target_ce = nullptr;
+            ConstantEntry* shadow_ce = nullptr;
+            aotFindInitConstantEntries(desc, pgm, shadow_pgm, target_ce, shadow_ce);
+            if (!target_ce && !shadow_ce) {
+                return true;
+            }
+            bool target_done = !target_ce || target_ce->hasValue();
+            bool shadow_done = !write_shadow || !shadow_ce || shadow_ce == target_ce || shadow_ce->hasValue();
+            return !target_done || !shadow_done;
+        }
+
+        case AOTCompiledInitFunc::STATIC_VAR: {
+            auto find_static_var = [&desc](qore_program_private* p) -> QoreVarInfo* {
+                if (!p) {
+                    return nullptr;
+                }
+                const qore_ns_private* found_ns = nullptr;
+                const QoreClass* qc = qore_root_ns_private::runtimeFindClass(
+                    *p->RootNS, desc.ns_path.c_str(), found_ns);
+                return qc ? qore_class_private::get(*const_cast<QoreClass*>(qc))->vars.find(
+                    desc.item_name.c_str()) : nullptr;
+            };
+            auto has_concrete_value = [](QoreVarInfo* vi) -> bool {
+                if (!vi || !vi->eval_init) {
+                    return false;
+                }
+                QoreValue value = vi->getRuntimeReferencedValue();
+                bool concrete = !value.needsEval();
+                value.discard(nullptr);
+                return concrete;
+            };
+            QoreVarInfo* target_vi = find_static_var(pp);
+            QoreVarInfo* shadow_vi = find_static_var(shadow_pp);
+            if (!target_vi && !shadow_vi) {
+                return true;
+            }
+            bool target_done = !target_vi || has_concrete_value(target_vi);
+            bool shadow_done = !write_shadow || !shadow_vi || shadow_vi == target_vi
+                || has_concrete_value(shadow_vi);
+            return !target_done || !shadow_done;
+        }
+
+        case AOTCompiledInitFunc::GLOBAL_VAR:
+        case AOTCompiledInitFunc::GLOBAL_VAR_CONSTRUCT: {
+            auto find_global_var = [&desc](qore_program_private* p) -> Var* {
+                if (!p) {
+                    return nullptr;
+                }
+                qore_ns_private* ns = findNamespaceByPath(qore_ns_private::get(*p->RootNS), desc.ns_path);
+                return ns ? ns->var_list.runtimeFindVar(desc.item_name.c_str()) : nullptr;
+            };
+            Var* target_var = find_global_var(pp);
+            Var* shadow_var = find_global_var(shadow_pp);
+            if (!target_var && !shadow_var) {
+                return true;
+            }
+            bool same_storage = target_var && shadow_var
+                && target_var->parseGetVar() == shadow_var->parseGetVar();
+            bool target_done = !target_var || target_var->isAOTInitDone();
+            bool shadow_done = !write_shadow || !shadow_var || same_storage || shadow_var->isAOTInitDone();
+            return !target_done || !shadow_done;
+        }
+
+        case AOTCompiledInitFunc::MODULE_INIT:
+            return write_shadow;
+
+        case AOTCompiledInitFunc::OUTLINED_HELPER:
+            return false;
+    }
+    return true;
+}
+
 static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_name,
         QoreProgram* tpgm, ExceptionSink& xsink) {
     AOTModuleInitRunResult result;
@@ -12208,18 +12292,6 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
         return result;
     };
 
-    std::unordered_map<std::string, const QoreAOTFunc*> func_map;
-    for (int i = 0; init_funcs && i < init_num_funcs; ++i) {
-        const char* fname = init_funcs[i].name;
-        if (init_funcs[i].fn_ptr && isAOTInitFunctionName(fname)) {
-            func_map[fname] = &init_funcs[i];
-        }
-    }
-    if (aotInitTraceEnabled()) {
-        fprintf(stderr, "[aot-init] ns_init module=%s init func_map=%zu\n",
-            mod_name.c_str(), func_map.size());
-    }
-
     if (!init_ctx_pgm) {
         return finish(false, true, "missing module program");
     }
@@ -12228,6 +12300,43 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
         if (xsink) {
             return finish(false);
         }
+    }
+
+    QoreProgram* shadow_pgm = init_ctx_pgm != tpgm ? init_ctx_pgm : nullptr;
+    std::vector<AOTInitFuncDescriptor> pending_descriptors;
+    std::unordered_set<std::string> pending_func_names;
+    for (size_t i = 0; i < init_descriptors.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(&xsink, "AOT pending initializer filtering")) {
+            return finish(false);
+        }
+        const AOTInitFuncDescriptor& desc = init_descriptors[i];
+        if (aotInitDescriptorNeedsExecution(desc, tpgm, shadow_pgm, write_shadow)) {
+            pending_func_names.insert(desc.name);
+            pending_descriptors.push_back(desc);
+        }
+    }
+    if (aotInitTraceEnabled()) {
+        fprintf(stderr, "[aot-init] ns_init module=%s pending descriptors=%zu/%zu\n",
+            mod_name.c_str(), pending_descriptors.size(), init_descriptors.size());
+    }
+    if (pending_descriptors.empty()) {
+        return finish(true);
+    }
+
+    std::unordered_map<std::string, const QoreAOTFunc*> func_map;
+    for (int i = 0; init_funcs && i < init_num_funcs; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(&xsink, "AOT pending initializer function lookup")) {
+            return finish(false);
+        }
+        const char* fname = init_funcs[i].name;
+        if (init_funcs[i].fn_ptr && isAOTInitFunctionName(fname)
+                && pending_func_names.find(fname) != pending_func_names.end()) {
+            func_map[fname] = &init_funcs[i];
+        }
+    }
+    if (aotInitTraceEnabled()) {
+        fprintf(stderr, "[aot-init] ns_init module=%s init func_map=%zu\n",
+            mod_name.c_str(), func_map.size());
     }
 
     QoreAOTBinaryReader fallback_init_reader;
@@ -12288,8 +12397,7 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
         printd(2, "AOT ns_init '%s': executing %d init functions\n",
             mod_name.c_str(), (int)init_func_contexts.size());
         int failed = executeInitFunctions(tpgm, init_func_contexts,
-            init_descriptors, mod_name.c_str(),
-            init_ctx_pgm != tpgm ? init_ctx_pgm : nullptr,
+            pending_descriptors, mod_name.c_str(), shadow_pgm,
             mod_path.empty() ? nullptr : mod_path.c_str(),
             write_shadow, &xsink);
         return finish(failed == 0);
@@ -13279,12 +13387,6 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
         printd(5, "AOT module ns_init '%s': calling copyMergeCommittedNamespace\n", mod_name);
         qore_root_ns_private::copyMergeCommittedNamespace(*target_root, *mod_root);
         printd(5, "AOT module ns_init '%s': copyMergeCommittedNamespace done\n", mod_name);
-
-        // Rebuild indexes so the merged items can be found during name resolution
-        // This is needed because copyMergeCommittedNamespace adds items directly without
-        // going through the module commit mechanism that normally rebuilds indexes
-        printd(5, "AOT module ns_init '%s': calling rebuildAllIndexes\n", mod_name);
-        qore_root_ns_private::get(*target_root)->rebuildAllIndexes();
     }
 
     // Check for exceptions during merge operations

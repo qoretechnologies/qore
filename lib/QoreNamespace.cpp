@@ -4100,12 +4100,18 @@ void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
                 QoreValue val = QoreValue::makeEnum(member);
                 ens_priv->constant.add(member->getName(), val, enum_priv->getTypeInfo());
             }
-            // Rebuild indexes for the new namespace
             qore_root_ns_private* rns = getRoot();
             if (rns) {
                 rns->rebuildIndexes(ens_priv);
             }
         }
+    }
+
+    // Namespace merges only add committed objects, so existing root-map entries remain valid. Reindex this
+    // destination namespace now instead of walking the complete, growing target tree after the merge.
+    qore_root_ns_private* rns = getRoot();
+    if (rns) {
+        rns->rebuildIndexes(this);
     }
 
     // add sub namespaces
