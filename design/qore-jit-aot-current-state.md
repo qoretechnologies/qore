@@ -265,3 +265,44 @@ proven.
 Do not relax this rule without a real dominator-tree or equivalent
 scope/finalization design. See
 [`aot-eh-cleanup-dominance.md`](aot-eh-cleanup-dominance.md).
+
+## Large Function Bodies and Cleanup Scaling
+
+Every per-statement exception and thread-exit check in a function branches to
+one shared `error_return` block, and that block releases each IR-only local that
+owns its value in its own alloca. Emitting one `load` / `store NOTHING` /
+`qore_rt_decref` triple per local there is correct but does not scale: SROA
+promotes those slots to SSA, so each local then needs a PHI in `error_return`
+for *every* edge reaching it. The PHI count is therefore
+`IR-only locals x exit edges`, PHI elimination expands each PHI operand into a
+machine `COPY`, and LLVM's register coalescer and allocator go superlinear on
+the result. A 150-statement body produced 151 PHIs across 751 predecessors —
+113k PHI operands and 235k `COPY`s — and took over ten seconds to code-generate;
+at 400 statements it did not finish in two minutes. The same body lowered
+without the LLVM optimizer, where the slots stay in memory, code-generated in
+0.7 seconds, which is what identifies the cleanup shape rather than the function
+size as the cause.
+
+`QoreIRToLLVM::prepareOwnedIrLocalCleanupArray()` measures both factors at
+function finalization — `owned_ir_local_allocas.size()` and the predecessor count
+of `error_return_block` — and, only when their product exceeds
+`getCleanupPhiBudget()` (`QORE_JIT_CLEANUP_PHI_BUDGET`, default 4096), records
+the slot addresses in an entry-block array and replaces the whole triple
+sequence with a single `qore_rt_cleanup_run_allocas()` call. Taking the slot
+addresses keeps them in memory, so no PHI is needed and code generation stays
+linear. Every function below the budget — which is every ordinary function —
+keeps the inline triples and full SSA promotion of its locals, so the trade-off
+is confined to bodies where promotion could not pay off anyway.
+
+Two details matter for correctness. The runtime helper releases slots in LIFO
+order, so the addresses are stored in reverse and the values are released in
+exactly the order the inline sequence used; destruction order of locals is
+observable through destructors. And the choice is made before any cleanup is
+written, so the shared error-return block and the shared EH common-cleanup block
+agree on which form they emit.
+
+The IR-side dataflow analyses that feed this path (`qore_ir_mark_local_list_pushes()`
+and `qore_ir_mark_in_place_string_appends()`) use `QoreIRLocalBitSet`, a dense
+bit vector, as their lattice element. A hash set copies one node per element on
+every block merge and transfer, which costs `O(blocks x candidate locals)`
+allocations and was the largest remaining cost of lowering a very large body.

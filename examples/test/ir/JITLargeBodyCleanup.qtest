@@ -1,0 +1,176 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class JITLargeBodyCleanupTest
+
+#! Regression tests for code generation on very large function bodies.
+/** A function body with many IR-only locals reaches its shared error-return
+    block from every per-statement exception and thread-exit check.  Emitting one
+    load/store/decref triple per local there costs one PHI per local for every one
+    of those edges once SROA promotes the slots, which made LLVM's register
+    coalescer and allocator superlinear.  A body with 150 such locals reached its
+    error-return block from 751 places: 113k PHI operands became 235k machine
+    COPYs and took over ten seconds to code-generate, and at 400 locals the
+    compile did not finish in two minutes.  Cleanup is now routed through
+    qore_rt_cleanup_run_allocas() once that product exceeds
+    QORE_JIT_CLEANUP_PHI_BUDGET.  These tests pin the behaviour that must not
+    change when it does: identical results and identical destruction order and
+    count on both the normal and the exception exit path.
+*/
+class JITLargeBodyCleanupTest inherits QUnit::Test {
+    public {
+        #! Statement groups in the generated body.
+        /** Each group contributes one IR-only local and several exception-check
+            edges into the shared error-return block, so this size puts the
+            (locals x exit edges) product an order of magnitude above the default
+            QORE_JIT_CLEANUP_PHI_BUDGET of 4096 while keeping each compile cheap;
+            the array form is first selected somewhere between 16 and 24.
+        */
+        const BodySize = 40;
+    }
+
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("JITLargeBodyCleanupTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("large body selects array cleanup", \testArrayCleanupSelected());
+        addTestCase("large body normal exit", \testLargeBodyNormalExit());
+        addTestCase("large body exception exit", \testLargeBodyExceptionExit());
+        addTestCase("large body destruction order", \testLargeBodyDestructionOrder());
+        addTestCase("small body keeps inline cleanup", \testSmallBodyKeepsInlineCleanup());
+        set_return_value(main());
+    }
+
+    #! Builds a function whose body has many IR-only locals and many exit edges.
+    /** @param size number of statement groups in the body
+        @param fail_at throw from this statement group, or -1 to run to completion
+    */
+    private string getCode(int size, int fail_at) {
+        string code = "%modern
+
+list<string> destroyed;
+
+class Marker {
+    private {
+        string name;
+    }
+    constructor(string n) {
+        name = n;
+    }
+    destructor() {
+        destroyed += name;
+    }
+}
+
+int sub big(int seed) {
+    int acc = seed;
+";
+        for (int i = 0; i < size; ++i) {
+            code += sprintf("    Marker m%d(\"m%d\");\n", i, i);
+            code += sprintf("    string s%d = sprintf(\"%%d\", acc + %d);\n", i, i);
+            code += sprintf("    acc += s%d.size();\n", i);
+            code += sprintf("    if (acc %% 7 == 0) { acc += %d; } else { acc -= %d; }\n", i, i);
+            if (i == fail_at) {
+                code += sprintf("    throw \"BIG-FAILURE\", \"at %d\";\n", i);
+            }
+        }
+        code += "    return acc;
+}
+
+int rv = 0;
+try {
+    rv = big(1);
+} catch (hash<ExceptionInfo> ex) {
+    rv = -1;
+}
+printf(\"rv:%d destroyed:%d order:%s\\n\", rv, destroyed.size(),
+    destroyed.size() > 4 ? destroyed[0] + \",\" + destroyed[1] + \"..\"
+        + destroyed[destroyed.size() - 2] + \",\" + destroyed[destroyed.size() - 1]
+        : destroyed.join(\",\"));
+";
+        return code;
+    }
+
+    #! The array cleanup path must actually be taken for a body of this size.
+    testArrayCleanupSelected() {
+        string out = runScript(getCode(BodySize, -1), "jit", "QORE_IR_OPT_STATS=1");
+        assertRegex("IR-OPT-LLVM: array-local-cleanup locals=[0-9]+ exit-edges=[0-9]+", out,
+            "a large body routes IR-only local cleanup through the runtime helper");
+    }
+
+    #! A body that never trips the budget must keep the inline per-local cleanup.
+    testSmallBodyKeepsInlineCleanup() {
+        string out = runScript(getCode(2, -1), "jit", "QORE_IR_OPT_STATS=1");
+        assertFalse(out =~ /array-local-cleanup/,
+            "a small body keeps its locals promotable to SSA");
+    }
+
+    #! Normal exit: array cleanup, inline cleanup and the AST tier must agree.
+    testLargeBodyNormalExit() {
+        string code = getCode(BodySize, -1);
+        string expected = runResult(code, "ast");
+        assertRegex("^rv:-?[0-9]+ destroyed:" + BodySize + " ", expected,
+            "the AST tier destroys every local exactly once");
+        assertEq(expected, runResult(code, "jit"),
+            "array cleanup matches the AST tier on the normal exit path");
+        assertEq(expected, runResult(code, "jit", "QORE_JIT_CLEANUP_PHI_BUDGET=0"),
+            "inline cleanup matches the AST tier on the normal exit path");
+    }
+
+    #! Exception exit: this is the path through the shared error-return block.
+    testLargeBodyExceptionExit() {
+        string code = getCode(BodySize, BodySize / 2);
+        string expected = runResult(code, "ast");
+        assertRegex("^rv:-1 destroyed:" + (BodySize / 2 + 1) + " ", expected,
+            "the AST tier destroys exactly the locals created before the throw");
+        assertEq(expected, runResult(code, "jit"),
+            "array cleanup matches the AST tier on the exception exit path");
+        assertEq(expected, runResult(code, "jit", "QORE_JIT_CLEANUP_PHI_BUDGET=0"),
+            "inline cleanup matches the AST tier on the exception exit path");
+        assertEq(expected, runResult(code, "ir"),
+            "the IR tier matches the AST tier on the exception exit path");
+    }
+
+    #! Destruction order is observable through destructors and must not change.
+    testLargeBodyDestructionOrder() {
+        foreach int fail_at in (-1, 0, BodySize - 1) {
+            string code = getCode(BodySize, fail_at);
+            string expected = runResult(code, "ast");
+            assertEq(expected, runResult(code, "jit"),
+                sprintf("array cleanup preserves destruction order (fail_at=%d)", fail_at));
+            assertEq(expected, runResult(code, "jit", "QORE_JIT_CLEANUP_PHI_BUDGET=0"),
+                sprintf("inline cleanup preserves destruction order (fail_at=%d)", fail_at));
+        }
+    }
+
+    private string runScript(string code, *string exec_mode, *string env) {
+        string mode = exec_mode ?? "jit";
+        # .qr implies %modern
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write(code);
+        tmp.file.close();
+        return backquote(sprintf("%s %s --enable-debug --exec-mode=%s %s 2>&1",
+            env ?? "", qore_bin, mode, tmp.path));
+    }
+
+    #! Returns only the result line, so the comparison cannot depend on the
+    #! temporary script path quoted in a parse warning.
+    private string runResult(string code, *string exec_mode, *string env) {
+        foreach string line in (runScript(code, exec_mode, env).split("\n")) {
+            if (line =~ /^rv:/) {
+                return trim(line);
+            }
+        }
+        throw "NO-RESULT", sprintf("no result line in output: %y",
+            runScript(code, exec_mode, env));
+    }
+}
