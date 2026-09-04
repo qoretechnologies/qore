@@ -1463,6 +1463,11 @@ void QoreIRToLLVM::declareRuntimeHelpers(llvm::Module& module) {
     // cleanup_run_allocas: (ptr, i32, ptr) -> void
     module.getOrInsertFunction("qore_rt_cleanup_run_allocas",
             llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type}, false));
+    // reload-chain flush helpers: (ptr, ptr, ptr) -> void and (ptr, ptr) -> void
+    module.getOrInsertFunction("qore_rt_reload_chain_rotate",
+        llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
+    module.getOrInsertFunction("qore_rt_reload_chain_clear",
+        llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
     // reload_local_if_stale: (ptr, ptr, ptr, ptr, ptr, i64, ptr) -> void
     module.getOrInsertFunction("qore_rt_reload_local_if_stale",
             llvm::FunctionType::get(void_type,
@@ -2645,11 +2650,95 @@ size_t QoreIRToLLVM::getCleanupPhiBudget() {
     return budget;
 }
 
-bool QoreIRToLLVM::prepareOwnedIrLocalCleanupArray(llvm::Function* llvm_func,
+bool QoreIRToLLVM::prepareIteratorCleanupArray(llvm::Function* llvm_func, size_t exits) {
+    iterator_cleanup_array = nullptr;
+    iterator_cleanup_array_count = 0;
+    const size_t count = iterator_cleanup_allocas.size();
+    const size_t budget = getCleanupPhiBudget();
+    if (!llvm_func || !budget || !count || !exits) {
+        return false;
+    }
+    if (count > static_cast<size_t>(std::numeric_limits<unsigned>::max())) {
+        return false;
+    }
+    if (exits <= budget / count) {
+        // overflow-safe form of (count * exits <= budget)
+        return false;
+    }
+    llvm::BasicBlock& entry = llvm_func->getEntryBlock();
+    llvm::Instruction* term = qoreGetTerminator(entry);
+    if (!term) {
+        return false;
+    }
+    // Emitted in the entry block, after every iterator slot it refers to.
+    llvm::IRBuilder<> ab(term);
+    llvm::AllocaInst* array = ab.CreateAlloca(ptr_type,
+            llvm::ConstantInt::get(i32_type, static_cast<unsigned>(count)),
+            "iterator_cleanup_slots");
+    // qore_rt_iterator_cleanup_allocas() walks the array forwards, matching the
+    // order of the inline sequence it replaces.
+    for (size_t i = 0; i < count; ++i) {
+        if (i && !(i % 100)
+                && qore_check_cancel(nullptr, "JIT iterator cleanup slot registration")) {
+            // the stores written so far address a slot array nothing reads
+            iterator_cleanup_array = nullptr;
+            iterator_cleanup_array_count = 0;
+            return false;
+        }
+        llvm::Value* gep = ab.CreateGEP(ptr_type, array,
+                llvm::ConstantInt::get(i32_type, static_cast<unsigned>(i)),
+                "iterator_cleanup_slot_ptr");
+        ab.CreateStore(iterator_cleanup_allocas[i], gep);
+    }
+    iterator_cleanup_array = array;
+    iterator_cleanup_array_count = static_cast<unsigned>(count);
+    if (getenv("QORE_IR_OPT_STATS")) {
+        fprintf(stderr, "IR-OPT-LLVM: array-iterator-cleanup iterators=%zu exits=%zu\n",
+            count, exits);
+    }
+    return true;
+}
+
+size_t QoreIRToLLVM::getReloadChainCallThreshold() {
+    static const size_t threshold = []() -> size_t {
+        constexpr size_t default_threshold = 32;
+        const char* env = getenv("QORE_JIT_RELOAD_CHAIN_CALL_THRESHOLD");
+        if (!env || !*env) {
+            return default_threshold;
+        }
+        char* end = nullptr;
+        unsigned long long value = strtoull(env, &end, 10);
+        if (!end || end == env || *end
+                || value > static_cast<unsigned long long>(
+                    std::numeric_limits<size_t>::max())) {
+            return default_threshold;
+        }
+        // 0 disables the helper form entirely
+        return value ? static_cast<size_t>(value)
+            : std::numeric_limits<size_t>::max();
+    }();
+    return threshold;
+}
+
+std::vector<llvm::AllocaInst*> QoreIRToLLVM::getBoxedExitCleanupSlots() const {
+    std::vector<llvm::AllocaInst*> slots;
+    slots.reserve(preinstantiated_entry_cleanup_allocas.size()
+        + fast_entry_param_allocas.size() + owned_ir_local_allocas.size());
+    slots.insert(slots.end(), preinstantiated_entry_cleanup_allocas.begin(),
+        preinstantiated_entry_cleanup_allocas.end());
+    slots.insert(slots.end(), fast_entry_param_allocas.begin(),
+        fast_entry_param_allocas.end());
+    slots.insert(slots.end(), owned_ir_local_allocas.begin(),
+        owned_ir_local_allocas.end());
+    return slots;
+}
+
+bool QoreIRToLLVM::prepareBoxedExitCleanupArray(llvm::Function* llvm_func,
         size_t exit_edges) {
-    local_cleanup_array = nullptr;
-    local_cleanup_array_count = 0;
-    const size_t count = owned_ir_local_allocas.size();
+    boxed_exit_cleanup_array = nullptr;
+    boxed_exit_cleanup_array_count = 0;
+    const std::vector<llvm::AllocaInst*> slots = getBoxedExitCleanupSlots();
+    const size_t count = slots.size();
     const size_t budget = getCleanupPhiBudget();
     if (!llvm_func || !budget || !count || !exit_edges) {
         return false;
@@ -2684,20 +2773,20 @@ bool QoreIRToLLVM::prepareOwnedIrLocalCleanupArray(llvm::Function* llvm_func,
                 && qore_check_cancel(nullptr, "JIT local cleanup slot registration")) {
             // the stores written so far address a slot array nothing reads, so
             // dropping the array here leaves the inline per-local cleanup intact
-            local_cleanup_array = nullptr;
-            local_cleanup_array_count = 0;
+            boxed_exit_cleanup_array = nullptr;
+            boxed_exit_cleanup_array_count = 0;
             return false;
         }
         llvm::Value* gep = ab.CreateGEP(ptr_type, array,
                 llvm::ConstantInt::get(i32_type,
                     static_cast<unsigned>(count - 1 - i)),
                 "local_cleanup_slot_ptr");
-        ab.CreateStore(owned_ir_local_allocas[i], gep);
+        ab.CreateStore(slots[i], gep);
     }
-    local_cleanup_array = array;
-    local_cleanup_array_count = static_cast<unsigned>(count);
+    boxed_exit_cleanup_array = array;
+    boxed_exit_cleanup_array_count = static_cast<unsigned>(count);
     if (getenv("QORE_IR_OPT_STATS")) {
-        fprintf(stderr, "IR-OPT-LLVM: array-local-cleanup locals=%zu exit-edges=%zu\n",
+        fprintf(stderr, "IR-OPT-LLVM: array-exit-cleanup slots=%zu exit-edges=%zu\n",
             count, exit_edges);
     }
     return true;
@@ -2904,6 +2993,21 @@ void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module) {
         builder->CreateCall(helper, {entry_val, xsink_arg});
     }
 
+    // prepareBoxedExitCleanupArray() replaces the three per-slot triple loops
+    // below with a single runtime call for functions where repeating them at the
+    // shared cleanup block would need one PHI per slot for every edge into it.
+    // The entry loads above stay inline: they are entry-block values, identical on
+    // every edge, so they never need a PHI.
+    if (boxed_exit_cleanup_array) {
+        auto run_helper = module.getOrInsertFunction("qore_rt_cleanup_run_allocas",
+                llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type},
+                    false));
+        builder->CreateCall(run_helper, {boxed_exit_cleanup_array,
+                llvm::ConstantInt::get(i32_type, boxed_exit_cleanup_array_count),
+                xsink_arg});
+        return;
+    }
+
     // Boxed pre-instantiated entry loads use cleanup slots so lvalue mutation
     // can clear them before function exit.  If already cleared, this is a no-op.
     for (llvm::AllocaInst* alloca : preinstantiated_entry_cleanup_allocas) {
@@ -2926,24 +3030,12 @@ void QoreIRToLLVM::emitPreinstantiatedCleanup(llvm::Module& module) {
     }
 
     // Boxed IR-only locals not represented on the runtime stack own their
-    // current alloca value directly.  prepareOwnedIrLocalCleanupArray() switches
-    // this to a single runtime call for functions where the per-local triples
-    // would need one PHI per local for every edge into the shared cleanup block.
-    if (local_cleanup_array
-            && local_cleanup_array_count == owned_ir_local_allocas.size()) {
-        auto run_helper = module.getOrInsertFunction("qore_rt_cleanup_run_allocas",
-                llvm::FunctionType::get(void_type, {ptr_type, i32_type, ptr_type},
-                    false));
-        builder->CreateCall(run_helper, {local_cleanup_array,
-                llvm::ConstantInt::get(i32_type, local_cleanup_array_count),
-                xsink_arg});
-    } else {
-        for (llvm::AllocaInst* alloca : owned_ir_local_allocas) {
-            llvm::Value* val = builder->CreateLoad(i64_type, alloca);
-            builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
-                    alloca);
-            builder->CreateCall(helper, {val, xsink_arg});
-        }
+    // current alloca value directly.
+    for (llvm::AllocaInst* alloca : owned_ir_local_allocas) {
+        llvm::Value* val = builder->CreateLoad(i64_type, alloca);
+        builder->CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING),
+                alloca);
+        builder->CreateCall(helper, {val, xsink_arg});
     }
 }
 
@@ -3088,8 +3180,31 @@ void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
     // turns each unmatched flush into a no-op for the chain, preserving the
     // value until either a real reload site rotates a new value through or
     // the function-exit cleanup runs.
+    // Emitting the NOTHING test inline costs two basic blocks per tracked local at
+    // every temp boundary, so a function with many locals and many call sites pays
+    // (locals x boundaries) blocks -- the reflection test's 1621-line method reached
+    // 88062 rotations, 95% of its 184933 basic blocks, and could not be
+    // code-generated in minutes.  Above the threshold the identical test and
+    // rotation run in the runtime helper instead, which emits one call and no extra
+    // block.  Small functions keep the inline form so LLVM can fold it.
+    const bool use_flush_helpers = (local_reload_trackers.size()
+        + local_reload_deferred.size()) >= getReloadChainCallThreshold();
+    llvm::FunctionCallee rotate_helper;
+    llvm::FunctionCallee clear_helper;
+    if (use_flush_helpers) {
+        rotate_helper = module.getOrInsertFunction("qore_rt_reload_chain_rotate",
+                llvm::FunctionType::get(void_type, {ptr_type, ptr_type, ptr_type}, false));
+        clear_helper = module.getOrInsertFunction("qore_rt_reload_chain_clear",
+                llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false));
+    }
+
     auto rotate_or_skip = [&](llvm::Value* tracker_alloca,
             llvm::Value* deferred_alloca) {
+        if (use_flush_helpers) {
+            builder->CreateCall(rotate_helper,
+                    {tracker_alloca, deferred_alloca, xsink_arg});
+            return;
+        }
         llvm::Value* tracker_val = builder->CreateLoad(i64_type, tracker_alloca);
         llvm::Value* is_set = builder->CreateICmpNE(tracker_val, i64_nothing,
                 "tracker_has_value");
@@ -3114,6 +3229,10 @@ void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
             // No deferred slot — gate the decref on tracker_val != NOTHING so
             // an empty tracker is a no-op (matches the rotation-path
             // behavior above).
+            if (use_flush_helpers) {
+                builder->CreateCall(clear_helper, {tracker_alloca, xsink_arg});
+                continue;
+            }
             llvm::Value* tracker_val = builder->CreateLoad(i64_type, tracker_alloca);
             llvm::Value* is_set = builder->CreateICmpNE(tracker_val, i64_nothing,
                     "tracker_has_value_noslot");
@@ -3138,6 +3257,10 @@ void QoreIRToLLVM::flushLocalReloadStateAtTempBoundary(llvm::Module& module) {
         (void)key;
         if (local_reload_trackers.find(key) != local_reload_trackers.end()) {
             // Already rotated above; skip to avoid double-decref.
+            continue;
+        }
+        if (use_flush_helpers) {
+            builder->CreateCall(clear_helper, {deferred_alloca, xsink_arg});
             continue;
         }
         llvm::Value* deferred_val = builder->CreateLoad(i64_type, deferred_alloca);
@@ -3225,6 +3348,17 @@ void QoreIRToLLVM::registerPersistentCleanupAlloca(llvm::Value* alloca_ptr) {
 
 void QoreIRToLLVM::emitIteratorCleanup(llvm::Module& module) {
     if (iterator_cleanup_allocas.empty()) {
+        return;
+    }
+    // prepareIteratorCleanupArray() switches this to a single runtime call for
+    // functions where repeating the sequence at every exit would need one PHI per
+    // iterator for every one of those exits.
+    if (iterator_cleanup_array
+            && iterator_cleanup_array_count == iterator_cleanup_allocas.size()) {
+        auto run_helper = module.getOrInsertFunction("qore_rt_iterator_cleanup_allocas",
+                llvm::FunctionType::get(void_type, {ptr_type, i32_type}, false));
+        builder->CreateCall(run_helper, {iterator_cleanup_array,
+                llvm::ConstantInt::get(i32_type, iterator_cleanup_array_count)});
         return;
     }
     auto helper = module.getOrInsertFunction("qore_rt_iterator_cleanup",
@@ -9694,8 +9828,10 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     invoke_result_allocas.clear();
     persistent_cleanup_allocas.clear();
     temp_cleanup_marks.clear();
-    local_cleanup_array = nullptr;
-    local_cleanup_array_count = 0;
+    boxed_exit_cleanup_array = nullptr;
+    boxed_exit_cleanup_array_count = 0;
+    iterator_cleanup_array = nullptr;
+    iterator_cleanup_array_count = 0;
     invoke_cleanup_array = nullptr;
     invoke_cleanup_array_capacity = estimateInvokeCleanupArrayCapacity(func);
     invoke_cleanup_array_count = 0;
@@ -11535,14 +11671,42 @@ bool QoreIRToLLVM::lowerFunction(const QoreIRFunction& func, llvm::Module& modul
     // Finalize the error return block (if used): fire on_block_exit handlers and
     // clean up before returning NOTHING for boxed entries or a neutral native
     // scalar for fast entries.  ExceptionSink remains authoritative.
+    // Choose how iterator cleanup is emitted before any exit writes it.  The
+    // sequence is written once per return/resume by emitLateExitCleanup() and once
+    // in the shared error-return block, and SimplifyCFG later merges all of those
+    // into one common return -- so the number of PHIs each iterator needs there is
+    // driven by the edges reaching those sites, not by the handful of ret
+    // instructions the lowered IR contains.
+    {
+        size_t exit_edges = 0;
+        size_t scanned = 0;
+        for (llvm::BasicBlock& bb : *llvm_func) {
+            if (++scanned % 100 == 0
+                    && qore_check_cancel(nullptr, "JIT iterator cleanup exit scan")) {
+                break;
+            }
+            llvm::Instruction* term = qoreGetTerminator(bb);
+            if (term && (llvm::isa<llvm::ReturnInst>(term)
+                    || llvm::isa<llvm::ResumeInst>(term))) {
+                ++exit_edges;
+            }
+        }
+        if (error_return_block) {
+            exit_edges += static_cast<size_t>(std::distance(
+                llvm::pred_begin(error_return_block),
+                llvm::pred_end(error_return_block)));
+        }
+        prepareIteratorCleanupArray(llvm_func, exit_edges);
+    }
+
     if (error_return_block) {
-        // Choose how IR-only local cleanup is emitted before writing any of it:
+        // Choose how boxed exit cleanup is emitted before writing any of it:
         // every exception and thread-exit check in the function branches here, so
         // with many locals the inline per-local triples need one PHI per local for
         // every one of those edges, and PHI elimination then expands each into a
         // COPY.  That product is what makes LLVM's register coalescer and
         // allocator superlinear on large function bodies.
-        prepareOwnedIrLocalCleanupArray(llvm_func,
+        prepareBoxedExitCleanupArray(llvm_func,
                 static_cast<size_t>(std::distance(
                     llvm::pred_begin(error_return_block),
                     llvm::pred_end(error_return_block))));

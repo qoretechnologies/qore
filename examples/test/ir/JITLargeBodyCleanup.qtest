@@ -47,6 +47,8 @@ class JITLargeBodyCleanupTest inherits QUnit::Test {
         addTestCase("large body exception exit", \testLargeBodyExceptionExit());
         addTestCase("large body destruction order", \testLargeBodyDestructionOrder());
         addTestCase("small body keeps inline cleanup", \testSmallBodyKeepsInlineCleanup());
+        addTestCase("many iterators use array cleanup", \testIteratorCleanupArray());
+        addTestCase("many locals use reload-chain helpers", \testReloadChainHelpers());
         set_return_value(main());
     }
 
@@ -103,14 +105,14 @@ printf(\"rv:%d destroyed:%d order:%s\\n\", rv, destroyed.size(),
     #! The array cleanup path must actually be taken for a body of this size.
     testArrayCleanupSelected() {
         string out = runScript(getCode(BodySize, -1), "jit", "QORE_IR_OPT_STATS=1");
-        assertRegex("IR-OPT-LLVM: array-local-cleanup locals=[0-9]+ exit-edges=[0-9]+", out,
+        assertRegex("IR-OPT-LLVM: array-exit-cleanup slots=[0-9]+ exit-edges=[0-9]+", out,
             "a large body routes IR-only local cleanup through the runtime helper");
     }
 
     #! A body that never trips the budget must keep the inline per-local cleanup.
     testSmallBodyKeepsInlineCleanup() {
         string out = runScript(getCode(2, -1), "jit", "QORE_IR_OPT_STATS=1");
-        assertFalse(out =~ /array-local-cleanup/,
+        assertFalse(out =~ /array-exit-cleanup/,
             "a small body keeps its locals promotable to SSA");
     }
 
@@ -150,6 +152,50 @@ printf(\"rv:%d destroyed:%d order:%s\\n\", rv, destroyed.size(),
             assertEq(expected, runResult(code, "jit", "QORE_JIT_CLEANUP_PHI_BUDGET=0"),
                 sprintf("inline cleanup preserves destruction order (fail_at=%d)", fail_at));
         }
+    }
+
+    #! Builds a body with many iterator loops and many exception-check edges.
+    private string getIteratorCode(int size) {
+        string code = "%modern
+
+int sub big(int seed) {
+    int acc = seed;
+    list<int> data = (1, 2, 3);
+";
+        for (int i = 0; i < size; ++i) {
+            code += sprintf("    foreach auto v%d in (data.iterator()) { acc += v%d + %d; }\n", i, i, i);
+            code += sprintf("    acc += sprintf(\"%%%%d\", acc).size();\n");
+        }
+        code += "    return acc;
+}
+
+printf(\"rv:%d\\n\", big(1));
+";
+        return code;
+    }
+
+    #! Iterator cleanup is repeated at every exit, so it needs the same treatment.
+    testIteratorCleanupArray() {
+        string code = getIteratorCode(60);
+        string out = runScript(code, "jit", "QORE_IR_OPT_STATS=1");
+        assertRegex("IR-OPT-LLVM: array-iterator-cleanup iterators=[0-9]+ exits=[0-9]+", out,
+            "many iterators route cleanup through the runtime helper");
+        string expected = runResult(code, "ast");
+        assertEq(expected, runResult(code, "jit"),
+            "array iterator cleanup matches the AST tier");
+        assertEq(expected, runResult(code, "jit", "QORE_JIT_CLEANUP_PHI_BUDGET=0"),
+            "inline iterator cleanup matches the AST tier");
+    }
+
+    #! The temp-boundary reload-chain flush must behave identically either way.
+    testReloadChainHelpers() {
+        string code = getCode(BodySize, -1);
+        string expected = runResult(code, "ast");
+        assertEq(expected, runResult(code, "jit"),
+            "reload-chain helper calls match the AST tier");
+        assertEq(expected, runResult(code, "jit",
+                "QORE_JIT_RELOAD_CHAIN_CALL_THRESHOLD=0"),
+            "inline reload-chain branches match the AST tier");
     }
 
     private string runScript(string code, *string exec_mode, *string env) {

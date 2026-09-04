@@ -283,16 +283,47 @@ without the LLVM optimizer, where the slots stay in memory, code-generated in
 0.7 seconds, which is what identifies the cleanup shape rather than the function
 size as the cause.
 
-`QoreIRToLLVM::prepareOwnedIrLocalCleanupArray()` measures both factors at
-function finalization — `owned_ir_local_allocas.size()` and the predecessor count
+This is the same shape clang avoids in its own EH cleanups: clang keeps cleanup
+state addressed through memory (`cleanup.dest.slot`, destructor objects
+referenced by their alloca address) and emits each cleanup once, so no
+cleanup-referenced value ever becomes a promoted SSA value needing a PHI per
+exit. Qore now does the same thing where it matters.
+
+`QoreIRToLLVM::prepareBoxedExitCleanupArray()` measures both factors at function
+finalization — the number of boxed exit-cleanup slots and the predecessor count
 of `error_return_block` — and, only when their product exceeds
 `getCleanupPhiBudget()` (`QORE_JIT_CLEANUP_PHI_BUDGET`, default 4096), records
 the slot addresses in an entry-block array and replaces the whole triple
 sequence with a single `qore_rt_cleanup_run_allocas()` call. Taking the slot
 addresses keeps them in memory, so no PHI is needed and code generation stays
-linear. Every function below the budget — which is every ordinary function —
-keeps the inline triples and full SSA promotion of its locals, so the trade-off
-is confined to bodies where promotion could not pay off anyway.
+linear. The slot set is everything `emitPreinstantiatedCleanup()` releases, in
+emission order: pre-instantiated entry cleanup slots, fast-entry parameter
+slots, then the IR-only locals that own their value directly — covering only one
+of the three leaves the other two to rebuild the same web. Every function below
+the budget — which is every ordinary function — keeps the inline triples and
+full SSA promotion of its slots, so the trade-off is confined to bodies where
+promotion could not pay off anyway.
+
+`prepareIteratorCleanupArray()` applies the identical treatment to
+`iterator_cleanup_allocas` and `qore_rt_iterator_cleanup_allocas()`. Iterator
+cleanup is written both in the shared error-return block and, by
+`emitLateExitCleanup()`, at every `ret`/`resume`, so its multiplier is the same
+edge count.
+
+A third instance of the pattern lives on the temp-boundary path.
+`flushLocalReloadStateAtTempBoundary()` emitted a two-block NOTHING test per
+tracked local at *every* temp boundary, so a function paid
+`tracked locals x temp boundaries` basic blocks: the reflection test's
+1621-line `namedCallReflectionTests()` reached 88062 rotations — 95% of its
+184933 basic blocks and 74% of its instructions, before the optimizer ran at
+all — and could not be code-generated in half an hour. Above
+`getReloadChainCallThreshold()` (`QORE_JIT_RELOAD_CHAIN_CALL_THRESHOLD`, default
+32 tracked locals) the same test and rotation run inside
+`qore_rt_reload_chain_rotate()` / `qore_rt_reload_chain_clear()`, which emits one
+call and no extra block. Smaller functions keep the inline form so LLVM can fold
+it away.
+
+Together these took that method from an unbounded hang to 29s.
 
 Two details matter for correctness. The runtime helper releases slots in LIFO
 order, so the addresses are stored in reverse and the values are released in

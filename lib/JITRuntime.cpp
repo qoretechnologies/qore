@@ -365,6 +365,9 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
         reinterpret_cast<void*>(&qore_rt_raise_typed_foreach_nothing) },
     { "qore_rt_load_local_aot", reinterpret_cast<void*>(&qore_rt_load_local_aot) },
     { "qore_rt_cleanup_run_allocas", reinterpret_cast<void*>(&qore_rt_cleanup_run_allocas) },
+    { "qore_rt_iterator_cleanup_allocas", reinterpret_cast<void*>(&qore_rt_iterator_cleanup_allocas) },
+    { "qore_rt_reload_chain_rotate", reinterpret_cast<void*>(&qore_rt_reload_chain_rotate) },
+    { "qore_rt_reload_chain_clear", reinterpret_cast<void*>(&qore_rt_reload_chain_clear) },
     { "qore_rt_reload_local_if_stale", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale) },
     { "qore_rt_reload_local_if_stale_aot", reinterpret_cast<void*>(&qore_rt_reload_local_if_stale_aot) },
     { "qore_rt_assign_local_aot", reinterpret_cast<void*>(&qore_rt_assign_local_aot) },
@@ -1015,6 +1018,61 @@ extern "C" DLLEXPORT void qore_rt_cleanup_run_allocas(uint64_t** alloca_ptrs, in
         *slot = 0;
         v.discard(xsink);
     }
+}
+
+//! Release every active iterator recorded in an array of cleanup slots.
+/** Mirrors the inline sequence QoreIRToLLVM::emitIteratorCleanup() emits per
+    iterator (load the slot, release it, clear the slot), in the same order.
+    emitLateExitCleanup() repeats that sequence at every return and resume in the
+    function, so once SROA promotes the slots each iterator needs a PHI at the
+    merged common return for every exit -- (iterators x exits) PHI operands.
+    Passing the slot addresses to this helper keeps them in memory, so the whole
+    sequence is one call and no PHI is required.
+*/
+extern "C" DLLEXPORT void qore_rt_iterator_cleanup_allocas(void*** slots, int32_t count) {
+    for (int32_t i = 0; i < count; ++i) {
+        void** slot = slots[i];
+        void* iter = *slot;
+        qore_rt_iterator_cleanup(iter);
+        *slot = nullptr;
+    }
+}
+
+//! Rotate one local reload-chain entry at a temp boundary.
+/** Mirrors the inline sequence QoreIRToLLVM::flushLocalReloadStateAtTempBoundary()
+    emits per tracked local: when the tracker holds a value, move it into the
+    deferred slot and release whatever the deferred slot held.  Doing the
+    NOTHING test here instead of in generated code removes two basic blocks per
+    tracked local per temp boundary; a function with many locals and many call
+    sites otherwise pays (locals x boundaries) blocks, which is what makes LLVM's
+    code generation superlinear on very large function bodies.
+*/
+extern "C" DLLEXPORT void qore_rt_reload_chain_rotate(uint64_t* tracker, uint64_t* deferred,
+        ExceptionSink* xsink) {
+    const uint64_t tracker_bits = *tracker;
+    if (tracker_bits == 0) {
+        // an empty tracker must not pump the deferred slot's reference off the chain
+        return;
+    }
+    const uint64_t old_deferred = *deferred;
+    *tracker = 0;
+    *deferred = tracker_bits;
+    QoreValue v = fromBits(old_deferred);
+    v.discard(xsink);
+}
+
+//! Clear one local reload-chain slot at a temp boundary.
+/** The tracker-only and deferred-only halves of the same flush; see
+    qore_rt_reload_chain_rotate() for why the test lives here.
+*/
+extern "C" DLLEXPORT void qore_rt_reload_chain_clear(uint64_t* slot, ExceptionSink* xsink) {
+    const uint64_t bits = *slot;
+    if (bits == 0) {
+        return;
+    }
+    *slot = 0;
+    QoreValue v = fromBits(bits);
+    v.discard(xsink);
 }
 
 //! Run all cleanup actions (decref all tracked values) and free the array.
