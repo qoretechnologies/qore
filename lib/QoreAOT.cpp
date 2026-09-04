@@ -1978,6 +1978,13 @@ enum class AOTMetadataCompressionPolicy {
     SectionedZstd,
 };
 
+// Auto sectioning is only worth evaluating when it can avoid eagerly
+// decompressing a substantial runtime-unused section. The final selection
+// below still caps the compressed metadata size premium.
+static constexpr uint32_t AOT_AUTO_SECTIONED_SYMBOL_INDEX_MIN = 512 * 1024;
+static constexpr uint32_t AOT_AUTO_SECTIONED_DEBUG_IR_MIN = 128 * 1024;
+static constexpr size_t AOT_AUTO_SECTIONED_SIZE_PREMIUM_PERCENT = 20;
+
 static AOTMetadataCompressionPolicy getAOTMetadataCompressionPolicy() {
     const char* mode = getenv("QORE_AOT_METADATA_COMPRESSION");
     if (!mode || !*mode || !strcmp(mode, "auto")) {
@@ -2190,7 +2197,10 @@ static void finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool 
     std::vector<uint8_t> sectioned_candidate;
     bool sectioned_candidate_ready = false;
     if (policy == AOTMetadataCompressionPolicy::Auto
-            && getAOTMetadataSectionSize(metadata, QoreAOTSectionType::SYMBOL_INDEX) >= 512 * 1024) {
+            && (getAOTMetadataSectionSize(metadata, QoreAOTSectionType::SYMBOL_INDEX)
+                    >= AOT_AUTO_SECTIONED_SYMBOL_INDEX_MIN
+                || getAOTMetadataSectionSize(metadata, QoreAOTSectionType::DEBUG_IR)
+                    >= AOT_AUTO_SECTIONED_DEBUG_IR_MIN)) {
         sectioned_candidate = metadata;
         std::string sectioned_error;
         sectioned_candidate_ready = finalizeAOTSectionedMetadataCompression(
@@ -2207,11 +2217,12 @@ static void finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool 
         : compressMetadata(post_header, compressed_post, compress_error);
     if (compressed) {
         size_t compressed_total = AOT_HEADER_BYTES + compressed_post.size();
-        // Sectioned metadata avoids inflating a large linker-only symbol index
-        // during runtime load. Bound its metadata-size premium to 15% so auto
+        // Sectioned metadata avoids inflating linker-only symbols and debug IR
+        // during runtime load. Bound its metadata-size premium so auto
         // does not exchange disproportionate artifact growth for startup work.
         if (sectioned_candidate_ready
-                && sectioned_candidate.size() <= compressed_total + compressed_total * 15 / 100) {
+                && sectioned_candidate.size() <= compressed_total
+                    + compressed_total * AOT_AUTO_SECTIONED_SIZE_PREMIUM_PERCENT / 100) {
             if (report_metadata) {
                 printf(" (section-compressed to %zu bytes, %.1f%%)\n", sectioned_candidate.size(),
                     100.0 * sectioned_candidate.size() / metadata.size());
