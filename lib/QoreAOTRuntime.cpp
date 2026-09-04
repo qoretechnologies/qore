@@ -3366,6 +3366,44 @@ std::shared_ptr<const AotSymtab> getOrLoadSymtab(const char* path) {
     g_aot_symtab_cache[key] = st;  // cache negatives too
     return st;
 }
+
+//! Per-registration native-image cache.  All function pointers in one slot-map
+//! registration belong to the same linked artifact, so only the first one needs
+//! dladdr() to identify its file and load bias.  A thread-local scoped pointer
+//! keeps nested dependency/module registration independent and avoids retaining
+//! module handles or program state after registration finishes.
+struct AotPcArtifactCache {
+    bool resolved = false;
+    std::string path;
+    uintptr_t bias = 0;
+    std::shared_ptr<const AotSymMap> symmap;
+    std::shared_ptr<const AotSymtab> symtab;
+};
+
+thread_local AotPcArtifactCache* aot_pc_artifact_cache = nullptr;
+
+class AotPcArtifactCacheScope {
+public:
+    AotPcArtifactCacheScope() {
+        static const bool enabled = getenv("QORE_AOT_LOC_NO_ARTIFACT_CACHE") == nullptr;
+        if (enabled && aotLazyLocEnabled()) {
+            previous = aot_pc_artifact_cache;
+            aot_pc_artifact_cache = &cache;
+            active = true;
+        }
+    }
+
+    ~AotPcArtifactCacheScope() {
+        if (active) {
+            aot_pc_artifact_cache = previous;
+        }
+    }
+
+private:
+    AotPcArtifactCache cache;
+    AotPcArtifactCache* previous = nullptr;
+    bool active = false;
+};
 } // anonymous namespace
 
 // Attach the lazy PC->loc map for an AOT function to the global registry, resolving
@@ -3381,27 +3419,60 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
     if (!fn_ptr || !ctx || !ctx->locs || ctx->num_locs <= 0) {
         return;
     }
-    Dl_info info;
+    Dl_info info{};
     uintptr_t sym_size = 0;
-    // Require only fname/fbase: dli_sname/dli_saddr may be ABSENT for functions that
-    // exist solely in .symtab (AOT functions linked into an executable like qorus-core
-    // are not in .dynsym, which is all dladdr sees) — those are resolved via .symtab.
+    std::shared_ptr<const AotSymMap> symmap;
+    std::shared_ptr<const AotSymtab> stab;
+    const bool cached_artifact = aot_pc_artifact_cache && aot_pc_artifact_cache->resolved;
+    if (cached_artifact) {
+        if (aot_pc_artifact_cache->path.empty()) {
+            return;
+        }
+        info.dli_fname = aot_pc_artifact_cache->path.c_str();
+        info.dli_fbase = reinterpret_cast<void*>(aot_pc_artifact_cache->bias);
+        symmap = aot_pc_artifact_cache->symmap;
+        stab = aot_pc_artifact_cache->symtab;
+    } else {
+        // Require only fname/fbase: dli_sname/dli_saddr may be ABSENT for functions that
+        // exist solely in .symtab (AOT functions linked into an executable like qorus-core
+        // are not in .dynsym, which is all dladdr sees) — those are resolved via .symtab.
 #ifdef __GLIBC__
-    const ElfW(Sym)* sym = nullptr;
-    if (!dladdr1(reinterpret_cast<void*>(fn_ptr), &info, reinterpret_cast<void**>(
-            const_cast<ElfW(Sym)**>(&sym)), RTLD_DL_SYMENT)
-            || !info.dli_fname) {
-        return;
-    }
-    if (sym && sym->st_size) {
-        sym_size = static_cast<uintptr_t>(sym->st_size);
-    }
+        const ElfW(Sym)* sym = nullptr;
+        if (!dladdr1(reinterpret_cast<void*>(fn_ptr), &info, reinterpret_cast<void**>(
+                const_cast<ElfW(Sym)**>(&sym)), RTLD_DL_SYMENT)
+                || !info.dli_fname) {
+            return;
+        }
+        if (sym && sym->st_size) {
+            sym_size = static_cast<uintptr_t>(sym->st_size);
+        }
 #else
-    if (!dladdr(reinterpret_cast<void*>(fn_ptr), &info) || !info.dli_fname) {
-        return;
-    }
+        if (!dladdr(reinterpret_cast<void*>(fn_ptr), &info) || !info.dli_fname) {
+            return;
+        }
 #endif
-    std::shared_ptr<const AotSymMap> symmap = getOrLoadPcLocTrailer(info.dli_fname);
+        symmap = getOrLoadPcLocTrailer(info.dli_fname);
+        if (aot_pc_artifact_cache) {
+            aot_pc_artifact_cache->path = info.dli_fname;
+            aot_pc_artifact_cache->symmap = symmap;
+            if (symmap) {
+                // A static symbol table is required for address-to-symbol lookup once
+                // later functions skip dladdr().  If it is unavailable, leave this
+                // scope unresolved and preserve the original per-function path.
+                stab = getOrLoadSymtab(info.dli_fname);
+                aot_pc_artifact_cache->symtab = stab;
+                if (stab) {
+                    aot_pc_artifact_cache->bias = stab->is_et_dyn
+                        ? reinterpret_cast<uintptr_t>(info.dli_fbase) : 0;
+                    aot_pc_artifact_cache->resolved = true;
+                }
+            } else {
+                // Cache a missing trailer too: all pointers in this registration
+                // belong to the same artifact and would produce the same miss.
+                aot_pc_artifact_cache->resolved = true;
+            }
+        }
+    }
     if (!symmap) {
         if (getenv("QORE_AOT_LOC_DEBUG")) {
             fprintf(stderr, "AOT-LOC: no map for fname=%s sym=%s\n",
@@ -3429,7 +3500,9 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
         // spans the WHOLE function — a return address past the last mapped offset (e.g.
         // the throw call site) must stay in-range or lazy lookup misses and falls back
         // to the function's declaration line.
-        std::shared_ptr<const AotSymtab> stab = getOrLoadSymtab(info.dli_fname);
+        if (!stab) {
+            stab = getOrLoadSymtab(info.dli_fname);
+        }
         if (stab && !stab->syms.empty()) {
             uintptr_t bias = stab->is_et_dyn
                 ? reinterpret_cast<uintptr_t>(info.dli_fbase) : 0;
@@ -3449,7 +3522,9 @@ static void aotAttachPcLocMap(AotFunctionPtr fn_ptr, const QoreAOTContext* ctx) 
         }
     }
     if (!sym_entries) {
-        std::shared_ptr<const AotSymtab> stab = getOrLoadSymtab(info.dli_fname);
+        if (!stab) {
+            stab = getOrLoadSymtab(info.dli_fname);
+        }
         if (stab && !stab->syms.empty()) {
             uintptr_t bias = stab->is_et_dyn
                 ? reinterpret_cast<uintptr_t>(info.dli_fbase) : 0;
@@ -9205,6 +9280,10 @@ static void registerAOTFunctionsFromSlotMaps(
         AOTClosureRuntimeBindingMap* external_closure_bindings = nullptr,
         const QoreAOTBinaryDeserializer* deserialized_variants = nullptr,
         QoreProgram* local_owner_pgm = nullptr) {
+    // Function pointers in this registration come from one native image.  Cache
+    // its path, load bias, trailer, and symbol table after resolving the first
+    // function so the remaining functions avoid repeated dladdr() calls.
+    AotPcArtifactCacheScope pc_artifact_cache_scope;
     const bool use_resolution_cache = getenv("QORE_DISABLE_AOT_RESOLUTION_CACHE") == nullptr;
     AOTSlotResolutionCache resolution_cache{pgm};
     AOTSlotResolutionCacheScope resolution_cache_scope(use_resolution_cache ? &resolution_cache : nullptr);
