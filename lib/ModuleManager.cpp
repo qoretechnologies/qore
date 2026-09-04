@@ -1026,6 +1026,15 @@ int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& ws
     return xsink ? -1 : 0;
 }
 
+int QoreModuleManager::loadProviderModule(ExceptionSink& xsink, const char* name, QoreProgram* path_pgm) {
+    assert(name);
+    QoreModuleLoadLockHelper aot_init_al;
+    OptLocker ol(&mutex);
+    loadModuleIntern(xsink, xsink, name, nullptr, false, MOD_OP_NONE, nullptr, nullptr, nullptr,
+        QMLO_NONE, QP_WARN_MODULES, nullptr, path_pgm);
+    return xsink ? -1 : 0;
+}
+
 void QoreModuleManager::loadModuleForReexport(ExceptionSink& xsink, const char* name, QoreProgram* pgm) {
     OptLocker ol(&mutex);
     loadModuleIntern(xsink, xsink, name, pgm);
@@ -3059,8 +3068,24 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
     // as binary-module dependencies, and those must honor the importing
     // Program's %prepend-module-path / %append-module-path lists.
     if (!mod_info.dependencies.empty()) {
+        size_t dep_count = 0;
         for (std::string& dep : mod_info.dependencies) {
-            loadModuleIntern(xsink, xsink, dep.c_str(), path_pgm);
+            if (dep_count && !(dep_count % 10)
+                    && qore_check_cancel(&xsink, "binary module dependency loading")) {
+                return nullptr;
+            }
+            ++dep_count;
+            if (mod_info.is_aot) {
+                // The native loader needs these providers registered before the AOT object is reopened with
+                // RTLD_NOW, but importing them into the caller here is redundant. The generated AOT init imports
+                // the dependencies needed by the module's own Program, and addToProgram() later applies only the
+                // requested module (plus its explicit reexports) to the caller. Keep path_pgm solely as the
+                // module-search/parse-option context while loading the provider globally.
+                loadModuleIntern(xsink, xsink, dep.c_str(), nullptr, false, MOD_OP_NONE, nullptr, nullptr,
+                    nullptr, QMLO_NONE, QP_WARN_MODULES, nullptr, path_pgm);
+            } else {
+                loadModuleIntern(xsink, xsink, dep.c_str(), path_pgm);
+            }
             if (xsink) {
                 return nullptr;
             }

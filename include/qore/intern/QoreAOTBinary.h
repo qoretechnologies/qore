@@ -295,6 +295,7 @@ enum class QoreAOTSectionType : uint16_t {
     SYMBOL_INDEX         = 26,  //!< Optional versioned Qore/native symbol and dependency index
     CALL_RELOCATIONS     = 27,  //!< Optional direct-call slot relocation candidates
     DEBUG_IR             = 28,  //!< Lazy debugger IR payloads referenced by SLOT_MAPS entries
+    IMPORT_DEPENDENCIES  = 29,  //!< Direct module dependencies imported into an AOT module Program
 };
 
 //! Symbol kinds written to the optional SYMBOL_INDEX section.
@@ -1448,6 +1449,23 @@ void serializeDependencies(QoreAOTBinaryWriter& writer, const std::vector<std::s
 bool readDependencies(const uint8_t* data, uint32_t size, std::vector<std::string>& dependencies, std::string& error);
 bool readDependencies(const QoreAOTBinaryReader& reader, std::vector<std::string>& dependencies,
         std::string& error);
+
+//! Serialize direct namespace-import dependencies into the IMPORT_DEPENDENCIES section
+/** DEPENDENCIES contains every provider required by compiled metadata/code. This narrower list contains only
+    source-level module directives that succeeded at compile time and whose namespaces must be merged into the
+    AOT module's private Program.
+*/
+void serializeImportDependencies(QoreAOTBinaryWriter& writer,
+        const std::vector<std::string>& dependencies);
+
+//! Read the optional direct namespace-import dependency list
+/** @param present set to true when the metadata contains IMPORT_DEPENDENCIES; false selects legacy behavior
+    @return true on success or if the section is absent, false on corrupt data
+*/
+bool readImportDependencies(const QoreAOTBinaryReader& reader,
+        std::vector<std::string>& dependencies, bool& present, std::string& error);
+bool readImportDependencies(const uint8_t* data, uint32_t size,
+        std::vector<std::string>& dependencies, bool& present, std::string& error);
 
 //! Collect the set of source files that contributed user declarations to the
 //! program rooted at @p ns (used by the single-file `-L` preload to avoid

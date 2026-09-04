@@ -26299,11 +26299,24 @@ static void aotAddExplicitBuiltinDependency(std::vector<std::string>& deps,
     }
 }
 
+static bool aotProgramHasLoadedDependency(const qore_program_private* pp, const std::string& dep) {
+    if (dep == "debug") {
+        return true;
+    }
+    if (aotIsImplicitQoreFeature(dep)) {
+        return false;
+    }
+    return pp->featureList.find(dep) != pp->featureList.end()
+        || pp->userFeatureList.find(dep) != pp->userFeatureList.end();
+}
+
 static bool serializeProgramFeatureDependencies(QoreAOTBinaryWriter& writer,
         qore_program_private* pp, const char* cancel_context, const char* skip_feature,
         const std::vector<std::string>* explicit_deps) {
     std::vector<std::string> all_deps;
     std::unordered_set<std::string> dep_seen;
+    std::vector<std::string> import_deps;
+    std::unordered_set<std::string> import_seen;
 
     size_t i = 0;
     for (const auto& feat : pp->featureList) {
@@ -26326,10 +26339,14 @@ static bool serializeProgramFeatureDependencies(QoreAOTBinaryWriter& writer,
                 return false;
             }
             aotAddExplicitBuiltinDependency(all_deps, dep_seen, dep, skip_feature);
+            if (aotProgramHasLoadedDependency(pp, dep)) {
+                aotAddDependency(import_deps, import_seen, dep, skip_feature);
+            }
             ++i;
         }
     }
     serializeDependencies(writer, all_deps);
+    serializeImportDependencies(writer, import_deps);
     return true;
 }
 

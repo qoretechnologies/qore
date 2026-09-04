@@ -5617,6 +5617,8 @@ public namespace BuiltinFeatureDepTest {
         string dump_out = dumpQccInfo(qmod_path, False);
         assertTrue(dump_out.regex("dependencies:\\s+\\(none\\)"),
             "implicit Qore builtin features are not serialized as module dependencies: " + dump_out);
+        assertTrue(dump_out.regex("imports:\\s+\\(none\\)"),
+            "implicit Qore builtin features are not serialized as module imports: " + dump_out);
 
         string script_path = tmp_dir + "/run.qr";
         {
@@ -5667,6 +5669,8 @@ public namespace ExplicitDebugFeatureDepTest {
             string debug_dump_out = dumpQccInfo(debug_qmod_path, False);
             assertTrue(debug_dump_out.regex("dependencies:\\s+debug"),
                 "explicit %requires debug is serialized as a dependency: " + debug_dump_out);
+            assertTrue(debug_dump_out.regex("imports:\\s+debug"),
+                "explicit %requires debug is serialized as a module import: " + debug_dump_out);
         }
     }
 
@@ -6455,6 +6459,8 @@ public int sub ok() {
         string missing_dump = dumpQccInfo(missing_qmod, False);
         assertTrue(!missing_dump.regex(missing_feature),
             "failed %try-module dependency is not serialized as a hard qmod dependency: " + missing_dump);
+        assertTrue(missing_dump.regex("imports:\\s+\\(none\\)"),
+            "failed %try-module dependency is not serialized as a namespace import: " + missing_dump);
 
         string loaded_mod = "LoadedTry" + suffix;
         string loaded_qm = loaded_dir + "/" + loaded_mod + ".qm";
@@ -6480,6 +6486,8 @@ public int sub ok() {
         string loaded_dump = dumpQccInfo(loaded_qmod, False);
         assertTrue(loaded_dump.regex("\\bFsUtil\\b"),
             "successful %try-module dependency is serialized as a hard qmod dependency: " + loaded_dump);
+        assertTrue(loaded_dump.regex("imports:\\s+FsUtil"),
+            "successful %try-module dependency is serialized as a namespace import: " + loaded_dump);
     }
 
     testAOTModuleCompile() {

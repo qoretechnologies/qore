@@ -11373,6 +11373,66 @@ static bool aotRequiredDepUnavailable(const char* dep) {
     return !QMM.findModule(dep);
 }
 
+struct AOTDependencyLoadResult {
+    std::string dependency;
+    bool cancelled = false;
+
+    explicit operator bool() const {
+        return dependency.empty() && !cancelled;
+    }
+};
+
+//! Load AOT providers globally, then import only the source-level dependency surface
+/** Metadata without IMPORT_DEPENDENCIES takes the legacy path and imports every provider. */
+static AOTDependencyLoadResult aotLoadModuleDependencies(ExceptionSink& xsink,
+        const std::vector<std::string>& providers, const std::vector<std::string>& imports,
+        bool imports_present, QoreProgram* local_pgm) {
+    static const bool force_legacy_imports = getenv("QORE_AOT_LEGACY_IMPORT_ALL") != nullptr;
+    static const bool trace_dependencies = getenv("QORE_AOT_DEP_TRACE") != nullptr;
+    if (trace_dependencies) {
+        fprintf(stderr, "[aot-deps] providers=%zu imports=%zu mode=%s\n", providers.size(), imports.size(),
+            (!imports_present || force_legacy_imports) ? "legacy-import-all" : "provider/import-split");
+    }
+    AOTDependencyLoadResult result;
+    size_t count = 0;
+    auto load = [&](const std::vector<std::string>& deps, bool import) -> bool {
+        for (const std::string& dep : deps) {
+            if (count && !(count % 10)
+                    && qore_check_cancel(&xsink, "AOT module dependency loading")) {
+                result.cancelled = true;
+                xsink.clear();
+                return false;
+            }
+            ++count;
+            if (trace_dependencies) {
+                fprintf(stderr, "[aot-deps] %s=%s\n", import ? "import" : "provider", dep.c_str());
+            }
+            int rc = import ? MM.runTimeLoadModule(&xsink, dep.c_str(), local_pgm)
+                : QMM.loadProviderModule(xsink, dep.c_str(), local_pgm);
+            if (rc >= 0 && !xsink) {
+                continue;
+            }
+            xsink.clear();
+            if (aotRequiredDepUnavailable(dep.c_str())) {
+                result.dependency = dep;
+                return false;
+            }
+            // A circular/in-progress dependency is registered in the module map and is resolved later.
+        }
+        return true;
+    };
+
+    if (!imports_present || force_legacy_imports) {
+        load(providers, true);
+        return result;
+    }
+    if (!load(providers, false)) {
+        return result;
+    }
+    load(imports, true);
+    return result;
+}
+
 extern "C" DLLEXPORT int qore_aot_run_v2(
     int argc, char** argv,
     const uint8_t* metadata, int metadata_len,
@@ -13662,6 +13722,17 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
     }
+    std::vector<std::string> import_deps;
+    bool import_deps_present = false;
+    if (!readImportDependencies(metadata, static_cast<uint32_t>(metadata_len), import_deps,
+            import_deps_present, dep_error)) {
+        QoreStringNode* err = new QoreStringNodeMaker(
+            "AOT module import dependency read error for module '%s' (%s): %s",
+            mod_name ? mod_name : "<unknown>",
+            (label && *label) ? label : "<unknown path>", dep_error.c_str());
+        local_pgm->waitForTerminationAndDeref(nullptr);
+        return err;
+    }
 
     // Read reexported module names from metadata
     std::vector<std::string> reexport_deps;
@@ -13672,37 +13743,28 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v2(
         // Non-fatal — continue without reexport info
     }
 
-    // Load each dependency module into this program.
-    // runTimeLoadModule will call addToProgram which imports the namespace.
-    //
-    // The dependency list reflects the modules loaded when the .qmod was compiled (including
-    // optional %try-module modules whose code was baked into the binary), so a genuinely-missing
-    // dependency is a hard error — see the matching loop in qore_aot_module_init_v3 for details.
-    for (const std::string& dep : deps) {
-        printd(5, "AOT module v2 '%s': loading dependency '%s'\n", mod_name, dep.c_str());
-        int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), local_pgm);
-        if (rc < 0 || xsink) {
-            xsink.clear();
-            if (aotRequiredDepUnavailable(dep.c_str())) {
-                // Genuinely missing (not a circular/in-progress load) — hard error.
-                printd(5, "AOT module v2 '%s': required dependency '%s' is unavailable\n",
-                    mod_name, dep.c_str());
-                QoreStringNode* err = new QoreStringNodeMaker(
-                    "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
-                    "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
-                    "and cannot be loaded without it",
-                    mod_name ? mod_name : "<unknown>",
-                    (label && *label) ? label : "<unknown path>", dep.c_str(), dep.c_str());
-                local_pgm->waitForTerminationAndDeref(nullptr);
-                return err;
-            }
-            // Circular dependency or other in-progress load - tolerate and continue.
-            printd(5, "AOT module v2 '%s': dependency '%s' load tolerated (rc=%d, module present)\n",
-                mod_name, dep.c_str(), rc);
+    AOTDependencyLoadResult load_result = aotLoadModuleDependencies(xsink, deps, import_deps,
+        import_deps_present, local_pgm);
+    if (!load_result) {
+        QoreStringNode* err;
+        if (load_result.cancelled) {
+            err = new QoreStringNodeMaker("AOT module '%s' (%s) dependency loading was cancelled",
+                mod_name ? mod_name : "<unknown>", (label && *label) ? label : "<unknown path>");
+        } else {
+            err = new QoreStringNodeMaker(
+                "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
+                "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
+                "and cannot be loaded without it",
+                mod_name ? mod_name : "<unknown>", (label && *label) ? label : "<unknown path>",
+                load_result.dependency.c_str(), load_result.dependency.c_str());
         }
+        local_pgm->waitForTerminationAndDeref(nullptr);
+        return err;
     }
 
-    printd(5, "AOT module v2 '%s': loaded %d dependencies\n", mod_name, (int)deps.size());
+    printd(5, "AOT module v2 '%s': loaded %d providers and imported %d dependencies%s\n", mod_name,
+        (int)deps.size(), (int)(import_deps_present ? import_deps.size() : deps.size()),
+        import_deps_present ? "" : " (legacy metadata)");
 
     // Deserialize namespace tree from metadata (replaces source parsing).
     // The metadata contains complete class/namespace structure.  Functions that were
@@ -15267,6 +15329,17 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         local_pgm->waitForTerminationAndDeref(nullptr);
         return err;
     }
+    std::vector<std::string> import_deps;
+    bool import_deps_present = false;
+    if (!readImportDependencies(metadata_reader, import_deps, import_deps_present, dep_error)) {
+        QoreStringNode* err = new QoreStringNodeMaker(
+            "AOT module import dependency read error for module '%s' (%s): %s",
+            mod_name ? mod_name : "<unknown>",
+            (module_context_path && *module_context_path) ? module_context_path : "<unknown path>",
+            dep_error.c_str());
+        local_pgm->waitForTerminationAndDeref(nullptr);
+        return err;
+    }
 
     // Read reexported module names from metadata
     std::vector<std::string> reexport_deps;
@@ -15277,47 +15350,29 @@ extern "C" DLLEXPORT QoreStringNode* qore_aot_module_init_v3(
         // Non-fatal — continue without reexport info
     }
 
-    // Load each dependency module into this program.
-    // runTimeLoadModule will call addToProgram which imports the namespace.
-    //
-    // The dependency list is built from the parsed program's feature lists at compile time
-    // (see serializeProgramFeatureDependencies()), so it lists exactly the modules that were loaded when the
-    // .qmod was compiled — including optional %try-module modules whose %ifndef-guarded code
-    // (e.g. json's make_json) was baked into the binary.  Such a module is therefore a hard
-    // runtime requirement: if it is genuinely unavailable the compiled function/type slots that
-    // reference it cannot be registered, which previously surfaced as a cryptic "unsupported AOT
-    // slot metadata" error.  Fail here with a clear message instead.
-    //
-    // A failed load is only tolerated for a circular/in-progress dependency, which is still
-    // registered in the module map.  AOT init runs outside the module-manager mutex, so the
-    // availability check uses the normal locking lookup.
-    for (const std::string& dep : deps) {
-        printd(5, "AOT module v3 '%s': loading dependency '%s'\n", mod_name, dep.c_str());
-        int rc = MM.runTimeLoadModule(&xsink, dep.c_str(), local_pgm);
-        if (rc < 0 || xsink) {
-            xsink.clear();
-            if (aotRequiredDepUnavailable(dep.c_str())) {
-                // Genuinely missing (not a circular/in-progress load) — hard error.
-                printd(5, "AOT module v3 '%s': required dependency '%s' is unavailable\n",
-                    mod_name, dep.c_str());
-                QoreStringNode* err = new QoreStringNodeMaker(
-                    "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
-                    "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
-                    "and cannot be loaded without it",
-                    mod_name ? mod_name : "<unknown>",
-                    module_context_desc.c_str(), dep.c_str(), dep.c_str());
-                local_pgm->waitForTerminationAndDeref(nullptr);
-                return err;
-            }
-            // Circular dependency or other in-progress load - tolerate and continue.
-            // The types might be resolved later when the requiring script is parsed.
-            printd(5, "AOT module v3 '%s': dependency '%s' load tolerated (rc=%d, module present)\n",
-                mod_name, dep.c_str(), rc);
+    AOTDependencyLoadResult load_result = aotLoadModuleDependencies(xsink, deps, import_deps,
+        import_deps_present, local_pgm);
+    if (!load_result) {
+        QoreStringNode* err;
+        if (load_result.cancelled) {
+            err = new QoreStringNodeMaker("AOT module '%s' (%s) dependency loading was cancelled",
+                mod_name ? mod_name : "<unknown>", module_context_desc.c_str());
+        } else {
+            err = new QoreStringNodeMaker(
+                "AOT module '%s' (%s) requires module '%s', which could not be loaded; the module "
+                "was AOT-compiled against '%s' (its compiled code references that module's symbols) "
+                "and cannot be loaded without it",
+                mod_name ? mod_name : "<unknown>", module_context_desc.c_str(),
+                load_result.dependency.c_str(), load_result.dependency.c_str());
         }
+        local_pgm->waitForTerminationAndDeref(nullptr);
+        return err;
     }
 
     AOT_TRACE("deps loaded");
-    printd(5, "AOT module v3 '%s': loaded %d dependencies\n", mod_name, (int)deps.size());
+    printd(5, "AOT module v3 '%s': loaded %d providers and imported %d dependencies%s\n", mod_name,
+        (int)deps.size(), (int)(import_deps_present ? import_deps.size() : deps.size()),
+        import_deps_present ? "" : " (legacy metadata)");
 
     // Deserialize namespace tree from metadata (replaces source parsing).
     // The metadata contains complete class/namespace structure.  Functions that were

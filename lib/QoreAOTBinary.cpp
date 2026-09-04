@@ -19609,8 +19609,9 @@ bool QoreAOTBinaryWriter::writePluginSections(std::string& error) {
     return true;
 }
 
-void serializeDependencies(QoreAOTBinaryWriter& writer, const std::vector<std::string>& dependencies) {
-    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::DEPENDENCIES);
+static void serializeDependencySection(QoreAOTBinaryWriter& writer, QoreAOTSectionType type,
+        const std::vector<std::string>& dependencies) {
+    uint32_t sec_idx = writer.beginSection(type);
 
     uint32_t count = static_cast<uint32_t>(dependencies.size());
     writer.writeU32(count);
@@ -19622,6 +19623,17 @@ void serializeDependencies(QoreAOTBinaryWriter& writer, const std::vector<std::s
     writer.endSection(sec_idx);
 }
 
+void serializeDependencies(QoreAOTBinaryWriter& writer, const std::vector<std::string>& dependencies) {
+    serializeDependencySection(writer, QoreAOTSectionType::DEPENDENCIES, dependencies);
+}
+
+void serializeImportDependencies(QoreAOTBinaryWriter& writer,
+        const std::vector<std::string>& dependencies) {
+    // Always write the section, including for an empty list. Its presence tells a new runtime that the producer
+    // distinguished global providers from namespace imports; absence selects the legacy import-all behavior.
+    serializeDependencySection(writer, QoreAOTSectionType::IMPORT_DEPENDENCIES, dependencies);
+}
+
 bool readDependencies(const uint8_t* data, uint32_t size, std::vector<std::string>& dependencies, std::string& error) {
     // Open the binary to read just the dependencies section
     QoreAOTBinaryReader reader;
@@ -19631,34 +19643,64 @@ bool readDependencies(const uint8_t* data, uint32_t size, std::vector<std::strin
     return readDependencies(reader, dependencies, error);
 }
 
-bool readDependencies(const QoreAOTBinaryReader& reader, std::vector<std::string>& dependencies,
-        std::string& error) {
-    // Find DEPENDENCIES section
-    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::DEPENDENCIES);
+static bool readDependencySection(const QoreAOTBinaryReader& reader, QoreAOTSectionType type,
+        const char* label, std::vector<std::string>& dependencies, bool& present, std::string& error) {
+    const QoreAOTSectionHeader* sec = reader.findSection(type);
     if (!sec) {
-        // No dependencies section - this is OK, just means no deps
+        present = false;
         return true;
     }
+    present = true;
 
     const uint8_t* ptr = reader.getSectionData(*sec);
-    if (!ptr) {
-        error = "invalid DEPENDENCIES section data";
+    if (!ptr || sec->size < 4) {
+        error = std::string("invalid ") + label + " section data";
         return false;
     }
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    if (count > (sec->size - 4) / 4) {
+        error = std::string(label) + " count " + std::to_string(count) + " exceeds section capacity";
+        return false;
+    }
     dependencies.reserve(count);
 
     for (uint32_t i = 0; i < count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, label)) {
+            error = std::string("operation cancelled while reading ") + label;
+            return false;
+        }
         const char* dep_name = reader.readStringRef(ptr);
         if (!dep_name) {
-            error = "invalid dependency name at index " + std::to_string(i);
+            error = std::string("invalid ") + label + " name at index " + std::to_string(i);
             return false;
         }
         dependencies.push_back(dep_name);
     }
 
     return true;
+}
+
+bool readDependencies(const QoreAOTBinaryReader& reader, std::vector<std::string>& dependencies,
+        std::string& error) {
+    bool present = false;
+    return readDependencySection(reader, QoreAOTSectionType::DEPENDENCIES, "DEPENDENCIES",
+        dependencies, present, error);
+}
+
+bool readImportDependencies(const QoreAOTBinaryReader& reader,
+        std::vector<std::string>& dependencies, bool& present, std::string& error) {
+    return readDependencySection(reader, QoreAOTSectionType::IMPORT_DEPENDENCIES, "IMPORT_DEPENDENCIES",
+        dependencies, present, error);
+}
+
+bool readImportDependencies(const uint8_t* data, uint32_t size,
+        std::vector<std::string>& dependencies, bool& present, std::string& error) {
+    QoreAOTBinaryReader reader;
+    if (!reader.open(data, size, error)) {
+        return false;
+    }
+    return readImportDependencies(reader, dependencies, present, error);
 }
 
 void serializeReexportModules(QoreAOTBinaryWriter& writer, const std::vector<std::string>& reexport_modules) {

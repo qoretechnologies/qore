@@ -3810,6 +3810,19 @@ static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index
         error.clear();
     }
 
+    std::vector<std::string> imports;
+    bool imports_present = false;
+    if (readImportDependencies(reader, imports, imports_present, error)) {
+        if (imports_present) {
+            print_string_list("imports", imports);
+        } else {
+            printf("    imports: (legacy: all dependencies)\n");
+        }
+    } else {
+        printf("    imports: error: %s\n", error.c_str());
+        error.clear();
+    }
+
     std::vector<std::string> reexports;
     if (readReexportModules(blob.bytes.data(), static_cast<uint32_t>(blob.bytes.size()), reexports, error)) {
         print_string_list("reexports", reexports);
