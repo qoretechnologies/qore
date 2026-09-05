@@ -2783,6 +2783,154 @@
           "source": "Stream a response from a model",
           "message": "Streamovať odpoveď z modelu"
         },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.desc": {
+          "source": "Transcribe an audio file into text using an OpenAI speech-to-text model such as `gpt-4o-transcribe` or `whisper-1`",
+          "message": "Prepísať zvukový súbor na text pomocou modelu OpenAI na prevod reči na text, napríklad `gpt-4o-transcribe` alebo `whisper-1`"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.display_name": {
+          "source": "Transcribe Audio",
+          "message": "Prepísať zvuk"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.ZmlsZQ.desc": {
+          "source": "The audio file to transcribe, in one of the following formats: `flac`, `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `ogg`, `wav`, or `webm`; the file name must have a matching extension. The maximum file size is 25 MB",
+          "message": "Zvukový súbor na prepis v jednom z nasledujúcich formátov: `flac`, `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `ogg`, `wav` alebo `webm`; názov súboru musí mať zodpovedajúcu príponu. Maximálna veľkosť súboru je 25 MB"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.ZmlsZQ.display_name": {
+          "source": "Audio File",
+          "message": "Zvukový súbor"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.ZmlsZQ.short_desc": {
+          "source": "The audio file to transcribe",
+          "message": "Zvukový súbor na prepis"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bGFuZ3VhZ2U.desc": {
+          "source": "The language of the input audio in [ISO-639-1](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) format (for example `en`); supplying the input language improves accuracy and latency",
+          "message": "Jazyk vstupného zvuku vo formáte [ISO-639-1](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) (napríklad `en`); zadanie vstupného jazyka zlepšuje presnosť a latenciu"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Jazyk"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "The language of the input audio as an ISO-639-1 code",
+          "message": "Jazyk vstupného zvuku ako kód ISO-639-1"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOmdwdC00by10cmFuc2NyaWJl.desc": {
+          "source": "The most accurate speech-to-text model; supports the `json` response format only",
+          "message": "Najpresnejší model na prevod reči na text; podporuje iba formát odpovede `json`"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOmdwdC00by10cmFuc2NyaWJl.display_name": {
+          "source": "GPT-4o Transcribe",
+          "message": "GPT-4o Transcribe"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOmdwdC00by1taW5pLXRyYW5zY3JpYmU.desc": {
+          "source": "A faster and cheaper speech-to-text model; supports the `json` response format only",
+          "message": "Rýchlejší a lacnejší model na prevod reči na text; podporuje iba formát odpovede `json`"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOmdwdC00by1taW5pLXRyYW5zY3JpYmU.display_name": {
+          "source": "GPT-4o Mini Transcribe",
+          "message": "GPT-4o Mini Transcribe"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOndoaXNwZXItMQ.desc": {
+          "source": "The open source Whisper V2 model; supports all response formats",
+          "message": "Open source model Whisper V2; podporuje všetky formáty odpovede"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOndoaXNwZXItMQ.display_name": {
+          "source": "Whisper",
+          "message": "Whisper"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.desc": {
+          "source": "The speech-to-text model to use for the transcription",
+          "message": "Model na prevod reči na text, ktorý sa má použiť na prepis"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Model"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.short_desc": {
+          "source": "The speech-to-text model to use",
+          "message": "Model na prevod reči na text, ktorý sa má použiť"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cHJvbXB0.desc": {
+          "source": "Optional text to guide the model's style or to continue a previous audio segment; the prompt should match the audio language",
+          "message": "Voliteľný text na usmernenie štýlu modelu alebo na nadviazanie na predchádzajúci zvukový segment; prompt by mal zodpovedať jazyku zvuku"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Prompt"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cHJvbXB0.short_desc": {
+          "source": "Optional text to guide the model's style or continue a previous audio segment",
+          "message": "Voliteľný text na usmernenie štýlu modelu alebo na nadviazanie na predchádzajúci zvukový segment"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "A JSON object with the transcribed text",
+          "message": "Objekt JSON s prepísaným textom"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnNydA.desc": {
+          "source": "SubRip subtitles with timestamps (`whisper-1` only)",
+          "message": "Titulky SubRip s časovými značkami (iba `whisper-1`)"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnNydA.display_name": {
+          "source": "SRT Subtitles",
+          "message": "Titulky SRT"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "The transcribed text only (`whisper-1` only)",
+          "message": "Iba prepísaný text (iba `whisper-1`)"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Obyčajný text"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnZ0dA.desc": {
+          "source": "Web Video Text Tracks subtitles with timestamps (`whisper-1` only)",
+          "message": "Titulky Web Video Text Tracks s časovými značkami (iba `whisper-1`)"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnZ0dA.display_name": {
+          "source": "WebVTT Subtitles",
+          "message": "Titulky WebVTT"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnZlcmJvc2VfanNvbg.desc": {
+          "source": "A JSON object with the transcribed text, language, duration, and timestamped segments (`whisper-1` only)",
+          "message": "Objekt JSON s prepísaným textom, jazykom, trvaním a segmentmi s časovými značkami (iba `whisper-1`)"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnZlcmJvc2VfanNvbg.display_name": {
+          "source": "Verbose JSON",
+          "message": "Podrobný JSON"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "The format of the transcription output.\n\n**Note**: `gpt-4o-transcribe` and `gpt-4o-mini-transcribe` support only `json`; the `text`, `srt`, `verbose_json`, and `vtt` formats require `whisper-1`. Non-JSON output is returned in the `text` field of the response",
+          "message": "Formát výstupu prepisu.\n\n**Poznámka**: `gpt-4o-transcribe` a `gpt-4o-mini-transcribe` podporujú iba `json`; formáty `text`, `srt`, `verbose_json` a `vtt` vyžadujú `whisper-1`. Výstup, ktorý nie je vo formáte JSON, sa vracia v poli `text` odpovede"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Formát odpovede"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "The format of the transcription output",
+          "message": "Formát výstupu prepisu"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "The sampling temperature, between `0` and `1`; higher values like `0.8` make the output more random, while lower values like `0.2` make it more focused and deterministic. If set to `0`, the model uses log probability to automatically increase the temperature until certain thresholds are hit",
+          "message": "Teplota vzorkovania v rozsahu od `0` do `1`; vyššie hodnoty ako `0.8` robia výstup náhodnejším, zatiaľ čo nižšie hodnoty ako `0.2` ho robia sústredenejším a deterministickejším. Pri nastavení na `0` model použije logaritmickú pravdepodobnosť na automatické zvyšovanie teploty, kým sa nedosiahnu určité prahové hodnoty"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Teplota vzorkovania"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature between 0 and 1",
+          "message": "Teplota vzorkovania v rozsahu od 0 do 1"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.short_desc": {
+          "source": "Transcribe an audio file into text",
+          "message": "Prepísať zvukový súbor na text"
+        },
         "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.desc": {
           "source": "Update an assistant",
           "message": "Aktualizovať asistenta"

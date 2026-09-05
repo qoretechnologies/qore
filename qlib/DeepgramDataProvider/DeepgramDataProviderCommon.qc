@@ -123,9 +123,39 @@ public class DeepgramDataProviderCommon inherits DataProvider::AbstractDataProvi
     }
 
     private hash<auto> doRestCommand(string method, string path, auto body, *hash<auto> hdr) {
+        return doRestCommandIntern(method, path, body, hdr, False);
+    }
+
+    #! Sends a request whose body is sent verbatim with the given \c Content-Type
+    /** The REST client's configured serialization (JSON) is bypassed by using its raw request
+        path, so a @ref binary body reaches the server byte-for-byte instead of being serialized
+        as a JSON string; the caller owns the body and its \c Content-Type.  Used by the
+        \c transcribe-file action to upload audio bytes to \c /v1/listen.
+
+        @param method the HTTP method
+        @param path the URI path
+        @param body the request body, sent unchanged
+        @param content_type the MIME type of \a body, sent as the \c Content-Type header
+        @param hdr any additional request headers
+
+        @return the REST response
+
+        @since DeepgramDataProvider 1.1
+    */
+    private hash<auto> doRawRestCommand(string method, string path, data body, string content_type,
+            *hash<auto> hdr) {
+        return doRestCommandIntern(method, path, body, (hdr ?? {}) + {"Content-Type": content_type}, True);
+    }
+
+    #! Common request path for doRestCommand() and doRawRestCommand()
+    private hash<auto> doRestCommandIntern(string method, string path, auto body, *hash<auto> hdr,
+            bool raw) {
         int retries = 0;
         while (True) {
             try {
+                if (raw) {
+                    return rest.restDoRawRequest(method.upr(), path, body, hdr);
+                }
                 switch (method.upr()) {
                     case "GET":
                         return rest.restGet(path, hdr);

@@ -27,6 +27,42 @@
           "source": "Create an event in a calendar",
           "message": "Einen Termin in einem Kalender erstellen"
         },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.desc": {
+          "source": "Retrieve a single event from a calendar by its event ID",
+          "message": "Einen einzelnen Termin anhand seiner Termin-ID aus einem Kalender abrufen"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.display_name": {
+          "source": "Get Event",
+          "message": "Termin abrufen"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.Y2FsZW5kYXI.desc": {
+          "source": "The calendar containing the event",
+          "message": "Der Kalender, der den Termin enthält"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.Y2FsZW5kYXI.display_name": {
+          "source": "Calendar",
+          "message": "Kalender"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.Y2FsZW5kYXI.short_desc": {
+          "source": "The calendar containing the event",
+          "message": "Der Kalender, der den Termin enthält"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.ZXZlbnRJZA.desc": {
+          "source": "The ID of the event to retrieve; event IDs are returned in the `id` field of the events returned by the `list-events` action",
+          "message": "Die ID des abzurufenden Termins; Termin-IDs werden im Feld `id` der von der Aktion `list-events` zurückgegebenen Termine zurückgegeben"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.ZXZlbnRJZA.display_name": {
+          "source": "Event ID",
+          "message": "Termin-ID"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.ZXZlbnRJZA.short_desc": {
+          "source": "The ID of the event to retrieve",
+          "message": "Die ID des abzurufenden Termins"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.short_desc": {
+          "source": "Retrieve an event from a calendar",
+          "message": "Einen Termin aus einem Kalender abrufen"
+        },
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.desc": {
           "source": "Delete an event from a calendar",
           "message": "Einen Termin aus einem Kalender löschen"
@@ -50,6 +86,182 @@
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.short_desc": {
           "source": "Delete an event from a calendar",
           "message": "Einen Termin aus einem Kalender löschen"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.desc": {
+          "source": "List the calendars in the authenticated user's calendar list; the `id` of each entry can be used as the calendar for the event actions",
+          "message": "Die Kalender in der Kalenderliste des authentifizierten Benutzers auflisten; die `id` jedes Eintrags kann als Kalender für die Terminaktionen verwendet werden"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.display_name": {
+          "source": "List Calendars",
+          "message": "Kalender auflisten"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of calendar list entries to return on one result page; incomplete pages can be detected by a non-empty `nextPageToken` field in the response. The default is `100`; the page size can never be larger than `250`",
+          "message": "Die maximale Anzahl von Kalenderlisteneinträgen, die auf einer Ergebnisseite zurückgegeben werden; unvollständige Seiten sind an einem nicht leeren Feld `nextPageToken` in der Antwort erkennbar. Der Standardwert ist `100`; die Seitengröße kann nie größer als `250` sein"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Maximum Results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of calendars to return on one result page",
+          "message": "Die maximale Anzahl von Kalendern, die auf einer Ergebnisseite zurückgegeben werden"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.c2hvd0hpZGRlbg.desc": {
+          "source": "If `True`, hidden calendar list entries are included in the result. The default is `False`",
+          "message": "Wenn `True`, werden ausgeblendete Kalenderlisteneinträge in das Ergebnis einbezogen. Der Standardwert ist `False`"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.c2hvd0hpZGRlbg.display_name": {
+          "source": "Show Hidden",
+          "message": "Ausgeblendete anzeigen"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.c2hvd0hpZGRlbg.short_desc": {
+          "source": "Include hidden calendar list entries in the result",
+          "message": "Ausgeblendete Kalenderlisteneinträge in das Ergebnis einbeziehen"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.cGFnZVRva2Vu.desc": {
+          "source": "Token specifying which result page to return; use the `nextPageToken` value from the previous response to retrieve the next page",
+          "message": "Token, das angibt, welche Ergebnisseite zurückgegeben werden soll; verwenden Sie den Wert `nextPageToken` aus der vorherigen Antwort, um die nächste Seite abzurufen"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "Seiten-Token"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Token specifying which result page to return",
+          "message": "Token, das angibt, welche Ergebnisseite zurückgegeben werden soll"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.short_desc": {
+          "source": "List the calendars in the user's calendar list",
+          "message": "Die Kalender in der Kalenderliste des Benutzers auflisten"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.desc": {
+          "source": "List events in a calendar; the result can be restricted to a time window, filtered with free-text search terms, and paged with `maxResults` and `pageToken`",
+          "message": "Termine in einem Kalender auflisten; das Ergebnis kann auf ein Zeitfenster eingeschränkt, mit Freitext-Suchbegriffen gefiltert und mit `maxResults` und `pageToken` seitenweise abgerufen werden"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.display_name": {
+          "source": "List Events",
+          "message": "Termine auflisten"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.Y2FsZW5kYXI.desc": {
+          "source": "The calendar to list events from",
+          "message": "Der Kalender, dessen Termine aufgelistet werden sollen"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.Y2FsZW5kYXI.display_name": {
+          "source": "Calendar",
+          "message": "Kalender"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.Y2FsZW5kYXI.short_desc": {
+          "source": "The calendar to list events from",
+          "message": "Der Kalender, dessen Termine aufgelistet werden sollen"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.allowed-value.c3RyaW5nOnN0YXJ0VGltZQ.desc": {
+          "source": "Order by the start date/time (ascending); this is only available when `singleEvents` is `True`",
+          "message": "Nach Startdatum/-zeit sortieren (aufsteigend); nur verfügbar, wenn `singleEvents` `True` ist"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.allowed-value.c3RyaW5nOnVwZGF0ZWQ.desc": {
+          "source": "Order by last modification time (ascending)",
+          "message": "Nach dem Zeitpunkt der letzten Änderung sortieren (aufsteigend)"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.desc": {
+          "source": "The order of the events returned in the result; the default is an unspecified, stable order.\nAcceptable values are:\n- `startTime`: Order by the start date/time (ascending); this is only available when `singleEvents` is `True`\n- `updated`: Order by last modification time (ascending)",
+          "message": "Die Reihenfolge der im Ergebnis zurückgegebenen Termine; standardmäßig ist die Reihenfolge unspezifiziert, aber stabil.\nZulässige Werte sind:\n- `startTime`: Nach Startdatum/-zeit sortieren (aufsteigend); nur verfügbar, wenn `singleEvents` `True` ist\n- `updated`: Nach dem Zeitpunkt der letzten Änderung sortieren (aufsteigend)"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.display_name": {
+          "source": "Order By",
+          "message": "Sortieren nach"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.short_desc": {
+          "source": "The order of the events returned in the result",
+          "message": "Die Reihenfolge der im Ergebnis zurückgegebenen Termine"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of events to return on one result page; the page may contain fewer events than this value, or none at all, even if more events match the query. Incomplete pages can be detected by a non-empty `nextPageToken` field in the response. The default is `250`; the page size can never be larger than `2500`",
+          "message": "Die maximale Anzahl von Terminen, die auf einer Ergebnisseite zurückgegeben werden; die Seite kann weniger Termine als diesen Wert oder gar keine enthalten, auch wenn weitere Termine der Abfrage entsprechen. Unvollständige Seiten sind an einem nicht leeren Feld `nextPageToken` in der Antwort erkennbar. Der Standardwert ist `250`; die Seitengröße kann nie größer als `2500` sein"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Maximum Results",
+          "message": "Maximale Ergebnisse"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of events to return on one result page",
+          "message": "Die maximale Anzahl von Terminen, die auf einer Ergebnisseite zurückgegeben werden"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2hvd0RlbGV0ZWQ.desc": {
+          "source": "If `True`, deleted events (with `status` equal to `cancelled`) are included in the result. Cancelled instances of recurring events (but not the underlying recurring event) are still included if `showDeleted` and `singleEvents` are both `False`; if both are `True`, only single instances of deleted events are returned. The default is `False`",
+          "message": "Wenn `True`, werden gelöschte Termine (mit `status` gleich `cancelled`) in das Ergebnis einbezogen. Abgesagte Instanzen wiederkehrender Termine (nicht aber der zugrunde liegende wiederkehrende Termin) werden weiterhin einbezogen, wenn `showDeleted` und `singleEvents` beide `False` sind; wenn beide `True` sind, werden nur einzelne Instanzen gelöschter Termine zurückgegeben. Der Standardwert ist `False`"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2hvd0RlbGV0ZWQ.display_name": {
+          "source": "Show Deleted",
+          "message": "Gelöschte anzeigen"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2hvd0RlbGV0ZWQ.short_desc": {
+          "source": "Include deleted events in the result",
+          "message": "Gelöschte Termine in das Ergebnis einbeziehen"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2luZ2xlRXZlbnRz.desc": {
+          "source": "If `True`, recurring events are expanded into their individual instances, and only single one-off events and instances of recurring events are returned, but not the underlying recurring events themselves. If `False`, each recurring event is returned once with its recurrence rule instead of its instances. Must be `True` to order the result by start time",
+          "message": "Wenn `True`, werden wiederkehrende Termine in ihre einzelnen Instanzen aufgelöst, und es werden nur einmalige Termine und Instanzen wiederkehrender Termine zurückgegeben, nicht aber die zugrunde liegenden wiederkehrenden Termine selbst. Wenn `False`, wird jeder wiederkehrende Termin einmal mit seiner Wiederholungsregel anstelle seiner Instanzen zurückgegeben. Muss `True` sein, um das Ergebnis nach Startzeit zu sortieren"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2luZ2xlRXZlbnRz.display_name": {
+          "source": "Expand Recurring Events",
+          "message": "Wiederkehrende Termine auflösen"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2luZ2xlRXZlbnRz.short_desc": {
+          "source": "Expand recurring events into their individual instances",
+          "message": "Wiederkehrende Termine in ihre einzelnen Instanzen auflösen"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cGFnZVRva2Vu.desc": {
+          "source": "Token specifying which result page to return; use the `nextPageToken` value from the previous response to retrieve the next page",
+          "message": "Token, das angibt, welche Ergebnisseite zurückgegeben werden soll; verwenden Sie den Wert `nextPageToken` aus der vorherigen Antwort, um die nächste Seite abzurufen"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "Seiten-Token"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Token specifying which result page to return",
+          "message": "Token, das angibt, welche Ergebnisseite zurückgegeben werden soll"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cQ.desc": {
+          "source": "Free-text search terms to find events that match these terms in the `summary`, `description`, and `location` fields, in attendee and organizer display names and email addresses, and in working location properties",
+          "message": "Freitext-Suchbegriffe zum Finden von Terminen, die diesen Begriffen in den Feldern `summary`, `description` und `location`, in den Anzeigenamen und E-Mail-Adressen von Teilnehmern und Organisatoren sowie in den Arbeitsort-Eigenschaften entsprechen"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cQ.display_name": {
+          "source": "Search Terms",
+          "message": "Suchbegriffe"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cQ.short_desc": {
+          "source": "Free-text search terms to find matching events",
+          "message": "Freitext-Suchbegriffe zum Finden passender Termine"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1heA.desc": {
+          "source": "Upper bound (exclusive) for an event's start time; only events that start before this time are returned. The default is not to filter by start time",
+          "message": "Obere Grenze (exklusiv) für die Startzeit eines Termins; es werden nur Termine zurückgegeben, die vor diesem Zeitpunkt beginnen. Standardmäßig wird nicht nach Startzeit gefiltert"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1heA.display_name": {
+          "source": "End Time",
+          "message": "Endzeit"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1heA.short_desc": {
+          "source": "Only return events that start before this time",
+          "message": "Nur Termine zurückgeben, die vor diesem Zeitpunkt beginnen"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1pbg.desc": {
+          "source": "Lower bound (exclusive) for an event's end time; only events that end after this time are returned. The default is not to filter by end time",
+          "message": "Untere Grenze (exklusiv) für die Endzeit eines Termins; es werden nur Termine zurückgegeben, die nach diesem Zeitpunkt enden. Standardmäßig wird nicht nach Endzeit gefiltert"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1pbg.display_name": {
+          "source": "Start Time",
+          "message": "Startzeit"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1pbg.short_desc": {
+          "source": "Only return events that end after this time",
+          "message": "Nur Termine zurückgeben, die nach diesem Zeitpunkt enden"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.short_desc": {
+          "source": "List events in a calendar",
+          "message": "Termine in einem Kalender auflisten"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bWFrZS1hcGktY2FsbA.desc": {
           "source": "Make a custom HTTP / REST API call to **Google Calendar** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",

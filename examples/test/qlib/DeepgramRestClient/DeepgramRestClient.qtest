@@ -7,18 +7,36 @@
 %requires Util
 %requires QUnit
 %requires DeepgramRestClient
+%requires HttpServer
+%requires Logger
+%requires Mime
+%requires json
 
 %exec-class DeepgramRestClientTest
 
+#! Captures the request headers exactly as they arrive on the wire and answers like /v1/projects
+class ProjectsCapture inherits AbstractHttpRequestHandler {
+    public {
+        list<hash<auto>> requests = ();
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        requests += hdr;
+        return makeResponse({"Content-Type": MimeTypeJson}, 200, make_json({"projects": ()}));
+    }
+}
+
 public class DeepgramRestClientTest inherits QUnit::Test {
-    constructor() : Test("DeepgramRestClient Test", "1.0") {
+    constructor() : Test("DeepgramRestClient Test", "1.1") {
         addTestCase("connection scheme registered",       \connectionSchemeTest());
         addTestCase("apikey maps to Authorization: Token header",
             \tokenAuthMappingTest());
         addTestCase("default URL applied when not provided",
             \defaultUrlTest());
-        addTestCase("existing default_headers are preserved",
+        addTestCase("existing headers are preserved",
             \preserveExistingHeadersTest());
+        addTestCase("Authorization header is sent on the wire",
+            \wireAuthorizationTest());
         set_return_value(main());
     }
 
@@ -35,8 +53,10 @@ public class DeepgramRestClientTest inherits QUnit::Test {
         hash<auto> opts = DeepgramRestClient::DeepgramRestClientBase::getOptions({
             "apikey": "secret-key-123",
         });
-        # apikey is rewritten to Authorization: Token header
-        assertEq("Token secret-key-123", opts.default_headers.Authorization);
+        # apikey is rewritten to an Authorization: Token header in the option the REST clients read
+        assertEq("Token secret-key-123", opts.headers.Authorization);
+        # the unread default_headers option must not be used (qorus#523)
+        assertEq(NOTHING, opts.default_headers);
         # apikey itself is removed from the options hash to avoid Bearer fallback
         assertEq(NOTHING, opts.apikey);
     }
@@ -49,13 +69,42 @@ public class DeepgramRestClientTest inherits QUnit::Test {
     }
 
     private preserveExistingHeadersTest() {
-        # If the caller already supplied default_headers, they should be merged
-        # (not overwritten) by the Authorization injection.
+        # headers supplied by the caller are merged (not overwritten) by the Authorization injection, and
+        # legacy default_headers entries are folded into headers
         hash<auto> opts = DeepgramRestClient::DeepgramRestClientBase::getOptions({
             "apikey": "k",
-            "default_headers": {"X-Trace-Id": "abc"},
+            "headers": {"X-Trace-Id": "abc"},
+            "default_headers": {"X-Legacy": "1"},
         });
-        assertEq("Token k",      opts.default_headers.Authorization);
-        assertEq("abc",          opts.default_headers."X-Trace-Id");
+        assertEq("Token k", opts.headers.Authorization);
+        assertEq("abc", opts.headers."X-Trace-Id");
+        assertEq("1", opts.headers."X-Legacy");
+        assertEq(NOTHING, opts.default_headers);
+    }
+
+    #! Both clients must actually send the header: this is the regression test for qorus#523
+    private wireAuthorizationTest() {
+        ProjectsCapture capture();
+        HttpServer http(<HttpServerOptionInfo>{
+            "logger": new Logger("deepgram-test", LoggerLevel::getLevelError()),
+        });
+        http.setHandler("projects", "", MimeTypeJson, capture);
+        http.setDefaultHandler("projects", capture);
+        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        on_exit http.stop();
+        hash<auto> opts = {
+            "apikey": "wire-key",
+            "url": sprintf("http://localhost:%d", port),
+        };
+
+        DeepgramRestClient sync_client(opts);
+        sync_client.get("v1/projects");
+        assertEq(1, capture.requests.size());
+        assertEq("Token wire-key", capture.requests[0].authorization, "sync client");
+
+        DeepgramRestClientIo async_client(opts);
+        async_client.restGet("/v1/projects");
+        assertEq(2, capture.requests.size());
+        assertEq("Token wire-key", capture.requests[1].authorization, "async client");
     }
 }

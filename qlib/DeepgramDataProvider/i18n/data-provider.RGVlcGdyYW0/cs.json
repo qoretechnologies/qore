@@ -452,8 +452,8 @@
           "message": "Syntetizovat řeč z textu pomocí Deepgram TTS (modely Aura)"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.desc": {
-          "source": "Submits a public audio URL to Deepgram's `/v1/listen` endpoint and returns the JSON transcript.  Supports the Nova model family with smart formatting, diarization, summarization, and language detection.\n\n**Note**: this action submits via URL only.  For raw-audio uploads and realtime WebSocket streaming, use @ref DeepgramRestClient::DeepgramRestClientIo \"DeepgramRestClientIo\" directly.",
-          "message": "Odešle veřejnou URL adresu zvuku do koncového bodu Deepgram `/v1/listen` a vrátí přepis ve formátu JSON. Podporuje rodinu modelů Nova s inteligentním formátováním, diarizací, sumarizací a detekcí jazyka.\n\n**Poznámka**: tato akce odesílá pouze prostřednictvím URL. Pro nahrávání nezpracovaného zvuku a streamování v reálném čase přes WebSocket použijte přímo @ref DeepgramRestClient::DeepgramRestClientIo \"DeepgramRestClientIo\"."
+          "source": "Submits audio to Deepgram's `/v1/listen` endpoint and returns the JSON transcript.  The audio is given either as a public `url` that Deepgram fetches or as an `audio` file whose bytes are uploaded as the request body; exactly one of the two must be provided.  Supports the Nova model family with smart formatting, diarization, summarization, and language detection.",
+          "message": "Odešle zvuk do koncového bodu Deepgram `/v1/listen` a vrátí přepis ve formátu JSON. Zvuk se zadává buď jako veřejná `url`, kterou Deepgram stáhne, nebo jako soubor `audio`, jehož bajty se nahrají jako tělo požadavku; musí být zadán právě jeden z nich. Podporuje rodinu modelů Nova s inteligentním formátováním, diarizací, sumarizací a detekcí jazyka."
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.display_name": {
           "source": "Transcribe File",
@@ -470,6 +470,18 @@
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.Y2FsbGJhY2s.short_desc": {
           "source": "Webhook URL for async transcript delivery",
           "message": "URL adresa webhooku pro asynchronní doručení přepisu"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.desc": {
+          "source": "The audio file to transcribe, uploaded as the request body; used when `url` is not given.  The file's `mime_type` (e.g. `audio/wav`, `audio/mpeg`, `audio/flac`) is sent as the request `Content-Type`; when it is `auto`, it is derived from the file `name`, falling back to `application/octet-stream`.  Upstream steps can pass either a file hash (`name`, `content`, `mime_type`) or the raw audio bytes as a `binary` value.\n\nExactly one of `url` or `audio` must be provided.",
+          "message": "Zvukový soubor k přepisu, nahraný jako tělo požadavku; použije se, když není zadána `url`. Hodnota `mime_type` souboru (např. `audio/wav`, `audio/mpeg`, `audio/flac`) se odešle jako `Content-Type` požadavku; pokud je `auto`, odvodí se z názvu souboru `name`, jinak se použije `application/octet-stream`. Předchozí kroky mohou předat buď hash souboru (`name`, `content`, `mime_type`), nebo nezpracované bajty zvuku jako hodnotu typu `binary`.\n\nMusí být zadán právě jeden z parametrů `url` nebo `audio`."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.display_name": {
+          "source": "Audio File",
+          "message": "Zvukový soubor"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.short_desc": {
+          "source": "Audio file to upload for transcription",
+          "message": "Zvukový soubor k nahrání pro přepis"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGV0ZWN0X2xhbmd1YWdl.desc": {
           "source": "When `True`, ignores the `language` parameter and detects the language automatically.",
@@ -592,8 +604,8 @@
           "message": "Přidat do přepisu interpunkci"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXJs.desc": {
-          "source": "Public URL of the audio file to transcribe.  Deepgram fetches the file from this URL; it must be reachable from the public internet.",
-          "message": "Veřejná URL adresa zvukového souboru k přepisu. Deepgram stáhne soubor z této URL adresy; musí být dostupná z veřejného internetu."
+          "source": "Public URL of the audio file to transcribe.  Deepgram fetches the file from this URL; it must be reachable from the public internet.\n\nExactly one of `url` or `audio` must be provided.",
+          "message": "Veřejná URL adresa zvukového souboru k přepisu. Deepgram stáhne soubor z této URL adresy; musí být dostupná z veřejného internetu.\n\nMusí být zadán právě jeden z parametrů `url` nebo `audio`."
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXJs.display_name": {
           "source": "Audio URL",
@@ -616,8 +628,8 @@
           "message": "Seskupit slova přepisu do promluv"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.short_desc": {
-          "source": "Transcribe an audio file by URL via Deepgram ASR",
-          "message": "Přepsat zvukový soubor z URL pomocí Deepgram ASR"
+          "source": "Transcribe an audio file by URL or upload via Deepgram ASR",
+          "message": "Přepsat zvukový soubor z URL nebo nahráním pomocí Deepgram ASR"
         },
         "app.RGVlcGdyYW0.desc": {
           "source": "Provides access to [Deepgram](https://deepgram.com) — a speech AI platform offering automatic speech recognition (ASR) and text-to-speech (TTS) APIs.\n\n**Common use cases**:\n- **Transcription**: convert recorded audio (PSTN calls, meeting recordings, podcasts) into searchable text with the Nova model family\n- **Voice synthesis**: generate natural-sounding speech from text via the Aura voice models — for voice agents, IVR, and accessibility\n- **Conversational AI**: pair Deepgram TTS with any LLM to build end-to-end voice conversation pipelines",

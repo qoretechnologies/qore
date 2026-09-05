@@ -452,8 +452,8 @@
           "message": "Syntetyzuj mowę z tekstu za pomocą Deepgram TTS (modele Aura)"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.desc": {
-          "source": "Submits a public audio URL to Deepgram's `/v1/listen` endpoint and returns the JSON transcript.  Supports the Nova model family with smart formatting, diarization, summarization, and language detection.\n\n**Note**: this action submits via URL only.  For raw-audio uploads and realtime WebSocket streaming, use @ref DeepgramRestClient::DeepgramRestClientIo \"DeepgramRestClientIo\" directly.",
-          "message": "Przesyła publiczny adres URL audio do punktu końcowego `/v1/listen` usługi Deepgram i zwraca transkrypcję JSON. Obsługuje rodzinę modeli Nova z inteligentnym formatowaniem, diaryzacją, podsumowywaniem i wykrywaniem języka.\n\n**Uwaga**: to działanie przesyła dane tylko za pośrednictwem adresu URL. W przypadku przesyłania surowego dźwięku i strumieniowania WebSocket w czasie rzeczywistym użyj bezpośrednio @ref DeepgramRestClient::DeepgramRestClientIo \"DeepgramRestClientIo\"."
+          "source": "Submits audio to Deepgram's `/v1/listen` endpoint and returns the JSON transcript.  The audio is given either as a public `url` that Deepgram fetches or as an `audio` file whose bytes are uploaded as the request body; exactly one of the two must be provided.  Supports the Nova model family with smart formatting, diarization, summarization, and language detection.",
+          "message": "Przesyła dźwięk do punktu końcowego `/v1/listen` usługi Deepgram i zwraca transkrypcję JSON. Dźwięk podaje się jako publiczny `url`, który Deepgram pobiera, albo jako plik `audio`, którego bajty są przesyłane jako treść żądania; należy podać dokładnie jedno z nich. Obsługuje rodzinę modeli Nova z inteligentnym formatowaniem, diaryzacją, podsumowywaniem i wykrywaniem języka."
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.display_name": {
           "source": "Transcribe File",
@@ -470,6 +470,18 @@
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.Y2FsbGJhY2s.short_desc": {
           "source": "Webhook URL for async transcript delivery",
           "message": "Adres URL webhooka do asynchronicznego dostarczania transkrypcji"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.desc": {
+          "source": "The audio file to transcribe, uploaded as the request body; used when `url` is not given.  The file's `mime_type` (e.g. `audio/wav`, `audio/mpeg`, `audio/flac`) is sent as the request `Content-Type`; when it is `auto`, it is derived from the file `name`, falling back to `application/octet-stream`.  Upstream steps can pass either a file hash (`name`, `content`, `mime_type`) or the raw audio bytes as a `binary` value.\n\nExactly one of `url` or `audio` must be provided.",
+          "message": "Plik audio do transkrypcji, przesyłany jako treść żądania; używany, gdy nie podano `url`. Wartość `mime_type` pliku (np. `audio/wav`, `audio/mpeg`, `audio/flac`) jest wysyłana jako `Content-Type` żądania; gdy ma wartość `auto`, jest wyprowadzana z nazwy pliku `name`, a w przeciwnym razie używana jest wartość `application/octet-stream`. Poprzednie kroki mogą przekazać hash pliku (`name`, `content`, `mime_type`) albo surowe bajty dźwięku jako wartość `binary`.\n\nNależy podać dokładnie jedno z: `url` lub `audio`."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.display_name": {
+          "source": "Audio File",
+          "message": "Plik audio"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.short_desc": {
+          "source": "Audio file to upload for transcription",
+          "message": "Plik audio do przesłania w celu transkrypcji"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGV0ZWN0X2xhbmd1YWdl.desc": {
           "source": "When `True`, ignores the `language` parameter and detects the language automatically.",
@@ -592,8 +604,8 @@
           "message": "Dodaj interpunkcję do transkrypcji"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXJs.desc": {
-          "source": "Public URL of the audio file to transcribe.  Deepgram fetches the file from this URL; it must be reachable from the public internet.",
-          "message": "Publiczny adres URL pliku audio do transkrypcji. Deepgram pobiera plik z tego adresu URL; musi być on dostępny z publicznego internetu."
+          "source": "Public URL of the audio file to transcribe.  Deepgram fetches the file from this URL; it must be reachable from the public internet.\n\nExactly one of `url` or `audio` must be provided.",
+          "message": "Publiczny adres URL pliku audio do transkrypcji. Deepgram pobiera plik z tego adresu URL; musi być on dostępny z publicznego internetu.\n\nNależy podać dokładnie jedno z: `url` lub `audio`."
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXJs.display_name": {
           "source": "Audio URL",
@@ -616,8 +628,8 @@
           "message": "Grupuj słowa transkrypcji w wypowiedzi"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.short_desc": {
-          "source": "Transcribe an audio file by URL via Deepgram ASR",
-          "message": "Transkrybuj plik audio z adresu URL za pomocą Deepgram ASR"
+          "source": "Transcribe an audio file by URL or upload via Deepgram ASR",
+          "message": "Transkrybuj plik audio z adresu URL lub przez przesłanie za pomocą Deepgram ASR"
         },
         "app.RGVlcGdyYW0.desc": {
           "source": "Provides access to [Deepgram](https://deepgram.com) — a speech AI platform offering automatic speech recognition (ASR) and text-to-speech (TTS) APIs.\n\n**Common use cases**:\n- **Transcription**: convert recorded audio (PSTN calls, meeting recordings, podcasts) into searchable text with the Nova model family\n- **Voice synthesis**: generate natural-sounding speech from text via the Aura voice models — for voice agents, IVR, and accessibility\n- **Conversational AI**: pair Deepgram TTS with any LLM to build end-to-end voice conversation pipelines",

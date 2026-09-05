@@ -3,6 +3,322 @@
   "locales": {
     "cs": {
       "messages": {
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.desc": {
+          "source": "Creates a new draft email from the supplied recipient addresses, subject, body, and attachments, and stores it in Gmail's drafts folder without sending it, so that a person can review and send it, or so that `send-draft` can send it later. Set `thread_id` and `in_reply_to` to draft a reply within an existing conversation",
+          "message": "Vytvoří nový koncept e-mailu ze zadaných adres příjemců, předmětu, těla a příloh a uloží jej do složky konceptů Gmailu bez odeslání, aby jej mohl zkontrolovat a odeslat člověk nebo aby jej mohla později odeslat akce `send-draft`. Nastavením `thread_id` a `in_reply_to` připravíte odpověď v rámci existující konverzace"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.display_name": {
+          "source": "Create a Draft",
+          "message": "Vytvořit koncept"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Y2M.desc": {
+          "source": "One or more `Cc:` addresses for the email",
+          "message": "Jedna nebo více adres `Cc:` pro e-mail"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "Kopie (CC)"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Y2M.short_desc": {
+          "source": "Carbon copy addresses",
+          "message": "Adresy v kopii"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YXR0YWNobWVudHM.desc": {
+          "source": "Any attachments for the message",
+          "message": "Přílohy zprávy"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "Přílohy"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "Message attachments",
+          "message": "Přílohy zprávy"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keQ.desc": {
+          "source": "The message body",
+          "message": "Tělo zprávy"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "Tělo zprávy"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keQ.short_desc": {
+          "source": "The message body",
+          "message": "Tělo zprávy"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "Bez kódování obsahu (nedoporučuje se)"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Žádné"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "Bez kódování obsahu (nedoporučuje se)"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.desc": {
+          "source": "Ideal for binary data",
+          "message": "Ideální pro binární data"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.display_name": {
+          "source": "Base64",
+          "message": "Base64"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.short_desc": {
+          "source": "Ideal for binary data",
+          "message": "Ideální pro binární data"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "`quoted-printable` for string data, `base64` for binary data",
+          "message": "`quoted-printable` pro textová data, `base64` pro binární data"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Auto",
+          "message": "Automaticky"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "'quoted-printable' for string data, 'base64' for binary data",
+          "message": "'quoted-printable' pro textová data, 'base64' pro binární data"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.desc": {
+          "source": "Ideal for string data",
+          "message": "Ideální pro textová data"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.display_name": {
+          "source": "Quoted Printable",
+          "message": "Quoted Printable"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.short_desc": {
+          "source": "Ideal for string data",
+          "message": "Ideální pro textová data"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.desc": {
+          "source": "The encoding to use for the attachment:\n- `default`: `quoted-printable` for string data, `base64` for binary data\n- `none`: no content encoding (not recommended)\n- `quoted-printable`: quoted printable encoding \n- `base64`: base64 encoding",
+          "message": "Kódování, které se má použít pro přílohu:\n- `default`: `quoted-printable` pro textová data, `base64` pro binární data\n- `none`: žádné kódování obsahu (nedoporučuje se)\n- `quoted-printable`: kódování quoted printable\n- `base64`: kódování base64"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.display_name": {
+          "source": "Body Encoding",
+          "message": "Kódování těla zprávy"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.short_desc": {
+          "source": "The encoding to use for the attachment",
+          "message": "Kódování, které se má použít pro přílohu"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "HTML text"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "Prostý text"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "Prostý text"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.desc": {
+          "source": "The MIME type of the message body",
+          "message": "MIME typ těla zprávy"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.display_name": {
+          "source": "Body Mime Type",
+          "message": "MIME typ těla zprávy"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.short_desc": {
+          "source": "The MIME type of the message body",
+          "message": "MIME typ těla zprávy"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YmNj.desc": {
+          "source": "One or more `Bcc:` addresses for the email",
+          "message": "Jedna nebo více adres `Bcc:` pro e-mail"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "Skrytá kopie (BCC)"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YmNj.short_desc": {
+          "source": "Blind carbon copy addresses",
+          "message": "Adresy skryté kopie (BCC)"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.aW5fcmVwbHlfdG8.desc": {
+          "source": "The `Message-ID` header value of the message being answered, including the angle brackets; sent as the `In-Reply-To` header and, unless `references` is set, also as the `References` header, so that mail clients and Gmail thread the reply under the original message. Watch events carry this value as `Message-ID`",
+          "message": "Hodnota hlavičky `Message-ID` zprávy, na kterou se odpovídá, včetně lomených závorek; odesílá se jako hlavička `In-Reply-To` a, pokud není nastaveno `references`, také jako hlavička `References`, aby poštovní klienti i Gmail zařadili odpověď pod původní zprávu. Události sledování nesou tuto hodnotu jako `Message-ID`"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.aW5fcmVwbHlfdG8.display_name": {
+          "source": "In Reply To",
+          "message": "Odpověď na"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.aW5fcmVwbHlfdG8.short_desc": {
+          "source": "The Message-ID header value of the message being answered",
+          "message": "Hodnota hlavičky Message-ID zprávy, na kterou se odpovídá"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.c2VuZGVy.desc": {
+          "source": "The sender's address for the email",
+          "message": "Adresa odesílatele e-mailu"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "Odesílatel"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.c2VuZGVy.short_desc": {
+          "source": "The sender's address for the email",
+          "message": "Adresa odesílatele e-mailu"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.c3ViamVjdA.desc": {
+          "source": "The subject for the email",
+          "message": "Předmět e-mailu"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Předmět"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.c3ViamVjdA.short_desc": {
+          "source": "The subject for the email",
+          "message": "Předmět e-mailu"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.cmVmZXJlbmNlcw.desc": {
+          "source": "The `References` header value: the `Message-ID` values of the messages in the conversation being answered, oldest first, separated by spaces and including the angle brackets. If not set, `in_reply_to` is used. Watch events carry the original message's `References` header",
+          "message": "Hodnota hlavičky `References`: hodnoty `Message-ID` zpráv v konverzaci, na kterou se odpovídá, od nejstarší, oddělené mezerami a včetně lomených závorek. Pokud není nastavena, použije se `in_reply_to`. Události sledování nesou hlavičku `References` původní zprávy"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.cmVmZXJlbmNlcw.display_name": {
+          "source": "References",
+          "message": "Reference"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.cmVmZXJlbmNlcw.short_desc": {
+          "source": "The Message-ID header values of the conversation being answered",
+          "message": "Hodnoty hlaviček Message-ID konverzace, na kterou se odpovídá"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.dG8.desc": {
+          "source": "One or more `To:` addresses for the email",
+          "message": "Jedna nebo více adres `To:` pro e-mail"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.dG8.display_name": {
+          "source": "To",
+          "message": "Komu"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.dG8.short_desc": {
+          "source": "Message recipient addresses",
+          "message": "Adresy příjemců zprávy"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.dGhyZWFkX2lk.desc": {
+          "source": "The ID of the Gmail thread to add the message to; set this to reply within an existing conversation. Gmail only honors it when `subject` matches the thread's subject and `in_reply_to` (or `references`) names a message in the thread. Watch events carry this value as `threadId`",
+          "message": "ID vlákna Gmailu, do kterého se má zpráva přidat; nastavte tuto hodnotu, chcete-li odpovědět v rámci existující konverzace. Gmail ji respektuje pouze tehdy, když `subject` odpovídá předmětu vlákna a `in_reply_to` (nebo `references`) uvádí zprávu z tohoto vlákna. Události sledování nesou tuto hodnotu jako `threadId`"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.dGhyZWFkX2lk.display_name": {
+          "source": "Thread ID",
+          "message": "ID vlákna"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.dGhyZWFkX2lk.short_desc": {
+          "source": "The ID of the Gmail thread to add the message to",
+          "message": "ID vlákna Gmailu, do kterého se má zpráva přidat"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.short_desc": {
+          "source": "Create a new draft email in Gmail without sending it",
+          "message": "Vytvořit v Gmailu nový koncept e-mailu bez jeho odeslání"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.desc": {
+          "source": "Creates a new user label in the account and returns it with the ID that `modify-message-labels` takes",
+          "message": "Vytvoří v účtu nový uživatelský štítek a vrátí jej s ID, které přijímá `modify-message-labels`"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.display_name": {
+          "source": "Create a Label",
+          "message": "Vytvořit štítek"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmxhYmVsSGlkZQ.desc": {
+          "source": "Do not show the label in the label list",
+          "message": "Nezobrazovat štítek v seznamu štítků"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmxhYmVsSGlkZQ.display_name": {
+          "source": "Hide",
+          "message": "Skrýt"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmxhYmVsU2hvd0lmVW5yZWFk.desc": {
+          "source": "Show the label in the label list only while it has unread messages",
+          "message": "Zobrazit štítek v seznamu štítků pouze tehdy, když obsahuje nepřečtené zprávy"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmxhYmVsU2hvd0lmVW5yZWFk.display_name": {
+          "source": "Show If Unread",
+          "message": "Zobrazit, pokud je nepřečteno"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmxhYmVsU2hvdw.desc": {
+          "source": "Show the label in the label list",
+          "message": "Zobrazit štítek v seznamu štítků"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmxhYmVsU2hvdw.display_name": {
+          "source": "Show",
+          "message": "Zobrazit"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.desc": {
+          "source": "Whether the label is shown in the label list of the Gmail web interface",
+          "message": "Zda se štítek zobrazuje v seznamu štítků webového rozhraní Gmailu"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.display_name": {
+          "source": "Label List Visibility",
+          "message": "Viditelnost v seznamu štítků"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.short_desc": {
+          "source": "Whether the label is shown in the label list",
+          "message": "Zda se štítek zobrazuje v seznamu štítků"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.allowed-value.c3RyaW5nOmhpZGU.desc": {
+          "source": "Do not show messages with the label in the message list",
+          "message": "Nezobrazovat zprávy s tímto štítkem v seznamu zpráv"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.allowed-value.c3RyaW5nOmhpZGU.display_name": {
+          "source": "Hide",
+          "message": "Skrýt"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.allowed-value.c3RyaW5nOnNob3c.desc": {
+          "source": "Show messages with the label in the message list",
+          "message": "Zobrazit zprávy s tímto štítkem v seznamu zpráv"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.allowed-value.c3RyaW5nOnNob3c.display_name": {
+          "source": "Show",
+          "message": "Zobrazit"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.desc": {
+          "source": "Whether messages with the label are shown in the message list of the Gmail web interface",
+          "message": "Zda se zprávy s tímto štítkem zobrazují v seznamu zpráv webového rozhraní Gmailu"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.display_name": {
+          "source": "Message List Visibility",
+          "message": "Viditelnost v seznamu zpráv"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.short_desc": {
+          "source": "Whether messages with the label are shown in the message list",
+          "message": "Zda se zprávy s tímto štítkem zobrazují v seznamu zpráv"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.desc": {
+          "source": "The display name of the label; use `/` to nest a label under another, ex: `Projects/Alpha`",
+          "message": "Zobrazovaný název štítku; pomocí `/` lze štítek vnořit pod jiný, např. `Projects/Alpha`"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.display_name": {
+          "source": "Label Name",
+          "message": "Název štítku"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.short_desc": {
+          "source": "The display name of the label",
+          "message": "Zobrazovaný název štítku"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.short_desc": {
+          "source": "Create a new user label in the account",
+          "message": "Vytvořit v účtu nový uživatelský štítek"
+        },
         "app.R21haWw.action.Z2V0.desc": {
           "source": "Retrieve a message",
           "message": "Získat zprávu"
@@ -63,6 +379,90 @@
           "source": "Retrieve an attachment",
           "message": "Získat přílohu"
         },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.desc": {
+          "source": "Retrieves a draft and the message it holds in the requested `format`",
+          "message": "Načte koncept a zprávu, kterou obsahuje, v požadovaném `format`"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.display_name": {
+          "source": "Retrieve a Draft",
+          "message": "Získat koncept"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1ldGFkYXRh.desc": {
+          "source": "Message IDs, labels, snippet, and headers only; no body",
+          "message": "Pouze ID zpráv, štítky, úryvek a hlavičky; bez těla"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1ldGFkYXRh.display_name": {
+          "source": "Metadata",
+          "message": "Metadata"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1ldGFkYXRh.short_desc": {
+          "source": "Message IDs, labels, snippet, and headers only",
+          "message": "Pouze ID zpráv, štítky, úryvek a hlavičky"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1pbmltYWw.desc": {
+          "source": "Message IDs and labels only; no headers and no body",
+          "message": "Pouze ID zpráv a štítky; bez hlaviček a bez těla"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "Minimal",
+          "message": "Minimální"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1pbmltYWw.short_desc": {
+          "source": "Message IDs and labels only",
+          "message": "Pouze ID zpráv a štítky"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOmZ1bGw.desc": {
+          "source": "The complete message including all headers and the MIME body parts; attachment data is not included and must be retrieved with `get-attachment`",
+          "message": "Celá zpráva včetně všech hlaviček a částí těla MIME; data příloh nejsou zahrnuta a je nutné je načíst pomocí `get-attachment`"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "Full",
+          "message": "Úplný"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOmZ1bGw.short_desc": {
+          "source": "The complete message including all headers and the body",
+          "message": "Celá zpráva včetně všech hlaviček a těla"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOnJhdw.desc": {
+          "source": "The complete message as base64url-encoded MIME data in `raw`; the body is not parsed",
+          "message": "Celá zpráva jako data MIME kódovaná pomocí base64url v `raw`; tělo se neparsuje"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOnJhdw.display_name": {
+          "source": "Raw",
+          "message": "Nezpracovaný"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOnJhdw.short_desc": {
+          "source": "The complete message as base64url-encoded MIME data",
+          "message": "Celá zpráva jako data MIME kódovaná pomocí base64url"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.desc": {
+          "source": "How much of the draft's message to retrieve; if not set, the complete message is returned",
+          "message": "Kolik ze zprávy konceptu se má načíst; pokud není nastaveno, vrátí se celá zpráva"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.display_name": {
+          "source": "Message Format",
+          "message": "Formát zprávy"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.short_desc": {
+          "source": "How much of the draft's message to retrieve",
+          "message": "Kolik ze zprávy konceptu se má načíst"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.aWQ.desc": {
+          "source": "The ID of the draft to retrieve; `list-drafts` and `create-draft` return this value as `id`",
+          "message": "ID konceptu, který se má načíst; `list-drafts` a `create-draft` vracejí tuto hodnotu jako `id`"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.aWQ.display_name": {
+          "source": "Draft ID",
+          "message": "ID konceptu"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.aWQ.short_desc": {
+          "source": "The ID of the draft to retrieve",
+          "message": "ID konceptu, který se má načíst"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.short_desc": {
+          "source": "Retrieve a draft",
+          "message": "Získat koncept"
+        },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.desc": {
           "source": "Permanently deletes a message. **This cannot be undone**: the message does not go to the trash and no copy remains, so use `trash-message` unless the message must be destroyed immediately.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed.\n\nThe Gmail API returns no content for this call",
           "message": "Trvale smaže zprávu. **Tuto akci nelze vrátit zpět**: zpráva se nepřesune do koše a nezůstane žádná kopie, proto použijte `trash-message`, pokud zpráva nemusí být zničena okamžitě.\n\nTuto akci použijte ze zpracovatele události `watch` nebo `watch-attachment` s hodnotou `message_id`, kterou událost nese, jakmile zpracování úspěšně proběhne. Smazání ze samotného sledování pomocí `delete_messages` zprávu zničí ihned po vyvolání události bez ohledu na to, zda zpracování následně uspělo.\n\nGmail API pro toto volání nevrací žádný obsah"
@@ -86,6 +486,30 @@
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
           "source": "Permanently delete a message; this cannot be undone",
           "message": "Trvale smazat zprávu; tuto akci nelze vrátit zpět"
+        },
+        "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.desc": {
+          "source": "Permanently deletes a draft. **This cannot be undone**: the draft does not go to the trash and no copy remains.\n\nThe Gmail API returns no content for this call",
+          "message": "Trvale smaže koncept. **Tuto akci nelze vrátit zpět**: koncept se nepřesune do koše a nezůstane žádná kopie.\n\nGmail API pro toto volání nevrací žádný obsah"
+        },
+        "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.display_name": {
+          "source": "Delete a Draft",
+          "message": "Smazat koncept"
+        },
+        "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.option.aWQ.desc": {
+          "source": "The ID of the draft to delete permanently; `list-drafts` and `create-draft` return this value as `id`",
+          "message": "ID konceptu, který se má trvale smazat; `list-drafts` a `create-draft` vracejí tuto hodnotu jako `id`"
+        },
+        "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.option.aWQ.display_name": {
+          "source": "Draft ID",
+          "message": "ID konceptu"
+        },
+        "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.option.aWQ.short_desc": {
+          "source": "The ID of the draft to delete permanently",
+          "message": "ID konceptu, který se má trvale smazat"
+        },
+        "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.short_desc": {
+          "source": "Permanently delete a draft; this cannot be undone",
+          "message": "Trvale smazat koncept; tuto akci nelze vrátit zpět"
         },
         "app.R21haWw.action.bGlzdA.desc": {
           "source": "Search for messages in the account",
@@ -158,6 +582,246 @@
         "app.R21haWw.action.bGlzdA.short_desc": {
           "source": "Search for messages",
           "message": "Hledat zprávy"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.desc": {
+          "source": "Search for messages in the account and return each matching message with its metadata, instead of the bare message and thread IDs that `list` returns. Each match is retrieved separately in the requested `format`, so a page of `maxResults` messages costs `maxResults` + 1 API requests; keep `maxResults` small and use `pageToken` to walk further pages",
+          "message": "Hledá zprávy v účtu a vrací každou odpovídající zprávu s jejími metadaty namísto pouhých ID zpráv a vláken, která vrací `list`. Každá nalezená zpráva se načítá samostatně v požadovaném `format`, takže stránka s `maxResults` zprávami stojí `maxResults` + 1 požadavků na API; udržujte `maxResults` malé a k procházení dalších stránek použijte `pageToken`"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.display_name": {
+          "source": "Search for Messages with Metadata",
+          "message": "Hledat zprávy s metadaty"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1ldGFkYXRh.desc": {
+          "source": "Message IDs, labels, snippet, and the headers named in `metadata_headers` only; no body",
+          "message": "Pouze ID zpráv, štítky, úryvek a hlavičky uvedené v `metadata_headers`; bez těla"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1ldGFkYXRh.display_name": {
+          "source": "Metadata",
+          "message": "Metadata"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1ldGFkYXRh.short_desc": {
+          "source": "Message IDs, labels, snippet, and the requested headers only",
+          "message": "Pouze ID zpráv, štítky, úryvek a požadované hlavičky"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.allowed-value.c3RyaW5nOmZ1bGw.desc": {
+          "source": "The complete message including all headers and the MIME body parts; attachment data is not included and must be retrieved with `get-attachment`",
+          "message": "Celá zpráva včetně všech hlaviček a částí těla MIME; data příloh nejsou zahrnuta a je nutné je načíst pomocí `get-attachment`"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "Full",
+          "message": "Úplný"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.allowed-value.c3RyaW5nOmZ1bGw.short_desc": {
+          "source": "The complete message including all headers and the body",
+          "message": "Celá zpráva včetně všech hlaviček a těla"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.desc": {
+          "source": "How much of each matching message to retrieve",
+          "message": "Kolik z každé odpovídající zprávy se má načíst"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.display_name": {
+          "source": "Message Format",
+          "message": "Formát zprávy"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.short_desc": {
+          "source": "How much of each matching message to retrieve",
+          "message": "Kolik z každé odpovídající zprávy se má načíst"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.aW5jbHVkZVNwYW1UcmFzaA.desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "Zahrnout do vyhledávání složky spam a koš?"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.aW5jbHVkZVNwYW1UcmFzaA.display_name": {
+          "source": "Include Spam and Trash?",
+          "message": "Zahrnout spam a koš?"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.aW5jbHVkZVNwYW1UcmFzaA.short_desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "Zahrnout do vyhledávání složky spam a koš?"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bGFiZWxJZHM.desc": {
+          "source": "Only return messages with labels that match all of the specified label IDs. Messages in a thread might have labels that other messages in the same thread don't have",
+          "message": "Vrátit pouze zprávy se štítky, které odpovídají všem zadaným ID štítků. Zprávy ve vlákně mohou mít štítky, které jiné zprávy ve stejném vlákně nemají"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bGFiZWxJZHM.display_name": {
+          "source": "Labels",
+          "message": "Štítky"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bGFiZWxJZHM.short_desc": {
+          "source": "Only return messages with labels that match all of the specified label IDs",
+          "message": "Vrátit pouze zprávy se štítky, které odpovídají všem zadaným ID štítků"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of results to return; each message returned costs one additional API request",
+          "message": "Maximální počet výsledků, které se mají vrátit; každá vrácená zpráva stojí jeden další požadavek na API"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of results to return",
+          "message": "Maximální počet vrácených výsledků"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bWV0YWRhdGFfaGVhZGVycw.desc": {
+          "source": "The message headers to retrieve for each matching message; ignored unless `format` is `metadata`",
+          "message": "Hlavičky zprávy, které se mají načíst pro každou odpovídající zprávu; ignoruje se, pokud `format` není `metadata`"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bWV0YWRhdGFfaGVhZGVycw.display_name": {
+          "source": "Metadata Headers",
+          "message": "Hlavičky metadat"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bWV0YWRhdGFfaGVhZGVycw.short_desc": {
+          "source": "The message headers to retrieve for each matching message",
+          "message": "Hlavičky zprávy, které se mají načíst pro každou odpovídající zprávu"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.cGFnZVRva2Vu.desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "Token stránky pro načtení konkrétní stránky výsledků v seznamu"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "Token stránky"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "Token stránky pro načtení konkrétní stránky výsledků v seznamu"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.cQ.desc": {
+          "source": "The gmail search criteria for retrieving the messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
+          "message": "Vyhledávací kritéria Gmailu pro načtení zpráv; např.: `in:inbox to:me@gmail.com subject:hello is:unread`"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "Kritéria vyhledávání"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.cQ.short_desc": {
+          "source": "The gmail search criteria for retrieving the messages",
+          "message": "Vyhledávací kritéria Gmailu pro načtení zpráv"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.short_desc": {
+          "source": "Search for messages and return each match with its headers",
+          "message": "Hledat zprávy a vrátit každou nalezenou zprávu s jejími hlavičkami"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.desc": {
+          "source": "Search for drafts in the account; each draft is returned with its ID and the ID and thread ID of the message it holds. Use `get-draft` to retrieve a draft's content",
+          "message": "Hledá koncepty v účtu; každý koncept se vrací se svým ID a s ID a ID vlákna zprávy, kterou obsahuje. Obsah konceptu načtete pomocí `get-draft`"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.display_name": {
+          "source": "Search for Drafts",
+          "message": "Hledat koncepty"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.aW5jbHVkZVNwYW1UcmFzaA.desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "Zahrnout do vyhledávání složky spam a koš?"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.aW5jbHVkZVNwYW1UcmFzaA.display_name": {
+          "source": "Include Spam and Trash?",
+          "message": "Zahrnout spam a koš?"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.aW5jbHVkZVNwYW1UcmFzaA.short_desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "Zahrnout do vyhledávání složky spam a koš?"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of results to return",
+          "message": "Maximální počet vrácených výsledků"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "Maximální počet výsledků"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of results to return",
+          "message": "Maximální počet vrácených výsledků"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.cGFnZVRva2Vu.desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "Token stránky pro načtení konkrétní stránky výsledků v seznamu"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "Token stránky"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "Token stránky pro načtení konkrétní stránky výsledků v seznamu"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.cQ.desc": {
+          "source": "The gmail search criteria for retrieving the drafts; ex: `to:me@gmail.com subject:hello`; if not set, all drafts are returned",
+          "message": "Kritéria vyhledávání Gmailu pro načtení konceptů; např. `to:me@gmail.com subject:hello`; pokud nejsou nastavena, vrátí se všechny koncepty"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "Kritéria vyhledávání"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.cQ.short_desc": {
+          "source": "The gmail search criteria for retrieving the drafts",
+          "message": "Kritéria vyhledávání Gmailu pro načtení konceptů"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.short_desc": {
+          "source": "Search for drafts",
+          "message": "Hledat koncepty"
+        },
+        "app.R21haWw.action.bGlzdC1sYWJlbHM.desc": {
+          "source": "Lists all labels in the account, both Gmail's system labels (`INBOX`, `UNREAD`, `STARRED`, and so on) and user-created labels, each with the ID that `modify-message-labels` and the `labelIds` search option take",
+          "message": "Vypíše všechny štítky v účtu, jak systémové štítky Gmailu (`INBOX`, `UNREAD`, `STARRED` a další), tak štítky vytvořené uživatelem, každý s ID, které přijímají `modify-message-labels` a možnost vyhledávání `labelIds`"
+        },
+        "app.R21haWw.action.bGlzdC1sYWJlbHM.display_name": {
+          "source": "List Labels",
+          "message": "Vypsat štítky"
+        },
+        "app.R21haWw.action.bGlzdC1sYWJlbHM.short_desc": {
+          "source": "List all labels in the account",
+          "message": "Vypsat všechny štítky v účtu"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.desc": {
+          "source": "Adds the labels in `addLabelIds` to and removes the labels in `removeLabelIds` from the message identified by `id` in one call. Gmail's system labels are changed the same way: remove `UNREAD` to mark a message as read, remove `INBOX` to archive it, or add `STARRED` to star it. Use `list-labels` to find a label's ID or `create-label` to make a new one",
+          "message": "Jedním voláním přidá ke zprávě identifikované pomocí `id` štítky uvedené v `addLabelIds` a odebere z ní štítky uvedené v `removeLabelIds`. Systémové štítky Gmailu se mění stejným způsobem: odeberte `UNREAD`, chcete-li zprávu označit jako přečtenou, odeberte `INBOX`, chcete-li ji archivovat, nebo přidejte `STARRED`, chcete-li ji označit hvězdičkou. Pomocí `list-labels` zjistíte ID štítku a pomocí `create-label` vytvoříte nový"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.display_name": {
+          "source": "Change a Message's Labels",
+          "message": "Změnit štítky zprávy"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.YWRkTGFiZWxJZHM.desc": {
+          "source": "The IDs of the labels to add to the message; a label is identified by its ID (ex: `INBOX`, `STARRED`, `Label_12`), not its name",
+          "message": "ID štítků, které se mají ke zprávě přidat; štítek je identifikován svým ID (např. `INBOX`, `STARRED`, `Label_12`), nikoli názvem"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.YWRkTGFiZWxJZHM.display_name": {
+          "source": "Labels to Add",
+          "message": "Štítky k přidání"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.YWRkTGFiZWxJZHM.short_desc": {
+          "source": "The IDs of the labels to add to the message",
+          "message": "ID štítků, které se mají ke zprávě přidat"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.aWQ.desc": {
+          "source": "The ID of the message to relabel; watch events carry this value as `message_id`",
+          "message": "ID zprávy, jejíž štítky se mají změnit; události sledování nesou tuto hodnotu jako `message_id`"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "ID zprávy"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.aWQ.short_desc": {
+          "source": "The ID of the message to relabel",
+          "message": "ID zprávy, jejíž štítky se mají změnit"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.cmVtb3ZlTGFiZWxJZHM.desc": {
+          "source": "The IDs of the labels to remove from the message; a label is identified by its ID (ex: `INBOX`, `UNREAD`, `Label_12`), not its name",
+          "message": "ID štítků, které se mají ze zprávy odebrat; štítek je identifikován svým ID (např. `INBOX`, `UNREAD`, `Label_12`), nikoli názvem"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.cmVtb3ZlTGFiZWxJZHM.display_name": {
+          "source": "Labels to Remove",
+          "message": "Štítky k odebrání"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.cmVtb3ZlTGFiZWxJZHM.short_desc": {
+          "source": "The IDs of the labels to remove from the message",
+          "message": "ID štítků, které se mají ze zprávy odebrat"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.short_desc": {
+          "source": "Add labels to and remove labels from a message",
+          "message": "Přidat štítky ke zprávě a odebrat je z ní"
         },
         "app.R21haWw.action.bWFrZS1hcGktY2FsbA.desc": {
           "source": "Make a custom HTTP / REST API call to **Gmail** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
@@ -483,9 +1147,33 @@
           "source": "Make a custom API call to Gmail",
           "message": "Provést vlastní volání API do Gmailu"
         },
+        "app.R21haWw.action.c2VuZC1kcmFmdA.desc": {
+          "source": "Sends the draft identified by `id` as it is to the recipients it names; Gmail removes the draft and returns the sent message. Use `get-draft` first to review what will be sent",
+          "message": "Odešle koncept identifikovaný pomocí `id` tak, jak je, příjemcům, které uvádí; Gmail koncept odstraní a vrátí odeslanou zprávu. Nejprve pomocí `get-draft` zkontrolujte, co bude odesláno"
+        },
+        "app.R21haWw.action.c2VuZC1kcmFmdA.display_name": {
+          "source": "Send a Draft",
+          "message": "Odeslat koncept"
+        },
+        "app.R21haWw.action.c2VuZC1kcmFmdA.option.aWQ.desc": {
+          "source": "The ID of the draft to send; `list-drafts` and `create-draft` return this value as `id`",
+          "message": "ID konceptu, který se má odeslat; `list-drafts` a `create-draft` vracejí tuto hodnotu jako `id`"
+        },
+        "app.R21haWw.action.c2VuZC1kcmFmdA.option.aWQ.display_name": {
+          "source": "Draft ID",
+          "message": "ID konceptu"
+        },
+        "app.R21haWw.action.c2VuZC1kcmFmdA.option.aWQ.short_desc": {
+          "source": "The ID of the draft to send",
+          "message": "ID konceptu, který se má odeslat"
+        },
+        "app.R21haWw.action.c2VuZC1kcmFmdA.short_desc": {
+          "source": "Send an existing draft as it is",
+          "message": "Odeslat existující koncept tak, jak je"
+        },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.desc": {
-          "source": "Creates a new outgoing email from the supplied recipient addresses, subject, body, and attachments, and transmits that new email through Gmail.",
-          "message": "Vytvoří nový odchozí e-mail ze zadaných adres příjemců, předmětu, těla a příloh a odešle jej přes Gmail."
+          "source": "Creates a new outgoing email from the supplied recipient addresses, subject, body, and attachments, and transmits that new email through Gmail. Set `thread_id` and `in_reply_to` to send the email as a reply within an existing conversation",
+          "message": "Vytvoří nový odchozí e-mail ze zadaných adres příjemců, předmětu, těla a příloh a odešle jej přes Gmail. Nastavením `thread_id` a `in_reply_to` odešlete e-mail jako odpověď v rámci existující konverzace"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
           "source": "Send a Message",
@@ -635,6 +1323,18 @@
           "source": "Blind carbon copy addresses",
           "message": "Adresy skryté kopie (BCC)"
         },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.aW5fcmVwbHlfdG8.desc": {
+          "source": "The `Message-ID` header value of the message being answered, including the angle brackets; sent as the `In-Reply-To` header and, unless `references` is set, also as the `References` header, so that mail clients and Gmail thread the reply under the original message. Watch events carry this value as `Message-ID`",
+          "message": "Hodnota hlavičky `Message-ID` zprávy, na kterou se odpovídá, včetně lomených závorek; odesílá se jako hlavička `In-Reply-To` a, pokud není nastaveno `references`, také jako hlavička `References`, aby poštovní klienti i Gmail zařadili odpověď pod původní zprávu. Události sledování nesou tuto hodnotu jako `Message-ID`"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.aW5fcmVwbHlfdG8.display_name": {
+          "source": "In Reply To",
+          "message": "Odpověď na"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.aW5fcmVwbHlfdG8.short_desc": {
+          "source": "The Message-ID header value of the message being answered",
+          "message": "Hodnota hlavičky Message-ID zprávy, na kterou se odpovídá"
+        },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c2VuZGVy.desc": {
           "source": "The sender's address for the email",
           "message": "Adresa odesílatele e-mailu"
@@ -659,6 +1359,18 @@
           "source": "The subject for the email",
           "message": "Předmět e-mailu"
         },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.cmVmZXJlbmNlcw.desc": {
+          "source": "The `References` header value: the `Message-ID` values of the messages in the conversation being answered, oldest first, separated by spaces and including the angle brackets. If not set, `in_reply_to` is used. Watch events carry the original message's `References` header",
+          "message": "Hodnota hlavičky `References`: hodnoty `Message-ID` zpráv v konverzaci, na kterou se odpovídá, od nejstarší, oddělené mezerami a včetně lomených závorek. Pokud není nastavena, použije se `in_reply_to`. Události sledování nesou hlavičku `References` původní zprávy"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.cmVmZXJlbmNlcw.display_name": {
+          "source": "References",
+          "message": "Reference"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.cmVmZXJlbmNlcw.short_desc": {
+          "source": "The Message-ID header values of the conversation being answered",
+          "message": "Hodnoty hlaviček Message-ID konverzace, na kterou se odpovídá"
+        },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.desc": {
           "source": "One or more `To:` addresses for the email",
           "message": "Jedna nebo více adres `To:` pro e-mail"
@@ -670,6 +1382,18 @@
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.short_desc": {
           "source": "Message recipient addresses",
           "message": "Adresy příjemců zprávy"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dGhyZWFkX2lk.desc": {
+          "source": "The ID of the Gmail thread to add the message to; set this to reply within an existing conversation. Gmail only honors it when `subject` matches the thread's subject and `in_reply_to` (or `references`) names a message in the thread. Watch events carry this value as `threadId`",
+          "message": "ID vlákna Gmailu, do kterého se má zpráva přidat; nastavte tuto hodnotu, chcete-li odpovědět v rámci existující konverzace. Gmail ji respektuje pouze tehdy, když `subject` odpovídá předmětu vlákna a `in_reply_to` (nebo `references`) uvádí zprávu z tohoto vlákna. Události sledování nesou tuto hodnotu jako `threadId`"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dGhyZWFkX2lk.display_name": {
+          "source": "Thread ID",
+          "message": "ID vlákna"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dGhyZWFkX2lk.short_desc": {
+          "source": "The ID of the Gmail thread to add the message to",
+          "message": "ID vlákna Gmailu, do kterého se má zpráva přidat"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {
           "source": "Create and transmit a new outgoing email through Gmail",
@@ -1030,6 +1754,30 @@
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
           "source": "Place an existing stored Gmail message in the recoverable trash folder",
           "message": "Přesunout existující uloženou zprávu Gmailu do obnovitelného koše"
+        },
+        "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.desc": {
+          "source": "Moves the message identified by `id` out of Gmail's trash folder and back into the mailbox, undoing `trash-message`; a message that Gmail has already purged from the trash cannot be restored",
+          "message": "Přesune zprávu identifikovanou pomocí `id` z koše Gmailu zpět do schránky, čímž vrátí zpět akci `trash-message`; zprávu, kterou Gmail již z koše odstranil, obnovit nelze"
+        },
+        "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.display_name": {
+          "source": "Restore a Message from the Trash",
+          "message": "Obnovit zprávu z koše"
+        },
+        "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.option.aWQ.desc": {
+          "source": "The ID of the message to restore from the trash; watch events carry this value as `message_id`",
+          "message": "ID zprávy, která má být obnovena z koše; události sledování nesou tuto hodnotu jako `message_id`"
+        },
+        "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "ID zprávy"
+        },
+        "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.option.aWQ.short_desc": {
+          "source": "The ID of the message to restore from the trash",
+          "message": "ID zprávy, která má být obnovena z koše"
+        },
+        "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.short_desc": {
+          "source": "Move a message from the trash back into the mailbox",
+          "message": "Přesunout zprávu z koše zpět do schránky"
         },
         "app.R21haWw.desc": {
           "source": "Gmail services",

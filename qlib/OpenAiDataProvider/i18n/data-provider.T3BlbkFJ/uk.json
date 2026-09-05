@@ -2783,6 +2783,154 @@
           "source": "Stream a response from a model",
           "message": "Отримувати потокову відповідь від моделі"
         },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.desc": {
+          "source": "Transcribe an audio file into text using an OpenAI speech-to-text model such as `gpt-4o-transcribe` or `whisper-1`",
+          "message": "Транскрибувати аудіофайл у текст за допомогою моделі OpenAI для перетворення мовлення на текст, наприклад `gpt-4o-transcribe` або `whisper-1`"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.display_name": {
+          "source": "Transcribe Audio",
+          "message": "Транскрибувати аудіо"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.ZmlsZQ.desc": {
+          "source": "The audio file to transcribe, in one of the following formats: `flac`, `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `ogg`, `wav`, or `webm`; the file name must have a matching extension. The maximum file size is 25 MB",
+          "message": "Аудіофайл для транскрибування в одному з таких форматів: `flac`, `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `ogg`, `wav` або `webm`; ім'я файлу повинно мати відповідне розширення. Максимальний розмір файлу — 25 МБ"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.ZmlsZQ.display_name": {
+          "source": "Audio File",
+          "message": "Аудіофайл"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.ZmlsZQ.short_desc": {
+          "source": "The audio file to transcribe",
+          "message": "Аудіофайл для транскрибування"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bGFuZ3VhZ2U.desc": {
+          "source": "The language of the input audio in [ISO-639-1](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) format (for example `en`); supplying the input language improves accuracy and latency",
+          "message": "Мова вхідного аудіо у форматі [ISO-639-1](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) (наприклад, `en`); зазначення мови вхідних даних покращує точність і затримку"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "Мова"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "The language of the input audio as an ISO-639-1 code",
+          "message": "Мова вхідного аудіо у вигляді коду ISO-639-1"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOmdwdC00by10cmFuc2NyaWJl.desc": {
+          "source": "The most accurate speech-to-text model; supports the `json` response format only",
+          "message": "Найточніша модель перетворення мовлення на текст; підтримує лише формат відповіді `json`"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOmdwdC00by10cmFuc2NyaWJl.display_name": {
+          "source": "GPT-4o Transcribe",
+          "message": "GPT-4o Transcribe"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOmdwdC00by1taW5pLXRyYW5zY3JpYmU.desc": {
+          "source": "A faster and cheaper speech-to-text model; supports the `json` response format only",
+          "message": "Швидша та дешевша модель перетворення мовлення на текст; підтримує лише формат відповіді `json`"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOmdwdC00by1taW5pLXRyYW5zY3JpYmU.display_name": {
+          "source": "GPT-4o Mini Transcribe",
+          "message": "GPT-4o Mini Transcribe"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOndoaXNwZXItMQ.desc": {
+          "source": "The open source Whisper V2 model; supports all response formats",
+          "message": "Модель Whisper V2 з відкритим кодом; підтримує всі формати відповіді"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOndoaXNwZXItMQ.display_name": {
+          "source": "Whisper",
+          "message": "Whisper"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.desc": {
+          "source": "The speech-to-text model to use for the transcription",
+          "message": "Модель перетворення мовлення на текст, яку слід використовувати для транскрибування"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "Модель"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.short_desc": {
+          "source": "The speech-to-text model to use",
+          "message": "Модель перетворення мовлення на текст, яку слід використовувати"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cHJvbXB0.desc": {
+          "source": "Optional text to guide the model's style or to continue a previous audio segment; the prompt should match the audio language",
+          "message": "Необов'язковий текст для спрямування стилю моделі або для продовження попереднього аудіосегмента; промпт повинен відповідати мові аудіо"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "Промпт"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cHJvbXB0.short_desc": {
+          "source": "Optional text to guide the model's style or continue a previous audio segment",
+          "message": "Необов'язковий текст для спрямування стилю моделі або продовження попереднього аудіосегмента"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "A JSON object with the transcribed text",
+          "message": "Об'єкт JSON із транскрибованим текстом"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnNydA.desc": {
+          "source": "SubRip subtitles with timestamps (`whisper-1` only)",
+          "message": "Субтитри SubRip із часовими мітками (лише `whisper-1`)"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnNydA.display_name": {
+          "source": "SRT Subtitles",
+          "message": "Субтитри SRT"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "The transcribed text only (`whisper-1` only)",
+          "message": "Лише транскрибований текст (лише `whisper-1`)"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "Звичайний текст"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnZ0dA.desc": {
+          "source": "Web Video Text Tracks subtitles with timestamps (`whisper-1` only)",
+          "message": "Субтитри Web Video Text Tracks із часовими мітками (лише `whisper-1`)"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnZ0dA.display_name": {
+          "source": "WebVTT Subtitles",
+          "message": "Субтитри WebVTT"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnZlcmJvc2VfanNvbg.desc": {
+          "source": "A JSON object with the transcribed text, language, duration, and timestamped segments (`whisper-1` only)",
+          "message": "Об'єкт JSON із транскрибованим текстом, мовою, тривалістю та сегментами з часовими мітками (лише `whisper-1`)"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnZlcmJvc2VfanNvbg.display_name": {
+          "source": "Verbose JSON",
+          "message": "Детальний JSON"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "The format of the transcription output.\n\n**Note**: `gpt-4o-transcribe` and `gpt-4o-mini-transcribe` support only `json`; the `text`, `srt`, `verbose_json`, and `vtt` formats require `whisper-1`. Non-JSON output is returned in the `text` field of the response",
+          "message": "Формат результату транскрибування.\n\n**Примітка**: `gpt-4o-transcribe` та `gpt-4o-mini-transcribe` підтримують лише `json`; формати `text`, `srt`, `verbose_json` і `vtt` потребують `whisper-1`. Результат не у форматі JSON повертається в полі `text` відповіді"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "Формат відповіді"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "The format of the transcription output",
+          "message": "Формат результату транскрибування"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "The sampling temperature, between `0` and `1`; higher values like `0.8` make the output more random, while lower values like `0.2` make it more focused and deterministic. If set to `0`, the model uses log probability to automatically increase the temperature until certain thresholds are hit",
+          "message": "Температура вибірки від `0` до `1`; вищі значення, як-от `0.8`, роблять результат більш випадковим, тоді як нижчі значення, як-от `0.2`, роблять його більш сфокусованим і детермінованим. Якщо встановлено `0`, модель використовує логарифмічну ймовірність для автоматичного підвищення температури до досягнення певних порогових значень"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "Температура вибірки"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature between 0 and 1",
+          "message": "Температура вибірки від 0 до 1"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.short_desc": {
+          "source": "Transcribe an audio file into text",
+          "message": "Транскрибувати аудіофайл у текст"
+        },
         "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.desc": {
           "source": "Update an assistant",
           "message": "Оновити асистента"

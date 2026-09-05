@@ -30,7 +30,7 @@
 %requires RestClientIo
 
 module DeepgramDataProvider {
-    version = "1.0";
+    version = "1.1";
     desc = "user module providing a data provider API for Deepgram speech services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -70,30 +70,24 @@ module DeepgramDataProvider {
             "path": "/transcribe-file",
             "action": "transcribe-file",
             "display_name": "Transcribe File",
-            "short_desc": "Transcribe an audio file by URL via Deepgram ASR",
-            "desc": "Submits a public audio URL to Deepgram's `/v1/listen` endpoint "
-                "and returns the JSON transcript.  Supports the Nova model family "
-                "with smart formatting, diarization, summarization, and "
-                "language detection.\n\n"
-                "**Note**: this action submits via URL only.  For raw-audio uploads "
-                "and realtime WebSocket streaming, use "
-                "@ref DeepgramRestClient::DeepgramRestClientIo \"DeepgramRestClientIo\" "
-                "directly.",
+            "short_desc": "Transcribe an audio file by URL or upload via Deepgram ASR",
+            "desc": "Submits audio to Deepgram's `/v1/listen` endpoint and returns the "
+                "JSON transcript.  The audio is given either as a public `url` that "
+                "Deepgram fetches or as an `audio` file whose bytes are uploaded as "
+                "the request body; exactly one of the two must be provided.  Supports "
+                "the Nova model family with smart formatting, diarization, "
+                "summarization, and language detection.",
             "action_code": DPAT_API,
             "groups": ("Speech Recognition",),
             "options": DataProviderActionCatalog::getActionOptionFromFields(
-                DeepgramTranscribeFileRequestDataType::Fields{"url",}, {
-                    "preselected": True, "required": True,
-                }
-            ) + DataProviderActionCatalog::getActionOptionFromFields(
                 DeepgramTranscribeFileRequestDataType::Fields{
-                    "model", "language", "smart_format", "diarize",
+                    "url", "audio", "model", "language", "smart_format", "diarize",
                 }, {
                     "preselected": True,
                 }
             ) + DataProviderActionCatalog::getActionOptionFromFields(
                 DeepgramTranscribeFileRequestDataType::Fields - (
-                    "url", "model", "language", "smart_format", "diarize",
+                    "url", "audio", "model", "language", "smart_format", "diarize",
                 )
             ),
             "output_type": DeepgramTranscribeFileDataProvider::ResponseType,
@@ -140,9 +134,9 @@ module DeepgramDataProvider {
     [Deepgram](https://deepgram.com) speech services.
 
     Two DPAT_API actions are registered:
-    - `transcribe-file` — submit an audio URL to `/v1/listen` and receive
-      a JSON transcript (Nova model family, smart format, diarization,
-      summarization, language detection)
+    - `transcribe-file` — submit an audio URL, or upload the audio bytes
+      directly, to `/v1/listen` and receive a JSON transcript (Nova model
+      family, smart format, diarization, summarization, language detection)
     - `synthesize-speech` — submit text to `/v1/speak` and receive audio
       bytes (Aura voice models, MP3/WAV/Opus/FLAC encodings)
 
@@ -154,6 +148,13 @@ module DeepgramDataProvider {
     @ref deepgramrestclientintro "DeepgramRestClient" for direct API access.
 
     @section DeepgramDataProviderRelnotes Release Notes
+
+    @subsection DeepgramDataProviderv1_1 DeepgramDataProvider v1.1
+    - the `transcribe-file` action accepts the audio to transcribe as a new
+      `audio` input option — a file value (or raw audio bytes) uploaded as the
+      request body with its MIME type sent as the `Content-Type` — as an
+      alternative to the `url` option, which is now optional; exactly one of
+      the two must be given
 
     @subsection DeepgramDataProviderv1_0 DeepgramDataProvider v1.0
     - the initial version of the %DeepgramDataProvider module

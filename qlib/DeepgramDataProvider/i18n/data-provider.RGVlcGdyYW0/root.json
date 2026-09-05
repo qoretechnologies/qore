@@ -344,12 +344,12 @@
           "message": "Transcribe File"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.short_desc": {
-          "source": "Transcribe an audio file by URL via Deepgram ASR",
-          "message": "Transcribe an audio file by URL via Deepgram ASR"
+          "source": "Transcribe an audio file by URL or upload via Deepgram ASR",
+          "message": "Transcribe an audio file by URL or upload via Deepgram ASR"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.desc": {
-          "source": "Submits a public audio URL to Deepgram's `/v1/listen` endpoint and returns the JSON transcript.  Supports the Nova model family with smart formatting, diarization, summarization, and language detection.\n\n**Note**: this action submits via URL only.  For raw-audio uploads and realtime WebSocket streaming, use @ref DeepgramRestClient::DeepgramRestClientIo \"DeepgramRestClientIo\" directly.",
-          "message": "Submits a public audio URL to Deepgram's `/v1/listen` endpoint and returns the JSON transcript.  Supports the Nova model family with smart formatting, diarization, summarization, and language detection.\n\n**Note**: this action submits via URL only.  For raw-audio uploads and realtime WebSocket streaming, use @ref DeepgramRestClient::DeepgramRestClientIo \"DeepgramRestClientIo\" directly."
+          "source": "Submits audio to Deepgram's `/v1/listen` endpoint and returns the JSON transcript.  The audio is given either as a public `url` that Deepgram fetches or as an `audio` file whose bytes are uploaded as the request body; exactly one of the two must be provided.  Supports the Nova model family with smart formatting, diarization, summarization, and language detection.",
+          "message": "Submits audio to Deepgram's `/v1/listen` endpoint and returns the JSON transcript.  The audio is given either as a public `url` that Deepgram fetches or as an `audio` file whose bytes are uploaded as the request body; exactly one of the two must be provided.  Supports the Nova model family with smart formatting, diarization, summarization, and language detection."
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXJs.display_name": {
           "source": "Audio URL",
@@ -360,8 +360,20 @@
           "message": "Public URL of the audio file to transcribe"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXJs.desc": {
-          "source": "Public URL of the audio file to transcribe.  Deepgram fetches the file from this URL; it must be reachable from the public internet.",
-          "message": "Public URL of the audio file to transcribe.  Deepgram fetches the file from this URL; it must be reachable from the public internet."
+          "source": "Public URL of the audio file to transcribe.  Deepgram fetches the file from this URL; it must be reachable from the public internet.\n\nExactly one of `url` or `audio` must be provided.",
+          "message": "Public URL of the audio file to transcribe.  Deepgram fetches the file from this URL; it must be reachable from the public internet.\n\nExactly one of `url` or `audio` must be provided."
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.display_name": {
+          "source": "Audio File",
+          "message": "Audio File"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.short_desc": {
+          "source": "Audio file to upload for transcription",
+          "message": "Audio file to upload for transcription"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.desc": {
+          "source": "The audio file to transcribe, uploaded as the request body; used when `url` is not given.  The file's `mime_type` (e.g. `audio/wav`, `audio/mpeg`, `audio/flac`) is sent as the request `Content-Type`; when it is `auto`, it is derived from the file `name`, falling back to `application/octet-stream`.  Upstream steps can pass either a file hash (`name`, `content`, `mime_type`) or the raw audio bytes as a `binary` value.\n\nExactly one of `url` or `audio` must be provided.",
+          "message": "The audio file to transcribe, uploaded as the request body; used when `url` is not given.  The file's `mime_type` (e.g. `audio/wav`, `audio/mpeg`, `audio/flac`) is sent as the request `Content-Type`; when it is `auto`, it is derived from the file `name`, falling back to `application/octet-stream`.  Upstream steps can pass either a file hash (`name`, `content`, `mime_type`) or the raw audio bytes as a `binary` value.\n\nExactly one of `url` or `audio` must be provided."
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.bW9kZWw.display_name": {
           "source": "Model",

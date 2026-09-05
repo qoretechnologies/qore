@@ -45,7 +45,14 @@ public class GmailBaseDataProvider inherits GoogleDataProvider::GoogleApiParentD
     }
 
     private {
+        #! Hand-written child providers; every other child is generated from the Discovery API document
         const ChildMap = {
+            "create-draft": Class::forName("GmailDataProvider::GmailCreateDraftDataProvider"),
+            "delete-draft": Class::forName("GmailDataProvider::GmailDeleteDraftDataProvider"),
+            "get-draft": Class::forName("GmailDataProvider::GmailGetDraftDataProvider"),
+            "list-with-metadata": Class::forName("GmailDataProvider::GmailListWithMetadataDataProvider"),
+            "modify-message-labels": Class::forName("GmailDataProvider::GmailModifyMessageLabelsDataProvider"),
+            "send-draft": Class::forName("GmailDataProvider::GmailSendDraftDataProvider"),
             "send-message": Class::forName("GmailDataProvider::GmailMessageSendDataProvider"),
             "watch": Class::forName("GmailDataProvider::GmailMessageWatchDataProvider"),
             "watch-attachment": Class::forName("GmailDataProvider::GmailAttachmentWatchDataProvider"),

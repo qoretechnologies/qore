@@ -1,0 +1,542 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%allow-injection
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Logger
+%requires DataProvider
+%requires RestClient
+%requires RestClientIo
+%requires GoogleRestClient
+%requires GoogleDataProvider
+%requires GmailDataProvider
+
+%exec-class GmailActionRequestsTest
+
+#! Records the events raised by a watch provider
+class RecordingObserver inherits DataProvider::Observer {
+    public {
+        list<hash<auto>> events = ();
+    }
+
+    update(string event_id, hash<auto> data_) {
+        push events, data_;
+    }
+}
+
+#! A Gmail REST client that records every request and answers from canned data instead of the network
+/** Every Gmail API provider sends its request through restDoRequest(), so that is the method overridden;
+    the recorded requests let a test check the exact HTTP method, path, query, and body an action produces
+*/
+class MockGmailApiRestClient inherits GoogleRestClient::GoogleRestClientIo {
+    public {
+        #! every request made, oldest first: method, path, body
+        list<hash<auto>> requests = ();
+
+        #! the response to a message listing
+        hash<auto> list_response = {};
+
+        #! message ID -> the message returned when it is retrieved
+        hash<auto> messages = {};
+
+        #! attachment ID -> the attachment returned when it is retrieved
+        hash<auto> attachments = {};
+
+        #! the account's labels
+        list<hash<auto>> labels = ();
+
+        #! the account's drafts
+        list<hash<auto>> drafts = ();
+    }
+
+    constructor() : GoogleRestClientIo(MockGmailApiRestClient::getRestOptions()) {
+    }
+
+    #! Returns REST options that do not narrow when the client copies them
+    static hash<auto!> getRestOptions() {
+        hash<auto!> opts = {
+            "api_profile": "gmail",
+            "url": "https://example.com",
+            "oauth2_client_id": "test",
+            "oauth2_client_secret": "test",
+            "oauth2_redirect_url": "https://localhost",
+            "token": "test",
+        };
+        return opts;
+    }
+
+    #! Returns the paths of the requests made with the given HTTP method, oldest first
+    list<string> getPaths(string method) {
+        return map $1.path, requests, $1.method == method;
+    }
+
+    hash<RestClient::RestResponseInfo> restDoRequest(string method, string path, auto body, *hash<auto> hdr) {
+        push requests, {"method": method, "path": path, "body": body};
+        return <RestClient::RestResponseInfo>{
+            "status_code": 200,
+            "headers": {},
+            "body": answer(method, path, body),
+        };
+    }
+
+    #! Answers one request from the canned data
+    private auto answer(string method, string path, auto body) {
+        if (method == "GET") {
+            if (path =~ /users\/me\/messages\?/) {
+                return list_response;
+            }
+            if (*string aid = (path =~ x/users\/me\/messages\/[^\/\?]+\/attachments\/([^\/\?]+)/)[0]) {
+                return attachments{aid};
+            }
+            if (*string id = (path =~ x/users\/me\/messages\/([^\/\?]+)/)[0]) {
+                return messages{id} ?? {"id": id};
+            }
+            if (path =~ /users\/me\/labels$/) {
+                return {"labels": labels};
+            }
+            if (path =~ /users\/me\/drafts(\?|$)/) {
+                return {"drafts": drafts};
+            }
+        } else if (method == "POST") {
+            if (path =~ /users\/me\/drafts$/) {
+                return {
+                    "id": "r-1",
+                    "message": {
+                        "id": "m-draft",
+                        "threadId": body.message.threadId ?? "t-draft",
+                    },
+                };
+            }
+            if (path =~ /users\/me\/messages\/send$/) {
+                return {
+                    "id": "m-sent",
+                    "threadId": body.threadId ?? "t-sent",
+                    "labelIds": ("SENT",),
+                };
+            }
+            if (*string id = (path =~ x/users\/me\/messages\/([^\/\?]+)\/modify$/)[0]) {
+                return {
+                    "id": id,
+                    "threadId": "t-" + id,
+                    "labelIds": body.addLabelIds,
+                };
+            }
+        }
+        throw "MOCK-ERROR", sprintf("unexpected request %s %y", method, path);
+    }
+}
+
+#! Gmail attachment watch provider exposing a single polling cycle
+class TestGmailAttachmentWatch inherits GmailAttachmentWatchDataProvider {
+    constructor(GoogleRestClient::GoogleRestClientIo rest, *hash<auto> options)
+            : GmailAttachmentWatchDataProvider(rest, options) {
+    }
+
+    hash<WatchCycleInfo> runCycle() { return runWatchCycle(fetchWatchItems()); }
+}
+
+public class GmailActionRequestsTest inherits QUnit::Test {
+    private {
+        #! why the Gmail Discovery document could not be loaded, if it could not
+        *string discovery_error;
+
+        #! the Message-ID of the message being answered in the threading tests
+        const OriginalMessageId = "<original@mail.example.com>";
+
+        #! 2026-07-29T10:00:00Z in milliseconds
+        const BaseMs = 1785664800000;
+    }
+
+    constructor() : Test("GmailActionRequestsTest", "1.0") {
+        addTestCase("MIME threading headers", \mimeThreadingTest());
+        addTestCase("send-message request shape", \sendMessageRequestTest());
+        addTestCase("create-draft request shape", \createDraftRequestTest());
+        addTestCase("modify-message-labels request shape", \modifyMessageLabelsRequestTest());
+        addTestCase("list-with-metadata request shape", \listWithMetadataRequestTest());
+        addTestCase("draft and label reference data", \referenceDataTest());
+        addTestCase("attachment events carry the thread ID", \attachmentEventThreadTest());
+
+        # the Discovery document is fetched from Google; no Gmail API provider can be built without it, so the
+        # tests that build one are skipped rather than failed when it cannot be fetched
+        try {
+            GoogleDataProviderBase::getRequestInfo(GoogleDiscoveryGmailApiName);
+        } catch (hash<ExceptionInfo> ex) {
+            discovery_error = sprintf("%s: %s", ex.err, ex.desc);
+        }
+
+        set_return_value(main());
+    }
+
+    #! Skips the current test if the Gmail Discovery document is not available
+    private checkDiscovery() {
+        if (discovery_error) {
+            testSkip(sprintf("the Gmail Discovery document is not available: %s", discovery_error));
+        }
+    }
+
+    #! Returns the value of the given header in a serialized MIME message, if present
+    private static *string getHeader(string mime, string name) {
+        int end = mime.find("\r\n\r\n");
+        string headers = end >= 0 ? mime.substr(0, end) : mime;
+        string prefix = name + ": ";
+        foreach string line in (headers.split("\r\n")) {
+            if (line.substr(0, prefix.size()) == prefix) {
+                return line.substr(prefix.size());
+            }
+        }
+    }
+
+    #! Returns the decoded MIME message from a Gmail API message body
+    private static string getMime(hash<auto> body) {
+        return parse_base64_url_string(body.raw).toString();
+    }
+
+    #! Returns a message as Gmail returns it in the metadata format
+    private static hash<auto> makeMetadataMessage(string id, string thread_id, string subject) {
+        return {
+            "id": id,
+            "threadId": thread_id,
+            "labelIds": ("INBOX",),
+            "snippet": subject,
+            "internalDate": string(BaseMs),
+            "payload": {
+                "mimeType": "text/plain",
+                "headers": (
+                    {"name": "Subject", "value": subject},
+                    {"name": "From", "value": "sender@example.com"},
+                ),
+                "body": {"size": 0},
+            },
+        };
+    }
+
+    #! A reply must carry In-Reply-To and References and name its thread; a fresh message must carry neither
+    mimeThreadingTest() {
+        hash<auto> base = {
+            "to": ("someone@example.com",),
+            "subject": "Re: hello",
+            "body": "thanks",
+        };
+
+        # a reply that names only the message it answers
+        hash<auto> body = GmailMessageSendDataProvider::makeMessageBody(base + {
+            "thread_id": "t-1",
+            "in_reply_to": OriginalMessageId,
+        });
+        assertEq(("raw", "threadId"), keys body);
+        assertEq("t-1", body.threadId, "the thread is named in the API body, not in the MIME message");
+        string mime = getMime(body);
+        assertEq("someone@example.com", getHeader(mime, "To"));
+        assertEq(OriginalMessageId, getHeader(mime, "In-Reply-To"));
+        assertEq(OriginalMessageId, getHeader(mime, "References"),
+            "In-Reply-To alone also serves as References, so Gmail threads the reply");
+
+        # an explicit References value wins
+        string refs = "<older@mail.example.com> " + OriginalMessageId;
+        body = GmailMessageSendDataProvider::makeMessageBody(base + {
+            "in_reply_to": OriginalMessageId,
+            "references": refs,
+        });
+        assertEq(("raw",), keys body, "no thread is named without thread_id");
+        mime = getMime(body);
+        assertEq(OriginalMessageId, getHeader(mime, "In-Reply-To"));
+        assertEq(refs, getHeader(mime, "References"));
+
+        # References without In-Reply-To is passed through as given
+        body = GmailMessageSendDataProvider::makeMessageBody(base + {"references": refs});
+        mime = getMime(body);
+        assertNothing(getHeader(mime, "In-Reply-To"));
+        assertEq(refs, getHeader(mime, "References"));
+
+        # a fresh message carries no threading headers at all
+        body = GmailMessageSendDataProvider::makeMessageBody(base);
+        assertEq(("raw",), keys body);
+        mime = getMime(body);
+        assertNothing(getHeader(mime, "In-Reply-To"));
+        assertNothing(getHeader(mime, "References"));
+        assertEq("Re: hello", getHeader(mime, "Subject"));
+    }
+
+    #! send-message must post the thread ID beside the MIME message and nothing else new
+    sendMessageRequestTest() {
+        checkDiscovery();
+        MockGmailApiRestClient rest();
+        GmailMessageSendDataProvider prov(rest);
+
+        hash<auto> res = prov.doRequest({
+            "to": "someone@example.com",
+            "subject": "Re: hello",
+            "body": "thanks",
+            "thread_id": "t-1",
+            "in_reply_to": OriginalMessageId,
+        });
+        assertEq(1, rest.requests.size());
+        hash<auto> req = rest.requests[0];
+        assertEq("POST", req.method);
+        assertEq("gmail/v1/users/me/messages/send", req.path);
+        # the body follows the Discovery schema's field order
+        assertEq(("raw", "threadId"), sort(keys req.body));
+        assertEq("t-1", req.body.threadId);
+        string mime = getMime(req.body);
+        assertEq(OriginalMessageId, getHeader(mime, "In-Reply-To"));
+        assertEq(OriginalMessageId, getHeader(mime, "References"));
+        assertEq("m-sent", res.id);
+        assertEq("t-1", res.threadId);
+
+        # without the threading options the body is exactly what it was before
+        rest.requests = ();
+        prov.doRequest({"to": "someone@example.com", "subject": "hello", "body": "hi"});
+        assertEq(("raw",), keys rest.requests[0].body);
+        assertNothing(getHeader(getMime(rest.requests[0].body), "In-Reply-To"));
+    }
+
+    #! create-draft must post the same message wrapped in a draft, without sending anything
+    createDraftRequestTest() {
+        checkDiscovery();
+        MockGmailApiRestClient rest();
+        GmailCreateDraftDataProvider prov(rest);
+
+        hash<auto> res = prov.doRequest({
+            "to": "someone@example.com",
+            "subject": "Re: hello",
+            "body": "thanks",
+            "thread_id": "t-1",
+            "in_reply_to": OriginalMessageId,
+        });
+        assertEq(1, rest.requests.size(), "a draft is stored with one request and never sent");
+        hash<auto> req = rest.requests[0];
+        assertEq("POST", req.method);
+        assertEq("gmail/v1/users/me/drafts", req.path);
+        assertEq(("message",), keys req.body, "the draft body wraps the message");
+        assertEq(("raw", "threadId"), keys req.body.message);
+        assertEq("t-1", req.body.message.threadId);
+        string mime = getMime(req.body.message);
+        assertEq("someone@example.com", getHeader(mime, "To"));
+        assertEq(OriginalMessageId, getHeader(mime, "In-Reply-To"));
+        assertEq(OriginalMessageId, getHeader(mime, "References"));
+        assertEq("r-1", res.id);
+        assertEq("t-1", res.message.threadId);
+
+        # a draft outside any thread
+        rest.requests = ();
+        prov.doRequest({"to": "someone@example.com", "subject": "hello", "body": "hi"});
+        assertEq(("raw",), keys rest.requests[0].body.message);
+    }
+
+    #! modify-message-labels must post both label lists to the message's modify endpoint
+    modifyMessageLabelsRequestTest() {
+        checkDiscovery();
+        MockGmailApiRestClient rest();
+        GmailModifyMessageLabelsDataProvider prov(rest);
+
+        hash<auto> res = prov.doRequest({
+            "id": "m1",
+            "addLabelIds": ("Label_1", "STARRED"),
+            "removeLabelIds": "UNREAD",
+        });
+        assertEq(1, rest.requests.size());
+        hash<auto> req = rest.requests[0];
+        assertEq("POST", req.method);
+        assertEq("gmail/v1/users/me/messages/m1/modify", req.path, "the message ID is a path argument");
+        assertEq({
+            "addLabelIds": ("Label_1", "STARRED"),
+            "removeLabelIds": ("UNREAD",),
+        }, req.body, "a single label is sent as a list too");
+        assertEq("m1", res.id);
+        assertEq(("Label_1", "STARRED"), res.labelIds);
+
+        # only one of the lists
+        rest.requests = ();
+        prov.doRequest({"id": "m2", "addLabelIds": "Label_1"});
+        assertEq({"addLabelIds": ("Label_1",)}, rest.requests[0].body);
+    }
+
+    #! list-with-metadata must list once and then retrieve each listed message in the requested format
+    listWithMetadataRequestTest() {
+        checkDiscovery();
+        MockGmailApiRestClient rest();
+        rest.list_response = {
+            "messages": (
+                {"id": "m1", "threadId": "t1"},
+                {"id": "m2", "threadId": "t2"},
+            ),
+            "nextPageToken": "page2",
+            "resultSizeEstimate": 2,
+        };
+        rest.messages = {
+            "m1": makeMetadataMessage("m1", "t1", "first"),
+            "m2": makeMetadataMessage("m2", "t2", "second"),
+        };
+        GmailListWithMetadataDataProvider prov(rest);
+
+        hash<auto> res = prov.doRequest({"q": "in:inbox", "maxResults": 2});
+        list<string> gets = rest.getPaths("GET");
+        assertEq(3, gets.size(), "one listing and one retrieval per listed message");
+        assertEq(3, rest.requests.size(), "and nothing else");
+        assertRegex("^gmail/v1/users/me/messages\\?", gets[0]);
+        assertRegex("q=in%3Ainbox", gets[0]);
+        assertRegex("maxResults=2", gets[0]);
+        assertRegex("^gmail/v1/users/me/messages/m1\\?", gets[1]);
+        assertRegex("format=metadata", gets[1], "the metadata format is the default");
+        foreach string header in (("Subject", "From", "To", "Date")) {
+            assertRegex("metadataHeaders=" + header + "(&|$)", gets[1],
+                sprintf("the default header list includes %s", header));
+        }
+        assertRegex("^gmail/v1/users/me/messages/m2\\?", gets[2]);
+
+        assertEq(2, res.messages.size());
+        assertEq("m1", res.messages[0].id);
+        assertEq("t1", res.messages[0].threadId);
+        assertEq("first", res.messages[0].payload.headers[0].value, "the retrieved message replaces the bare ID");
+        assertEq("second", res.messages[1].payload.headers[0].value);
+        assertEq("page2", res.nextPageToken, "the listing's paging information is passed through");
+        assertEq(2, res.resultSizeEstimate);
+
+        # a specific header list is passed to each retrieval; labels narrow the listing
+        rest.requests = ();
+        prov.doRequest({
+            "q": "in:inbox",
+            "labelIds": ("INBOX", "UNREAD"),
+            "metadata_headers": ("Subject", "Message-ID"),
+        });
+        gets = rest.getPaths("GET");
+        assertRegex("labelIds=INBOX", gets[0]);
+        assertRegex("labelIds=UNREAD", gets[0]);
+        assertRegex("metadataHeaders=Subject", gets[1]);
+        assertRegex("metadataHeaders=Message-ID", gets[1]);
+        assertFalse(gets[1] =~ /metadataHeaders=From/, "only the requested headers are named");
+
+        # the full format retrieves bodies, so no header list is sent
+        rest.requests = ();
+        prov.doRequest({"q": "in:inbox", "format": "full", "metadata_headers": ("Subject",)});
+        gets = rest.getPaths("GET");
+        assertRegex("format=full", gets[1]);
+        assertFalse(gets[1] =~ /metadataHeaders/, "Gmail ignores the header list unless the metadata format is used");
+
+        # an empty listing costs no retrievals
+        rest.list_response = {"resultSizeEstimate": 0};
+        rest.requests = ();
+        res = prov.doRequest({"q": "in:inbox"});
+        assertEq(1, rest.requests.size());
+        assertEq((), res.messages);
+        assertEq(0, res.resultSizeEstimate);
+
+        # the search criteria are required
+        assertThrows("INVALID-REQUEST", "\"q\"", sub () {
+            prov.doRequest({"maxResults": 2});
+        });
+    }
+
+    #! The draft and label actions must offer the account's drafts and labels as dropdown values
+    referenceDataTest() {
+        checkDiscovery();
+        MockGmailApiRestClient rest();
+        rest.labels = (
+            {"id": "INBOX", "name": "INBOX", "type": "system"},
+            {"id": "Label_1", "name": "Projects/Alpha", "type": "user"},
+        );
+        rest.drafts = (
+            {"id": "r-1", "message": {"id": "m1", "threadId": "t1"}},
+            {"id": "r-2", "message": {"id": "m2", "threadId": "t2"}},
+        );
+
+        GmailGetDraftDataProvider prov(rest);
+        assertEq({"drafts": True, "labels": True}, prov.getSupportedReferenceData());
+        assertEq({"labels": True}, prov.getSupportedElementReferenceData(),
+            "list-typed label options take their values from element reference data");
+
+        *list<hash<AllowedValueInfo>> labels = prov.getReferenceData("labels");
+        assertEq(("INBOX", "Label_1"), (map $1.value, labels), "a label is identified by its ID");
+        assertEq(("INBOX", "Projects/Alpha"), (map $1.display_name, labels), "and shown by its name");
+        assertEq(labels, prov.getElementReferenceData("labels"));
+        assertEq(("gmail/v1/users/me/labels", "gmail/v1/users/me/labels"), rest.getPaths("GET"));
+
+        rest.requests = ();
+        *list<hash<AllowedValueInfo>> drafts = prov.getReferenceData("drafts");
+        assertEq(("r-1", "r-2"), (map $1.value, drafts), "a draft is identified by its draft ID");
+        assertRegex("m1", drafts[0].short_desc, "and described by the message it holds");
+        assertRegex("t1", drafts[0].short_desc);
+        assertEq(("gmail/v1/users/me/drafts?maxResults=100",), rest.getPaths("GET"));
+
+        assertNothing(prov.getReferenceData("messages"), "unknown reference data is not an error");
+        assertThrows("UNSUPPORTED-REFERENCE-DATA", sub () {
+            prov.getReferenceDataEx("messages");
+        });
+
+        # every hand-written action provider shares the same reference data
+        foreach AbstractDataProvider other in ((
+            new GmailDeleteDraftDataProvider(rest),
+            new GmailSendDraftDataProvider(rest),
+            new GmailModifyMessageLabelsDataProvider(rest),
+            new GmailListWithMetadataDataProvider(rest),
+            new GmailCreateDraftDataProvider(rest),
+        )) {
+            assertEq({"drafts": True, "labels": True}, other.getSupportedReferenceData(), other.getName());
+            assertEq({"labels": True}, other.getSupportedElementReferenceData(), other.getName());
+        }
+    }
+
+    #! An attachment event must identify the thread of its source message, so a consumer can reply in it
+    attachmentEventThreadTest() {
+        checkDiscovery();
+        MockGmailApiRestClient rest();
+        rest.list_response = {
+            "messages": ({"id": "m1", "threadId": "t-1"},),
+        };
+        rest.messages.m1 = {
+            "id": "m1",
+            "threadId": "t-1",
+            "labelIds": ("INBOX",),
+            "snippet": "report",
+            "internalDate": string(BaseMs),
+            "payload": {
+                "mimeType": "multipart/mixed",
+                "headers": (
+                    {"name": "Subject", "value": "report"},
+                    {"name": "From", "value": "sender@example.com"},
+                    {"name": "Date", "value": "Wed, 29 Jul 2026 10:00:00 +0000"},
+                    {"name": "Message-ID", "value": OriginalMessageId},
+                ),
+                "body": {"size": 0},
+                "parts": (
+                    {
+                        "partId": "0",
+                        "mimeType": "text/plain",
+                        "headers": ({"name": "Content-Type", "value": "text/plain"},),
+                        "body": {"size": 2, "data": make_base64_url_string("hi")},
+                    },
+                    {
+                        "partId": "1",
+                        "mimeType": "text/csv",
+                        "filename": "report.csv",
+                        "headers": (
+                            {"name": "Content-Type", "value": "text/csv; name=\"report.csv\""},
+                            {"name": "Content-Disposition", "value": "attachment; filename=\"report.csv\""},
+                        ),
+                        "body": {"attachmentId": "a1", "size": 5},
+                    },
+                ),
+            },
+        };
+        rest.attachments.a1 = {"size": 5, "data": make_base64_url_string("a,b,c")};
+
+        TestGmailAttachmentWatch watch(rest, {"q": "in:inbox"});
+        RecordingObserver obs();
+        watch.registerObserver(obs);
+        assertEq(1, watch.runCycle().dispatched);
+        assertEq(1, obs.events.size(), "one event per attachment");
+        hash<auto> event = obs.events[0];
+        assertEq("m1", event.message_id, "the event names its source message");
+        assertEq("t-1", event.thread_id, "and the source message's thread");
+        assertEq("report.csv", event.filename);
+        assertEq("a,b,c", event.body);
+
+        # the example event and the event type say the same
+        assertEq({"message_id": "m1", "thread_id": "t-1"},
+            GmailAttachmentWatchDataProvider::getSourceInfo({"id": "m1", "threadId": "t-1"}));
+        assertEq("*string", GmailAttachmentEventDataType.getFields().thread_id.getType().getName());
+    }
+}

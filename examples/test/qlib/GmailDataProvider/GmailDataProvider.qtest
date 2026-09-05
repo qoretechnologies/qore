@@ -50,6 +50,14 @@ public class GmailDataProviderTest inherits QUnit::Test {
         addTestCase("gmail attachment events address their source message",
             \gmailAttachmentEventSourceMessageTest());
         addTestCase("gmail watch checkpoint semantics", \gmailWatchCheckpointTest());
+        addTestCase("gmail draft actions", \gmailDraftActionTest());
+        addTestCase("gmail label actions", \gmailLabelActionTest());
+        addTestCase("gmail search with metadata action", \gmailListWithMetadataActionTest());
+        addTestCase("gmail read-only actions", \gmailReadOnlyActionTest());
+        addTestCase("gmail reply threading", \gmailThreadingTest());
+        addTestCase("gmail drafts live", \gmailDraftLiveTest());
+        addTestCase("gmail labels live", \gmailLabelLiveTest());
+        addTestCase("gmail search with metadata live", \gmailListWithMetadataLiveTest());
 
         try {
             setupConnection();
@@ -162,6 +170,172 @@ public class GmailDataProviderTest inherits QUnit::Test {
             "the attachment watch deletion option describes the same");
     }
 
+    #! Returns the registered action, failing if it is unknown
+    private static hash<DataProviderActionInfo> getAction(string action) {
+        return DataProviderActionCatalog::getAppActionEx(GmailDataProvider::AppName, action);
+    }
+
+    #! Returns @ref True if the action declares an output type either way
+    private static bool hasOutputType(hash<DataProviderActionInfo> action) {
+        return action.hasKey("get_output_type") || action.hasKey("output_type");
+    }
+
+    #! A consumer must be able to draft a message and to find, retrieve, send, and delete drafts
+    gmailDraftActionTest() {
+        hash<DataProviderActionInfo> create = getAction("create-draft");
+        assertEq("/create-draft", create.path);
+        assertEq(DPAT_API, create.action_code);
+        assertEq(keys getAction("send-message").options, keys create.options,
+            "a draft takes exactly the options a sent message takes");
+        assertTrue(create.options.to.required);
+        assertTrue(create.options.subject.required);
+        assertTrue(create.options.body.required);
+        assertTrue(hasOutputType(create));
+        assertTrue(DataProviderActionCatalog::actionMutatesState(create));
+
+        hash<DataProviderActionInfo> list = getAction("list-drafts");
+        assertEq("/drafts/list", list.path);
+        assertEq(DPAT_API, list.action_code);
+        assertEq(("q", "maxResults", "includeSpamTrash", "pageToken"), keys list.options);
+        assertFalse(list.options.q.required, "all drafts can be listed");
+        assertEq(False, list.mutates_state);
+        assertTrue(hasOutputType(list));
+
+        hash<DataProviderActionInfo> get = getAction("get-draft");
+        assertEq("/get-draft", get.path);
+        assertEq(DPAT_API, get.action_code);
+        assertTrue(get.options.id.required);
+        assertEq("drafts", get.options.id.ref_data, "the draft can be chosen from a dropdown");
+        assertEq(("full", "metadata", "minimal", "raw"), (map $1.value, get.options.format.allowed_values));
+        assertFalse(get.options.format.required);
+        assertEq(False, get.mutates_state);
+        assertTrue(hasOutputType(get));
+
+        hash<DataProviderActionInfo> send = getAction("send-draft");
+        assertEq("/send-draft", send.path);
+        assertEq(DPAT_API, send.action_code);
+        assertEq(("id",), keys send.options);
+        assertTrue(send.options.id.required);
+        assertEq("drafts", send.options.id.ref_data);
+        assertTrue(hasOutputType(send));
+        assertTrue(DataProviderActionCatalog::actionMutatesState(send));
+
+        hash<DataProviderActionInfo> del = getAction("delete-draft");
+        assertEq("/delete-draft", del.path);
+        assertEq(DPAT_API, del.action_code);
+        assertEq(("id",), keys del.options);
+        assertTrue(del.options.id.required);
+        assertEq("drafts", del.options.id.ref_data);
+        # the Gmail API returns no content for a permanent delete, as for delete-message
+        assertFalse(hasOutputType(del));
+        assertTrue(DataProviderActionCatalog::actionMutatesState(del));
+    }
+
+    #! A consumer must be able to list and create labels and to relabel a message
+    gmailLabelActionTest() {
+        hash<DataProviderActionInfo> modify = getAction("modify-message-labels");
+        assertEq("/modify-message-labels", modify.path);
+        assertEq(DPAT_API, modify.action_code);
+        assertEq(("id", "addLabelIds", "removeLabelIds"), keys modify.options);
+        assertTrue(modify.options.id.required);
+        foreach string opt in (("addLabelIds", "removeLabelIds")) {
+            assertFalse(modify.options{opt}.required, opt);
+            assertEq("*softlist<string>", modify.options{opt}.type.getName(), opt);
+            assertEq("labels", modify.options{opt}.element_ref_data,
+                sprintf("each element of %s can be chosen from a dropdown", opt));
+        }
+        assertTrue(hasOutputType(modify));
+        assertTrue(DataProviderActionCatalog::actionMutatesState(modify));
+
+        hash<DataProviderActionInfo> list = getAction("list-labels");
+        assertEq("/labels/list", list.path);
+        assertEq(DPAT_API, list.action_code);
+        assertEq({}, list.options, "listing labels takes no options");
+        assertEq(False, list.mutates_state);
+        assertTrue(hasOutputType(list));
+
+        hash<DataProviderActionInfo> create = getAction("create-label");
+        assertEq("/labels/create", create.path);
+        assertEq(DPAT_API, create.action_code);
+        assertEq(("name", "labelListVisibility", "messageListVisibility"), keys create.options);
+        assertTrue(create.options.name.required);
+        assertEq(("labelShow", "labelShowIfUnread", "labelHide"),
+            (map $1.value, create.options.labelListVisibility.allowed_values));
+        assertEq(("show", "hide"), (map $1.value, create.options.messageListVisibility.allowed_values));
+        assertTrue(hasOutputType(create));
+        assertTrue(DataProviderActionCatalog::actionMutatesState(create));
+
+        hash<DataProviderActionInfo> untrash = getAction("untrash-message");
+        assertEq("/messages/untrash", untrash.path);
+        assertEq(DPAT_API, untrash.action_code);
+        assertEq(("id",), keys untrash.options);
+        assertTrue(untrash.options.id.required);
+        assertTrue(hasOutputType(untrash));
+        assertTrue(DataProviderActionCatalog::actionMutatesState(untrash));
+    }
+
+    #! A consumer must be able to get matching messages with their headers in one action
+    gmailListWithMetadataActionTest() {
+        hash<DataProviderActionInfo> action = getAction("list-with-metadata");
+        assertEq("/list-with-metadata", action.path);
+        assertEq(DPAT_API, action.action_code);
+        assertEq(("q", "maxResults", "includeSpamTrash", "labelIds", "pageToken", "format", "metadata_headers"),
+            keys action.options);
+        assertTrue(action.options.q.required);
+        assertTrue(action.options.q.preselected);
+        assertEq("labels", action.options.labelIds.element_ref_data);
+        assertEq(("metadata", "full"), (map $1.value, action.options.format.allowed_values));
+        assertEq("metadata", action.options.format.default_value);
+        assertEq(("Subject", "From", "To", "Date"), action.options.metadata_headers.default_value);
+        assertEq("*softlist<string>", action.options.metadata_headers.type.getName());
+        assertEq(False, action.mutates_state);
+        assertTrue(hasOutputType(action));
+
+        # the existing list action is untouched
+        hash<DataProviderActionInfo> list = getAction("list");
+        assertEq("/messages/list", list.path);
+        assertEq(("q", "maxResults", "includeSpamTrash", "labelIds", "pageToken"), keys list.options);
+    }
+
+    #! Actions that only read must say so, because an unannotated API action counts as mutating
+    gmailReadOnlyActionTest() {
+        foreach string name in (("list", "get", "get-attachment", "list-labels", "list-drafts", "get-draft",
+                "list-with-metadata")) {
+            hash<DataProviderActionInfo> action = getAction(name);
+            assertEq(False, action.mutates_state, sprintf("%s declares that it is read-only", name));
+            assertFalse(DataProviderActionCatalog::actionMutatesState(action), name);
+        }
+        foreach string name in (("send-message", "create-draft", "send-draft", "delete-draft", "create-label",
+                "modify-message-labels", "untrash-message", "trash-message", "delete-message")) {
+            assertTrue(DataProviderActionCatalog::actionMutatesState(getAction(name)),
+                sprintf("%s is classified as mutating", name));
+        }
+    }
+
+    #! A consumer must be able to answer a message in its thread from the data a watch event carries
+    gmailThreadingTest() {
+        foreach string name in (("send-message", "create-draft")) {
+            hash<string, hash<ActionOptionInfo>> options = getAction(name).options;
+            foreach string opt in (("thread_id", "in_reply_to", "references")) {
+                assertTrue(options.hasKey(opt), sprintf("%s takes %s", name, opt));
+                assertFalse(options{opt}.required, sprintf("%s: %s is optional", name, opt));
+                assertEq("*string", options{opt}.type.getName(), sprintf("%s: %s", name, opt));
+            }
+            assertTrue(options.in_reply_to.example_value =~ /^<.*>$/,
+                sprintf("%s: the In-Reply-To example includes the angle brackets", name));
+        }
+
+        # the watch events carry what the reply needs
+        assertTrue(GmailMessageEventDataType::Fields.hasKey("In-Reply-To"),
+            "message events declare the In-Reply-To header");
+        assertEq("*string", GmailMessageEventDataType::Fields."In-Reply-To".type.getName());
+        assertTrue(GmailAttachmentEventDataType.getFields().hasKey("thread_id"),
+            "attachment events declare the source message's thread");
+        assertEq("*string", GmailAttachmentEventDataType.getFields().thread_id.getType().getName());
+        assertEq({"message_id": "m1", "thread_id": "t1"},
+            GmailAttachmentWatchDataProvider::getSourceInfo({"id": "m1", "threadId": "t1"}));
+    }
+
     #! Every attachment event must identify the message it came from
     gmailAttachmentEventSourceMessageTest() {
         assertTrue(GmailAttachmentEventDataType.getFields().hasKey("message_id"),
@@ -234,6 +408,160 @@ public class GmailDataProviderTest inherits QUnit::Test {
         assertThrows("WATCH-CHECKPOINT-ERROR", sub () {
             provider.advance(102, "");
         });
+    }
+
+    #! Drafts must be creatable in a thread, listable, retrievable, and deletable without anything being sent
+    gmailDraftLiveTest() {
+        if (!gdp) {
+            testSkip("no connection");
+        }
+
+        # draft the reply in the thread of any message in the inbox; Gmail honors the thread only when the
+        # subject matches, so the draft reuses that message's subject
+        hash<auto> listed = gdp.getChildProviderPath("list-with-metadata").doRequest({
+            "q": "in:inbox",
+            "maxResults": 1,
+            "metadata_headers": ("Subject", "Message-ID"),
+        });
+        *hash<auto> original = listed.messages[0];
+        hash<auto> req = {
+            "to": "draft-test@example.invalid",
+            "subject": original ? getHeaderValue(original, "Subject") ?? "GmailDataProvider test draft"
+                : sprintf("GmailDataProvider test draft %s", get_random_string(12)),
+            "body": sprintf("created by GmailDataProvider.qtest %s; safe to delete", get_random_string(12)),
+        };
+        if (original) {
+            req += {
+                "thread_id": original.threadId,
+                "in_reply_to": getHeaderValue(original, "Message-ID"),
+            };
+        }
+
+        hash<auto> draft = gdp.getChildProviderPath("create-draft").doRequest(req);
+        string draft_id = draft.id;
+        assertTrue(draft_id.val(), "the draft was created");
+        bool deleted;
+        on_exit if (!deleted) {
+            gdp.getChildProviderPath("delete-draft").doRequest({"id": draft_id});
+        }
+        if (original) {
+            assertEq(original.threadId, draft.message.threadId, "the draft was created in the requested thread");
+        }
+
+        # the draft is listed
+        AbstractDataProvider list_drafts = gdp.getChildProviderPath("drafts/list");
+        bool found;
+        *string page_token;
+        do {
+            hash<auto> page = list_drafts.doRequest({"maxResults": 500}
+                + (page_token.val() ? {"pageToken": page_token} : {}));
+            found = (select page.drafts, $1.id == draft_id).size() > 0;
+            page_token = page.nextPageToken;
+        } while (!found && page_token.val());
+        assertTrue(found, "the new draft is listed");
+
+        # and offered as reference data
+        AbstractDataProvider get_draft = gdp.getChildProviderPath("get-draft");
+        assertEq(1, (select get_draft.getReferenceData("drafts"), $1.value == draft_id).size(),
+            "the new draft is offered as a dropdown value");
+
+        # the stored draft has the requested content
+        hash<auto> got = gdp.getChildProviderPath("get-draft").doRequest({"id": draft_id, "format": "metadata"});
+        assertEq(draft_id, got.id);
+        assertEq(draft.message.id, got.message.id);
+        assertEq(req.subject, getHeaderValue(got.message, "Subject"), "the stored draft carries the subject");
+        if (original) {
+            assertEq(original.threadId, got.message.threadId, "the stored draft is in the thread");
+            assertEq(req.in_reply_to, getHeaderValue(got.message, "In-Reply-To"),
+                "the stored draft carries the In-Reply-To header");
+            assertEq(req.in_reply_to, getHeaderValue(got.message, "References"),
+                "and the References header derived from it");
+        }
+
+        # deleting it makes it unretrievable
+        gdp.getChildProviderPath("delete-draft").doRequest({"id": draft_id});
+        deleted = True;
+        try {
+            gdp.getChildProviderPath("get-draft").doRequest({"id": draft_id, "format": "minimal"});
+            fail("a deleted draft can still be retrieved");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(404, ex.arg."response-code", "the deleted draft is gone");
+        }
+    }
+
+    #! Labels must be listable and creatable, and a message must be relabelable with a created label
+    gmailLabelLiveTest() {
+        if (!gdp) {
+            testSkip("no connection");
+        }
+        hash<auto> listed = gdp.getChildProviderPath("messages/list").doRequest({"q": "in:inbox", "maxResults": 1});
+        if (!listed.messages) {
+            testSkip("no messages in the inbox to relabel");
+        }
+        string message_id = listed.messages[0].id;
+
+        hash<auto> labels = gdp.getChildProviderPath("labels/list").doRequest({});
+        assertEq(1, (select labels.labels, $1.id == "INBOX").size(), "the system labels are listed");
+
+        string name = sprintf("qore-test-%s", get_random_string(12));
+        hash<auto> label = gdp.getChildProviderPath("labels/create").doRequest({
+            "name": name,
+            "labelListVisibility": "labelHide",
+            "messageListVisibility": "hide",
+        });
+        string label_id = label.id;
+        assertTrue(label_id.val(), "the label was created");
+        on_exit gdp.getChildProviderPath("labels/delete").doRequest({"id": label_id});
+        assertEq(name, label.name);
+        assertEq("labelHide", label.labelListVisibility, "the visibility options were stored");
+        assertEq("hide", label.messageListVisibility);
+
+        # the new label is offered as a dropdown value for the label options
+        AbstractDataProvider modify = gdp.getChildProviderPath("modify-message-labels");
+        assertEq(1, (select modify.getElementReferenceData("labels"), $1.value == label_id).size());
+        assertEq(1, (select modify.getReferenceData("labels"), $1.value == label_id).size());
+
+        # add the label, then check what Gmail stored, not only what it returned
+        hash<auto> modified = modify.doRequest({"id": message_id, "addLabelIds": (label_id,)});
+        assertTrue(inlist(label_id, modified.labelIds), "the label was added");
+        AbstractDataProvider get = gdp.getChildProviderPath("messages/get");
+        assertTrue(inlist(label_id, get.doRequest({"id": message_id, "format": "minimal"}).labelIds),
+            "the added label is stored");
+
+        modified = modify.doRequest({"id": message_id, "removeLabelIds": label_id});
+        assertFalse(inlist(label_id, modified.labelIds), "the label was removed");
+        assertFalse(inlist(label_id, get.doRequest({"id": message_id, "format": "minimal"}).labelIds),
+            "the removal is stored");
+    }
+
+    #! A search with metadata must return each match with the requested headers
+    gmailListWithMetadataLiveTest() {
+        if (!gdp) {
+            testSkip("no connection");
+        }
+        hash<auto> res = gdp.getChildProviderPath("list-with-metadata").doRequest({
+            "q": "in:inbox",
+            "maxResults": 2,
+        });
+        if (!res.messages) {
+            testSkip("no messages in the inbox");
+        }
+        assertTrue(res.messages.size() <= 2, "maxResults bounds the page");
+        foreach hash<auto> msg in (res.messages) {
+            assertTrue(msg.id.val());
+            assertTrue(msg.threadId.val());
+            assertTrue(getHeaderValue(msg, "From").val(), "the From header was retrieved");
+            assertNothing(msg.payload.body."data", "the metadata format carries no body");
+        }
+    }
+
+    #! Returns the value of the given header of a Gmail message, if present
+    private static *string getHeaderValue(hash<auto> msg, string name) {
+        foreach hash<auto> hdr in (msg.payload.headers) {
+            if (hdr.name.lwr() == name.lwr()) {
+                return hdr.value;
+            }
+        }
     }
 
     private usageIntern() {

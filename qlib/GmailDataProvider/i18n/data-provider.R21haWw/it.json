@@ -3,6 +3,322 @@
   "locales": {
     "it": {
       "messages": {
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.desc": {
+          "source": "Creates a new draft email from the supplied recipient addresses, subject, body, and attachments, and stores it in Gmail's drafts folder without sending it, so that a person can review and send it, or so that `send-draft` can send it later. Set `thread_id` and `in_reply_to` to draft a reply within an existing conversation",
+          "message": "Crea una nuova bozza di email a partire da indirizzi dei destinatari, oggetto, corpo e allegati forniti e la salva nella cartella delle bozze di Gmail senza inviarla, in modo che una persona possa rivederla e inviarla, oppure che `send-draft` possa inviarla in seguito. Imposta `thread_id` e `in_reply_to` per preparare una risposta all'interno di una conversazione esistente"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.display_name": {
+          "source": "Create a Draft",
+          "message": "Crea una bozza"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Y2M.desc": {
+          "source": "One or more `Cc:` addresses for the email",
+          "message": "Uno o più indirizzi `Cc:` per l'e-mail"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Y2M.display_name": {
+          "source": "CC",
+          "message": "CC"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Y2M.short_desc": {
+          "source": "Carbon copy addresses",
+          "message": "Indirizzi in copia conoscenza (Cc)"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YXR0YWNobWVudHM.desc": {
+          "source": "Any attachments for the message",
+          "message": "Eventuali allegati per il messaggio"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YXR0YWNobWVudHM.display_name": {
+          "source": "Attachments",
+          "message": "Allegati"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YXR0YWNobWVudHM.short_desc": {
+          "source": "Message attachments",
+          "message": "Allegati del messaggio"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keQ.desc": {
+          "source": "The message body",
+          "message": "Il corpo del messaggio"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keQ.display_name": {
+          "source": "Message Body",
+          "message": "Corpo del messaggio"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keQ.short_desc": {
+          "source": "The message body",
+          "message": "Il corpo del messaggio"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "Nessuna codifica dei contenuti (non consigliato)"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.display_name": {
+          "source": "None",
+          "message": "Nessuno"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOm5vbmU.short_desc": {
+          "source": "No content encoding (not recommended)",
+          "message": "Nessuna codifica dei contenuti (non consigliato)"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.desc": {
+          "source": "Ideal for binary data",
+          "message": "Ideale per dati binari"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.display_name": {
+          "source": "Base64",
+          "message": "Base64"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmJhc2U2NA.short_desc": {
+          "source": "Ideal for binary data",
+          "message": "Ideale per dati binari"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.desc": {
+          "source": "`quoted-printable` for string data, `base64` for binary data",
+          "message": "`quoted-printable` per dati stringa, `base64` per dati binari"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.display_name": {
+          "source": "Auto",
+          "message": "Auto"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOmRlZmF1bHQ.short_desc": {
+          "source": "'quoted-printable' for string data, 'base64' for binary data",
+          "message": "'quoted-printable' per dati stringa, 'base64' per dati binari"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.desc": {
+          "source": "Ideal for string data",
+          "message": "Ideale per dati stringa"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.display_name": {
+          "source": "Quoted Printable",
+          "message": "Quoted Printable"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.allowed-value.c3RyaW5nOnF1b3RlZC1wcmludGFibGU.short_desc": {
+          "source": "Ideal for string data",
+          "message": "Ideale per dati stringa"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.desc": {
+          "source": "The encoding to use for the attachment:\n- `default`: `quoted-printable` for string data, `base64` for binary data\n- `none`: no content encoding (not recommended)\n- `quoted-printable`: quoted printable encoding \n- `base64`: base64 encoding",
+          "message": "La codifica da utilizzare per l'allegato:\n- `default`: `quoted-printable` per dati stringa, `base64` per dati binari\n- `none`: nessuna codifica del contenuto (non consigliato)\n- `quoted-printable`: codifica quoted-printable \n- `base64`: codifica base64"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.display_name": {
+          "source": "Body Encoding",
+          "message": "Codifica corpo"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1lbmNvZGluZw.short_desc": {
+          "source": "The encoding to use for the attachment",
+          "message": "La codifica da utilizzare per l'allegato"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.desc": {
+          "source": "HTML text",
+          "message": "Testo HTML"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.display_name": {
+          "source": "text/html",
+          "message": "text/html"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvaHRtbA.short_desc": {
+          "source": "HTML text",
+          "message": "Testo HTML"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.desc": {
+          "source": "Plain text",
+          "message": "Testo normale"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.display_name": {
+          "source": "text/plain",
+          "message": "text/plain"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.allowed-value.c3RyaW5nOnRleHQvcGxhaW4.short_desc": {
+          "source": "Plain text",
+          "message": "Testo normale"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.desc": {
+          "source": "The MIME type of the message body",
+          "message": "Il tipo MIME del corpo del messaggio"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.display_name": {
+          "source": "Body Mime Type",
+          "message": "Tipo MIME del corpo"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.Ym9keS1taW1lLXR5cGU.short_desc": {
+          "source": "The MIME type of the message body",
+          "message": "Il tipo MIME del corpo del messaggio"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YmNj.desc": {
+          "source": "One or more `Bcc:` addresses for the email",
+          "message": "Uno o più indirizzi `Bcc:` per l'email"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YmNj.display_name": {
+          "source": "BCC",
+          "message": "CCN"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.YmNj.short_desc": {
+          "source": "Blind carbon copy addresses",
+          "message": "Indirizzi in copia conoscenza nascosta"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.aW5fcmVwbHlfdG8.desc": {
+          "source": "The `Message-ID` header value of the message being answered, including the angle brackets; sent as the `In-Reply-To` header and, unless `references` is set, also as the `References` header, so that mail clients and Gmail thread the reply under the original message. Watch events carry this value as `Message-ID`",
+          "message": "Il valore dell'intestazione `Message-ID` del messaggio a cui si risponde, parentesi angolari comprese; inviato come intestazione `In-Reply-To` e, a meno che non sia impostato `references`, anche come intestazione `References`, in modo che i client di posta e Gmail raggruppino la risposta sotto il messaggio originale. Gli eventi di monitoraggio includono questo valore come `Message-ID`"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.aW5fcmVwbHlfdG8.display_name": {
+          "source": "In Reply To",
+          "message": "In risposta a"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.aW5fcmVwbHlfdG8.short_desc": {
+          "source": "The Message-ID header value of the message being answered",
+          "message": "Il valore dell'intestazione Message-ID del messaggio a cui si risponde"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.c2VuZGVy.desc": {
+          "source": "The sender's address for the email",
+          "message": "L'indirizzo del mittente per l'email"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.c2VuZGVy.display_name": {
+          "source": "Sender",
+          "message": "Mittente"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.c2VuZGVy.short_desc": {
+          "source": "The sender's address for the email",
+          "message": "L'indirizzo del mittente per l'email"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.c3ViamVjdA.desc": {
+          "source": "The subject for the email",
+          "message": "L'oggetto dell'email"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.c3ViamVjdA.display_name": {
+          "source": "Subject",
+          "message": "Oggetto"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.c3ViamVjdA.short_desc": {
+          "source": "The subject for the email",
+          "message": "L'oggetto dell'email"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.cmVmZXJlbmNlcw.desc": {
+          "source": "The `References` header value: the `Message-ID` values of the messages in the conversation being answered, oldest first, separated by spaces and including the angle brackets. If not set, `in_reply_to` is used. Watch events carry the original message's `References` header",
+          "message": "Il valore dell'intestazione `References`: i valori `Message-ID` dei messaggi della conversazione a cui si risponde, dal più vecchio al più recente, separati da spazi e parentesi angolari comprese. Se non è impostato, viene usato `in_reply_to`. Gli eventi di monitoraggio includono l'intestazione `References` del messaggio originale"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.cmVmZXJlbmNlcw.display_name": {
+          "source": "References",
+          "message": "Riferimenti"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.cmVmZXJlbmNlcw.short_desc": {
+          "source": "The Message-ID header values of the conversation being answered",
+          "message": "I valori delle intestazioni Message-ID della conversazione a cui si risponde"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.dG8.desc": {
+          "source": "One or more `To:` addresses for the email",
+          "message": "Uno o più indirizzi `To:` per l'email"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.dG8.display_name": {
+          "source": "To",
+          "message": "A"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.dG8.short_desc": {
+          "source": "Message recipient addresses",
+          "message": "Indirizzi dei destinatari del messaggio"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.dGhyZWFkX2lk.desc": {
+          "source": "The ID of the Gmail thread to add the message to; set this to reply within an existing conversation. Gmail only honors it when `subject` matches the thread's subject and `in_reply_to` (or `references`) names a message in the thread. Watch events carry this value as `threadId`",
+          "message": "L'ID del thread di Gmail a cui aggiungere il messaggio; impostalo per rispondere all'interno di una conversazione esistente. Gmail lo rispetta solo quando `subject` corrisponde all'oggetto del thread e `in_reply_to` (o `references`) indica un messaggio del thread. Gli eventi di monitoraggio includono questo valore come `threadId`"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.dGhyZWFkX2lk.display_name": {
+          "source": "Thread ID",
+          "message": "ID thread"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.option.dGhyZWFkX2lk.short_desc": {
+          "source": "The ID of the Gmail thread to add the message to",
+          "message": "L'ID del thread di Gmail a cui aggiungere il messaggio"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWRyYWZ0.short_desc": {
+          "source": "Create a new draft email in Gmail without sending it",
+          "message": "Crea una nuova bozza di email in Gmail senza inviarla"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.desc": {
+          "source": "Creates a new user label in the account and returns it with the ID that `modify-message-labels` takes",
+          "message": "Crea una nuova etichetta utente nell'account e la restituisce con l'ID accettato da `modify-message-labels`"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.display_name": {
+          "source": "Create a Label",
+          "message": "Crea un'etichetta"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmxhYmVsSGlkZQ.desc": {
+          "source": "Do not show the label in the label list",
+          "message": "Non mostrare l'etichetta nell'elenco delle etichette"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmxhYmVsSGlkZQ.display_name": {
+          "source": "Hide",
+          "message": "Nascondi"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmxhYmVsU2hvd0lmVW5yZWFk.desc": {
+          "source": "Show the label in the label list only while it has unread messages",
+          "message": "Mostra l'etichetta nell'elenco delle etichette solo finché contiene messaggi non letti"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmxhYmVsU2hvd0lmVW5yZWFk.display_name": {
+          "source": "Show If Unread",
+          "message": "Mostra se non letti"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmxhYmVsU2hvdw.desc": {
+          "source": "Show the label in the label list",
+          "message": "Mostra l'etichetta nell'elenco delle etichette"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.allowed-value.c3RyaW5nOmxhYmVsU2hvdw.display_name": {
+          "source": "Show",
+          "message": "Mostra"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.desc": {
+          "source": "Whether the label is shown in the label list of the Gmail web interface",
+          "message": "Se l'etichetta viene mostrata nell'elenco delle etichette dell'interfaccia web di Gmail"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.display_name": {
+          "source": "Label List Visibility",
+          "message": "Visibilità nell'elenco delle etichette"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bGFiZWxMaXN0VmlzaWJpbGl0eQ.short_desc": {
+          "source": "Whether the label is shown in the label list",
+          "message": "Se l'etichetta viene mostrata nell'elenco delle etichette"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.allowed-value.c3RyaW5nOmhpZGU.desc": {
+          "source": "Do not show messages with the label in the message list",
+          "message": "Non mostrare i messaggi con l'etichetta nell'elenco dei messaggi"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.allowed-value.c3RyaW5nOmhpZGU.display_name": {
+          "source": "Hide",
+          "message": "Nascondi"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.allowed-value.c3RyaW5nOnNob3c.desc": {
+          "source": "Show messages with the label in the message list",
+          "message": "Mostra i messaggi con l'etichetta nell'elenco dei messaggi"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.allowed-value.c3RyaW5nOnNob3c.display_name": {
+          "source": "Show",
+          "message": "Mostra"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.desc": {
+          "source": "Whether messages with the label are shown in the message list of the Gmail web interface",
+          "message": "Se i messaggi con l'etichetta vengono mostrati nell'elenco dei messaggi dell'interfaccia web di Gmail"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.display_name": {
+          "source": "Message List Visibility",
+          "message": "Visibilità nell'elenco dei messaggi"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bWVzc2FnZUxpc3RWaXNpYmlsaXR5.short_desc": {
+          "source": "Whether messages with the label are shown in the message list",
+          "message": "Se i messaggi con l'etichetta vengono mostrati nell'elenco dei messaggi"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.desc": {
+          "source": "The display name of the label; use `/` to nest a label under another, ex: `Projects/Alpha`",
+          "message": "Il nome visualizzato dell'etichetta; usa `/` per annidare un'etichetta sotto un'altra, es. `Projects/Alpha`"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.display_name": {
+          "source": "Label Name",
+          "message": "Nome dell'etichetta"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.option.bmFtZQ.short_desc": {
+          "source": "The display name of the label",
+          "message": "Il nome visualizzato dell'etichetta"
+        },
+        "app.R21haWw.action.Y3JlYXRlLWxhYmVs.short_desc": {
+          "source": "Create a new user label in the account",
+          "message": "Crea una nuova etichetta utente nell'account"
+        },
         "app.R21haWw.action.Z2V0.desc": {
           "source": "Retrieve a message",
           "message": "Recupera un messaggio"
@@ -63,6 +379,90 @@
           "source": "Retrieve an attachment",
           "message": "Recupera un allegato"
         },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.desc": {
+          "source": "Retrieves a draft and the message it holds in the requested `format`",
+          "message": "Recupera una bozza e il messaggio che contiene nel `format` richiesto"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.display_name": {
+          "source": "Retrieve a Draft",
+          "message": "Recupera una bozza"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1ldGFkYXRh.desc": {
+          "source": "Message IDs, labels, snippet, and headers only; no body",
+          "message": "Solo ID dei messaggi, etichette, frammento e intestazioni; nessun corpo"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1ldGFkYXRh.display_name": {
+          "source": "Metadata",
+          "message": "Metadati"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1ldGFkYXRh.short_desc": {
+          "source": "Message IDs, labels, snippet, and headers only",
+          "message": "Solo ID dei messaggi, etichette, frammento e intestazioni"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1pbmltYWw.desc": {
+          "source": "Message IDs and labels only; no headers and no body",
+          "message": "Solo ID dei messaggi ed etichette; nessuna intestazione e nessun corpo"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1pbmltYWw.display_name": {
+          "source": "Minimal",
+          "message": "Minimo"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1pbmltYWw.short_desc": {
+          "source": "Message IDs and labels only",
+          "message": "Solo ID dei messaggi ed etichette"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOmZ1bGw.desc": {
+          "source": "The complete message including all headers and the MIME body parts; attachment data is not included and must be retrieved with `get-attachment`",
+          "message": "Il messaggio completo, comprese tutte le intestazioni e le parti MIME del corpo; i dati degli allegati non sono inclusi e devono essere recuperati con `get-attachment`"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "Full",
+          "message": "Completo"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOmZ1bGw.short_desc": {
+          "source": "The complete message including all headers and the body",
+          "message": "Il messaggio completo, comprese tutte le intestazioni e il corpo"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOnJhdw.desc": {
+          "source": "The complete message as base64url-encoded MIME data in `raw`; the body is not parsed",
+          "message": "Il messaggio completo come dati MIME codificati in base64url in `raw`; il corpo non viene analizzato"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOnJhdw.display_name": {
+          "source": "Raw",
+          "message": "Grezzo"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.allowed-value.c3RyaW5nOnJhdw.short_desc": {
+          "source": "The complete message as base64url-encoded MIME data",
+          "message": "Il messaggio completo come dati MIME codificati in base64url"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.desc": {
+          "source": "How much of the draft's message to retrieve; if not set, the complete message is returned",
+          "message": "Quanto del messaggio della bozza recuperare; se non impostato, viene restituito il messaggio completo"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.display_name": {
+          "source": "Message Format",
+          "message": "Formato del messaggio"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.Zm9ybWF0.short_desc": {
+          "source": "How much of the draft's message to retrieve",
+          "message": "Quanto del messaggio della bozza recuperare"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.aWQ.desc": {
+          "source": "The ID of the draft to retrieve; `list-drafts` and `create-draft` return this value as `id`",
+          "message": "L'ID della bozza da recuperare; `list-drafts` e `create-draft` restituiscono questo valore come `id`"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.aWQ.display_name": {
+          "source": "Draft ID",
+          "message": "ID bozza"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.option.aWQ.short_desc": {
+          "source": "The ID of the draft to retrieve",
+          "message": "L'ID della bozza da recuperare"
+        },
+        "app.R21haWw.action.Z2V0LWRyYWZ0.short_desc": {
+          "source": "Retrieve a draft",
+          "message": "Recupera una bozza"
+        },
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.desc": {
           "source": "Permanently deletes a message. **This cannot be undone**: the message does not go to the trash and no copy remains, so use `trash-message` unless the message must be destroyed immediately.\n\nUse this action from the consumer of a `watch` or `watch-attachment` event, with the `message_id` the event carries, once processing has succeeded. Deleting from the watch itself with `delete_messages` destroys the message as soon as the event is raised, whether or not the consumer went on to succeed.\n\nThe Gmail API returns no content for this call",
           "message": "Elimina definitivamente un messaggio. **Questa operazione non può essere annullata**: il messaggio non viene spostato nel cestino e non ne rimane alcuna copia, pertanto usa `trash-message` a meno che il messaggio non debba essere eliminato immediatamente.\n\nUsa questa azione dal consumer di un evento `watch` o `watch-attachment`, con il parametro `message_id` trasportato dall'evento, una volta completata l'elaborazione con successo. L'eliminazione direttamente dal watch con `delete_messages` distrugge il messaggio non appena l'evento viene generato, indipendentemente dal fatto che il consumer abbia successo o meno.\n\nL'API di Gmail non restituisce alcun contenuto per questa chiamata"
@@ -86,6 +486,30 @@
         "app.R21haWw.action.ZGVsZXRlLW1lc3NhZ2U.short_desc": {
           "source": "Permanently delete a message; this cannot be undone",
           "message": "Elimina definitivamente un messaggio; questa operazione non può essere annullata"
+        },
+        "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.desc": {
+          "source": "Permanently deletes a draft. **This cannot be undone**: the draft does not go to the trash and no copy remains.\n\nThe Gmail API returns no content for this call",
+          "message": "Elimina definitivamente una bozza. **Questa operazione non può essere annullata**: la bozza non viene spostata nel cestino e non ne rimane alcuna copia.\n\nL'API di Gmail non restituisce alcun contenuto per questa chiamata"
+        },
+        "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.display_name": {
+          "source": "Delete a Draft",
+          "message": "Elimina una bozza"
+        },
+        "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.option.aWQ.desc": {
+          "source": "The ID of the draft to delete permanently; `list-drafts` and `create-draft` return this value as `id`",
+          "message": "L'ID della bozza da eliminare definitivamente; `list-drafts` e `create-draft` restituiscono questo valore come `id`"
+        },
+        "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.option.aWQ.display_name": {
+          "source": "Draft ID",
+          "message": "ID bozza"
+        },
+        "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.option.aWQ.short_desc": {
+          "source": "The ID of the draft to delete permanently",
+          "message": "L'ID della bozza da eliminare definitivamente"
+        },
+        "app.R21haWw.action.ZGVsZXRlLWRyYWZ0.short_desc": {
+          "source": "Permanently delete a draft; this cannot be undone",
+          "message": "Elimina definitivamente una bozza; questa operazione non può essere annullata"
         },
         "app.R21haWw.action.bGlzdA.desc": {
           "source": "Search for messages in the account",
@@ -158,6 +582,246 @@
         "app.R21haWw.action.bGlzdA.short_desc": {
           "source": "Search for messages",
           "message": "Cerca messaggi"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.desc": {
+          "source": "Search for messages in the account and return each matching message with its metadata, instead of the bare message and thread IDs that `list` returns. Each match is retrieved separately in the requested `format`, so a page of `maxResults` messages costs `maxResults` + 1 API requests; keep `maxResults` small and use `pageToken` to walk further pages",
+          "message": "Cerca messaggi nell'account e restituisce ogni messaggio corrispondente con i suoi metadati, anziché i soli ID di messaggio e di thread restituiti da `list`. Ogni risultato viene recuperato separatamente nel `format` richiesto, quindi una pagina di `maxResults` messaggi costa `maxResults` + 1 richieste API; mantieni `maxResults` basso e usa `pageToken` per scorrere le pagine successive"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.display_name": {
+          "source": "Search for Messages with Metadata",
+          "message": "Cerca messaggi con metadati"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1ldGFkYXRh.desc": {
+          "source": "Message IDs, labels, snippet, and the headers named in `metadata_headers` only; no body",
+          "message": "Solo ID dei messaggi, etichette, frammento e le intestazioni indicate in `metadata_headers`; nessun corpo"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1ldGFkYXRh.display_name": {
+          "source": "Metadata",
+          "message": "Metadati"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.allowed-value.c3RyaW5nOm1ldGFkYXRh.short_desc": {
+          "source": "Message IDs, labels, snippet, and the requested headers only",
+          "message": "Solo ID dei messaggi, etichette, frammento e le intestazioni richieste"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.allowed-value.c3RyaW5nOmZ1bGw.desc": {
+          "source": "The complete message including all headers and the MIME body parts; attachment data is not included and must be retrieved with `get-attachment`",
+          "message": "Il messaggio completo, comprese tutte le intestazioni e le parti MIME del corpo; i dati degli allegati non sono inclusi e devono essere recuperati con `get-attachment`"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.allowed-value.c3RyaW5nOmZ1bGw.display_name": {
+          "source": "Full",
+          "message": "Completo"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.allowed-value.c3RyaW5nOmZ1bGw.short_desc": {
+          "source": "The complete message including all headers and the body",
+          "message": "Il messaggio completo, comprese tutte le intestazioni e il corpo"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.desc": {
+          "source": "How much of each matching message to retrieve",
+          "message": "Quanto di ogni messaggio corrispondente recuperare"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.display_name": {
+          "source": "Message Format",
+          "message": "Formato del messaggio"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.Zm9ybWF0.short_desc": {
+          "source": "How much of each matching message to retrieve",
+          "message": "Quanto di ogni messaggio corrispondente recuperare"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.aW5jbHVkZVNwYW1UcmFzaA.desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "Includere le cartelle spam e cestino nella ricerca?"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.aW5jbHVkZVNwYW1UcmFzaA.display_name": {
+          "source": "Include Spam and Trash?",
+          "message": "Includere spam e cestino?"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.aW5jbHVkZVNwYW1UcmFzaA.short_desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "Includere le cartelle spam e cestino nella ricerca?"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bGFiZWxJZHM.desc": {
+          "source": "Only return messages with labels that match all of the specified label IDs. Messages in a thread might have labels that other messages in the same thread don't have",
+          "message": "Restituisce solo i messaggi con etichette corrispondenti a tutti gli ID etichetta specificati. I messaggi in un thread potrebbero avere etichette che altri messaggi nello stesso thread non hanno"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bGFiZWxJZHM.display_name": {
+          "source": "Labels",
+          "message": "Etichette"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bGFiZWxJZHM.short_desc": {
+          "source": "Only return messages with labels that match all of the specified label IDs",
+          "message": "Restituisci solo messaggi con etichette corrispondenti a tutti gli ID indicati"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of results to return; each message returned costs one additional API request",
+          "message": "Il numero massimo di risultati da restituire; ogni messaggio restituito costa una richiesta API aggiuntiva"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "Risultati massimi"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of results to return",
+          "message": "Il numero massimo di risultati da restituire"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bWV0YWRhdGFfaGVhZGVycw.desc": {
+          "source": "The message headers to retrieve for each matching message; ignored unless `format` is `metadata`",
+          "message": "Le intestazioni del messaggio da recuperare per ogni messaggio corrispondente; ignorato a meno che `format` non sia `metadata`"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bWV0YWRhdGFfaGVhZGVycw.display_name": {
+          "source": "Metadata Headers",
+          "message": "Intestazioni dei metadati"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.bWV0YWRhdGFfaGVhZGVycw.short_desc": {
+          "source": "The message headers to retrieve for each matching message",
+          "message": "Le intestazioni del messaggio da recuperare per ogni messaggio corrispondente"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.cGFnZVRva2Vu.desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "Token di pagina per recuperare una pagina specifica di risultati nell'elenco"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "Token di pagina"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "Token di pagina per recuperare una pagina specifica di risultati nell'elenco"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.cQ.desc": {
+          "source": "The gmail search criteria for retrieving the messages; ex: `in:inbox to:me@gmail.com subject:hello is:unread`",
+          "message": "I criteri di ricerca di Gmail per recuperare i messaggi; es.: `in:inbox to:me@gmail.com subject:hello is:unread`"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "Criteri di ricerca"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.option.cQ.short_desc": {
+          "source": "The gmail search criteria for retrieving the messages",
+          "message": "I criteri di ricerca di Gmail per recuperare i messaggi"
+        },
+        "app.R21haWw.action.bGlzdC13aXRoLW1ldGFkYXRh.short_desc": {
+          "source": "Search for messages and return each match with its headers",
+          "message": "Cerca messaggi e restituisce ogni risultato con le sue intestazioni"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.desc": {
+          "source": "Search for drafts in the account; each draft is returned with its ID and the ID and thread ID of the message it holds. Use `get-draft` to retrieve a draft's content",
+          "message": "Cerca bozze nell'account; ogni bozza viene restituita con il suo ID e con l'ID e l'ID thread del messaggio che contiene. Usa `get-draft` per recuperare il contenuto di una bozza"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.display_name": {
+          "source": "Search for Drafts",
+          "message": "Cerca bozze"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.aW5jbHVkZVNwYW1UcmFzaA.desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "Includere le cartelle spam e cestino nella ricerca?"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.aW5jbHVkZVNwYW1UcmFzaA.display_name": {
+          "source": "Include Spam and Trash?",
+          "message": "Includere spam e cestino?"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.aW5jbHVkZVNwYW1UcmFzaA.short_desc": {
+          "source": "Include the spam and trash folders in the search?",
+          "message": "Includere le cartelle spam e cestino nella ricerca?"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of results to return",
+          "message": "Il numero massimo di risultati da restituire"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Max Results",
+          "message": "Risultati massimi"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of results to return",
+          "message": "Il numero massimo di risultati da restituire"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.cGFnZVRva2Vu.desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "Token di pagina per recuperare una pagina specifica di risultati nell'elenco"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "Token di pagina"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Page token to retrieve a specific page of results in the list",
+          "message": "Token di pagina per recuperare una pagina specifica di risultati nell'elenco"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.cQ.desc": {
+          "source": "The gmail search criteria for retrieving the drafts; ex: `to:me@gmail.com subject:hello`; if not set, all drafts are returned",
+          "message": "I criteri di ricerca Gmail per recuperare le bozze; es. `to:me@gmail.com subject:hello`; se non impostati, vengono restituite tutte le bozze"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.cQ.display_name": {
+          "source": "Search Criteria",
+          "message": "Criteri di ricerca"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.option.cQ.short_desc": {
+          "source": "The gmail search criteria for retrieving the drafts",
+          "message": "I criteri di ricerca Gmail per recuperare le bozze"
+        },
+        "app.R21haWw.action.bGlzdC1kcmFmdHM.short_desc": {
+          "source": "Search for drafts",
+          "message": "Cerca bozze"
+        },
+        "app.R21haWw.action.bGlzdC1sYWJlbHM.desc": {
+          "source": "Lists all labels in the account, both Gmail's system labels (`INBOX`, `UNREAD`, `STARRED`, and so on) and user-created labels, each with the ID that `modify-message-labels` and the `labelIds` search option take",
+          "message": "Elenca tutte le etichette dell'account, sia le etichette di sistema di Gmail (`INBOX`, `UNREAD`, `STARRED` e così via) sia quelle create dall'utente, ciascuna con l'ID accettato da `modify-message-labels` e dall'opzione di ricerca `labelIds`"
+        },
+        "app.R21haWw.action.bGlzdC1sYWJlbHM.display_name": {
+          "source": "List Labels",
+          "message": "Elenca etichette"
+        },
+        "app.R21haWw.action.bGlzdC1sYWJlbHM.short_desc": {
+          "source": "List all labels in the account",
+          "message": "Elenca tutte le etichette dell'account"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.desc": {
+          "source": "Adds the labels in `addLabelIds` to and removes the labels in `removeLabelIds` from the message identified by `id` in one call. Gmail's system labels are changed the same way: remove `UNREAD` to mark a message as read, remove `INBOX` to archive it, or add `STARRED` to star it. Use `list-labels` to find a label's ID or `create-label` to make a new one",
+          "message": "Aggiunge le etichette in `addLabelIds` al messaggio identificato da `id` e ne rimuove le etichette in `removeLabelIds` in una sola chiamata. Le etichette di sistema di Gmail si modificano allo stesso modo: rimuovi `UNREAD` per segnare un messaggio come letto, rimuovi `INBOX` per archiviarlo o aggiungi `STARRED` per contrassegnarlo con una stella. Usa `list-labels` per trovare l'ID di un'etichetta o `create-label` per crearne una nuova"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.display_name": {
+          "source": "Change a Message's Labels",
+          "message": "Modifica le etichette di un messaggio"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.YWRkTGFiZWxJZHM.desc": {
+          "source": "The IDs of the labels to add to the message; a label is identified by its ID (ex: `INBOX`, `STARRED`, `Label_12`), not its name",
+          "message": "Gli ID delle etichette da aggiungere al messaggio; un'etichetta è identificata dal suo ID (es. `INBOX`, `STARRED`, `Label_12`), non dal nome"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.YWRkTGFiZWxJZHM.display_name": {
+          "source": "Labels to Add",
+          "message": "Etichette da aggiungere"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.YWRkTGFiZWxJZHM.short_desc": {
+          "source": "The IDs of the labels to add to the message",
+          "message": "Gli ID delle etichette da aggiungere al messaggio"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.aWQ.desc": {
+          "source": "The ID of the message to relabel; watch events carry this value as `message_id`",
+          "message": "L'ID del messaggio di cui modificare le etichette; gli eventi di monitoraggio includono questo valore come `message_id`"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "ID messaggio"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.aWQ.short_desc": {
+          "source": "The ID of the message to relabel",
+          "message": "L'ID del messaggio di cui modificare le etichette"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.cmVtb3ZlTGFiZWxJZHM.desc": {
+          "source": "The IDs of the labels to remove from the message; a label is identified by its ID (ex: `INBOX`, `UNREAD`, `Label_12`), not its name",
+          "message": "Gli ID delle etichette da rimuovere dal messaggio; un'etichetta è identificata dal suo ID (es. `INBOX`, `UNREAD`, `Label_12`), non dal nome"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.cmVtb3ZlTGFiZWxJZHM.display_name": {
+          "source": "Labels to Remove",
+          "message": "Etichette da rimuovere"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.option.cmVtb3ZlTGFiZWxJZHM.short_desc": {
+          "source": "The IDs of the labels to remove from the message",
+          "message": "Gli ID delle etichette da rimuovere dal messaggio"
+        },
+        "app.R21haWw.action.bW9kaWZ5LW1lc3NhZ2UtbGFiZWxz.short_desc": {
+          "source": "Add labels to and remove labels from a message",
+          "message": "Aggiungi etichette a un messaggio e rimuovile"
         },
         "app.R21haWw.action.bWFrZS1hcGktY2FsbA.desc": {
           "source": "Make a custom HTTP / REST API call to **Gmail** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",
@@ -483,9 +1147,33 @@
           "source": "Make a custom API call to Gmail",
           "message": "Esegui una chiamata API personalizzata a Gmail"
         },
+        "app.R21haWw.action.c2VuZC1kcmFmdA.desc": {
+          "source": "Sends the draft identified by `id` as it is to the recipients it names; Gmail removes the draft and returns the sent message. Use `get-draft` first to review what will be sent",
+          "message": "Invia la bozza identificata da `id` così com'è ai destinatari che indica; Gmail rimuove la bozza e restituisce il messaggio inviato. Usa prima `get-draft` per controllare cosa verrà inviato"
+        },
+        "app.R21haWw.action.c2VuZC1kcmFmdA.display_name": {
+          "source": "Send a Draft",
+          "message": "Invia una bozza"
+        },
+        "app.R21haWw.action.c2VuZC1kcmFmdA.option.aWQ.desc": {
+          "source": "The ID of the draft to send; `list-drafts` and `create-draft` return this value as `id`",
+          "message": "L'ID della bozza da inviare; `list-drafts` e `create-draft` restituiscono questo valore come `id`"
+        },
+        "app.R21haWw.action.c2VuZC1kcmFmdA.option.aWQ.display_name": {
+          "source": "Draft ID",
+          "message": "ID bozza"
+        },
+        "app.R21haWw.action.c2VuZC1kcmFmdA.option.aWQ.short_desc": {
+          "source": "The ID of the draft to send",
+          "message": "L'ID della bozza da inviare"
+        },
+        "app.R21haWw.action.c2VuZC1kcmFmdA.short_desc": {
+          "source": "Send an existing draft as it is",
+          "message": "Invia una bozza esistente così com'è"
+        },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.desc": {
-          "source": "Creates a new outgoing email from the supplied recipient addresses, subject, body, and attachments, and transmits that new email through Gmail.",
-          "message": "Crea una nuova email in uscita a partire da indirizzi dei destinatari, oggetto, corpo e allegati forniti, e la trasmette tramite Gmail."
+          "source": "Creates a new outgoing email from the supplied recipient addresses, subject, body, and attachments, and transmits that new email through Gmail. Set `thread_id` and `in_reply_to` to send the email as a reply within an existing conversation",
+          "message": "Crea una nuova email in uscita a partire da indirizzi dei destinatari, oggetto, corpo e allegati forniti, e la trasmette tramite Gmail. Imposta `thread_id` e `in_reply_to` per inviare l'email come risposta all'interno di una conversazione esistente"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.display_name": {
           "source": "Send a Message",
@@ -635,6 +1323,18 @@
           "source": "Blind carbon copy addresses",
           "message": "Indirizzi in copia conoscenza nascosta"
         },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.aW5fcmVwbHlfdG8.desc": {
+          "source": "The `Message-ID` header value of the message being answered, including the angle brackets; sent as the `In-Reply-To` header and, unless `references` is set, also as the `References` header, so that mail clients and Gmail thread the reply under the original message. Watch events carry this value as `Message-ID`",
+          "message": "Il valore dell'intestazione `Message-ID` del messaggio a cui si risponde, parentesi angolari comprese; inviato come intestazione `In-Reply-To` e, a meno che non sia impostato `references`, anche come intestazione `References`, in modo che i client di posta e Gmail raggruppino la risposta sotto il messaggio originale. Gli eventi di monitoraggio includono questo valore come `Message-ID`"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.aW5fcmVwbHlfdG8.display_name": {
+          "source": "In Reply To",
+          "message": "In risposta a"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.aW5fcmVwbHlfdG8.short_desc": {
+          "source": "The Message-ID header value of the message being answered",
+          "message": "Il valore dell'intestazione Message-ID del messaggio a cui si risponde"
+        },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.c2VuZGVy.desc": {
           "source": "The sender's address for the email",
           "message": "L'indirizzo del mittente per l'email"
@@ -659,6 +1359,18 @@
           "source": "The subject for the email",
           "message": "L'oggetto dell'email"
         },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.cmVmZXJlbmNlcw.desc": {
+          "source": "The `References` header value: the `Message-ID` values of the messages in the conversation being answered, oldest first, separated by spaces and including the angle brackets. If not set, `in_reply_to` is used. Watch events carry the original message's `References` header",
+          "message": "Il valore dell'intestazione `References`: i valori `Message-ID` dei messaggi della conversazione a cui si risponde, dal più vecchio al più recente, separati da spazi e parentesi angolari comprese. Se non è impostato, viene usato `in_reply_to`. Gli eventi di monitoraggio includono l'intestazione `References` del messaggio originale"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.cmVmZXJlbmNlcw.display_name": {
+          "source": "References",
+          "message": "Riferimenti"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.cmVmZXJlbmNlcw.short_desc": {
+          "source": "The Message-ID header values of the conversation being answered",
+          "message": "I valori delle intestazioni Message-ID della conversazione a cui si risponde"
+        },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.desc": {
           "source": "One or more `To:` addresses for the email",
           "message": "Uno o più indirizzi `To:` per l'email"
@@ -670,6 +1382,18 @@
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dG8.short_desc": {
           "source": "Message recipient addresses",
           "message": "Indirizzi dei destinatari del messaggio"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dGhyZWFkX2lk.desc": {
+          "source": "The ID of the Gmail thread to add the message to; set this to reply within an existing conversation. Gmail only honors it when `subject` matches the thread's subject and `in_reply_to` (or `references`) names a message in the thread. Watch events carry this value as `threadId`",
+          "message": "L'ID del thread di Gmail a cui aggiungere il messaggio; impostalo per rispondere all'interno di una conversazione esistente. Gmail lo rispetta solo quando `subject` corrisponde all'oggetto del thread e `in_reply_to` (o `references`) indica un messaggio del thread. Gli eventi di monitoraggio includono questo valore come `threadId`"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dGhyZWFkX2lk.display_name": {
+          "source": "Thread ID",
+          "message": "ID thread"
+        },
+        "app.R21haWw.action.c2VuZC1tZXNzYWdl.option.dGhyZWFkX2lk.short_desc": {
+          "source": "The ID of the Gmail thread to add the message to",
+          "message": "L'ID del thread di Gmail a cui aggiungere il messaggio"
         },
         "app.R21haWw.action.c2VuZC1tZXNzYWdl.short_desc": {
           "source": "Create and transmit a new outgoing email through Gmail",
@@ -1030,6 +1754,30 @@
         "app.R21haWw.action.dHJhc2gtbWVzc2FnZQ.short_desc": {
           "source": "Place an existing stored Gmail message in the recoverable trash folder",
           "message": "Sposta un messaggio Gmail esistente nel cestino recuperabile"
+        },
+        "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.desc": {
+          "source": "Moves the message identified by `id` out of Gmail's trash folder and back into the mailbox, undoing `trash-message`; a message that Gmail has already purged from the trash cannot be restored",
+          "message": "Sposta il messaggio identificato da `id` fuori dal cestino di Gmail e di nuovo nella casella di posta, annullando `trash-message`; un messaggio che Gmail ha già eliminato dal cestino non può essere ripristinato"
+        },
+        "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.display_name": {
+          "source": "Restore a Message from the Trash",
+          "message": "Ripristina un messaggio dal cestino"
+        },
+        "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.option.aWQ.desc": {
+          "source": "The ID of the message to restore from the trash; watch events carry this value as `message_id`",
+          "message": "L'ID del messaggio da ripristinare dal cestino; gli eventi di monitoraggio includono questo valore come `message_id`"
+        },
+        "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.option.aWQ.display_name": {
+          "source": "Message ID",
+          "message": "ID messaggio"
+        },
+        "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.option.aWQ.short_desc": {
+          "source": "The ID of the message to restore from the trash",
+          "message": "L'ID del messaggio da ripristinare dal cestino"
+        },
+        "app.R21haWw.action.dW50cmFzaC1tZXNzYWdl.short_desc": {
+          "source": "Move a message from the trash back into the mailbox",
+          "message": "Sposta un messaggio dal cestino di nuovo nella casella di posta"
         },
         "app.R21haWw.desc": {
           "source": "Gmail services",

@@ -137,9 +137,10 @@ public class GmailAttachmentWatchDataProvider inherits GmailMessageWatchDataProv
 
     #! Raise events
     /** @note the ID of the message carrying the attachment is added to each event as
-        \c message_id; without it an event consumer has no way to refer back to the source message
-        (to delete or label it after successful processing, for example), because the event
-        otherwise carries attachment data only
+        \c message_id, and the ID of its thread as \c thread_id; without them an event consumer has
+        no way to refer back to the source message (to delete or label it after successful
+        processing, or to reply in its thread, for example), because the event otherwise carries
+        attachment data only
     */
     private messageReceived(hash<auto> msg) {
         int matches;
@@ -149,7 +150,7 @@ public class GmailAttachmentWatchDataProvider inherits GmailMessageWatchDataProv
                     att.filename, attachment_glob);
                 continue;
             }
-            notifyObservers(EVENT_ATTACHMENT_MATCHED, att + {"message_id": msg.id});
+            notifyObservers(EVENT_ATTACHMENT_MATCHED, att + GmailAttachmentWatchDataProvider::getSourceInfo(msg));
             ++matches;
         }
         LoggerWrapper::info("Gmail: message %y matched attachments: %d/%d", msg.id, matches, msg.attachments.size());
@@ -168,10 +169,24 @@ public class GmailAttachmentWatchDataProvider inherits GmailMessageWatchDataProv
     private auto getExampleEventDataImpl(string event_id) {
         *hash<auto> msg = getExampleMessage();
         if (msg.attachments) {
-            # must match the shape raised by messageReceived(), including the source message ID
-            return msg.attachments[0] + {"message_id": msg.id};
+            # must match the shape raised by messageReceived(), including the source message and thread IDs
+            return msg.attachments[0] + GmailAttachmentWatchDataProvider::getSourceInfo(msg);
         }
         return AbstractDataProvider::getExampleEventDataImpl(event_id);
+    }
+
+    #! Returns the source message fields carried by every attachment event
+    /** @param msg the Gmail message carrying the attachment
+
+        @return a hash with \c message_id and \c thread_id
+
+        @since GmailDataProvider 1.2
+    */
+    static hash<auto> getSourceInfo(hash<auto> msg) {
+        return {
+            "message_id": msg.id,
+            "thread_id": msg.threadId,
+        };
     }
 }
 
@@ -185,6 +200,14 @@ public class GmailAttachmentEventDataType inherits HashDataType {
                 "desc": "The ID of the Gmail message carrying the attachment; use this to refer back to the "
                     "source message after processing the attachment - to delete or label it, for example - "
                     "with the `make-api-call` action.  Always set on events raised by this provider",
+                "type": AbstractDataProviderTypeMap."*string",
+            },
+            "thread_id": {
+                "display_name": "Thread ID",
+                "short_desc": "The ID of the Gmail thread of the message carrying the attachment",
+                "desc": "The ID of the Gmail thread of the message carrying the attachment; pass it as "
+                    "`thread_id` to the `send-message` or `create-draft` action to answer in the same "
+                    "conversation. Always set on events raised by this provider",
                 "type": AbstractDataProviderTypeMap."*string",
             },
             "hdr": {

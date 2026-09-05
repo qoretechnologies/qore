@@ -69,6 +69,27 @@ public class GmailMessageSendDataProvider inherits GoogleDataProvider::GoogleApi
         @return the response to the request
     */
     private auto doRequestImpl(auto req, *hash<auto> request_options) {
+        hash<auto> greq = {
+            "userId": "me",
+        } + GmailMessageSendDataProvider::makeMessageBody(req);
+        return GoogleApiDataProvider::doRequestImpl(greq, request_options);
+    }
+
+    #! Returns the MIME message for a send or draft request, base64url-encoded as Gmail's API expects
+    /** @param req the request; see @ref GmailSendMessageRequestDataType for the keys
+
+        @return the serialized MIME message encoded with @ref Qore::make_base64_url_string()
+
+        @throw MESSAGE-ERROR the message cannot be serialized (ex: no recipients)
+
+        @note The threading headers follow RFC 5322 section 3.6.4: a reply carries the original's \c Message-ID
+        in \c In-Reply-To and the conversation's IDs in \c References; when only \c in_reply_to is given, it
+        also serves as \c References, because Gmail threads a message under the original only when both
+        headers refer to it
+
+        @since GmailDataProvider 1.2
+    */
+    static string makeRawMessage(hash<auto> req) {
         Message msg(req.sender ?? "me@gmail.com", req.subject);
         map msg.addTO($1), req.to;
         map msg.addCC($1), req.cc;
@@ -76,14 +97,35 @@ public class GmailMessageSendDataProvider inherits GoogleDataProvider::GoogleApi
         msg.setBody(req.body, req."body-encoding", req."body-mime-type");
         map msg.attach($1."data".name, $1."data".mime_type, parse_base64_string($1."data".content), $1.encoding,
             $1.hdr), req.attachments;
+        if (req.in_reply_to.val()) {
+            msg.addHeader({"In-Reply-To": req.in_reply_to});
+        }
+        if (*string references = req.references ?? req.in_reply_to) {
+            msg.addHeader({"References": references});
+        }
 
         # throws a MESSAGE-ERROR exception if the message cannot be sent
-        string mstr = make_base64_url_string(msg.serialize());
-        hash<auto> greq = {
-            "userId": "me",
-            "raw": mstr,
+        return make_base64_url_string(msg.serialize());
+    }
+
+    #! Returns the Gmail API \c Message body for a send or draft request
+    /** @param req the request; see @ref GmailSendMessageRequestDataType for the keys
+
+        @return a hash with the \c raw MIME message (see makeRawMessage()) and, when the request names a thread
+        in \c thread_id, the \c threadId the message belongs to
+
+        @throw MESSAGE-ERROR the message cannot be serialized (ex: no recipients)
+
+        @since GmailDataProvider 1.2
+    */
+    static hash<auto> makeMessageBody(hash<auto> req) {
+        hash<auto> rv = {
+            "raw": GmailMessageSendDataProvider::makeRawMessage(req),
         };
-        return GoogleApiDataProvider::doRequestImpl(greq, request_options);
+        if (req.thread_id.val()) {
+            rv.threadId = req.thread_id;
+        }
+        return rv;
     }
 
     #! Returns the description of a successful request message, if any
@@ -264,6 +306,36 @@ public class GmailSendMessageRequestDataType inherits HashDataType {
                 "type": StringOrNothingType,
                 "short_desc": "The sender's address for the email",
                 "desc": "The sender's address for the email",
+            },
+            "thread_id": {
+                "display_name": "Thread ID",
+                "type": StringOrNothingType,
+                "short_desc": "The ID of the Gmail thread to add the message to",
+                "desc": "The ID of the Gmail thread to add the message to; set this to reply within an existing "
+                    "conversation. Gmail only honors it when `subject` matches the thread's subject and "
+                    "`in_reply_to` (or `references`) names a message in the thread. Watch events carry this "
+                    "value as `threadId`",
+                "example_value": "18c6b13f059fc0bd",
+            },
+            "in_reply_to": {
+                "display_name": "In Reply To",
+                "type": StringOrNothingType,
+                "short_desc": "The Message-ID header value of the message being answered",
+                "desc": "The `Message-ID` header value of the message being answered, including the angle "
+                    "brackets; sent as the `In-Reply-To` header and, unless `references` is set, also as the "
+                    "`References` header, so that mail clients and Gmail thread the reply under the original "
+                    "message. Watch events carry this value as `Message-ID`",
+                "example_value": "<CAF1mXwUPjLb-Q3P2Ee5Ax9U1YrMU=ZxWq7MdX0KE_4Y5N6uD5Q@mail.gmail.com>",
+            },
+            "references": {
+                "display_name": "References",
+                "type": StringOrNothingType,
+                "short_desc": "The Message-ID header values of the conversation being answered",
+                "desc": "The `References` header value: the `Message-ID` values of the messages in the "
+                    "conversation being answered, oldest first, separated by spaces and including the angle "
+                    "brackets. If not set, `in_reply_to` is used. Watch events carry the original message's "
+                    "`References` header",
+                "example_value": "<original@mail.example.com> <first-reply@mail.example.com>",
             },
         };
     }

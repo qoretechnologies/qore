@@ -27,6 +27,42 @@
           "source": "Create an event in a calendar",
           "message": "캘린더에 일정 생성"
         },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.desc": {
+          "source": "Retrieve a single event from a calendar by its event ID",
+          "message": "일정 ID로 캘린더에서 단일 일정을 가져옵니다"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.display_name": {
+          "source": "Get Event",
+          "message": "이벤트 가져오기"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.Y2FsZW5kYXI.desc": {
+          "source": "The calendar containing the event",
+          "message": "일정이 포함된 캘린더"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.Y2FsZW5kYXI.display_name": {
+          "source": "Calendar",
+          "message": "캘린더"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.Y2FsZW5kYXI.short_desc": {
+          "source": "The calendar containing the event",
+          "message": "일정이 포함된 캘린더"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.ZXZlbnRJZA.desc": {
+          "source": "The ID of the event to retrieve; event IDs are returned in the `id` field of the events returned by the `list-events` action",
+          "message": "가져올 일정의 ID입니다. 일정 ID는 `list-events` 액션이 반환하는 일정의 `id` 필드에 반환됩니다"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.ZXZlbnRJZA.display_name": {
+          "source": "Event ID",
+          "message": "일정 ID"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.ZXZlbnRJZA.short_desc": {
+          "source": "The ID of the event to retrieve",
+          "message": "가져올 일정의 ID"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.short_desc": {
+          "source": "Retrieve an event from a calendar",
+          "message": "캘린더에서 일정을 가져옵니다"
+        },
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.desc": {
           "source": "Delete an event from a calendar",
           "message": "캘린더에서 일정 삭제"
@@ -50,6 +86,182 @@
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.short_desc": {
           "source": "Delete an event from a calendar",
           "message": "캘린더에서 일정 삭제"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.desc": {
+          "source": "List the calendars in the authenticated user's calendar list; the `id` of each entry can be used as the calendar for the event actions",
+          "message": "인증된 사용자의 캘린더 목록에 있는 캘린더를 나열합니다. 각 항목의 `id`는 일정 액션의 캘린더로 사용할 수 있습니다"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.display_name": {
+          "source": "List Calendars",
+          "message": "캘린더 나열"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of calendar list entries to return on one result page; incomplete pages can be detected by a non-empty `nextPageToken` field in the response. The default is `100`; the page size can never be larger than `250`",
+          "message": "한 결과 페이지에 반환할 캘린더 목록 항목의 최대 수입니다. 불완전한 페이지는 응답의 `nextPageToken` 필드가 비어 있지 않은 것으로 감지할 수 있습니다. 기본값은 `100`이며 페이지 크기는 `250`을 초과할 수 없습니다"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Maximum Results",
+          "message": "최대 결과 수"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of calendars to return on one result page",
+          "message": "한 결과 페이지에 반환할 최대 캘린더 수"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.c2hvd0hpZGRlbg.desc": {
+          "source": "If `True`, hidden calendar list entries are included in the result. The default is `False`",
+          "message": "`True`이면 숨겨진 캘린더 목록 항목이 결과에 포함됩니다. 기본값은 `False`입니다"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.c2hvd0hpZGRlbg.display_name": {
+          "source": "Show Hidden",
+          "message": "숨겨진 항목 표시"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.c2hvd0hpZGRlbg.short_desc": {
+          "source": "Include hidden calendar list entries in the result",
+          "message": "숨겨진 캘린더 목록 항목을 결과에 포함합니다"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.cGFnZVRva2Vu.desc": {
+          "source": "Token specifying which result page to return; use the `nextPageToken` value from the previous response to retrieve the next page",
+          "message": "반환할 결과 페이지를 지정하는 토큰입니다. 다음 페이지를 가져오려면 이전 응답의 `nextPageToken` 값을 사용하세요"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "페이지 토큰"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Token specifying which result page to return",
+          "message": "반환할 결과 페이지를 지정하는 토큰"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.short_desc": {
+          "source": "List the calendars in the user's calendar list",
+          "message": "사용자의 캘린더 목록에 있는 캘린더를 나열합니다"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.desc": {
+          "source": "List events in a calendar; the result can be restricted to a time window, filtered with free-text search terms, and paged with `maxResults` and `pageToken`",
+          "message": "캘린더의 일정을 나열합니다. 결과는 시간 범위로 제한하거나, 자유 텍스트 검색어로 필터링하거나, `maxResults`와 `pageToken`으로 페이지를 나눌 수 있습니다"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.display_name": {
+          "source": "List Events",
+          "message": "이벤트 나열"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.Y2FsZW5kYXI.desc": {
+          "source": "The calendar to list events from",
+          "message": "일정을 나열할 캘린더"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.Y2FsZW5kYXI.display_name": {
+          "source": "Calendar",
+          "message": "캘린더"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.Y2FsZW5kYXI.short_desc": {
+          "source": "The calendar to list events from",
+          "message": "일정을 나열할 캘린더"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.allowed-value.c3RyaW5nOnN0YXJ0VGltZQ.desc": {
+          "source": "Order by the start date/time (ascending); this is only available when `singleEvents` is `True`",
+          "message": "시작 날짜/시간 기준 정렬(오름차순). `singleEvents`가 `True`인 경우에만 사용할 수 있습니다"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.allowed-value.c3RyaW5nOnVwZGF0ZWQ.desc": {
+          "source": "Order by last modification time (ascending)",
+          "message": "마지막 수정 시간 기준 정렬(오름차순)"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.desc": {
+          "source": "The order of the events returned in the result; the default is an unspecified, stable order.\nAcceptable values are:\n- `startTime`: Order by the start date/time (ascending); this is only available when `singleEvents` is `True`\n- `updated`: Order by last modification time (ascending)",
+          "message": "결과에 반환되는 일정의 순서입니다. 기본값은 지정되지 않은 안정적인 순서입니다.\n허용되는 값:\n- `startTime`: 시작 날짜/시간 기준 정렬(오름차순). `singleEvents`가 `True`인 경우에만 사용할 수 있습니다\n- `updated`: 마지막 수정 시간 기준 정렬(오름차순)"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.display_name": {
+          "source": "Order By",
+          "message": "정렬 기준"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.short_desc": {
+          "source": "The order of the events returned in the result",
+          "message": "결과에 반환되는 일정의 순서"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of events to return on one result page; the page may contain fewer events than this value, or none at all, even if more events match the query. Incomplete pages can be detected by a non-empty `nextPageToken` field in the response. The default is `250`; the page size can never be larger than `2500`",
+          "message": "한 결과 페이지에 반환할 최대 일정 수입니다. 쿼리와 일치하는 일정이 더 있더라도 페이지에는 이 값보다 적은 일정이 포함되거나 아예 포함되지 않을 수 있습니다. 불완전한 페이지는 응답의 `nextPageToken` 필드가 비어 있지 않은 것으로 감지할 수 있습니다. 기본값은 `250`이며 페이지 크기는 `2500`을 초과할 수 없습니다"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Maximum Results",
+          "message": "최대 결과 수"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of events to return on one result page",
+          "message": "한 결과 페이지에 반환할 최대 일정 수"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2hvd0RlbGV0ZWQ.desc": {
+          "source": "If `True`, deleted events (with `status` equal to `cancelled`) are included in the result. Cancelled instances of recurring events (but not the underlying recurring event) are still included if `showDeleted` and `singleEvents` are both `False`; if both are `True`, only single instances of deleted events are returned. The default is `False`",
+          "message": "`True`이면 삭제된 일정(`status`가 `cancelled`인 일정)이 결과에 포함됩니다. 반복 일정의 취소된 인스턴스(기본 반복 일정은 제외)는 `showDeleted`와 `singleEvents`가 모두 `False`인 경우에도 계속 포함됩니다. 둘 다 `True`이면 삭제된 일정의 개별 인스턴스만 반환됩니다. 기본값은 `False`입니다"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2hvd0RlbGV0ZWQ.display_name": {
+          "source": "Show Deleted",
+          "message": "삭제된 항목 표시"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2hvd0RlbGV0ZWQ.short_desc": {
+          "source": "Include deleted events in the result",
+          "message": "삭제된 일정을 결과에 포함합니다"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2luZ2xlRXZlbnRz.desc": {
+          "source": "If `True`, recurring events are expanded into their individual instances, and only single one-off events and instances of recurring events are returned, but not the underlying recurring events themselves. If `False`, each recurring event is returned once with its recurrence rule instead of its instances. Must be `True` to order the result by start time",
+          "message": "`True`이면 반복 일정이 개별 인스턴스로 펼쳐지고, 단일 일정과 반복 일정의 인스턴스만 반환되며 기본 반복 일정 자체는 반환되지 않습니다. `False`이면 각 반복 일정이 인스턴스 대신 반복 규칙과 함께 한 번만 반환됩니다. 결과를 시작 시간으로 정렬하려면 `True`여야 합니다"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2luZ2xlRXZlbnRz.display_name": {
+          "source": "Expand Recurring Events",
+          "message": "반복 일정 펼치기"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2luZ2xlRXZlbnRz.short_desc": {
+          "source": "Expand recurring events into their individual instances",
+          "message": "반복 일정을 개별 인스턴스로 펼칩니다"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cGFnZVRva2Vu.desc": {
+          "source": "Token specifying which result page to return; use the `nextPageToken` value from the previous response to retrieve the next page",
+          "message": "반환할 결과 페이지를 지정하는 토큰입니다. 다음 페이지를 가져오려면 이전 응답의 `nextPageToken` 값을 사용하세요"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "페이지 토큰"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Token specifying which result page to return",
+          "message": "반환할 결과 페이지를 지정하는 토큰"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cQ.desc": {
+          "source": "Free-text search terms to find events that match these terms in the `summary`, `description`, and `location` fields, in attendee and organizer display names and email addresses, and in working location properties",
+          "message": "`summary`, `description`, `location` 필드, 참석자와 주최자의 표시 이름 및 이메일 주소, 근무 위치 속성에서 이 검색어와 일치하는 일정을 찾기 위한 자유 텍스트 검색어"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cQ.display_name": {
+          "source": "Search Terms",
+          "message": "검색어"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cQ.short_desc": {
+          "source": "Free-text search terms to find matching events",
+          "message": "일치하는 일정을 찾기 위한 자유 텍스트 검색어"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1heA.desc": {
+          "source": "Upper bound (exclusive) for an event's start time; only events that start before this time are returned. The default is not to filter by start time",
+          "message": "일정 시작 시간의 상한(해당 값 제외)입니다. 이 시간 이전에 시작하는 일정만 반환됩니다. 기본적으로 시작 시간으로 필터링하지 않습니다"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1heA.display_name": {
+          "source": "End Time",
+          "message": "종료 시간"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1heA.short_desc": {
+          "source": "Only return events that start before this time",
+          "message": "이 시간 이전에 시작하는 일정만 반환합니다"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1pbg.desc": {
+          "source": "Lower bound (exclusive) for an event's end time; only events that end after this time are returned. The default is not to filter by end time",
+          "message": "일정 종료 시간의 하한(해당 값 제외)입니다. 이 시간 이후에 끝나는 일정만 반환됩니다. 기본적으로 종료 시간으로 필터링하지 않습니다"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1pbg.display_name": {
+          "source": "Start Time",
+          "message": "시작 시간"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1pbg.short_desc": {
+          "source": "Only return events that end after this time",
+          "message": "이 시간 이후에 끝나는 일정만 반환합니다"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.short_desc": {
+          "source": "List events in a calendar",
+          "message": "캘린더의 일정을 나열합니다"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bWFrZS1hcGktY2FsbA.desc": {
           "source": "Make a custom HTTP / REST API call to **Google Calendar** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",

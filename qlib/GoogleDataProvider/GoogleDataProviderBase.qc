@@ -192,6 +192,12 @@ public class GoogleDataProviderBase inherits DataProvider::AbstractDataProvider 
         @endcode
     */
     string getQueryValue(string key, AbstractDataProviderType type, auto val) {
+        if (val.typeCode() == NT_DATE) {
+            # Google APIs take timestamps in query arguments as RFC 3339 strings (ex: timeMin / timeMax /
+            # updatedMin in Calendar events.list); the default date-to-string conversion would send an
+            # unparseable digit string instead
+            return encode_url(val.format("YYYY-MM-DDTHH:mm:SSZ"), True);
+        }
         switch (type.getBaseTypeCode()) {
             case NT_BOOLEAN:
                 return val ? "true" : "false";

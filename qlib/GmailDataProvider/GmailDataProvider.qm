@@ -36,7 +36,7 @@
 %requires MailMessage
 
 module GmailDataProvider {
-    version = "1.1";
+    version = "1.2";
     desc = "User module providing a data provider API for Gmail REST cloud services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -67,6 +67,7 @@ module GmailDataProvider {
             "short_desc": "Search for messages",
             "desc": "Search for messages in the account",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": {
                 "q": <ActionOptionInfo>{
                     "display_name": "Search Criteria",
@@ -121,6 +122,7 @@ module GmailDataProvider {
             "short_desc": "Retrieve a message",
             "desc": "Retrieve a message",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": {
                 "id": <ActionOptionInfo>{
                     "display_name": "Message ID",
@@ -145,6 +147,7 @@ module GmailDataProvider {
             "short_desc": "Retrieve an attachment",
             "desc": "Retrieve an attachment",
             "action_code": DPAT_API,
+            "mutates_state": False,
             "options": {
                 "messageId": <ActionOptionInfo>{
                     "display_name": "Message ID",
@@ -369,12 +372,312 @@ module GmailDataProvider {
             "display_name": "Send a Message",
             "short_desc": "Create and transmit a new outgoing email through Gmail",
             "desc": "Creates a new outgoing email from the supplied recipient addresses, subject, body, "
-                "and attachments, and transmits that new email through Gmail.",
+                "and attachments, and transmits that new email through Gmail. Set `thread_id` and "
+                "`in_reply_to` to send the email as a reply within an existing conversation",
             "action_code": DPAT_API,
             "options": DataProviderActionCatalog::getActionOptionFromFields(GmailSendMessageRequestDataType::Fields),
             "get_output_type": AbstractDataProviderType sub () {
                 return GoogleDataProviderBase::getResponseTypeForSchema(GoogleDiscoveryGmailApiName,
                     GmailMessageSendDataProvider::ResourceAction);
+            },
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GmailDataProvider::AppName,
+            "path": "/list-with-metadata",
+            "action": "list-with-metadata",
+            "display_name": "Search for Messages with Metadata",
+            "short_desc": "Search for messages and return each match with its headers",
+            "desc": "Search for messages in the account and return each matching message with its metadata, "
+                "instead of the bare message and thread IDs that `list` returns. Each match is retrieved "
+                "separately in the requested `format`, so a page of `maxResults` messages costs `maxResults` "
+                "+ 1 API requests; keep `maxResults` small and use `pageToken` to walk further pages",
+            "action_code": DPAT_API,
+            "mutates_state": False,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GmailListWithMetadataRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return GmailListWithMetadataDataProvider::getResponseType();
+            },
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GmailDataProvider::AppName,
+            "path": "/messages/untrash",
+            "action": "untrash-message",
+            "display_name": "Restore a Message from the Trash",
+            "short_desc": "Move a message from the trash back into the mailbox",
+            "desc": "Moves the message identified by `id` out of Gmail's trash folder and back into the "
+                "mailbox, undoing `trash-message`; a message that Gmail has already purged from the trash "
+                "cannot be restored",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Message ID",
+                    "short_desc": "The ID of the message to restore from the trash",
+                    "desc": "The ID of the message to restore from the trash; watch events carry this value "
+                        "as `message_id`",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "example_value": "18c6b13f059fc0bd",
+                    "required": True,
+                    "preselected": True,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return GoogleDataProviderBase::getResponseTypeForSchema(GoogleDiscoveryGmailApiName,
+                    "users/messages/untrash");
+            },
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GmailDataProvider::AppName,
+            "path": "/modify-message-labels",
+            "action": "modify-message-labels",
+            "display_name": "Change a Message's Labels",
+            "short_desc": "Add labels to and remove labels from a message",
+            "desc": "Adds the labels in `addLabelIds` to and removes the labels in `removeLabelIds` from the "
+                "message identified by `id` in one call. Gmail's system labels are changed the same way: "
+                "remove `UNREAD` to mark a message as read, remove `INBOX` to archive it, or add `STARRED` to "
+                "star it. Use `list-labels` to find a label's ID or `create-label` to make a new one",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(
+                GmailModifyMessageLabelsRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return GoogleDataProviderBase::getResponseTypeForSchema(GoogleDiscoveryGmailApiName,
+                    GmailModifyMessageLabelsDataProvider::ResourceAction);
+            },
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GmailDataProvider::AppName,
+            "path": "/labels/list",
+            "action": "list-labels",
+            "display_name": "List Labels",
+            "short_desc": "List all labels in the account",
+            "desc": "Lists all labels in the account, both Gmail's system labels (`INBOX`, `UNREAD`, `STARRED`, "
+                "and so on) and user-created labels, each with the ID that `modify-message-labels` and the "
+                "`labelIds` search option take",
+            "action_code": DPAT_API,
+            "mutates_state": False,
+            "options": {},
+            "get_output_type": AbstractDataProviderType sub () {
+                return GoogleDataProviderBase::getResponseTypeForSchema(GoogleDiscoveryGmailApiName,
+                    "users/labels/list");
+            },
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GmailDataProvider::AppName,
+            "path": "/labels/create",
+            "action": "create-label",
+            "display_name": "Create a Label",
+            "short_desc": "Create a new user label in the account",
+            "desc": "Creates a new user label in the account and returns it with the ID that "
+                "`modify-message-labels` takes",
+            "action_code": DPAT_API,
+            "options": {
+                "name": <ActionOptionInfo>{
+                    "display_name": "Label Name",
+                    "short_desc": "The display name of the label",
+                    "desc": "The display name of the label; use `/` to nest a label under another, ex: "
+                        "`Projects/Alpha`",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "example_value": "Projects/Alpha",
+                    "required": True,
+                    "preselected": True,
+                },
+                "labelListVisibility": <ActionOptionInfo>{
+                    "display_name": "Label List Visibility",
+                    "short_desc": "Whether the label is shown in the label list",
+                    "desc": "Whether the label is shown in the label list of the Gmail web interface",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "labelShow",
+                            "display_name": "Show",
+                            "desc": "Show the label in the label list",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "labelShowIfUnread",
+                            "display_name": "Show If Unread",
+                            "desc": "Show the label in the label list only while it has unread messages",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "labelHide",
+                            "display_name": "Hide",
+                            "desc": "Do not show the label in the label list",
+                        },
+                    ),
+                },
+                "messageListVisibility": <ActionOptionInfo>{
+                    "display_name": "Message List Visibility",
+                    "short_desc": "Whether messages with the label are shown in the message list",
+                    "desc": "Whether messages with the label are shown in the message list of the Gmail web "
+                        "interface",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "allowed_values": (
+                        <AllowedValueInfo>{
+                            "value": "show",
+                            "display_name": "Show",
+                            "desc": "Show messages with the label in the message list",
+                        },
+                        <AllowedValueInfo>{
+                            "value": "hide",
+                            "display_name": "Hide",
+                            "desc": "Do not show messages with the label in the message list",
+                        },
+                    ),
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return GoogleDataProviderBase::getResponseTypeForSchema(GoogleDiscoveryGmailApiName,
+                    "users/labels/create");
+            },
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GmailDataProvider::AppName,
+            "path": "/create-draft",
+            "action": "create-draft",
+            "display_name": "Create a Draft",
+            "short_desc": "Create a new draft email in Gmail without sending it",
+            "desc": "Creates a new draft email from the supplied recipient addresses, subject, body, and "
+                "attachments, and stores it in Gmail's drafts folder without sending it, so that a person can "
+                "review and send it, or so that `send-draft` can send it later. Set `thread_id` and "
+                "`in_reply_to` to draft a reply within an existing conversation",
+            "action_code": DPAT_API,
+            "options": DataProviderActionCatalog::getActionOptionFromFields(GmailSendMessageRequestDataType::Fields),
+            "get_output_type": AbstractDataProviderType sub () {
+                return GoogleDataProviderBase::getResponseTypeForSchema(GoogleDiscoveryGmailApiName,
+                    GmailCreateDraftDataProvider::ResourceAction);
+            },
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GmailDataProvider::AppName,
+            "path": "/drafts/list",
+            "action": "list-drafts",
+            "display_name": "Search for Drafts",
+            "short_desc": "Search for drafts",
+            "desc": "Search for drafts in the account; each draft is returned with its ID and the ID and thread "
+                "ID of the message it holds. Use `get-draft` to retrieve a draft's content",
+            "action_code": DPAT_API,
+            "mutates_state": False,
+            "options": {
+                "q": <ActionOptionInfo>{
+                    "display_name": "Search Criteria",
+                    "short_desc": "The gmail search criteria for retrieving the drafts",
+                    "desc": "The gmail search criteria for retrieving the drafts; ex: `to:me@gmail.com "
+                        "subject:hello`; if not set, all drafts are returned",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "example_value": "to:me@gmail.com subject:hello",
+                    "preselected": True,
+                },
+                "maxResults": <ActionOptionInfo>{
+                    "display_name": "Max Results",
+                    "short_desc": "The maximum number of results to return",
+                    "desc": "The maximum number of results to return",
+                    "type": AbstractDataProviderTypeMap."int",
+                    "example_value": 20,
+                },
+                "includeSpamTrash": <ActionOptionInfo>{
+                    "display_name": "Include Spam and Trash?",
+                    "short_desc": "Include the spam and trash folders in the search?",
+                    "desc": "Include the spam and trash folders in the search?",
+                    "type": AbstractDataProviderTypeMap."bool",
+                    "example_value": False,
+                },
+                "pageToken": <ActionOptionInfo>{
+                    "display_name": "Page Token",
+                    "short_desc": "Page token to retrieve a specific page of results in the list",
+                    "desc": "Page token to retrieve a specific page of results in the list",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "example_value": "07142542234962330268",
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return GoogleDataProviderBase::getResponseTypeForSchema(GoogleDiscoveryGmailApiName,
+                    "users/drafts/list");
+            },
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GmailDataProvider::AppName,
+            "path": "/get-draft",
+            "action": "get-draft",
+            "display_name": "Retrieve a Draft",
+            "short_desc": "Retrieve a draft",
+            "desc": "Retrieves a draft and the message it holds in the requested `format`",
+            "action_code": DPAT_API,
+            "mutates_state": False,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Draft ID",
+                    "short_desc": "The ID of the draft to retrieve",
+                    "desc": "The ID of the draft to retrieve; `list-drafts` and `create-draft` return this "
+                        "value as `id`",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "example_value": "r-1234567890123456789",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": GmailApiDataProviderBase::ReferenceDataDrafts,
+                },
+                "format": <ActionOptionInfo>{
+                    "display_name": "Message Format",
+                    "short_desc": "How much of the draft's message to retrieve",
+                    "desc": "How much of the draft's message to retrieve; if not set, the complete message is "
+                        "returned",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "example_value": "metadata",
+                    "allowed_values": GmailMessageFormatList,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return GoogleDataProviderBase::getResponseTypeForSchema(GoogleDiscoveryGmailApiName,
+                    GmailGetDraftDataProvider::ResourceAction);
+            },
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GmailDataProvider::AppName,
+            "path": "/send-draft",
+            "action": "send-draft",
+            "display_name": "Send a Draft",
+            "short_desc": "Send an existing draft as it is",
+            "desc": "Sends the draft identified by `id` as it is to the recipients it names; Gmail removes the "
+                "draft and returns the sent message. Use `get-draft` first to review what will be sent",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Draft ID",
+                    "short_desc": "The ID of the draft to send",
+                    "desc": "The ID of the draft to send; `list-drafts` and `create-draft` return this value "
+                        "as `id`",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "example_value": "r-1234567890123456789",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": GmailApiDataProviderBase::ReferenceDataDrafts,
+                },
+            },
+            "get_output_type": AbstractDataProviderType sub () {
+                return GoogleDataProviderBase::getResponseTypeForSchema(GoogleDiscoveryGmailApiName,
+                    GmailSendDraftDataProvider::ResourceAction);
+            },
+        });
+        DataProviderActionCatalog::registerAction(<DataProviderActionInfo>{
+            "app": GmailDataProvider::AppName,
+            "path": "/delete-draft",
+            "action": "delete-draft",
+            "display_name": "Delete a Draft",
+            "short_desc": "Permanently delete a draft; this cannot be undone",
+            "desc": "Permanently deletes a draft. **This cannot be undone**: the draft does not go to the trash "
+                "and no copy remains.\n\n"
+                "The Gmail API returns no content for this call",
+            "action_code": DPAT_API,
+            "options": {
+                "id": <ActionOptionInfo>{
+                    "display_name": "Draft ID",
+                    "short_desc": "The ID of the draft to delete permanently",
+                    "desc": "The ID of the draft to delete permanently; `list-drafts` and `create-draft` return "
+                        "this value as `id`",
+                    "type": AbstractDataProviderTypeMap."string",
+                    "example_value": "r-1234567890123456789",
+                    "required": True,
+                    "preselected": True,
+                    "ref_data": GmailApiDataProviderBase::ReferenceDataDrafts,
+                },
             },
         });
     };
@@ -390,10 +693,37 @@ module GmailDataProvider {
     services.
 
     This data provider provides Google API access to the Gmail API as defined by Google's Discovery
-    API; some example data providers are listed below:
+    API.
 
     To use this data provider, you will need a connection that has already executed the OAuth2 authorization code flow
     and acquired a token to communicate with the Google API.
+
+    @section gmaildataprovider_actions Gmail Actions
+
+    The \c Gmail app registers the following actions; the path in the second column names the child of the
+    root data provider that backs the action.  Children with a single-segment path are hand-written classes in
+    this module; every other child is generated from the Gmail Discovery API document and executes one Gmail
+    API method.
+
+    |!Action|!Path|!Description
+    |\c list|\c /messages/list|Searches for messages and returns their message and thread IDs
+    |\c list-with-metadata|\c /list-with-metadata|Searches for messages and returns each match with its headers
+    |\c get|\c /messages/get|Retrieves a message
+    |\c get-attachment|\c /messages/attachments/get|Retrieves an attachment
+    |\c send-message|\c /send-message|Creates and sends a message, optionally as a reply in an existing thread
+    |\c create-draft|\c /create-draft|Creates a draft without sending it
+    |\c list-drafts|\c /drafts/list|Searches for drafts
+    |\c get-draft|\c /get-draft|Retrieves a draft
+    |\c send-draft|\c /send-draft|Sends an existing draft
+    |\c delete-draft|\c /delete-draft|Permanently deletes a draft
+    |\c list-labels|\c /labels/list|Lists all labels in the account
+    |\c create-label|\c /labels/create|Creates a user label
+    |\c modify-message-labels|\c /modify-message-labels|Adds labels to and removes labels from a message
+    |\c trash-message|\c /messages/trash|Moves a message to the trash
+    |\c untrash-message|\c /messages/untrash|Restores a message from the trash
+    |\c delete-message|\c /messages/delete|Permanently deletes a message
+    |\c watch|\c /watch|Raises an event for each new matching message
+    |\c watch-attachment|\c /watch-attachment|Raises an event for each new matching attachment
 
     @section gmaildataprovider_factory Gmail Data Provider Factory
 
@@ -405,6 +735,22 @@ module GmailDataProvider {
 
 
     @section gmaildataprovider_relnotes Release Notes
+
+    @subsection gmaildataprovider_v1_2 GmailDataProvider v1.2
+    - added the \c create-draft, \c list-drafts, \c get-draft, \c send-draft, and \c delete-draft actions for
+      working with drafts; \c get-draft, \c send-draft, and \c delete-draft offer the account's drafts as
+      reference data
+    - added the \c list-labels, \c create-label, and \c modify-message-labels actions for working with labels,
+      and the \c untrash-message action to restore a message from the trash; the label options of
+      \c modify-message-labels and the \c labelIds option of \c list-with-metadata offer the account's labels as
+      element reference data
+    - added the \c list-with-metadata action, which returns each matching message with its headers in one call
+      instead of the bare IDs that \c list returns
+    - added the \c thread_id, \c in_reply_to, and \c references options to \c send-message and \c create-draft,
+      so a message can be sent or drafted as a reply within an existing conversation
+    - message watch events carry the \c In-Reply-To header, and attachment watch events carry the \c thread_id
+      of the source message
+    - the \c list, \c get, and \c get-attachment actions are declared read-only
 
     @subsection gmaildataprovider_v1_1 GmailDataProvider v1.1
     - added the \c trash-message and \c delete-message actions, so a consumer can clear a source message
@@ -450,6 +796,37 @@ public const GoogleDiscoveryGmailApiName = "gmail";
 
 #! used in accordance with: https://about.google/brand-resource-center/brand-elements/
 public const GmailLogo = File::readTextFile(get_script_dir() + "/gmail-logo.svg");
+
+#! Message formats supported when retrieving a message or draft
+/** @since GmailDataProvider 1.2
+*/
+public const GmailMessageFormatList = (
+    <AllowedValueInfo>{
+        "display_name": "Full",
+        "short_desc": "The complete message including all headers and the body",
+        "desc": "The complete message including all headers and the MIME body parts; attachment data is not "
+            "included and must be retrieved with `get-attachment`",
+        "value": "full",
+    },
+    <AllowedValueInfo>{
+        "display_name": "Metadata",
+        "short_desc": "Message IDs, labels, snippet, and headers only",
+        "desc": "Message IDs, labels, snippet, and headers only; no body",
+        "value": "metadata",
+    },
+    <AllowedValueInfo>{
+        "display_name": "Minimal",
+        "short_desc": "Message IDs and labels only",
+        "desc": "Message IDs and labels only; no headers and no body",
+        "value": "minimal",
+    },
+    <AllowedValueInfo>{
+        "display_name": "Raw",
+        "short_desc": "The complete message as base64url-encoded MIME data",
+        "desc": "The complete message as base64url-encoded MIME data in `raw`; the body is not parsed",
+        "value": "raw",
+    },
+);
 
 #! Backlog-handling options shared by the Gmail watch actions
 /** @since GmailDataProvider 1.1

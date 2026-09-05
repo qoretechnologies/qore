@@ -452,8 +452,8 @@
           "message": "透過 Deepgram TTS（Aura 模型）將文字合成為語音"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.desc": {
-          "source": "Submits a public audio URL to Deepgram's `/v1/listen` endpoint and returns the JSON transcript.  Supports the Nova model family with smart formatting, diarization, summarization, and language detection.\n\n**Note**: this action submits via URL only.  For raw-audio uploads and realtime WebSocket streaming, use @ref DeepgramRestClient::DeepgramRestClientIo \"DeepgramRestClientIo\" directly.",
-          "message": "提交公開音訊 URL 至 Deepgram 的 `/v1/listen` 端點並傳回 JSON 逐字稿。支援具備智慧格式化、說話者辨識 (Diarization)、摘要和語言偵測功能的 Nova 模型系列。\n\n**注意**：此動作僅支援透過 URL 提交。如需原始音訊上傳和即時 WebSocket 串流，請直接使用 @ref DeepgramRestClient::DeepgramRestClientIo \"DeepgramRestClientIo\"。"
+          "source": "Submits audio to Deepgram's `/v1/listen` endpoint and returns the JSON transcript.  The audio is given either as a public `url` that Deepgram fetches or as an `audio` file whose bytes are uploaded as the request body; exactly one of the two must be provided.  Supports the Nova model family with smart formatting, diarization, summarization, and language detection.",
+          "message": "將音訊提交至 Deepgram 的 `/v1/listen` 端點並傳回 JSON 逐字稿。音訊可以是由 Deepgram 擷取的公開 `url`，或是以位元組作為請求主體上傳的 `audio` 檔案；兩者必須恰好提供其中之一。支援具備智慧格式化、說話者辨識 (Diarization)、摘要和語言偵測功能的 Nova 模型系列。"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.display_name": {
           "source": "Transcribe File",
@@ -470,6 +470,18 @@
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.Y2FsbGJhY2s.short_desc": {
           "source": "Webhook URL for async transcript delivery",
           "message": "用於非同步交付逐字稿的 Webhook URL"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.desc": {
+          "source": "The audio file to transcribe, uploaded as the request body; used when `url` is not given.  The file's `mime_type` (e.g. `audio/wav`, `audio/mpeg`, `audio/flac`) is sent as the request `Content-Type`; when it is `auto`, it is derived from the file `name`, falling back to `application/octet-stream`.  Upstream steps can pass either a file hash (`name`, `content`, `mime_type`) or the raw audio bytes as a `binary` value.\n\nExactly one of `url` or `audio` must be provided.",
+          "message": "要轉錄的音訊檔案，以請求主體上傳；在未提供 `url` 時使用。檔案的 `mime_type`（例如 `audio/wav`、`audio/mpeg`、`audio/flac`）會作為請求的 `Content-Type` 傳送；若為 `auto`，則會從檔案名稱 `name` 推斷，否則使用 `application/octet-stream`。上游步驟可以傳入檔案雜湊（`name`、`content`、`mime_type`）或以 `binary` 值傳入原始音訊位元組。\n\n`url` 與 `audio` 必須恰好提供其中之一。"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.display_name": {
+          "source": "Audio File",
+          "message": "音訊檔案"
+        },
+        "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.YXVkaW8.short_desc": {
+          "source": "Audio file to upload for transcription",
+          "message": "要上傳以進行轉錄的音訊檔案"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.ZGV0ZWN0X2xhbmd1YWdl.desc": {
           "source": "When `True`, ignores the `language` parameter and detects the language automatically.",
@@ -592,8 +604,8 @@
           "message": "為逐字稿新增標點符號"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXJs.desc": {
-          "source": "Public URL of the audio file to transcribe.  Deepgram fetches the file from this URL; it must be reachable from the public internet.",
-          "message": "要轉錄之音訊檔案的公開 URL。Deepgram 會從此 URL 擷取檔案；該 URL 必須可從公開網際網路連線。"
+          "source": "Public URL of the audio file to transcribe.  Deepgram fetches the file from this URL; it must be reachable from the public internet.\n\nExactly one of `url` or `audio` must be provided.",
+          "message": "要轉錄之音訊檔案的公開 URL。Deepgram 會從此 URL 擷取檔案；該 URL 必須可從公開網際網路連線。\n\n`url` 與 `audio` 必須恰好提供其中之一。"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.option.dXJs.display_name": {
           "source": "Audio URL",
@@ -616,8 +628,8 @@
           "message": "將逐字稿單字分組為話語段落"
         },
         "app.RGVlcGdyYW0.action.dHJhbnNjcmliZS1maWxl.short_desc": {
-          "source": "Transcribe an audio file by URL via Deepgram ASR",
-          "message": "透過 Deepgram ASR 根據 URL 轉錄音訊檔案"
+          "source": "Transcribe an audio file by URL or upload via Deepgram ASR",
+          "message": "透過 Deepgram ASR 根據 URL 或上傳轉錄音訊檔案"
         },
         "app.RGVlcGdyYW0.desc": {
           "source": "Provides access to [Deepgram](https://deepgram.com) — a speech AI platform offering automatic speech recognition (ASR) and text-to-speech (TTS) APIs.\n\n**Common use cases**:\n- **Transcription**: convert recorded audio (PSTN calls, meeting recordings, podcasts) into searchable text with the Nova model family\n- **Voice synthesis**: generate natural-sounding speech from text via the Aura voice models — for voice agents, IVR, and accessibility\n- **Conversational AI**: pair Deepgram TTS with any LLM to build end-to-end voice conversation pipelines",

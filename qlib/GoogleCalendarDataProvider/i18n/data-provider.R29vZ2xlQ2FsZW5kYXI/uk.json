@@ -27,6 +27,42 @@
           "source": "Create an event in a calendar",
           "message": "Створити подію в календарі"
         },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.desc": {
+          "source": "Retrieve a single event from a calendar by its event ID",
+          "message": "Отримати одну подію з календаря за її ідентифікатором"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.display_name": {
+          "source": "Get Event",
+          "message": "Отримати подію"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.Y2FsZW5kYXI.desc": {
+          "source": "The calendar containing the event",
+          "message": "Календар, що містить подію"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.Y2FsZW5kYXI.display_name": {
+          "source": "Calendar",
+          "message": "Календар"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.Y2FsZW5kYXI.short_desc": {
+          "source": "The calendar containing the event",
+          "message": "Календар, що містить подію"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.ZXZlbnRJZA.desc": {
+          "source": "The ID of the event to retrieve; event IDs are returned in the `id` field of the events returned by the `list-events` action",
+          "message": "Ідентифікатор події, яку потрібно отримати; ідентифікатори подій повертаються в полі `id` подій, які повертає дія `list-events`"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.ZXZlbnRJZA.display_name": {
+          "source": "Event ID",
+          "message": "Ідентифікатор події"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.option.ZXZlbnRJZA.short_desc": {
+          "source": "The ID of the event to retrieve",
+          "message": "Ідентифікатор події, яку потрібно отримати"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.Z2V0LWV2ZW50.short_desc": {
+          "source": "Retrieve an event from a calendar",
+          "message": "Отримати подію з календаря"
+        },
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.desc": {
           "source": "Delete an event from a calendar",
           "message": "Видалити подію з календаря"
@@ -50,6 +86,182 @@
         "app.R29vZ2xlQ2FsZW5kYXI.action.ZGVsZXRlLWV2ZW50.short_desc": {
           "source": "Delete an event from a calendar",
           "message": "Видалити подію з календаря"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.desc": {
+          "source": "List the calendars in the authenticated user's calendar list; the `id` of each entry can be used as the calendar for the event actions",
+          "message": "Перелічити календарі зі списку календарів автентифікованого користувача; `id` кожного запису можна використовувати як календар для дій з подіями"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.display_name": {
+          "source": "List Calendars",
+          "message": "Перелічити календарі"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of calendar list entries to return on one result page; incomplete pages can be detected by a non-empty `nextPageToken` field in the response. The default is `100`; the page size can never be larger than `250`",
+          "message": "Максимальна кількість записів списку календарів, що повертаються на одній сторінці результатів; неповні сторінки можна виявити за непорожнім полем `nextPageToken` у відповіді. Типове значення — `100`; розмір сторінки ніколи не може перевищувати `250`"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Maximum Results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of calendars to return on one result page",
+          "message": "Максимальна кількість календарів, що повертаються на одній сторінці результатів"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.c2hvd0hpZGRlbg.desc": {
+          "source": "If `True`, hidden calendar list entries are included in the result. The default is `False`",
+          "message": "Якщо `True`, приховані записи списку календарів включаються до результату. Типове значення — `False`"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.c2hvd0hpZGRlbg.display_name": {
+          "source": "Show Hidden",
+          "message": "Показувати приховані"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.c2hvd0hpZGRlbg.short_desc": {
+          "source": "Include hidden calendar list entries in the result",
+          "message": "Включати приховані записи списку календарів до результату"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.cGFnZVRva2Vu.desc": {
+          "source": "Token specifying which result page to return; use the `nextPageToken` value from the previous response to retrieve the next page",
+          "message": "Токен, який вказує, яку сторінку результатів повернути; щоб отримати наступну сторінку, використовуйте значення `nextPageToken` з попередньої відповіді"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "Токен сторінки"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Token specifying which result page to return",
+          "message": "Токен, який вказує, яку сторінку результатів повернути"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1jYWxlbmRhcnM.short_desc": {
+          "source": "List the calendars in the user's calendar list",
+          "message": "Перелічити календарі зі списку календарів користувача"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.desc": {
+          "source": "List events in a calendar; the result can be restricted to a time window, filtered with free-text search terms, and paged with `maxResults` and `pageToken`",
+          "message": "Перелічити події в календарі; результат можна обмежити часовим проміжком, відфільтрувати за довільними пошуковими термінами та розбити на сторінки за допомогою `maxResults` і `pageToken`"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.display_name": {
+          "source": "List Events",
+          "message": "Перелічити події"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.Y2FsZW5kYXI.desc": {
+          "source": "The calendar to list events from",
+          "message": "Календар, з якого потрібно перелічити події"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.Y2FsZW5kYXI.display_name": {
+          "source": "Calendar",
+          "message": "Календар"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.Y2FsZW5kYXI.short_desc": {
+          "source": "The calendar to list events from",
+          "message": "Календар, з якого потрібно перелічити події"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.allowed-value.c3RyaW5nOnN0YXJ0VGltZQ.desc": {
+          "source": "Order by the start date/time (ascending); this is only available when `singleEvents` is `True`",
+          "message": "Упорядкувати за датою/часом початку (за зростанням); доступно лише тоді, коли `singleEvents` має значення `True`"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.allowed-value.c3RyaW5nOnVwZGF0ZWQ.desc": {
+          "source": "Order by last modification time (ascending)",
+          "message": "Упорядкувати за часом останньої зміни (за зростанням)"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.desc": {
+          "source": "The order of the events returned in the result; the default is an unspecified, stable order.\nAcceptable values are:\n- `startTime`: Order by the start date/time (ascending); this is only available when `singleEvents` is `True`\n- `updated`: Order by last modification time (ascending)",
+          "message": "Порядок подій, що повертаються в результаті; типово порядок невизначений, але стабільний.\nДопустимі значення:\n- `startTime`: Упорядкувати за датою/часом початку (за зростанням); доступно лише тоді, коли `singleEvents` має значення `True`\n- `updated`: Упорядкувати за часом останньої зміни (за зростанням)"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.display_name": {
+          "source": "Order By",
+          "message": "Упорядкувати за"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.b3JkZXJCeQ.short_desc": {
+          "source": "The order of the events returned in the result",
+          "message": "Порядок подій, що повертаються в результаті"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.bWF4UmVzdWx0cw.desc": {
+          "source": "The maximum number of events to return on one result page; the page may contain fewer events than this value, or none at all, even if more events match the query. Incomplete pages can be detected by a non-empty `nextPageToken` field in the response. The default is `250`; the page size can never be larger than `2500`",
+          "message": "Максимальна кількість подій, що повертаються на одній сторінці результатів; сторінка може містити менше подій, ніж це значення, або жодної, навіть якщо запиту відповідає більше подій. Неповні сторінки можна виявити за непорожнім полем `nextPageToken` у відповіді. Типове значення — `250`; розмір сторінки ніколи не може перевищувати `2500`"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.bWF4UmVzdWx0cw.display_name": {
+          "source": "Maximum Results",
+          "message": "Максимальна кількість результатів"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.bWF4UmVzdWx0cw.short_desc": {
+          "source": "The maximum number of events to return on one result page",
+          "message": "Максимальна кількість подій, що повертаються на одній сторінці результатів"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2hvd0RlbGV0ZWQ.desc": {
+          "source": "If `True`, deleted events (with `status` equal to `cancelled`) are included in the result. Cancelled instances of recurring events (but not the underlying recurring event) are still included if `showDeleted` and `singleEvents` are both `False`; if both are `True`, only single instances of deleted events are returned. The default is `False`",
+          "message": "Якщо `True`, видалені події (зі `status`, що дорівнює `cancelled`) включаються до результату. Скасовані екземпляри повторюваних подій (але не базова повторювана подія) все одно включаються, якщо `showDeleted` і `singleEvents` обидва мають значення `False`; якщо обидва мають значення `True`, повертаються лише окремі екземпляри видалених подій. Типове значення — `False`"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2hvd0RlbGV0ZWQ.display_name": {
+          "source": "Show Deleted",
+          "message": "Показувати видалені"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2hvd0RlbGV0ZWQ.short_desc": {
+          "source": "Include deleted events in the result",
+          "message": "Включати видалені події до результату"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2luZ2xlRXZlbnRz.desc": {
+          "source": "If `True`, recurring events are expanded into their individual instances, and only single one-off events and instances of recurring events are returned, but not the underlying recurring events themselves. If `False`, each recurring event is returned once with its recurrence rule instead of its instances. Must be `True` to order the result by start time",
+          "message": "Якщо `True`, повторювані події розгортаються на окремі екземпляри, і повертаються лише одноразові події та екземпляри повторюваних подій, але не самі базові повторювані події. Якщо `False`, кожна повторювана подія повертається один раз із правилом повторення замість своїх екземплярів. Має бути `True`, щоб упорядкувати результат за часом початку"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2luZ2xlRXZlbnRz.display_name": {
+          "source": "Expand Recurring Events",
+          "message": "Розгортати повторювані події"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.c2luZ2xlRXZlbnRz.short_desc": {
+          "source": "Expand recurring events into their individual instances",
+          "message": "Розгортати повторювані події на їхні окремі екземпляри"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cGFnZVRva2Vu.desc": {
+          "source": "Token specifying which result page to return; use the `nextPageToken` value from the previous response to retrieve the next page",
+          "message": "Токен, який вказує, яку сторінку результатів повернути; щоб отримати наступну сторінку, використовуйте значення `nextPageToken` з попередньої відповіді"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cGFnZVRva2Vu.display_name": {
+          "source": "Page Token",
+          "message": "Токен сторінки"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cGFnZVRva2Vu.short_desc": {
+          "source": "Token specifying which result page to return",
+          "message": "Токен, який вказує, яку сторінку результатів повернути"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cQ.desc": {
+          "source": "Free-text search terms to find events that match these terms in the `summary`, `description`, and `location` fields, in attendee and organizer display names and email addresses, and in working location properties",
+          "message": "Довільні пошукові терміни для пошуку подій, які відповідають цим термінам у полях `summary`, `description` і `location`, у відображуваних іменах та адресах електронної пошти учасників і організаторів, а також у властивостях робочого місця"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cQ.display_name": {
+          "source": "Search Terms",
+          "message": "Пошукові терміни"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.cQ.short_desc": {
+          "source": "Free-text search terms to find matching events",
+          "message": "Довільні пошукові терміни для пошуку відповідних подій"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1heA.desc": {
+          "source": "Upper bound (exclusive) for an event's start time; only events that start before this time are returned. The default is not to filter by start time",
+          "message": "Верхня межа (не включно) часу початку події; повертаються лише події, які починаються до цього часу. Типово фільтрація за часом початку не виконується"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1heA.display_name": {
+          "source": "End Time",
+          "message": "Час закінчення"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1heA.short_desc": {
+          "source": "Only return events that start before this time",
+          "message": "Повертати лише події, які починаються до цього часу"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1pbg.desc": {
+          "source": "Lower bound (exclusive) for an event's end time; only events that end after this time are returned. The default is not to filter by end time",
+          "message": "Нижня межа (не включно) часу закінчення події; повертаються лише події, які закінчуються після цього часу. Типово фільтрація за часом закінчення не виконується"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1pbg.display_name": {
+          "source": "Start Time",
+          "message": "Час початку"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.option.dGltZU1pbg.short_desc": {
+          "source": "Only return events that end after this time",
+          "message": "Повертати лише події, які закінчуються після цього часу"
+        },
+        "app.R29vZ2xlQ2FsZW5kYXI.action.bGlzdC1ldmVudHM.short_desc": {
+          "source": "List events in a calendar",
+          "message": "Перелічити події в календарі"
         },
         "app.R29vZ2xlQ2FsZW5kYXI.action.bWFrZS1hcGktY2FsbA.desc": {
           "source": "Make a custom HTTP / REST API call to **Google Calendar** using the configured connection's authentication.\n\nSpecify the HTTP method, the URI path (relative to the connection's API base URL), optional query parameters, headers, and request body. The response is returned as a hash containing the status code, response headers, and response body.\n\nUse this action for endpoints that are not yet exposed as first-class actions on this app.",

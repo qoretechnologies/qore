@@ -2783,6 +2783,154 @@
           "source": "Stream a response from a model",
           "message": "모델로부터 응답 스트리밍"
         },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.desc": {
+          "source": "Transcribe an audio file into text using an OpenAI speech-to-text model such as `gpt-4o-transcribe` or `whisper-1`",
+          "message": "`gpt-4o-transcribe` 또는 `whisper-1`과 같은 OpenAI 음성-텍스트 변환 모델을 사용하여 오디오 파일을 텍스트로 전사합니다"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.display_name": {
+          "source": "Transcribe Audio",
+          "message": "오디오 전사"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.ZmlsZQ.desc": {
+          "source": "The audio file to transcribe, in one of the following formats: `flac`, `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `ogg`, `wav`, or `webm`; the file name must have a matching extension. The maximum file size is 25 MB",
+          "message": "전사할 오디오 파일로, `flac`, `mp3`, `mp4`, `mpeg`, `mpga`, `m4a`, `ogg`, `wav`, `webm` 형식 중 하나여야 하며 파일 이름에 해당 확장자가 있어야 합니다. 최대 파일 크기는 25 MB입니다"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.ZmlsZQ.display_name": {
+          "source": "Audio File",
+          "message": "오디오 파일"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.ZmlsZQ.short_desc": {
+          "source": "The audio file to transcribe",
+          "message": "전사할 오디오 파일"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bGFuZ3VhZ2U.desc": {
+          "source": "The language of the input audio in [ISO-639-1](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) format (for example `en`); supplying the input language improves accuracy and latency",
+          "message": "[ISO-639-1](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) 형식의 입력 오디오 언어(예: `en`)로, 입력 언어를 지정하면 정확도와 지연 시간이 개선됩니다"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bGFuZ3VhZ2U.display_name": {
+          "source": "Language",
+          "message": "언어"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bGFuZ3VhZ2U.short_desc": {
+          "source": "The language of the input audio as an ISO-639-1 code",
+          "message": "ISO-639-1 코드로 된 입력 오디오의 언어"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOmdwdC00by10cmFuc2NyaWJl.desc": {
+          "source": "The most accurate speech-to-text model; supports the `json` response format only",
+          "message": "가장 정확한 음성-텍스트 변환 모델로, `json` 응답 형식만 지원합니다"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOmdwdC00by10cmFuc2NyaWJl.display_name": {
+          "source": "GPT-4o Transcribe",
+          "message": "GPT-4o Transcribe"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOmdwdC00by1taW5pLXRyYW5zY3JpYmU.desc": {
+          "source": "A faster and cheaper speech-to-text model; supports the `json` response format only",
+          "message": "더 빠르고 저렴한 음성-텍스트 변환 모델로, `json` 응답 형식만 지원합니다"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOmdwdC00by1taW5pLXRyYW5zY3JpYmU.display_name": {
+          "source": "GPT-4o Mini Transcribe",
+          "message": "GPT-4o Mini Transcribe"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOndoaXNwZXItMQ.desc": {
+          "source": "The open source Whisper V2 model; supports all response formats",
+          "message": "오픈 소스 Whisper V2 모델로, 모든 응답 형식을 지원합니다"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.allowed-value.c3RyaW5nOndoaXNwZXItMQ.display_name": {
+          "source": "Whisper",
+          "message": "Whisper"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.desc": {
+          "source": "The speech-to-text model to use for the transcription",
+          "message": "전사에 사용할 음성-텍스트 변환 모델"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.display_name": {
+          "source": "Model",
+          "message": "모델"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.bW9kZWw.short_desc": {
+          "source": "The speech-to-text model to use",
+          "message": "사용할 음성-텍스트 변환 모델"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cHJvbXB0.desc": {
+          "source": "Optional text to guide the model's style or to continue a previous audio segment; the prompt should match the audio language",
+          "message": "모델의 스타일을 안내하거나 이전 오디오 세그먼트를 이어가기 위한 선택적 텍스트로, 프롬프트는 오디오의 언어와 일치해야 합니다"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cHJvbXB0.display_name": {
+          "source": "Prompt",
+          "message": "프롬프트"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cHJvbXB0.short_desc": {
+          "source": "Optional text to guide the model's style or continue a previous audio segment",
+          "message": "모델의 스타일을 안내하거나 이전 오디오 세그먼트를 이어가기 위한 선택적 텍스트"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOmpzb24.desc": {
+          "source": "A JSON object with the transcribed text",
+          "message": "전사된 텍스트가 포함된 JSON 객체"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOmpzb24.display_name": {
+          "source": "JSON",
+          "message": "JSON"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnNydA.desc": {
+          "source": "SubRip subtitles with timestamps (`whisper-1` only)",
+          "message": "타임스탬프가 포함된 SubRip 자막(`whisper-1` 전용)"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnNydA.display_name": {
+          "source": "SRT Subtitles",
+          "message": "SRT 자막"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnRleHQ.desc": {
+          "source": "The transcribed text only (`whisper-1` only)",
+          "message": "전사된 텍스트만(`whisper-1` 전용)"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnRleHQ.display_name": {
+          "source": "Plain Text",
+          "message": "일반 텍스트"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnZ0dA.desc": {
+          "source": "Web Video Text Tracks subtitles with timestamps (`whisper-1` only)",
+          "message": "타임스탬프가 포함된 Web Video Text Tracks 자막(`whisper-1` 전용)"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnZ0dA.display_name": {
+          "source": "WebVTT Subtitles",
+          "message": "WebVTT 자막"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnZlcmJvc2VfanNvbg.desc": {
+          "source": "A JSON object with the transcribed text, language, duration, and timestamped segments (`whisper-1` only)",
+          "message": "전사된 텍스트, 언어, 길이 및 타임스탬프가 포함된 세그먼트를 담은 JSON 객체(`whisper-1` 전용)"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.allowed-value.c3RyaW5nOnZlcmJvc2VfanNvbg.display_name": {
+          "source": "Verbose JSON",
+          "message": "상세 JSON"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.desc": {
+          "source": "The format of the transcription output.\n\n**Note**: `gpt-4o-transcribe` and `gpt-4o-mini-transcribe` support only `json`; the `text`, `srt`, `verbose_json`, and `vtt` formats require `whisper-1`. Non-JSON output is returned in the `text` field of the response",
+          "message": "전사 출력의 형식입니다.\n\n**참고**: `gpt-4o-transcribe`와 `gpt-4o-mini-transcribe`는 `json`만 지원하며, `text`, `srt`, `verbose_json`, `vtt` 형식에는 `whisper-1`이 필요합니다. JSON이 아닌 출력은 응답의 `text` 필드에 반환됩니다"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.display_name": {
+          "source": "Response Format",
+          "message": "응답 형식"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.cmVzcG9uc2VfZm9ybWF0.short_desc": {
+          "source": "The format of the transcription output",
+          "message": "전사 출력의 형식"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.dGVtcGVyYXR1cmU.desc": {
+          "source": "The sampling temperature, between `0` and `1`; higher values like `0.8` make the output more random, while lower values like `0.2` make it more focused and deterministic. If set to `0`, the model uses log probability to automatically increase the temperature until certain thresholds are hit",
+          "message": "`0`과 `1` 사이의 샘플링 온도로, `0.8`과 같은 높은 값은 출력을 더 무작위로 만들고 `0.2`와 같은 낮은 값은 더 집중적이고 결정론적으로 만듭니다. `0`으로 설정하면 모델은 로그 확률을 사용하여 특정 임계값에 도달할 때까지 온도를 자동으로 높입니다"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.dGVtcGVyYXR1cmU.display_name": {
+          "source": "Temperature",
+          "message": "샘플링 온도"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.option.dGVtcGVyYXR1cmU.short_desc": {
+          "source": "The sampling temperature between 0 and 1",
+          "message": "0과 1 사이의 샘플링 온도"
+        },
+        "app.T3BlbkFJ.action.dHJhbnNjcmliZS1hdWRpbw.short_desc": {
+          "source": "Transcribe an audio file into text",
+          "message": "오디오 파일을 텍스트로 전사합니다"
+        },
         "app.T3BlbkFJ.action.dXBkYXRlLWFzc2lzdGFudA.desc": {
           "source": "Update an assistant",
           "message": "어시스턴트 업데이트"

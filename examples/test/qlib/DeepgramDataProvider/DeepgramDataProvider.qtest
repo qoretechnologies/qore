@@ -8,6 +8,9 @@
 %requires Util
 %requires QUnit
 %requires Logger
+%requires Mime
+%requires json
+%requires HttpServer
 %requires ConnectionProvider
 %requires DataProvider
 %requires DeepgramRestClient
@@ -19,23 +22,56 @@ class FakeDeepgramRestClientIo inherits RestClientIo::RestClientIo {
     public {
         string last_method;
         string last_path;
-        *hash<auto> last_body;
+        auto last_body;
+        *hash<auto> last_hdr;
+        #! True when the last request went through the raw (unserialized) request path
+        bool last_raw = False;
         hash<auto> response;
     }
     constructor() : RestClientIo({"url": "https://api.deepgram.com"}) {}
 
     hash<RestClient::RestResponseInfo> restPost(string path, auto body, *hash<auto> hdr) {
-        last_method = "POST";
-        last_path = path;
-        last_body = body;
-        return cast<hash<RestClient::RestResponseInfo>>(response);
+        return record("POST", path, body, hdr, False);
     }
     hash<RestClient::RestResponseInfo> restGet(string path, *hash<auto> hdr) {
-        last_method = "GET";
-        last_path = path;
-        return cast<hash<RestClient::RestResponseInfo>>(response);
+        return record("GET", path, NOTHING, hdr, False);
+    }
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        return record(method, path, body, hdr, True);
     }
     string getSafeUrl() { return "https://api.deepgram.com"; }
+
+    private hash<RestClient::RestResponseInfo> record(string method, string path, auto body,
+            *hash<auto> hdr, bool raw) {
+        last_method = method;
+        last_path = path;
+        last_body = body;
+        last_hdr = hdr;
+        last_raw = raw;
+        return cast<hash<RestClient::RestResponseInfo>>(response);
+    }
+}
+
+#! Captures the request exactly as it arrives on the wire and answers with a fixed transcript
+class ListenCapture inherits AbstractHttpRequestHandler {
+    public {
+        string method;
+        string path;
+        hash<auto> hdr;
+        *binary body;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        method = hdr.method;
+        path = hdr.path;
+        self.hdr = hdr;
+        self.body = exists body ? binary(body) : NOTHING;
+        return makeResponse({"Content-Type": MimeTypeJson}, 200, make_json({
+            "metadata": {"request_id": "wire-1"},
+            "results": {"channels": ({"alternatives": ({"transcript": "wire ok"},)},)},
+        }));
+    }
 }
 
 public class DeepgramDataProviderTest inherits QUnit::Test {
@@ -49,6 +85,9 @@ public class DeepgramDataProviderTest inherits QUnit::Test {
 
         #! Public Deepgram audio sample used by the live transcribe test
         const LiveAudioUrl = "https://dpgr.am/spacewalk.wav";
+
+        #! Bytes standing in for an audio file: "RIFF" + bytes that are not valid UTF-8 + "WAVE"
+        const AudioBytes = <52494646ff80000057415645>;
     }
 
     private {
@@ -64,6 +103,14 @@ public class DeepgramDataProviderTest inherits QUnit::Test {
             \transcribeFileQueryStringTest());
         addTestCase("transcribe-file omits NOTHING params from the query string",
             \transcribeFileSkipNothingTest());
+        addTestCase("transcribe-file uploads a file value as the raw request body",
+            \transcribeFileAudioFileTest());
+        addTestCase("transcribe-file accepts raw audio bytes and derives the MIME type",
+            \transcribeFileAudioBinaryTest());
+        addTestCase("transcribe-file requires exactly one of url / audio",
+            \transcribeFileAudioSourceErrorTest());
+        addTestCase("transcribe-file sends audio bytes unserialized on the wire",
+            \transcribeFileAudioWireTest());
         addTestCase("synthesize-speech surfaces audio bytes + content-type",
             \synthesizeSpeechTest());
         addTestCase("app declares Speech AppGroup",       \speechAppGroupTest());
@@ -104,6 +151,19 @@ public class DeepgramDataProviderTest inherits QUnit::Test {
 
         list<string> action_codes = sort(map $1.action, actions);
         assertEq(("synthesize-speech", "transcribe-file"), action_codes);
+
+        # transcribe-file: url is no longer required; audio is a file input in the same
+        # required group, and each excludes the other
+        hash<DataProviderActionInfo> tf = (select actions, $1.action == "transcribe-file")[0];
+        assertFalse(tf.options.url.required ?? False);
+        assertTrue(tf.options.url.preselected);
+        assertEq(("audio_source",), tf.options.url.required_groups);
+        assertEq(("audio",), tf.options.url.exclusive_with);
+        assertEq("*file", tf.options.audio.type.getName());
+        assertFalse(tf.options.audio.required ?? False);
+        assertTrue(tf.options.audio.preselected);
+        assertEq(("audio_source",), tf.options.audio.required_groups);
+        assertEq(("url",), tf.options.audio.exclusive_with);
     }
 
     private transcribeFileQueryStringTest() {
@@ -125,8 +185,10 @@ public class DeepgramDataProviderTest inherits QUnit::Test {
         });
 
         assertEq("POST", fake.last_method);
-        # URL is in the JSON body — not the query string
+        # URL is in the JSON body — not the query string — through the normal (serialized) path
+        assertFalse(fake.last_raw);
         assertEq("https://example.com/audio.wav", fake.last_body.url);
+        assertFalse(exists fake.last_hdr."Content-Type");
         # All other params go in the query string
         assertTrue(fake.last_path =~ /^\/v1\/listen\?/);
         assertTrue(fake.last_path =~ /model=nova-3/);
@@ -163,6 +225,136 @@ public class DeepgramDataProviderTest inherits QUnit::Test {
         assertFalse(fake.last_path =~ /utterances=/);
         assertFalse(fake.last_path =~ /keywords=/);
         assertFalse(fake.last_path =~ /callback=/);
+    }
+
+    private transcribeFileAudioFileTest() {
+        FakeDeepgramRestClientIo fake();
+        fake.response = <RestClient::RestResponseInfo>{
+            "body": {
+                "metadata": {"request_id": "up-1"},
+                "results": {"channels": ({"alternatives":
+                    ({"transcript": "uploaded audio"},)},)},
+            },
+        };
+        DeepgramDataProvider::DeepgramTranscribeFileDataProvider prov(fake);
+        auto resp = prov.doRequest({
+            "audio": {
+                "name": "clip.wav",
+                "mime_type": "audio/wav",
+                "content": make_base64_string(AudioBytes),
+            },
+            "model": "nova-3",
+            "smart_format": True,
+            "diarize": True,
+        });
+
+        assertEq("POST", fake.last_method);
+        # the decoded bytes are the body, sent through the raw (unserialized) request path
+        # with the file's MIME type as the Content-Type
+        assertTrue(fake.last_raw);
+        assertEq(AudioBytes, fake.last_body);
+        assertEq("audio/wav", fake.last_hdr."Content-Type");
+        # all other params still go in the query string; the audio source never does
+        assertTrue(fake.last_path =~ /^\/v1\/listen\?/);
+        assertTrue(fake.last_path =~ /model=nova-3/);
+        assertTrue(fake.last_path =~ /smart_format=true/);
+        assertTrue(fake.last_path =~ /diarize=true/);
+        assertFalse(fake.last_path =~ /audio=/);
+        assertFalse(fake.last_path =~ /url=/);
+
+        assertEq("uploaded audio",
+            resp.results.channels[0].alternatives[0].transcript);
+        assertEq("up-1", resp.metadata.request_id);
+    }
+
+    private transcribeFileAudioBinaryTest() {
+        FakeDeepgramRestClientIo fake();
+        fake.response = <RestClient::RestResponseInfo>{
+            "body": {"metadata": {}, "results": {}},
+        };
+        DeepgramDataProvider::DeepgramTranscribeFileDataProvider prov(fake);
+
+        # raw bytes: there is no name to derive a MIME type from, so the generic default is sent
+        prov.doRequest({"audio": AudioBytes, "model": "nova-2"});
+        assertEq("POST", fake.last_method);
+        assertTrue(fake.last_raw);
+        assertEq(AudioBytes, fake.last_body);
+        assertEq(MimeTypeOctetStream, fake.last_hdr."Content-Type");
+        assertTrue(fake.last_path =~ /^\/v1\/listen\?/);
+        assertTrue(fake.last_path =~ /model=nova-2/);
+
+        # a file value without a MIME type derives the Content-Type from its name; the
+        # framework base64-encodes raw content, which must be decoded again before sending
+        prov.doRequest({"audio": {"name": "clip.mp3", "content": AudioBytes}});
+        assertTrue(fake.last_raw);
+        assertEq(AudioBytes, fake.last_body);
+        assertEq("audio/mpeg", fake.last_hdr."Content-Type");
+    }
+
+    private transcribeFileAudioSourceErrorTest() {
+        FakeDeepgramRestClientIo fake();
+        DeepgramDataProvider::DeepgramTranscribeFileDataProvider prov(fake);
+
+        assertThrows("DEEPGRAM-TRANSCRIBE-ERROR", "neither", \prov.doRequest(),
+            ({"model": "nova-3"},));
+        assertThrows("DEEPGRAM-TRANSCRIBE-ERROR", "both", \prov.doRequest(), ({
+            "url": "https://example.com/a.wav",
+            "audio": AudioBytes,
+        },));
+        # a file value without content is rejected by the file type before any I/O
+        assertThrows("RUNTIME-TYPE-ERROR", "content", \prov.doRequest(),
+            ({"audio": {"name": "clip.wav"}},));
+        # nothing was sent
+        assertFalse(exists fake.last_method);
+
+        # an unset option can arrive as a key with no value; it must not count as an audio source
+        fake.response = <RestClient::RestResponseInfo>{
+            "body": {"results": {}},
+            "headers": {},
+        };
+        prov.doRequest({"url": "https://example.com/a.wav", "audio": NOTHING, "model": "nova-3"});
+        assertEq("POST", fake.last_method);
+        assertFalse(fake.last_raw);
+        assertEq("https://example.com/a.wav", fake.last_body.url);
+    }
+
+    #! Proves that the real REST client sends the audio bytes verbatim
+    /** The fake above only shows which client method the provider calls; this case runs the real
+        @ref DeepgramRestClient::DeepgramRestClientIo "DeepgramRestClientIo" against a local HTTP
+        server and checks what actually arrives: the raw bytes (not a JSON string, not base64,
+        no charset appended) and the file's Content-Type.
+    */
+    private transcribeFileAudioWireTest() {
+        ListenCapture capture();
+        HttpServer http(<HttpServerOptionInfo>{
+            "logger": new Logger("deepgram-test", LoggerLevel::getLevelError()),
+        });
+        http.setHandler("listen", "", MimeTypeJson, capture);
+        http.setDefaultHandler("listen", capture);
+        int port = http.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        on_exit http.stop();
+
+        DeepgramDataProvider::DeepgramTranscribeFileDataProvider prov({
+            "apikey": "test-key",
+            "url": sprintf("http://localhost:%d", port),
+        });
+        auto resp = prov.doRequest({
+            "audio": {
+                "name": "clip.wav",
+                "mime_type": "audio/wav",
+                "content": make_base64_string(AudioBytes),
+            },
+            "model": "nova-3",
+        });
+
+        assertEq("POST", capture.method);
+        # the server reports the request path without the leading slash
+        assertTrue(capture.path =~ /^\/?v1\/listen\?/);
+        assertTrue(capture.path =~ /model=nova-3/);
+        assertEq(AudioBytes, capture.body);
+        assertEq("audio/wav", capture.hdr."content-type");
+        assertEq("Token test-key", capture.hdr.authorization);
+        assertEq("wire ok", resp.results.channels[0].alternatives[0].transcript);
     }
 
     private synthesizeSpeechTest() {
