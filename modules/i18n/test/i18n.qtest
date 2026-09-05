@@ -37,6 +37,8 @@ class I18nTest inherits QUnit::Test {
         addTestCase("catalog file parse counter", \catalogFileParseCountTest());
         addTestCase("message catalog discovery", \messageCatalogDiscoveryTest());
         addTestCase("message catalog discovery sandbox", \messageCatalogDiscoverySandboxTest());
+        addTestCase("catalog locale discovery", \catalogLocaleDiscoveryTest());
+        addTestCase("catalog locale discovery sandbox", \catalogLocaleDiscoverySandboxTest());
         addTestCase("catalog discovery index", \catalogDiscoveryIndexTest());
         addTestCase("catalog discovery index sandbox", \catalogDiscoveryIndexSandboxTest());
         addTestCase("message catalog literal text", \messageCatalogLiteralTextTest());
@@ -773,6 +775,91 @@ list<string> sub discover_catalogs(string domain, string locale, string path) {
         assertThrows("FILESYSTEM-ACCESS-DENIED", auto sub() {
             return p.callFunction("discover_catalogs", "billing", "root", "/etc");
         });
+    }
+
+    catalogLocaleDiscoveryTest() {
+        string base_dir = make_tmp_dir("qore-i18n-locales-base-");
+        string override_dir = make_tmp_dir("qore-i18n-locales-override-");
+        on_exit remove_tree(base_dir);
+        on_exit remove_tree(override_dir);
+
+        mkdir(base_dir + "/billing");
+        mkdir(base_dir + "/billing/cs");
+        mkdir(base_dir + "/billing/es");
+        mkdir(base_dir + "/billing/pt_BR");
+        mkdir(override_dir + "/billing");
+        mkdir(override_dir + "/billing/it");
+        writeTextFile(base_dir + "/billing/root.json", createCatalogJson("Root"));
+        writeTextFile(base_dir + "/billing/cs/owner.json", createCatalogJson("Ahoj"));
+        writeTextFile(base_dir + "/billing/es/notes.txt", "ignored");
+        writeTextFile(base_dir + "/billing/pt_BR/owner.json", createCatalogJson("Ola"));
+        writeTextFile(base_dir + "/billing/fr-FR.json", createCatalogJson("Bonjour"));
+        writeTextFile(base_dir + "/billing/en_US.json", createCatalogJson("Hello"));
+        writeTextFile(base_dir + "/billing.de.json", createCatalogJson("Hallo"));
+        writeTextFile(base_dir + "/billing.iw.json", createCatalogJson("Shalom"));
+        writeTextFile(override_dir + "/billing/cs.json", createCatalogJson("Cau"));
+        writeTextFile(override_dir + "/billing/it/owner.json", createCatalogJson("Ciao"));
+
+        hash<auto> opts = {
+            "search_path": (base_dir,),
+            "override_path": override_dir,
+        };
+        const list<string> Expected = ("root", "cs", "de", "fr-FR", "it");
+        assertEq(Expected, I18n::discover_catalog_locales("billing", opts),
+            "locale discovery composes direct, flat, and fragment layouts");
+
+        I18n::CatalogDiscoveryIndex index();
+        assertEq(Expected, index.discoverLocales("billing", opts),
+            "indexed locale discovery matches direct discovery");
+        int scans = index.getDirectoryScanCount();
+        assertEq(Expected, index.discoverLocales("billing", opts),
+            "repeating indexed locale discovery preserves results");
+        assertEq(scans, index.getDirectoryScanCount(),
+            "repeating indexed locale discovery performs no directory reads");
+
+        writeTextFile(base_dir + "/billing/ja.json", createCatalogJson("Konnichiwa"));
+        assertEq(Expected, index.discoverLocales("billing", opts),
+            "an index reports the locale tree it snapshotted");
+        assertEq(("root", "cs", "de", "fr-FR", "it", "ja"),
+            I18n::discover_catalog_locales("billing", opts),
+            "direct locale discovery sees newly installed catalogs");
+        index.clear();
+        assertEq(("root", "cs", "de", "fr-FR", "it", "ja"),
+            index.discoverLocales("billing", opts),
+            "a cleared index takes a new locale snapshot");
+
+        assertThrows("I18N-CATALOG-ERROR", auto sub() {
+            return I18n::discover_catalog_locales("../billing", opts);
+        }, NOTHING, "locale discovery validates the domain");
+    }
+
+    catalogLocaleDiscoverySandboxTest() {
+        string base_dir = make_tmp_dir("qore-i18n-locales-sandbox-");
+        on_exit remove_tree(base_dir);
+
+        mkdir(base_dir + "/billing");
+        writeTextFile(base_dir + "/billing/root.json", createCatalogJson("Root"));
+
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("
+%modern
+%requires i18n
+
+list<string> sub discover_locales(string domain, string path) {
+    I18n::CatalogDiscoveryIndex index();
+    return index.discoverLocales(domain, {\"search_path\": (path,)});
+}
+        ", "i18n_sandbox_locale_discovery");
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(base_dir);
+        p.setSandboxManager(sm);
+
+        assertEq(("root",), p.callFunction("discover_locales", "billing", base_dir),
+            "locale enumeration respects an allowed sandbox root");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", auto sub() {
+            return p.callFunction("discover_locales", "billing", "/etc");
+        }, NOTHING, "locale enumeration cannot list outside the sandbox");
     }
 
     catalogDiscoveryIndexTest() {

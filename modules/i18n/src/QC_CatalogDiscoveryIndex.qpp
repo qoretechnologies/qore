@@ -108,6 +108,28 @@ list<string> CatalogDiscoveryIndex::discover(string domain, string locale, *hash
     return i18n_discover_catalog_files_api(domain, locale, opts, index, xsink);
 }
 
+//! Discovers native catalog locales for a domain, reusing directory reads.
+/** The return value is identical to @ref Qore::I18n::discover_catalog_locales() called with the same arguments; only
+    the number of filesystem reads differs. Locale discovery and later calls to @ref discover() share this index.
+
+    @param domain catalog domain
+    @param opts optional hash with \c search_path and \c override_path string or list<string> entries
+    @return distinct catalog locale names, with \c root first when present and all other names in lexical order
+
+    @throw FILESYSTEM-ACCESS-DENIED if a sandbox does not permit listing a required catalog directory
+    @throw I18N-CATALOG-ERROR if \a domain or \a opts is invalid, or a catalog directory cannot be read
+
+    @par Example
+    @code{.py}
+list<string> locales = index.discoverLocales("billing", {"search_path": (catalog_root,)});
+    @endcode
+
+    @note Results reflect the filesystem as it was when each directory was first read by this index.
+*/
+list<string> CatalogDiscoveryIndex::discoverLocales(string domain, *hash<auto> opts) [flags=RET_VALUE_ONLY;dom=FILESYSTEM,EXTERNAL_INFO] {
+    return i18n_discover_catalog_locales_api(domain, opts, index, xsink);
+}
+
 //! Returns the number of directories this index has read from disk.
 /** The count is reset by @ref CatalogDiscoveryIndex::clear().  It exists so that callers and tests can verify that
     an operation reuses directory reads instead of inferring it from elapsed time.

@@ -112,6 +112,36 @@ bool I18nCatalogDirIndex::listJsonFiles(const std::string& dir, std::vector<std:
     return true;
 }
 
+bool I18nCatalogDirIndex::listDirectories(const std::string& dir, std::vector<std::string>& names,
+        ExceptionSink* xsink) {
+    AutoLocker al(m);
+    DirSnapshot* snap = getSnapshot(dir, xsink);
+    if (!snap) {
+        return false;
+    }
+    if (snap->scan_errno) {
+        return snap->scan_errno == ENOENT || snap->scan_errno == ENOTDIR;
+    }
+
+    size_t count = 0;
+    for (std::map<std::string, EntryType>::iterator i = snap->entries.begin(), e = snap->entries.end(); i != e;
+            ++i) {
+        if (count && !(count % 100) && qore_check_cancel(xsink, "listing i18n catalog locale directories")) {
+            return false;
+        }
+        ++count;
+
+        if (i->first == "." || i->first == "..") {
+            continue;
+        }
+        i->second = resolveType(dir, i->first, i->second);
+        if (i->second == ET_DIRECTORY) {
+            names.push_back(i->first);
+        }
+    }
+    return true;
+}
+
 int I18nCatalogDirIndex::getScanError(const std::string& dir, ExceptionSink* xsink) {
     AutoLocker al(m);
     DirSnapshot* snap = getSnapshot(dir, xsink);
@@ -195,6 +225,8 @@ bool I18nCatalogDirIndex::readDir(const std::string& dir, DirSnapshot& snap, Exc
                 type = ET_REGULAR;
                 break;
             case DT_DIR:
+                type = ET_DIRECTORY;
+                break;
             case DT_FIFO:
             case DT_SOCK:
             case DT_CHR:
@@ -221,5 +253,8 @@ I18nCatalogDirIndex::EntryType I18nCatalogDirIndex::resolveType(const std::strin
     if (stat(path.c_str(), &sbuf)) {
         return ET_OTHER;
     }
-    return S_ISREG(sbuf.st_mode) ? ET_REGULAR : ET_OTHER;
+    if (S_ISREG(sbuf.st_mode)) {
+        return ET_REGULAR;
+    }
+    return S_ISDIR(sbuf.st_mode) ? ET_DIRECTORY : ET_OTHER;
 }

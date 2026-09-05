@@ -62,6 +62,7 @@
 #include <cstdlib>
 #include <iterator>
 #include <memory>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -1070,6 +1071,150 @@ static std::vector<std::string> i18n_discover_catalog_files(const std::string& d
     return files;
 }
 
+static bool i18n_catalog_locale_filename(const std::string& raw, std::string& locale) {
+    if (raw.empty()) {
+        return false;
+    }
+
+    ExceptionSink discard;
+    std::string canonical = i18n_canonicalize_locale_tag(raw, &discard, true);
+    if (discard || canonical != raw) {
+        discard.clear();
+        return false;
+    }
+    locale = std::move(canonical);
+    return true;
+}
+
+static bool i18n_require_catalog_directory_access(const std::string& path, ExceptionSink* xsink) {
+    QoreSandboxManagerHelper smh;
+    return !smh || smh->checkFilesystemAccess(path.c_str(), QSEC_READ, xsink);
+}
+
+static bool i18n_list_catalog_json_files(const std::string& path, I18nCatalogDirIndex& index,
+        std::vector<std::string>& names, ExceptionSink* xsink) {
+    if (!i18n_require_catalog_directory_access(path, xsink)) {
+        return false;
+    }
+    if (index.listJsonFiles(path, names, xsink)) {
+        return !*xsink;
+    }
+    if (*xsink) {
+        return false;
+    }
+    int err = index.getScanError(path, xsink);
+    if (!*xsink) {
+        xsink->raiseErrnoException("I18N-CATALOG-ERROR", err, "cannot open catalog directory '%s'", path.c_str());
+    }
+    return false;
+}
+
+static bool i18n_list_catalog_directories(const std::string& path, I18nCatalogDirIndex& index,
+        std::vector<std::string>& names, ExceptionSink* xsink) {
+    if (!i18n_require_catalog_directory_access(path, xsink)) {
+        return false;
+    }
+    if (index.listDirectories(path, names, xsink)) {
+        return !*xsink;
+    }
+    if (*xsink) {
+        return false;
+    }
+    int err = index.getScanError(path, xsink);
+    if (!*xsink) {
+        xsink->raiseErrnoException("I18N-CATALOG-ERROR", err, "cannot open catalog directory '%s'", path.c_str());
+    }
+    return false;
+}
+
+static void i18n_add_catalog_locale(std::set<std::string>& locales, const std::string& raw) {
+    std::string locale;
+    if (i18n_catalog_locale_filename(raw, locale)) {
+        locales.insert(std::move(locale));
+    }
+}
+
+static std::vector<std::string> i18n_discover_catalog_locales(const std::string& domain, const QoreHashNode* opts,
+        I18nCatalogDirIndex* shared_index, ExceptionSink* xsink) {
+    std::vector<std::string> rv;
+    if (!i18n_validate_catalog_domain(domain, xsink)) {
+        return rv;
+    }
+
+    std::vector<std::string> paths = i18n_get_catalog_search_paths(opts, xsink);
+    if (*xsink) {
+        return rv;
+    }
+
+    I18nCatalogDirIndex local_index;
+    I18nCatalogDirIndex& index = shared_index ? *shared_index : local_index;
+    std::set<std::string> locales;
+    const std::string flat_prefix = domain + ".";
+    for (size_t p = 0; p < paths.size(); ++p) {
+        if (p && !(p % 100) && qore_check_cancel(xsink, "discovering i18n catalog locales")) {
+            return rv;
+        }
+
+        std::vector<std::string> root_files;
+        if (!i18n_list_catalog_json_files(paths[p], index, root_files, xsink)) {
+            return rv;
+        }
+        for (size_t f = 0; f < root_files.size(); ++f) {
+            if (f && !(f % 100) && qore_check_cancel(xsink, "checking flat i18n catalog locales")) {
+                return rv;
+            }
+            const std::string& name = root_files[f];
+            if (name.size() > flat_prefix.size() + 5 && !name.compare(0, flat_prefix.size(), flat_prefix)) {
+                i18n_add_catalog_locale(locales,
+                    name.substr(flat_prefix.size(), name.size() - flat_prefix.size() - 5));
+            }
+        }
+
+        std::string domain_dir = i18n_join_catalog_path(paths[p], domain);
+        std::vector<std::string> domain_files;
+        if (!i18n_list_catalog_json_files(domain_dir, index, domain_files, xsink)) {
+            return rv;
+        }
+        for (size_t f = 0; f < domain_files.size(); ++f) {
+            if (f && !(f % 100) && qore_check_cancel(xsink, "checking direct i18n catalog locales")) {
+                return rv;
+            }
+            i18n_add_catalog_locale(locales, domain_files[f].substr(0, domain_files[f].size() - 5));
+        }
+
+        std::vector<std::string> fragment_locales;
+        if (!i18n_list_catalog_directories(domain_dir, index, fragment_locales, xsink)) {
+            return rv;
+        }
+        for (size_t l = 0; l < fragment_locales.size(); ++l) {
+            if (l && !(l % 100) && qore_check_cancel(xsink, "checking fragment i18n catalog locales")) {
+                return rv;
+            }
+            const std::string& candidate = fragment_locales[l];
+            std::string locale;
+            if (!i18n_catalog_locale_filename(candidate, locale)) {
+                continue;
+            }
+            std::vector<std::string> fragments;
+            if (!i18n_list_catalog_json_files(i18n_join_catalog_path(domain_dir, candidate), index, fragments,
+                    xsink)) {
+                return rv;
+            }
+            if (!fragments.empty()) {
+                locales.insert(std::move(locale));
+            }
+        }
+    }
+
+    std::set<std::string>::iterator root = locales.find("root");
+    if (root != locales.end()) {
+        rv.push_back(*root);
+        locales.erase(root);
+    }
+    rv.insert(rv.end(), locales.begin(), locales.end());
+    return rv;
+}
+
 static QoreListNode* i18n_string_vector_to_list(const std::vector<std::string>& values, ExceptionSink* xsink,
         const char* activity) {
     ReferenceHolder<QoreListNode> rv(new QoreListNode(stringTypeInfo), xsink);
@@ -1121,6 +1266,19 @@ QoreListNode* i18n_discover_catalog_files_api(const QoreStringNode* domain, cons
         return nullptr;
     }
     return i18n_string_vector_to_list(files, xsink, "returning discovered i18n catalog files");
+}
+
+QoreListNode* i18n_discover_catalog_locales_api(const QoreStringNode* domain, const QoreHashNode* opts,
+        I18nCatalogDirIndex* index, ExceptionSink* xsink) {
+    std::string domain_str = i18n_string_arg_to_utf8(domain, xsink, "domain", 128);
+    if (*xsink) {
+        return nullptr;
+    }
+    std::vector<std::string> locales = i18n_discover_catalog_locales(domain_str, opts, index, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return i18n_string_vector_to_list(locales, xsink, "returning discovered i18n catalog locales");
 }
 
 static icu::Locale i18n_make_locale(const QoreStringNode* locale_arg, ExceptionSink* xsink) {
@@ -2881,6 +3039,34 @@ list<string> get_catalog_search_path(*hash<auto> opts) [flags=RET_VALUE_ONLY;dom
 */
 list<string> discover_catalog_files(string domain, string locale, *hash<auto> opts) [flags=RET_VALUE_ONLY;dom=FILESYSTEM,EXTERNAL_INFO] {
     return i18n_discover_catalog_files_api(domain, locale, opts, nullptr, xsink);
+}
+
+//! Discovers locales with native catalog files for a domain.
+/** Discovery recognizes the same direct, flat, and fragment layouts as @ref discover_catalog_files(). A fragment
+    locale is returned only when its directory contains at least one regular JSON file. Locale names must already be
+    canonical BCP 47 tags (or \c root), because only those names can be resolved by @ref discover_catalog_files().
+    Incidental files, empty fragment directories, and noncanonical or invalid locale names are ignored.
+
+    @param domain catalog domain
+    @param opts optional hash with \c search_path and \c override_path string or list<string> entries
+    @return distinct catalog locale names, with \c root first when present and all other names in lexical order
+
+    @throw FILESYSTEM-ACCESS-DENIED if a sandbox does not permit listing a required catalog directory
+    @throw I18N-CATALOG-ERROR if \a domain or \a opts is invalid, or a catalog directory cannot be read
+
+    @par Example
+    @code{.py}
+list<string> locales = I18n::discover_catalog_locales("billing", {
+    "search_path": ("/opt/qore/catalogs",),
+    "override_path": "/etc/qore/catalogs",
+});
+    @endcode
+
+    @note Every call reads the filesystem. An operation combining locale and file discovery can reuse one bounded
+    directory snapshot with @ref Qore::I18n::CatalogDiscoveryIndex "CatalogDiscoveryIndex".
+*/
+list<string> discover_catalog_locales(string domain, *hash<auto> opts) [flags=RET_VALUE_ONLY;dom=FILESYSTEM,EXTERNAL_INFO] {
+    return i18n_discover_catalog_locales_api(domain, opts, nullptr, xsink);
 }
 
 //! Formats a decimal number with explicit locale data.

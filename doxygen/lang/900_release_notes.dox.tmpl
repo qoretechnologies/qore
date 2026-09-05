@@ -1835,7 +1835,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - the new \c I18n::CatalogDiscoveryIndex class lets one operation reuse catalog directory reads across many
         domains and locales instead of re-probing the same directories for every catalog; the index is owned and
         scoped by the caller, so it has no stale process-global state, and it never changes which catalog files a
-        program can discover
+        program can discover; \c I18n::discover_catalog_locales() and
+        \c CatalogDiscoveryIndex::discoverLocales() enumerate the canonical locale identities actually installed
+        for a domain, allowing applications to add translations without maintaining a language allowlist
       - locale-sensitive number/percentage/currency/date formatting, collation, and string-predicate APIs, plus a
         \c qore-i18n catalog extraction and management tool; percentage formatting uses ratio inputs and ICU/CLDR
         percent-sign placement, spacing, digits, and bidirectional marks

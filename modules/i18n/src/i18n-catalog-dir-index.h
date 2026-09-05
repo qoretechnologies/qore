@@ -82,6 +82,16 @@ public:
     */
     DLLLOCAL bool listJsonFiles(const std::string& dir, std::vector<std::string>& names, ExceptionSink* xsink);
 
+    //! Appends the names of all directories in \a dir to \a names in filename order
+    /** @param dir directory to list
+        @param names sorted names are appended here
+        @param xsink Qore-language exception sink
+
+        @return @c false if the directory cannot be indexed; the directory not existing is not a failure and yields
+            no names
+    */
+    DLLLOCAL bool listDirectories(const std::string& dir, std::vector<std::string>& names, ExceptionSink* xsink);
+
     //! Returns the errno recorded for a failed scan of \a dir, or 0 if the directory was read
     DLLLOCAL int getScanError(const std::string& dir, ExceptionSink* xsink);
 
@@ -99,6 +109,7 @@ private:
     enum EntryType : unsigned char {
         ET_UNKNOWN = 0,
         ET_REGULAR,
+        ET_DIRECTORY,
         ET_OTHER,
     };
 

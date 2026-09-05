@@ -41,5 +41,7 @@ DLLLOCAL int64 i18n_get_catalog_file_parse_count();
 class I18nCatalogDirIndex;
 DLLLOCAL QoreListNode* i18n_discover_catalog_files_api(const QoreStringNode* domain, const QoreStringNode* locale,
     const QoreHashNode* opts, I18nCatalogDirIndex* index, ExceptionSink* xsink);
+DLLLOCAL QoreListNode* i18n_discover_catalog_locales_api(const QoreStringNode* domain, const QoreHashNode* opts,
+    I18nCatalogDirIndex* index, ExceptionSink* xsink);
 
 #endif

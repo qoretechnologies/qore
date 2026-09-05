@@ -98,6 +98,17 @@ list<string> files = I18n::discover_catalog_files("billing", "cs-CZ", {
 I18n::MessageCatalog billing_catalog(files);
     @endcode
 
+    Applications do not need a source-code locale allowlist. \c I18n::discover_catalog_locales() enumerates the
+    canonical locale identities that actually have direct, flat, or fragment catalogs for a domain. It ignores
+    incidental files, invalid or noncanonical locale names, and empty fragment directories:
+
+    @code{.py}
+list<string> locales = I18n::discover_catalog_locales("billing", {
+    "search_path": ("/opt/qore/catalogs",),
+    "override_path": "/etc/qore/catalogs",
+});
+    @endcode
+
     Every \c I18n::discover_catalog_files() call reads the filesystem: it probes the candidate paths and scans the
     fragment directory for each search root and locale-fallback entry. An operation that discovers many domains or
     locales at once therefore reads the same directories repeatedly. \c I18n::CatalogDiscoveryIndex answers those
@@ -107,7 +118,7 @@ I18n::MessageCatalog billing_catalog(files);
     @code{.py}
 I18n::CatalogDiscoveryIndex index();
 foreach string domain in (domains) {
-    foreach string locale in (locales) {
+    foreach string locale in (index.discoverLocales(domain, opts)) {
         I18n::MessageCatalog catalog(index.discover(domain, locale, opts));
     }
 }
