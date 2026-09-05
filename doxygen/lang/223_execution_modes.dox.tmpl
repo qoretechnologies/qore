@@ -137,6 +137,41 @@ Program::setJitOptimizationLevel(3);
     its own optimization level, set with its \c -O / \c --opt-level option and
     defaulting to \c 3; see @ref qcc_tool.
 
+    @subsection jit_size_budget JIT Native Compilation Size Budget
+
+    Native compilation of an exceptionally large function costs far more than it
+    returns: the @ref exec_mode_ir "IR tier" already executes it, while LLVM's
+    compilation cost grows superlinearly with function size.  Such a function can
+    also exhaust the background compiler thread's stack (LLVM's ScalarEvolution
+    analysis recurses on the function's control flow, and threads have small
+    default stacks on some platforms), delay %Program destruction, which drains
+    that program's pending compilations, or exhaust the memory of a constrained
+    container.
+
+    A function whose %Qore IR is larger than the native compilation budget
+    therefore stays on the IR tier, where it executes normally.  The budget
+    applies to every native compilation: functions and methods, top-level code,
+    and interprocedural batches; an oversized batch
+    is reduced to its root function, which is compiled with its callees left
+    behind the normal runtime-call boundary.
+
+    The budget is 10000 IR instructions by default and is set with the
+    \c QORE_JIT_MAX_IR_INSTRUCTIONS environment variable; \c 0 means "no limit".
+    An invalid or empty value is ignored and the default is used.
+
+    @code{.sh}
+# raise the budget for a build that natively compiles very large functions
+QORE_JIT_MAX_IR_INSTRUCTIONS=50000 qore --exec-mode=jit script.qr
+    @endcode
+
+    @note Setting this variable to \c 0 or to a very large value restores the
+    unbounded behavior and can crash or stall native compilation of pathologically
+    large functions; raise it only when the platform's thread stack and memory are
+    known to be sufficient.
+
+    @note Set \c QORE_JIT_TIMING to report each skipped native compilation along
+    with the function's IR instruction count and the budget in effect.
+
     @section exec_mode_tiered Tiered Execution Mode
 
     Tiered mode is the default for @ref modern "%modern" code and can also be

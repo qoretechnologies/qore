@@ -265,15 +265,16 @@ void QoreLoggerLevel::init() {
     llimap.insert(llimap_t::value_type(QLL_FATAL, LoggerLevelFatal));
     llimap.insert(llimap_t::value_type(QLL_OFF, LoggerLevelOff));
 
-    LevelAll = new QoreObject(QC_LOGGERLEVEL, getProgram(), LoggerLevelAll);
-    LevelTrace = new QoreObject(QC_LOGGERLEVEL, getProgram(), LoggerLevelTrace);
-    LevelDebug = new QoreObject(QC_LOGGERLEVEL, getProgram(), LoggerLevelDebug);
-    LevelDetail = new QoreObject(QC_LOGGERLEVEL, getProgram(), LoggerLevelDetail);
-    LevelInfo = new QoreObject(QC_LOGGERLEVEL, getProgram(), LoggerLevelInfo);
-    LevelWarn = new QoreObject(QC_LOGGERLEVEL, getProgram(), LoggerLevelWarn);
-    LevelError = new QoreObject(QC_LOGGERLEVEL, getProgram(), LoggerLevelError);
-    LevelFatal = new QoreObject(QC_LOGGERLEVEL, getProgram(), LoggerLevelFatal);
-    LevelOff = new QoreObject(QC_LOGGERLEVEL, getProgram(), LoggerLevelOff);
+    // These objects have module lifetime and must not retain whichever Program happens to load the module first.
+    LevelAll = new QoreObject(QC_LOGGERLEVEL, nullptr, LoggerLevelAll);
+    LevelTrace = new QoreObject(QC_LOGGERLEVEL, nullptr, LoggerLevelTrace);
+    LevelDebug = new QoreObject(QC_LOGGERLEVEL, nullptr, LoggerLevelDebug);
+    LevelDetail = new QoreObject(QC_LOGGERLEVEL, nullptr, LoggerLevelDetail);
+    LevelInfo = new QoreObject(QC_LOGGERLEVEL, nullptr, LoggerLevelInfo);
+    LevelWarn = new QoreObject(QC_LOGGERLEVEL, nullptr, LoggerLevelWarn);
+    LevelError = new QoreObject(QC_LOGGERLEVEL, nullptr, LoggerLevelError);
+    LevelFatal = new QoreObject(QC_LOGGERLEVEL, nullptr, LoggerLevelFatal);
+    LevelOff = new QoreObject(QC_LOGGERLEVEL, nullptr, LoggerLevelOff);
 
     lsmap.insert(lsmap_t::value_type("ALL", LevelAll));
     lsmap.insert(lsmap_t::value_type("TRACE", LevelTrace));

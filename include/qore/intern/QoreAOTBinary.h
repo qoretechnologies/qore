@@ -175,12 +175,16 @@ constexpr uint32_t QORE_AOT_BINARY_MAGIC = 0x44524F51;
 //! v15: constants with a pending init function also record the value the producing parse computed, so a
 //!      `qcc -c -L` parse resolving against `.qo` declaration shells can evaluate a constant initializer that
 //!      reads them (see ConstantEntry::setAOTParseShellValue())
+//! v16: native function descriptors encode whether their contexts contain closures, allowing closure-free
+//!      ordinary function contexts to be reconstructed safely on first execution
 constexpr uint16_t QORE_AOT_BINARY_MIN_VERSION = 9;
-constexpr uint16_t QORE_AOT_BINARY_VERSION = 15;
+constexpr uint16_t QORE_AOT_BINARY_VERSION = 16;
 //! First format version recording a compile-time value beside a pending constant's init-function flag.
 constexpr uint16_t QORE_AOT_CONST_PARSE_VALUE_VERSION = 15;
 //! First format version storing lazy debugger IR in a separate section.
 constexpr uint16_t QORE_AOT_SPLIT_DEBUG_IR_VERSION = 13;
+//! First format version encoding context-laziness safety flags in native function descriptors.
+constexpr uint16_t QORE_AOT_LAZY_CONTEXT_FLAGS_VERSION = 16;
 
 constexpr uint8_t QORE_AOT_COMPRESSION_NONE = 0;
 constexpr uint8_t QORE_AOT_COMPRESSION_ZLIB = 1;
@@ -295,6 +299,8 @@ enum class QoreAOTSectionType : uint16_t {
     SYMBOL_INDEX         = 26,  //!< Optional versioned Qore/native symbol and dependency index
     CALL_RELOCATIONS     = 27,  //!< Optional direct-call slot relocation candidates
     DEBUG_IR             = 28,  //!< Lazy debugger IR payloads referenced by SLOT_MAPS entries
+    IMPORT_DEPENDENCIES  = 29,  //!< Direct module dependencies imported into an AOT module Program
+    SOURCE_STAT_FINGERPRINT = 30,  //!< Optional source size and nanosecond mtime for staleness checks
 };
 
 //! Symbol kinds written to the optional SYMBOL_INDEX section.
@@ -916,6 +922,13 @@ public:
         buffer.push_back(static_cast<uint8_t>((v >> 24) & 0xFF));
     }
 
+    //! Write an unsigned 64-bit integer (little-endian)
+    void writeU64(uint64_t v) {
+        for (int i = 0; i < 8; ++i) {
+            buffer.push_back(static_cast<uint8_t>((v >> (i * 8)) & 0xFF));
+        }
+    }
+
     //! Write a signed 64-bit integer (little-endian)
     void writeI64(int64_t v) {
         uint64_t uv;
@@ -1166,6 +1179,16 @@ public:
         return string_pool + offset;
     }
 
+    //! Get the decoded string-pool bytes.
+    const uint8_t* getStringPoolData() const {
+        return reinterpret_cast<const uint8_t*>(string_pool);
+    }
+
+    //! Get the decoded string-pool size.
+    uint32_t getStringPoolSize() const {
+        return string_pool_size;
+    }
+
     //! Get the source label from the header
     const char* getLabel() const {
         return getString(header.label_offset);
@@ -1191,6 +1214,16 @@ public:
                    | (static_cast<uint32_t>(ptr[2]) << 16)
                    | (static_cast<uint32_t>(ptr[3]) << 24);
         ptr += 4;
+        return v;
+    }
+
+    //! Read an unsigned 64-bit integer (little-endian) from a data pointer
+    static uint64_t readU64(const uint8_t*& ptr) {
+        uint64_t v = 0;
+        for (int i = 0; i < 8; ++i) {
+            v |= static_cast<uint64_t>(ptr[i]) << (i * 8);
+        }
+        ptr += 8;
         return v;
     }
 
@@ -1449,6 +1482,23 @@ bool readDependencies(const uint8_t* data, uint32_t size, std::vector<std::strin
 bool readDependencies(const QoreAOTBinaryReader& reader, std::vector<std::string>& dependencies,
         std::string& error);
 
+//! Serialize direct namespace-import dependencies into the IMPORT_DEPENDENCIES section
+/** DEPENDENCIES contains every provider required by compiled metadata/code. This narrower list contains only
+    source-level module directives that succeeded at compile time and whose namespaces must be merged into the
+    AOT module's private Program.
+*/
+void serializeImportDependencies(QoreAOTBinaryWriter& writer,
+        const std::vector<std::string>& dependencies);
+
+//! Read the optional direct namespace-import dependency list
+/** @param present set to true when the metadata contains IMPORT_DEPENDENCIES; false selects legacy behavior
+    @return true on success or if the section is absent, false on corrupt data
+*/
+bool readImportDependencies(const QoreAOTBinaryReader& reader,
+        std::vector<std::string>& dependencies, bool& present, std::string& error);
+bool readImportDependencies(const uint8_t* data, uint32_t size,
+        std::vector<std::string>& dependencies, bool& present, std::string& error);
+
 //! Collect the set of source files that contributed user declarations to the
 //! program rooted at @p ns (used by the single-file `-L` preload to avoid
 //! re-registering declarations the target parse already produced).
@@ -1569,6 +1619,34 @@ bool readProgramMetadata(const QoreAOTBinaryReader& reader, std::string& exec_cl
 */
 void serializeBuildInfo(QoreAOTBinaryWriter& writer,
         const std::vector<std::pair<std::string, std::string>>& info);
+
+//! Filesystem metadata used to avoid hashing an unchanged AOT source file.
+struct QoreAOTSourceStatFingerprint {
+    uint64_t size = 0;       //!< source size in bytes
+    uint64_t mtime_ns = 0;   //!< source modification time in nanoseconds since the Unix epoch
+};
+
+//! Read the current filesystem fingerprint for a source file.
+/** @param path source file path; the caller must perform any required sandbox policy check
+    @param fingerprint receives the source fingerprint on success
+    @return true for a regular file with a representable size and modification time, false otherwise
+*/
+bool getAOTSourceStatFingerprint(const char* path, QoreAOTSourceStatFingerprint& fingerprint);
+
+//! Serialize an optional source stat fingerprint into its fixed-width binary section.
+/** @param writer AOT binary writer receiving the section
+    @param fingerprint source stat fingerprint to serialize
+*/
+void serializeAOTSourceStatFingerprint(QoreAOTBinaryWriter& writer,
+        const QoreAOTSourceStatFingerprint& fingerprint);
+
+//! Read an optional source fingerprint from an AOT binary.
+/** @param reader opened AOT binary reader
+    @param fingerprint receives the recorded source fingerprint on success
+    @return true when both fingerprint fields are present and valid, false otherwise
+*/
+bool readAOTSourceStatFingerprint(const QoreAOTBinaryReader& reader,
+        QoreAOTSourceStatFingerprint& fingerprint);
 
 //! Read producer/build metadata from an opened binary reader.
 bool readBuildInfo(const QoreAOTBinaryReader& reader,
@@ -1974,6 +2052,7 @@ struct AOTSlotIdentities {
     std::vector<AOTLVPathSlotId> lv_path_insts;  //!< indexed by lv_path slot index
     bool has_unsupported_exprs = false;   //!< true if any expression cannot be serialized without fallback
     bool has_closure_exprs = false;       //!< true if any expression is CLOSURE_CREATE
+    bool has_closure_locals = false;      //!< true if any local uses closure/reference storage
     bool uses_argv = true;                //!< function requires the caller's implicit argv context
     bool uses_self = true;                //!< function requires the caller's implicit self context
     std::vector<std::string> unsupported_expr_details; //!< compile-time diagnostics for unsupported expression slots
@@ -2089,6 +2168,40 @@ bool qoreAOTAppendPcLocTrailer(const std::string& path, const std::vector<uint8_
 //! Read and parse the PC->loc trailer from the file at `path`. Returns false (and
 //! leaves `out` empty) when the file has no valid trailer.
 bool qoreAOTReadPcLocTrailer(const std::string& path, std::vector<AOTPcLocFuncEntry>& out);
+
+//! AOT module dependency trailer appended after any PC->loc trailer.
+/** The fixed footer is the same 16-byte shape as the PC->loc footer:
+    uint64 payload_len; uint32 magic('QAMD'); uint32 version.  The payload is:
+    uint32 module_name_len; char[module_name_len] module_name; uint32 num_dependencies;
+    repeat: uint32 dependency_len; char[dependency_len] dependency.
+
+    The loader reads this metadata before dlopen() so dependencies can be loaded before
+    mapping the AOT qmod once with RTLD_NOW.  Artifacts without the trailer use the legacy
+    RTLD_LAZY discovery and reopen path.
+*/
+static constexpr uint32_t QORE_AOT_MODULE_DEPS_MAGIC = 0x444d4151u;  //!< 'QAMD' little-endian
+static constexpr uint32_t QORE_AOT_MODULE_DEPS_VERSION = 1u;
+
+//! Append module identity and dependency metadata to an AOT qmod.
+/** @param path AOT qmod path
+    @param module_name module feature name
+    @param dependencies exact dependency list from the module descriptor
+    @param error receives a validation or I/O diagnostic
+    @return true on success, false on error
+*/
+bool qoreAOTAppendModuleDependenciesTrailer(const std::string& path, const std::string& module_name,
+        const std::vector<std::string>& dependencies, std::string& error);
+
+//! Read module dependency metadata without loading the native image.
+/** @param path AOT qmod path
+    @param module_name receives the serialized module name
+    @param dependencies receives the serialized dependency list
+    @param error receives a corruption or I/O diagnostic
+    @return 1 when a valid trailer was read, 0 when no trailer is present or the file cannot be opened,
+        -1 for an invalid trailer
+*/
+int qoreAOTReadModuleDependenciesTrailer(const std::string& path, std::string& module_name,
+        std::vector<std::string>& dependencies, std::string& error);
 
 //! ELF section name carrying the PC->loc map. Unlike the EOF trailer (which is
 //! dropped whenever a .qo is RE-LINKED into another artifact — e.g. qorus links its
@@ -2659,6 +2772,11 @@ private:
     bool resolveTypedefs(std::string& error);
     bool resolveEnumBaseTypes(std::string& error);
     bool resolveBCAExpressions(std::string& error);
+    enum class IndexPhase {
+        TypeAndValue,
+        Functions,
+    };
+    bool rebuildRootIndexes(std::string& error, IndexPhase phase);
 
     //! resolves deferred general expression-tree param defaults; see PendingNativeExprDefault
     bool resolveNativeExprDefaults(std::string& error);

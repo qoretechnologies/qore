@@ -1195,6 +1195,9 @@ static uint32_t encodeAOTRegexCountAndContext(
     if (!slot_ids.uses_self) {
         encoded |= QORE_AOT_FUNC_NO_SELF_CONTEXT;
     }
+    if (slot_ids.has_closure_exprs || slot_ids.has_closure_locals) {
+        encoded |= QORE_AOT_FUNC_HAS_CLOSURE_CONTEXT;
+    }
     return encoded;
 }
 
@@ -1875,11 +1878,11 @@ static bool appendModulePathListSections(QoreAOTBinaryWriter& writer,
     return true;
 }
 
-//! Append producer/build diagnostics to the AOT metadata blob.  This section is
-//! intentionally informational: runtimes ignore it, while qcc --dump-info can
-//! use it to identify stale or shadowed AOT binaries without executing them.
+//! Append producer/build diagnostics and an optional source stat fingerprint to the AOT metadata blob.
+/** BUILD_INFO is informational. The fixed-width fingerprint lets supporting runtimes avoid reading an unchanged
+    source file; older runtimes safely ignore its unknown optional section. */
 static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* binary_kind,
-        const char* target_triple, int opt_level, bool include_source) {
+        const char* target_triple, int opt_level, bool include_source, const char* source_path = nullptr) {
     std::vector<std::pair<std::string, std::string>> info;
     auto add = [&info](const char* key, const std::string& value) {
         info.emplace_back(key, value);
@@ -1901,8 +1904,12 @@ static void appendBuildInfoSection(QoreAOTBinaryWriter& writer, const char* bina
     add("debug-info", getenv("QORE_AOT_NO_DEBUG_INFO") ? "false" : "true");
     const char* big_fn = getenv("QORE_AOT_BIG_FN_THRESHOLD");
     add("big-fn-threshold", big_fn ? big_fn : "");
-
     serializeBuildInfo(writer, info);
+
+    QoreAOTSourceStatFingerprint source_fingerprint;
+    if (getAOTSourceStatFingerprint(source_path, source_fingerprint)) {
+        serializeAOTSourceStatFingerprint(writer, source_fingerprint);
+    }
 }
 
 //! Compute xxHash64 of source file bytes
@@ -1977,6 +1984,13 @@ enum class AOTMetadataCompressionPolicy {
     Zstd,
     SectionedZstd,
 };
+
+// Auto sectioning is only worth evaluating when it can avoid eagerly
+// decompressing a substantial runtime-unused section. The final selection
+// below still caps the compressed metadata size premium.
+static constexpr uint32_t AOT_AUTO_SECTIONED_SYMBOL_INDEX_MIN = 512 * 1024;
+static constexpr uint32_t AOT_AUTO_SECTIONED_DEBUG_IR_MIN = 128 * 1024;
+static constexpr size_t AOT_AUTO_SECTIONED_SIZE_PREMIUM_PERCENT = 20;
 
 static AOTMetadataCompressionPolicy getAOTMetadataCompressionPolicy() {
     const char* mode = getenv("QORE_AOT_METADATA_COMPRESSION");
@@ -2190,7 +2204,10 @@ static void finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool 
     std::vector<uint8_t> sectioned_candidate;
     bool sectioned_candidate_ready = false;
     if (policy == AOTMetadataCompressionPolicy::Auto
-            && getAOTMetadataSectionSize(metadata, QoreAOTSectionType::SYMBOL_INDEX) >= 512 * 1024) {
+            && (getAOTMetadataSectionSize(metadata, QoreAOTSectionType::SYMBOL_INDEX)
+                    >= AOT_AUTO_SECTIONED_SYMBOL_INDEX_MIN
+                || getAOTMetadataSectionSize(metadata, QoreAOTSectionType::DEBUG_IR)
+                    >= AOT_AUTO_SECTIONED_DEBUG_IR_MIN)) {
         sectioned_candidate = metadata;
         std::string sectioned_error;
         sectioned_candidate_ready = finalizeAOTSectionedMetadataCompression(
@@ -2207,11 +2224,12 @@ static void finalizeAOTMetadataCompression(std::vector<uint8_t>& metadata, bool 
         : compressMetadata(post_header, compressed_post, compress_error);
     if (compressed) {
         size_t compressed_total = AOT_HEADER_BYTES + compressed_post.size();
-        // Sectioned metadata avoids inflating a large linker-only symbol index
-        // during runtime load. Bound its metadata-size premium to 15% so auto
+        // Sectioned metadata avoids inflating linker-only symbols and debug IR
+        // during runtime load. Bound its metadata-size premium so auto
         // does not exchange disproportionate artifact growth for startup work.
         if (sectioned_candidate_ready
-                && sectioned_candidate.size() <= compressed_total + compressed_total * 15 / 100) {
+                && sectioned_candidate.size() <= compressed_total
+                    + compressed_total * AOT_AUTO_SECTIONED_SIZE_PREMIUM_PERCENT / 100) {
             if (report_metadata) {
                 printf(" (section-compressed to %zu bytes, %.1f%%)\n", sectioned_candidate.size(),
                     100.0 * sectioned_candidate.size() / metadata.size());
@@ -23189,7 +23207,7 @@ bool QoreAOT::compile(QoreProgram* pgm,
             error = "operation cancelled during AOT module command serialization";
             return false;
         }
-        appendBuildInfoSection(writer, "script", target_triple, opt_level, include_source);
+        appendBuildInfoSection(writer, "script", target_triple, opt_level, include_source, label);
 
         // Serialize dependencies from the parsed program's feature lists.
         // This captures ALL module dependencies including those from %include'd files,
@@ -25388,7 +25406,7 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
             error = "operation cancelled during AOT module command serialization";
             return false;
         }
-        appendBuildInfoSection(writer, "module", target_triple, opt_level, include_source);
+        appendBuildInfoSection(writer, "module", target_triple, opt_level, include_source, label);
 
         // Serialize successfully-loaded dependencies so they can be loaded at
         // runtime before deserializing the namespace tree. Failed %try-module
@@ -25544,6 +25562,11 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     // Append the lazy PC->loc trailer to the final loaded artifact (output_path is
     // the .qo in compile_only mode, otherwise the just-linked .qmod).
     if (!writeAndVerifyPcLocTrailer(output_path, emitted_func_slots, error)) {
+        return false;
+    }
+    if (!compile_only && !target_triple
+            && !qoreAOTAppendModuleDependenciesTrailer(
+                output_path, mod_info.name, mod_info.dependencies, error)) {
         return false;
     }
 
@@ -25864,7 +25887,7 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
                 error = "operation cancelled during AOT module command serialization";
                 return false;
             }
-            appendBuildInfoSection(writer, "split-module", target_triple, opt_level, include_source);
+            appendBuildInfoSection(writer, "split-module", target_triple, opt_level, include_source, qm_path.c_str());
 
             // Serialize successfully-loaded dependencies so failed %try-module
             // directives do not become hard AOT dependencies.
@@ -26018,6 +26041,11 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
 
         // Append the lazy PC->loc trailer to the final loaded artifact.
         if (!writeAndVerifyPcLocTrailer(output_path, emitted_func_slots, error)) {
+            return false;
+        }
+        if (!compile_only && !target_triple
+                && !qoreAOTAppendModuleDependenciesTrailer(
+                    output_path, mod_info.name, mod_info.dependencies, error)) {
             return false;
         }
 
@@ -26299,11 +26327,24 @@ static void aotAddExplicitBuiltinDependency(std::vector<std::string>& deps,
     }
 }
 
+static bool aotProgramHasLoadedDependency(const qore_program_private* pp, const std::string& dep) {
+    if (dep == "debug") {
+        return true;
+    }
+    if (aotIsImplicitQoreFeature(dep)) {
+        return false;
+    }
+    return pp->featureList.find(dep) != pp->featureList.end()
+        || pp->userFeatureList.find(dep) != pp->userFeatureList.end();
+}
+
 static bool serializeProgramFeatureDependencies(QoreAOTBinaryWriter& writer,
         qore_program_private* pp, const char* cancel_context, const char* skip_feature,
         const std::vector<std::string>* explicit_deps) {
     std::vector<std::string> all_deps;
     std::unordered_set<std::string> dep_seen;
+    std::vector<std::string> import_deps;
+    std::unordered_set<std::string> import_seen;
 
     size_t i = 0;
     for (const auto& feat : pp->featureList) {
@@ -26326,10 +26367,14 @@ static bool serializeProgramFeatureDependencies(QoreAOTBinaryWriter& writer,
                 return false;
             }
             aotAddExplicitBuiltinDependency(all_deps, dep_seen, dep, skip_feature);
+            if (aotProgramHasLoadedDependency(pp, dep)) {
+                aotAddDependency(import_deps, import_seen, dep, skip_feature);
+            }
             ++i;
         }
     }
     serializeDependencies(writer, all_deps);
+    serializeImportDependencies(writer, import_deps);
     return true;
 }
 
@@ -26496,7 +26541,8 @@ static bool emitScriptQoFromParsedProgram(QoreProgram* qpgm,
             error = "operation cancelled during AOT module command serialization";
             return false;
         }
-        appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source);
+        appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source,
+            target_canon.c_str());
 
         // Every script fragment carries the full program-wide dependency set.
         // This is conservative but harmless: already-loaded modules are no-ops,
@@ -29189,7 +29235,8 @@ bool QoreAOT::compileScriptFile(const char* target_file,
             error = "operation cancelled during AOT module command serialization";
             return false;
         }
-        appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source);
+        appendBuildInfoSection(writer, "script-fragment", target_triple, opt_level, include_source,
+            target_canon.c_str());
 
         // Every script fragment carries the full program-wide dependency set.
         // This is conservative but harmless: already-loaded modules are no-ops,
@@ -29767,7 +29814,8 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
                 error = "operation cancelled during AOT module command serialization";
                 return false;
             }
-            appendBuildInfoSection(writer, "module-fragment", target_triple, opt_level, include_source);
+            appendBuildInfoSection(writer, "module-fragment", target_triple, opt_level, include_source,
+                qm_path.c_str());
 
             std::vector<std::string> reexport_mods;
             std::vector<std::string> explicit_deps = extractAllDependencies(combined_source.c_str(),
@@ -30235,7 +30283,8 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
                 error = "operation cancelled during AOT module command serialization";
                 return false;
             }
-            appendBuildInfoSection(writer, "aggregated-module", target_triple, opt_level, include_source);
+            appendBuildInfoSection(writer, "aggregated-module", target_triple, opt_level, include_source,
+                qm_path.c_str());
 
             std::vector<std::string> reexport_mods;
             std::vector<std::string> explicit_deps = extractAllDependencies(combined_source.c_str(),
@@ -30385,6 +30434,12 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
         // a `qore_aot_pcloc` ELF section (added in emitObjectFile), and the linker
         // concatenates them into the linked artifact — so lazy on-throw locations work
         // for aggregate-resident functions automatically.
+        if (!target_triple
+                && !qoreAOTAppendModuleDependenciesTrailer(
+                    output_path, mod_info.name, mod_info.dependencies, error)) {
+            remove(glue_obj.c_str());
+            return false;
+        }
 
         if (!target_triple) {
             remove(glue_obj.c_str());
@@ -30713,7 +30768,7 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
                 error = "operation cancelled during AOT module command serialization";
                 return false;
             }
-            appendBuildInfoSection(writer, "archive", target_triple, opt_level, include_source);
+            appendBuildInfoSection(writer, "archive", target_triple, opt_level, include_source, qm_path.c_str());
 
             std::vector<std::string> reexport_mods;
             std::vector<std::string> explicit_deps = extractAllDependencies(combined_source.c_str(),
@@ -35039,6 +35094,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
     }
     out.has_unsupported_exprs = false;
     out.has_closure_exprs = false;
+    out.has_closure_locals = false;
     // Snapshot (bits, slot) pairs before iterating: classifyExpression
     // runs an ExprTreeSerializer dry-run that can call getExprSlot() and
     // register additional expr slots, rehashing slots.expr_slots and
@@ -35151,6 +35207,7 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         }
         if (lv->closureUse()) {
             lid.flags |= 0x02; // is_closure
+            out.has_closure_locals = true;
         }
         if (lv->isReadOnly()) {
             lid.flags |= 0x10; // read-only binding
@@ -35183,6 +35240,9 @@ void extractAOTSlotIdentities(const QoreIRFunction& func, const AOTSlotMap& slot
         blid.name = lv->getName();
         blid.type_path = getSlotTypePath(lv->getTypeInfoForLValue());
         blid.is_closure = lv->closureUse();
+        if (blid.is_closure) {
+            out.has_closure_locals = true;
+        }
         blid.read_only = lv->isReadOnly();
         auto slot_it = func.local_var_slots.find(lv);
         blid.slot_id = slot_it != func.local_var_slots.end() ? slot_it->second : UINT32_MAX;

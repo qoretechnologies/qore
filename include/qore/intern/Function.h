@@ -54,6 +54,7 @@ struct QoreAOTLazyClosureIR;
 struct QoreAOTLazyFunctionIR;
 using JitFunctionPtr = uint64_t (*)(ExceptionSink*);
 using AotFunctionPtr = uint64_t (*)(QoreAOTContext*, ExceptionSink*);
+DLLLOCAL void qore_aot_ensure_pc_loc_map(QoreAOTContext* ctx);
 
 // these data structures are all private to the library
 
@@ -893,12 +894,13 @@ protected:
     mutable std::vector<std::shared_ptr<QoreIRFunction>> jit_owned_ir;
     mutable std::atomic<JitFunctionPtr> cached_jit_fn{nullptr};
     mutable AotFunctionPtr cached_aot_fn = nullptr;
-    mutable QoreAOTContext* cached_aot_ctx = nullptr;
+    mutable std::atomic<QoreAOTContext*> cached_aot_ctx{nullptr};
     mutable std::once_flag ir_lower_once;
     //! JIT compilation state: 0=not started, 1=submitted, 2=done (success or failure)
     mutable std::atomic<int> jit_compile_state{0};
     mutable bool ir_lower_failed = false;
-    mutable bool jit_compile_failed = false;
+    //! True when native JIT compilation is permanently unavailable for this variant
+    mutable std::atomic<bool> jit_compile_failed{false};
     bool is_closure = false;  //!< true for closure variants
     //! Deopt counter: incremented on JIT guard failure, triggers recompilation
     mutable std::atomic<uint32_t> deopt_count{0};
@@ -922,6 +924,8 @@ protected:
     mutable std::atomic<bool> has_aot_lazy_closure_ir{false};
     //! Serialized source-stripped function IR installed for qcc parse-time execution.
     mutable std::shared_ptr<const QoreAOTLazyFunctionIR> aot_lazy_function_ir;
+    //! Entry in the shared lazy-function descriptor table.
+    mutable uint32_t aot_lazy_function_ir_index = 0;
     mutable std::mutex aot_lazy_function_ir_mutex;
     //! Lock-free call guard; publishes aot_lazy_function_ir before first invocation.
     mutable std::atomic<bool> has_aot_lazy_function_ir{false};
@@ -992,8 +996,10 @@ public:
     /** Install serialized function IR for source-stripped qcc parse-time execution.
         The descriptor is immutable and published before the combined program can execute.
     */
-    DLLLOCAL void setLazyAOTFunctionIR(std::shared_ptr<const QoreAOTLazyFunctionIR> lazy_ir) const {
+    DLLLOCAL void setLazyAOTFunctionIR(std::shared_ptr<const QoreAOTLazyFunctionIR> lazy_ir,
+            uint32_t entry_index = 0) const {
         aot_lazy_function_ir = std::move(lazy_ir);
+        aot_lazy_function_ir_index = entry_index;
         has_aot_lazy_function_ir.store(true, std::memory_order_release);
     }
 
@@ -1085,6 +1091,24 @@ public:
     //! Register a pre-compiled AOT function pointer with context, promoting directly to JIT tier
     DLLLOCAL void registerPrecompiledAOTFunction(AotFunctionPtr fn, QoreAOTContext* ctx);
 
+    /** Register a pre-compiled AOT function whose context is built on first execution.
+        @param fn native function pointer
+        @param lazy_ir immutable metadata needed to reconstruct the context
+        @param entry_index descriptor-table entry for this function
+        @param context_uses_argv true when the native body needs the implicit argv context
+        @param context_uses_self true when the native body needs the implicit self context
+    */
+    DLLLOCAL void registerLazyPrecompiledAOTFunction(AotFunctionPtr fn,
+            std::shared_ptr<const QoreAOTLazyFunctionIR> lazy_ir,
+            uint32_t entry_index, bool uses_argv, bool uses_self);
+
+    /** Ensure that a lazily registered native AOT function has a complete context.
+        @param name function name for diagnostics
+        @param xsink exception sink; may be null for speculative direct-call lookup
+        @return true when the context is ready
+    */
+    DLLLOCAL bool ensureAOTContext(const char* name, ExceptionSink* xsink) const;
+
     //! Returns true if the variant has a cached JIT or AOT function ready for fast dispatch
     DLLLOCAL bool hasCachedFunction() const {
         return current_tier.load(std::memory_order_acquire) == TIER_JIT
@@ -1098,7 +1122,12 @@ public:
     //! @return NaN-boxed result bits, or 0 if invalidated
     DLLLOCAL uint64_t execCachedFunction(ExceptionSink* xsink, bool& invalidated) const {
         invalidated = false;
-        if (cached_aot_ctx && cached_aot_fn) {
+        if (cached_aot_fn) {
+            if (!ensureAOTContext(nullptr, xsink)) {
+                return 0;
+            }
+            QoreAOTContext* ctx = cached_aot_ctx.load(std::memory_order_acquire);
+            qore_aot_ensure_pc_loc_map(ctx);
             // C++ EH prototype: the AOT code body is now emitted with
             // invoke/landingpad EH under QORE_AOT_EH=1. Per-function landing
             // pads resume the in-flight exception so it propagates up through
@@ -1108,7 +1137,7 @@ public:
             // just sees 0 (NOTHING bits) + xsink set, matching the behavior
             // of the check-based path.
             try {
-                return cached_aot_fn(cached_aot_ctx, xsink);
+                return cached_aot_fn(ctx, xsink);
             } catch (const QoreJITException&) {
                 return 0;
             }
@@ -1138,12 +1167,17 @@ public:
 
     //! Returns true if this variant has a cached AOT function
     DLLLOCAL bool hasCachedAOT() const {
-        return cached_aot_ctx != nullptr && cached_aot_fn != nullptr;
+        return cached_aot_fn != nullptr;
+    }
+
+    //! Returns true if this variant's AOT context has already been materialized.
+    DLLLOCAL bool hasMaterializedAOTContext() const {
+        return cached_aot_ctx.load(std::memory_order_acquire) != nullptr;
     }
 
     //! Returns the cached AOT context for direct AOT fast-entry dispatch.
     DLLLOCAL QoreAOTContext* getCachedAOTContext() const {
-        return cached_aot_ctx;
+        return cached_aot_ctx.load(std::memory_order_acquire);
     }
 
     //! Returns true if argv is actually used in the function body

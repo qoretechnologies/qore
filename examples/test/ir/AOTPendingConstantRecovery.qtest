@@ -31,6 +31,7 @@ class AOTPendingConstantRecoveryTest inherits QUnit::Test {
             "labels": "alpha,beta",
             "class_const_label": "beta",
             "nested_label": "alpha",
+            "indirect_label": "late",
             "script_map_a": "alpha",
         };
     }
@@ -103,6 +104,20 @@ public class Reader {
     }
 }
 
+# This call hides the constant dependency behind a regular function. The compiler cannot put Late before
+# IndirectRead from the initializer IR alone, so eager module init must resolve it recursively on first read.
+public class IndirectReader {
+    public {
+        const Late = new Thing("late");
+    }
+
+    static Thing read() {
+        return Late;
+    }
+}
+
+public const IndirectRead = IndirectReader::read();
+
 #! read from AOT-compiled module code rather than from the script
 public string sub verify() {
     string rv;
@@ -111,6 +126,7 @@ public string sub verify() {
     rv += sprintf("labels=%s\n", ThingLabels.join(","));
     rv += sprintf("class_const_label=%s\n", Reader::lookup("b"));
     rv += sprintf("nested_label=%s\n", Reader::Snapshot.a.getLabel());
+    rv += sprintf("indirect_label=%s\n", IndirectRead.getLabel());
     return rv;
 }
 }
@@ -212,6 +228,7 @@ printf(\"script_map_a=%s\\n\", AOTPendingConstMod::ThingMap.a.getLabel());
 
         hash<string, string> src = parseResults(runModule(m.src_dir, m.script_path));
         hash<string, string> aot = parseResults(runModule(m.qmod_dir, m.script_path));
+        string eager_trace = runModule(m.qmod_dir, m.script_path, "QORE_AOT_INIT_TRACE=1");
         string deferred_output = runModule(m.qmod_dir, m.script_path,
             "QORE_AOT_TEST_DEFER_CONSTANT_INIT=1");
         hash<string, string> deferred = parseResults(deferred_output);
@@ -224,6 +241,11 @@ printf(\"script_map_a=%s\\n\", AOTPendingConstMod::ThingMap.a.getLabel());
         }
         assertEq(-1, deferred_output.find("AOT-PENDING-CONSTANT"),
             "reading a deferred constant does not report it as unpopulated");
+        assertTrue(eager_trace.find("[aot-init] lazy constant init") >= 0
+            && eager_trace.find("item=Late") >= 0,
+            "eager initialization recursively resolves a dependency hidden behind a function call");
+        assertEq(-1, eager_trace.find("[aot-init] call exception"),
+            "recursive eager initialization does not throw and retry pending constant dependencies");
 
         # the assertions above are only meaningful if initialization really was deferred: without the trace,
         # a build that ignored the test hook would pass them by initializing everything at load

@@ -219,6 +219,35 @@ Increment the native ABI revision whenever generated code can no longer execute
 safely against the previous runtime-helper or ownership contract. Metadata-only
 backward readers remain governed by their format and feature versions.
 
+## Load-Time Dependency Preflight
+
+A loadable `.qmod` needs its dependency providers registered before the dynamic
+loader eagerly resolves all generated symbols. Reading the binary-module descriptor
+would normally require mapping the qmod first, which previously forced this sequence:
+map with `RTLD_LAZY`, read the descriptor, load dependencies, unmap, then map again
+with `RTLD_NOW`.
+
+Current qcc output appends a small, non-executing dependency trailer to the final
+`.qmod`. The trailer follows any PC→location EOF trailer and contains the module name
+and the descriptor's exact ordered dependency list, followed by a fixed 16-byte footer
+with payload length, `QAMD` magic, and format version. It is appended after the final
+link, including object aggregation, because arbitrary relinking does not preserve EOF
+trailers.
+
+The runtime loader uses the trailer as follows:
+
+1. validate its version, lengths, entry count, and module name before mapping code;
+2. reserve the parent in the module load map and recursively load the declared providers;
+3. map the qmod once with `RTLD_NOW|RTLD_GLOBAL`;
+4. read the executable descriptor and require its AOT marker, module name, and dependency
+   list to match the preflight metadata exactly before running module initialization.
+
+Payloads are bounded to 16 MiB and 65,536 dependencies, and strings must be nonempty
+where required and contain no embedded NUL. Qmods without the trailer retain the legacy
+lazy-discovery/reopen path, so introducing the trailer does not invalidate existing AOT
+artifacts. The EOF format also keeps a qmod self-contained; there is no sidecar whose
+installation, renaming, or symlink lifetime could diverge from the executable artifact.
+
 ## Symbol Index
 
 Newly generated metadata may also carry an optional `SYMBOL_INDEX` section. The

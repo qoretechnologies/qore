@@ -52,6 +52,7 @@ class AOTTopLevelSourceLocationsTest inherits QUnit::Test {
         addTestCase("top-level exception location", \testTopLevelLocation());
         addTestCase("inlined callee exception location", \testInlinedCalleeLocation());
         addTestCase("top-level location in a source-stripped build", \testStrippedTopLevel());
+        addTestCase("module PC map attaches on first execution", \testDeferredModulePcMap());
 
         set_return_value(main());
     }
@@ -144,5 +145,46 @@ try {
         string exe = compile(source, tmp.path, "--strip-source --strip-debug-info");
         assertEq(expected, run(sprintf("%s %s", env, exe)),
             "source-stripped AOT reports the top-level throw line");
+    }
+
+    testDeferredModulePcMap() {
+        TmpDir tmp("qore-aot-deferred-pc-loc-");
+        string source = write(tmp.path, "DeferredPcLoc.qm", "%modern
+module DeferredPcLoc {
+    version = \"1.0\";
+    desc = \"deferred PC location test module\";
+    author = \"Qore Test\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public string sub deferredPcLocProbe() {
+    try {
+        throw \"DEFERRED-PC-LOC\", \"first call\";
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s:%d\", ex.err, ex.line);
+    }
+}
+");
+        string qmod = tmp.path + "/DeferredPcLoc.qmod";
+        string compile_out = run(sprintf("%s %s -O3 -m -o %s %s", env, qcc_bin, qmod, source));
+        assertTrue(is_file(qmod), "deferred PC location module compiled: " + compile_out);
+
+        string module_env = sprintf("%s QORE_MODULE_DIR=%s:$QORE_MODULE_DIR QORE_AOT_LOC_DEBUG=1",
+            env, tmp.path);
+        string load_out = run(sprintf("%s %s -l DeferredPcLoc -X 1", module_env, qore_bin));
+        assertTrue(load_out !~ /AOT-LOC: registered PC range/,
+            "loading an unused function does not attach its PC map: " + load_out);
+
+        string call_out = run(sprintf("%s %s -l DeferredPcLoc -X 'deferredPcLocProbe()'",
+            module_env, qore_bin));
+        assertTrue(call_out =~ /AOT-LOC: registered PC range/
+                && call_out =~ /DEFERRED-PC-LOC:[1-9][0-9]*/,
+            "the first function execution attaches its PC map before a throw: " + call_out);
+
+        string eager_out = run(sprintf("%s QORE_AOT_LOC_EAGER_ATTACH=1 %s -l DeferredPcLoc -X 1",
+            module_env, qore_bin));
+        assertTrue(eager_out =~ /AOT-LOC: registered PC range/,
+            "the eager compatibility mode attaches the map while loading: " + eager_out);
     }
 }

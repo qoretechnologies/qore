@@ -24,6 +24,12 @@ class BgCompileShutdownTest inherits QUnit::Test {
         libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
         script_path = "/tmp/qore-bg-compile-shutdown-" + string(getpid()) + ".qr";
         addTestCase("queued tier promotions are cancelled at shutdown", \testShutdown());
+        addTestCase("oversized functions remain at the IR tier", \testOversizedFunction());
+        addTestCase("the native compilation budget is configurable", \testBudgetOverride());
+        addTestCase("a zero budget disables the size limit", \testBudgetDisabled());
+        addTestCase("an invalid budget falls back to the default", \testInvalidBudget());
+        addTestCase("oversized top-level code is not natively compiled", \testOversizedTopLevel());
+        addTestCase("an oversized batch is reduced to its root", \testOversizedBatch());
         set_return_value(main());
     }
 
@@ -62,5 +68,149 @@ class BgCompileShutdownTest inherits QUnit::Test {
             "all calls completed before shutdown: " + output);
         assertTrue(output =~ /\[BG-JIT\] cancelled [1-9][0-9]* pending compilations? at shutdown/,
             "shutdown cancelled queued tier promotions: " + output);
+    }
+
+    private string writeScript(string source) {
+        File script();
+        script.open2(script_path, O_WRONLY | O_CREAT | O_TRUNC);
+        script.write(source);
+        script.close();
+        return script_path;
+    }
+
+    #! Returns the source of a function whose Qore IR exceeds the default native-compilation budget
+    private string oversizedSource() {
+        const int StatementCount = 12000;
+        list<string> source = ("%modern\nint sub oversizedFunction(int value) {\n    int total = value;\n",);
+        for (int index = 0; index < StatementCount; ++index) {
+            push source, "    total += 1;\n";
+        }
+        push source, "    return total;\n}\nprintf(\"result=%d\\n\", oversizedFunction(0));\n";
+        return join("", source);
+    }
+
+    #! Returns the source of a function small enough to be natively compiled under the default budget
+    /** The body is far larger than the generated top-level block, so a budget between the two sizes
+        skips the function while the top-level block is still compiled natively.
+    */
+    private string smallSource() {
+        const int StatementCount = 200;
+        list<string> source = ("%modern\nint sub smallFunction(int value) {\n    int total = value;\n",);
+        for (int index = 0; index < StatementCount; ++index) {
+            push source, "    total += 1;\n";
+        }
+        push source, "    return total;\n}\nprintf(\"result=%d\\n\", smallFunction(0));\n";
+        return join("", source);
+    }
+
+    private string runJit(string env, string path) {
+        return backquote(sprintf("%s QORE_JIT_TIMING=1 LD_LIBRARY_PATH=%s %s -b --exec-mode=jit %s 2>&1",
+            env, shellQuote(libqore_dir), shellQuote(qore_bin), shellQuote(path)));
+    }
+
+    private testOversizedFunction() {
+        string output = runJit("", writeScript(oversizedSource()));
+        assertTrue(output =~ /result=12000\n/,
+            "oversized function completed at the IR tier: " + output);
+        assertTrue(output =~ /\[BG-JIT\] skipped native promotion of 'oversizedFunction@/,
+            "oversized function was not submitted to LLVM: " + output);
+        # the reported size must be the function's real IR instruction count, over the default limit
+        *list<*string> reported = (output =~ x/compilation budget exceeded; ([0-9]+) IR instructions; limit ([0-9]+)\)/);
+        assertEq(2, reported.size(), "budget diagnostic reported both counts: " + output);
+        assertEq(10000, reported[1].toInt(), "the default native-compilation budget applied: " + output);
+        assertGt(10000, reported[0].toInt(), "the function's real IR size was reported: " + output);
+        assertFalse(output =~ /\[BG-JIT\] enqueued compilation of 'oversizedFunction@/,
+            "no native compilation was queued for the oversized function: " + output);
+    }
+
+    private testBudgetOverride() {
+        string path = writeScript(smallSource());
+        # the same function is natively compiled under the default budget and skipped under a tiny one,
+        # so the difference can only come from the budget setting
+        string default_output = runJit("", path);
+        assertTrue(default_output =~ /result=200\n/, "small function returned the right result: " + default_output);
+        assertTrue(default_output =~ /\[BG-JIT\] enqueued compilation of 'smallFunction@/,
+            "a function under the budget is still natively compiled: " + default_output);
+        assertFalse(default_output =~ /\[BG-JIT\] skipped native promotion of 'smallFunction@/,
+            "a function under the budget is not skipped: " + default_output);
+
+        # a budget above the top-level block but below the function isolates the function-level
+        # decision: the top-level block is still natively compiled, so the call to smallFunction
+        # still reaches the promotion path that the budget then rejects
+        string limited_output = runJit("QORE_JIT_MAX_IR_INSTRUCTIONS=100", path);
+        assertTrue(limited_output =~ /result=200\n/,
+            "small function still ran correctly under a lowered budget: " + limited_output);
+        assertTrue(limited_output =~ /skipped native promotion of 'smallFunction@.*limit 100\)/,
+            "QORE_JIT_MAX_IR_INSTRUCTIONS lowered the budget: " + limited_output);
+        assertFalse(limited_output =~ /\[BG-JIT\] enqueued compilation of 'smallFunction@/,
+            "no native compilation was queued under the tiny budget: " + limited_output);
+    }
+
+    private testBudgetDisabled() {
+        # 0 means "no limit"; treated as an ordinary limit it would skip every function
+        string output = runJit("QORE_JIT_MAX_IR_INSTRUCTIONS=0", writeScript(smallSource()));
+        assertTrue(output =~ /result=200\n/, "small function returned the right result: " + output);
+        assertFalse(output =~ /\[BG-JIT\] skipped native promotion of 'smallFunction@/,
+            "a zero budget imposes no size limit: " + output);
+        assertTrue(output =~ /\[BG-JIT\] enqueued compilation of 'smallFunction@/,
+            "native compilation still runs with the limit disabled: " + output);
+    }
+
+    #! Top-level code is compiled synchronously, on a path that never reaches the background queue
+    private testOversizedTopLevel() {
+        const int StatementCount = 12000;
+        list<string> source = ("%modern\nint total = 0;\n",);
+        for (int index = 0; index < StatementCount; ++index) {
+            push source, "total += 1;\n";
+        }
+        push source, "printf(\"result=%d\\n\", total);\n";
+
+        string output = runJit("", writeScript(join("", source)));
+        assertTrue(output =~ /result=12000\n/,
+            "oversized top-level code ran on the IR tier: " + output);
+        assertTrue(output =~ /\[JIT\] skipped native compilation of '_toplevel@.*limit 10000\)/,
+            "oversized top-level code was not submitted to LLVM: " + output);
+    }
+
+    #! A root small enough to compile can still gather callees that overflow the budget together
+    private testOversizedBatch() {
+        const int CalleeCount = 20;
+        const int StatementCount = 600;
+        list<string> source = ("%modern\n",);
+        for (int callee = 0; callee < CalleeCount; ++callee) {
+            push source, sprintf("int sub callee%d(int value) {\n    int total = value;\n", callee);
+            for (int index = 0; index < StatementCount; ++index) {
+                push source, "    total += 1;\n";
+            }
+            push source, "    return total;\n}\n";
+        }
+        push source, "int sub batchRoot(int value) {\n    int total = value;\n";
+        for (int callee = 0; callee < CalleeCount; ++callee) {
+            push source, sprintf("    total += callee%d(0);\n", callee);
+        }
+        push source, "    return total;\n}\nprintf(\"result=%d\\n\", batchRoot(0));\n";
+
+        string output = runJit("", writeScript(join("", source)));
+        assertEq(CalleeCount * StatementCount, (output =~ x/result=([0-9]+)/)[0].toInt(),
+            "batch root returned the right result: " + output);
+        assertTrue(output =~ /\[BG-JIT\] disabled oversized batch for 'batchRoot@.*limit 10000\)/,
+            "the oversized batch was reduced to its root: " + output);
+        # the root itself is under the budget, so it must still reach the native tier
+        assertTrue(output =~ /\[BG-JIT\] enqueued compilation of 'batchRoot@/,
+            "the root is still natively compiled after the batch is reduced: " + output);
+        assertFalse(output =~ /\[BG-JIT\] skipped native promotion of 'batchRoot@/,
+            "reducing the batch does not skip the root: " + output);
+    }
+
+    private testInvalidBudget() {
+        string path = writeScript(oversizedSource());
+        # a negative value must not wrap to a huge limit and silently disable the guard
+        foreach string value in (("-1", "abc", "10000x", ""))  {
+            string output = runJit("QORE_JIT_MAX_IR_INSTRUCTIONS=" + shellQuote(value), path);
+            assertTrue(output =~ /result=12000\n/,
+                sprintf("oversized function ran with budget %y: %s", value, output));
+            assertTrue(output =~ /skipped native promotion of 'oversizedFunction@.*limit 10000\)/,
+                sprintf("invalid budget %y fell back to the default: %s", value, output));
+        }
     }
 }

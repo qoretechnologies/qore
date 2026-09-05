@@ -45,6 +45,7 @@
 
 #include <atomic>
 #include <map>
+#include <unordered_map>
 #include <vector>
 #include <list>
 
@@ -1058,17 +1059,28 @@ protected:
     // map from depth to namespace
     typedef std::multimap<unsigned, qore_ns_private*> nsdmap_t;
     nsdmap_t nsdmap;
+    std::unordered_map<qore_ns_private*, nsdmap_t::iterator> nsmap;
 
 public:
     DLLLOCAL NamespaceDepthList() {
     }
 
     DLLLOCAL void add(qore_ns_private* ns) {
-        nsdmap.insert(nsdmap_t::value_type(ns->depth, ns));
+        auto i = nsmap.find(ns);
+        if (i != nsmap.end()) {
+            if (i->second->first == ns->depth) {
+                return;
+            }
+            nsdmap.erase(i->second);
+            i->second = nsdmap.insert(nsdmap_t::value_type(ns->depth, ns));
+        } else {
+            nsmap.emplace(ns, nsdmap.insert(nsdmap_t::value_type(ns->depth, ns)));
+        }
     }
 
     DLLLOCAL void clear() {
         nsdmap.clear();
+        nsmap.clear();
     }
 };
 
@@ -2128,34 +2140,58 @@ protected:
         }
     }
 
-    DLLLOCAL void rebuildIndexes(qore_ns_private* ns) {
-        // process function indexes
-        rebuildFunctionIndexes(fmap, ns->func_list, ns);
+    enum RebuildIndexFlag : unsigned {
+        RIF_FUNCTIONS = 1U << 0,
+        RIF_VARIABLES = 1U << 1,
+        RIF_CONSTANTS = 1U << 2,
+        RIF_CLASSES = 1U << 3,
+        RIF_HASHDECLS = 1U << 4,
+        RIF_ENUMS = 1U << 5,
+        RIF_TYPEDEFS = 1U << 6,
+        RIF_ALL = RIF_FUNCTIONS | RIF_VARIABLES | RIF_CONSTANTS | RIF_CLASSES | RIF_HASHDECLS | RIF_ENUMS
+            | RIF_TYPEDEFS,
+    };
 
-        // process variable indexes
-        for (map_var_t::iterator i = ns->var_list.vmap.begin(), e = ns->var_list.vmap.end(); i != e; ++i)
-            varmap.update(i->first, ns, i->second);
+    DLLLOCAL void rebuildObjectIndexes(qore_ns_private* ns, unsigned flags) {
+        if (flags & RIF_FUNCTIONS) {
+            rebuildFunctionIndexes(fmap, ns->func_list, ns);
+        }
 
-        // process constant indexes
-        rebuildConstantIndexes(cnmap, ns->constant, ns);
+        if (flags & RIF_VARIABLES) {
+            for (map_var_t::iterator i = ns->var_list.vmap.begin(), e = ns->var_list.vmap.end(); i != e; ++i) {
+                varmap.update(i->first, ns, i->second);
+            }
+        }
 
-        // process class indexes
-        rebuildClassIndexes(clmap, ns->classList, ns);
+        if (flags & RIF_CONSTANTS) {
+            rebuildConstantIndexes(cnmap, ns->constant, ns);
+        }
 
-        // process hashdecl indexes
-        rebuildHashDeclIndexes(thdmap, ns->hashDeclList, ns);
+        if (flags & RIF_CLASSES) {
+            rebuildClassIndexes(clmap, ns->classList, ns);
+        }
 
-        // process enum indexes
-        rebuildEnumIndexes(edmap, ns->enumList, ns);
+        if (flags & RIF_HASHDECLS) {
+            rebuildHashDeclIndexes(thdmap, ns->hashDeclList, ns);
+        }
 
-        // process typedef indexes
-        rebuildTypedefIndexes(tdmap, ns->typedefMap, ns);
+        if (flags & RIF_ENUMS) {
+            rebuildEnumIndexes(edmap, ns->enumList, ns);
+        }
 
-        // reindex namespace
+        if (flags & RIF_TYPEDEFS) {
+            rebuildTypedefIndexes(tdmap, ns->typedefMap, ns);
+        }
+    }
+
+    DLLLOCAL void rebuildNamespaceIndexes(qore_ns_private* ns) {
         nsmap.update(ns);
-
-        // inserts into depth list
         nshlist.add(ns);
+    }
+
+    DLLLOCAL void rebuildIndexes(qore_ns_private* ns) {
+        rebuildObjectIndexes(ns, RIF_ALL);
+        rebuildNamespaceIndexes(ns);
     }
 
     DLLLOCAL void parseRebuildIndexes(qore_ns_private* ns) {
@@ -2280,6 +2316,17 @@ public:
         QorePrivateNamespaceIterator qpni(this);
         while (qpni.next())
             rebuildIndexes(qpni.get());
+    }
+
+    //! Publishes namespace constants, global variables, typedefs, and the namespace itself during AOT loading
+    DLLLOCAL void rebuildAOTTypeAndValueIndexes(qore_ns_private* ns) {
+        rebuildObjectIndexes(ns, RIF_VARIABLES | RIF_CONSTANTS | RIF_TYPEDEFS);
+        rebuildNamespaceIndexes(ns);
+    }
+
+    //! Publishes namespace functions after AOT function deserialization
+    DLLLOCAL void rebuildAOTFunctionIndexes(qore_ns_private* ns) {
+        rebuildFunctionIndexes(fmap, ns->func_list, ns);
     }
 
     DLLLOCAL void deferParseCheckAbstractNew(const qore_class_private* qc, const QoreProgramLocation* loc) {
@@ -2837,9 +2884,6 @@ public:
 
     DLLLOCAL static void copyMergeCommittedNamespace(RootQoreNamespace& ns, const RootQoreNamespace& mns) {
         ns.priv->copyMergeCommittedNamespace(*(mns.priv));
-
-        // rebuild root indexes - only for committed objects
-        ns.rpriv->rebuildAllIndexes();
     }
 
     DLLLOCAL static Var* runtimeFindGlobalVar(const RootQoreNamespace& rns, const char* vname, const qore_ns_private*& vns) {

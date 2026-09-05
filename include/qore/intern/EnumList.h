@@ -88,6 +88,10 @@ public:
     DLLLOCAL bool empty() const {
         return hm.empty();
     }
+
+    DLLLOCAL size_t size() const {
+        return hm.size();
+    }
 };
 
 class EnumListIterator {

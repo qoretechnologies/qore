@@ -4004,6 +4004,14 @@ void qore_ns_private::scanMergeCommittedNamespace(const qore_ns_private& mns, Qo
 void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
     printd(5, "qore_ns_private::copyMergeCommittedNamespace() this: %p '%s'\n", this, name.c_str());
 
+    const size_t old_constant_size = constant.size();
+    const size_t old_class_size = classList.size();
+    const size_t old_hashdecl_size = hashDeclList.size();
+    const size_t old_function_size = func_list.size();
+    const size_t old_var_size = var_list.vmap.size();
+    const size_t old_enum_size = enumList.size();
+    const size_t old_typedef_size = typedefMap.size();
+
     // merge in source constants
     constant.mergeUserPublic(mns.constant);
 
@@ -4100,11 +4108,43 @@ void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
                 QoreValue val = QoreValue::makeEnum(member);
                 ens_priv->constant.add(member->getName(), val, enum_priv->getTypeInfo());
             }
-            // Rebuild indexes for the new namespace
             qore_root_ns_private* rns = getRoot();
             if (rns) {
                 rns->rebuildIndexes(ens_priv);
             }
+        }
+    }
+
+    // Namespace merges only add committed objects, so existing root-map entries remain valid. Reindex only the
+    // object categories changed by this merge instead of rescanning every list in the destination namespace. A
+    // repeated diamond import that added no direct item needs no reindexing at all; the namespace's name and depth
+    // are unchanged, so the root namespace and depth indexes do not need updating here either.
+    qore_root_ns_private* rns = getRoot();
+    if (rns) {
+        unsigned flags = 0;
+        if (constant.size() != old_constant_size) {
+            flags |= qore_root_ns_private::RIF_CONSTANTS;
+        }
+        if (classList.size() != old_class_size) {
+            flags |= qore_root_ns_private::RIF_CLASSES;
+        }
+        if (hashDeclList.size() != old_hashdecl_size) {
+            flags |= qore_root_ns_private::RIF_HASHDECLS;
+        }
+        if (func_list.size() != old_function_size) {
+            flags |= qore_root_ns_private::RIF_FUNCTIONS;
+        }
+        if (var_list.vmap.size() != old_var_size) {
+            flags |= qore_root_ns_private::RIF_VARIABLES;
+        }
+        if (enumList.size() != old_enum_size) {
+            flags |= qore_root_ns_private::RIF_ENUMS;
+        }
+        if (typedefMap.size() != old_typedef_size) {
+            flags |= qore_root_ns_private::RIF_TYPEDEFS;
+        }
+        if (flags) {
+            rns->rebuildObjectIndexes(this, flags);
         }
     }
 
@@ -4123,6 +4163,12 @@ void qore_ns_private::copyMergeCommittedNamespace(const qore_ns_private& mns) {
             nns = npns->ns;
             nns->priv->imported = true;
             nns = nsl.runtimeAdd(nns, this)->ns;
+            // The new namespace was attached directly rather than through addCommitNamespaceIntern(), so add its
+            // name and depth indexes here. Its object indexes are populated selectively by the recursive merge.
+            qore_root_ns_private* rns = getRoot();
+            if (rns) {
+                rns->rebuildNamespaceIndexes(nns->priv);
+            }
         }
 
         // Merge the source namespace's contributing modules into the destination so

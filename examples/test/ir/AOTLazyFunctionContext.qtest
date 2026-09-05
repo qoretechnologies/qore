@@ -1,0 +1,200 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class AOTLazyFunctionContextTest
+
+#! Verifies first-execution construction of closure-free AOT function contexts.
+class AOTLazyFunctionContextTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string env;
+    }
+
+    constructor() : QUnit::Test("AOTLazyFunctionContextTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        env = sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+
+        addTestCase("lazy AOT function contexts", \testLazyContexts());
+        set_return_value(main());
+    }
+
+    private string run(string cmd) {
+        return backquote(cmd + " 2>&1");
+    }
+
+    private string write(string dir, string name, string body) {
+        string path = dir + "/" + name;
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        f.write(body);
+        return path;
+    }
+
+    private int countLines(string output, string needle) {
+        int count = 0;
+        foreach string line in (output.split("\n")) {
+            if (line.find(needle) >= 0) {
+                ++count;
+            }
+        }
+        return count;
+    }
+
+    testLazyContexts() {
+        TmpDir tmp("qore-aot-lazy-function-context-");
+        string source = write(tmp.path, "AOTLazyFunctionContext.qm", "%modern
+module AOTLazyFunctionContext {
+    version = \"1.0\";
+    desc = \"lazy AOT function context test module\";
+    author = \"Qore Test\";
+    url = \"https://qore.org\";
+    license = \"MIT\";
+}
+
+public int sub lazyIncrement(int value) {
+    int result = value + 1;
+    return result;
+}
+
+public int sub lazyRecursive(int value) {
+    return value <= 1 ? 1 : value * lazyRecursive(value - 1);
+}
+
+public int sub concurrentFirstCall(int value) {
+    int result = value + 1;
+    return result;
+}
+
+public int sub closureEager(int value) {
+    code<int()> get_value = int sub () {
+        return value + 2;
+    };
+    return get_value();
+}
+
+int sub incrementReference(reference<int> value) {
+    ++value;
+    return value;
+}
+
+public int sub referenceEager(int value) {
+    return incrementReference(\\value);
+}
+
+public string sub lazyThrow() {
+    try {
+        throw \"LAZY-CONTEXT-TEST\", \"first call\";
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf(\"%s:%d\", ex.err, ex.line);
+    }
+}
+");
+        string qmod = tmp.path + "/AOTLazyFunctionContext.qmod";
+        string compile_out = run(sprintf("%s %s -O3 -m -o %s %s", env, qcc_bin, qmod, source));
+        assertTrue(is_file(qmod), "v16 test module compiled: " + compile_out);
+
+        string module_env = sprintf(
+            "%s QORE_MODULE_DIR=%s:$QORE_MODULE_DIR QORE_AOT_LAZY_CONTEXT_TRACE=1",
+            env, tmp.path);
+        string load_out = run(sprintf("%s %s -l AOTLazyFunctionContext -X 1",
+            module_env, qore_bin));
+        assertTrue(load_out.find("[aot-lazy-context] deferred lazyIncrement(int)") >= 0,
+            "closure-free function context is deferred: " + load_out);
+        assertEq(0, countLines(load_out, "[aot-lazy-context] materialized"),
+            "module load does not materialize an unused ordinary function context");
+        assertTrue(load_out.find("deferred closureEager(int)") == -1,
+            "closure-bearing function context remains eager: " + load_out);
+        assertTrue(load_out.find("deferred referenceEager") == -1,
+            "closure-storage reference parameter context remains eager: " + load_out);
+
+        string increment_out = run(sprintf(
+            "%s %s -l AOTLazyFunctionContext -X 'lazyIncrement(41)'",
+            module_env, qore_bin));
+        assertTrue(increment_out.find("[aot-lazy-context] materialized lazyIncrement(int)") >= 0
+                && increment_out.find("42") >= 0,
+            "first ordinary call materializes the context and returns its value: " + increment_out);
+
+        string recursive_out = run(sprintf(
+            "%s %s -l AOTLazyFunctionContext -X 'lazyRecursive(8)'",
+            module_env, qore_bin));
+        assertTrue(recursive_out.find("[aot-lazy-context] materialized lazyRecursive(int)") >= 0
+                && recursive_out.find("40320") >= 0,
+            "recursive first invocation uses the published context: " + recursive_out);
+
+        string closure_out = run(sprintf(
+            "%s %s -l AOTLazyFunctionContext -X 'closureEager(40)'",
+            module_env, qore_bin));
+        assertTrue(closure_out.find("materialized closureEager(int)") == -1
+                && closure_out.find("42") >= 0,
+            "closure-bearing eager context preserves captured-parameter binding: " + closure_out);
+
+        string reference_runner = write(tmp.path, "reference.q", "%modern
+%requires AOTLazyFunctionContext
+printf(\"%d\\n\", referenceEager(41));
+");
+        string reference_out = run(sprintf("%s %s %s", module_env, qore_bin, reference_runner));
+        assertTrue(reference_out.find("materialized referenceEager") == -1
+                && reference_out.find("42") >= 0,
+            "reference-expression eager context preserves caller-owned storage: " + reference_out);
+
+        string throw_out = run(sprintf(
+            "%s %s -l AOTLazyFunctionContext -X 'lazyThrow()'",
+            module_env, qore_bin));
+        assertTrue(throw_out.find("[aot-lazy-context] materialized lazyThrow()") >= 0
+                && throw_out =~ /LAZY-CONTEXT-TEST:[1-9][0-9]*/,
+            "lazy context is ready before exception source lookup: " + throw_out);
+
+        string runner = write(tmp.path, "concurrent.q", "%modern
+%requires AOTLazyFunctionContext
+
+const Threads = 32;
+Counter ready(Threads);
+Counter done(Threads);
+Gate start();
+Mutex lock();
+int checksum = 0;
+
+start.enter();
+for (int i = 0; i < Threads; ++i) {
+    background sub (int value) {
+        on_exit done.dec();
+        ready.dec();
+        start.enter();
+        start.exit();
+        int result = concurrentFirstCall(value);
+        lock.lock();
+        on_exit lock.unlock();
+        checksum += result;
+    }(i);
+}
+ready.waitForZero();
+start.exit();
+done.waitForZero();
+printf(\"checksum=%d\\n\", checksum);
+");
+        string concurrent_out = run(sprintf("%s %s %s", module_env, qore_bin, runner));
+        assertTrue(concurrent_out.find("checksum=528") >= 0,
+            "concurrent first calls all return correctly: " + concurrent_out);
+        assertEq(1, countLines(concurrent_out,
+            "[aot-lazy-context] materialized concurrentFirstCall(int)"),
+            "concurrent first calls materialize exactly one context");
+
+        string eager_out = run(sprintf(
+            "%s QORE_DISABLE_AOT_LAZY_FUNCTION_CONTEXTS=1 %s -l AOTLazyFunctionContext "
+            "-X 'lazyIncrement(41)'", module_env, qore_bin));
+        assertTrue(eager_out.find("[aot-lazy-context]") == -1 && eager_out.find("42") >= 0,
+            "diagnostic opt-out retains eager behavior: " + eager_out);
+    }
+}

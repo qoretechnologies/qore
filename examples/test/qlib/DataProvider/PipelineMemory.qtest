@@ -671,42 +671,57 @@ public class PipelineMemoryTest inherits QUnit::Test {
             warmup.waitDone();
         }
 
-        # run without metrics
-        hash<auto> baseline = runPipelineAndMeasure("baseline-no-metrics", record_count);
-        logVerbose("baseline (no metrics): RSS growth %s, %.1f rec/s",
-            fmtMem(baseline.rss_growth), baseline.recs_per_sec);
-        assertEq(record_count, baseline.record_count);
+        # Short pipeline benchmarks are sensitive to scheduler noise on shared runners. Measure three paired
+        # samples and compare their median rather than allowing one transient scheduling delay to fail the suite.
+        list<float> throughput_overheads;
+        for (int sample = 1; sample <= 3; ++sample) {
+            # run without metrics
+            hash<auto> baseline = runPipelineAndMeasure(
+                sprintf("baseline-no-metrics-%d", sample), record_count);
+            logVerbose("sample %d baseline (no metrics): RSS growth %s, %.1f rec/s", sample,
+                fmtMem(baseline.rss_growth), baseline.recs_per_sec);
+            assertEq(record_count, baseline.record_count);
 
-        # run with lightweight metrics collector (every 1000 records)
-        LightweightMetricsCollector lw_collector(1000);
-        hash<auto> with_metrics = runPipelineAndMeasure("with-lightweight-metrics", record_count, lw_collector);
-        logVerbose("with metrics (interval=1000): RSS growth %s, %.1f rec/s, %d callbacks",
-            fmtMem(with_metrics.rss_growth), with_metrics.recs_per_sec, lw_collector.callback_count);
-        assertEq(record_count, with_metrics.record_count);
-        assertTrue(lw_collector.shutdown_called, "collector shutdown should be called");
-        assertTrue(lw_collector.callback_count > 0, "should have received metrics callbacks");
+            # run with lightweight metrics collector (every 1000 records)
+            LightweightMetricsCollector lw_collector(1000);
+            hash<auto> with_metrics = runPipelineAndMeasure(
+                sprintf("with-lightweight-metrics-%d", sample), record_count, lw_collector);
+            logVerbose("sample %d with metrics (interval=1000): RSS growth %s, %.1f rec/s, %d callbacks", sample,
+                fmtMem(with_metrics.rss_growth), with_metrics.recs_per_sec, lw_collector.callback_count);
+            assertEq(record_count, with_metrics.record_count);
+            assertTrue(lw_collector.shutdown_called, "collector shutdown should be called");
+            assertTrue(lw_collector.callback_count > 0, "should have received metrics callbacks");
 
-        # the metrics overhead should not exceed the threshold
-        assertTrue(with_metrics.rss_growth < max_rss_growth,
-            sprintf("metrics-enabled RSS growth %s should be less than %s",
-                fmtMem(with_metrics.rss_growth), fmtMem(max_rss_growth)));
+            # the metrics overhead should not exceed the memory threshold in any sample
+            assertTrue(with_metrics.rss_growth < max_rss_growth,
+                sprintf("metrics-enabled RSS growth %s should be less than %s",
+                    fmtMem(with_metrics.rss_growth), fmtMem(max_rss_growth)));
 
-        # report the delta between the two runs
-        int overhead = with_metrics.rss_growth - baseline.rss_growth;
-        logVerbose("metrics overhead (RSS delta): %s", fmtMem(overhead));
+            int rss_overhead = with_metrics.rss_growth - baseline.rss_growth;
+            logVerbose("sample %d metrics overhead (RSS delta): %s", sample, fmtMem(rss_overhead));
 
-        # Verify throughput overhead is within acceptable range.
+            if (baseline.recs_per_sec > 0.0) {
+                float throughput_overhead_pct = ((baseline.recs_per_sec - with_metrics.recs_per_sec)
+                    / baseline.recs_per_sec) * 100.0;
+                push throughput_overheads, throughput_overhead_pct;
+                logVerbose("sample %d throughput overhead: %.1f%%", sample, throughput_overhead_pct);
+            }
+        }
+
+        # Verify median throughput overhead is within acceptable range.
         # NOTE: The overhead target is 70% for this no-op passthrough benchmark, where
         # per-record Qore interpreter operations dominate (~12 ops at ~3μs each = ~34μs).
         # For real-world pipelines with processors doing meaningful work (>100μs each),
         # the metrics overhead is <5%.  CI variability can add ~10-15% noise on shared
         # runners, so the threshold includes margin for that.
-        if (baseline.recs_per_sec > 0.0) {
-            float throughput_overhead_pct = ((baseline.recs_per_sec - with_metrics.recs_per_sec)
-                / baseline.recs_per_sec) * 100.0;
-            logVerbose("throughput overhead: %.1f%% (target: < 70%%)", throughput_overhead_pct);
-            assertTrue(throughput_overhead_pct < 70.0,
-                sprintf("metrics throughput overhead %.1f%% must be less than 70%%", throughput_overhead_pct));
+        if (throughput_overheads) {
+            list<float> sorted_overheads = sort(throughput_overheads);
+            float median_overhead_pct = sorted_overheads[sorted_overheads.size() / 2];
+            logVerbose("median throughput overhead: %.1f%% from samples %y (target: < 70%%)",
+                median_overhead_pct, throughput_overheads);
+            assertTrue(median_overhead_pct < 70.0,
+                sprintf("median metrics throughput overhead %.1f%% must be less than 70%%",
+                    median_overhead_pct));
         }
     }
 

@@ -509,6 +509,8 @@ struct DLHelper {
     }
 };
 
+class ModuleLoadMapHelper;
+
 class QoreModuleManager {
     friend class QoreAbstractModule;
     friend class ModuleLoadMapHelper;
@@ -575,6 +577,12 @@ public:
     DLLLOCAL int runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& wsink, const char* name, QoreProgram* pgm,
             QoreProgram* mpgm = nullptr, unsigned load_opt = QMLO_NONE, int warning_mask = QP_WARN_MODULES,
             bool reexport = false, qore_binary_module_desc_t mod_desc_func = nullptr);
+
+    //! Ensure a dependency provider is loaded globally without importing its namespace into a Program
+    /** @param path_pgm supplies module search paths, parse options, and sandbox context for a cold provider load
+        @return 0 on success, -1 on error
+    */
+    DLLLOCAL int loadProviderModule(ExceptionSink& xsink, const char* name, QoreProgram* path_pgm);
 
     //! Worker for ModuleManager::registerAOTStaticModule — no dlopen, skip filesystem search
     DLLLOCAL int registerAOTStaticModuleIntern(ExceptionSink& xsink, QoreProgram* tpgm,
@@ -811,7 +819,12 @@ protected:
 
     DLLLOCAL QoreAbstractModule* loadBinaryModuleFromDesc(ExceptionSink& xsink, DLHelper* dlh,
             QoreModuleInfo& mod_info, const char* path, const char* feature = nullptr, bool reexport = false,
-            QoreProgram* mpgm = nullptr, QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE);
+            QoreProgram* mpgm = nullptr, QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
+            ModuleLoadMapHelper* load_guard = nullptr);
+
+    //! Load direct AOT descriptor dependencies while the parent module owns a load-map reservation.
+    DLLLOCAL int loadAOTBinaryModuleDependencies(ExceptionSink& xsink,
+            const std::vector<std::string>& dependencies, QoreProgram* path_pgm);
 
     DLLLOCAL QoreAbstractModule* loadUserModuleFromPath(ExceptionSink& xsink, ExceptionSink& wsink, const char* path,
             const char* feature = nullptr, QoreProgram* tpgm = nullptr, bool reexport = false,

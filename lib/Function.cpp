@@ -4856,7 +4856,7 @@ UserVariantBase::UserVariantBase(StatementBlock *b, int n_sig_first_line, int n_
 }
 
 UserVariantBase::~UserVariantBase() {
-    delete cached_aot_ctx;
+    delete cached_aot_ctx.load(std::memory_order_relaxed);
     delete cached_ir;
     delete gate;
     delete aot_entry_statement;
@@ -4881,14 +4881,15 @@ QoreParseOptions UserVariantBase::getParseOptions(const QoreParseOptions& po) co
 
 void UserVariantBase::registerPrecompiledAOTFunction(
         AotFunctionPtr fn, QoreAOTContext* ctx) {
-    if (cached_aot_ctx != ctx) {
-        delete cached_aot_ctx;
+    QoreAOTContext* old_ctx = cached_aot_ctx.exchange(ctx, std::memory_order_acq_rel);
+    if (old_ctx != ctx) {
+        delete old_ctx;
     }
     cached_aot_fn = fn;
-    cached_aot_ctx = ctx;
     {
         std::lock_guard<std::mutex> lock(aot_lazy_function_ir_mutex);
         aot_lazy_function_ir.reset();
+        aot_lazy_function_ir_index = 0;
         has_aot_lazy_function_ir.store(false, std::memory_order_release);
     }
     if (ctx) {
@@ -4904,24 +4905,89 @@ void UserVariantBase::registerPrecompiledAOTFunction(
     current_tier.store(TIER_JIT, std::memory_order_release);
 }
 
+void UserVariantBase::registerLazyPrecompiledAOTFunction(AotFunctionPtr fn,
+        std::shared_ptr<const QoreAOTLazyFunctionIR> lazy_ir,
+        uint32_t entry_index, bool context_uses_argv, bool context_uses_self) {
+    QoreAOTContext* old_ctx = cached_aot_ctx.exchange(nullptr, std::memory_order_acq_rel);
+    delete old_ctx;
+    cached_aot_fn = fn;
+    {
+        std::lock_guard<std::mutex> lock(aot_lazy_function_ir_mutex);
+        aot_lazy_function_ir = std::move(lazy_ir);
+        aot_lazy_function_ir_index = entry_index;
+        has_aot_lazy_function_ir.store(true, std::memory_order_release);
+    }
+    if (getenv("QORE_DISABLE_IR_CONTEXT_ELISION")) {
+        uses_argv = signature.argvid != nullptr;
+        uses_self = signature.selfid != nullptr;
+    } else {
+        uses_argv = context_uses_argv;
+        uses_self = context_uses_self;
+    }
+    jit_compile_state.store(2, std::memory_order_relaxed);
+    current_tier.store(TIER_JIT, std::memory_order_release);
+}
+
+bool UserVariantBase::ensureAOTContext(const char* name, ExceptionSink* xsink) const {
+    if (cached_aot_ctx.load(std::memory_order_acquire)) {
+        return true;
+    }
+    std::lock_guard<std::mutex> lock(aot_lazy_function_ir_mutex);
+    if (cached_aot_ctx.load(std::memory_order_relaxed)) {
+        return true;
+    }
+    if (!cached_aot_fn || !aot_lazy_function_ir) {
+        if (xsink) {
+            xsink->raiseException("AOT-CONTEXT-ERROR",
+                "native AOT function '%s' has no context metadata",
+                name ? name : "<function>");
+        }
+        return false;
+    }
+
+    ExceptionSink local_xsink;
+    ExceptionSink* build_xsink = xsink ? xsink : &local_xsink;
+    std::string error;
+    QoreAOTContext* ctx = qore_aot_materialize_lazy_function_context(
+        *aot_lazy_function_ir, aot_lazy_function_ir_index,
+        const_cast<UserVariantBase*>(this), build_xsink, error);
+    if (!ctx) {
+        if (!*build_xsink) {
+            build_xsink->raiseException("AOT-CONTEXT-ERROR",
+                "could not materialize native AOT context for '%s': %s",
+                name ? name : "<function>", error.empty() ? "unknown error" : error.c_str());
+        }
+        if (!xsink) {
+            local_xsink.clear();
+        }
+        return false;
+    }
+
+    cached_aot_ctx.store(ctx, std::memory_order_release);
+    aot_lazy_function_ir.reset();
+    aot_lazy_function_ir_index = 0;
+    has_aot_lazy_function_ir.store(false, std::memory_order_release);
+    return true;
+}
+
 const std::vector<LocalVar*>& UserVariantBase::getBodyLocals() const {
-    if (cached_aot_ctx) {
-        return cached_aot_ctx->all_body_locals;
+    if (QoreAOTContext* ctx = cached_aot_ctx.load(std::memory_order_acquire)) {
+        return ctx->all_body_locals;
     }
     assert(cached_ir);
     return cached_ir->all_body_locals;
 }
 
 bool UserVariantBase::areAllBodyLocalsIROnly() const {
-    if (cached_aot_ctx) {
-        return cached_aot_ctx->all_body_locals_ir_only;
+    if (QoreAOTContext* ctx = cached_aot_ctx.load(std::memory_order_acquire)) {
+        return ctx->all_body_locals_ir_only;
     }
     return all_body_locals_ir_only;
 }
 
 const std::vector<LocalVar*>& UserVariantBase::getASTVisibleBodyLocals() const {
-    if (cached_aot_ctx) {
-        return cached_aot_ctx->all_body_locals;
+    if (QoreAOTContext* ctx = cached_aot_ctx.load(std::memory_order_acquire)) {
+        return ctx->all_body_locals;
     }
     assert(cached_ir);
     return cached_ir->ast_visible_body_locals;
@@ -4999,16 +5065,20 @@ void UserVariantBase::setCachedIR(QoreIRFunction* ir, bool promote_to_ir) const 
 }
 
 bool UserVariantBase::materializeAOTDebugIR(const char* name, ExceptionSink* xsink) const {
+    if (cached_aot_fn && !ensureAOTContext(name, xsink)) {
+        return false;
+    }
     std::lock_guard<std::mutex> lock(aot_debug_ir_mutex);
     if (cached_ir) {
         return true;
     }
-    if (!cached_aot_ctx || !cached_aot_ctx->hasLazyDebugIR()) {
+    QoreAOTContext* ctx = cached_aot_ctx.load(std::memory_order_acquire);
+    if (!ctx || !ctx->hasLazyDebugIR()) {
         return false;
     }
 
     std::string error;
-    std::unique_ptr<QoreIRFunction> ir = cached_aot_ctx->materializeDebugIR(name, error);
+    std::unique_ptr<QoreIRFunction> ir = ctx->materializeDebugIR(name, error);
     if (!ir) {
         xsink->raiseException("AOT-DEBUG-IR-ERROR",
             "could not materialize source-stripped AOT debug IR for '%s': %s",
@@ -5050,9 +5120,13 @@ bool UserVariantBase::materializeLazyAOTClosureIR(const char* name, ExceptionSin
 }
 
 bool UserVariantBase::materializeLazyAOTFunctionIR(const char* name, ExceptionSink* xsink) const {
+    if (cached_aot_fn) {
+        return ensureAOTContext(name, xsink);
+    }
     std::lock_guard<std::mutex> lock(aot_lazy_function_ir_mutex);
     if (cached_ir || hasCachedAOT()) {
         aot_lazy_function_ir.reset();
+        aot_lazy_function_ir_index = 0;
         has_aot_lazy_function_ir.store(false, std::memory_order_release);
         return true;
     }
@@ -5063,7 +5137,8 @@ bool UserVariantBase::materializeLazyAOTFunctionIR(const char* name, ExceptionSi
     std::string error;
     QoreAOTContext* context = nullptr;
     std::unique_ptr<QoreIRFunction> ir = qore_aot_materialize_lazy_function_ir(
-        *aot_lazy_function_ir, const_cast<UserVariantBase*>(this), xsink, context, error);
+        *aot_lazy_function_ir, aot_lazy_function_ir_index,
+        const_cast<UserVariantBase*>(this), xsink, context, error);
     if (!ir) {
         if (!*xsink) {
             xsink->raiseException("AOT-SOURCE-IR-ERROR",
@@ -5073,9 +5148,10 @@ bool UserVariantBase::materializeLazyAOTFunctionIR(const char* name, ExceptionSi
         return false;
     }
 
-    cached_aot_ctx = context;
+    cached_aot_ctx.store(context, std::memory_order_release);
     setCachedIR(ir.release());
     aot_lazy_function_ir.reset();
+    aot_lazy_function_ir_index = 0;
     has_aot_lazy_function_ir.store(false, std::memory_order_release);
     return true;
 }
@@ -5999,6 +6075,23 @@ void UserVariantBase::attemptJITCompilation() const {
         return;  // Already enqueued or completed
     }
 
+    // Keep an oversized function on the fully functional IR tier rather than enqueueing native
+    // compilation work that costs far more than it returns; see QoreJIT::getMaxJITIRInstructions().
+    const size_t jit_ir_budget = static_cast<size_t>(QoreJIT::getMaxJITIRInstructions());
+    const size_t instruction_count = cached_ir->getInstructionCount();
+    if (jit_ir_budget && instruction_count > jit_ir_budget) {
+        // Mark the decision complete so OSR and invocation thresholds cannot repeatedly resubmit
+        // the same oversized function.
+        jit_compile_failed.store(true, std::memory_order_release);
+        jit_compile_state.store(2, std::memory_order_release);
+        if (getenv("QORE_JIT_TIMING")) {
+            fprintf(stderr, "[BG-JIT] skipped native promotion of '%s' (compilation budget exceeded; "
+                "%zu IR instructions; limit %zu)\n", cached_ir->name.c_str(), instruction_count,
+                jit_ir_budget);
+        }
+        return;
+    }
+
     // Enqueue for background JIT compilation instead of compiling synchronously.
     // This allows I/O threads and other critical threads to continue executing IR code
     // while the background thread performs expensive LLVM compilation.
@@ -6011,7 +6104,7 @@ void UserVariantBase::attemptJITCompilation() const {
     const AbstractQoreFunctionVariant* self_variant = dynamic_cast<const AbstractQoreFunctionVariant*>(this);
     if (!self_variant) {
         jit_compile_state.store(2, std::memory_order_release);
-        jit_compile_failed = true;
+        jit_compile_failed.store(true, std::memory_order_release);
         return;
     }
 
@@ -6019,6 +6112,24 @@ void UserVariantBase::attemptJITCompilation() const {
 
     // Collect direct callees that have cached IR for batch compilation
     auto callees = collectBatchCallees(*cached_ir, pgm);
+
+    // A small root can still produce an oversized LLVM module when many direct callees are folded
+    // into its batch.  In that case compile only the root, leaving its callees behind the normal
+    // runtime-call boundary; the root still reaches the JIT tier.
+    if (jit_ir_budget && !callees.empty()) {
+        size_t batch_instruction_count = instruction_count;
+        for (const auto& callee : callees) {
+            batch_instruction_count += callee.ir_func->getInstructionCount();
+        }
+        if (batch_instruction_count > jit_ir_budget) {
+            if (getenv("QORE_JIT_TIMING")) {
+                fprintf(stderr, "[BG-JIT] disabled oversized batch for '%s' (compilation budget exceeded; "
+                    "%zu IR instructions; limit %zu)\n", cached_ir->name.c_str(), batch_instruction_count,
+                    jit_ir_budget);
+            }
+            callees.clear();
+        }
+    }
 
     if (!callees.empty()) {
         std::shared_ptr<QoreIRFunction> compile_ir;
@@ -6324,7 +6435,7 @@ void UserVariantBase::recordFastCallExecution() const {
     // reached only as a callee never accrues exec_count there and would never be
     // promoted by the threshold mechanism.  Mirror evalTiered()'s IR-tier
     // promotion tail here so hot tiered-mode functions still reach the JIT tier.
-    if (jit_compile_failed || !cached_ir) {
+    if (jit_compile_failed.load(std::memory_order_acquire) || !cached_ir) {
         return;
     }
     // Already native — nothing to promote.
@@ -6395,8 +6506,12 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     // Load cached_jit_fn atomically; if it was invalidated by recompilation, fall through to IR tier
     JitFunctionPtr jit_fn = cached_jit_fn.load(std::memory_order_acquire);
     if (tier == TIER_JIT && (jit_fn || cached_aot_fn)) {
+        if (cached_aot_fn && !ensureAOTContext(name, xsink)) {
+            return QoreValue();
+        }
+        QoreAOTContext* aot_ctx = cached_aot_ctx.load(std::memory_order_acquire);
         printd(3, "evalTiered JIT/AOT '%s' exec_count=%lu aot_ctx=%p\n",
-            name, exec_count.load(), (void*)cached_aot_ctx);
+            name, exec_count.load(), static_cast<void*>(aot_ctx));
 
         // self might be 0 if instantiated by a constructor call
         // Only instantiate if actually used in the function body
@@ -6437,8 +6552,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // Get AST-visible body locals: for AOT use all_body_locals (separate optimization),
                 // for IR use filtered ast_visible_body_locals (excludes IR-only locals that
                 // are never accessed by AST callbacks).
-                const std::vector<LocalVar*>& body_locals = cached_aot_ctx
-                    ? cached_aot_ctx->all_body_locals
+                const std::vector<LocalVar*>& body_locals = aot_ctx
+                    ? aot_ctx->all_body_locals
                     : cached_ir->ast_visible_body_locals;
 
                 // Instantiate AST-visible body locals so that AST Invoke callbacks
@@ -6479,8 +6594,9 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
                 // at the original raise site, so return 0 bits and fall
                 // through to the normal xsink-set path below.
                 try {
-                    if (cached_aot_ctx && cached_aot_fn) {
-                        result_bits = cached_aot_fn(cached_aot_ctx, xsink);
+                    if (aot_ctx && cached_aot_fn) {
+                        qore_aot_ensure_pc_loc_map(aot_ctx);
+                        result_bits = cached_aot_fn(aot_ctx, xsink);
                     } else {
                         assert(jit_fn);
                         result_bits = jit_fn(xsink);
@@ -6689,18 +6805,19 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         // Check for JIT promotion while on IR tier
         uint64_t count = exec_count.fetch_add(1, std::memory_order_relaxed) + 1;
         printd(3, "evalTiered IR '%s' exec_count=%lu jit_threshold=%lu is_closure=%d jit_failed=%d\n",
-            name, count, (unsigned long)QoreJIT::getJITThreshold(), (int)is_closure, (int)jit_compile_failed);
+            name, count, (unsigned long)QoreJIT::getJITThreshold(), (int)is_closure,
+            (int)jit_compile_failed.load(std::memory_order_acquire));
         // OSR: hot loop detected by IR interpreter — trigger JIT compilation early
         // On-demand promotion: explicit --exec-mode=jit promotes on the first call
         // (threshold 1); tiered mode promotes once the function is hot.
         uint64_t jit_promote_threshold = (pgm && pgm->getExecMode() == QEM_JIT)
             ? 1 : QoreJIT::getJITThreshold();
-        if (cached_ir->osr_jit_requested && !jit_compile_failed) {
+        if (cached_ir->osr_jit_requested && !jit_compile_failed.load(std::memory_order_acquire)) {
             cached_ir->osr_jit_requested = false;  // Reset flag
             printd(2, "evalTiered OSR: promoting '%s' to JIT tier (hot loop detected)\n",
                 cached_ir->name.c_str());
             attemptJITCompilation();
-        } else if (count >= jit_promote_threshold && !jit_compile_failed) {
+        } else if (count >= jit_promote_threshold && !jit_compile_failed.load(std::memory_order_acquire)) {
             attemptJITCompilation();
         }
 
@@ -6727,7 +6844,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     uint64_t count = exec_count.fetch_add(1, std::memory_order_relaxed) + 1;
 
     // Check for JIT promotion (IR already cached from a previous call)
-    if (count >= QoreJIT::getJITThreshold() && cached_ir && !jit_compile_failed) {
+    if (count >= QoreJIT::getJITThreshold() && cached_ir
+            && !jit_compile_failed.load(std::memory_order_acquire)) {
         attemptJITCompilation();
         // If promotion succeeded, dispatch to JIT on next call; for now, continue with IR or AST
     }
@@ -6808,8 +6926,8 @@ QoreValue UserVariantBase::evalIntern(const char* name, ReferenceHolder<QoreList
             // AOT dispatch: always use evalTiered when a cached AOT function is
             // available (tier==TIER_JIT && cached_aot_fn). This covers both
             // strip-source (no AST body) and normal AOT with AST body.
-            // The AOT context is valid because registerPrecompiledAOTFunction()
-            // set it up during program initialization.
+            // evalTiered() materializes any deferred AOT context before binding
+            // arguments or executing the native function.
             if (has_aot) {
                 return evalTiered(name, argv, self, xsink, true);
             }

@@ -66,4 +66,34 @@ foreach string mode in ("auto", "sectioned", "zstd", "zlib", "none") {
     unlink(exe_path);
 }
 
+# Auto mode must prefer lazy section compression when debug IR is substantial,
+# even when the linker-only symbol index is below its independent threshold.
+string debug_source_path = realpath(get_script_dir() + "/../../../qlib/Util.qm");
+string debug_qmod_path = "/tmp/qore-aot-metadata-debug-compression-" + string(getpid()) + ".qmod";
+string debug_compile_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --aot-metadata-compression=auto -O3 -m %s -o %s 2>&1",
+    libqore_dir, qcc_bin, debug_source_path, debug_qmod_path));
+if (!is_file(debug_qmod_path)) {
+    printf("debug-heavy auto metadata compilation failed:\n%s", debug_compile_out);
+    unlink(source_path);
+    exit(2);
+}
+string debug_dump_out = backquote(sprintf(
+    "LD_LIBRARY_PATH=%s %s --dump-info --dump-sections %s 2>&1",
+    libqore_dir, qcc_bin, debug_qmod_path));
+*list<string> debug_ir_size =
+    debug_dump_out =~ x/DEBUG_IR\s+type=28\s+offset=\d+\s+size=(\d+)/;
+*list<string> symbol_index_size =
+    debug_dump_out =~ x/SYMBOL_INDEX\s+type=26\s+offset=\d+\s+size=(\d+)/;
+if (!(debug_dump_out =~ /bytes compressed \(sectioned-zstd\)/)
+        || !debug_ir_size || debug_ir_size[0].toInt() < 128 * 1024
+        || !symbol_index_size || symbol_index_size[0].toInt() >= 512 * 1024) {
+    printf("debug-heavy auto metadata mismatch:\ncompile:\n%sdump:\n%s",
+        debug_compile_out, debug_dump_out);
+    unlink(source_path);
+    unlink(debug_qmod_path);
+    exit(2);
+}
+unlink(debug_qmod_path);
+
 unlink(source_path);

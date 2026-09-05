@@ -2880,6 +2880,11 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         accepted background promotion now initializes LLVM once on the compilation worker and completes native
         promotion
         (<a href="https://github.com/qoretechnologies/qore/issues/5412">issue 5412</a>)
+      - fixed native JIT compilation of exceptionally large functions overflowing the background compiler thread's
+        stack in LLVM ScalarEvolution on musl, stalling @ref Qore::Program "Program" teardown on glibc, or exhausting
+        memory in constrained containers; functions, methods, and top-level code larger than the
+        @ref jit_size_budget "native compilation size budget" now stay on the functional IR tier, and an oversized
+        interprocedural batch is reduced to its root function before native compilation
       - fixed a potential crash when a running @ref Qore::Program "Program" loaded a module while other threads
         resolved functions, classes, namespaces, constants, or global and static variables in the same Program;
         runtime module application and committed namespace lookups are now synchronized without stopping unrelated
@@ -2930,6 +2935,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         complex container base type but have different value types, such as
         <tt>union&lt;list&lt;string&gt;, list&lt;int&gt;&gt;</tt>
       - fixed non-blocking file and socket poll reads to ensure NUL-terminated strings when converting poll buffers
+      - fixed synchronous and asynchronous TCP connections failing with a spurious \c SOCKET-CONNECT-ERROR when
+        the post-connect readiness probe was interrupted by a signal; interrupted probes are now retried with a
+        bounded yield back to the poll loop
       - fixed synchronous @ref Qore::ReadOnlyFile "ReadOnlyFile" and @ref Qore::FileInputStream
         "FileInputStream" reads on descriptors opened with \c O_NONBLOCK: transient \c EAGAIN / \c EWOULDBLOCK
         results now return to a cancellation-aware readiness wait with a bounded backoff and one monotonic timeout

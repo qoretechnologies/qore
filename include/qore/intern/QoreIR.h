@@ -2939,6 +2939,31 @@ public:
         }
     }
 
+    //! Returns the total number of IR instructions in all of the function's basic blocks
+    /** Used to keep exceptionally large functions off the native tier; see
+        QoreJIT::getMaxJITIRInstructions().
+
+        Only called once the function is fully lowered, and memoized: a function kept on the IR tier
+        is re-offered to the compiler on every call through QoreJIT::executeWithFallback(), and
+        rescanning every block there would cost more than executing a body that returns early.
+        Two threads racing here compute the same total from the same blocks.
+
+        This loop is deliberately not a cancellation point: it only sums sizes of already-allocated
+        vectors, so it is bounded by the function's own IR size (well under a millisecond even for
+        pathologically large functions), and a size accessor has no channel to report a cancellation
+        without returning a wrong count to a caller that would then act on it.
+    */
+    size_t getInstructionCount() const {
+        size_t instruction_count = cached_instruction_count.load(std::memory_order_relaxed);
+        if (!instruction_count) {
+            for (const auto& block : blocks) {
+                instruction_count += block->instructions.size();
+            }
+            cached_instruction_count.store(instruction_count, std::memory_order_relaxed);
+        }
+        return instruction_count;
+    }
+
     QoreIRBasicBlock* createBlock(const std::string& block_name) {
         auto block = std::make_unique<QoreIRBasicBlock>(block_name);
         QoreIRBasicBlock* ptr = block.get();
@@ -3319,6 +3344,8 @@ public:
 
 private:
     uint32_t next_value_id = 1;
+    //! Memoized getInstructionCount() result; 0 = not yet computed
+    mutable std::atomic<size_t> cached_instruction_count{0};
 };
 
 //! Check if an opcode is a block terminator (transfers control flow)

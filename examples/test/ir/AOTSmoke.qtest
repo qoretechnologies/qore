@@ -5617,6 +5617,8 @@ public namespace BuiltinFeatureDepTest {
         string dump_out = dumpQccInfo(qmod_path, False);
         assertTrue(dump_out.regex("dependencies:\\s+\\(none\\)"),
             "implicit Qore builtin features are not serialized as module dependencies: " + dump_out);
+        assertTrue(dump_out.regex("imports:\\s+\\(none\\)"),
+            "implicit Qore builtin features are not serialized as module imports: " + dump_out);
 
         string script_path = tmp_dir + "/run.qr";
         {
@@ -5667,6 +5669,8 @@ public namespace ExplicitDebugFeatureDepTest {
             string debug_dump_out = dumpQccInfo(debug_qmod_path, False);
             assertTrue(debug_dump_out.regex("dependencies:\\s+debug"),
                 "explicit %requires debug is serialized as a dependency: " + debug_dump_out);
+            assertTrue(debug_dump_out.regex("imports:\\s+debug"),
+                "explicit %requires debug is serialized as a module import: " + debug_dump_out);
         }
     }
 
@@ -6455,6 +6459,8 @@ public int sub ok() {
         string missing_dump = dumpQccInfo(missing_qmod, False);
         assertTrue(!missing_dump.regex(missing_feature),
             "failed %try-module dependency is not serialized as a hard qmod dependency: " + missing_dump);
+        assertTrue(missing_dump.regex("imports:\\s+\\(none\\)"),
+            "failed %try-module dependency is not serialized as a namespace import: " + missing_dump);
 
         string loaded_mod = "LoadedTry" + suffix;
         string loaded_qm = loaded_dir + "/" + loaded_mod + ".qm";
@@ -6480,6 +6486,8 @@ public int sub ok() {
         string loaded_dump = dumpQccInfo(loaded_qmod, False);
         assertTrue(loaded_dump.regex("\\bFsUtil\\b"),
             "successful %try-module dependency is serialized as a hard qmod dependency: " + loaded_dump);
+        assertTrue(loaded_dump.regex("imports:\\s+FsUtil"),
+            "successful %try-module dependency is serialized as a namespace import: " + loaded_dump);
     }
 
     testAOTModuleCompile() {
@@ -9725,7 +9733,7 @@ printf(\"%d %d\\n\", h.x, h.y);
     }
 
     testSourceStaleDetection() {
-        # Test that source hash is captured and stale detection warning works
+        # Test the stat fast path and exact-hash fallback used for source staleness detection.
         string code = "%modern\nprintf(\"hello\\n\");\n";
         hash<auto> paths = writeTempScript(code);
         on_exit {
@@ -9738,6 +9746,26 @@ printf(\"%d %d\\n\", h.x, h.y);
             libqore_dir, qore_bin, paths.src, paths.out);
         backquote(compile_cmd);
 
+        string info = dumpQccInfo(paths.out, False);
+        assertTrue(info =~ /source-size: [0-9]+/, "AOT build info records source size: " + info);
+        assertTrue(info =~ /source-mtime-ns: [0-9]+/, "AOT build info records source mtime: " + info);
+
+        string run_cmd = sprintf("LD_LIBRARY_PATH=%s QORE_AOT_SOURCE_CHECK_TRACE=1 %s -b -d 2>&1",
+            libqore_dir, paths.out);
+        string run_out = backquote(run_cmd);
+        assertTrue(run_out =~ /\[aot-source-check\] stat-hit/, "Unchanged source uses stat fast path: " + run_out);
+        assertFalse(run_out =~ /hash-fallback/, "Unchanged source is not read and hashed: " + run_out);
+
+        # Force only the metadata to differ. The fallback must hash the file and
+        # prove that its unchanged content still matches without a warning.
+        assertEq(0, system(sprintf("touch -t 200001010000 %s", paths.src)),
+            "Can change source mtime for fallback test");
+        run_out = backquote(run_cmd);
+        assertTrue(run_out =~ /hash-fallback/, "Changed source metadata uses exact hash fallback: " + run_out);
+        assertTrue(run_out =~ /hash-match/, "Exact hash accepts unchanged source content: " + run_out);
+        assertFalse(run_out =~ /binary source hash mismatch/,
+            "Metadata-only source change does not produce a stale warning: " + run_out);
+
         # Modify the source file to trigger staleness detection
         {
             File f();
@@ -9745,14 +9773,13 @@ printf(\"%d %d\\n\", h.x, h.y);
             f.write("printf(\"modified\\n\");\n");
         }
 
-        # Run with debug enabled to see warnings
         # Run the binary directly as a standalone executable, not through the interpreter
-        string run_cmd = sprintf("LD_LIBRARY_PATH=%s %s -b 2>&1",
-            libqore_dir, paths.out);
-        string run_out = backquote(run_cmd);
+        run_out = backquote(run_cmd);
 
         # Stale detection is a warning, not an error - binary should still run
         assertTrue(run_out =~ /hello/, "Stale binary still executes");
+        assertTrue(run_out =~ /hash-fallback/, "Changed source content uses exact hash fallback: " + run_out);
+        assertTrue(run_out =~ /hash-mismatch/, "Exact hash detects changed source content: " + run_out);
     }
 
     testFeatureFlagsNonZero() {

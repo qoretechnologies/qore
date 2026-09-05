@@ -601,6 +601,17 @@ public:
     static void setIRThreshold(uint64_t t);
     static void setJITThreshold(uint64_t t);
 
+    //! Returns the largest %Qore IR function size that may be submitted for native compilation.
+    /** Functions (and interprocedural batches) larger than this many IR instructions stay on the
+        functional IR tier instead of being compiled to native code, because native compilation of
+        exceptionally large functions costs far more than it returns in a tiered JIT and can exhaust
+        the background compiler thread's stack or the container's memory.
+
+        The default is 10000; override it with the QORE_JIT_MAX_IR_INSTRUCTIONS environment
+        variable, where 0 means "no limit".  An invalid or empty value is ignored.
+    */
+    static uint64_t getMaxJITIRInstructions();
+
     //! Returns the process-wide LLVM optimization level used for JIT compilation.
     /** 0 (no optimization) to 3 (most aggressive); the default is 3, matching the default of the
         qcc AOT compiler.  Overridable with the

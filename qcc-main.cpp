@@ -1815,6 +1815,7 @@ static const char* aot_section_type_name(uint16_t type) {
         case QoreAOTSectionType::SYMBOL_INDEX: return "SYMBOL_INDEX";
         case QoreAOTSectionType::CALL_RELOCATIONS: return "CALL_RELOCATIONS";
         case QoreAOTSectionType::DEBUG_IR: return "DEBUG_IR";
+        case QoreAOTSectionType::SOURCE_STAT_FINGERPRINT: return "SOURCE_STAT_FINGERPRINT";
     }
     return "UNKNOWN";
 }
@@ -3810,6 +3811,19 @@ static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index
         error.clear();
     }
 
+    std::vector<std::string> imports;
+    bool imports_present = false;
+    if (readImportDependencies(reader, imports, imports_present, error)) {
+        if (imports_present) {
+            print_string_list("imports", imports);
+        } else {
+            printf("    imports: (legacy: all dependencies)\n");
+        }
+    } else {
+        printf("    imports: error: %s\n", error.c_str());
+        error.clear();
+    }
+
     std::vector<std::string> reexports;
     if (readReexportModules(blob.bytes.data(), static_cast<uint32_t>(blob.bytes.size()), reexports, error)) {
         print_string_list("reexports", reexports);
@@ -3856,6 +3870,14 @@ static void dump_aot_metadata_blob(const AOTDumpMetadataBlob& blob, size_t index
     } else {
         printf("    build info: error: %s\n", error.c_str());
         error.clear();
+    }
+
+    QoreAOTSourceStatFingerprint source_fingerprint;
+    if (readAOTSourceStatFingerprint(reader, source_fingerprint)) {
+        printf("    source stat fingerprint:\n");
+        printf("      source-size: %llu\n", static_cast<unsigned long long>(source_fingerprint.size));
+        printf("      source-mtime-ns: %llu\n",
+            static_cast<unsigned long long>(source_fingerprint.mtime_ns));
     }
 
     print_aot_slot_map_summary(reader);

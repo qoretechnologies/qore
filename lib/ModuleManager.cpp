@@ -1026,6 +1026,15 @@ int QoreModuleManager::runTimeLoadModule(ExceptionSink& xsink, ExceptionSink& ws
     return xsink ? -1 : 0;
 }
 
+int QoreModuleManager::loadProviderModule(ExceptionSink& xsink, const char* name, QoreProgram* path_pgm) {
+    assert(name);
+    QoreModuleLoadLockHelper aot_init_al;
+    OptLocker ol(&mutex);
+    loadModuleIntern(xsink, xsink, name, nullptr, false, MOD_OP_NONE, nullptr, nullptr, nullptr,
+        QMLO_NONE, QP_WARN_MODULES, nullptr, path_pgm);
+    return xsink ? -1 : 0;
+}
+
 void QoreModuleManager::loadModuleForReexport(ExceptionSink& xsink, const char* name, QoreProgram* pgm) {
     OptLocker ol(&mutex);
     loadModuleIntern(xsink, xsink, name, pgm);
@@ -2777,6 +2786,25 @@ static qore_binary_module_desc_t get_binary_module_desc(void* ptr, const char* f
     return (qore_binary_module_desc_t)dlsym(ptr, sym.c_str());
 }
 
+int QoreModuleManager::loadAOTBinaryModuleDependencies(ExceptionSink& xsink,
+        const std::vector<std::string>& dependencies, QoreProgram* path_pgm) {
+    for (size_t i = 0; i < dependencies.size(); ++i) {
+        if (i && !(i % 10) && qore_check_cancel(&xsink, "AOT binary module dependency loading")) {
+            return -1;
+        }
+        // The descriptor dependency list contains the module's direct,
+        // non-reexported %requires dependencies. Import them into the caller
+        // just as the source-module loader does. The wider provider list in
+        // the embedded AOT metadata is still loaded globally by generated AOT
+        // init, so transitive providers do not leak into every caller.
+        loadModuleIntern(xsink, xsink, dependencies[i].c_str(), path_pgm);
+        if (xsink) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 //! True when the caller asked for module files to be checked before they are mapped.
 /** Off by default, and read once: the check costs a whole-file hash (measured at ~5 ms/MB
     on macOS), which a process loading a hundred modules would pay on every start.
@@ -2882,9 +2910,40 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
         }
     }
 
-    void* ptr = dlopen(path, QORE_DLOPEN_FLAGS);
+    std::string trailer_module_name;
+    std::vector<std::string> trailer_dependencies;
+    std::string trailer_error;
+    int trailer_status = qoreAOTReadModuleDependenciesTrailer(
+        path, trailer_module_name, trailer_dependencies, trailer_error);
+    if (trailer_status < 0) {
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
+            "cannot read AOT dependency metadata from module '%s': %s", path,
+            trailer_error.c_str());
+        return nullptr;
+    }
+
+    std::unique_ptr<ModuleLoadMapHelper> preload_guard;
+    if (trailer_status > 0) {
+        if (trailer_module_name != feature) {
+            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
+                "AOT dependency metadata for module '%s' identifies feature '%s', expecting '%s'",
+                path, trailer_module_name.c_str(), feature);
+            return nullptr;
+        }
+        // Reserve the parent before recursively loading its dependency graph,
+        // matching loadBinaryModuleFromDesc()'s cycle and waiter semantics.
+        preload_guard = std::make_unique<ModuleLoadMapHelper>(feature, xsink, false);
+        if (loadAOTBinaryModuleDependencies(xsink, trailer_dependencies, path_pgm)) {
+            return nullptr;
+        }
+    }
+
+    int dlopen_flags = trailer_status > 0 ? QORE_DLOPEN_NOW_FLAGS : QORE_DLOPEN_FLAGS;
+    void* ptr = dlopen(path, dlopen_flags);
     if (!ptr) {
-        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path), "error loading qore module '%s': %s",
+        xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
+            trailer_status > 0 ? "error resolving symbols in qore AOT module '%s': %s"
+                : "error loading qore module '%s': %s",
             path, dlerror());
         return nullptr;
     }
@@ -2898,8 +2957,17 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
 
     if (mod_desc) {
         mod_desc(mod_info);
+        if (trailer_status > 0 && (!mod_info.is_aot
+                || mod_info.name != trailer_module_name
+                || mod_info.dependencies != trailer_dependencies)) {
+            ReferenceHolder<QoreHashNode> info(mod_info.info, &xsink);
+            mod_info.info = nullptr;
+            xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path),
+                "AOT dependency metadata does not match the module descriptor for '%s'", path);
+            return nullptr;
+        }
         return loadBinaryModuleFromDesc(xsink, &dlh, mod_info, path, feature, reexport, pholder.release(),
-            path_pgm, load_opt);
+            path_pgm, load_opt, preload_guard.get());
     }
 
     // construct a valid C identifier for the error message suggestion
@@ -2912,10 +2980,9 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromPath(ExceptionSink& x
 
 static int reopen_aot_binary_module_now(ExceptionSink& xsink, DLHelper& dlh, QoreModuleInfo& mod_info,
         const char* path, const char* feature) {
-    // The initial dlopen must stay lazy so the module descriptor can be read before
-    // declared module dependencies are loaded. AOT qmods then run generated code from
-    // module init/ns_init, so reopen with RTLD_NOW after dependencies are available
-    // and before any generated module code can enter unresolved runtime helpers.
+    // Legacy AOT qmods have no non-executing dependency trailer. The initial
+    // dlopen must stay lazy so the descriptor can be read before dependencies
+    // are loaded; reopen with RTLD_NOW before generated module code runs.
     void* old_ptr = dlh.release();
     assert(old_ptr);
     dlclose(old_ptr);
@@ -2930,7 +2997,6 @@ static int reopen_aot_binary_module_now(ExceptionSink& xsink, DLHelper& dlh, Qor
 
     qore_binary_module_desc_t mod_desc = get_binary_module_desc(ptr, feature);
     if (!mod_desc) {
-        // construct a valid C identifier for the error message suggestion
         QoreStringMaker suggested_sym("%s_qore_module_desc", feature);
         suggested_sym.replaceAll("-", "_");
         xsink.raiseExceptionArg("LOAD-MODULE-ERROR", new QoreStringNode(path), "module '%s': modules must implement "
@@ -2946,7 +3012,7 @@ static int reopen_aot_binary_module_now(ExceptionSink& xsink, DLHelper& dlh, Qor
 
 QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& xsink, DLHelper* dlh,
         QoreModuleInfo& mod_info, const char* path, const char* feature, bool reexport,
-        QoreProgram* mpgm, QoreProgram* path_pgm, unsigned load_opt) {
+        QoreProgram* mpgm, QoreProgram* path_pgm, unsigned load_opt, ModuleLoadMapHelper* load_guard) {
     ReferenceHolder<QoreProgram> pholder(mpgm, &xsink);
     // take info hash immediately, if any
     ReferenceHolder<QoreHashNode> info(mod_info.info, &xsink);
@@ -3053,21 +3119,35 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
     // while its init code runs; without this reservation, another thread can
     // start loading the same parent module before this thread reaches the
     // parent's own initialization.
-    ModuleLoadMapHelper mlmh(name, xsink, false);
+    bool dependencies_preloaded = load_guard;
+    std::unique_ptr<ModuleLoadMapHelper> owned_load_guard;
+    if (!load_guard) {
+        owned_load_guard = std::make_unique<ModuleLoadMapHelper>(name, xsink, false);
+        load_guard = owned_load_guard.get();
+    }
 
     // Use path_pgm for search-path layering: AOT qmods expose source %requires
     // as binary-module dependencies, and those must honor the importing
     // Program's %prepend-module-path / %append-module-path lists.
-    if (!mod_info.dependencies.empty()) {
-        for (std::string& dep : mod_info.dependencies) {
-            loadModuleIntern(xsink, xsink, dep.c_str(), path_pgm);
-            if (xsink) {
+    if (!mod_info.dependencies.empty() && !dependencies_preloaded) {
+        if (mod_info.is_aot) {
+            if (loadAOTBinaryModuleDependencies(xsink, mod_info.dependencies, path_pgm)) {
                 return nullptr;
+            }
+        } else {
+            for (size_t i = 0; i < mod_info.dependencies.size(); ++i) {
+                if (i && !(i % 10) && qore_check_cancel(&xsink, "binary module dependency loading")) {
+                    return nullptr;
+                }
+                loadModuleIntern(xsink, xsink, mod_info.dependencies[i].c_str(), path_pgm);
+                if (xsink) {
+                    return nullptr;
+                }
             }
         }
     }
 
-    if (dlh && mod_info.is_aot) {
+    if (dlh && mod_info.is_aot && !dependencies_preloaded) {
         if (reopen_aot_binary_module_now(xsink, *dlh, mod_info, path, feature)) {
             return nullptr;
         }
@@ -3151,7 +3231,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         assert(q_gettid());
         // Run only module init code without the module-manager mutex; the in-progress
         // reservation remains active so concurrent loads of this module still wait.
-        mlmh.unlock();
+        load_guard->unlock();
         assert(mod_info.init);
         printd(5, "QoreModuleManager::loadBinaryModuleFromDesc(%s) %s: calling module_init@%p\n", path,
             name, mod_info.init);
@@ -3172,7 +3252,7 @@ QoreAbstractModule* QoreModuleManager::loadBinaryModuleFromDesc(ExceptionSink& x
         e.convert(&xsink);
         return nullptr;
     }
-    mlmh.lock();
+    load_guard->lock();
 
     std::unique_ptr<QoreBuiltinModule> bmi(new QoreBuiltinModule(nullptr, path, mod_info,
         dlh ? dlh->release() : nullptr, info.release(), load_opt));

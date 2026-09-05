@@ -146,6 +146,10 @@ public:
         return vector.size();
     }
 
+    DLLLOCAL void reserve(size_t size) {
+        vector.reserve(size);
+    }
+
     DLLLOCAL void erase(iterator i) {
         vector.erase(i);
     }
@@ -163,6 +167,13 @@ public:
         iterator i = find_create(vt.first, created);
         i->second = vt.second;
         return std::pair<iterator, bool>(i, created);
+    }
+
+    //! Append a value whose key is known not to exist in the container.
+    /** This preserves insertion order without the linear duplicate scan performed by insert(). */
+    DLLLOCAL iterator append(value_type vt) {
+        vector.push_back(std::move(vt));
+        return std::prev(vector.end());
     }
 
     DLLLOCAL T& operator[](const K& key) {

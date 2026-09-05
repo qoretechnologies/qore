@@ -36,11 +36,14 @@
 #include "qore/intern/QoreNamespaceIntern.h"
 #include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/qore_aot_deps.h"
+#include "qore/intern/xxhash.h"
 
 #include <algorithm>
 #include <atomic>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
+#include <unordered_set>
 #include <vector>
 
 // parse-time thread-local depth of constant value initialization in progress (see ConstantList.h)
@@ -704,7 +707,7 @@ const QoreValue ConstantEntry::getValue() const {
 ConstantList::ConstantList(const ConstantList& old, const QoreParseOptions& po, ClassNs p) : ptr(p), runtime_init_hwm(old.runtime_init_hwm) {
     //printd(5, "ConstantList::ConstantList(old: %p, p: %s %s) this: %p cls: %p ns: %p\n", &old, p.getType(),
     //  p.getName(), this, ptr.getClass(), ptr.getNs());
-    cnemap_t::iterator last = cnemap.begin();
+    cnemap.reserve(old.cnemap.size());
     for (cnemap_t::const_iterator i = old.cnemap.begin(), e = old.cnemap.end(); i != e; ++i) {
         assert(i->second->init);
         // only check copying criteria when copying a constant list in a namespace
@@ -726,7 +729,7 @@ ConstantList::ConstantList(const ConstantList& old, const QoreParseOptions& po, 
             ce = new ConstantEntry(*ce);
         }
 
-        last = cnemap.insert(last, cnemap_t::value_type(ce->getName(), ce));
+        cnemap.append(cnemap_t::value_type(ce->getName(), ce));
         //printd(5, "ConstantList::ConstantList(old=%p) this=%p copying %s (%p)\n", &old, this, i->first,
         //  i->second->node);
     }
@@ -803,7 +806,7 @@ cnemap_t::iterator ConstantList::parseAdd(const QoreProgramLocation* loc, const 
     if (parsingExternalStubDeclarations()) {
         ce->makeExternalStubDeclaration();
     }
-    return cnemap.insert(cnemap_t::value_type(ce->getName(), ce)).first;
+    return cnemap.append(cnemap_t::value_type(ce->getName(), ce));
 }
 
 cnemap_t::iterator ConstantList::add(const char* name, QoreValue value, const QoreTypeInfo* typeInfo,
@@ -865,7 +868,30 @@ bool ConstantList::inList(const std::string& name) const {
 }
 
 void ConstantList::mergeUserPublic(const ConstantList& src) {
+    cnemap.reserve(cnemap.size() + src.cnemap.size());
+    // Constant lists are normally small, where the compact vector's linear lookup wins.  Large repeated module
+    // merges are different: a target/source Cartesian scan can perform millions of strcmp() calls.  Build a
+    // transient content-keyed index only when that scan is large enough to amortize hashing the destination.
+    std::unique_ptr<std::unordered_set<const char*, qore_hash_str, eqstr>> name_index;
+    if (!cnemap.empty() && src.cnemap.size() > 256 / cnemap.size()) {
+        name_index = std::make_unique<std::unordered_set<const char*, qore_hash_str, eqstr>>();
+        name_index->reserve(cnemap.size() + src.cnemap.size());
+        size_t count = 0;
+        for (const auto& i : cnemap) {
+            if (count && !(count % 100) && qore_check_cancel(nullptr, "constant merge index build")) {
+                return;
+            }
+            name_index->insert(i.first);
+            ++count;
+        }
+    }
+
+    size_t count = 0;
     for (cnemap_t::const_iterator i = src.cnemap.begin(), e = src.cnemap.end(); i != e; ++i) {
+        if (count && !(count % 100) && qore_check_cancel(nullptr, "constant merge")) {
+            return;
+        }
+        ++count;
         if (!i->second->isUserPublic()) {
             continue;
         }
@@ -873,12 +899,12 @@ void ConstantList::mergeUserPublic(const ConstantList& src) {
         // skip constants that already exist (same module re-imported via different dependency paths,
         // e.g. QUnit -> Util and FsUtil -> Util); scanMergeCommittedNamespace already validated
         // that any existing constant has the same identity
-        if (inList(i->first)) {
+        if (name_index ? !name_index->insert(i->first).second : inList(i->first)) {
             continue;
         }
 
         ConstantEntry* n = new ConstantEntry(*i->second);
-        cnemap[n->getName()] = n;
+        cnemap.append(cnemap_t::value_type(n->getName(), n));
     }
 }
 
@@ -894,17 +920,18 @@ int ConstantList::importSystemConstants(const ConstantList& src, ExceptionSink* 
         }
 
         ConstantEntry* n = new ConstantEntry(*i->second);
-        cnemap[n->getName()] = n;
+        cnemap.append(cnemap_t::value_type(n->getName(), n));
     }
     return 0;
 }
 
 // no duplicate checking is done here
 void ConstantList::assimilate(ConstantList& n) {
+    cnemap.reserve(cnemap.size() + n.cnemap.size());
     for (cnemap_t::iterator i = n.cnemap.begin(), e = n.cnemap.end(); i != e; ++i) {
         assert(!inList(i->first));
         // "move" data to new list
-        cnemap[i->first] = i->second;
+        cnemap.append(cnemap_t::value_type(i->first, i->second));
         i->second = nullptr;
     }
 
@@ -931,7 +958,7 @@ void ConstantList::assimilate(ConstantList& n, const char* type, const char* nam
             continue;
         }
 
-        cnemap[i->first] = i->second;
+        cnemap.append(cnemap_t::value_type(i->first, i->second));
         // track the new constant name for rollback support
         if (pending_names) {
             pending_names->push_back(i->first);
@@ -960,7 +987,7 @@ void ConstantList::parseAdd(const QoreProgramLocation* loc, const std::string& n
     if (parsingExternalStubDeclarations()) {
         ce->makeExternalStubDeclaration();
     }
-    cnemap[ce->getName()] = ce;
+    cnemap.append(cnemap_t::value_type(ce->getName(), ce));
 }
 
 int ConstantList::parseInit() {

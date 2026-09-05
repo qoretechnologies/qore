@@ -168,6 +168,7 @@
 #include <set>
 #include <sstream>
 #include <cstdlib>
+#include <sys/stat.h>
 #include <typeinfo>
 #include <unordered_set>
 #include <zlib.h>
@@ -188,6 +189,11 @@ inline void pcmapPut32(std::vector<uint8_t>& out, uint32_t v) {
     out.push_back(static_cast<uint8_t>((v >> 16) & 0xff));
     out.push_back(static_cast<uint8_t>((v >> 24) & 0xff));
 }
+inline void pcmapPut64(std::vector<uint8_t>& out, uint64_t v) {
+    for (unsigned i = 0; i < 8; ++i) {
+        out.push_back(static_cast<uint8_t>((v >> (i * 8)) & 0xff));
+    }
+}
 inline bool pcmapGet32(const uint8_t* data, size_t len, size_t& p, uint32_t& v) {
     if (p + 4 > len) {
         return false;
@@ -199,6 +205,36 @@ inline bool pcmapGet32(const uint8_t* data, size_t len, size_t& p, uint32_t& v) 
     p += 4;
     return true;
 }
+inline bool pcmapGet64(const uint8_t* data, size_t len, size_t& p, uint64_t& v) {
+    if (p + 8 > len) {
+        return false;
+    }
+    v = 0;
+    for (unsigned i = 0; i < 8; ++i) {
+        v |= static_cast<uint64_t>(data[p + i]) << (i * 8);
+    }
+    p += 8;
+    return true;
+}
+
+inline bool readAOTTrailerFooter(FILE* f, long end, uint64_t& payload_len,
+        uint32_t& magic, uint32_t& version) {
+    if (end < static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE)
+            || fseek(f, end - static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE), SEEK_SET) != 0) {
+        return false;
+    }
+    uint8_t footer[QORE_AOT_PCMAP_FOOTER_SIZE];
+    if (fread(footer, 1, sizeof(footer), f) != sizeof(footer)) {
+        return false;
+    }
+    size_t p = 0;
+    return pcmapGet64(footer, sizeof(footer), p, payload_len)
+        && pcmapGet32(footer, sizeof(footer), p, magic)
+        && pcmapGet32(footer, sizeof(footer), p, version);
+}
+
+constexpr size_t QORE_AOT_MODULE_DEPS_MAX_PAYLOAD_SIZE = 16 * 1024 * 1024;
+constexpr size_t QORE_AOT_MODULE_DEPS_MAX_COUNT = 65536;
 } // anonymous namespace
 
 size_t qoreAOTSerializePcLocPayload(const std::vector<AOTCompiledFuncWithSlots>& func_slots,
@@ -347,14 +383,12 @@ bool qoreAOTAppendPcLocTrailer(const std::string& path, const std::vector<uint8_
     }
     bool ok = fwrite(payload.data(), 1, payload.size(), f) == payload.size();
     if (ok) {
-        uint8_t footer[QORE_AOT_PCMAP_FOOTER_SIZE];
-        uint64_t plen = payload.size();
-        uint32_t magic = QORE_AOT_PCMAP_MAGIC;
-        uint32_t ver = QORE_AOT_PCMAP_VERSION;
-        memcpy(footer, &plen, 8);
-        memcpy(footer + 8, &magic, 4);
-        memcpy(footer + 12, &ver, 4);
-        ok = fwrite(footer, 1, QORE_AOT_PCMAP_FOOTER_SIZE, f) == QORE_AOT_PCMAP_FOOTER_SIZE;
+        std::vector<uint8_t> footer;
+        pcmapPut64(footer, payload.size());
+        pcmapPut32(footer, QORE_AOT_PCMAP_MAGIC);
+        pcmapPut32(footer, QORE_AOT_PCMAP_VERSION);
+        assert(footer.size() == QORE_AOT_PCMAP_FOOTER_SIZE);
+        ok = fwrite(footer.data(), 1, footer.size(), f) == footer.size();
     }
     if (fclose(f) != 0) {
         ok = false;
@@ -378,29 +412,32 @@ bool qoreAOTReadPcLocTrailer(const std::string& path, std::vector<AOTPcLocFuncEn
             break;
         }
         long fsize = ftell(f);
-        if (fsize < static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE)) {
-            break;
-        }
-        if (fseek(f, fsize - static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE), SEEK_SET) != 0) {
-            break;
-        }
-        uint8_t footer[QORE_AOT_PCMAP_FOOTER_SIZE];
-        if (fread(footer, 1, QORE_AOT_PCMAP_FOOTER_SIZE, f) != QORE_AOT_PCMAP_FOOTER_SIZE) {
-            break;
-        }
+        long trailer_end = fsize;
         uint64_t plen = 0;
         uint32_t magic = 0, ver = 0;
-        memcpy(&plen, footer, 8);
-        memcpy(&magic, footer + 8, 4);
-        memcpy(&ver, footer + 12, 4);
+        if (!readAOTTrailerFooter(f, trailer_end, plen, magic, ver)) {
+            break;
+        }
+        // New qmods put the dependency trailer last so it is available before
+        // dlopen().  Skip it to find the preceding PC->loc footer.
+        if (magic == QORE_AOT_MODULE_DEPS_MAGIC) {
+            if (ver != QORE_AOT_MODULE_DEPS_VERSION || !plen
+                    || plen > static_cast<uint64_t>(trailer_end) - QORE_AOT_PCMAP_FOOTER_SIZE) {
+                break;
+            }
+            trailer_end -= static_cast<long>(plen + QORE_AOT_PCMAP_FOOTER_SIZE);
+            if (!readAOTTrailerFooter(f, trailer_end, plen, magic, ver)) {
+                break;
+            }
+        }
         if (magic != QORE_AOT_PCMAP_MAGIC || ver != QORE_AOT_PCMAP_VERSION) {
             break;
         }
-        if (plen == 0 || plen > static_cast<uint64_t>(fsize) - QORE_AOT_PCMAP_FOOTER_SIZE) {
+        if (plen == 0 || plen > static_cast<uint64_t>(trailer_end) - QORE_AOT_PCMAP_FOOTER_SIZE) {
             break;
         }
         std::vector<uint8_t> payload(plen);
-        if (fseek(f, fsize - static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE)
+        if (fseek(f, trailer_end - static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE)
                 - static_cast<long>(plen), SEEK_SET) != 0) {
             break;
         }
@@ -414,6 +451,193 @@ bool qoreAOTReadPcLocTrailer(const std::string& path, std::vector<AOTPcLocFuncEn
         out.clear();
     }
     return ok;
+}
+
+bool qoreAOTAppendModuleDependenciesTrailer(const std::string& path, const std::string& module_name,
+        const std::vector<std::string>& dependencies, std::string& error) {
+    if (module_name.empty() || module_name.find('\0') != std::string::npos
+            || module_name.size() > UINT32_MAX || dependencies.size() > QORE_AOT_MODULE_DEPS_MAX_COUNT) {
+        error = "invalid AOT module dependency trailer identity or count";
+        return false;
+    }
+    if (module_name.size() > QORE_AOT_MODULE_DEPS_MAX_PAYLOAD_SIZE - 8) {
+        error = "AOT module dependency trailer exceeds the maximum payload size";
+        return false;
+    }
+
+    std::vector<uint8_t> payload;
+    payload.reserve(8 + module_name.size());
+    pcmapPut32(payload, static_cast<uint32_t>(module_name.size()));
+    payload.insert(payload.end(), module_name.begin(), module_name.end());
+    pcmapPut32(payload, static_cast<uint32_t>(dependencies.size()));
+    for (size_t i = 0; i < dependencies.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT module dependency trailer output")) {
+            error = "AOT module dependency trailer output cancelled";
+            return false;
+        }
+        const std::string& dependency = dependencies[i];
+        if (dependency.empty() || dependency.find('\0') != std::string::npos
+                || dependency.size() > UINT32_MAX) {
+            error = "invalid AOT module dependency trailer entry";
+            return false;
+        }
+        if (payload.size() > QORE_AOT_MODULE_DEPS_MAX_PAYLOAD_SIZE - 4
+                || dependency.size() > QORE_AOT_MODULE_DEPS_MAX_PAYLOAD_SIZE - payload.size() - 4) {
+            error = "AOT module dependency trailer exceeds the maximum payload size";
+            return false;
+        }
+        pcmapPut32(payload, static_cast<uint32_t>(dependency.size()));
+        payload.insert(payload.end(), dependency.begin(), dependency.end());
+    }
+
+    std::vector<uint8_t> footer;
+    pcmapPut64(footer, payload.size());
+    pcmapPut32(footer, QORE_AOT_MODULE_DEPS_MAGIC);
+    pcmapPut32(footer, QORE_AOT_MODULE_DEPS_VERSION);
+    assert(footer.size() == QORE_AOT_PCMAP_FOOTER_SIZE);
+
+    FILE* f = fopen(path.c_str(), "ab");
+    if (!f) {
+        error = "failed to open '" + path + "' to append AOT module dependencies: " + strerror(errno);
+        return false;
+    }
+    bool ok = fwrite(payload.data(), 1, payload.size(), f) == payload.size()
+        && fwrite(footer.data(), 1, footer.size(), f) == footer.size();
+    if (fclose(f) != 0) {
+        ok = false;
+    }
+    if (!ok) {
+        error = "failed to write AOT module dependencies to '" + path + "': " + strerror(errno);
+        return false;
+    }
+    return true;
+}
+
+int qoreAOTReadModuleDependenciesTrailer(const std::string& path, std::string& module_name,
+        std::vector<std::string>& dependencies, std::string& error) {
+    module_name.clear();
+    dependencies.clear();
+    error.clear();
+
+    FILE* f = fopen(path.c_str(), "rb");
+    if (!f) {
+        // Preserve the established loader diagnostic and source-module fallback
+        // behavior for missing or unreadable binary paths: dlopen() below reports
+        // the authoritative error. Only a present dependency trailer can be invalid.
+        return 0;
+    }
+    int result = 0;
+    do {
+        if (fseek(f, 0, SEEK_END) != 0) {
+            error = "cannot seek in AOT module dependency metadata '" + path + "'";
+            result = -1;
+            break;
+        }
+        long fsize = ftell(f);
+        if (fsize < static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE)) {
+            break;
+        }
+        uint64_t payload_len = 0;
+        uint32_t magic = 0;
+        uint32_t version = 0;
+        if (!readAOTTrailerFooter(f, fsize, payload_len, magic, version)) {
+            error = "cannot read AOT module dependency metadata footer from '" + path + "'";
+            result = -1;
+            break;
+        }
+        if (magic != QORE_AOT_MODULE_DEPS_MAGIC) {
+            break;
+        }
+        if (version != QORE_AOT_MODULE_DEPS_VERSION) {
+            error = "unsupported AOT module dependency metadata version " + std::to_string(version);
+            result = -1;
+            break;
+        }
+        if (!payload_len || payload_len > QORE_AOT_MODULE_DEPS_MAX_PAYLOAD_SIZE
+                || payload_len > static_cast<uint64_t>(fsize) - QORE_AOT_PCMAP_FOOTER_SIZE) {
+            error = "invalid AOT module dependency metadata size";
+            result = -1;
+            break;
+        }
+        std::vector<uint8_t> payload(payload_len);
+        if (fseek(f, fsize - static_cast<long>(QORE_AOT_PCMAP_FOOTER_SIZE)
+                - static_cast<long>(payload_len), SEEK_SET) != 0
+                || fread(payload.data(), 1, payload.size(), f) != payload.size()) {
+            error = "cannot read AOT module dependency metadata payload from '" + path + "'";
+            result = -1;
+            break;
+        }
+
+        size_t p = 0;
+        uint32_t name_len = 0;
+        if (!pcmapGet32(payload.data(), payload.size(), p, name_len)
+                || !name_len || name_len > payload.size() - p) {
+            error = "invalid AOT module name in dependency metadata";
+            result = -1;
+            break;
+        }
+        module_name.assign(reinterpret_cast<const char*>(payload.data() + p), name_len);
+        if (module_name.find('\0') != std::string::npos) {
+            error = "invalid AOT module name in dependency metadata";
+            result = -1;
+            break;
+        }
+        p += name_len;
+        uint32_t dependency_count = 0;
+        if (!pcmapGet32(payload.data(), payload.size(), p, dependency_count)) {
+            error = "missing AOT module dependency count";
+            result = -1;
+            break;
+        }
+        // Every dependency needs at least a four-byte length and one byte of data.
+        // Bound the count before reserve() so corrupted metadata cannot request a
+        // disproportionate allocation.
+        if (dependency_count > QORE_AOT_MODULE_DEPS_MAX_COUNT
+                || dependency_count > (payload.size() - p) / 5) {
+            error = "invalid AOT module dependency count";
+            result = -1;
+            break;
+        }
+        dependencies.reserve(dependency_count);
+        bool valid = true;
+        for (uint32_t i = 0; i < dependency_count; ++i) {
+            if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT module dependency trailer input")) {
+                error = "AOT module dependency trailer input cancelled";
+                valid = false;
+                break;
+            }
+            uint32_t dependency_len = 0;
+            if (!pcmapGet32(payload.data(), payload.size(), p, dependency_len)
+                    || !dependency_len || dependency_len > payload.size() - p) {
+                error = "invalid AOT module dependency entry";
+                valid = false;
+                break;
+            }
+            dependencies.emplace_back(reinterpret_cast<const char*>(payload.data() + p), dependency_len);
+            if (dependencies.back().find('\0') != std::string::npos) {
+                error = "invalid AOT module dependency entry";
+                valid = false;
+                break;
+            }
+            p += dependency_len;
+        }
+        if (!valid) {
+            result = -1;
+            break;
+        }
+        if (p != payload.size()) {
+            error = "unexpected trailing data in AOT module dependency metadata";
+            result = -1;
+            break;
+        }
+        result = 1;
+    } while (false);
+    fclose(f);
+    if (result != 1) {
+        module_name.clear();
+        dependencies.clear();
+    }
+    return result;
 }
 
 void qoreAOTFramePcLocSectionRecord(const std::vector<uint8_t>& payload, std::vector<uint8_t>& out) {
@@ -14769,20 +14993,42 @@ static void rebuildAOTRootIndexes(QoreProgram* pgm) {
     rpriv->rebuildAllIndexes();
 }
 
+bool QoreAOTBinaryDeserializer::rebuildRootIndexes(std::string& error, IndexPhase phase) {
+    qore_program_private* pp_idx = qore_program_private::get(*pgm);
+    qore_root_ns_private* rpriv = static_cast<qore_root_ns_private*>(
+        qore_ns_private::get(*pp_idx->RootNS));
+    for (size_t i = 0; i < ns_list.size(); ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, "AOT namespace index rebuild")) {
+            error = "operation cancelled during AOT namespace index rebuild";
+            return false;
+        }
+        if (phase == IndexPhase::Functions) {
+            rpriv->rebuildAOTFunctionIndexes(ns_list[i]);
+        } else {
+            rpriv->rebuildAOTTypeAndValueIndexes(ns_list[i]);
+        }
+    }
+    return true;
+}
+
 bool QoreAOTBinaryDeserializer::resolveTypesAndMembers(std::string& error) {
     if (!resolveTypes(error)
             || !resolveConstants(error)
             || !resolveStaticsAndConstants(error)) {
         return false;
     }
-    rebuildAOTRootIndexes(pgm);
+    if (!rebuildRootIndexes(error, IndexPhase::TypeAndValue)) {
+        return false;
+    }
     if (!deserializeFunctionsAndMethods(error)) {
         return false;
     }
     // Function deserialization mutates namespace function lists. Rebuild before
     // materializing member default expression ASTs that resolve through the
     // root runtime indexes.
-    rebuildAOTRootIndexes(pgm);
+    if (!rebuildRootIndexes(error, IndexPhase::Functions)) {
+        return false;
+    }
     return resolveStaticMembersPhase(error)
         && resolveMembers(error);
 }
@@ -15208,12 +15454,8 @@ bool QoreAOTBinaryDeserializer::finalize(std::string& error) {
     if (!finalizePreIndex(error)) {
         return false;
     }
-    // Rebuild root namespace indexes (fmap, varmap, clmap, etc.) so that
-    // runtime lookups like runtimeFindFunctionEntry() can find the
-    // deserialized functions, classes, etc.
-    {
-        rebuildAOTRootIndexes(pgm);
-    }
+    // All namespace objects have already been indexed at the type/value and function phase boundaries. Class commit
+    // and finalizePreIndex() only mutate the objects behind those entries, so another index rebuild is unnecessary.
     return finalizePostIndex(error);
 }
 
@@ -19609,8 +19851,9 @@ bool QoreAOTBinaryWriter::writePluginSections(std::string& error) {
     return true;
 }
 
-void serializeDependencies(QoreAOTBinaryWriter& writer, const std::vector<std::string>& dependencies) {
-    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::DEPENDENCIES);
+static void serializeDependencySection(QoreAOTBinaryWriter& writer, QoreAOTSectionType type,
+        const std::vector<std::string>& dependencies) {
+    uint32_t sec_idx = writer.beginSection(type);
 
     uint32_t count = static_cast<uint32_t>(dependencies.size());
     writer.writeU32(count);
@@ -19622,6 +19865,17 @@ void serializeDependencies(QoreAOTBinaryWriter& writer, const std::vector<std::s
     writer.endSection(sec_idx);
 }
 
+void serializeDependencies(QoreAOTBinaryWriter& writer, const std::vector<std::string>& dependencies) {
+    serializeDependencySection(writer, QoreAOTSectionType::DEPENDENCIES, dependencies);
+}
+
+void serializeImportDependencies(QoreAOTBinaryWriter& writer,
+        const std::vector<std::string>& dependencies) {
+    // Always write the section, including for an empty list. Its presence tells a new runtime that the producer
+    // distinguished global providers from namespace imports; absence selects the legacy import-all behavior.
+    serializeDependencySection(writer, QoreAOTSectionType::IMPORT_DEPENDENCIES, dependencies);
+}
+
 bool readDependencies(const uint8_t* data, uint32_t size, std::vector<std::string>& dependencies, std::string& error) {
     // Open the binary to read just the dependencies section
     QoreAOTBinaryReader reader;
@@ -19631,34 +19885,64 @@ bool readDependencies(const uint8_t* data, uint32_t size, std::vector<std::strin
     return readDependencies(reader, dependencies, error);
 }
 
-bool readDependencies(const QoreAOTBinaryReader& reader, std::vector<std::string>& dependencies,
-        std::string& error) {
-    // Find DEPENDENCIES section
-    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::DEPENDENCIES);
+static bool readDependencySection(const QoreAOTBinaryReader& reader, QoreAOTSectionType type,
+        const char* label, std::vector<std::string>& dependencies, bool& present, std::string& error) {
+    const QoreAOTSectionHeader* sec = reader.findSection(type);
     if (!sec) {
-        // No dependencies section - this is OK, just means no deps
+        present = false;
         return true;
     }
+    present = true;
 
     const uint8_t* ptr = reader.getSectionData(*sec);
-    if (!ptr) {
-        error = "invalid DEPENDENCIES section data";
+    if (!ptr || sec->size < 4) {
+        error = std::string("invalid ") + label + " section data";
         return false;
     }
 
     uint32_t count = QoreAOTBinaryReader::readU32(ptr);
+    if (count > (sec->size - 4) / 4) {
+        error = std::string(label) + " count " + std::to_string(count) + " exceeds section capacity";
+        return false;
+    }
     dependencies.reserve(count);
 
     for (uint32_t i = 0; i < count; ++i) {
+        if (i && !(i % 100) && qore_check_cancel(nullptr, label)) {
+            error = std::string("operation cancelled while reading ") + label;
+            return false;
+        }
         const char* dep_name = reader.readStringRef(ptr);
         if (!dep_name) {
-            error = "invalid dependency name at index " + std::to_string(i);
+            error = std::string("invalid ") + label + " name at index " + std::to_string(i);
             return false;
         }
         dependencies.push_back(dep_name);
     }
 
     return true;
+}
+
+bool readDependencies(const QoreAOTBinaryReader& reader, std::vector<std::string>& dependencies,
+        std::string& error) {
+    bool present = false;
+    return readDependencySection(reader, QoreAOTSectionType::DEPENDENCIES, "DEPENDENCIES",
+        dependencies, present, error);
+}
+
+bool readImportDependencies(const QoreAOTBinaryReader& reader,
+        std::vector<std::string>& dependencies, bool& present, std::string& error) {
+    return readDependencySection(reader, QoreAOTSectionType::IMPORT_DEPENDENCIES, "IMPORT_DEPENDENCIES",
+        dependencies, present, error);
+}
+
+bool readImportDependencies(const uint8_t* data, uint32_t size,
+        std::vector<std::string>& dependencies, bool& present, std::string& error) {
+    QoreAOTBinaryReader reader;
+    if (!reader.open(data, size, error)) {
+        return false;
+    }
+    return readImportDependencies(reader, dependencies, present, error);
 }
 
 void serializeReexportModules(QoreAOTBinaryWriter& writer, const std::vector<std::string>& reexport_modules) {
@@ -19970,6 +20254,62 @@ void serializeBuildInfo(QoreAOTBinaryWriter& writer,
         writer.writeStringRef(value.c_str());
     }
     writer.endSection(sec_idx);
+}
+
+bool getAOTSourceStatFingerprint(const char* path, QoreAOTSourceStatFingerprint& fingerprint) {
+    if (!path || !*path) {
+        return false;
+    }
+
+    struct stat sb;
+    if (stat(path, &sb) || !S_ISREG(sb.st_mode) || sb.st_size < 0 || sb.st_mtime < 0) {
+        return false;
+    }
+
+    long mtime_nsec = 0;
+#ifdef HAVE_STRUCT_STAT_ST_TIM
+    mtime_nsec = sb.st_mtim.tv_nsec;
+#elif defined(HAVE_STRUCT_STAT_ST_TIMESPEC)
+    mtime_nsec = sb.st_mtimespec.tv_nsec;
+#endif
+    if (mtime_nsec < 0 || mtime_nsec >= 1000000000L) {
+        return false;
+    }
+
+    uint64_t mtime_sec = static_cast<uint64_t>(sb.st_mtime);
+    constexpr uint64_t ns_per_sec = 1000000000ULL;
+    if (mtime_sec > (std::numeric_limits<uint64_t>::max()
+            - static_cast<uint64_t>(mtime_nsec)) / ns_per_sec) {
+        return false;
+    }
+
+    fingerprint.size = static_cast<uint64_t>(sb.st_size);
+    fingerprint.mtime_ns = mtime_sec * ns_per_sec + static_cast<uint64_t>(mtime_nsec);
+    return true;
+}
+
+void serializeAOTSourceStatFingerprint(QoreAOTBinaryWriter& writer,
+        const QoreAOTSourceStatFingerprint& fingerprint) {
+    uint32_t sec_idx = writer.beginSection(QoreAOTSectionType::SOURCE_STAT_FINGERPRINT);
+    writer.writeU64(fingerprint.size);
+    writer.writeU64(fingerprint.mtime_ns);
+    writer.endSection(sec_idx);
+}
+
+bool readAOTSourceStatFingerprint(const QoreAOTBinaryReader& reader,
+        QoreAOTSourceStatFingerprint& fingerprint) {
+    const QoreAOTSectionHeader* sec = reader.findSection(QoreAOTSectionType::SOURCE_STAT_FINGERPRINT);
+    if (!sec || sec->size != 16) {
+        return false;
+    }
+
+    const uint8_t* ptr = reader.getSectionData(*sec);
+    if (!ptr) {
+        return false;
+    }
+    fingerprint.size = QoreAOTBinaryReader::readU64(ptr);
+    fingerprint.mtime_ns = QoreAOTBinaryReader::readU64(ptr);
+    return true;
 }
 
 bool readBuildInfo(const QoreAOTBinaryReader& reader,
