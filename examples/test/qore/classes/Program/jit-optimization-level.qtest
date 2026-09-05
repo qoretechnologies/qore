@@ -21,7 +21,7 @@
 class JitOptimizationLevelTest inherits QUnit::Test {
     public {
         #! the documented process-wide default
-        const DefaultLevel = 2;
+        const DefaultLevel = 3;
     }
 
     private {

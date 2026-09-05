@@ -791,14 +791,15 @@ uint64_t QoreJIT::jit_threshold = []() -> uint64_t {
     return env ? strtoull(env, nullptr, 10) : 1000;
 }();
 
-// Process-wide JIT optimization level: default O2, overridable with QORE_JIT_OPT_LEVEL or
+// Process-wide JIT optimization level: default O3, matching the qcc AOT compiler's own default,
+// overridable with QORE_JIT_OPT_LEVEL or
 // QoreJIT::setJITOptLevel(); a Program may override it with QoreProgram::setJitOptimizationLevel()
 std::atomic<int> QoreJIT::jit_opt_level{-1};  // -1 = not yet initialized
 
 int QoreJIT::getJITOptLevel() {
     int current = jit_opt_level.load(std::memory_order_acquire);
     if (current < 0) {
-        constexpr int default_level = 2;
+        constexpr int default_level = 3;
         const char* env = getenv("QORE_JIT_OPT_LEVEL");
         // atoi() cannot tell "0" from an unparsable value, and 0 is in range, so a malformed or
         // empty value selected -O0 silently instead of falling back to the default

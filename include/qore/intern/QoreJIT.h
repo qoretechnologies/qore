@@ -602,7 +602,8 @@ public:
     static void setJITThreshold(uint64_t t);
 
     //! Returns the process-wide LLVM optimization level used for JIT compilation.
-    /** 0 (no optimization) to 3 (most aggressive); the default is 2.  Overridable with the
+    /** 0 (no optimization) to 3 (most aggressive); the default is 3, matching the default of the
+        qcc AOT compiler.  Overridable with the
         QORE_JIT_OPT_LEVEL environment variable or QoreJIT::setJITOptLevel(); an individual
         %Program may override it with QoreProgram::setJitOptimizationLevel().
     */
