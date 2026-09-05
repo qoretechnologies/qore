@@ -1095,6 +1095,30 @@ bool QoreJIT::compileFunctionLocked(const QoreIRFunction& func, std::string& err
     return compileFunctionInternal(func, error, deopt_counter);
 }
 
+//! Returns false when \a instruction_count exceeds the native-compilation budget
+/** Every native compilation funnels through compileFunctionInternal() or
+    compileFunctionBatchInternal(), so refusing an oversized function here covers the background
+    compile worker, QoreJIT::executeWithFallback(), and deopt-driven recompilation alike.  Callers
+    fall back to the IR tier, which already executes the function.
+    See QoreJIT::getMaxJITIRInstructions().
+*/
+static bool jit_check_size_budget(const std::string& func_name, size_t instruction_count,
+        std::string& error) {
+    const size_t budget = static_cast<size_t>(QoreJIT::getMaxJITIRInstructions());
+    if (!budget || instruction_count <= budget) {
+        return true;
+    }
+    error = "function '" + func_name + "' is too large for native compilation ("
+        + std::to_string(instruction_count) + " IR instructions; limit " + std::to_string(budget)
+        + "); it remains on the IR tier";
+    if (getenv("QORE_JIT_TIMING")) {
+        fprintf(stderr, "[JIT] skipped native compilation of '%s' (compilation budget exceeded; "
+            "%zu IR instructions; limit %zu)\n", func_name.c_str(), instruction_count, budget);
+    }
+    printd(2, "QoreJIT: %s\n", error.c_str());
+    return false;
+}
+
 bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& error,
         void* deopt_counter) {
     // Copy func.name before any LLVM operations.
@@ -1110,6 +1134,10 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
         if (compiled_functions.find(func_name) != compiled_functions.end()) {
             return true;
         }
+    }
+
+    if (!jit_check_size_budget(func_name, func.getInstructionCount(), error)) {
+        return false;
     }
 
     // Create a new LLVM context and module for this compilation
@@ -1232,6 +1260,21 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
         std::lock_guard<std::mutex> lock(cache_mutex);
         if (compiled_functions.find(root_func_name) != compiled_functions.end()) {
             return true;
+        }
+    }
+
+    {
+        // the rewritten root replaces root_func in the module when interprocedural rewrites apply
+        size_t batch_instruction_count = rewrite_root
+            ? rewrite_root->getInstructionCount()
+            : root_func.getInstructionCount();
+        for (const auto& callee : callees) {
+            if (callee.ir_func) {
+                batch_instruction_count += callee.ir_func->getInstructionCount();
+            }
+        }
+        if (!jit_check_size_budget(root_func_name, batch_instruction_count, error)) {
+            return false;
         }
     }
 
@@ -1650,6 +1693,37 @@ uint64_t QoreJIT::getJITThreshold() {
     return jit_threshold;
 }
 
+// Native compilation of exceptionally large IR functions has a poor cost/benefit ratio in a tiered
+// JIT: the IR tier already executes them, while LLVM's cost grows superlinearly with function size.
+// Worse, ScalarEvolution can recurse deeply enough on their control flow to overflow the background
+// compiler thread's stack on platforms with small thread stacks (musl), and even an unoptimized
+// native compile of such a function can stall Program teardown for minutes or exhaust the memory of
+// a constrained container.  Such functions therefore stay on the IR tier.
+uint64_t QoreJIT::getMaxJITIRInstructions() {
+    // function-local so the value cannot be read before its initializer runs, and is computed once
+    static const uint64_t budget = []() -> uint64_t {
+        constexpr uint64_t default_max = 10000;
+        const char* env = getenv("QORE_JIT_MAX_IR_INSTRUCTIONS");
+        if (!env || !*env) {
+            return default_max;
+        }
+        // an unparsable, negative, or trailing-garbage value must not silently select a limit:
+        // strtoull() wraps a negative value to a huge limit, which would disable the guard instead
+        // of ignoring the malformed setting
+        if (*env == '-') {
+            return default_max;
+        }
+        char* end = nullptr;
+        unsigned long long value = strtoull(env, &end, 10);
+        if (!end || end == env || *end) {
+            return default_max;
+        }
+        // 0 means "no limit"
+        return static_cast<uint64_t>(value);
+    }();
+    return budget;
+}
+
 void QoreJIT::setIRThreshold(uint64_t t) {
     ir_threshold = t;
 }
@@ -1733,6 +1807,7 @@ void QoreJIT::bgCompileThreadLoop() {
         if (!init_success) {
             if (work.uvb) {
                 UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(work.uvb);
+                mutable_uvb->jit_compile_failed.store(true, std::memory_order_release);
                 mutable_uvb->jit_compile_state.store(2, std::memory_order_release);
             }
             finishBgCompileWork(work);
@@ -1775,7 +1850,11 @@ void QoreJIT::bgCompileThreadLoop() {
             if (getenv("QORE_JIT_TIMING")) {
                 fprintf(stderr, "[BG-JIT] failed to compile '%s': %s\n", saved_func_name.c_str(), error.c_str());
             }
-            // Mark compilation as failed; uvb->jit_compile_failed will be set by evalTiered
+            if (work.uvb) {
+                UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(work.uvb);
+                mutable_uvb->jit_compile_failed.store(true, std::memory_order_release);
+                mutable_uvb->jit_compile_state.store(2, std::memory_order_release);
+            }
             finishBgCompileWork(work);
             continue;
         }
@@ -1808,7 +1887,9 @@ void QoreJIT::bgCompileThreadLoop() {
                 fprintf(stderr, "[BG-JIT] lookup failed for '%s'\n", saved_func_name.c_str());
             }
             // Mark as failed
-            const_cast<UserVariantBase*>(root_uvb)->jit_compile_state.store(2, std::memory_order_release);
+            UserVariantBase* mutable_uvb = const_cast<UserVariantBase*>(root_uvb);
+            mutable_uvb->jit_compile_failed.store(true, std::memory_order_release);
+            mutable_uvb->jit_compile_state.store(2, std::memory_order_release);
             finishBgCompileWork(work);
             continue;
         }

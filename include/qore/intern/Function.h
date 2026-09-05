@@ -899,7 +899,8 @@ protected:
     //! JIT compilation state: 0=not started, 1=submitted, 2=done (success or failure)
     mutable std::atomic<int> jit_compile_state{0};
     mutable bool ir_lower_failed = false;
-    mutable bool jit_compile_failed = false;
+    //! True when native JIT compilation is permanently unavailable for this variant
+    mutable std::atomic<bool> jit_compile_failed{false};
     bool is_closure = false;  //!< true for closure variants
     //! Deopt counter: incremented on JIT guard failure, triggers recompilation
     mutable std::atomic<uint32_t> deopt_count{0};

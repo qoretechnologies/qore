@@ -2880,6 +2880,11 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         accepted background promotion now initializes LLVM once on the compilation worker and completes native
         promotion
         (<a href="https://github.com/qoretechnologies/qore/issues/5412">issue 5412</a>)
+      - fixed native JIT compilation of exceptionally large functions overflowing the background compiler thread's
+        stack in LLVM ScalarEvolution on musl, stalling @ref Qore::Program "Program" teardown on glibc, or exhausting
+        memory in constrained containers; functions, methods, and top-level code larger than the
+        @ref jit_size_budget "native compilation size budget" now stay on the functional IR tier, and an oversized
+        interprocedural batch is reduced to its root function before native compilation
       - fixed a potential crash when a running @ref Qore::Program "Program" loaded a module while other threads
         resolved functions, classes, namespaces, constants, or global and static variables in the same Program;
         runtime module application and committed namespace lookups are now synchronized without stopping unrelated

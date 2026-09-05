@@ -6075,6 +6075,23 @@ void UserVariantBase::attemptJITCompilation() const {
         return;  // Already enqueued or completed
     }
 
+    // Keep an oversized function on the fully functional IR tier rather than enqueueing native
+    // compilation work that costs far more than it returns; see QoreJIT::getMaxJITIRInstructions().
+    const size_t jit_ir_budget = static_cast<size_t>(QoreJIT::getMaxJITIRInstructions());
+    const size_t instruction_count = cached_ir->getInstructionCount();
+    if (jit_ir_budget && instruction_count > jit_ir_budget) {
+        // Mark the decision complete so OSR and invocation thresholds cannot repeatedly resubmit
+        // the same oversized function.
+        jit_compile_failed.store(true, std::memory_order_release);
+        jit_compile_state.store(2, std::memory_order_release);
+        if (getenv("QORE_JIT_TIMING")) {
+            fprintf(stderr, "[BG-JIT] skipped native promotion of '%s' (compilation budget exceeded; "
+                "%zu IR instructions; limit %zu)\n", cached_ir->name.c_str(), instruction_count,
+                jit_ir_budget);
+        }
+        return;
+    }
+
     // Enqueue for background JIT compilation instead of compiling synchronously.
     // This allows I/O threads and other critical threads to continue executing IR code
     // while the background thread performs expensive LLVM compilation.
@@ -6087,7 +6104,7 @@ void UserVariantBase::attemptJITCompilation() const {
     const AbstractQoreFunctionVariant* self_variant = dynamic_cast<const AbstractQoreFunctionVariant*>(this);
     if (!self_variant) {
         jit_compile_state.store(2, std::memory_order_release);
-        jit_compile_failed = true;
+        jit_compile_failed.store(true, std::memory_order_release);
         return;
     }
 
@@ -6095,6 +6112,24 @@ void UserVariantBase::attemptJITCompilation() const {
 
     // Collect direct callees that have cached IR for batch compilation
     auto callees = collectBatchCallees(*cached_ir, pgm);
+
+    // A small root can still produce an oversized LLVM module when many direct callees are folded
+    // into its batch.  In that case compile only the root, leaving its callees behind the normal
+    // runtime-call boundary; the root still reaches the JIT tier.
+    if (jit_ir_budget && !callees.empty()) {
+        size_t batch_instruction_count = instruction_count;
+        for (const auto& callee : callees) {
+            batch_instruction_count += callee.ir_func->getInstructionCount();
+        }
+        if (batch_instruction_count > jit_ir_budget) {
+            if (getenv("QORE_JIT_TIMING")) {
+                fprintf(stderr, "[BG-JIT] disabled oversized batch for '%s' (compilation budget exceeded; "
+                    "%zu IR instructions; limit %zu)\n", cached_ir->name.c_str(), batch_instruction_count,
+                    jit_ir_budget);
+            }
+            callees.clear();
+        }
+    }
 
     if (!callees.empty()) {
         std::shared_ptr<QoreIRFunction> compile_ir;
@@ -6400,7 +6435,7 @@ void UserVariantBase::recordFastCallExecution() const {
     // reached only as a callee never accrues exec_count there and would never be
     // promoted by the threshold mechanism.  Mirror evalTiered()'s IR-tier
     // promotion tail here so hot tiered-mode functions still reach the JIT tier.
-    if (jit_compile_failed || !cached_ir) {
+    if (jit_compile_failed.load(std::memory_order_acquire) || !cached_ir) {
         return;
     }
     // Already native — nothing to promote.
@@ -6770,18 +6805,19 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
         // Check for JIT promotion while on IR tier
         uint64_t count = exec_count.fetch_add(1, std::memory_order_relaxed) + 1;
         printd(3, "evalTiered IR '%s' exec_count=%lu jit_threshold=%lu is_closure=%d jit_failed=%d\n",
-            name, count, (unsigned long)QoreJIT::getJITThreshold(), (int)is_closure, (int)jit_compile_failed);
+            name, count, (unsigned long)QoreJIT::getJITThreshold(), (int)is_closure,
+            (int)jit_compile_failed.load(std::memory_order_acquire));
         // OSR: hot loop detected by IR interpreter — trigger JIT compilation early
         // On-demand promotion: explicit --exec-mode=jit promotes on the first call
         // (threshold 1); tiered mode promotes once the function is hot.
         uint64_t jit_promote_threshold = (pgm && pgm->getExecMode() == QEM_JIT)
             ? 1 : QoreJIT::getJITThreshold();
-        if (cached_ir->osr_jit_requested && !jit_compile_failed) {
+        if (cached_ir->osr_jit_requested && !jit_compile_failed.load(std::memory_order_acquire)) {
             cached_ir->osr_jit_requested = false;  // Reset flag
             printd(2, "evalTiered OSR: promoting '%s' to JIT tier (hot loop detected)\n",
                 cached_ir->name.c_str());
             attemptJITCompilation();
-        } else if (count >= jit_promote_threshold && !jit_compile_failed) {
+        } else if (count >= jit_promote_threshold && !jit_compile_failed.load(std::memory_order_acquire)) {
             attemptJITCompilation();
         }
 
@@ -6808,7 +6844,8 @@ QoreValue UserVariantBase::evalTiered(const char* name, ReferenceHolder<QoreList
     uint64_t count = exec_count.fetch_add(1, std::memory_order_relaxed) + 1;
 
     // Check for JIT promotion (IR already cached from a previous call)
-    if (count >= QoreJIT::getJITThreshold() && cached_ir && !jit_compile_failed) {
+    if (count >= QoreJIT::getJITThreshold() && cached_ir
+            && !jit_compile_failed.load(std::memory_order_acquire)) {
         attemptJITCompilation();
         // If promotion succeeded, dispatch to JIT on next call; for now, continue with IR or AST
     }
