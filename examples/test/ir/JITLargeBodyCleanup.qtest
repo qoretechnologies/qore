@@ -102,11 +102,17 @@ printf(\"rv:%d destroyed:%d order:%s\\n\", rv, destroyed.size(),
         return code;
     }
 
-    #! The array cleanup path must actually be taken for a body of this size.
+    #! The array cleanup path must be taken when the budget selects it.
+    /** The budget is forced to its lowest setting rather than relying on a body
+        large enough to trip the default: how many exit edges a given body lowers
+        to varies by platform, so asserting on the default would make this test
+        depend on the heuristic rather than on the path it is meant to cover.
+    */
     testArrayCleanupSelected() {
-        string out = runScript(getCode(BodySize, -1), "jit", "QORE_IR_OPT_STATS=1");
+        string out = runScript(getCode(BodySize, -1), "jit",
+            "QORE_IR_OPT_STATS=1 QORE_JIT_CLEANUP_PHI_BUDGET=1");
         assertRegex("IR-OPT-LLVM: array-exit-cleanup slots=[0-9]+ exit-edges=[0-9]+", out,
-            "a large body routes IR-only local cleanup through the runtime helper");
+            "the budget routes boxed exit cleanup through the runtime helper");
     }
 
     #! A body that never trips the budget must keep the inline per-local cleanup.
@@ -124,6 +130,8 @@ printf(\"rv:%d destroyed:%d order:%s\\n\", rv, destroyed.size(),
             "the AST tier destroys every local exactly once");
         assertEq(expected, runResult(code, "jit"),
             "array cleanup matches the AST tier on the normal exit path");
+        assertEq(expected, runResult(code, "jit", "QORE_JIT_CLEANUP_PHI_BUDGET=1"),
+            "array cleanup matches the AST tier on the normal exit path");
         assertEq(expected, runResult(code, "jit", "QORE_JIT_CLEANUP_PHI_BUDGET=0"),
             "inline cleanup matches the AST tier on the normal exit path");
     }
@@ -135,6 +143,8 @@ printf(\"rv:%d destroyed:%d order:%s\\n\", rv, destroyed.size(),
         assertRegex("^rv:-1 destroyed:" + (BodySize / 2 + 1) + " ", expected,
             "the AST tier destroys exactly the locals created before the throw");
         assertEq(expected, runResult(code, "jit"),
+            "array cleanup matches the AST tier on the exception exit path");
+        assertEq(expected, runResult(code, "jit", "QORE_JIT_CLEANUP_PHI_BUDGET=1"),
             "array cleanup matches the AST tier on the exception exit path");
         assertEq(expected, runResult(code, "jit", "QORE_JIT_CLEANUP_PHI_BUDGET=0"),
             "inline cleanup matches the AST tier on the exception exit path");
@@ -176,12 +186,15 @@ printf(\"rv:%d\\n\", big(1));
 
     #! Iterator cleanup is repeated at every exit, so it needs the same treatment.
     testIteratorCleanupArray() {
-        string code = getIteratorCode(60);
-        string out = runScript(code, "jit", "QORE_IR_OPT_STATS=1");
+        string code = getIteratorCode(20);
+        string out = runScript(code, "jit",
+            "QORE_IR_OPT_STATS=1 QORE_JIT_CLEANUP_PHI_BUDGET=1");
         assertRegex("IR-OPT-LLVM: array-iterator-cleanup iterators=[0-9]+ exits=[0-9]+", out,
-            "many iterators route cleanup through the runtime helper");
+            "the budget routes iterator cleanup through the runtime helper");
         string expected = runResult(code, "ast");
         assertEq(expected, runResult(code, "jit"),
+            "the default budget matches the AST tier");
+        assertEq(expected, runResult(code, "jit", "QORE_JIT_CLEANUP_PHI_BUDGET=1"),
             "array iterator cleanup matches the AST tier");
         assertEq(expected, runResult(code, "jit", "QORE_JIT_CLEANUP_PHI_BUDGET=0"),
             "inline iterator cleanup matches the AST tier");
