@@ -407,6 +407,16 @@ public class MutationObserverPgsqlTest inherits QUnit::Test {
         } catch (hash<ExceptionInfo> ex) {
             testSkip("no PostgreSQL connection: " + ex.err + ": " + ex.desc);
         }
+        # Roll back before dropTable(setup) runs. In a release build the
+        # debug fault-injection call below skips after the INSERT, and leaving
+        # the pool transaction open would make the independent setup
+        # connection block forever while dropping the table.
+        on_exit {
+            try {
+                dsp.rollback();
+            } catch (hash<ExceptionInfo> ex) {
+            }
+        }
 
         obs.reset();
         dsp.setMutationObserver(\obs.event(), SQL_MUTATION_MASK_ALL);
