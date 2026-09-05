@@ -262,11 +262,24 @@ static int qore_socket_set_raw_error(int rc) {
 
 // returns 0 = connected, 1 = still in progress, -1 = error
 static int qore_socket_check_connect_ready(int fd) {
-    int val = 0;
-    socklen_t lon = sizeof(val);
-    if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (GETSOCKOPT_ARG_4)&val, &lon) == QORE_SOCKET_ERROR) {
-        sock_get_error();
-        return -1;
+    unsigned loop = 0;
+    int val;
+    while (true) {
+        val = 0;
+        socklen_t lon = sizeof(val);
+        if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (GETSOCKOPT_ARG_4)&val, &lon) != QORE_SOCKET_ERROR) {
+            break;
+        }
+        int e = sock_get_error();
+        if (e != EINTR) {
+            return -1;
+        }
+        // Bound immediate retries so a signal storm cannot monopolize an async I/O worker.
+        // The connected socket remains writable, so returning "in progress" schedules another
+        // readiness pass without turning a transient interruption into a connection failure.
+        if (++loop >= max_nonblock_ops) {
+            return 1;
+        }
     }
 
     if (val) {
@@ -279,16 +292,25 @@ static int qore_socket_check_connect_ready(int fd) {
 
     // Try a zero-byte send to confirm connection.  This is needed on macOS,
     // where poll() may report writable readiness before connect completion.
-    int rc = ::send(fd, nullptr, 0, 0);
-    if (rc) {
+    while (true) {
+        int rc = ::send(fd, nullptr, 0, 0);
+        if (!rc) {
+            return 0;
+        }
         int e = sock_get_error();
         if (e == EINPROGRESS || e == EAGAIN || e == ENOTCONN) {
             return 1;
         }
+        if (e == EINTR) {
+            // As above, yield after a bounded number of immediate retries.  A zero-byte send
+            // has no partial-progress state, so retrying it is safe on every supported platform.
+            if (++loop >= max_nonblock_ops) {
+                return 1;
+            }
+            continue;
+        }
         return -1;
     }
-
-    return 0;
 }
 
 static void qore_socket_raise_poll_result_exception(const QoreHashNode* ex, ExceptionSink* xsink) {

@@ -2930,6 +2930,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         complex container base type but have different value types, such as
         <tt>union&lt;list&lt;string&gt;, list&lt;int&gt;&gt;</tt>
       - fixed non-blocking file and socket poll reads to ensure NUL-terminated strings when converting poll buffers
+      - fixed synchronous and asynchronous TCP connections failing with a spurious \c SOCKET-CONNECT-ERROR when
+        the post-connect readiness probe was interrupted by a signal; interrupted probes are now retried with a
+        bounded yield back to the poll loop
       - fixed synchronous @ref Qore::ReadOnlyFile "ReadOnlyFile" and @ref Qore::FileInputStream
         "FileInputStream" reads on descriptors opened with \c O_NONBLOCK: transient \c EAGAIN / \c EWOULDBLOCK
         results now return to a cancellation-aware readiness wait with a bounded backoff and one monotonic timeout
