@@ -90,6 +90,51 @@ $ gdb --args qore --exec-mode=jit script.qr
     \c PO_ALLOW_DEBUGGER and remain dormant behind a single atomic check until a
     debugger is actually attached, so they impose no cost on normal execution.
 
+    @subsection jit_optimization_level JIT Optimization Level
+
+    Native code generation applies LLVM optimization passes at a configurable
+    level before emitting machine code.
+
+    <b>JIT Optimization Levels</b>
+    |!Level|!Description
+    |\c 0|No LLVM optimization; the fastest to compile and the slowest to run
+    |\c 1|Basic optimization
+    |\c 2|Default; the usual balance of compile time against generated-code quality
+    |\c 3|Most aggressive optimization
+
+    The level applies only to the LLVM passes; %Qore's own IR optimizer runs
+    beforehand in every case, so the difference between levels \c 1, \c 2 and
+    \c 3 is normally small, while turning optimization off entirely (\c 0) has a
+    measurable cost in generated-code speed.
+
+    The level is resolved when a function is compiled, so changing it affects
+    functions compiled afterwards; functions already compiled to native code keep
+    the code they were compiled with.
+
+    The level can be set in three ways, in decreasing order of precedence:
+    - per %Program, with @ref Qore::Program::setJitOptimizationLevel()
+      "Program::setJitOptimizationLevel()" (or its static form, which applies to
+      the current %Program), or from C++ with \c QoreProgram::setJitOptimizationLevel()
+    - process-wide, from C++ with \c QoreJIT::setJITOptLevel()
+    - process-wide, with the \c QORE_JIT_OPT_LEVEL environment variable
+
+    A %Program that sets no level of its own uses the process-wide default.  Pass
+    \c -1 to @ref Qore::Program::setJitOptimizationLevel()
+    "Program::setJitOptimizationLevel()" to clear a %Program's override so that
+    the process-wide default applies again.
+
+    @code{.py}
+# compile this Program's functions with the most aggressive optimization
+Program::setJitOptimizationLevel(3);
+    @endcode
+
+    @note An invalid or empty \c QORE_JIT_OPT_LEVEL value is ignored and the
+    default level is used.
+
+    @note This setting applies to the JIT tier only.  The \c qcc AOT compiler has
+    its own optimization level, set with its \c -O / \c --opt-level option and
+    defaulting to \c 3; see @ref qcc_tool.
+
     @section exec_mode_tiered Tiered Execution Mode
 
     Tiered mode is the default for @ref modern "%modern" code and can also be

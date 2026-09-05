@@ -3201,6 +3201,53 @@ int Program::getCapabilityMask() [flags=RET_VALUE_ONLY] {
     return p->getParseOptions().getLo();
 }
 
+//! Returns the LLVM optimization level used when JIT-compiling this %Program's functions
+/** @return the level set with @ref Qore::Program::setJitOptimizationLevel()
+    "Program::setJitOptimizationLevel()", or the process-wide default (see
+    @ref jit_optimization_level) if this %Program has no override of its own
+
+    @par Example:
+    @code{.py}
+int level = pgm.getJitOptimizationLevel();
+    @endcode
+
+    @see
+    - @ref Qore::Program::setJitOptimizationLevel() "Program::setJitOptimizationLevel()"
+    - @ref jit_optimization_level
+
+    @since %Qore 3.0
+ */
+int Program::getJitOptimizationLevel() [flags=CONSTANT] {
+    return p->getJitOptimizationLevel();
+}
+
+//! Sets the LLVM optimization level used when JIT-compiling this %Program's functions
+/** @param level the optimization level to use: 0 (no optimization) to 3 (most aggressive), or -1
+    to clear this %Program's override so that the process-wide default applies again
+
+    @par Example:
+    @code{.py}
+pgm.setJitOptimizationLevel(3);
+    @endcode
+
+    @throw PROGRAM-JIT-OPTIMIZATION-LEVEL-ERROR the level given is not -1 or in the range 0 - 3
+
+    @note The level is read when a function is compiled, so it affects functions compiled after the
+    call; functions already compiled to native code keep the code they were compiled with
+
+    @see
+    - @ref Qore::Program::getJitOptimizationLevel() "Program::getJitOptimizationLevel()"
+    - @ref jit_optimization_level
+
+    @since %Qore 3.0
+ */
+nothing Program::setJitOptimizationLevel(softint level) [flags=NAMED_ARGS] {
+    if (p->setJitOptimizationLevel(static_cast<int>(level))) {
+        xsink->raiseException("PROGRAM-JIT-OPTIMIZATION-LEVEL-ERROR", "JIT optimization level "
+            QLLD " is invalid; expecting 0 - 3, or -1 to use the process-wide default", level);
+    }
+}
+
 //! Returns the capability mask of the program n calls above this call
 /** @param frame_offset the number of stack frames above this call; must be a non-negative number
 
@@ -3322,6 +3369,52 @@ static ParseOptions Program::getFullParseOptions() [flags=CONSTANT] {
  */
 static *hash<auto> Program::getAllDefines() [flags=CONSTANT;dom=PROCESS] {
    return qore_program_private::runTimeGetAllDefines(getProgram());
+}
+
+//! Returns the LLVM optimization level used when JIT-compiling the current %Program's functions
+/** @return the level set for the current %Program, or the process-wide default (see
+    @ref jit_optimization_level) if the current %Program has no override of its own
+
+    @par Example:
+    @code{.py}
+int level = Program::getJitOptimizationLevel();
+    @endcode
+
+    @see
+    - @ref Qore::Program::setJitOptimizationLevel() "Program::setJitOptimizationLevel()"
+    - @ref jit_optimization_level
+
+    @since %Qore 3.0
+ */
+static int Program::getJitOptimizationLevel() [flags=CONSTANT;dom=PROCESS] {
+    return getProgram()->getJitOptimizationLevel();
+}
+
+//! Sets the LLVM optimization level used when JIT-compiling the current %Program's functions
+/** @param level the optimization level to use: 0 (no optimization) to 3 (most aggressive), or -1
+    to clear the current %Program's override so that the process-wide default applies again
+
+    @par Example:
+    @code{.py}
+Program::setJitOptimizationLevel(3);
+    @endcode
+
+    @throw PROGRAM-JIT-OPTIMIZATION-LEVEL-ERROR the level given is not -1 or in the range 0 - 3
+
+    @note The level is read when a function is compiled, so it affects functions compiled after the
+    call; functions already compiled to native code keep the code they were compiled with
+
+    @see
+    - @ref Qore::Program::getJitOptimizationLevel() "Program::getJitOptimizationLevel()"
+    - @ref jit_optimization_level
+
+    @since %Qore 3.0
+ */
+static nothing Program::setJitOptimizationLevel(softint level) [flags=NAMED_ARGS;dom=PROCESS] {
+    if (getProgram()->setJitOptimizationLevel(static_cast<int>(level))) {
+        xsink->raiseException("PROGRAM-JIT-OPTIMIZATION-LEVEL-ERROR", "JIT optimization level "
+            QLLD " is invalid; expecting 0 - 3, or -1 to use the process-wide default", level);
+    }
 }
 
 //! Saves a %Qore object in the %Program's object cache, holding a strong reference to it

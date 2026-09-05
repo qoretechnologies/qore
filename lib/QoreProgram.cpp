@@ -2976,6 +2976,19 @@ qore_exec_mode_t QoreProgram::getExecMode() const {
     return priv->exec_mode;
 }
 
+int QoreProgram::setJitOptimizationLevel(int level) {
+    if (level < -1 || level > 3) {
+        return -1;
+    }
+    priv->jit_opt_level.store(level, std::memory_order_release);
+    return 0;
+}
+
+int QoreProgram::getJitOptimizationLevel() const {
+    const int level = priv->jit_opt_level.load(std::memory_order_acquire);
+    return level >= 0 ? level : QoreJIT::getJITOptLevel();
+}
+
 void QoreProgram::setIRDump(bool dump) {
     priv->ir_dump = dump;
 }

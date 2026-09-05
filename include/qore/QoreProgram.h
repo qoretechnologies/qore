@@ -849,6 +849,32 @@ public:
     //! gets the current execution mode for this program
     DLLEXPORT qore_exec_mode_t getExecMode() const;
 
+    //! sets the LLVM optimization level used when JIT-compiling this Program's functions
+    /** Overrides the process-wide default for functions belonging to this %Program only; the
+        process-wide default is used by any %Program that does not set its own level.
+
+        @param level the optimization level to use: 0 (no optimization) to 3 (most aggressive), or
+        -1 to clear the override and fall back to the process-wide default
+
+        @return 0 if the level was set, -1 if @ref level is out of range (the level is unchanged)
+
+        @note The level is read when a function is compiled, so changing it affects functions
+        compiled afterwards; already-compiled functions keep the code they were compiled with.
+
+        @see QoreProgram::getJitOptimizationLevel()
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int setJitOptimizationLevel(int level);
+
+    //! returns the LLVM optimization level used when JIT-compiling this Program's functions
+    /** @return the level set with QoreProgram::setJitOptimizationLevel(), or the process-wide
+        default if this %Program has no override
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT int getJitOptimizationLevel() const;
+
     //! enables or disables IR dump before execution
     DLLEXPORT void setIRDump(bool dump);
 
