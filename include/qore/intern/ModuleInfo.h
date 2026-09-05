@@ -822,7 +822,7 @@ protected:
             QoreProgram* mpgm = nullptr, QoreProgram* path_pgm = nullptr, unsigned load_opt = QMLO_NONE,
             ModuleLoadMapHelper* load_guard = nullptr);
 
-    //! Load AOT dependency providers while the parent module owns a load-map reservation.
+    //! Load direct AOT descriptor dependencies while the parent module owns a load-map reservation.
     DLLLOCAL int loadAOTBinaryModuleDependencies(ExceptionSink& xsink,
             const std::vector<std::string>& dependencies, QoreProgram* path_pgm);
 
