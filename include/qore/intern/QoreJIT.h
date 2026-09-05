@@ -601,8 +601,27 @@ public:
     static void setIRThreshold(uint64_t t);
     static void setJITThreshold(uint64_t t);
 
-    //! JIT optimization level (0-3, default 2, overridable via QORE_JIT_OPT_LEVEL)
+    //! Returns the process-wide LLVM optimization level used for JIT compilation.
+    /** 0 (no optimization) to 3 (most aggressive); the default is 3, matching the default of the
+        qcc AOT compiler.  Overridable with the
+        QORE_JIT_OPT_LEVEL environment variable or QoreJIT::setJITOptLevel(); an individual
+        %Program may override it with QoreProgram::setJitOptimizationLevel().
+    */
     static int getJITOptLevel();
+
+    //! Sets the process-wide LLVM optimization level used for JIT compilation.
+    /** @param level 0 (no optimization) to 3 (most aggressive)
+
+        @return 0 if the level was set, -1 if @ref level is out of range (the level is unchanged)
+    */
+    static int setJITOptLevel(int level);
+
+    //! Returns the optimization level that applies to functions belonging to the given %Program.
+    /** @param pgm the %Program owning the function being compiled; may be nullptr
+
+        @return the %Program's own level if it set one, otherwise the process-wide level
+    */
+    static int getEffectiveJITOptLevel(const QoreProgram* pgm);
 
     //! Try to acquire the compilation mutex without blocking.
     //! Returns true if the lock was acquired; caller MUST call releaseCompileLock() after compilation.
@@ -673,7 +692,9 @@ private:
     static uint64_t jit_threshold;
 
     //! JIT optimization level (-1 = not yet initialized)
-    static int jit_opt_level;
+    /** atomic: read by the background compile thread while setJITOptLevel() may set it from another
+    */
+    static std::atomic<int> jit_opt_level;
 
     //! Internal compilation logic (assumes compile_mutex is held)
     bool compileFunctionInternal(const QoreIRFunction& func, std::string& error,

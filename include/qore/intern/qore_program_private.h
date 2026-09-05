@@ -559,6 +559,11 @@ public:
     qore_exec_mode_t exec_mode = QEM_AST;
     bool user_requested_exec_mode = false;
     bool inherited_user_requested_exec_mode = false;
+    // LLVM optimization level applied to this Program's JIT-compiled functions;
+    // -1 means "unset", in which case the process-wide default is used
+    // (QoreJIT::getJITOptLevel(), QORE_JIT_OPT_LEVEL); see QoreProgram::setJitOptimizationLevel()
+    // atomic: read by the background JIT compile thread while the API may set it from another
+    std::atomic<int> jit_opt_level{-1};
     QoreParseOptions inherited_exec_mode_parse_options;
 
     //! the parent whose external data is copied once this Program is fully constructed

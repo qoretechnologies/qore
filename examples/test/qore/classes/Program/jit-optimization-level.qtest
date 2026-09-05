@@ -1,0 +1,128 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires QUnit
+%requires FsUtil
+
+%exec-class JitOptimizationLevelTest
+
+#! Tests the JIT optimization level API
+/** The level applies to the LLVM passes run before native code is emitted.  It is a process-wide
+    default that any %Program may override for its own functions, so the tests here pin three
+    things: that a %Program's override is independent of every other %Program, that an invalid
+    level is rejected rather than silently applied, and that a malformed or empty
+    QORE_JIT_OPT_LEVEL falls back to the documented default instead of selecting level 0 - which is
+    what the environment variable used to do, silently disabling optimization.
+*/
+class JitOptimizationLevelTest inherits QUnit::Test {
+    public {
+        #! the documented process-wide default
+        const DefaultLevel = 3;
+    }
+
+    private {
+        string qore_bin;
+    }
+
+    constructor() : QUnit::Test("JitOptimizationLevelTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        addTestCase("current Program static methods", \testCurrentProgram());
+        addTestCase("per-Program override is independent", \testPerProgramOverride());
+        addTestCase("invalid levels are rejected", \testInvalidLevels());
+        addTestCase("environment variable handling", \testEnvironmentVariable());
+        addTestCase("static method requires PROCESS domain", \testProcessDomain());
+        set_return_value(main());
+    }
+
+    #! the static forms act on the current Program
+    testCurrentProgram() {
+        assertEq(DefaultLevel, Program::getJitOptimizationLevel(),
+            "the current Program starts on the process-wide default");
+        on_exit Program::setJitOptimizationLevel(-1);
+        foreach int level in (0, 1, 2, 3) {
+            Program::setJitOptimizationLevel(level);
+            assertEq(level, Program::getJitOptimizationLevel(),
+                sprintf("level %d is applied to the current Program", level));
+        }
+        Program::setJitOptimizationLevel(-1);
+        assertEq(DefaultLevel, Program::getJitOptimizationLevel(),
+            "-1 clears the override so the process-wide default applies again");
+    }
+
+    #! a Program's level must not leak into any other Program
+    testPerProgramOverride() {
+        Program pgm(PO_NEW_STYLE);
+        assertEq(DefaultLevel, pgm.getJitOptimizationLevel(),
+            "a new Program starts on the process-wide default");
+        pgm.setJitOptimizationLevel(0);
+        assertEq(0, pgm.getJitOptimizationLevel(), "the Program keeps its own level");
+        assertEq(DefaultLevel, Program::getJitOptimizationLevel(),
+            "another Program's level does not affect the current Program");
+
+        Program other(PO_NEW_STYLE);
+        assertEq(DefaultLevel, other.getJitOptimizationLevel(),
+            "a second Program is unaffected by the first");
+        pgm.setJitOptimizationLevel(-1);
+        assertEq(DefaultLevel, pgm.getJitOptimizationLevel(),
+            "-1 clears a Program's override");
+    }
+
+    #! an out-of-range level must throw rather than be silently clamped or applied
+    testInvalidLevels() {
+        Program pgm(PO_NEW_STYLE);
+        foreach int bad in (4, -2, 100, -100) {
+            assertThrows("PROGRAM-JIT-OPTIMIZATION-LEVEL-ERROR", \pgm.setJitOptimizationLevel(),
+                bad, sprintf("instance method rejects level %d", bad));
+            assertThrows("PROGRAM-JIT-OPTIMIZATION-LEVEL-ERROR",
+                \Program::setJitOptimizationLevel(), bad,
+                sprintf("static method rejects level %d", bad));
+        }
+        assertEq(DefaultLevel, pgm.getJitOptimizationLevel(),
+            "a rejected level leaves the current setting untouched");
+        assertEq(DefaultLevel, Program::getJitOptimizationLevel(),
+            "a rejected level leaves the current Program untouched");
+    }
+
+    #! QORE_JIT_OPT_LEVEL sets the process-wide default; bad values must not disable optimization
+    testEnvironmentVariable() {
+        # a valid value is honored
+        assertEq("3", runWithEnv("QORE_JIT_OPT_LEVEL=3"), "a valid level is applied");
+        assertEq("0", runWithEnv("QORE_JIT_OPT_LEVEL=0"), "level 0 is applied when asked for");
+        # anything unparsable, empty or out of range falls back to the default rather than to 0
+        foreach string bad in ("abc", "", "9", "-1", "2x", " ") {
+            assertEq(string(DefaultLevel), runWithEnv(sprintf("QORE_JIT_OPT_LEVEL=%s", bad)),
+                sprintf("QORE_JIT_OPT_LEVEL=%y falls back to the default", bad));
+        }
+    }
+
+    #! the static form is process-scoped and must be unavailable without PO_NO_PROCESS_CONTROL
+    testProcessDomain() {
+        Program pgm(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+        assertThrows("PARSE-EXCEPTION", "Program::setJitOptimizationLevel",
+            \pgm.parse(), ("Program::setJitOptimizationLevel(3);", "sandbox-set"),
+            "the static setter needs the PROCESS domain");
+
+        Program pgm2(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+        assertThrows("PARSE-EXCEPTION", "Program::getJitOptimizationLevel",
+            \pgm2.parse(), ("int i = Program::getJitOptimizationLevel();", "sandbox-get"),
+            "the static getter needs the PROCESS domain");
+
+        # configuring a Program object the caller already holds is not process control
+        Program pgm3(PO_NEW_STYLE | PO_NO_PROCESS_CONTROL);
+        pgm3.parse("sub f() { Program p(PO_NEW_STYLE); p.setJitOptimizationLevel(3); }",
+            "sandbox-instance");
+        assertTrue(True, "the instance methods do not require the PROCESS domain");
+    }
+
+    #! runs a child process with the given environment and returns the level it reports
+    private string runWithEnv(string env) {
+        TmpFile tmp(NOTHING, ".qr");
+        tmp.file.write("%modern\nprintf(\"%d\", Program::getJitOptimizationLevel());\n");
+        tmp.file.close();
+        return trim(backquote(sprintf("%s %s --enable-debug %s 2>&1", env, qore_bin, tmp.path)));
+    }
+}

@@ -791,20 +791,46 @@ uint64_t QoreJIT::jit_threshold = []() -> uint64_t {
     return env ? strtoull(env, nullptr, 10) : 1000;
 }();
 
-// JIT optimization level: default O2, overridable via QORE_JIT_OPT_LEVEL env var
-int QoreJIT::jit_opt_level = -1;  // -1 = not yet initialized
+// Process-wide JIT optimization level: default O3, matching the qcc AOT compiler's own default,
+// overridable with QORE_JIT_OPT_LEVEL or
+// QoreJIT::setJITOptLevel(); a Program may override it with QoreProgram::setJitOptimizationLevel()
+std::atomic<int> QoreJIT::jit_opt_level{-1};  // -1 = not yet initialized
 
 int QoreJIT::getJITOptLevel() {
-    if (jit_opt_level < 0) {
+    int current = jit_opt_level.load(std::memory_order_acquire);
+    if (current < 0) {
+        constexpr int default_level = 3;
         const char* env = getenv("QORE_JIT_OPT_LEVEL");
-        if (env) {
-            int level = atoi(env);
-            jit_opt_level = (level >= 0 && level <= 3) ? level : 2;
-        } else {
-            jit_opt_level = 2;
+        // atoi() cannot tell "0" from an unparsable value, and 0 is in range, so a malformed or
+        // empty value selected -O0 silently instead of falling back to the default
+        int level = default_level;
+        if (env && *env) {
+            char* end = nullptr;
+            long value = strtol(env, &end, 10);
+            if (end && end != env && !*end && value >= 0 && value <= 3) {
+                level = static_cast<int>(value);
+            }
         }
+        // two threads racing here compute the same value from the same environment
+        jit_opt_level.store(level, std::memory_order_release);
+        current = level;
     }
-    return jit_opt_level;
+    return current;
+}
+
+int QoreJIT::setJITOptLevel(int level) {
+    if (level < 0 || level > 3) {
+        return -1;
+    }
+    jit_opt_level.store(level, std::memory_order_release);
+    return 0;
+}
+
+int QoreJIT::getEffectiveJITOptLevel(const QoreProgram* pgm) {
+    // QoreProgram::getJitOptimizationLevel() already resolves an unset Program override to the
+    // process-wide default; a batch module uses the root function's Program, which owns the entry
+    // point the module is compiled for
+    return pgm ? pgm->getJitOptimizationLevel() : getJITOptLevel();
 }
 
 //! Run LLVM optimization passes on a module before JIT compilation
@@ -1108,7 +1134,7 @@ bool QoreJIT::compileFunctionInternal(const QoreIRFunction& func, std::string& e
     }
 
     // Run LLVM optimization passes
-    optimizeModule(*module, getJITOptLevel());
+    optimizeModule(*module, getEffectiveJITOptLevel(func.pgm));
 
     // Dump LLVM IR if requested (after optimization)
     if (getenv("QORE_DUMP_LLVM_IR")) {
@@ -1517,7 +1543,7 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     di_builder.finalize();
 
     // Run LLVM optimization passes
-    optimizeModule(*module, getJITOptLevel());
+    optimizeModule(*module, getEffectiveJITOptLevel(root_func.pgm));
 
     // Dump LLVM IR if requested (after optimization)
     if (getenv("QORE_DUMP_LLVM_IR")) {

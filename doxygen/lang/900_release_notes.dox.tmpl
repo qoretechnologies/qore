@@ -632,6 +632,14 @@ int echoed = child.echo(value);
     enum and the @ref Qore::Program::setExecMode() "Program::setExecMode()" /
     @ref Qore::Program::getExecMode() "Program::getExecMode()" methods.
 
+    JIT native code generation now defaults to optimization level 3, matching the \c qcc AOT
+    compiler, so a function generates the same code whether it is compiled by the JIT or ahead of
+    time.  The @ref jit_optimization_level "JIT optimization level" is configurable as well, per %Program
+    with @ref Qore::Program::setJitOptimizationLevel() "Program::setJitOptimizationLevel()" /
+    @ref Qore::Program::getJitOptimizationLevel() "Program::getJitOptimizationLevel()" (both also
+    available as static methods acting on the current %Program), and process-wide with the
+    \c QORE_JIT_OPT_LEVEL environment variable.
+
     A damaged binary module is reported rather than fatal when
     \c QORE_VERIFY_MODULE_SIGNATURES is set: the module loader verifies that a module file is
     intact before mapping it and raises a \c LOAD-MODULE-ERROR naming the file if it is not.
