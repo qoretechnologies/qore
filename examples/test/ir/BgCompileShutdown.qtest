@@ -204,8 +204,10 @@ class BgCompileShutdownTest inherits QUnit::Test {
 
     private testInvalidBudget() {
         string path = writeScript(oversizedSource());
-        # a negative value must not wrap to a huge limit and silently disable the guard
-        foreach string value in (("-1", "abc", "10000x", ""))  {
+        # a negative value must not wrap to a huge limit and silently disable the guard; strtoull()
+        # skips leading whitespace, so " -1" must be rejected just like "-1", and a signed value is
+        # malformed even when positive
+        foreach string value in (("-1", " -1", "\t-1", "+1", "abc", "10000x", " ", ""))  {
             string output = runJit("QORE_JIT_MAX_IR_INSTRUCTIONS=" + shellQuote(value), path);
             assertTrue(output =~ /result=12000\n/,
                 sprintf("oversized function ran with budget %y: %s", value, output));

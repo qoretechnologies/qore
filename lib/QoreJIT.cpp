@@ -1707,15 +1707,23 @@ uint64_t QoreJIT::getMaxJITIRInstructions() {
         if (!env || !*env) {
             return default_max;
         }
-        // an unparsable, negative, or trailing-garbage value must not silently select a limit:
-        // strtoull() wraps a negative value to a huge limit, which would disable the guard instead
-        // of ignoring the malformed setting
-        if (*env == '-') {
+        // An unparsable, negative, or trailing-garbage value must not silently select a limit:
+        // strtoull() skips leading whitespace and wraps a negative value to a huge limit, which
+        // would disable this guard instead of ignoring the malformed setting.  Testing only the
+        // first byte for '-' would therefore still admit " -1".  Accept nothing but an unsigned
+        // decimal integer, after optional leading whitespace; a signed value (even "+1") is
+        // treated as malformed and ignored.
+        const char* start = env;
+        while (*start == ' ' || *start == '\t' || *start == '\n' || *start == '\r'
+                || *start == '\v' || *start == '\f') {
+            ++start;
+        }
+        if (*start < '0' || *start > '9') {
             return default_max;
         }
         char* end = nullptr;
-        unsigned long long value = strtoull(env, &end, 10);
-        if (!end || end == env || *end) {
+        unsigned long long value = strtoull(start, &end, 10);
+        if (!end || end == start || *end) {
             return default_max;
         }
         // 0 means "no limit"
