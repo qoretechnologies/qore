@@ -3822,6 +3822,13 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         return opts.request_timeout;
     }
 
+    #! Returns the maximum number of retries for retryable connection and capacity errors
+    /** @return the \c max_request_retries option; @c 0 means that requests are not retried
+    */
+    int getMaxRequestRetries() {
+        return opts.max_request_retries;
+    }
+
     #! Returns the configured protocol mode (@c "auto", @c "h1", @c "h2", @c "h3")
     string getProtocolMode() {
         return opts.protocol;

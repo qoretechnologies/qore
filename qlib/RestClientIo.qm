@@ -4452,6 +4452,96 @@ hash<RestResponseInfo> resp = pool.restGet("/api/data");
         }
     }
 
+#! Acquires the connection for an event-driven RestClientIo operation and bounds its failed connection attempts
+/** Each acquisition step hands back the connection that the returned readiness notifier reports on.  When the
+    notifier fires because that connection closed instead of becoming ready, the connection attempt failed:
+    acquiring again would only open another connection to the same endpoint, and without a bound a refused
+    connection turns into a tight reconnect loop that never reports the error.
+
+    Failed attempts are bounded by the connection manager's \c max_request_retries option, like synchronous
+    requests; the last failure is raised with the same \c HTTPCLIENT-CONNECT-ERROR exception.  A losing leg of
+    an unresolved HTTP/3 + HTTP/2 happy-eyeballs race is not a failed attempt: the race continues with the other
+    protocol.
+*/
+class RestClientIoAsyncConnector {
+    private {
+        #! The connection manager
+        HttpClientIo::HttpClientConnectionManager mgr;
+
+        #! The target URL
+        string url;
+
+        #! The connection handed back by the last acquisition step
+        *HttpClientIo::HttpClientConnection tracked;
+
+        #! Failed connection attempts
+        int failures = 0;
+    }
+
+    #! Creates the connector for the given client
+    /** @param rcio the client whose connection manager and URL are used
+    */
+    constructor(RestClientIo rcio) {
+        mgr = rcio.getConnectionManager();
+        url = rcio.getUrl();
+    }
+
+    #! Advances connection acquisition
+    /** Call once to start acquisition, and again each time the returned notifier fires.
+
+        A connection failure is always reported by a later call after the notifier has fired, never by the first
+        call, so an operation reports connection errors the same way whether the connection failed immediately
+        or after connecting for a while.
+
+        @return an EventNotifier to poll for readiness, or @ref nothing if a connection is ready for submission
+
+        @throw HTTPCLIENT-CONNECT-ERROR the connection attempts failed more often than \c max_request_retries
+        allows
+    */
+    *EventNotifier acquire() {
+        checkFailure();
+        *EventNotifier notifier = mgr.acquireConnectionAsync(url, \tracked);
+        if (!notifier && tracked && failed(tracked) && !mgr.isUnresolvedRaceLeg(tracked)) {
+            # the connection closed synchronously, for example a refused connection to a local endpoint; the
+            # next call counts the failure
+            notifier = new EventNotifier();
+            notifier.notify();
+        }
+        return notifier;
+    }
+
+    #! Signals that a request was submitted on the ready connection
+    /** A connection that was used for a request is no longer a pending connection attempt; closing it later,
+        for example after a response that closes the connection, must not count as a failed attempt.
+    */
+    submitted() {
+        remove tracked;
+    }
+
+    #! Counts the tracked connection as a failed attempt if it failed before it could be used
+    private checkFailure() {
+        *HttpClientIo::HttpClientConnection conn = remove tracked;
+        if (!conn || !failed(conn) || mgr.isUnresolvedRaceLeg(conn)) {
+            return;
+        }
+        if (++failures <= mgr.getMaxRequestRetries()) {
+            return;
+        }
+        *hash<auto> err = conn.getPollOperation().getError();
+        throw "HTTPCLIENT-CONNECT-ERROR",
+            sprintf("connection closed: %s: %s", err.err ?? "UNKNOWN", err.desc ?? "unknown"), err;
+    }
+
+    #! Returns @ref True if a pending connection failed
+    /** The poll operation's error is recorded before the connection is marked closed; the connection manager
+        already treats such a connection as dead and opens a new one on the next acquisition step, so it is a
+        failed attempt as well.
+    */
+    private static bool failed(HttpClientIo::HttpClientConnection conn) {
+        return conn.isClosed() || conn.getPollOperation().hasError();
+    }
+}
+
 #! Event-driven RestClientIo async request operation with Negotiate retry support
 /** Drives connection readiness, one or two raw HTTP request attempts, and final
     Future resolution without running retry logic from Future::get().
@@ -4488,6 +4578,9 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
 
         #! Current connection-readiness notifier
         *EventNotifier connection_ready_notifier;
+
+        #! Acquires the connection and bounds failed connection attempts
+        RestClientIoAsyncConnector connector;
 
         #! True after the first continuePoll() call in SPS_CONNECTING
         bool waiting_for_connection = False;
@@ -4582,6 +4675,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         self.completion_notifier = completion_notifier;
         self.signer_header = signer_header;
         self.signer = signer;
+        connector = new RestClientIoAsyncConnector(rcio);
         state = SPS_CONNECTING;
     }
 
@@ -4730,24 +4824,23 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
     private *hash<SocketPollInfo> continuePollIntern() {
         while (True) {
             if (state == SPS_CONNECTING) {
-                if (!waiting_for_connection) {
-                    doStartConnecting();
-                    if (state != SPS_CONNECTING) {
-                        continue;
-                    }
-                    waiting_for_connection = True;
-                    return <SocketPollInfo>{
-                        "events": SOCK_POLLIN,
-                        "socket": connection_ready_notifier,
-                        "poll_timeout_ms": AsyncNotifierPollTimeoutMs,
-                    };
+                if (waiting_for_connection) {
+                    connection_ready_notifier.acknowledge();
+                    delete connection_ready_notifier;
+                    waiting_for_connection = False;
                 }
-
-                connection_ready_notifier.acknowledge();
-                delete connection_ready_notifier;
-                waiting_for_connection = False;
+                # exactly one acquisition step per entry: a second step before the notifier fires would open
+                # another connection while the first one is still connecting
                 doStartConnecting();
-                continue;
+                if (state != SPS_CONNECTING) {
+                    continue;
+                }
+                waiting_for_connection = True;
+                return <SocketPollInfo>{
+                    "events": SOCK_POLLIN,
+                    "socket": connection_ready_notifier,
+                    "poll_timeout_ms": AsyncNotifierPollTimeoutMs,
+                };
             }
 
             if (state == SPS_IO_WAITING) {
@@ -4790,7 +4883,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
     }
 
     private doStartConnecting() {
-        connection_ready_notifier = rcio.startConnectionAsync();
+        connection_ready_notifier = connector.acquire();
         if (connection_ready_notifier) {
             state = SPS_CONNECTING;
             return;
@@ -4817,6 +4910,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         }
         hash<auto> result = rcio.submitPreparedAsyncRequestAttemptWithNotifier(method, path,
             hdr, prepared_attempt, io_notifier);
+        connector.submitted();
         delete prepared_attempt;
         pending_future = result.future;
         pending_stream = result.stream;
@@ -4891,6 +4985,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         EventNotifier stream_notifier();
         Queue sse_queue();
         *EventNotifier connection_ready_notifier;
+        RestClientIoAsyncConnector connector;
         bool waiting_for_connection = False;
         bool waiting_for_stream = False;
 
@@ -4920,6 +5015,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         self.path = path;
         self.body = body;
         self.hdr = hdr;
+        connector = new RestClientIoAsyncConnector(rcio);
     }
 
     start() {
@@ -5013,23 +5109,22 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
             }
 
             if (state == SPS_CONNECTING) {
-                if (!waiting_for_connection) {
-                    doStartConnecting();
-                    if (state != SPS_CONNECTING) {
-                        continue;
-                    }
-                    waiting_for_connection = True;
-                    return <SocketPollInfo>{
-                        "events": SOCK_POLLIN,
-                        "socket": connection_ready_notifier,
-                    };
+                if (waiting_for_connection) {
+                    connection_ready_notifier.acknowledge();
+                    delete connection_ready_notifier;
+                    waiting_for_connection = False;
                 }
-
-                connection_ready_notifier.acknowledge();
-                delete connection_ready_notifier;
-                waiting_for_connection = False;
+                # exactly one acquisition step per entry: a second step before the notifier fires would open
+                # another connection while the first one is still connecting
                 doStartConnecting();
-                continue;
+                if (state != SPS_CONNECTING) {
+                    continue;
+                }
+                waiting_for_connection = True;
+                return <SocketPollInfo>{
+                    "events": SOCK_POLLIN,
+                    "socket": connection_ready_notifier,
+                };
             }
 
             if (state == SPS_STREAM_WAITING || state == SPS_ERROR_DRAIN) {
@@ -5051,7 +5146,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
     }
 
     private doStartConnecting() {
-        connection_ready_notifier = rcio.startConnectionAsync();
+        connection_ready_notifier = connector.acquire();
         if (connection_ready_notifier) {
             state = SPS_CONNECTING;
             return;
@@ -5081,6 +5176,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         # retained past end_stream to drain buffered body bytes into the SSE parser.
         pending_stream.startStreaming(method, path, hdr, False,
             prepared_attempt.serialized_body, stream_notifier, True);
+        connector.submitted();
         request_body = prepared_attempt.serialized_body;
         request_allow_any_response = prepared_attempt.allow_any_response;
         delete prepared_attempt;

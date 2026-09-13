@@ -628,6 +628,8 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("ping poll non-existent host", \testPingPollNonExistentHost());
         addTestCase("ping poll abort cancels request", \testPingPollAbortCancelsRequest());
         addTestCase("ping poll connection-closed retry", \testPingPollConnectionClosedRetry());
+        addTestCase("async request connection refused", \testAsyncRequestConnectionRefused());
+        addTestCase("caller-driven poll request connection refused", \testPollRequestConnectionRefused());
         addTestCase("ping poll happy-eyeballs H3", \testPingPollHappyEyeballsH3());
         addTestCase("ping poll happy-eyeballs falls back to H2",
             \testPingPollHappyEyeballsNoH3());
@@ -3507,6 +3509,63 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         ping with a connection error so PollingConnectionMonitor can schedule the next
         ping interval instead of spinning inside one ping operation.
     */
+    #! Regression: an async request whose connection is refused fails with the connection error
+    /** Each wake of the connecting state used to start another connection without noticing that the connection
+        it waited for had closed, so a refused connection became a reconnect loop of thousands of connections
+        that ended only when the caller gave up, with the connection error lost.
+    */
+    testAsyncRequestConnectionRefused() {
+        # bound but not listening: every connection is refused
+        Socket bound();
+        bound.bindINET("127.0.0.1", 0, True);
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"max_request_retries": 1});
+        on_exit mgr.closeAll();
+        RestClientIo::RestClientIo rest({
+            "url": sprintf("http://127.0.0.1:%d", bound.getSocketInfo().port),
+            "data": "json",
+        }, mgr);
+
+        ControllerLogCapture cap();
+        AsyncIoController::setLogger(cap);
+        on_exit AsyncIoController::setLogger(NOTHING);
+
+        RestClientIo::RestFuture f = rest.restGetAsync("/refused");
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", "Connection refused", \f.get(), (30s,));
+        assertEq(2, countConnectionSubmits(cap), "one connection attempt and one retry");
+    }
+
+    #! Regression: a caller-driven poll request whose connection is refused ends with the connection error
+    testPollRequestConnectionRefused() {
+        Socket bound();
+        bound.bindINET("127.0.0.1", 0, True);
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"max_request_retries": 0});
+        on_exit mgr.closeAll();
+        RestClientIo::RestClientIo rest({
+            "url": sprintf("http://127.0.0.1:%d", bound.getSocketInfo().port),
+            "data": "json",
+        }, mgr);
+
+        ControllerLogCapture cap();
+        AsyncIoController::setLogger(cap);
+        on_exit AsyncIoController::setLogger(NOTHING);
+
+        *hash<ExceptionInfo> caught = drivePingOp(rest.startPollRequest("GET", "/refused"));
+        assertEq("HTTPCLIENT-CONNECT-ERROR", caught.err);
+        assertRegex("Connection refused", caught.desc);
+        assertEq(1, countConnectionSubmits(cap), "retries are disabled");
+    }
+
+    #! Returns the number of connections the connection manager submitted to the async I/O controller
+    private static int countConnectionSubmits(ControllerLogCapture cap) {
+        int count = 0;
+        foreach string msg in (cap.snapshot()) {
+            if (msg =~ /submit: operation 'HttpClientConnectionManager:/) {
+                ++count;
+            }
+        }
+        return count;
+    }
+
     testPingPollConnectionClosedRetry() {
         # Bind to a random port and immediately close — the port has nothing listening
         # when the test runs, so all TCP connection attempts get ECONNREFUSED (→ CLOSED).

@@ -62,6 +62,23 @@ class HelloSseHandler inherits ServerSentEventHandler {
     }
 }
 
+#! Forwards SSE close events to a queue
+class SseCloseObserver inherits DataProvider::Observer {
+    private {
+        Queue closed;
+    }
+
+    constructor(Queue closed) {
+        self.closed = closed;
+    }
+
+    update(string event_id, hash<auto> data_) {
+        if (event_id == HttpClientStreamingIo::EVENT_SSE_CLOSED) {
+            closed.push(data_);
+        }
+    }
+}
+
 #! Accepts one connection on a UNIX domain socket, reports when the request has arrived and never replies
 class SilentUnixListener {
     public {
@@ -126,6 +143,7 @@ public class HttpClientIoUnixSocketTest inherits QUnit::Test {
         addTestCase("SSE over a UNIX domain socket", \testSse());
         addTestCase("redirect to another UNIX domain socket", \testRedirect());
         addTestCase("missing socket fails without DNS", \testMissingSocket());
+        addTestCase("missing socket: async request and SSE observable", \testMissingSocketAsync());
         addTestCase("request timeout", \testTimeout());
         addTestCase("cancellation by closeAll()", \testCancel());
         addTestCase("unsupported transports are rejected", \testUnsupported());
@@ -236,6 +254,28 @@ public class HttpClientIoUnixSocketTest inherits QUnit::Test {
             assertRegex("No such file or directory", ex.desc);
             assertFalse(ex.desc =~ /QOREADDRINFO/, "no name resolution is attempted");
         }
+    }
+
+    #! A missing socket fails its connection synchronously; the error is still delivered asynchronously
+    testMissingSocketAsync() {
+        string missing_url = "http://socket=" + encode_url(tmp.path + "/missing-async.sock", True);
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"max_request_retries": 1});
+        on_exit mgr.closeAll();
+        RestClientIo rest({"url": missing_url, "data": "json"}, mgr);
+
+        # the async call returns a Future rather than throwing; the Future carries the connection error
+        RestFuture f = rest.restGetAsync("/");
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", "No such file or directory", \f.get(), (30s,));
+
+        HttpClientStreamingIo::SseObservable obs = rest.restObserveSse("GET", "/sse");
+        Queue closed();
+        obs.registerObserver(new SseCloseObserver(closed));
+        obs.observersReady();
+        on_exit obs.stopEvents();
+        hash<auto> evt = closed.get(30s);
+        assertEq("startup-error", evt.reason);
+        assertEq("HTTPCLIENT-CONNECT-ERROR", evt.error.err);
+        assertRegex("No such file or directory", evt.error.desc);
     }
 
     testTimeout() {

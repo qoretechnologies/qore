@@ -176,6 +176,32 @@ absolute socket path is the host of a `socket=` URL, e.g. `http://socket=%2Ftmp%
 - **Redirects:** an absolute `Location` naming a socket is rebuilt as a `socket=` URL with the path
   re-encoded, since `parse_url()` returned it decoded.
 
+### Event-Driven Connection Acquisition
+
+Poll operations that must not block (the `RestClientIo` async request and SSE observable startup
+operations, and the connection-monitor ping) acquire connections with `acquireConnectionAsync(url, \conn)`,
+re-entering it each time the returned readiness notifier fires.  The contract:
+
+- **Track the connection handed back.**  A notifier also fires when the connection closes instead of becoming
+  ready.  A pending connection that is closed, or whose poll operation has an error (recorded before the
+  closed state), is a failed attempt; acquiring again without noticing would open another connection to the
+  same endpoint, turning a refused connection into a reconnect loop that never reports the error.
+- **Bound failed attempts** by `max_request_retries`, like synchronous requests, and raise the last failure as
+  `HTTPCLIENT-CONNECT-ERROR` (`connection closed: <err>: <desc>`, with the poll operation error as the
+  argument).  The ping operation uses its own single-attempt limit because the monitor schedules the next ping.
+- **A losing happy-eyeballs leg is not a failure** (`isUnresolvedRaceLeg()`): the race continues with the
+  other protocol.
+- **One acquisition step per wake.**  A second step before the notifier fires opens another connection while
+  the first is still connecting.
+- **Report failures asynchronously.**  A connection that fails synchronously (a refused or missing local
+  endpoint) is reported through a self-signaled notifier, so the error reaches the Future or the observers the
+  same way as a failure detected later, never as an exception from the call that started the operation.
+- **Release the attempt once a request is submitted**: a used connection that closes later (e.g. after a
+  `Connection: close` response before a Negotiate retry) is not a failed connection attempt.
+
+`RestClientIoAsyncConnector` in `RestClientIo.qm` implements this for the request and SSE startup
+operations.
+
 ### Public Methods
 
 ```qore

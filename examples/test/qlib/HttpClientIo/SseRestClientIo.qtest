@@ -113,6 +113,30 @@ class TestObserver inherits DataProvider::Observer {
     }
 }
 
+#! Captures async I/O controller log messages
+class ControllerLogCapture inherits LoggerInterfaceBase {
+    private {
+        list<string> messages();
+        Mutex mtx();
+    }
+
+    logArgs(int level, string message, *softlist<auto> args) {
+        string formatted = args ? vsprintf(message, args) : message;
+        AutoLock al(mtx);
+        push messages, formatted;
+    }
+
+    bool isEnabledFor(int level) {
+        return True;
+    }
+
+    #! Returns the number of connections the connection manager submitted to the controller
+    int countConnectionSubmits() {
+        AutoLock al(mtx);
+        return (select messages, $1 =~ /submit: operation 'HttpClientConnectionManager:/).size();
+    }
+}
+
 class SseRestClientIoTest inherits Test {
     private {
         HttpServer server;
@@ -133,6 +157,7 @@ class SseRestClientIoTest inherits Test {
         addTestCase("restSseReader throws HTTP response errors",
             \testRestSseReaderThrowsResponseError());
         addTestCase("restObserveSse receives events", \testRestObserveSse());
+        addTestCase("restObserveSse reports a refused connection", \testRestObserveSseConnectionRefused());
         addTestCase("HttpSseStreamPollOperation heartbeat defaults on",
             \testPollOperationHeartbeatDefault());
         set_return_value(main());
@@ -350,6 +375,40 @@ class SseRestClientIoTest inherits Test {
         assertEq(HttpClientStreamingIo::EVENT_SSE_DATA, observer.events[1].event_id);
         assertEq("hello", observer.events[1].data.event);
         assertEq("\"world\"", observer.events[1].data.data);
+    }
+
+    #! Regression: a refused connection closes the observable with the connection error
+    /** The startup operation used to start another connection on every wake without noticing that the one it
+        waited for had closed: observers received no event at all until the observable was stopped, while
+        thousands of connections were attempted.
+    */
+    testRestObserveSseConnectionRefused() {
+        # bound but not listening: every connection is refused
+        Socket bound();
+        bound.bindINET("127.0.0.1", 0, True);
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"max_request_retries": 1});
+        on_exit mgr.closeAll();
+        RestClientIo rest({
+            "url": sprintf("http://127.0.0.1:%d", bound.getSocketInfo().port),
+        }, mgr);
+
+        ControllerLogCapture cap();
+        AsyncIoController::setLogger(cap);
+        on_exit AsyncIoController::setLogger(NOTHING);
+
+        HttpClientStreamingIo::SseObservable obs = rest.restObserveSse("GET", "/sse");
+        TestObserver observer(1);
+        obs.registerObserver(observer);
+        obs.observersReady();
+        on_exit obs.stopEvents();
+
+        assertTrue(observer.waitForEvents(30s), "the observable reported the failed startup");
+        hash<auto> evt = observer.events[0];
+        assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED, evt.event_id);
+        assertEq("startup-error", evt.data.reason);
+        assertEq("HTTPCLIENT-CONNECT-ERROR", evt.data.error.err);
+        assertRegex("Connection refused", evt.data.error.desc);
+        assertEq(2, cap.countConnectionSubmits(), "one connection attempt and one retry");
     }
 
     testPollOperationHeartbeatDefault() {
