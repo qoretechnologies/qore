@@ -586,6 +586,7 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("connection path trailing slash", \testConnectionPathTrailingSlash());
         addTestCase("connection path empty vs NOTHING", \testConnectionPathEmptyVsNothing());
         addTestCase("connection path h1", \testConnectionPathH1());
+        addTestCase("connection path with an empty request path", \testConnectionPathEmptyRequestPath());
         # Phase 3: Basic auth
         addTestCase("basic auth", \testBasicAuth());
         addTestCase("basic auth clear", \testBasicAuthClear());
@@ -2750,6 +2751,31 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         resp = rest.restGet("/api/test");
         assertEq(200, resp.status_code);
         assertRegex("api/test", resp.body.path);
+    }
+
+    #! Regression: an empty request path sends the connection path without a trailing slash, like RestClient
+    testConnectionPathEmptyRequestPath() {
+        RestClientIo::RestClientIo rest = createH1Client({"default_path": "/api/v2"});
+        on_exit rest.close();
+        assertEq("api/v2", rest.restGet("").body.path);
+        # a request path is still appended to the connection path
+        assertEq("api/v2/items", rest.restGet("items").body.path);
+
+        # a URL path is the connection path as well
+        RestClientIo::RestClientIo from_url({
+            "url": sprintf("http://127.0.0.1:%d/api/v3", h1_port),
+            "data": "json",
+        });
+        on_exit from_url.close();
+        assertEq("api/v3", from_url.restGet("").body.path);
+
+        # without a connection path, an empty request path is the root path
+        RestClientIo::RestClientIo no_path({
+            "url": sprintf("http://127.0.0.1:%d", h1_port),
+            "data": "json",
+        });
+        on_exit no_path.close();
+        assertEq("", no_path.restGet("").body.path);
     }
 
     testConnectionPathH1() {

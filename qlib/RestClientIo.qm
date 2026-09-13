@@ -2879,11 +2879,11 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
         #! Internal: shared prep path for @ref prepareRequest() and @ref prepareRawRequest()
         private hash<auto> prepareRequestIntern(string method, reference<string> path, auto body,
                 reference<*hash<auto>> hdr, bool raw) {
-            # Normalize path to be absolute (HTTP/2/3 :path pseudo-header requires leading "/")
-            if (path.val() && path[0] != "/") {
+            # Normalize path to be absolute (HTTP/2/3 :path pseudo-header requires leading "/"); an empty path
+            # addresses the connection path itself and is resolved below
+            bool empty_path = !path.val();
+            if (!empty_path && path[0] != "/") {
                 path = "/" + path;
-            } else if (!path.val()) {
-                path = "/";
             }
 
             *string req_sct;
@@ -2905,10 +2905,16 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 req_validator = validator;
             }
 
-            # Apply connection path (avoid double-prepending)
-            if (req_connection_path.val()
-                    && path.substr(0, req_connection_path.length()) != req_connection_path) {
-                path = req_connection_path + path;
+            # Apply connection path (avoid double-prepending); like HTTPClient, an empty request path sends the
+            # connection path as-is instead of appending a trailing "/" to it
+            if (req_connection_path.val()) {
+                if (empty_path) {
+                    path = req_connection_path;
+                } else if (path.substr(0, req_connection_path.length()) != req_connection_path) {
+                    path = req_connection_path + path;
+                }
+            } else if (empty_path) {
+                path = "/";
             }
 
             # Normalize header keys to lowercase for HTTP/2 and HTTP/3 compatibility
