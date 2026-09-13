@@ -3209,7 +3209,7 @@ bool QoreTypeSpec::acceptInput(ExceptionSink* xsink, const QoreTypeInfo& typeInf
                             lvh.setTypeInfo(u.ti);
                             //printd(5, "ref assign '%s' to '%s'\n", QoreTypeInfo::getName(val.getTypeInfo()), QoreTypeInfo::getName(u.ti));
                             if (!lvh.assign(val, "<reference>") && orig
-                                && lvh.getValue().getInternalNode() == orig) {
+                                && lvh.getInternalNode() == orig) {
                                 // the identical node is still in place, so the set of objects reachable from the
                                 // lvalue cannot have changed; skip the cycle scan, which would otherwise walk the
                                 // entire reachable object graph on every reference argument binding

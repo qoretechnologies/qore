@@ -4274,7 +4274,11 @@ void QoreIRToLLVM::retainLocalCacheValue(const void* key, llvm::Value* value,
             || !canReloadLocalFromRuntime(key, honor_reload_exempt)) {
         return;
     }
+    retainLocalCacheValueIntern(key, alloca_it->second, value, module, llvm_func);
+}
 
+void QoreIRToLLVM::retainLocalCacheValueIntern(const void* key, llvm::Value* local_alloca,
+        llvm::Value* value, llvm::Module& module, llvm::Function* llvm_func) {
     auto tracker_it = local_reload_trackers.find(key);
     if (tracker_it == local_reload_trackers.end()) {
         llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
@@ -4308,7 +4312,7 @@ void QoreIRToLLVM::retainLocalCacheValue(const void* key, llvm::Value* value,
     llvm::Value* old_deferred = builder->CreateLoad(i64_type, deferred_it->second);
 
     builder->CreateCall(incref_fn, {value});
-    builder->CreateStore(value, alloca_it->second);
+    builder->CreateStore(value, local_alloca);
     builder->CreateStore(value, tracker_it->second);
     builder->CreateStore(old_tracker, deferred_it->second);
     builder->CreateCall(decref_fn, {old_deferred, xsink_arg});
@@ -12090,6 +12094,69 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
         return rv;
     };
 
+    // Releases a value's own reference; the fused int helpers box results outside the
+    // NaN-box payload as new heap nodes, while in-range results are immediates.
+    auto release_fused_boxed_int = [&](llvm::Value* boxed) {
+        auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
+                llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
+        builder->CreateCall(decref_fn, {boxed, xsink_arg});
+    };
+
+    // Publishes a fused int result to a local's alloca and returns the value stored
+    // (nullptr for a native alloca).  A boxed result outside the NaN-box payload is a new
+    // heap node, so the new reference must go to whatever owns the alloca's value, as
+    // StoreLocal does; storing it unowned leaks it on every update.
+    auto publish_fused_int = [&](const void* key,
+            std::unordered_map<const void*, llvm::Value*>::iterator alloca_it,
+            llvm::Value* result, bool alloca_owns) -> llvm::Value* {
+        if (native_int_locals.count(key)) {
+            builder->CreateStore(result, alloca_it->second);
+            markLocalCacheFresh(key, llvm_func);
+            return nullptr;
+        }
+        llvm::Value* boxed = boxIntInline(result);
+        if (alloca_owns) {
+            // IR-only locals and fast-entry parameters own the alloca value (or a
+            // pre-instantiated cleanup slot does, with the alloca borrowing from it);
+            // take the new value before releasing the old one
+            auto preinst_cleanup = preinstantiated_entry_cleanup_by_local.find(key);
+            llvm::Value* owner = preinst_cleanup != preinstantiated_entry_cleanup_by_local.end()
+                ? preinst_cleanup->second : alloca_it->second;
+            llvm::Value* old_val = builder->CreateLoad(i64_type, owner);
+            builder->CreateStore(boxed, owner);
+            if (owner != alloca_it->second) {
+                builder->CreateStore(boxed, alloca_it->second);
+            }
+            release_fused_boxed_int(old_val);
+            markLocalCacheFresh(key, llvm_func);
+            return boxed;
+        }
+        // the runtime stack owns the local and the alloca only borrows: an immediate can
+        // be cached as is, a heap node is retained by the reload tracker instead of the
+        // caller's reference, which is released here
+        llvm::Value* in_range = builder->CreateAnd(
+                builder->CreateICmpSGE(result, llvm::ConstantInt::get(i64_type, INT48_MIN)),
+                builder->CreateICmpSLE(result, llvm::ConstantInt::get(i64_type, INT48_MAX)));
+        llvm::BasicBlock* immediate_bb = llvm::BasicBlock::Create(ctx, "fused_int_cache_immediate",
+                llvm_func);
+        llvm::BasicBlock* heap_bb = llvm::BasicBlock::Create(ctx, "fused_int_cache_heap", llvm_func);
+        llvm::BasicBlock* done_bb = llvm::BasicBlock::Create(ctx, "fused_int_cache_done", llvm_func);
+        builder->CreateCondBr(in_range, immediate_bb, heap_bb);
+
+        builder->SetInsertPoint(immediate_bb);
+        builder->CreateStore(boxed, alloca_it->second);
+        builder->CreateBr(done_bb);
+
+        builder->SetInsertPoint(heap_bb);
+        retainLocalCacheValueIntern(key, alloca_it->second, boxed, module, llvm_func);
+        release_fused_boxed_int(boxed);
+        builder->CreateBr(done_bb);
+
+        builder->SetInsertPoint(done_bb);
+        markLocalCacheFresh(key, llvm_func);
+        return boxed;
+    };
+
     auto assign_local_int_for_fused = [&](LocalVar* local, const void* key,
             std::unordered_map<const void*, llvm::Value*>::iterator alloca_it,
             llvm::Value* result) {
@@ -12111,26 +12178,24 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
                 builder->CreateCall(assign_fn, {var_as_ptr, boxed, xsink_arg});
             }
+            // the closure variable took its own reference
+            release_fused_boxed_int(boxed);
             return;
         }
 
-        bool is_native = native_int_locals.count(key) > 0;
         bool is_ir_only = ir_only_locals_set && ir_only_locals_set->count(key);
         llvm::Value* boxed = nullptr;
-
         if (alloca_it != local_allocas.end()) {
-            if (is_native) {
-                builder->CreateStore(result, alloca_it->second);
-            } else {
-                boxed = boxIntInline(result);
-                builder->CreateStore(boxed, alloca_it->second);
-            }
-            markLocalCacheFresh(key, llvm_func);
+            boxed = publish_fused_int(key, alloca_it, result,
+                is_ir_only || fast_entry_param_allocas_by_local.count(key));
             if (is_ir_only) {
                 return;
             }
         }
 
+        // a value published to the alloca stays owned by it (or by the local's reload
+        // tracker) across the runtime assignment; otherwise this reference is our own
+        bool release_boxed = !boxed;
         if (!boxed) {
             boxed = boxIntInline(result);
         }
@@ -12149,6 +12214,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     reinterpret_cast<uint64_t>(local));
             llvm::Value* var_as_ptr = builder->CreateIntToPtr(var_ptr, ptr_type);
             builder->CreateCall(assign_fn, {var_as_ptr, boxed, xsink_arg});
+        }
+        if (release_boxed) {
+            // the runtime local took its own reference
+            release_fused_boxed_int(boxed);
         }
     };
 
@@ -12173,12 +12242,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     {builder->CreateIntToPtr(var_ptr, ptr_type), delta, xsink_arg});
         }
         if (alloca_it != local_allocas.end()) {
-            if (native_int_locals.count(key)) {
-                builder->CreateStore(result, alloca_it->second);
-            } else {
-                builder->CreateStore(boxIntInline(result), alloca_it->second);
-            }
-            markLocalCacheFresh(key, llvm_func);
+            publish_fused_int(key, alloca_it, result,
+                fast_entry_param_allocas_by_local.count(key) > 0);
         }
         emitExceptionCheck(module, llvm_func, source_inst);
         return result;

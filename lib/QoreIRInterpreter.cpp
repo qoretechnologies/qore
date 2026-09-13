@@ -8996,15 +8996,17 @@ load_local_done:
                     }
                 }
                 int64 result_val = target_val + source_val;
-                // Update slot cache (always)
+                // Update slot cache (always); a result outside the immediate int range is a heap
+                // value, so the slot must release the value it replaces
                 if (fused_inst->target_slot_id < locals_slot_cache.size()) {
+                    locals_slot_cache[fused_inst->target_slot_id].discard(xsink);
                     locals_slot_cache[fused_inst->target_slot_id] = QoreValue(result_val);
                 }
                 // Write through to thread-local variable only if not IR-only
                 if (!fused_inst->target_ir_only) {
                     if (fused_inst->target->closureUse()) {
                         // Closure-use variable: write through cvstack, not lvstack
-                        assignClosureVarValue(fused_inst->target, QoreValue(result_val), xsink);
+                        assignClosureVarValueTransfer(fused_inst->target, QoreValue(result_val), xsink);
                         if (xsink && *xsink) {
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
                             cleanupLocalCaches();
@@ -9020,16 +9022,16 @@ load_local_done:
                         if (lvv) {
                             discard(lvv->val.assign(result_val), xsink);
                         } else {
-                            assignLocalVarValue(fused_inst->target, QoreValue(result_val), xsink);
+                            assignLocalVarValueTransfer(fused_inst->target, QoreValue(result_val), xsink);
                         }
                     } else {
-                        assignLocalVarValue(fused_inst->target, QoreValue(result_val), xsink);
+                        assignLocalVarValueTransfer(fused_inst->target, QoreValue(result_val), xsink);
                     }
                 }
                 markParentSlotDirty(fused_inst->target_slot_id);
                 // Set result value
                 if (fused_inst->result.isValid()) {
-                    setValueSlot(values, fused_inst->result.id, QoreValue(result_val), xsink);
+                    setOwnedValueSlot(values, cleanup, fused_inst->result.id, QoreValue(result_val), xsink);
                 }
                 ++ip;
                 break;
@@ -9041,12 +9043,13 @@ load_local_done:
                     int64_t result_val = 0;
                     if (incrementClosureVarIntFast(fused_inst->local, fused_inst->delta, result_val, xsink)) {
                         if (fused_inst->slot_id < locals_slot_cache.size()) {
+                            locals_slot_cache[fused_inst->slot_id].discard(xsink);
                             locals_slot_cache[fused_inst->slot_id] = QoreValue(result_val);
                         }
                         updateClosureCacheInt(fused_inst->local, result_val);
                         markParentSlotDirty(fused_inst->slot_id);
                         if (fused_inst->result.isValid()) {
-                            setValueSlot(values, fused_inst->result.id, QoreValue(result_val), xsink);
+                            setOwnedValueSlot(values, cleanup, fused_inst->result.id, QoreValue(result_val), xsink);
                         }
                         ++ip;
                         break;
@@ -9084,15 +9087,17 @@ load_local_done:
                     }
                 }
                 int64 result_val = local_val + fused_inst->delta;
-                // Update slot cache (always)
+                // Update slot cache (always); a result outside the immediate int range is a heap
+                // value, so the slot must release the value it replaces
                 if (fused_inst->slot_id < locals_slot_cache.size()) {
+                    locals_slot_cache[fused_inst->slot_id].discard(xsink);
                     locals_slot_cache[fused_inst->slot_id] = QoreValue(result_val);
                 }
                 // Write through to thread-local variable only if not IR-only
                 if (!fused_inst->ir_only) {
                     if (fused_inst->local->closureUse()) {
                         // Closure-use variable: write through cvstack, not lvstack
-                        assignClosureVarValue(fused_inst->local, QoreValue(result_val), xsink);
+                        assignClosureVarValueTransfer(fused_inst->local, QoreValue(result_val), xsink);
                         if (xsink && *xsink) {
                             cleanupValues(values, cleanup, xsink, true, cleanup_log);
                             cleanupLocalCaches();
@@ -9108,16 +9113,16 @@ load_local_done:
                         if (lvv) {
                             discard(lvv->val.assign(result_val), xsink);
                         } else {
-                            assignLocalVarValue(fused_inst->local, QoreValue(result_val), xsink);
+                            assignLocalVarValueTransfer(fused_inst->local, QoreValue(result_val), xsink);
                         }
                     } else {
-                        assignLocalVarValue(fused_inst->local, QoreValue(result_val), xsink);
+                        assignLocalVarValueTransfer(fused_inst->local, QoreValue(result_val), xsink);
                     }
                 }
                 markParentSlotDirty(fused_inst->slot_id);
                 // Set result value
                 if (fused_inst->result.isValid()) {
-                    setValueSlot(values, fused_inst->result.id, QoreValue(result_val), xsink);
+                    setOwnedValueSlot(values, cleanup, fused_inst->result.id, QoreValue(result_val), xsink);
                 }
                 ++ip;
                 break;

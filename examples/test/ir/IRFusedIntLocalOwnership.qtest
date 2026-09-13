@@ -1,0 +1,157 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../../../qlib/QUnit.qm
+%requires ../../../qlib/FsUtil.qm
+
+%exec-class IRFusedIntLocalOwnershipTest
+
+#! Regression coverage for large int results of fused local int updates
+/** With NaN boxing, an int outside the 48-bit immediate range is a heap node.  Fused local
+    updates (<tt>++x</tt>, <tt>x += n</tt>) on boxed int locals leaked such nodes:
+
+    - LLVM code stored the new boxed value into the local's alloca without releasing the value
+      it replaced, and for runtime-stack locals cached a value nothing owned
+    - the IR interpreter overwrote its local slot cache without releasing the old value, passed
+      a temporary to reference-taking assignments and left the result slot out of cleanup
+    - binding a reference argument read the lvalue back through a value accessor that creates
+      a new heap node for a large int, in every tier including AST
+
+    The fixture checks the computed values in every tier and AOT, and measures resident set
+    growth over many updates: each leaked node is a separate allocation, so a leak grows by
+    megabytes while correct code reuses freed nodes.
+*/
+class IRFusedIntLocalOwnershipTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string fixture;
+
+        #! forces promotion on the first call so ir/tiered also run the native code
+        const Promote = "QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 ";
+
+        #! exec mode -> extra environment
+        const Tiers = (
+            ("ast", ""),
+            ("ir", ""),
+            ("ir", Promote),
+            ("jit", ""),
+            ("jit", Promote),
+            ("tiered", ""),
+            ("tiered", Promote),
+        );
+
+        const Big = 1 << 50;
+        const Edge = (1 << 47) - 2;
+
+        #! resident set growth that no leak-free run approaches; a leak of the 200000 updates grows by megabytes
+        const MaxGrowthKb = 2048;
+    }
+
+    constructor() : QUnit::Test("IRFusedIntLocalOwnershipTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        fixture = get_script_dir() + "/IRFusedIntLocalOwnershipScenario.qr";
+
+        foreach list<string> tier in (Tiers) {
+            string mode = tier[0];
+            string env = tier[1];
+            string label = mode + (env ? " (promoted)" : "");
+            addTestCase("large int values: " + label, sub () {
+                checkValues(mode, env);
+            });
+            addTestCase("large int updates do not leak: " + label, sub () {
+                checkGrowth(mode, env);
+            });
+        }
+        addTestCase("large int values: AOT", \testAot());
+
+        set_return_value(main());
+    }
+
+    private static string expected() {
+        # optional: two +2 loops across the 48-bit boundary, then -4 steps back below it
+        list<int> optional = map Edge + 2 * ($1 + 1), xrange(4);
+        optional += map Edge + 4 - 4 * $1, xrange(4);
+        list<int> soft = map Big + 2 * ($1 + 1), xrange(3);
+        list<int> auto_values = map Big + 3 * ($1 + 1), xrange(3);
+        string rv;
+        for (int i = 0; i < 3; ++i) {
+            rv += sprintf("optional[%d]: %y\n", i, optional);
+            rv += sprintf("soft[%d]: %y\n", i, soft);
+            rv += sprintf("auto[%d]: %y\n", i, auto_values);
+            rv += sprintf("parameter[%d]: %y %y\n", i, Big + 6, Edge + 6);
+            # sum of (Big + i + 6) - Big for i = 0..2
+            rv += sprintf("direct[%d]: %d\n", i, 21);
+            rv += sprintf("runtime-stack[%d]: %y\n", i, Big + 6);
+            rv += sprintf("closure[%d]: %y\n", i, Big + 6);
+        }
+        return rv;
+    }
+
+    private string run(string mode, string env, *string arg) {
+        # synchronous compilation makes promotion deterministic instead of racing the compiler
+        return backquote(sprintf("%sQORE_JIT_SYNC_COMPILE=1 LD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=%s %s%s 2>&1", env, shellQuote(libqore_dir), shellQuote(qore_bin), mode,
+            shellQuote(fixture), arg ? " " + arg : ""));
+    }
+
+    private checkValues(string mode, string env) {
+        assertEq(expected(), run(mode, env), sprintf("exec-mode=%s %s output", mode, env));
+    }
+
+    private checkGrowth(string mode, string env) {
+        if (!is_readable("/proc/self/status")) {
+            testSkip("resident set size is only measured through /proc");
+        }
+        string output = run(mode, env, "rss");
+        list<string> lines = output.split("\n");
+        assertEq(4, lines.size(), "one growth measurement per update pattern: " + output);
+        foreach string line in (lines) {
+            *list<*string> m = (line =~ x/^([a-z-]+): (-?[0-9]+)$/);
+            assertTrue(exists m, "growth line format: " + line);
+            if (m) {
+                int growth = m[1].toInt();
+                assertTrue(growth < MaxGrowthKb, sprintf("exec-mode=%s %s: %s grew by %d kB", mode, env, m[0],
+                    growth));
+            }
+        }
+    }
+
+    testAot() {
+        if (!is_file(qcc_bin) && !backquote("command -v " + qcc_bin + " 2>/dev/null")) {
+            testSkip("qcc not available");
+        }
+        TmpDir tmp("qore-ir-fused-int-local-ownership-");
+        string exe = tmp.path + "/ownership";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1", shellQuote(libqore_dir),
+            shellQuote(qcc_bin), shellQuote(exe), shellQuote(fixture)));
+        assertTrue(is_file(exe), "AOT compile produced an executable: " + compile_out);
+        assertEq(expected(), backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", shellQuote(libqore_dir),
+            shellQuote(exe))), "AOT output");
+        if (is_readable("/proc/self/status")) {
+            string output = backquote(sprintf("LD_LIBRARY_PATH=%s %s rss 2>&1", shellQuote(libqore_dir),
+                shellQuote(exe)));
+            foreach string line in (output.split("\n")) {
+                *list<*string> m = (line =~ x/^([a-z-]+): (-?[0-9]+)$/);
+                assertTrue(exists m, "AOT growth line format: " + line);
+                if (m) {
+                    assertTrue(m[1].toInt() < MaxGrowthKb, sprintf("AOT: %s grew by %s kB", m[0], m[1]));
+                }
+            }
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}

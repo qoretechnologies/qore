@@ -1337,6 +1337,12 @@ private:
     void retainLocalCacheValue(const void* key, llvm::Value* value, llvm::Module& module,
             llvm::Function* llvm_func, bool honor_reload_exempt = true);
 
+    // Stores a new reference to value in the local's alloca and reload tracker without
+    // checking whether the local can be reloaded; the tracker's previous value is released
+    // one cycle later, so SSA values still borrowing it stay valid.
+    void retainLocalCacheValueIntern(const void* key, llvm::Value* local_alloca, llvm::Value* value,
+            llvm::Module& module, llvm::Function* llvm_func);
+
     // Clear the reload tracker for a specific local, releasing the +1 reference
     // held from a previous reloadLocalFromRuntime() call.  Called before lvalue
     // compound operations (+=, -=, etc.) so that the container's refcount drops to 1,

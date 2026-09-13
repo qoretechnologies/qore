@@ -699,6 +699,14 @@ public:
         return val ? val->getInternalNode() : qv->getInternalNode();
     }
 
+    //! returns the node stored in the lvalue, or nullptr if it holds none
+    /** unlike getValue(), this never creates a value: a large int stored natively is returned by getValue() as a
+        new heap node that the caller would have to release
+    */
+    DLLLOCAL const AbstractQoreNode* getInternalNode() const {
+        return val ? val->getInternalNode() : qv->getInternalNode();
+    }
+
     DLLLOCAL const char* getTypeName() const {
         return val ? val->getTypeName() : qv->getTypeName();
     }

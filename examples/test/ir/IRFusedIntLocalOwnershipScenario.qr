@@ -1,0 +1,170 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Fixture for IRFusedIntLocalOwnership.qtest: fused local int updates (++x, x += n) on boxed int
+# locals whose values cross the 48-bit immediate range in both directions, so compiled code
+# must hand each heap-boxed result to the local's owner and release the value it replaces.
+#
+# Without arguments it prints the computed values.  With "rss" it repeats each update pattern
+# and prints the resident set growth of a promoted call in kB: every leaked large int is a
+# separate heap node, so a leak grows by megabytes while correct code reuses freed nodes.
+
+const Big = 1 << 50;
+const Edge = (1 << 47) - 2;
+
+list<auto> sub bodyOptional() {
+    list<auto> rv;
+    *int x = Edge;
+    for (int i = 0; i < 4; ++i) {
+        x += 1;
+        ++x;
+        rv += x;
+    }
+    for (int i = 0; i < 4; ++i) {
+        x -= 3;
+        --x;
+        rv += x;
+    }
+    return rv;
+}
+
+list<auto> sub bodySoft() {
+    list<auto> rv;
+    softint y = Big;
+    for (int i = 0; i < 3; ++i) {
+        y += 1;
+        y++;
+        rv += y;
+    }
+    return rv;
+}
+
+list<auto> sub bodyAuto() {
+    list<auto> rv;
+    auto z = Big;
+    for (int i = 0; i < 3; ++i) {
+        z += 2;
+        ++z;
+        rv += z;
+    }
+    return rv;
+}
+
+*int sub parameter(*int x) {
+    for (int i = 0; i < 3; ++i) {
+        x += 1;
+        ++x;
+    }
+    return x;
+}
+
+# JIT-to-JIT calls can bind the parameter through a direct fast entry
+int sub directCaller() {
+    int sum = 0;
+    for (int i = 0; i < 3; ++i) {
+        sum += parameter(Big + i) - Big;
+    }
+    return sum;
+}
+
+sub touch(reference<*int> r) {
+    r = r + 0;
+}
+
+# taking a reference keeps the local on the runtime stack
+*int sub runtimeStack() {
+    *int x = Big;
+    for (int i = 0; i < 3; ++i) {
+        x += 1;
+        ++x;
+    }
+    touch(\x);
+    return x;
+}
+
+*int sub closureCaptured() {
+    *int x = Big;
+    code c = *int sub () { return x; };
+    for (int i = 0; i < 3; ++i) {
+        x += 1;
+        ++x;
+    }
+    return c();
+}
+
+const RssIterations = 200000;
+
+int sub rssKb() {
+    *list<*string> m = (ReadOnlyFile::readTextFile("/proc/self/status") =~ x/VmRSS:\s+([0-9]+)/);
+    return m[0].toInt();
+}
+
+*int sub rssBody() {
+    *int x = Big;
+    for (int i = 0; i < RssIterations; ++i) {
+        x += 1;
+        ++x;
+    }
+    return x;
+}
+
+*int sub rssParameter(*int x) {
+    for (int i = 0; i < RssIterations; ++i) {
+        x += 1;
+        ++x;
+    }
+    return x;
+}
+
+int sub rssDirect() {
+    return rssParameter(Big) - Big;
+}
+
+*int sub rssRuntimeStack() {
+    *int x = Big;
+    for (int i = 0; i < RssIterations; ++i) {
+        ++x;
+        touch(\x);
+    }
+    return x;
+}
+
+*int sub rssClosureCaptured() {
+    *int x = Big;
+    code c = *int sub () { return x; };
+    for (int i = 0; i < RssIterations; ++i) {
+        x += 1;
+        ++x;
+    }
+    return c();
+}
+
+if (ARGV[0] == "rss") {
+    hash<string, code> cases = {
+        "body": \rssBody(),
+        "direct": \rssDirect(),
+        "runtime-stack": \rssRuntimeStack(),
+        "closure": \rssClosureCaptured(),
+    };
+    foreach hash<auto> c in (cases.pairIterator()) {
+        code f = c.value;
+        # the first call promotes and compiles the function; measure a later call
+        f();
+        int before = rssKb();
+        f();
+        printf("%s: %d\n", c.key, rssKb() - before);
+    }
+    return;
+}
+
+for (int i = 0; i < 3; ++i) {
+    printf("optional[%d]: %y\n", i, bodyOptional());
+    printf("soft[%d]: %y\n", i, bodySoft());
+    printf("auto[%d]: %y\n", i, bodyAuto());
+    printf("parameter[%d]: %y %y\n", i, parameter(Big), parameter(Edge));
+    printf("direct[%d]: %d\n", i, directCaller());
+    printf("runtime-stack[%d]: %y\n", i, runtimeStack());
+    printf("closure[%d]: %y\n", i, closureCaptured());
+}

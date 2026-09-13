@@ -333,6 +333,28 @@ destructor timing depends on these rules. `IRBlockScopedObjectLifetime.qtest`
 checks exact constructor/destructor order for these shapes in every tier and in
 AOT.
 
+## Large Int Ownership in Fused Local Updates
+
+With NaN boxing an int outside the 48-bit immediate range is a heap node, so any
+code that produces a boxed int must give that reference an owner. Fused local
+int updates (`AddAssignLocalInt`, `IncrementLocalInt`) follow `StoreLocal`:
+
+- LLVM code hands a boxed result to whatever owns the local's value: the alloca
+  of an IR-only local or fast-entry parameter (releasing the value it replaces),
+  or the pre-instantiated cleanup slot the alloca borrows from. For a
+  runtime-stack local the alloca only caches: an immediate is stored as is, a
+  heap node is retained by the local's reload tracker with the usual deferred
+  release, and the runtime assignment takes its own reference.
+- The IR interpreter releases the slot-cache value it overwrites, uses the
+  transferring assignment helpers so the variable consumes the new value, and
+  registers the result slot for cleanup.
+
+Code that only inspects an lvalue must not read it through `getValue()`, which
+creates a new heap node for a large int stored natively;
+`LValueHelper::getInternalNode()` returns the stored node without creating one.
+`IRFusedIntLocalOwnership.qtest` checks values across the immediate boundary and
+bounds resident set growth over repeated updates in every tier and in AOT.
+
 ## Large Function Bodies and Cleanup Scaling
 
 Every per-statement exception and thread-exit check in a function branches to
