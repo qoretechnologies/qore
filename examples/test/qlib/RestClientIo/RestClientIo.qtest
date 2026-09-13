@@ -3541,13 +3541,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         that ended only when the caller gave up, with the connection error lost.
     */
     testAsyncRequestConnectionRefused() {
-        # bound but not listening: every connection is refused
-        Socket bound();
-        bound.bindINET("127.0.0.1", 0, True);
+        int port = reserveUnusedPort();
         HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"max_request_retries": 1});
         on_exit mgr.closeAll();
         RestClientIo::RestClientIo rest({
-            "url": sprintf("http://127.0.0.1:%d", bound.getSocketInfo().port),
+            "url": sprintf("http://127.0.0.1:%d", port),
             "data": "json",
         }, mgr);
 
@@ -3562,12 +3560,11 @@ Do+Sl1gfqlpgpszQaOMjR4M=
 
     #! Regression: a caller-driven poll request whose connection is refused ends with the connection error
     testPollRequestConnectionRefused() {
-        Socket bound();
-        bound.bindINET("127.0.0.1", 0, True);
+        int port = reserveUnusedPort();
         HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"max_request_retries": 0});
         on_exit mgr.closeAll();
         RestClientIo::RestClientIo rest({
-            "url": sprintf("http://127.0.0.1:%d", bound.getSocketInfo().port),
+            "url": sprintf("http://127.0.0.1:%d", port),
             "data": "json",
         }, mgr);
 
@@ -3576,9 +3573,27 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         on_exit AsyncIoController::setLogger(NOTHING);
 
         *hash<ExceptionInfo> caught = drivePingOp(rest.startPollRequest("GET", "/refused"));
-        assertEq("HTTPCLIENT-CONNECT-ERROR", caught.err);
+        assertEq("HTTPCLIENT-CONNECT-ERROR", caught.err, sprintf("%s: %s", caught.err, caught.desc));
         assertRegex("Connection refused", caught.desc);
         assertEq(1, countConnectionSubmits(cap), "retries are disabled");
+    }
+
+    #! Returns a port on the loopback interface with nothing listening on it
+    /** The port is reserved and released again: a socket kept bound without listening is refused promptly on
+        Linux, but on Darwin the connection is not refused and only fails when it times out.
+    */
+    private static int reserveUnusedPort() {
+        int port;
+        {
+            Socket probe();
+            probe.bindINET("127.0.0.1", 0, True);
+            port = probe.getSocketInfo().port;
+            probe.close();
+        }
+        if (port <= 0) {
+            throw "TEST-ERROR", sprintf("no ephemeral port was reserved: %y", port);
+        }
+        return port;
     }
 
     #! Returns the number of connections the connection manager submitted to the async I/O controller

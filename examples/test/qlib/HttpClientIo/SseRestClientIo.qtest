@@ -383,13 +383,20 @@ class SseRestClientIoTest inherits Test {
         thousands of connections were attempted.
     */
     testRestObserveSseConnectionRefused() {
-        # bound but not listening: every connection is refused
-        Socket bound();
-        bound.bindINET("127.0.0.1", 0, True);
+        # reserve a port and release it again, so nothing listens on it: a socket kept bound without listening
+        # is refused promptly on Linux, but on Darwin the connection only fails when it times out
+        int port;
+        {
+            Socket probe();
+            probe.bindINET("127.0.0.1", 0, True);
+            port = probe.getSocketInfo().port;
+            probe.close();
+        }
+        assertGt(0, port, "an ephemeral port was reserved");
         HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"max_request_retries": 1});
         on_exit mgr.closeAll();
         RestClientIo rest({
-            "url": sprintf("http://127.0.0.1:%d", bound.getSocketInfo().port),
+            "url": sprintf("http://127.0.0.1:%d", port),
         }, mgr);
 
         ControllerLogCapture cap();
@@ -407,7 +414,8 @@ class SseRestClientIoTest inherits Test {
         assertEq(HttpClientStreamingIo::EVENT_SSE_CLOSED, evt.event_id);
         assertEq("startup-error", evt.data.reason);
         assertEq("HTTPCLIENT-CONNECT-ERROR", evt.data.error.err);
-        assertRegex("Connection refused", evt.data.error.desc);
+        assertRegex("Connection refused", evt.data.error.desc, sprintf("%s: %s", evt.data.error.err,
+            evt.data.error.desc));
         assertEq(2, cap.countConnectionSubmits(), "one connection attempt and one retry");
     }
 
