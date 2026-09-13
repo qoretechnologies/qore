@@ -1,0 +1,143 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/AsyncSocketIo
+
+%exec-class AsyncIoReleaseOffIoThreadTest
+
+#! Destroyed with the poll operation that owns it; its destructor waits for another owner's callback
+/** This is the shape of the \c HttpClientConnectionManager destructor: \c closeAll() -> \c flushCallbacksByOwner().
+    The callback it waits for issues a controller command, which needs the I/O thread, so if the destructor runs on
+    the I/O thread each waits for the other.
+*/
+class ReleaseProbe {
+    private {
+        AsyncSocketIo::AsyncSocketIoController ctl;
+        string flush_owner;
+        Counter entered;
+        Counter released;
+    }
+
+    constructor(AsyncSocketIo::AsyncSocketIoController ctl, string flush_owner, Counter entered, Counter released) {
+        self.ctl = ctl;
+        self.flush_owner = flush_owner;
+        self.entered = entered;
+        self.released = released;
+    }
+
+    destructor() {
+        entered.dec();
+        ctl.flushCallbacksByOwner(flush_owner);
+        released.dec();
+    }
+}
+
+#! Waits on a notifier that is never signaled until its owner is canceled
+class WaitingPollOperation inherits Qore::AbstractPollOperation {
+    private {
+        EventNotifier notifier;
+        ReleaseProbe probe;
+    }
+
+    constructor(EventNotifier notifier, ReleaseProbe probe) {
+        self.notifier = notifier;
+        self.probe = probe;
+    }
+
+    string getGoal() {
+        return "wait";
+    }
+
+    string getState() {
+        return "waiting";
+    }
+
+    bool goalReached() {
+        return False;
+    }
+
+    *hash<SocketPollInfo> continuePoll() {
+        return <SocketPollInfo>{
+            "events": SOCK_POLLIN,
+            "socket": notifier,
+        };
+    }
+}
+
+#! Regression coverage: the async I/O thread never runs Qore destructors
+/** A poll operation submitted without keeping a reference is owned by the controller alone.  When a cancel
+    command is processed, the I/O thread's cleanup of the controller entry drops the last references to the
+    operation and everything it holds, which used to run their destructors on the I/O thread.  A destructor that
+    waits for the controller then stalled the I/O thread and every other controller user with it, hanging
+    shutdowns that stop polling connection monitors.
+*/
+class AsyncIoReleaseOffIoThreadTest inherits QUnit::Test {
+    constructor() : Test("AsyncIoReleaseOffIoThreadTest", "1.0", \ARGV) {
+        addTestCase("canceled operation released off the I/O thread", \testCancelRelease());
+        set_return_value(main());
+    }
+
+    testCancelRelease() {
+        AsyncSocketIo::AsyncSocketIoController ctl();
+        Counter destructor_entered(1);
+        Counter released(1);
+
+        # an owner with a callback still running: it waits until the probe's destructor has started and then
+        # issues a controller command
+        EventNotifier busy_notifier();
+        Counter callback_entered(1);
+        Counter callback_done(1);
+        ctl.submit(<SocketPollOperationInfo>{
+            "sock": busy_notifier,
+            "spop": new DelegatingPollOperation(new AsyncSocketIo::NotifierPollOperation(busy_notifier),
+                sub (hash<SocketPollResultInfo> result) {
+                    on_exit callback_done.dec();
+                    callback_entered.dec();
+                    destructor_entered.waitForZero();
+                    ctl.cancelByOwner("release-probe-unrelated-owner");
+                }),
+            "owner": "release-probe-busy",
+        });
+        busy_notifier.notify();
+        assertEq(0, callback_entered.waitForZero(30s), "the busy owner's callback started");
+
+        # neither the operation nor its result queue is kept: the controller holds the last references
+        EventNotifier notifier();
+        ctl.submit(<SocketPollOperationInfo>{
+            "sock": notifier,
+            "spop": new WaitingPollOperation(notifier, new ReleaseProbe(ctl, "release-probe-busy",
+                destructor_entered, released)),
+            "owner": "release-probe",
+        });
+
+        Counter canceled(1);
+        background sub () {
+            on_exit canceled.dec();
+            ctl.cancelByOwner("release-probe");
+        }();
+
+        # the bounds only turn a stalled I/O thread into a failure instead of a hung test
+        assertEq(0, released.waitForZero(30s), "the operation's destructor completed");
+        assertEq(0, callback_done.waitForZero(30s), "the busy owner's callback completed");
+        assertEq(0, canceled.waitForZero(30s), "the cancel command completed");
+
+        # the controller still serves other work afterwards
+        EventNotifier after();
+        Counter completed(1);
+        ctl.submit(<SocketPollOperationInfo>{
+            "sock": after,
+            "spop": new DelegatingPollOperation(new AsyncSocketIo::NotifierPollOperation(after),
+                sub (hash<SocketPollResultInfo> result) {
+                    completed.dec();
+                }),
+            "owner": "release-probe-after",
+        });
+        after.notify();
+        assertEq(0, completed.waitForZero(30s), "a later operation completes");
+    }
+}

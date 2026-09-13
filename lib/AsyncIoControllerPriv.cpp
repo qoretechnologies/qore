@@ -354,6 +354,38 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
         clear_socket_async_io_owner(sock, xsink);
         socket_async_io = false;
     }
+    // the controller's references may be the last ones to the poll operation and everything it holds, and
+    // releasing them can run Qore destructors, which must not run on the I/O thread
+    AsyncIoDeferredRelease refs;
+    refs.sock_obj = sock_obj;
+    refs.sock = sock;
+    refs.spop_obj = spop_obj;
+    refs.poll_info = poll_info;
+    refs.other = other;
+    refs.queue = queue;
+    refs.spop_base = spop_base;
+    sock_obj = nullptr;
+    sock = nullptr;
+    spop_obj = nullptr;
+    poll_info = nullptr;
+    other = nullptr;
+    queue = nullptr;
+    spop_base = nullptr;
+    if (controller) {
+        controller->releaseOffIoThread(refs, xsink);
+    } else {
+        refs.release(xsink);
+    }
+}
+
+QoreProgram* AsyncIoDeferredRelease::getProgram() const {
+    if (spop_obj) {
+        return spop_obj->getProgram();
+    }
+    return sock_obj ? sock_obj->getProgram() : nullptr;
+}
+
+void AsyncIoDeferredRelease::release(ExceptionSink* xsink) {
     if (sock_obj) {
         sock_obj->deref(xsink);
         sock_obj = nullptr;
@@ -382,6 +414,22 @@ void AsyncIoControllerPriv::PollInfo::cleanup(ExceptionSink* xsink) {
         spop_base->deref(xsink);
         spop_base = nullptr;
     }
+    udata.discard(xsink);
+    udata = QoreValue();
+}
+
+void AsyncIoControllerPriv::releaseOffIoThread(AsyncIoDeferredRelease& refs, ExceptionSink* xsink) {
+    if (refs.empty()) {
+        return;
+    }
+    if (!on_async_io_thread) {
+        refs.release(xsink);
+        return;
+    }
+    ensureCallDispatcher();
+    std::unique_ptr<AsyncIoDeferredRelease> deferred(new AsyncIoDeferredRelease(refs));
+    refs = AsyncIoDeferredRelease();
+    call_dispatcher.load(std::memory_order_acquire)->dispatchReleaseAsync(deferred.release());
 }
 
 void AsyncIoControllerPriv::snapshotSocketWaitGeneration(PollInfo& pinfo, QoreHashNode* poll_info) {
@@ -594,33 +642,25 @@ void AsyncIoControllerPriv::cleanupAbandonedCommand(Command& cmd, ExceptionSink*
                 cmd.submit_route_thread_idx = -1;
                 cmd.submit_route_sock_hash.clear();
             }
-            if (cmd.submit_sock_obj) {
-                cmd.submit_sock_obj->deref(xsink);
+            {
+                // an abandoned submission can hold the last references to its poll operation; see
+                // PollInfo::cleanup()
+                AsyncIoDeferredRelease refs;
+                refs.sock_obj = cmd.submit_sock_obj;
+                refs.sock = cmd.submit_sock;
+                refs.spop_obj = cmd.submit_spop_obj;
+                refs.poll_info = cmd.submit_poll_info;
+                refs.other = cmd.submit_other;
+                refs.queue = cmd.submit_queue;
+                refs.spop_base = cmd.submit_spop_base;
                 cmd.submit_sock_obj = nullptr;
-            }
-            if (cmd.submit_sock) {
-                cmd.submit_sock->deref(xsink);
                 cmd.submit_sock = nullptr;
-            }
-            if (cmd.submit_spop_obj) {
-                cmd.submit_spop_obj->deref(xsink);
                 cmd.submit_spop_obj = nullptr;
-            }
-            if (cmd.submit_spop_base) {
-                cmd.submit_spop_base->deref(xsink);
                 cmd.submit_spop_base = nullptr;
-            }
-            if (cmd.submit_poll_info) {
-                cmd.submit_poll_info->deref(xsink);
                 cmd.submit_poll_info = nullptr;
-            }
-            if (cmd.submit_other) {
-                cmd.submit_other->deref(xsink);
                 cmd.submit_other = nullptr;
-            }
-            if (cmd.submit_queue) {
-                cmd.submit_queue->deref(xsink);
                 cmd.submit_queue = nullptr;
+                releaseOffIoThread(refs, xsink);
             }
             break;
         }
@@ -757,7 +797,18 @@ void QoreCallDispatcher::dispatchPollCompleteAsync(QoreObject* spop_obj, const s
     enqueue(std::move(item));
 }
 
+void QoreCallDispatcher::dispatchReleaseAsync(AsyncIoDeferredRelease* release) {
+    AsyncWorkItem item{nullptr, nullptr, nullptr, nullptr, DT_RELEASE, nullptr, std::string()};
+    item.release = release;
+    enqueue(std::move(item));
+}
+
 void QoreCallDispatcher::releaseWorkItem(AsyncWorkItem& item, ExceptionSink* xsink) {
+    if (item.release) {
+        item.release->release(xsink);
+        delete item.release;
+        item.release = nullptr;
+    }
     if (item.controller) {
         if (item.type == DT_CONTINUE_POLL) {
             // Tell the I/O thread the operation is done so it drops its cache entry;
@@ -807,8 +858,13 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
     // destruction on a worker thread, racing with the main thread's
     // module cleanup path.  A dep ref keeps the struct alive without
     // blocking the data-cleanup path.
-    if (item.spop_obj) {
-        item.pgm = item.spop_obj->getProgram();
+    // an item re-queued by the discard path below already holds its program dependency reference
+    if (!item.pgm) {
+        if (item.spop_obj) {
+            item.pgm = item.spop_obj->getProgram();
+        } else if (item.release) {
+            item.pgm = item.release->getProgram();
+        }
         if (item.pgm) {
             item.pgm->depRef();
         }
@@ -820,6 +876,8 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
     // destructor calling flushCallbacksByOwner()), which would deadlock on the
     // non-recursive dispatcher lock.
     bool discard = false;
+    // set when an owner-barrier discard happens on the async I/O thread
+    bool release_off_io_thread = false;
     {
         AutoLocker al(m);
 
@@ -852,6 +910,10 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
             // Deliberately NOT counted in active_per_owner: nothing will ever pop
             // this item, so a counted item would hang waitForOwnerIdle() forever.
             discard = true;
+            // Releasing the references can run Qore destructors, which must not run on the I/O thread
+            // (a destructor waiting on the controller would stall it); while workers can still take work, an
+            // owner-barrier discard hands them to a worker as an untracked release item instead.
+            release_off_io_thread = on_async_io_thread && !stopping && !pgm_shutting_down_now;
         } else {
             // Increment per-owner tracking at enqueue time (only for items that are
             // actually queued).  Counting at enqueue — rather than at pop time in the
@@ -888,6 +950,20 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
 
     if (discard) {
         ExceptionSink xsink;
+        if (release_off_io_thread) {
+            if (item.controller) {
+                if (item.type == DT_CONTINUE_POLL) {
+                    // see releaseWorkItem()
+                    item.controller->enqueueContinuePollResult(item.key, nullptr, nullptr, true);
+                }
+                item.controller->deref(&xsink);
+                item.controller = nullptr;
+            }
+            item.type = DT_RELEASE;
+            item.owner.clear();
+            enqueue(std::move(item));
+            return;
+        }
         releaseWorkItem(item, &xsink);
     }
 }
@@ -905,6 +981,11 @@ void QoreCallDispatcher::stop(ExceptionSink* xsink) {
 
     // Clean up any remaining async work items
     for (auto& item : async_queue) {
+        if (item.release) {
+            item.release->release(xsink);
+            delete item.release;
+            item.release = nullptr;
+        }
         if (item.spop_obj) {
             item.spop_obj->deref(xsink);
         }
@@ -1154,6 +1235,8 @@ static const char* getDispatchTypeName(QoreCallDispatcher::DispatchType type) {
             return "onStreamData";
         case QoreCallDispatcher::DT_POLL_COMPLETE_NOTIFY:
             return "onPollComplete";
+        case QoreCallDispatcher::DT_RELEASE:
+            return "release";
     }
     return "unknown";
 }
@@ -1408,6 +1491,9 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                         &work_xsink), &work_xsink);
                     break;
                 }
+                case DT_RELEASE:
+                    // nothing to call; the references are released below
+                    break;
             }
         }
 
@@ -1466,6 +1552,11 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             async_item.owner.clear();  // make the post-deref decrement a no-op
         }
 
+        if (async_item.release) {
+            async_item.release->release(xsink);
+            delete async_item.release;
+            async_item.release = nullptr;
+        }
         if (async_item.spop_obj) {
             async_item.spop_obj->deref(xsink);
         }
@@ -5336,7 +5427,12 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
                     call_dispatcher.load(std::memory_order_acquire)->dispatchAsync(cb_snapshot, args);
                 }
             }
-            te.udata.discard(xsink);
+            // the dispatched callback holds its own reference, but it can finish first; a closure can hold the
+            // last references to arbitrary objects
+            AsyncIoDeferredRelease refs;
+            refs.udata = te.udata;
+            te.udata = QoreValue();
+            releaseOffIoThread(refs, xsink);
         }
         if (cb_snapshot) {
             cb_snapshot->deref(xsink);
@@ -5420,7 +5516,10 @@ void AsyncIoControllerPriv::ioThread(IoThreadContext& t, ExceptionSink* xsink) {
         // Clean up any remaining timers
         for (auto& [id, tinfo] : timer_info_map) {
             t.loop->cancelTimer(id);
-            tinfo.udata.discard(xsink);
+            AsyncIoDeferredRelease refs;
+            refs.udata = tinfo.udata;
+            tinfo.udata = QoreValue();
+            releaseOffIoThread(refs, xsink);
         }
         timer_info_map.clear();
 
@@ -7259,13 +7358,20 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* spop_obj,
         (int)has_on_complete, (void*)spop_obj, (void*)queue,
         spop_obj ? spop_obj->getClassName() : "null");
     bool dispatch_on_complete = has_on_complete && spop_obj;
+    // the references dropped here can be the last ones; see releaseOffIoThread()
+    auto release_refs = [&](QoreObject* obj, QoreHashNode* hash) {
+        AsyncIoDeferredRelease refs;
+        refs.spop_obj = obj;
+        refs.other = hash;
+        releaseOffIoThread(refs, xsink);
+    };
     if (dispatch_on_complete && !result) {
         // buildResultHash failed — don't dispatch onComplete with null result
         // (the Qore method would receive NOTHING, causing PSEUDO-METHOD-DOES-NOT-EXIST
         // when accessing result members)
         log(QORE_LOG_LEVEL_ERROR, "deliverResult: buildResultHash returned null for %s; "
             "skipping onComplete dispatch", spop_obj->getClassName());
-        spop_obj->deref(xsink);
+        release_refs(spop_obj, nullptr);
         return;
     }
 
@@ -7275,9 +7381,7 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* spop_obj,
             : result;
         queue->push(xsink, queue_result);
         if (!dispatch_on_complete) {
-            if (spop_obj) {
-                spop_obj->deref(xsink);
-            }
+            release_refs(spop_obj, nullptr);
             return;
         }
     }
@@ -7296,12 +7400,7 @@ void AsyncIoControllerPriv::deliverResult(Queue* queue, QoreObject* spop_obj,
             (void*)result, (void*)spop_obj);
         log(QORE_LOG_LEVEL_ERROR, "deliverResult: dropping result for %s — no onComplete "
             "and no queue", spop_obj ? spop_obj->getClassName() : "null");
-        if (spop_obj) {
-            spop_obj->deref(xsink);
-        }
-        if (result) {
-            result->deref(xsink);
-        }
+        release_refs(spop_obj, result);
     }
 }
 

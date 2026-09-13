@@ -48,6 +48,19 @@ Blocking sync wrappers and user Qore code must not run on the I/O thread.  Qore 
 callbacks are worker-dispatched, while the I/O thread only drives controller commands, readiness, and pure C++
 poll-state work.
 
+The rule covers destructors too.  An operation submitted without the caller keeping a reference (for example a
+`DelegatingPollOperation` wrapper) is owned by the controller alone, so the controller's release of its entry can
+be the last reference to the operation and everything it holds.  A destructor reached that way runs arbitrary Qore
+code; one that waits on the controller (`HttpClientConnectionManager::closeAll()` -> `flushCallbacksByOwner()`,
+whose callbacks in turn issue controller commands) can never be satisfied on the I/O thread, which stalls it and
+every other controller user, including shutdown.  The I/O thread therefore never drops such references itself:
+`PollInfo::cleanup()`, abandoned submissions, results that are dropped in `deliverResult()`, owner-barrier discards
+in `QoreCallDispatcher::enqueue()` and timer user data go through `AsyncIoControllerPriv::releaseOffIoThread()`,
+which hands them to a callback worker as a `DT_RELEASE` item.  A release item is not owner-tracked, so no owner
+barrier waits for or discards it; it is released on the calling thread only when the dispatcher is stopping (after
+the I/O threads have exited) or the objects' program is shutting down.  Builtin objects whose destruction is pure
+C++ (e.g. `Promise`, `EventNotifier`) may still be released on the I/O thread.
+
 ## Thread Model
 
 - **I/O thread** — one per controller instance
@@ -1127,7 +1140,7 @@ The **ordering contract** for completing a task is:
 
 ```
 1. Dispatch the task (evalMethod or similar)
-2. Deref captured objects (spop_obj, result, callback, args)
+2. Deref captured objects (a `DT_RELEASE` item's release set, then spop_obj, result, callback, args)
 3. Under m: decrement active_processing AND active_per_program[pgm]; broadcast pgm_idle_cond
 4. Deref async_item.pgm (may trigger Program destruction)
 ```

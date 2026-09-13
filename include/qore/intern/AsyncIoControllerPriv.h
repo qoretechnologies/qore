@@ -85,6 +85,38 @@ DLLLOCAL int qore_async_io_deadline_to_poll_timeout_ms(int64 deadline_us, int64 
 */
 class AsyncIoControllerPriv;  // forward declaration for DT_CONTINUE_POLL
 
+//! References to be released by a callback worker instead of the async I/O thread
+/** Releasing the last reference to a Qore value runs its destructors, and Qore code must not run on the I/O
+    thread: a destructor that calls back into the controller and waits for the I/O thread (for example
+    \c HttpClientConnectionManager::closeAll() -> \c flushCallbacksByOwner()) can never be satisfied there, which
+    stalls the I/O thread and with it every other user of the controller.
+
+    The poll operation members mirror the references held by a poll operation's controller entry and are released
+    in the same order as @ref AsyncIoControllerPriv::PollInfo::cleanup() releases them, followed by \c udata.
+*/
+struct AsyncIoDeferredRelease {
+    QoreObject* sock_obj = nullptr;                  //!< Pollable I/O object (referenced, or nullptr)
+    AbstractPollableIoObjectBase* sock = nullptr;    //!< Pollable I/O private data (referenced, or nullptr)
+    QoreObject* spop_obj = nullptr;                  //!< Poll operation object (referenced, or nullptr)
+    QoreHashNode* poll_info = nullptr;               //!< Poll info hash (referenced, or nullptr)
+    QoreHashNode* other = nullptr;                   //!< Free-form data (referenced, or nullptr)
+    Queue* queue = nullptr;                          //!< Result queue (referenced, or nullptr)
+    SocketPollOperationBase* spop_base = nullptr;    //!< C++ poll operation (referenced, or nullptr)
+    QoreValue udata;                                 //!< Timer user data, e.g. a callback (referenced)
+
+    //! Returns True if no references are held
+    DLLLOCAL bool empty() const {
+        return !sock_obj && !sock && !spop_obj && !poll_info && !other && !queue && !spop_base
+            && !udata.hasNode();
+    }
+
+    //! Returns the program the released objects belong to, if known
+    DLLLOCAL QoreProgram* getProgram() const;
+
+    //! Releases all references in order and clears them
+    DLLLOCAL void release(ExceptionSink* xsink);
+};
+
 #ifdef DEBUG
 //! Overrides the async I/O thread flag for focused unit tests
 /** @return the previous async I/O thread flag value
@@ -102,6 +134,7 @@ public:
         DT_CONTINUE_POLL,   //!< Call continuePoll() on spop_obj and send result back to I/O thread
         DT_STREAM_DATA_NOTIFY, //!< Call onStreamData(stream_id) on spop_obj (stream queue drain notification)
         DT_POLL_COMPLETE_NOTIFY, //!< Call onPollComplete() on spop_obj (WebSocket frame arrival notification)
+        DT_RELEASE,         //!< Release the references in release only, off the async I/O thread
     };
 
     //! Async work item for fire-and-forget dispatch
@@ -116,6 +149,7 @@ public:
         std::string stream_key;              //!< For DT_STREAM_DATA_NOTIFY: stream key
         QoreProgram* pgm = nullptr;          //!< Program reference to prevent premature deletion
         std::string owner;                   //!< Owner identifier for per-owner flush (empty if untracked)
+        AsyncIoDeferredRelease* release = nullptr; //!< For DT_RELEASE: owned references to release (or nullptr)
     };
 
     //! Creates the dispatcher
@@ -182,6 +216,16 @@ public:
     */
     DLLLOCAL void dispatchPollCompleteAsync(QoreObject* spop_obj,
         const std::string& owner = std::string());
+
+    //! Releases references on a callback worker (fire-and-forget)
+    /** Used by the async I/O thread for references whose release can run Qore destructors.  The item is not
+        owner-tracked, so it is never discarded or waited for by an owner barrier; when it cannot be queued
+        (the dispatcher is stopping or the objects' program is shutting down) the references are released on the
+        calling thread, as for any discarded work item.
+
+        @param release the references to release (ownership transferred)
+    */
+    DLLLOCAL void dispatchReleaseAsync(AsyncIoDeferredRelease* release);
 
     //! Stop all worker threads
     DLLLOCAL void stop(ExceptionSink* xsink);
@@ -1142,6 +1186,16 @@ private:
 
     //! Ensure call_dispatcher exists (lock-free fast path)
     DLLLOCAL void ensureCallDispatcher();
+
+    //! Releases references held by the controller, off the async I/O thread
+    /** Qore code must not run on an I/O thread, and releasing the last reference to a Qore value runs its
+        destructors (see @ref AsyncIoDeferredRelease); on an I/O thread the references are therefore handed to a
+        callback worker, on any other thread they are released immediately.
+
+        @param refs the references to release; all members are cleared on return
+        @param xsink exception sink for immediate releases
+    */
+    DLLLOCAL void releaseOffIoThread(AsyncIoDeferredRelease& refs, ExceptionSink* xsink);
 
     //! Start the I/O thread (caller must hold lock)
     DLLLOCAL void startIntern(ExceptionSink* xsink);
