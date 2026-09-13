@@ -304,6 +304,35 @@ Do not relax this rule without a real dominator-tree or equivalent
 scope/finalization design. See
 [`aot-eh-cleanup-dominance.md`](aot-eh-cleanup-dominance.md).
 
+## Block-Scoped IR-Only Local Lifetime
+
+An IR-only body local never has a runtime local-stack entry: the call wrapper
+skips it and `StoreLocal` neither instantiates nor publishes it. In LLVM code a
+boxed IR-only local that is neither a fast-entry parameter nor backed by a
+pre-instantiated cleanup slot owns its current value in its local alloca; every
+write that replaces that value stores an owned reference.
+
+Two rules keep its lifetime lexical, matching the AST interpreter:
+
+- `UninstantiateLocal` releases the local at every scope exit (normal end,
+  `break`, `continue`, `return`, exception cleanup): it drops the owned alloca
+  value and the local's cleanup slots and resets the alloca, but touches no
+  runtime stack slot. The lazy-instantiation path, which pops a runtime stack
+  entry, must never handle these locals: it returns early for a local that
+  `StoreLocal` did not instantiate, which delayed destructors to function exit.
+- Ownership is registered when `preCreateLocalAllocas()` creates the alloca,
+  before any block is lowered, not when the first owning store is lowered.
+  Blocks are lowered in layout order, so an exit can be lowered before a store
+  that executes ahead of it (a `return` or `throw` after a `switch` whose case
+  assigns the local); its inline cleanup would otherwise omit the local and leak
+  the value.
+
+Object-typed locals whose type names a unique class stay AST-visible, but
+`*Class`, `auto`, and container-typed locals holding objects are IR-only, so
+destructor timing depends on these rules. `IRBlockScopedObjectLifetime.qtest`
+checks exact constructor/destructor order for these shapes in every tier and in
+AOT.
+
 ## Large Function Bodies and Cleanup Scaling
 
 Every per-statement exception and thread-exit check in a function branches to

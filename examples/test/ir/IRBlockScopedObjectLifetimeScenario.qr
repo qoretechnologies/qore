@@ -1,0 +1,480 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+#
+# Fixture for IRBlockScopedObjectLifetime.qtest: every case records constructor ("name+") and
+# destructor ("name-") events around its own markers, so the output fixes the exact point at
+# which each object dies.  The AST interpreter defines the expected lifetimes; every compiled
+# tier must print the same lines.
+
+thread_local list<string> trace;
+thread_local int live;
+
+class Obj {
+    private {
+        string name;
+    }
+
+    constructor(string name) {
+        self.name = name;
+        ++live;
+        trace += name + "+";
+    }
+
+    destructor() {
+        --live;
+        trace += name + "-";
+    }
+}
+
+#! Saves and restores a thread-local flag like the provider scopes this bug was found in
+class FlagScope {
+    private {
+        bool previous;
+        string name;
+    }
+
+    constructor(string name, bool value) {
+        self.name = name;
+        previous = flag;
+        flag = value;
+        ++live;
+        trace += name + "+";
+    }
+
+    destructor() {
+        --live;
+        trace += name + "-";
+        flag = previous;
+    }
+}
+
+thread_local bool flag = False;
+
+class Holder {
+    run() {
+        Obj outer("o");
+        {
+            *Obj inner = new Obj("i");
+            trace += "body";
+        }
+        trace += "after";
+    }
+}
+
+sub reproducer(bool fail) {
+    bool check = !flag;
+    FlagScope outer("outer", True);
+    try {
+        *FlagScope inner = check ? new FlagScope("inner", False) : NOTHING;
+        if (fail) {
+            throw "EXPECTED";
+        }
+    } catch (hash<ExceptionInfo> ex) {
+        rethrow;
+    }
+}
+
+sub caseReproducer() {
+    reproducer(False);
+    trace += "flag=" + flag;
+    try {
+        reproducer(True);
+    } catch (hash<ExceptionInfo> ex) {
+        trace += "caught=" + ex.err;
+    }
+    trace += "flag=" + flag;
+}
+
+sub caseDirect() {
+    Obj outer("o");
+    {
+        *Obj inner = new Obj("i");
+        trace += "body";
+    }
+    trace += "after";
+}
+
+sub caseTernary(bool create) {
+    Obj outer("o");
+    {
+        *Obj inner = create ? new Obj("i") : NOTHING;
+        trace += "body";
+    }
+    trace += "after";
+}
+
+sub caseConditionalAssignment(bool create) {
+    Obj outer("o");
+    {
+        *Obj inner;
+        if (create) {
+            inner = new Obj("i");
+        }
+        trace += "body";
+    }
+    trace += "after";
+}
+
+sub caseUntyped() {
+    Obj outer("o");
+    {
+        auto inner = new Obj("i");
+        trace += "body";
+    }
+    trace += "after";
+}
+
+sub caseHashValue() {
+    Obj outer("o");
+    {
+        hash<auto> h = {"x": new Obj("i")};
+        trace += "body";
+    }
+    trace += "after";
+}
+
+sub caseListValue() {
+    Obj outer("o");
+    {
+        list<auto> l = (new Obj("i"),);
+        trace += "body";
+    }
+    trace += "after";
+}
+
+sub caseReassign() {
+    Obj outer("o");
+    {
+        *Obj inner = new Obj("i1");
+        trace += "b1";
+        inner = new Obj("i2");
+        trace += "b2";
+    }
+    trace += "after";
+}
+
+sub caseNested() {
+    Obj a("a");
+    {
+        *Obj b = new Obj("b");
+        {
+            *Obj c = new Obj("c");
+            trace += "inner";
+        }
+        trace += "mid";
+    }
+    trace += "after";
+}
+
+# constructor-declaration control: this syntax was never affected
+sub caseConstructorDeclaration() {
+    Obj outer("o");
+    {
+        Obj inner("i");
+        trace += "body";
+    }
+    trace += "after";
+}
+
+sub caseEarlyReturn(bool early) {
+    Obj outer("o");
+    {
+        *Obj inner = new Obj("i");
+        if (early) {
+            trace += "ret";
+            return;
+        }
+        trace += "body";
+    }
+    trace += "after";
+}
+
+sub caseTryBody(bool fail) {
+    Obj outer("o");
+    try {
+        *Obj inner = new Obj("i");
+        if (fail) {
+            throw "X";
+        }
+        trace += "body";
+    } catch (hash<ExceptionInfo> ex) {
+        trace += "catch";
+    }
+    trace += "after";
+}
+
+sub throwingBlock() {
+    Obj outer("o");
+    {
+        *Obj inner = new Obj("i");
+        trace += "throw";
+        throw "PROPAGATED";
+    }
+}
+
+sub caseExceptionPropagation() {
+    try {
+        throwingBlock();
+    } catch (hash<ExceptionInfo> ex) {
+        trace += "caught=" + ex.err;
+    }
+}
+
+sub caseLoopExits() {
+    Obj outer("o");
+    for (int i = 0; i < 3; ++i) {
+        *Obj inner = new Obj("i" + i);
+        if (i == 1) {
+            trace += "cont";
+            continue;
+        }
+        if (i == 2) {
+            trace += "brk";
+            break;
+        }
+        trace += "end" + i;
+    }
+    trace += "after";
+}
+
+sub caseLoopExitsBeforeDeclaration() {
+    Obj outer("o");
+    for (int i = 0; i < 4; ++i) {
+        if (i == 1) {
+            trace += "cont";
+            continue;
+        }
+        if (i == 3) {
+            trace += "brk";
+            break;
+        }
+        *Obj inner = new Obj("i" + i);
+        trace += "end" + i;
+    }
+    trace += "after";
+}
+
+sub caseWhileLoop() {
+    Obj outer("o");
+    int i = 0;
+    while (i < 2) {
+        *Obj inner = new Obj("i" + i);
+        ++i;
+        trace += "end";
+    }
+    trace += "after";
+}
+
+sub caseDoWhileLoop() {
+    Obj outer("o");
+    int i = 0;
+    do {
+        *Obj inner = new Obj("i" + i);
+        trace += "end";
+    } while (++i < 2);
+    trace += "after";
+}
+
+sub caseForeachLoop() {
+    Obj outer("o");
+    foreach int i in (0, 1) {
+        *Obj inner = new Obj("i" + i);
+        trace += "end";
+    }
+    trace += "after";
+}
+
+# the switch exit block is laid out (and lowered) before the case that stores the local
+sub caseSwitchBreak(int v) {
+    Obj outer("o");
+    switch (v) {
+        case 1: {
+            *Obj inner = new Obj("i");
+            trace += "case";
+            break;
+        }
+    }
+    trace += "after";
+}
+
+sub caseSwitchAssignThenReturn(int v) {
+    *Obj a;
+    switch (v) {
+        case 1:
+            a = new Obj("a");
+            break;
+    }
+    trace += "return";
+    return;
+}
+
+sub switchAssignThenThrow(int v) {
+    *Obj a;
+    switch (v) {
+        case 1:
+            a = new Obj("a");
+            break;
+    }
+    trace += "throw";
+    throw "SWITCH";
+}
+
+sub caseSwitchAssignThenThrow() {
+    try {
+        switchAssignThenThrow(1);
+    } catch (hash<ExceptionInfo> ex) {
+        trace += "caught=" + ex.err;
+    }
+}
+
+sub switchAssignThenRethrow(int v) {
+    *Obj a;
+    switch (v) {
+        case 1:
+            a = new Obj("a");
+            break;
+    }
+    try {
+        throw "RETHROWN";
+    } catch (hash<ExceptionInfo> ex) {
+        trace += "rethrow";
+        rethrow;
+    }
+}
+
+sub caseSwitchAssignThenRethrow() {
+    try {
+        switchAssignThenRethrow(1);
+    } catch (hash<ExceptionInfo> ex) {
+        trace += "caught=" + ex.err;
+    }
+}
+
+sub caseClosureCapture() {
+    Obj outer("o");
+    for (int i = 0; i < 3; ++i) {
+        *Obj inner = new Obj("i" + i);
+        code c = *Obj sub () { return inner; };
+        if (i == 1) {
+            trace += "cont";
+            continue;
+        }
+        if (i == 2) {
+            trace += "brk";
+            break;
+        }
+        trace += "end" + i;
+    }
+    trace += "after";
+}
+
+sub caseOnExit() {
+    Obj outer("o");
+    {
+        *Obj inner = new Obj("i");
+        on_exit trace += "on_exit";
+        trace += "body";
+    }
+    trace += "after";
+}
+
+sub caseMethod() {
+    Holder h();
+    h.run();
+}
+
+# a reference that escapes the block keeps the object alive until its new owner releases it
+*Obj sub escapeToOuterLocal() {
+    Obj outer("o");
+    *Obj keep;
+    {
+        *Obj inner = new Obj("i");
+        keep = inner;
+        trace += "body";
+    }
+    trace += "after";
+    return keep;
+}
+
+sub caseEscapeToOuterLocal() {
+    {
+        *Obj x = escapeToOuterLocal();
+        trace += "caller";
+    }
+    trace += "done";
+}
+
+*Obj sub escapeByReturn() {
+    Obj outer("o");
+    {
+        *Obj inner = new Obj("i");
+        trace += "body";
+        return inner;
+    }
+}
+
+sub caseEscapeByReturn() {
+    {
+        *Obj x = escapeByReturn();
+        trace += "caller";
+    }
+    trace += "done";
+}
+
+sub caseEscapeToContainer() {
+    hash<auto> keep;
+    {
+        *Obj inner = new Obj("i");
+        keep.obj = inner;
+        trace += "body";
+    }
+    trace += "after";
+    remove keep.obj;
+    trace += "removed";
+}
+
+# each case runs several times so compiled tiers execute it after promotion, not only on the
+# first (interpreted) call
+sub run(string name, code c) {
+    for (int i = 0; i < 3; ++i) {
+        trace = ();
+        c();
+        printf("%s[%d]: %s\n", name, i, trace.join(" "));
+    }
+}
+
+run("reproducer", \caseReproducer());
+run("direct", sub () { caseDirect(); caseDirect(); });
+run("ternary", sub () { caseTernary(True); caseTernary(False); caseTernary(True); });
+run("conditional-assignment", sub () {
+    caseConditionalAssignment(True);
+    caseConditionalAssignment(False);
+    caseConditionalAssignment(True);
+});
+run("untyped", sub () { caseUntyped(); caseUntyped(); });
+run("hash-value", \caseHashValue());
+run("list-value", \caseListValue());
+run("reassign", \caseReassign());
+run("nested", \caseNested());
+run("constructor-declaration", sub () { caseConstructorDeclaration(); caseConstructorDeclaration(); });
+run("early-return", sub () { caseEarlyReturn(True); caseEarlyReturn(False); });
+run("try-body", sub () { caseTryBody(False); caseTryBody(True); caseTryBody(False); });
+run("exception-propagation", \caseExceptionPropagation());
+run("loop-exits", \caseLoopExits());
+run("loop-exits-before-declaration", \caseLoopExitsBeforeDeclaration());
+run("while", \caseWhileLoop());
+run("do-while", \caseDoWhileLoop());
+run("foreach", \caseForeachLoop());
+run("switch-break", sub () { caseSwitchBreak(1); caseSwitchBreak(1); });
+run("switch-assign-return", sub () { caseSwitchAssignThenReturn(1); caseSwitchAssignThenReturn(1); });
+run("switch-assign-throw", \caseSwitchAssignThenThrow());
+run("switch-assign-rethrow", \caseSwitchAssignThenRethrow());
+run("closure-capture", \caseClosureCapture());
+run("on-exit", \caseOnExit());
+run("method", sub () { caseMethod(); caseMethod(); });
+run("escape-outer-local", \caseEscapeToOuterLocal());
+run("escape-return", \caseEscapeByReturn());
+run("escape-container", \caseEscapeToContainer());
+printf("live: %d\n", live);

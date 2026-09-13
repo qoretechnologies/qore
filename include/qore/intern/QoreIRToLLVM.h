@@ -497,7 +497,9 @@ private:
 
     // Boxed IR-only locals that are neither fast-entry params nor backed by a
     // pre-instantiated cleanup slot. Their alloca owns the current value and
-    // must be decref'd at function exit.
+    // must be decref'd at block scope exit and function exit.  Body locals are
+    // registered when preCreateLocalAllocas() creates their alloca, so every
+    // scope exit and return sees them regardless of block lowering order.
     std::vector<llvm::AllocaInst*> owned_ir_local_allocas;
     std::unordered_set<const void*> owned_ir_local_alloca_keys;
 

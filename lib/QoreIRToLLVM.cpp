@@ -2338,6 +2338,19 @@ void QoreIRToLLVM::emitLocalInstantiation(llvm::Module& module) {
 void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* llvm_func) {
     llvm::BasicBlock* entry = &llvm_func->getEntryBlock();
     llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+    // A boxed IR-only body local owns its alloca value for the whole function:
+    // every write that replaces the value stores an owned reference.  Register
+    // the ownership here, before any block is lowered, rather than at the first
+    // owning store to be lowered.  Blocks are lowered in layout order, so a scope
+    // exit or return can be lowered before a store that runs ahead of it (e.g. a
+    // return after a switch whose case assigns the local); lowered first, it
+    // would release nothing and leak the value.
+    auto register_owned_ir_local = [&](const void* key, llvm::AllocaInst* alloca) {
+        if (ir_only_locals_set && ir_only_locals_set->count(key)
+                && owned_ir_local_alloca_keys.insert(key).second) {
+            owned_ir_local_allocas.push_back(alloca);
+        }
+    };
     for (LocalVar* var : function_locals) {
         auto key = reinterpret_cast<const void*>(var);
         if (local_allocas.count(key)) {
@@ -2422,6 +2435,7 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                 alloca_builder.CreateStore(llvm::ConstantInt::getFalse(i1_type), alloca);
             } else {
                 alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
+                register_owned_ir_local(key, alloca);
             }
             local_allocas[key] = alloca;
             continue;
@@ -2515,6 +2529,7 @@ void QoreIRToLLVM::preCreateLocalAllocas(llvm::Module& module, llvm::Function* l
                 alloca_builder.CreateStore(llvm::ConstantInt::getFalse(i1_type), alloca);
             } else {
                 alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), alloca);
+                register_owned_ir_local(key, alloca);
             }
         }
         local_allocas[key] = alloca;
@@ -14090,9 +14105,17 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // Pre-instantiated or entry-block block-scoped locals: clear the value
             // on the runtime stack to trigger destructors at block scope exit.
             // The entry stays on the stack so the caller/epilogue can pop it later.
+            //
+            // IR-only body locals take the same path even though they are not
+            // pre-instantiated: they never have a runtime stack entry, so StoreLocal
+            // never records them in instantiated_non_entry_locals, and the lazy
+            // instantiation path below would return before releasing anything.  Their
+            // only references are compiler-held (the owned local alloca and its cleanup
+            // slots); dropping those here runs destructors at the lexical scope exit
+            // instead of at function exit.
             bool is_pre_instantiated = pre_instantiated_locals && pre_instantiated_locals->count(key);
             bool is_entry_block_scoped = entry_locals_set.count(key) && block_scoped_locals.count(key);
-            if (is_pre_instantiated || is_entry_block_scoped) {
+            if (is_pre_instantiated || is_entry_block_scoped || ir_only_body_locals.count(key)) {
                 auto decref_fn = module.getOrInsertFunction("qore_rt_decref",
                         llvm::FunctionType::get(void_type, {i64_type, ptr_type}, false));
 

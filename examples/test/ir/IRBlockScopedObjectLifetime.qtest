@@ -1,0 +1,138 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../../../qlib/QUnit.qm
+%requires ../../../qlib/FsUtil.qm
+
+%exec-class IRBlockScopedObjectLifetimeTest
+
+#! Regression coverage for block-scoped values released at their lexical scope exit
+/** An object assigned to a block-scoped local (<tt>*Obj x = new Obj()</tt>, a ternary or an
+    untyped/container local) is an IR-only local in the JIT: no runtime stack entry exists for
+    it and its LLVM alloca owns the reference.  Two lowering defects kept that reference alive
+    past the block:
+
+    - UninstantiateLocal took the lazy-instantiation path for such locals, which returns early
+      because StoreLocal never instantiates IR-only locals, so nothing was released until the
+      function epilogue: destructors ran after the enclosing scope's destructors.
+    - ownership of the alloca was registered only when the owning StoreLocal was lowered.
+      Blocks are lowered in layout order, so a return or throw laid out before the store (e.g.
+      after a switch whose case assigns the local) released nothing and the object leaked.
+
+    The fixture prints constructor/destructor events around explicit markers; every tier and
+    the AOT executable must print exactly the AST output below.
+*/
+class IRBlockScopedObjectLifetimeTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string fixture;
+
+        #! forces promotion on the first call so ir/tiered also run the native code
+        const Promote = "QORE_IR_THRESHOLD=1 QORE_JIT_THRESHOLD=1 ";
+
+        #! exec mode -> extra environment
+        const Tiers = (
+            ("ast", ""),
+            ("ir", ""),
+            ("ir", Promote),
+            ("jit", ""),
+            ("jit", Promote),
+            ("tiered", ""),
+            ("tiered", Promote),
+        );
+
+        #! per-case event trace; each case runs three times
+        const ExpectedCases = (
+            ("reproducer", "outer+ inner+ inner- outer- flag=0 outer+ inner+ inner- outer- caught=EXPECTED flag=0"),
+            ("direct", "o+ i+ body i- after o- o+ i+ body i- after o-"),
+            ("ternary", "o+ i+ body i- after o- o+ body after o- o+ i+ body i- after o-"),
+            ("conditional-assignment", "o+ i+ body i- after o- o+ body after o- o+ i+ body i- after o-"),
+            ("untyped", "o+ i+ body i- after o- o+ i+ body i- after o-"),
+            ("hash-value", "o+ i+ body i- after o-"),
+            ("list-value", "o+ i+ body i- after o-"),
+            ("reassign", "o+ i1+ b1 i2+ i1- b2 i2- after o-"),
+            ("nested", "a+ b+ c+ inner c- mid b- after a-"),
+            ("constructor-declaration", "o+ i+ body i- after o- o+ i+ body i- after o-"),
+            ("early-return", "o+ i+ ret i- o- o+ i+ body i- after o-"),
+            ("try-body", "o+ i+ body i- after o- o+ i+ i- catch after o- o+ i+ body i- after o-"),
+            ("exception-propagation", "o+ i+ throw i- o- caught=PROPAGATED"),
+            ("loop-exits", "o+ i0+ end0 i0- i1+ cont i1- i2+ brk i2- after o-"),
+            ("loop-exits-before-declaration", "o+ i0+ end0 i0- cont i2+ end2 i2- brk after o-"),
+            ("while", "o+ i0+ end i0- i1+ end i1- after o-"),
+            ("do-while", "o+ i0+ end i0- i1+ end i1- after o-"),
+            ("foreach", "o+ i0+ end i0- i1+ end i1- after o-"),
+            ("switch-break", "o+ i+ case i- after o- o+ i+ case i- after o-"),
+            ("switch-assign-return", "a+ return a- a+ return a-"),
+            ("switch-assign-throw", "a+ throw a- caught=SWITCH"),
+            ("switch-assign-rethrow", "a+ rethrow a- caught=RETHROWN"),
+            ("closure-capture", "o+ i0+ end0 i0- i1+ cont i1- i2+ brk i2- after o-"),
+            ("on-exit", "o+ i+ body on_exit i- after o-"),
+            ("method", "o+ i+ body i- after o- o+ i+ body i- after o-"),
+            ("escape-outer-local", "o+ i+ body after o- caller i- done"),
+            ("escape-return", "o+ i+ body o- caller i- done"),
+            ("escape-container", "i+ body after i- removed"),
+        );
+    }
+
+    constructor() : QUnit::Test("IRBlockScopedObjectLifetimeTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        fixture = get_script_dir() + "/IRBlockScopedObjectLifetimeScenario.qr";
+
+        foreach list<string> tier in (Tiers) {
+            string mode = tier[0];
+            string env = tier[1];
+            addTestCase(sprintf("lexical lifetimes: %s%s", mode, env ? " (promoted)" : ""), sub () {
+                checkTier(mode, env);
+            });
+        }
+        addTestCase("lexical lifetimes: AOT", \testAot());
+
+        set_return_value(main());
+    }
+
+    private static string expected() {
+        string rv;
+        foreach list<string> c in (ExpectedCases) {
+            for (int i = 0; i < 3; ++i) {
+                rv += sprintf("%s[%d]: %s\n", c[0], i, c[1]);
+            }
+        }
+        return rv + "live: 0\n";
+    }
+
+    private checkTier(string mode, string env) {
+        # synchronous compilation makes promotion deterministic instead of racing the compiler
+        string output = backquote(sprintf("%sQORE_JIT_SYNC_COMPILE=1 LD_LIBRARY_PATH=%s %s -b --enable-debug "
+            "--exec-mode=%s %s 2>&1", env, shellQuote(libqore_dir), shellQuote(qore_bin), mode,
+            shellQuote(fixture)));
+        assertEq(expected(), output, sprintf("exec-mode=%s %s output", mode, env));
+    }
+
+    testAot() {
+        if (!is_file(qcc_bin) && !backquote("command -v " + qcc_bin + " 2>/dev/null")) {
+            testSkip("qcc not available");
+        }
+        TmpDir tmp("qore-ir-block-scoped-object-lifetime-");
+        string exe = tmp.path + "/lifetime";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s %s -o %s %s 2>&1", shellQuote(libqore_dir),
+            shellQuote(qcc_bin), shellQuote(exe), shellQuote(fixture)));
+        assertTrue(is_file(exe), "AOT compile produced an executable: " + compile_out);
+        assertEq(expected(), backquote(sprintf("LD_LIBRARY_PATH=%s %s 2>&1", shellQuote(libqore_dir),
+            shellQuote(exe))), "AOT output");
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\\''") + "'";
+    }
+}
