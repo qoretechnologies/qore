@@ -141,12 +141,14 @@ protected:
     bool bs;
 };
 
-VariableBlockHelper::VariableBlockHelper() {
+VariableBlockHelper::VariableBlockHelper() : closure_parse_env(thread_get_closure_parse_env()) {
    new VNode(0);
+   thread_set_closure_parse_env(nullptr);
    //printd(5, "VariableBlockHelper::VariableBlockHelper() this=%p pushed %p\n", this, 0);
 }
 
 VariableBlockHelper::~VariableBlockHelper() {
+   thread_set_closure_parse_env(closure_parse_env);
    std::unique_ptr<VNode> vnode(getVStack());
    assert(vnode.get());
    updateVStack(vnode->next);

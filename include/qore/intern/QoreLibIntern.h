@@ -1420,11 +1420,20 @@ public:
     }
 };
 
+class ClosureParseEnvironment;
+
 // pushes a marker on the local variable parse stack so that searches can skip to global thread-local variables when the search hits the marker
+/* the block is also a new capture root: a closure being parsed in the enclosing context (e.g. one whose body
+   references a function whose body is parsed on demand) cannot capture variables found from inside the block, so
+   its parse environment is hidden until the block is left
+*/
 class VariableBlockHelper {
 public:
     DLLLOCAL VariableBlockHelper();
     DLLLOCAL ~VariableBlockHelper();
+
+private:
+    ClosureParseEnvironment* closure_parse_env;
 };
 
 class ParseOptionMaps {

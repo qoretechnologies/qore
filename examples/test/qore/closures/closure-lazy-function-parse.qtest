@@ -1,0 +1,145 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+
+%exec-class ClosureLazyFunctionParseTest
+
+#! Regression coverage for functions whose bodies are first parsed from inside a closure
+/** A function body is parsed on demand when a call to it is first resolved.  When that call
+    was inside a closure body, the closure's parse environment was still active while the
+    function body was parsed, so a top-level local referenced by the function was classified as
+    a variable captured by that closure.  At runtime the function then looked the variable up
+    in whatever closure environment was current and crashed (SIGSEGV) or read another frame's
+    value.  Referencing the function outside a closure first hid the bug.
+
+    Each program runs in a child process so a crash is reported as a failure of its case.
+*/
+class ClosureLazyFunctionParseTest inherits QUnit::Test {
+    private {
+        string qore_bin;
+
+        const Modes = ("ast", "ir", "jit", "tiered");
+    }
+
+    constructor() : QUnit::Test("ClosureLazyFunctionParseTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+
+        addTestCase("function writing a top-level local, first called in a closure", \testWrite());
+        addTestCase("function reading a top-level local, first called in a closure", \testRead());
+        addTestCase("function declared after the closure", \testDeclaredAfter());
+        addTestCase("call chain through another function", \testCallChain());
+        addTestCase("closure capturing the same local", \testClosureAlsoCaptures());
+        addTestCase("static and instance methods", \testMethods());
+        addTestCase("nested closures", \testNestedClosures());
+        addTestCase("closure inside the lazily parsed function", \testClosureInsideFunction());
+
+        set_return_value(main());
+    }
+
+    private string runInMode(string code, string mode) {
+        TmpFile script();
+        script.file.write("%modern\n" + code);
+        script.file.close();
+
+        TmpFile out();
+        # synchronous compilation keeps the compiled tiers from racing the short programs
+        int rc = system(sprintf("QORE_JIT_SYNC_COMPILE=1 %s -b --enable-debug --exec-mode=%s %s > %s 2>&1",
+            qore_bin, mode, script.path, out.path));
+        string output = ReadOnlyFile::readTextFile(out.path) ?? "";
+        assertEq(0, rc, sprintf("%s: exit status (output: %y)", mode, output));
+        return output;
+    }
+
+    private check(string code, string expected) {
+        foreach string mode in (Modes) {
+            assertEq(expected, runInMode(code, mode), mode);
+        }
+    }
+
+    testWrite() {
+        check("int live;
+sub f() { ++live; }
+code c = sub () { f(); };
+c();
+printf(\"%d\\n\", live);
+", "1\n");
+    }
+
+    testRead() {
+        check("int live = 7;
+sub f() { printf(\"read %d\\n\", live); }
+code c = sub () { f(); };
+c();
+", "read 7\n");
+    }
+
+    testDeclaredAfter() {
+        check("int live;
+code c = sub () { f(); };
+sub f() { ++live; }
+c();
+c();
+printf(\"%d\\n\", live);
+", "2\n");
+    }
+
+    testCallChain() {
+        check("int live;
+sub f() { ++live; }
+sub g() { f(); }
+code c = sub () { g(); };
+c();
+printf(\"%d\\n\", live);
+", "1\n");
+    }
+
+    testClosureAlsoCaptures() {
+        check("int live;
+sub f() { ++live; }
+code c = sub () { ++live; f(); };
+c();
+c();
+printf(\"%d\\n\", live);
+", "4\n");
+    }
+
+    testMethods() {
+        check("int live;
+class C {
+    static inc() { ++live; }
+    m() { ++live; }
+}
+code c = sub () { C::inc(); C o(); o.m(); };
+c();
+printf(\"%d\\n\", live);
+", "2\n");
+    }
+
+    testNestedClosures() {
+        check("int live;
+sub f() { ++live; }
+code outer = sub () { code inner = sub () { f(); }; inner(); };
+outer();
+outer();
+printf(\"%d\\n\", live);
+", "2\n");
+    }
+
+    testClosureInsideFunction() {
+        check("int live = 10;
+int sub f() { code inner = int sub () { return live + 1; }; return inner(); }
+code c = sub () { printf(\"%d\\n\", f()); };
+c();
+live = 20;
+c();
+", "11\n21\n");
+    }
+}
