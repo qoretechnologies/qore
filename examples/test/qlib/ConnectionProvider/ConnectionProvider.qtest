@@ -1021,8 +1021,16 @@ class TestSslServer {
     private:internal listen() {
         while (!exit) {
             try {
-                *Socket a = sock.acceptSSL(100ms);
+                # the short bound only paces the exit check while no client connects; the TLS handshake gets its
+                # own bound, otherwise a handshake slower than the accept bound (e.g. on a loaded host) is reported
+                # as SOCKET-TIMEOUT instead of the certificate verification result each case waits for
+                *Socket a = sock.accept(100ms);
                 if (a) {
+                    a.setCertificate(ReadOnlyFile::readTextFile(CertPath));
+                    a.setPrivateKey(ReadOnlyFile::readTextFile(KeyPath), KeyPassword);
+                    a.setSslVerifyMode(sock.getSslVerifyMode());
+                    a.acceptAllCertificates(sock.getAcceptAllCertificates());
+                    a.upgradeServerToSSL(30s);
                     #printf("got %y\n", a.verifyPeerCertificate());
                     q.push(a.verifyPeerCertificate());
                 }
