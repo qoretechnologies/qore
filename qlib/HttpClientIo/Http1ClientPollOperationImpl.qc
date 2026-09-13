@@ -162,10 +162,13 @@ public class Http1ClientPollOperation inherits Http1ClientPollOperationBase, Htt
         return sock;
     }
 
-    #! Internal: computes the TCP connect target string
+    #! Internal: computes the connect target string: \c host:port, or the socket path for a UNIX domain socket
     private static string computeConnectTarget(hash<auto> url_info, *hash<auto> proxy_info) {
         if (proxy_info) {
             return sprintf("%s:%d", proxy_info.host, proxy_info.port);
+        }
+        if (HttpClientConnectionManager::isUnixSocketTarget(url_info)) {
+            return url_info.host;
         }
         return sprintf("%s:%d", url_info.host, url_info.port);
     }

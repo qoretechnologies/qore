@@ -903,8 +903,14 @@ int Http1ClientPollOperationPriv::checkConnectDeadline(ExceptionSink* xsink) {
     }
     ASYNC_IO_TRACE("H1 checkConnectDeadline: EXPIRED target=%s:%d\n",
         target_host.c_str(), target_port);
-    QoreStringMaker desc("connection to %s:%d was not established within the connect timeout "
-        "(%lld ms)", target_host.c_str(), target_port, (long long)(connect_timeout_us / 1000));
+    QoreString desc;
+    if (target_port) {
+        desc.sprintf("connection to %s:%d was not established within the connect timeout (%lld ms)",
+            target_host.c_str(), target_port, (long long)(connect_timeout_us / 1000));
+    } else {
+        desc.sprintf("connection to UNIX domain socket %s was not established within the connect timeout "
+            "(%lld ms)", target_host.c_str(), (long long)(connect_timeout_us / 1000));
+    }
     setError("HTTP1-CONNECT-TIMEOUT", desc.c_str(), xsink);
     return -1;
 }
@@ -2586,7 +2592,7 @@ qclass Http1ClientPollOperationBase [
 
 //! Creates the HTTP/1.1 client poll operation base
 /** @param socket the TCP socket (must not be connected yet)
-    @param connect_target the TCP connect target ("host:port")
+    @param connect_target the connect target: "host:port", or the socket path for a UNIX domain socket target
     @param target_host the target hostname for Host header and proxy CONNECT
     @param target_port the target port number
     @param ssl_required True if SSL/TLS is required (HTTPS)
@@ -2600,10 +2606,16 @@ Http1ClientPollOperationBase::constructor(Socket[QoreSocketObject] socket, strin
         AbstractHttpPollConnection[AbstractHttpPollConnectionPriv] connection) [flags=NAMED_ARGS] {
     QoreSocketObject* sock_ptr = *socket;
 
-    // Create initial TCP connect operation
+    // Create the initial connect operation.  A UNIX domain socket target carries the socket path in
+    // connect_target and port 0 (see HttpClientConnectionManager::isUnixSocketTarget()); it must be connected
+    // explicitly as a path, since an automatic target containing ':' would be resolved as a TCP host:port.
+    bool unix_target = !proxy_tunnel && !plain_proxy && !target_port && target_host->strlen()
+        && target_host->c_str()[0] == '/';
     sock_ptr->ref();
     ReferenceHolder<SocketConnectPollOperation> connect_op(
-        new SocketConnectPollOperation(xsink, false, connect_target->c_str(), sock_ptr, true),
+        unix_target
+            ? new SocketConnectPollOperation(xsink, false, connect_target->c_str(), SOCK_STREAM, 0, sock_ptr, true)
+            : new SocketConnectPollOperation(xsink, false, connect_target->c_str(), sock_ptr, true),
         xsink);
     if (*xsink) {
         return;

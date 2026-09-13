@@ -154,6 +154,28 @@ Auto-selection fallback logic:
 4. Cache the successful protocol per host:port for subsequent connections.
 5. Periodically re-probe HTTP/3 for hosts that fell back.
 
+### UNIX Domain Socket Targets
+
+A server listening on a UNIX domain socket is addressed like `HTTPClient` does it: the URL-encoded
+absolute socket path is the host of a `socket=` URL, e.g. `http://socket=%2Ftmp%2Fapp.sock`.
+
+- **Identification:** `parse_url()` decodes the `socket=` host to the socket path and reports no port.
+  `HttpClientConnectionManager::isUnixSocketTarget()` (port unset/0 and host starting with `/`) is the
+  single predicate; every URL entry point parses through `parseRequestUrl()`, which keeps port `0` and
+  defaults the scheme to `http` instead of applying the TCP default ports.
+- **Pooling:** the pool key is `getPoolKey()` = `host:port`, i.e. `<path>:0`, so all pool, protocol-cache,
+  race and eviction lookups use the same key for a socket.
+- **Transport:** plain HTTP/1.1 only.  `https` URLs and a proxy are rejected in `parseRequestUrl()`
+  (`HTTPCLIENT-URL-ERROR` / `HTTPCLIENT-PROXY-ERROR`), a forced `h2`/`h3` protocol in `resolveProtocol()`
+  (`HTTPCLIENT-URL-ERROR`); `auto` resolves to `h1`.  Diagnostics name only the socket path, never the URL,
+  which can carry credentials.
+- **Connect:** the connect target is the socket path, and the HTTP/1.1 poll operation constructs an explicit
+  UNIX-socket `SocketConnectPollOperation`: the automatic target form treats anything containing `:` as
+  `host:port`.  The UNIX connect state applies the same sandbox checks as the automatic path.
+- **Host header:** the encoded socket path, as `HTTPClient` sends.
+- **Redirects:** an absolute `Location` naming a socket is rebuilt as a `socket=` URL with the path
+  re-encoded, since `parse_url()` returned it decoded.
+
 ### Public Methods
 
 ```qore

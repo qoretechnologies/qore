@@ -63,6 +63,8 @@ module HttpClientIo {
     - **Sync and async APIs**: Blocking and Future-based interfaces
     - **Streaming support**: WebSocket and SSE over HTTP/1.1, HTTP/2, and HTTP/3
     - **Connection migration**: QUIC connection migration for HTTP/3
+    - **UNIX domain sockets**: plain HTTP/1.1 to a local server listening on a UNIX domain socket, addressed
+      like @ref Qore::HTTPClient "HTTPClient" with a \c socket= URL
 
     @section httpclientio_components Components
 
@@ -126,6 +128,20 @@ auto mgr_h2 = new HttpClientConnectionManager({"protocol": "h2"});
 
 # Force HTTP/3 only (HTTPS required)
 auto mgr_h3 = new HttpClientConnectionManager({"protocol": "h3"});
+    @endcode
+
+    @par UNIX Domain Sockets
+    Give the URL-encoded absolute socket path as the host of a \c socket= URL.  Connections are pooled by
+    socket path, and requests carry the encoded path in the \c Host header.  Only plain HTTP/1.1 is available
+    over a UNIX domain socket: an \c https URL, a forced \c h2 or \c h3 protocol, and a proxy are rejected with
+    \c HTTPCLIENT-URL-ERROR or \c HTTPCLIENT-PROXY-ERROR.
+    @code{.py}
+%requires HttpClientIo
+
+HttpClientConnectionManager manager();
+string url = "http://socket=" + encode_url("/var/run/app/rest.sock", True);
+hash<auto> resp = manager.request(url, "GET", "/api/status");
+manager.closeAll();
     @endcode
 
     @section httpclientio_relnotes Release Notes

@@ -1,0 +1,302 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServerAsyncIo
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/ServerSentEventHandler
+%requires ../../../../qlib/DataProvider
+%requires ../../../../qlib/ConnectionProvider
+%requires ../../../../qlib/RestSchemaValidator.qm
+%requires ../../../../qlib/Swagger.qm
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/HttpClientIo
+%requires ../../../../qlib/HttpClientStreamingIo
+%requires ../../../../qlib/RestClientIo.qm
+
+%try-module json
+%define NoJson
+%endtry
+
+%exec-class HttpClientIoUnixSocketTest
+
+#! Echoes the request path and Host header
+class EchoHandler inherits AbstractHttpRequestHandler {
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(200, make_json({
+            "path": hdr.path,
+            "host": hdr.host,
+        }), {"Content-Type": MimeTypeJson});
+    }
+}
+
+#! Redirects every request to an absolute URL
+class RedirectHandler inherits AbstractHttpRequestHandler {
+    private {
+        string location;
+    }
+
+    constructor(string location) {
+        self.location = location;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        return makeResponse(302, "", {"Location": location});
+    }
+}
+
+class HelloSseHandler inherits ServerSentEventHandler {
+    connectionRegisteredImpl(ServerSentEventConnection conn) {
+        conn.send(<SseMessageInfo>{
+            "event": "hello",
+            "data": "unix",
+        });
+    }
+}
+
+#! Accepts one connection on a UNIX domain socket, reports when the request has arrived and never replies
+class SilentUnixListener {
+    public {
+        Counter request_received(1);
+        Counter done(1);
+    }
+
+    private {
+        string path;
+        Socket listener();
+        Queue release();
+    }
+
+    constructor(string path) {
+        self.path = path;
+        if (listener.bindUNIX(path)) {
+            throw "BIND-ERROR", strerror();
+        }
+        if (listener.listen()) {
+            throw "LISTEN-ERROR", strerror();
+        }
+        background run();
+    }
+
+    stop() {
+        if (request_received.getCount()) {
+            # the client never connected (a failing case): connect so the listener thread can finish
+            Socket sock();
+            sock.connect(path);
+            sock.send("GET / HTTP/1.1\r\n\r\n");
+        }
+        release.push(True);
+        done.waitForZero();
+    }
+
+    private:internal run() {
+        on_exit done.dec();
+        *Socket conn = listener.accept();
+        # the request line and headers are complete when the empty line arrives
+        conn.readHTTPHeader(30s);
+        request_received.dec();
+        release.get();
+        conn.close();
+    }
+}
+
+public class HttpClientIoUnixSocketTest inherits QUnit::Test {
+    private {
+        TmpDir tmp;
+        HttpServer server;
+        string sock_path;
+        string url;
+        HelloSseHandler sse();
+        int tcp_port;
+    }
+
+    constructor() : Test("HttpClientIoUnixSocketTest", "1.0", \ARGV) {
+        addTestCase("request over a UNIX domain socket", \testRequest());
+        addTestCase("pooled connection identity", \testPooling());
+        addTestCase("socket URL without a scheme", \testNoScheme());
+        addTestCase("RestClientIo API path", \testRestClientIo());
+        addTestCase("SSE over a UNIX domain socket", \testSse());
+        addTestCase("redirect to another UNIX domain socket", \testRedirect());
+        addTestCase("missing socket fails without DNS", \testMissingSocket());
+        addTestCase("request timeout", \testTimeout());
+        addTestCase("cancellation by closeAll()", \testCancel());
+        addTestCase("unsupported transports are rejected", \testUnsupported());
+        addTestCase("TCP requests are unaffected", \testTcp());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        tmp = new TmpDir("httpclientio-unix-");
+        sock_path = tmp.path + "/rest.sock";
+        url = "http://socket=" + encode_url(sock_path, True);
+        server = new HttpServer(<HttpServerOptionInfo>{
+            "logger": new Logger("unix", LoggerLevel::getLevelInfo()),
+            "enable_h3": False,
+        });
+        server.setHandler("sse", "/sse", NOTHING, sse);
+        server.setDefaultHandler("echo", new EchoHandler());
+        server.addListener(<HttpListenerOptionInfo>{"node": sock_path});
+        tcp_port = server.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        server.waitForAsyncIo();
+    }
+
+    globalTearDown() {
+        if (server) {
+            server.stop();
+            delete server;
+        }
+        delete tmp;
+    }
+
+    testRequest() {
+        HttpClientConnectionManager manager();
+        on_exit manager.closeAll();
+        hash<auto> resp = manager.request(url, "GET", "/api/test");
+        assertEq(200, resp.status_code);
+        hash<auto> body = parse_json(resp.body);
+        assertEq("api/test", body.path);
+        # the Host header carries the URL-encoded socket path, like HTTPClient
+        assertEq(encode_url(sock_path, True), body.host);
+    }
+
+    testPooling() {
+        HttpClientConnectionManager manager();
+        on_exit manager.closeAll();
+        assertEq(200, manager.request(url, "GET", "/one").status_code);
+        assertEq(200, manager.request(url, "GET", "/two").status_code);
+        list<hash<HttpClientConnectionInfo>> info = manager.getConnectionInfo(url);
+        assertEq(1, info.size(), "sequential requests reuse one connection");
+        assertEq(sock_path, info[0].host);
+        assertEq(0, info[0].port);
+        assertEq("h1", info[0].protocol);
+        assertFalse(info[0].ssl);
+    }
+
+    testNoScheme() {
+        HttpClientConnectionManager manager();
+        on_exit manager.closeAll();
+        assertEq(200, manager.request("socket=" + encode_url(sock_path, True), "GET", "/").status_code);
+    }
+
+    testRestClientIo() {
+        RestClientIo rest({"url": url + "/api/v1", "data": "json"});
+        hash<auto> resp = rest.restGet("items");
+        assertEq(200, resp.status_code);
+        assertEq("api/v1/items", resp.body.path);
+    }
+
+    testSse() {
+        RestClientIo rest({"url": url});
+        SseStreamReader reader = rest.restSseReader("GET", "/sse");
+        *hash<SseMessageInfo> evt = reader.readEvent(10s);
+        assertTrue(exists evt, "an SSE event arrived over the UNIX domain socket");
+        assertEq("hello", evt.event);
+    }
+
+    testRedirect() {
+        string target_path = tmp.path + "/target.sock";
+        HttpServer target(<HttpServerOptionInfo>{"enable_h3": False});
+        on_exit target.stop();
+        target.setDefaultHandler("echo", new EchoHandler());
+        target.addListener(<HttpListenerOptionInfo>{"node": target_path});
+        target.waitForAsyncIo();
+
+        string redirect_path = tmp.path + "/redirect.sock";
+        HttpServer redirect(<HttpServerOptionInfo>{"enable_h3": False});
+        on_exit redirect.stop();
+        redirect.setDefaultHandler("redirect", new RedirectHandler("http://socket="
+            + encode_url(target_path, True) + "/moved"));
+        redirect.addListener(<HttpListenerOptionInfo>{"node": redirect_path});
+        redirect.waitForAsyncIo();
+
+        HttpClientConnectionManager manager();
+        on_exit manager.closeAll();
+        hash<auto> resp = manager.request("http://socket=" + encode_url(redirect_path, True), "GET", "/start");
+        assertEq(200, resp.status_code);
+        assertEq("moved", parse_json(resp.body).path);
+    }
+
+    testMissingSocket() {
+        HttpClientConnectionManager manager();
+        on_exit manager.closeAll();
+        string missing = tmp.path + "/missing.sock";
+        try {
+            manager.request("http://socket=" + encode_url(missing, True), "GET", "/");
+            fail("a request to a missing socket must fail");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("HTTPCLIENT-CONNECT-ERROR", ex.err);
+            assertRegex("No such file or directory", ex.desc);
+            assertFalse(ex.desc =~ /QOREADDRINFO/, "no name resolution is attempted");
+        }
+    }
+
+    testTimeout() {
+        string path = tmp.path + "/silent-timeout.sock";
+        SilentUnixListener listener(path);
+        on_exit listener.stop();
+        HttpClientConnectionManager manager();
+        on_exit manager.closeAll();
+        assertThrows("HTTPCLIENT-TIMEOUT", \manager.request(), ("http://socket=" + encode_url(path, True), "GET",
+            "/", NOTHING, NOTHING, 500ms));
+    }
+
+    testCancel() {
+        string path = tmp.path + "/silent-cancel.sock";
+        SilentUnixListener listener(path);
+        on_exit listener.stop();
+        HttpClientConnectionManager manager();
+
+        Queue result();
+        background sub () {
+            try {
+                result.push(manager.request("http://socket=" + encode_url(path, True), "GET", "/"));
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex);
+            }
+        }();
+        assertEq(0, listener.request_received.waitForZero(30s), "the request reached the listener");
+        manager.closeAll();
+        auto rv = result.get(30s);
+        assertEq("hash<ExceptionInfo>", rv.fullType(), "the in-flight request was aborted");
+    }
+
+    testUnsupported() {
+        HttpClientConnectionManager manager();
+        on_exit manager.closeAll();
+        assertThrows("HTTPCLIENT-URL-ERROR", "TLS is not supported", \manager.request(),
+            ("https://socket=" + encode_url(sock_path, True), "GET", "/"));
+
+        foreach string protocol in (("h2", "h3")) {
+            HttpClientConnectionManager m(<HttpClientConnectionManagerOptions>{"protocol": protocol});
+            on_exit m.closeAll();
+            assertThrows("HTTPCLIENT-URL-ERROR", "only HTTP/1.1", \m.request(), (url, "GET", "/"));
+        }
+
+        HttpClientConnectionManager proxied(<HttpClientConnectionManagerOptions>{
+            "proxy_url": sprintf("http://localhost:%d", tcp_port),
+        });
+        on_exit proxied.closeAll();
+        assertThrows("HTTPCLIENT-PROXY-ERROR", "cannot use a proxy", \proxied.request(), (url, "GET", "/"));
+    }
+
+    testTcp() {
+        HttpClientConnectionManager manager();
+        on_exit manager.closeAll();
+        assertEq(200, manager.request(url, "GET", "/unix").status_code);
+        hash<auto> resp = manager.request(sprintf("http://localhost:%d", tcp_port), "GET", "/tcp");
+        assertEq(200, resp.status_code);
+        assertEq("tcp", parse_json(resp.body).path);
+        list<hash<HttpClientConnectionInfo>> info = manager.getConnectionInfo(sprintf("http://localhost:%d",
+            tcp_port));
+        assertEq(1, info.size());
+        assertEq(tcp_port, info[0].port);
+    }
+}

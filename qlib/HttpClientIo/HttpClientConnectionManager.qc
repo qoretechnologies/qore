@@ -512,21 +512,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         maybeCleanupIdle();
         drainPendingAltSvc();
 
-        hash<UrlInfo> url_info;
-        try {
-            url_info = parse_url(url);
-        } catch (hash<ExceptionInfo> ex) {
-            throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL %y: %s", url, ex.desc);
-        }
-        if (!url_info.host) {
-            throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL: %y (missing host)", url);
-        }
-        if (!url_info.protocol) {
-            url_info.protocol = "https";
-        }
-        if (!url_info.port) {
-            url_info.port = url_info.protocol == "https" ? 443 : 80;
-        }
+        hash<UrlInfo> url_info = parseRequestUrl(url);
 
         bool from_pool = False;
         HttpClientConnection conn = getConnection(url_info, \from_pool, non_blocking);
@@ -631,21 +617,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         # takes effect on the next connection
         drainPendingAltSvc();
 
-        hash<UrlInfo> url_info;
-        try {
-            url_info = parse_url(url);
-        } catch (hash<ExceptionInfo> ex) {
-            throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL %y: %s", url, ex.desc);
-        }
-        if (!url_info.host) {
-            throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL: %y (missing host)", url);
-        }
-        if (!url_info.protocol) {
-            url_info.protocol = "https";
-        }
-        if (!url_info.port) {
-            url_info.port = url_info.protocol == "https" ? 443 : 80;
-        }
+        hash<UrlInfo> url_info = parseRequestUrl(url);
 
         bool from_pool = False;
         HttpClientConnection conn = getConnection(url_info, \from_pool, non_blocking);
@@ -981,7 +953,8 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
     #! Performs a synchronous request
     /** @param url the target URL; only scheme, host, and port are used for connection
-        management — the URL's path is \b not prepended to \c path
+        management — the URL's path is \b not prepended to \c path; a \c socket= URL with a URL-encoded
+        absolute path addresses a server on a UNIX domain socket (see @ref httpclientio_usage)
         @param method HTTP method
         @param path the full request path to send (must include any base path from the URL)
         @param headers request headers (optional)
@@ -1005,7 +978,9 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
 
         @throw HTTPCLIENT-TIMEOUT if the request times out (after retry for pooled connections)
         @throw HTTPCLIENT-REQUEST-ERROR if the request fails due to a protocol or transport error
-        @throw HTTPCLIENT-URL-ERROR if the URL is invalid or missing a host
+        @throw HTTPCLIENT-URL-ERROR if the URL is invalid or missing a host, or if it addresses a UNIX domain
+        socket with TLS or with a forced HTTP/2 or HTTP/3 protocol
+        @throw HTTPCLIENT-PROXY-ERROR if the URL addresses a UNIX domain socket and a proxy is configured
         @throw HTTPCLIENT-SHUTDOWN if the connection manager is shutting down
         @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired after retries
         @throw HTTP-REDIRECT-ERROR if the maximum number of redirects is exceeded
@@ -1063,9 +1038,14 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                 if (location =~ /^https?:\/\//) {
                     # Absolute URL — update base URL and path
                     hash<UrlInfo> loc_info = parse_url(location);
-                    url = sprintf("%s://%s", loc_info.protocol, loc_info.host);
-                    if (loc_info.port) {
-                        url += sprintf(":%d", loc_info.port);
+                    if (isUnixSocketTarget(loc_info)) {
+                        # parse_url() decodes a "socket=" host to the socket path
+                        url = sprintf("%s://socket=%s", loc_info.protocol, encode_url(loc_info.host, True));
+                    } else {
+                        url = sprintf("%s://%s", loc_info.protocol, loc_info.host);
+                        if (loc_info.port) {
+                            url += sprintf(":%d", loc_info.port);
+                        }
                     }
                     path = loc_info.path ?? "/";
                 } else {
@@ -1344,22 +1324,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         on_exit in_flight.dec();
         *string filter_key;
         if (exists url) {
-            hash<UrlInfo> url_info;
-            try {
-                url_info = parse_url(url);
-            } catch (hash<ExceptionInfo> ex) {
-                throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL %y: %s", url, ex.desc);
-            }
-            if (!url_info.host) {
-                throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL: %y (missing host)", url);
-            }
-            if (!url_info.protocol) {
-                url_info.protocol = "https";
-            }
-            if (!url_info.port) {
-                url_info.port = url_info.protocol == "https" ? 443 : 80;
-            }
-            filter_key = sprintf("%s:%d", url_info.host, url_info.port);
+            filter_key = getPoolKey(parseRequestUrl(url));
         }
 
         # Snapshot the matching connections under the pool lock, then build the
@@ -1573,6 +1538,74 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         return migrated;
     }
 
+    #! Returns @ref True if the parsed URL names a UNIX domain socket
+    /** A \c socket= host (e.g. <tt>http://socket=%2Ftmp%2Fapp.sock</tt>) is decoded by @ref parse_url() to the
+        socket path and has no port; this is also how @ref Qore::HTTPClient "HTTPClient" identifies a UNIX domain
+        socket target.
+
+        @param url_info the parsed URL
+
+        @return @ref True if \a url_info names a UNIX domain socket
+    */
+    static bool isUnixSocketTarget(hash<auto> url_info) {
+        return !url_info.port && url_info.host =~ /^\//;
+    }
+
+    #! Parses a request URL and applies the default scheme and port
+    /** A UNIX domain socket target keeps port 0 and defaults to \c http; plain HTTP/1.1 is the only transport
+        available for it.
+
+        @param url the request URL
+
+        @return the parsed URL
+
+        @throw HTTPCLIENT-URL-ERROR the URL is invalid or has no host, or requests TLS to a UNIX domain socket
+        @throw HTTPCLIENT-PROXY-ERROR a UNIX domain socket target was requested with a proxy configured
+    */
+    private hash<UrlInfo> parseRequestUrl(string url) {
+        hash<UrlInfo> url_info;
+        try {
+            url_info = parse_url(url);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL %y: %s", url, ex.desc);
+        }
+        if (!url_info.host) {
+            throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL: %y (missing host)", url);
+        }
+        if (isUnixSocketTarget(url_info)) {
+            if (!url_info.protocol) {
+                url_info.protocol = "http";
+            } else if (url_info.protocol != "http") {
+                # only the socket path is reported: the URL can carry credentials
+                throw "HTTPCLIENT-URL-ERROR", sprintf("UNIX domain socket %y: TLS is not supported over UNIX "
+                    "domain sockets; use an http://socket= URL", url_info.host);
+            }
+            if (proxy_info) {
+                throw "HTTPCLIENT-PROXY-ERROR", sprintf("UNIX domain socket %y: requests to UNIX domain "
+                    "sockets cannot use a proxy", url_info.host);
+            }
+            # connections take an integer port; 0 marks the UNIX domain socket target
+            url_info.port = 0;
+            return url_info;
+        }
+        if (!url_info.protocol) {
+            url_info.protocol = "https";
+        }
+        if (!url_info.port) {
+            url_info.port = url_info.protocol == "https" ? 443 : 80;
+        }
+        return url_info;
+    }
+
+    #! Returns the connection pool key for a URL parsed by @ref parseRequestUrl()
+    /** @param url_info the parsed URL
+
+        @return the pool key: \c host:port, or \c path:0 for a UNIX domain socket
+    */
+    static string getPoolKey(hash<auto> url_info) {
+        return sprintf("%s:%d", url_info.host, url_info.port);
+    }
+
     #! Internal: resolves the protocol to use for a given URL
     /** In auto mode: HTTPS with no proxy uses a happy-eyeballs race between
         HTTP/3 and HTTP/2, giving HTTP/3 a head start.  Plain HTTP uses
@@ -1585,12 +1618,23 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         That entry expires after @ref H1_REPROBE_INTERVAL so the race is re-run
         rather than pinning the host to HTTP/1.1 permanently.
 
+        A UNIX domain socket target always uses HTTP/1.1.
+
         @param url_info parsed URL info
         @param key the pool key "host:port"
 
         @return "h1", "h2", "h3", or "happy-eyeballs"
+
+        @throw HTTPCLIENT-URL-ERROR HTTP/2 or HTTP/3 is forced for a UNIX domain socket target
     */
     private string resolveProtocol(hash<auto> url_info, string key) {
+        if (isUnixSocketTarget(url_info)) {
+            if (opts.protocol == "h2" || opts.protocol == "h3") {
+                throw "HTTPCLIENT-URL-ERROR", sprintf("UNIX domain socket %y: protocol %y is not supported over "
+                    "UNIX domain sockets; only HTTP/1.1 is available", url_info.host, opts.protocol);
+            }
+            return "h1";
+        }
         if (opts.protocol == "h1") {
             return "h1";
         }
@@ -1675,7 +1719,7 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
     */
     private HttpClientConnection getConnection(hash<auto> url_info, reference<bool> from_pool,
             *bool non_blocking) {
-        string key = sprintf("%s:%d", url_info.host, url_info.port);
+        string key = getPoolKey(url_info);
 
         # Persistent-session pin: if a leased connection is pinned for this manager's remote, use it
         # for every request/stream to that host:port (bypassing the pool scan) so a connection-scoped
@@ -2442,22 +2486,8 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         maybeCleanupIdle();
         drainPendingAltSvc();
 
-        hash<UrlInfo> url_info;
-        try {
-            url_info = parse_url(url);
-        } catch (hash<ExceptionInfo> ex) {
-            throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL %y: %s", url, ex.desc);
-        }
-        if (!url_info.host) {
-            throw "HTTPCLIENT-URL-ERROR", sprintf("invalid URL: %y (missing host)", url);
-        }
-        if (!url_info.protocol) {
-            url_info.protocol = "https";
-        }
-        if (!url_info.port) {
-            url_info.port = url_info.protocol == "https" ? 443 : 80;
-        }
-        string key = sprintf("%s:%d", url_info.host, url_info.port);
+        hash<UrlInfo> url_info = parseRequestUrl(url);
+        string key = getPoolKey(url_info);
 
         # Pool-reuse fast path (read lock, mirrors getConnection's first scan).
         # No stream is reserved here: the caller holds no StreamHandle and will
@@ -2537,20 +2567,11 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         on_exit in_flight.dec();
         hash<UrlInfo> url_info;
         try {
-            url_info = parse_url(url);
+            url_info = parseRequestUrl(url);
         } catch (hash<ExceptionInfo> ex) {
             return;
         }
-        if (!url_info.host) {
-            return;
-        }
-        if (!url_info.protocol) {
-            url_info.protocol = "https";
-        }
-        if (!url_info.port) {
-            url_info.port = url_info.protocol == "https" ? 443 : 80;
-        }
-        abandonAsyncHEByKey(sprintf("%s:%d", url_info.host, url_info.port));
+        abandonAsyncHEByKey(getPoolKey(url_info));
     }
 
     #! Internal: tears down any in-flight async happy-eyeballs race for a key
@@ -3496,11 +3517,8 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         if (shutdown) {
             return;
         }
-        hash<UrlInfo> url_info = parse_url(url);
-        if (!url_info.port) {
-            url_info.port = url_info.protocol == "https" ? 443 : 80;
-        }
-        string key = sprintf("%s:%d", url_info.host, url_info.port);
+        hash<UrlInfo> url_info = parseRequestUrl(url);
+        string key = getPoolKey(url_info);
 
         if (url_info.protocol != "https" && isH2cIncompatible(err)) {
             # Plain HTTP: h2c failed → server doesn't support HTTP/2 prior knowledge
@@ -3700,8 +3718,8 @@ foreach hash<HttpClientConnectionInfo> info in (manager.getConnectionInfo()) {
         if (shutdown) {
             return;
         }
-        hash<UrlInfo> url_info = parse_url(url);
-        string key = sprintf("%s:%d", url_info.host, url_info.port);
+        # the same key getConnection() pools the connection under, including the default port
+        string key = getPoolKey(parseRequestUrl(url));
 
         list<HttpClientConnection> to_close = ();
         {
