@@ -40,12 +40,82 @@
 #include <map>
 #include <string>
 #include <set>
+#include <utility>
 
 // maps from index strings to containers
 typedef std::map<std::string, QoreValue> oimap_t;
 
-// maps from object hashes to index strings
-typedef std::map<std::string, std::string> imap_t;
+//! Reserves the address of a source object, hash or list identified by a serialization index entry
+/** Index entries identify source nodes by address, but a source node can be released before serialization
+    completes; for example a serializeMembers() method or a builtin serializer can return or serialize newly created
+    containers that are released as soon as they have been serialized.  If the node's memory were then reused for a
+    new node, the new node would be taken for the old one and would be serialized as a reference to the old node's
+    serialized data.
+
+    This holds a weak reference (an existence reference for objects) to the node.  The reference keeps the node's
+    memory allocated, and therefore its address unique, until the serialization context is destroyed; it does not
+    keep the node's value alive, change its strong reference count or delay its destruction.  Releasing the
+    reference cannot raise an exception.
+*/
+class QoreSerializationIdentity {
+public:
+    DLLLOCAL explicit QoreSerializationIdentity(const QoreObject& obj) : node(&obj), type(NT_OBJECT) {
+        obj.tRef();
+    }
+
+    DLLLOCAL explicit QoreSerializationIdentity(const QoreHashNode& h) : node(&h), type(NT_HASH) {
+        const_cast<QoreHashNode&>(h).weakRef();
+    }
+
+    DLLLOCAL explicit QoreSerializationIdentity(const QoreListNode& l) : node(&l), type(NT_LIST) {
+        const_cast<QoreListNode&>(l).weakRef();
+    }
+
+    DLLLOCAL QoreSerializationIdentity(QoreSerializationIdentity&& old) noexcept : node(old.node), type(old.type) {
+        old.node = nullptr;
+    }
+
+    DLLLOCAL ~QoreSerializationIdentity() {
+        if (!node) {
+            return;
+        }
+        switch (type) {
+            case NT_OBJECT:
+                const_cast<QoreObject*>(static_cast<const QoreObject*>(node))->tDeref();
+                break;
+            case NT_HASH:
+                const_cast<QoreHashNode*>(static_cast<const QoreHashNode*>(node))->weakDeref();
+                break;
+            default:
+                assert(type == NT_LIST);
+                const_cast<QoreListNode*>(static_cast<const QoreListNode*>(node))->weakDeref();
+                break;
+        }
+    }
+
+    DLLLOCAL QoreSerializationIdentity(const QoreSerializationIdentity&) = delete;
+    DLLLOCAL QoreSerializationIdentity& operator=(const QoreSerializationIdentity&) = delete;
+    DLLLOCAL QoreSerializationIdentity& operator=(QoreSerializationIdentity&&) = delete;
+
+private:
+    const AbstractQoreNode* node;
+    qore_type_t type;
+};
+
+//! a serialization index entry for a source node
+struct QoreSerializationIndexEntry {
+    //! the serialization index string of the node's serialized data
+    std::string index;
+    //! reserves the source node's address while it identifies this entry
+    QoreSerializationIdentity source;
+
+    DLLLOCAL QoreSerializationIndexEntry(std::string&& index, QoreSerializationIdentity&& source)
+            : index(std::move(index)), source(std::move(source)) {
+    }
+};
+
+// maps from object hashes to index entries
+typedef std::map<std::string, QoreSerializationIndexEntry> imap_t;
 
 // set of modules to load
 typedef std::set<std::string> mset_t;

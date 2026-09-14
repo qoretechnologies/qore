@@ -1,0 +1,378 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%allow-weak-references
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires ../../../../../qlib/QUnit.qm
+%exec-class TransientSourceIdentityTest
+
+#! the number of objects serialized in one operation in each test
+const OBJECTS = 100;
+#! the number of containers created by each serializeMembers() call
+const BATCH = 64;
+
+#! Serialization identifies each source object, hash and list by its address. Containers created by a
+#! serializeMembers() method or a builtin serializer are released as soon as they have been serialized, and the
+#! memory of a released container is normally reused for the next container of the same size; each of these tests
+#! creates many such containers in one operation, which would serialize a later container as a reference to an
+#! earlier one if a released container's address could be reused while it identified an index entry.
+class TransientSourceIdentityTest inherits QUnit::Test {
+    constructor() : Test("Serialization identity of released source containers", "1.0") {
+        addTestCase("Released hook hashes keep distinct identities", \hashes());
+        addTestCase("Released hook lists keep distinct identities", \lists());
+        addTestCase("Released hook objects keep distinct identities", \objects());
+        addTestCase("Weak references to released containers keep their identities", \weakReferences());
+        addTestCase("Shared and cyclic released containers keep a single identity", \sharedAndCyclic());
+        addTestCase("Identity retention does not delay destruction", \destruction());
+        addTestCase("Serialization errors release retained identities", \serializationErrors());
+        addTestCase("Builtin serializer payloads keep distinct identities", \builtinSerializer());
+        set_return_value(main());
+    }
+
+    private hashes() {
+        list<TransientHashes> sources = map new TransientHashes($1), xrange(OBJECTS);
+        hash<SerializationInfo> data = Serializable::serializeToData(sources);
+        # the source list, then for each object: the object, its state list and each of its hashes
+        assertEq(1 + OBJECTS * (2 + BATCH), data._index.size());
+        list<auto> restored = Serializable::deserialize(data);
+        assertEq(OBJECTS, restored.size());
+        foreach TransientHashes object in (restored) {
+            assertEq($#, object.id);
+            assertEq(TransientHashes::getState($#), object.restored.state);
+        }
+    }
+
+    private lists() {
+        list<TransientLists> sources = map new TransientLists($1), xrange(OBJECTS);
+        hash<SerializationInfo> data = Serializable::serializeToData(sources);
+        assertEq(1 + OBJECTS * (2 + BATCH), data._index.size());
+        list<auto> restored = Serializable::deserialize(data);
+        assertEq(OBJECTS, restored.size());
+        foreach TransientLists object in (restored) {
+            assertEq($#, object.id);
+            assertEq(TransientLists::getState($#), object.restored.state);
+        }
+    }
+
+    private objects() {
+        list<TransientObjects> sources = map new TransientObjects($1), xrange(OBJECTS);
+        hash<SerializationInfo> data = Serializable::serializeToData(sources);
+        assertEq(1 + OBJECTS * (2 + BATCH), data._index.size());
+        list<auto> restored = Serializable::deserialize(data);
+        assertEq(OBJECTS, restored.size());
+        foreach TransientObjects object in (restored) {
+            int id = $#;
+            assertEq(id, object.id);
+            assertEq(BATCH, object.restored.state.size());
+            foreach TransientLeaf leaf in (object.restored.state) {
+                assertEq(id, leaf.id);
+                assertEq($#, leaf.slot);
+            }
+        }
+    }
+
+    private weakReferences() {
+        list<TransientWeakReferences> sources = map new TransientWeakReferences($1), xrange(OBJECTS);
+        hash<SerializationInfo> data = Serializable::serializeToData(sources);
+        # for each object: the object, four lists, its hashes and its leaf objects
+        assertEq(1 + OBJECTS * (5 + 2 * BATCH), data._index.size());
+
+        # each weak reference refers to the index entry of the strong reference created with it
+        foreach hash<auto> element in (data._index{data._data._index}._elements) {
+            hash<auto> members = data._index{element._index}._class_data.TransientWeakReferences;
+            foreach string key in (("hashes", "leaves")) {
+                list<auto> strong = data._index{members{key}._index}._elements;
+                list<auto> weak = data._index{members{"weak_" + key}._index}._elements;
+                assertEq(BATCH, weak.size());
+                assertEq((map $1._index, strong), (map $1._weak, weak));
+            }
+        }
+
+        list<auto> restored = Serializable::deserialize(data);
+        assertEq(OBJECTS, restored.size());
+        foreach TransientWeakReferences object in (restored) {
+            int id = $#;
+            assertEq(id, object.id);
+            for (int i = 0; i < BATCH; ++i) {
+                assertEq({"id": id, "slot": i}, object.restored.hashes[i]);
+                assertEq({"id": id, "slot": i}, object.restored.weak_hashes[i]);
+                # a weak reference compares by identity once assigned to a strongly-typed variable
+                TransientLeaf weak_leaf = object.restored.weak_leaves[i];
+                assertTrue(weak_leaf === object.restored.leaves[i]);
+                assertEq(id, weak_leaf.id);
+                assertEq(i, weak_leaf.slot);
+            }
+        }
+    }
+
+    private sharedAndCyclic() {
+        list<TransientSharedGraph> sources = map new TransientSharedGraph($1), xrange(OBJECTS);
+        hash<SerializationInfo> data = Serializable::serializeToData(sources);
+        # for each object: the object, its shared hash and its self-referencing node
+        assertEq(1 + OBJECTS * 3, data._index.size());
+        foreach hash<auto> element in (data._index{data._data._index}._elements) {
+            hash<auto> members = data._index{element._index}._class_data.TransientSharedGraph;
+            assertEq(members.first._index, members.second._index);
+            hash<auto> node = data._index{members.node._index}._class_data.TransientNode;
+            assertEq(members.node._index, node.next._index);
+        }
+
+        list<auto> restored = Serializable::deserialize(data);
+        assertEq(OBJECTS, restored.size());
+        foreach TransientSharedGraph object in (restored) {
+            assertEq($#, object.id);
+            assertEq({"id": $#}, object.restored.first);
+            assertEq({"id": $#}, object.restored.second);
+            TransientNode node = object.restored.node;
+            assertEq($#, node.id);
+            assertTrue(node.next === node);
+            # break the restored cycle
+            remove node.next;
+        }
+    }
+
+    private destruction() {
+        TransientDestructionProbe::destroyed = 0;
+        list<TransientDestructionHook> sources = map new TransientDestructionHook($1), xrange(OBJECTS);
+        hash<SerializationInfo> data = Serializable::serializeToData(sources);
+        # each hook ran after the probes created by all earlier hooks had been released and destroyed
+        assertEq((map $1, xrange(OBJECTS)), (map $1.observed_destroyed, sources));
+        assertEq(OBJECTS, TransientDestructionProbe::destroyed);
+        assertEq(1 + OBJECTS * 2, data._index.size());
+    }
+
+    private serializationErrors() {
+        list<TransientHashes> good = map new TransientHashes($1), xrange(OBJECTS);
+
+        # a hook throws after earlier hooks' released containers were indexed
+        list<auto> sources = good + (new TransientFailure(True),) + good;
+        assertThrows("TRANSIENT-FAILURE", \Serializable::serializeToData(), (sources,));
+
+        # a hook returns a released container holding a value that cannot be serialized
+        sources = good + (new TransientFailure(False),);
+        assertThrows("SERIALIZATION-ERROR", \Serializable::serializeToData(), (sources,));
+
+        hash<SerializationInfo> data = Serializable::serializeToData(good);
+        assertEq(1 + OBJECTS * (2 + BATCH), data._index.size());
+        list<auto> restored = Serializable::deserialize(data);
+        foreach TransientHashes object in (restored) {
+            assertEq(TransientHashes::getState($#), object.restored.state);
+        }
+    }
+
+    private builtinSerializer() {
+        list<ColumnarResult> sources = map ColumnarResult::fromRows((
+            {"id": $1, "name": "row-" + $1, "amount": $1 * 1.5n},
+            {"id": -$1, "name": NOTHING, "amount": NOTHING},
+        )), xrange(OBJECTS);
+        list<auto> restored = Serializable::deserialize(Serializable::serialize(sources));
+        assertEq(OBJECTS, restored.size());
+        foreach ColumnarResult result in (restored) {
+            assertEq(sources[$#].toRows(), result.toRows());
+        }
+    }
+}
+
+#! returns a list of new hashes from serializeMembers()
+class TransientHashes inherits Serializable {
+    public {
+        transient int id;
+        transient *hash<auto> restored;
+    }
+
+    constructor(int id) {
+        self.id = id;
+    }
+
+    static list<auto> getState(int id) {
+        return map ("id": id, "slot": $1), xrange(BATCH);
+    }
+
+    private:internal hash<auto> serializeMembers(*hash<auto> members) {
+        return {"id": id, "state": TransientHashes::getState(id)};
+    }
+
+    private:internal deserializeMembers(hash<auto> members) {
+        id = members.id;
+        restored = members;
+    }
+}
+
+#! returns a list of new lists from serializeMembers()
+class TransientLists inherits Serializable {
+    public {
+        transient int id;
+        transient *hash<auto> restored;
+    }
+
+    constructor(int id) {
+        self.id = id;
+    }
+
+    static list<auto> getState(int id) {
+        return map (id, $1), xrange(BATCH);
+    }
+
+    private:internal hash<auto> serializeMembers(*hash<auto> members) {
+        return {"id": id, "state": TransientLists::getState(id)};
+    }
+
+    private:internal deserializeMembers(hash<auto> members) {
+        id = members.id;
+        restored = members;
+    }
+}
+
+class TransientLeaf inherits Serializable {
+    public {
+        int id;
+        int slot;
+    }
+
+    constructor(int id, int slot) {
+        self.id = id;
+        self.slot = slot;
+    }
+}
+
+#! returns a list of new objects from serializeMembers()
+class TransientObjects inherits Serializable {
+    public {
+        transient int id;
+        transient *hash<auto> restored;
+    }
+
+    constructor(int id) {
+        self.id = id;
+    }
+
+    private:internal hash<auto> serializeMembers(*hash<auto> members) {
+        return {"id": id, "state": map new TransientLeaf(id, $1), xrange(BATCH)};
+    }
+
+    private:internal deserializeMembers(hash<auto> members) {
+        id = members.id;
+        restored = members;
+    }
+}
+
+#! returns new hashes and objects from serializeMembers() with weak references to each of them
+class TransientWeakReferences inherits Serializable {
+    public {
+        transient int id;
+        transient *hash<auto> restored;
+    }
+
+    constructor(int id) {
+        self.id = id;
+    }
+
+    private:internal hash<auto> serializeMembers(*hash<auto> members) {
+        list<auto> hashes = map ("id": id, "slot": $1), xrange(BATCH);
+        list<auto> leaves = map new TransientLeaf(id, $1), xrange(BATCH);
+        list<auto> weak_hashes = ();
+        list<auto> weak_leaves = ();
+        for (int i = 0; i < BATCH; ++i) {
+            weak_hashes[i] := hashes[i];
+            weak_leaves[i] := leaves[i];
+        }
+        return {
+            "id": id,
+            "hashes": hashes,
+            "weak_hashes": weak_hashes,
+            "leaves": leaves,
+            "weak_leaves": weak_leaves,
+        };
+    }
+
+    private:internal deserializeMembers(hash<auto> members) {
+        id = members.id;
+        restored = members;
+    }
+}
+
+class TransientNode inherits Serializable {
+    public {
+        int id;
+        *TransientNode next;
+    }
+
+    constructor(int id) {
+        self.id = id;
+    }
+}
+
+#! returns a new hash referenced twice and a new self-referencing object from serializeMembers()
+class TransientSharedGraph inherits Serializable {
+    public {
+        transient int id;
+        transient *hash<auto> restored;
+    }
+
+    constructor(int id) {
+        self.id = id;
+    }
+
+    private:internal hash<auto> serializeMembers(*hash<auto> members) {
+        hash<auto> shared = {"id": id};
+        # the cycle is reclaimed by deterministic garbage collection when the returned hash is released
+        TransientNode node(id);
+        node.next = node;
+        return {"id": id, "first": shared, "second": shared, "node": node};
+    }
+
+    private:internal deserializeMembers(hash<auto> members) {
+        id = members.id;
+        restored = members;
+    }
+}
+
+class TransientDestructionProbe inherits Serializable {
+    public {
+        static int destroyed = 0;
+        int id;
+    }
+
+    constructor(int id) {
+        self.id = id;
+    }
+
+    destructor() {
+        ++destroyed;
+    }
+}
+
+#! records how many probes created by earlier hooks had been destroyed when its own hook ran
+class TransientDestructionHook inherits Serializable {
+    public {
+        transient int id;
+        transient int observed_destroyed = -1;
+    }
+
+    constructor(int id) {
+        self.id = id;
+    }
+
+    private:internal hash<auto> serializeMembers(*hash<auto> members) {
+        observed_destroyed = TransientDestructionProbe::destroyed;
+        return {"probe": new TransientDestructionProbe(id)};
+    }
+}
+
+#! fails serialization from serializeMembers()
+class TransientFailure inherits Serializable {
+    private {
+        transient bool throw_exception;
+    }
+
+    constructor(bool throw_exception) {
+        self.throw_exception = throw_exception;
+    }
+
+    private:internal hash<auto> serializeMembers(*hash<auto> members) {
+        if (throw_exception) {
+            throw "TRANSIENT-FAILURE", "serializeMembers() failed";
+        }
+        return {"state": map ("slot": $1, "code": sub () {}), xrange(BATCH)};
+    }
+}

@@ -1,0 +1,182 @@
+/* -*- mode: c++; indent-tabs-mode: nil -*- */
+/** @file QC_SerializationIndexProbe.qpp a builtin class serializing through the serialization context index API */
+/*
+    Qore Programming Language
+
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+#include "cppapiuser-module.h"
+#include "QC_SerializationIndexProbe.h"
+
+#include <string>
+
+// the private data of a SerializationIndexProbe object
+class QoreSerializationIndexProbe : public AbstractPrivateData {
+public:
+    DLLLOCAL QoreSerializationIndexProbe(std::string&& label) : label(std::move(label)) {
+    }
+
+    DLLLOCAL const std::string& getLabel() const {
+        return label;
+    }
+
+private:
+    // the label in UTF-8 encoding
+    std::string label;
+};
+
+// serializes the label through newly created containers that are released as soon as they have been serialized
+static QoreHashNode* SerializationIndexProbe_serializer(const QoreObject& self,
+        const QoreSerializationIndexProbe& probe, QoreSerializationContext& context, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    (void)rc;
+    std::string hash_index;
+    {
+        ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
+        h->setKeyValue("label", new QoreStringNode(probe.getLabel(), QCS_UTF8), xsink);
+        if (*xsink || context.serializeHash(**h, hash_index, xsink)) {
+            return nullptr;
+        }
+    }
+
+    std::string list_index;
+    {
+        ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), xsink);
+        l->push(new QoreStringNode(probe.getLabel(), QCS_UTF8), xsink);
+        if (*xsink || context.serializeList(**l, list_index, xsink)) {
+            return nullptr;
+        }
+    }
+
+    // the object is already being serialized, so this returns its existing index
+    std::string self_index;
+    if (context.serializeObject(self, self_index, xsink)) {
+        return nullptr;
+    }
+
+    ReferenceHolder<QoreHashNode> rv(new QoreHashNode(autoTypeInfo), xsink);
+    rv->setKeyValue("hash", new QoreStringNode(hash_index), xsink);
+    rv->setKeyValue("list", new QoreStringNode(list_index), xsink);
+    rv->setKeyValue("self", new QoreStringNode(self_index), xsink);
+    return *xsink ? nullptr : rv.release();
+}
+
+// returns the index string stored under the given key of the serialized data
+static const char* serialization_index_probe_get_index(const QoreHashNode* sdata, const char* key,
+        ExceptionSink* xsink) {
+    QoreValue val = sdata ? sdata->getKeyValue(key) : QoreValue();
+    if (val.getType() != NT_STRING) {
+        xsink->raiseException("DESERIALIZATION-ERROR", "SerializationIndexProbe serialization key '%s' has type "
+            "'%s'; expecting 'string'", key, val.getTypeName());
+        return nullptr;
+    }
+    return val.get<const QoreStringNode>()->c_str();
+}
+
+// restores the label from the indexed containers and verifies that each index resolves to the expected container
+static void SerializationIndexProbe_deserializer(QoreObject& self, const QoreHashNode* sdata,
+        QoreDeserializationContext& context, RuntimeConfig& runtime_cfg, ExceptionSink* xsink) {
+    (void)runtime_cfg;
+    const char* index = serialization_index_probe_get_index(sdata, "hash", xsink);
+    if (!index) {
+        return;
+    }
+    ValueHolder h(context.deserializeContainer(index, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    QoreValue label = h->getType() == NT_HASH ? h->get<const QoreHashNode>()->getKeyValue("label") : QoreValue();
+    if (label.getType() != NT_STRING) {
+        xsink->raiseException("DESERIALIZATION-ERROR", "SerializationIndexProbe hash index '%s' resolved to type "
+            "'%s' without a string 'label' key", index, h->getTypeName());
+        return;
+    }
+
+    index = serialization_index_probe_get_index(sdata, "list", xsink);
+    if (!index) {
+        return;
+    }
+    ValueHolder l(context.deserializeContainer(index, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    if (l->getType() != NT_LIST || l->get<const QoreListNode>()->size() != 1
+        || !l->get<const QoreListNode>()->retrieveEntry(0).isEqualHard(label)) {
+        xsink->raiseException("DESERIALIZATION-ERROR", "SerializationIndexProbe list index '%s' resolved to type "
+            "'%s' without the hash index's label", index, l->getTypeName());
+        return;
+    }
+
+    index = serialization_index_probe_get_index(sdata, "self", xsink);
+    if (!index) {
+        return;
+    }
+    ValueHolder obj(context.deserializeContainer(index, xsink), xsink);
+    if (*xsink) {
+        return;
+    }
+    if (obj->getType() != NT_OBJECT || obj->get<const QoreObject>() != &self) {
+        xsink->raiseException("DESERIALIZATION-ERROR", "SerializationIndexProbe self index '%s' resolved to type "
+            "'%s' instead of the object being deserialized", index, obj->getTypeName());
+        return;
+    }
+
+    TempEncodingHelper str(label.get<const QoreStringNode>(), QCS_UTF8, xsink);
+    if (*xsink) {
+        return;
+    }
+    self.setPrivate(CID_SERIALIZATIONINDEXPROBE, new QoreSerializationIndexProbe(std::string(str->c_str(),
+        str->size())));
+}
+
+//! serializes its state through the serialization context index API
+/** A builtin serializer can serialize a container with QoreSerializationContext::serializeHash(),
+    QoreSerializationContext::serializeList() or QoreSerializationContext::serializeObject() and store the index
+    returned, and its deserializer can then retrieve the container with
+    QoreDeserializationContext::deserializeContainer().  This class serializes its label through a hash and a list
+    that are released as soon as they have been serialized, and stores the index of each along with its own index;
+    examples/test/module-cpp-api/serialization-context-index.qtest drives it.
+*/
+qclass SerializationIndexProbe [arg=QoreSerializationIndexProbe* probe; ns=Qore::CppApiTest; vparent=Serializable;
+    serializer=reinterpret_cast<q_serializer_t>(SerializationIndexProbe_serializer);
+    deserializer=SerializationIndexProbe_deserializer];
+
+//! creates the object with the given label
+/** @param label the label to serialize; converted to UTF-8
+
+    @throw ENCODING-CONVERSION-ERROR the label cannot be converted to UTF-8
+ */
+SerializationIndexProbe::constructor(string label) {
+    TempEncodingHelper str(label, QCS_UTF8, xsink);
+    if (*xsink) {
+        return;
+    }
+    self->setPrivate(CID_SERIALIZATIONINDEXPROBE, new QoreSerializationIndexProbe(std::string(str->c_str(),
+        str->size())));
+}
+
+//! returns the label
+/** @return the label in UTF-8 encoding
+ */
+string SerializationIndexProbe::getLabel() [flags=CONSTANT] {
+    return new QoreStringNode(probe->getLabel(), QCS_UTF8);
+}

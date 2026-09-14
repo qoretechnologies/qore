@@ -55,3 +55,30 @@ one reference left that rejected cycle alive. The cleanup now detaches `next`
 before releasing ownership. `FailedObjectGraphs.qtest` covers this case, mutual
 and container links, escaped rejected objects, native members, inheritance,
 automatic member rejection, cancellation and successful identity preservation.
+
+
+Serialization identifies each indexed source object, hash and list by its
+address. `QoreInternalSerializationContext::imap` maps that address to a
+`QoreSerializationIndexEntry`, which holds the index string and a
+`QoreSerializationIdentity`. The identity holds a weak reference to a hash or
+list, or an existence (`tRef()`) reference to an object. It keeps the node's
+memory allocated, so its address cannot identify a different node, until the
+context is destroyed on success, error or cancellation. It does not keep the
+node's value alive, change its strong reference count, delay its destructor or
+affect copy-on-write. Releasing it cannot raise an exception.
+
+Retention is needed because a source node can be released while the context is
+still in use. A `serializeMembers()` method or builtin serializer can return or
+serialize newly created containers that are released once serialized. Without
+retention, allocators reuse that memory for the next same-sized container, which
+was then found in the index and emitted as a reference to the earlier data
+without being serialized. Shared and cyclic references within one operation
+still resolve to one entry; each distinct source node gets its own entry.
+
+`QoreSerializationContext::serializeHash()`, `serializeList()` and
+`serializeObject()` return the entry's index string, which is the key in
+`_index` and the value `QoreDeserializationContext::deserializeContainer()`
+accepts. `TransientSourceIdentity.qtest` covers released hook hashes, lists,
+objects, weak references, shared and cyclic graphs, destructor timing, errors
+and `ColumnarResult`. `examples/test/module-cpp-api/serialization-context-index.qtest`
+covers the native index API through the `SerializationIndexProbe` test class.

@@ -1,0 +1,118 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  serialization-context-index.qtest Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+%enable-all-warnings
+
+# the "cppapiuser" test module is built into the build tree by
+# examples/test/module-cpp-api/CMakeLists.txt and is not installed, so QORE_MODULE_DIR must include
+# the build tree (run_tests.sh does this)
+%requires cppapiuser
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../../../qlib/QUnit.qm
+
+%exec-class SerializationContextIndexTest
+
+#! tests the serialization index API used by builtin serializers and deserializers
+/** A builtin serializer stores the index strings returned by QoreSerializationContext::serializeHash(),
+    serializeList() and serializeObject(), and its deserializer passes them to
+    QoreDeserializationContext::deserializeContainer().  The SerializationIndexProbe class from the
+    "cppapiuser" test module serializes its label through a hash and a list that are released as soon as
+    they have been serialized, and verifies in its deserializer that each stored index resolves to the
+    expected container.
+*/
+class SerializationContextIndexTest inherits QUnit::Test {
+    public {
+        #! the class data key of the probe class
+        const ProbeClass = "Qore::CppApiTest::SerializationIndexProbe";
+        #! the number of probes serialized in one operation
+        const Probes = 200;
+    }
+
+    constructor() : QUnit::Test("serialization-context-index", "1.0") {
+        addTestCase("context index strings name index entries", \indexStrings());
+        addTestCase("context index strings round trip", \roundTrip());
+        addTestCase("released native containers keep distinct identities", \releasedContainers());
+        addTestCase("invalid context index strings are rejected", \invalidIndexes());
+        set_return_value(main());
+    }
+
+    indexStrings() {
+        SerializationIndexProbe probe("label-ü");
+        hash<SerializationInfo> data = Serializable::serializeToData(probe);
+        # the object, its hash and its list
+        assertEq(3, data._index.size());
+        string self_index = data._data._index;
+        hash<auto> indexes = data._index{self_index}._class_data{ProbeClass};
+        assertEq(self_index, indexes.self);
+        assertEq("label-ü", data._index{indexes.hash}._members.label);
+        assertEq(("label-ü",), data._index{indexes.list}._elements);
+    }
+
+    roundTrip() {
+        SerializationIndexProbe probe("label-ü");
+        SerializationIndexProbe restored = Serializable::deserialize(Serializable::serialize(probe));
+        assertTrue(restored !== probe);
+        assertEq("label-ü", restored.getLabel());
+    }
+
+    releasedContainers() {
+        list<SerializationIndexProbe> probes = map new SerializationIndexProbe("label-" + $1), xrange(Probes);
+        hash<SerializationInfo> data = Serializable::serializeToData(probes);
+        # the source list, then for each probe: the object, its hash and its list
+        assertEq(1 + Probes * 3, data._index.size());
+        list<auto> restored = Serializable::deserialize(data);
+        assertEq(Probes, restored.size());
+        foreach SerializationIndexProbe probe in (restored) {
+            assertEq("label-" + $#, probe.getLabel());
+        }
+    }
+
+    invalidIndexes() {
+        SerializationIndexProbe probe("label");
+        hash<SerializationInfo> good = Serializable::serializeToData(probe);
+        string self_index = good._data._index;
+        hash<auto> indexes = good._index{self_index}._class_data{ProbeClass};
+
+        hash<SerializationInfo> data = good;
+        data._index{self_index}._class_data{ProbeClass}.hash = "missing";
+        assertThrows("DESERIALIZATION-ERROR", "no such index exists", \Serializable::deserialize(), (data,));
+
+        data = good;
+        data._index{self_index}._class_data{ProbeClass}.list = indexes.hash;
+        assertThrows("DESERIALIZATION-ERROR", "list index", \Serializable::deserialize(), (data,));
+
+        data = good;
+        data._index{self_index}._class_data{ProbeClass}.self = indexes.hash;
+        assertThrows("DESERIALIZATION-ERROR", "self index", \Serializable::deserialize(), (data,));
+
+        data = good;
+        remove data._index{self_index}._class_data{ProbeClass}.hash;
+        assertThrows("DESERIALIZATION-ERROR", "key 'hash'", \Serializable::deserialize(), (data,));
+
+        SerializationIndexProbe restored = Serializable::deserialize(good);
+        assertEq("label", restored.getLabel());
+    }
+}

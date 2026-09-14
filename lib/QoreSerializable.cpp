@@ -221,7 +221,7 @@ int QoreInternalSerializationContext::serializeObject(const QoreObject& obj, std
     if (*xsink) {
         return -1;
     }
-    index_str = i->first;
+    index_str = i->second.index;
     return 0;
 }
 
@@ -261,7 +261,7 @@ int QoreInternalSerializationContext::serializeHash(const QoreHashNode& h, std::
     if (*xsink) {
         return -1;
     }
-    index_str = i->first;
+    index_str = i->second.index;
     return 0;
 }
 
@@ -271,7 +271,7 @@ int QoreInternalSerializationContext::serializeList(const QoreListNode& l, std::
     if (*xsink) {
         return -1;
     }
-    index_str = i->first;
+    index_str = i->second.index;
     return 0;
 }
 
@@ -323,10 +323,20 @@ int64 QoreDeserializationContext::getFlags() const {
     return reinterpret_cast<const QoreInternalDeserializationContext*>(this)->flags;
 }
 
+// adds the index entry for a source node before its data is serialized, so that recursive references resolve to it;
+// the entry reserves the node's address until the context is destroyed, even if the node is released first
+template <typename T>
+static imap_t::iterator serialization_add_index(QoreInternalSerializationContext& context, const QoreString& str,
+        imap_t::iterator hint, const T& node) {
+    assert(context.imap.find(str.c_str()) == context.imap.end());
+    return context.imap.emplace_hint(hint, std::piecewise_construct, std::forward_as_tuple(str.c_str()),
+        std::forward_as_tuple(std::to_string(context.imap.size()), QoreSerializationIdentity(node)));
+}
+
 static QoreHashNode* serialization_get_index(imap_t::iterator i, bool weak) {
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(hashdeclIndexedObjectSerializationInfo, nullptr), nullptr);
     qore_hash_private* h = qore_hash_private::get(**rv);
-    h->setKeyValueIntern(weak ? "_weak" : "_index", new QoreStringNode(i->second.c_str()));
+    h->setKeyValueIntern(weak ? "_weak" : "_index", new QoreStringNode(i->second.index.c_str()));
     return rv.release();
 }
 
@@ -496,9 +506,8 @@ imap_t::iterator QoreSerializable::serializeObjectToIndexIntern(const QoreObject
     }
 
     // first write object to index
-    assert(context.imap.find(str.c_str()) == context.imap.end());
-    std::string index_str = std::to_string(context.imap.size());
-    imap_t::iterator i = context.imap.insert(hint, imap_t::value_type(str.c_str(), index_str));
+    imap_t::iterator i = serialization_add_index(context, str, hint, self);
+    const std::string& index_str = i->second.index;
 
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(hashdeclObjectSerializationInfo, xsink), xsink);
     h->setKeyValue("_class", new QoreStringNode(cls.getNamespacePath()), xsink);
@@ -683,9 +692,8 @@ imap_t::iterator QoreSerializable::serializeHashToIndexIntern(const QoreHashNode
         QoreInternalSerializationContext& context, const QoreString& str,
         imap_t::iterator hint, ExceptionSink* xsink) {
     // first write to imap
-    assert(context.imap.find(str.c_str()) == context.imap.end());
-    std::string index_str = std::to_string(context.imap.size());
-    imap_t::iterator i = context.imap.insert(hint, imap_t::value_type(str.c_str(), index_str));
+    imap_t::iterator i = serialization_add_index(context, str, hint, h);
+    const std::string& index_str = i->second.index;
 
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(hashdeclHashSerializationInfo, xsink), xsink);
 
@@ -756,9 +764,8 @@ imap_t::iterator QoreSerializable::serializeListToIndexIntern(const QoreListNode
         QoreInternalSerializationContext& context, const QoreString& str,
         imap_t::iterator hint, ExceptionSink* xsink) {
     // first write to imap
-    assert(context.imap.find(str.c_str()) == context.imap.end());
-    std::string index_str = std::to_string(context.imap.size());
-    imap_t::iterator i = context.imap.insert(hint, imap_t::value_type(str.c_str(), index_str));
+    imap_t::iterator i = serialization_add_index(context, str, hint, l);
+    const std::string& index_str = i->second.index;
 
     ReferenceHolder<QoreHashNode> rv(new QoreHashNode(hashdeclListSerializationInfo, xsink), xsink);
 

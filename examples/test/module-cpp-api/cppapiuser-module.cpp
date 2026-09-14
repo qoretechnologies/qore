@@ -110,6 +110,7 @@ static QoreClass* cppapiuser_class_handler(QoreNamespace* ns, const char* cname)
 static void cppapiuser_module_init(QoreModuleInitContext& ctx, ExceptionSink& xsink) {
     init_cppapiuser_functions(CppApiTestNs);
     CppApiTestNs.addSystemClass(initProgramContextProbeClass(CppApiTestNs));
+    CppApiTestNs.addSystemClass(initSerializationIndexProbeClass(CppApiTestNs));
 }
 
 static void cppapiuser_module_ns_init(QoreNamespace* rns, QoreNamespace* qns, ExceptionSink& xsink) {

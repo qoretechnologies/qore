@@ -29,7 +29,8 @@ set_target_properties(cppapitest PROPERTIES
 
 # --- the consumer -------------------------------------------------------------------------------
 
-qore_wrap_qpp_value(CPPAPIUSER_QPP_SOURCES ql_cppapiuser.qpp QC_ProgramContextProbe.qpp)
+qore_wrap_qpp_value(CPPAPIUSER_QPP_SOURCES ql_cppapiuser.qpp QC_ProgramContextProbe.qpp
+    QC_SerializationIndexProbe.qpp)
 add_custom_target(CPPAPIUSER_QPP_GENERATED_FILES DEPENDS qpp ${CPPAPIUSER_QPP_SOURCES})
 
 add_library(cppapiuser MODULE cppapiuser-module.cpp ${CPPAPIUSER_QPP_SOURCES})

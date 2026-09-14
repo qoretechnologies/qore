@@ -2993,6 +2993,13 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed @ref Qore::Serializable "Serializable" serializing a container as a reference to a different,
+      previously serialized container when a container created during serialization was released and its
+      memory was reused, for example containers returned by a \c serializeMembers() method or created by the
+      @ref Qore::SQL::ColumnarResult "ColumnarResult" serializer. The serialized data silently restored the wrong
+      values or could not be deserialized. The index strings that builtin serializers receive from
+      \c QoreSerializationContext::serializeHash(), \c serializeList() and \c serializeObject() now also name
+      the index entries that \c QoreDeserializationContext::deserializeContainer() expects.
     - Fixed the test runner treating Alpine timeout termination as a crash and rerunning the hung test
       under a debugger. Timeouts remain failed tests and the runner proceeds to the next test.
     - Fixed parallel binary-module documentation builds reading unfinished core tags, abstract-method
