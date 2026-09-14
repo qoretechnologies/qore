@@ -191,8 +191,18 @@ re-entering it each time the returned readiness notifier fires.  The contract:
   argument).  The ping operation uses its own single-attempt limit because the monitor schedules the next ping.
 - **A losing happy-eyeballs leg is not a failure** (`isUnresolvedRaceLeg()`): the race continues with the
   other protocol.
-- **One acquisition step per wake.**  A second step before the notifier fires opens another connection while
-  the first is still connecting.
+- **One acquisition step per readiness notification** — not per wake.  A controller-driven operation is also
+  entered when no notification arrived: the controller drives a first `continuePoll()` as soon as the
+  operation is submitted, and again on every `poll_timeout_ms` tick.  A step taken then asks for a connection
+  while the tracked one is still connecting, and the manager hands back a new connection the moment it sees
+  the old one die — an attempt no notifier ever reported and that the failed-attempt bound therefore never
+  counted.  Before advancing, check that the tracked connection has settled (`connectionPending()`): the
+  notifier is signaled only after the connection is marked ready or closed, so a connection still in the
+  connecting state means the entry was not a readiness notification.  Return the same poll info in that case
+  and leave the notifier unacknowledged, so a notification racing the check is not lost.  An unresolved
+  happy-eyeballs leg is never "pending" here: the race is advanced by the acquisition step itself.  The check
+  is skipped for a notifier the operation signaled itself (the `HTTPCLIENT-NOT-READY` retry): the connection
+  reported itself ready and refused the request anyway, so waiting on it would never end.
 - **Report failures asynchronously.**  A connection that fails synchronously (a refused or missing local
   endpoint) is reported through a self-signaled notifier, so the error reaches the Future or the observers the
   same way as a failure detected later, never as an exception from the call that started the operation.

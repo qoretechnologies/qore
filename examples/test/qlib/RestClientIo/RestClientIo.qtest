@@ -630,6 +630,9 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         addTestCase("ping poll abort cancels request", \testPingPollAbortCancelsRequest());
         addTestCase("ping poll connection-closed retry", \testPingPollConnectionClosedRetry());
         addTestCase("async request connection refused", \testAsyncRequestConnectionRefused());
+        addTestCase("async request connection refused without retries",
+            \testAsyncRequestConnectionRefusedNoRetries());
+        addTestCase("async request opens one connection", \testAsyncRequestSingleConnection());
         addTestCase("caller-driven poll request connection refused", \testPollRequestConnectionRefused());
         addTestCase("ping poll happy-eyeballs H3", \testPingPollHappyEyeballsH3());
         addTestCase("ping poll happy-eyeballs falls back to H2",
@@ -3556,6 +3559,52 @@ Do+Sl1gfqlpgpszQaOMjR4M=
         RestClientIo::RestFuture f = rest.restGetAsync("/refused");
         assertThrows("HTTPCLIENT-CONNECT-ERROR", "Connection refused", \f.get(), (30s,));
         assertEq(2, countConnectionSubmits(cap), "one connection attempt and one retry");
+    }
+
+    #! Regression: an async request with retries disabled reports the connection error after one attempt
+    /** The refused-connection bound must hold at its lower end as well: with \c max_request_retries 0 the
+        first failed connection is final, and no second connection may be opened before the error is raised.
+    */
+    testAsyncRequestConnectionRefusedNoRetries() {
+        int port = reserveUnusedPort();
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"max_request_retries": 0});
+        on_exit mgr.closeAll();
+        RestClientIo::RestClientIo rest({
+            "url": sprintf("http://127.0.0.1:%d", port),
+            "data": "json",
+        }, mgr);
+
+        ControllerLogCapture cap();
+        AsyncIoController::setLogger(cap);
+        on_exit AsyncIoController::setLogger(NOTHING);
+
+        RestClientIo::RestFuture f = rest.restGetAsync("/refused");
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", "Connection refused", \f.get(), (30s,));
+        assertEq(1, countConnectionSubmits(cap), "retries are disabled");
+    }
+
+    #! An async request to a live endpoint opens exactly one connection and completes
+    /** Pairs with @ref testAsyncRequestConnectionRefused(): the connecting state only advances the
+        acquisition when the connection it waited for has settled, and this asserts that the guard neither
+        stalls a connection that becomes ready nor lets the controller's first continuePoll() open a second
+        connection to an endpoint that answers.
+    */
+    testAsyncRequestSingleConnection() {
+        HttpClientConnectionManager mgr(<HttpClientConnectionManagerOptions>{"max_request_retries": 1});
+        on_exit mgr.closeAll();
+        RestClientIo::RestClientIo rest({
+            "url": sprintf("http://127.0.0.1:%d", h1_port),
+            "data": "json",
+            "protocol": "h1",
+        }, mgr);
+
+        ControllerLogCapture cap();
+        AsyncIoController::setLogger(cap);
+        on_exit AsyncIoController::setLogger(NOTHING);
+
+        hash<RestClient::RestResponseInfo> resp = rest.restGetAsync("/api/test").get(30s);
+        assertEq(200, resp.status_code, "async request to a live endpoint succeeds");
+        assertEq(1, countConnectionSubmits(cap), "a successful async request opens one connection");
     }
 
     #! Regression: a caller-driven poll request whose connection is refused ends with the connection error

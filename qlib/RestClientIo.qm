@@ -4524,6 +4524,21 @@ class RestClientIoAsyncConnector {
         remove tracked;
     }
 
+    #! Returns @ref True while the connection handed back by the last acquisition step is still connecting
+    /** An acquisition step may only be advanced when the connection it waited for has settled: the readiness
+        notifier is signaled after the connection is marked ready or closed, so a call that finds the
+        connection still connecting was not driven by that notifier.  Advancing anyway would ask the
+        connection manager for a connection while the current one is still connecting, and the manager hands
+        back a new connection as soon as it sees the old one die — an attempt that no notifier ever reported
+        and that the failed-attempt bound therefore never counted.
+
+        A leg of an unresolved HTTP/3 + HTTP/2 happy-eyeballs race is never pending in this sense: the race
+        is advanced by the acquisition step itself, which starts the second protocol.
+    */
+    bool connectionPending() {
+        return exists tracked && !failed(tracked) && !tracked.isReady() && !mgr.isUnresolvedRaceLeg(tracked);
+    }
+
     #! Counts the tracked connection as a failed attempt if it failed before it could be used
     private checkFailure() {
         *HttpClientIo::HttpClientConnection conn = remove tracked;
@@ -4590,6 +4605,12 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
 
         #! True after the first continuePoll() call in SPS_CONNECTING
         bool waiting_for_connection = False;
+
+        #! True when @ref connection_ready_notifier was signaled here rather than by the connection
+        /** The connection is then not the thing to wait for — it reported itself ready and refused the
+            request anyway — so the next entry must advance the acquisition unconditionally.
+        */
+        bool self_signaled_notifier = False;
 
         #! HTTP method
         string method;
@@ -4831,12 +4852,21 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
         while (True) {
             if (state == SPS_CONNECTING) {
                 if (waiting_for_connection) {
+                    # exactly one acquisition step per readiness notification: this method is also entered
+                    # when no notification arrived — the controller drives a first continuePoll() as soon as
+                    # the operation is submitted, and again on every AsyncNotifierPollTimeoutMs tick — and a
+                    # step taken then would open another connection while the first one is still connecting
+                    if (!self_signaled_notifier && connector.connectionPending()) {
+                        return <SocketPollInfo>{
+                            "events": SOCK_POLLIN,
+                            "socket": connection_ready_notifier,
+                            "poll_timeout_ms": AsyncNotifierPollTimeoutMs,
+                        };
+                    }
                     connection_ready_notifier.acknowledge();
                     delete connection_ready_notifier;
                     waiting_for_connection = False;
                 }
-                # exactly one acquisition step per entry: a second step before the notifier fires would open
-                # another connection while the first one is still connecting
                 doStartConnecting();
                 if (state != SPS_CONNECTING) {
                     continue;
@@ -4889,6 +4919,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
     }
 
     private doStartConnecting() {
+        self_signaled_notifier = False;
         connection_ready_notifier = connector.acquire();
         if (connection_ready_notifier) {
             state = SPS_CONNECTING;
@@ -4901,6 +4932,7 @@ public class RestClientIoAsyncRequestOperation inherits Qore::AbstractPollOperat
             if (ex.err == "HTTPCLIENT-NOT-READY") {
                 connection_ready_notifier = new EventNotifier();
                 connection_ready_notifier.notify();
+                self_signaled_notifier = True;
                 state = SPS_CONNECTING;
                 waiting_for_connection = False;
                 return;
@@ -4993,6 +5025,8 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
         *EventNotifier connection_ready_notifier;
         RestClientIoAsyncConnector connector;
         bool waiting_for_connection = False;
+        #! True when @ref connection_ready_notifier was signaled here rather than by the connection
+        bool self_signaled_notifier = False;
         bool waiting_for_stream = False;
 
         *HttpClientIo::HttpClientStreamHandle pending_stream;
@@ -5116,12 +5150,18 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
 
             if (state == SPS_CONNECTING) {
                 if (waiting_for_connection) {
+                    # exactly one acquisition step per readiness notification; see the same guard in
+                    # RestClientIoAsyncRequestOperation::continuePollIntern()
+                    if (!self_signaled_notifier && connector.connectionPending()) {
+                        return <SocketPollInfo>{
+                            "events": SOCK_POLLIN,
+                            "socket": connection_ready_notifier,
+                        };
+                    }
                     connection_ready_notifier.acknowledge();
                     delete connection_ready_notifier;
                     waiting_for_connection = False;
                 }
-                # exactly one acquisition step per entry: a second step before the notifier fires would open
-                # another connection while the first one is still connecting
                 doStartConnecting();
                 if (state != SPS_CONNECTING) {
                     continue;
@@ -5152,6 +5192,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
     }
 
     private doStartConnecting() {
+        self_signaled_notifier = False;
         connection_ready_notifier = connector.acquire();
         if (connection_ready_notifier) {
             state = SPS_CONNECTING;
@@ -5164,6 +5205,7 @@ public class RestClientIoSseObservableStartOperation inherits Qore::AbstractPoll
             if (ex.err == "HTTPCLIENT-NOT-READY") {
                 connection_ready_notifier = new EventNotifier();
                 connection_ready_notifier.notify();
+                self_signaled_notifier = True;
                 state = SPS_CONNECTING;
                 waiting_for_connection = False;
                 return;
