@@ -1841,6 +1841,12 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         cache out of sync for structurally divergent tables; now processes tables in FK topological order
       - fixed foreign-key DDL generation for Oracle, MySQL, SQL Server, Firebird, and SQLite to preserve quoted
         and renamed column names on both sides of the constraint
+      - fixed a failed native PostgreSQL upsert writing the database error, the SQL statement, and its bind
+        arguments to standard output before the exception reached the caller; the statement and arguments are now
+        only added to the exception description, and the original error code, exception argument (including the
+        SQLSTATE), and exception chain are preserved, so restart classification is unaffected
+      - fixed an exception raised by an \c sql_callback for a list of SQL statements writing the failed statement to
+        standard output; the statement is only passed to the \c error_callback
 
     - @ref utilintro "Util" module
       - added the @ref Util::TerminalColor "TerminalColor" class for ANSI terminal color output with automatic terminal detection

@@ -1,0 +1,237 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# PostgreSQL SqlUtil diagnostics are reported in exceptions and never written to the process output
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires Util
+%requires FsUtil
+
+%try-module pgsql
+%define NoPgsql
+%endtry
+
+%exec-class PgsqlUpsertDiagnosticsTest
+
+#! one execution of PgsqlUpsertDiagnosticsProbe.q
+hashdecl PgsqlUpsertDiagnosticsProbeRun {
+    #! reason the probe could not be executed
+    *string skip;
+    #! name of the table created by the probe
+    string table = "";
+    #! key value rejected by the table's check constraint
+    string key = "";
+    #! synthetic value that must never reach the process output
+    string secret = "";
+    #! probe exit status
+    int rc = -1;
+    #! everything the probe wrote to stdout
+    string stdout = "";
+    #! everything the probe wrote to stderr
+    string stderr = "";
+    #! the probe's serialized result
+    hash<auto> result = {};
+}
+
+class PgsqlUpsertDiagnosticsTest inherits QUnit::Test {
+    private {
+        string qlib_dir;
+        string probe_path;
+
+        #! probe results keyed by module form ("source" or "qmod")
+        hash<string, hash<PgsqlUpsertDiagnosticsProbeRun>> probes = {};
+
+        const MyOpts = Opts + {
+            "connstr": "c,conn=s",
+        };
+
+        const OptionColumn = 22;
+    }
+
+    constructor() : Test("PgsqlUpsertDiagnostics", "1.0", \ARGV, MyOpts) {
+        qlib_dir = normalize_dir(get_script_dir() + "/../../../../qlib");
+        probe_path = normalize_dir(get_script_dir() + "/PgsqlUpsertDiagnosticsProbe.q");
+
+        foreach string form in ("source", "qmod") {
+            addTestCase(form + " modules: process output and module form", sub () { outputTest(form); });
+            addTestCase(form + " modules: rejected native upsert", sub () { constraintTest(form); });
+            addTestCase(form + " modules: connection lost during native upsert",
+                sub () { connectionLossTest(form); });
+            addTestCase(form + " modules: SQL callback error", sub () { sqlCallbackTest(form); });
+        }
+
+        set_return_value(main());
+    }
+
+    private usageIntern() {
+        TestReporter::usageIntern(OptionColumn);
+        printOption("-c,--conn=ARG", "set DB connection argument (ex: \"pgsql:user/pass@db\")", OptionColumn);
+    }
+
+    private outputTest(string form) {
+        hash<PgsqlUpsertDiagnosticsProbeRun> probe = getProbe(form);
+
+        assertEq(0, probe.rc, "probe exit status");
+        assertEq("", probe.stdout, "the probe writes nothing to stdout");
+        assertEq("", probe.stderr, "the probe writes nothing to stderr");
+        foreach hash<auto> output in ({"stdout": probe.stdout, "stderr": probe.stderr}.pairIterator()) {
+            foreach hash<auto> marker in ({
+                "synthetic value": probe.secret,
+                "rejected row": probe.key,
+                "SQL text": probe.table,
+                "SQL arguments": "args: [",
+            }.pairIterator()) {
+                assertFalse(output.value.contains(marker.value),
+                    sprintf("%s does not contain the %s", output.key, marker.key));
+            }
+        }
+
+        string ext = form == "source" ? ".qm" : ".qmod";
+        assertEq(qlib_dir + "/SqlUtil/SqlUtil" + ext, normalize_dir(probe.result.modules.SqlUtil),
+            "SqlUtil module form");
+        assertEq(qlib_dir + "/PgsqlSqlUtilBase" + ext, normalize_dir(probe.result.modules.PgsqlSqlUtilBase),
+            "PgsqlSqlUtilBase module form");
+        assertEq(qlib_dir + "/PgsqlSqlUtil" + ext, normalize_dir(probe.result.modules.PgsqlSqlUtil),
+            "PgsqlSqlUtil module form");
+        assertTrue(probe.result.atomic_upsert, "the table uses PostgreSQL's native upsert");
+        assertNothing(probe.result.cleanup_error, "the probe transaction was rolled back cleanly");
+    }
+
+    private constraintTest(string form) {
+        hash<PgsqlUpsertDiagnosticsProbeRun> probe = getProbe(form);
+        hash<auto> raw = probe.result.constraint.raw;
+        hash<auto> upsert = probe.result.constraint.upsert;
+
+        assertEq("DBI:PGSQL:ERROR", raw.err, "the driver rejects the row");
+        assertEq("23514", raw.arg.alterr, "the driver reports the check violation SQLSTATE");
+        assertEq(raw.err, upsert.err, "the upsert preserves the error code");
+        assertEq(raw.arg, upsert.arg, "the upsert preserves the exception argument and SQLSTATE");
+        assertEq(raw.next, upsert.next, "the upsert preserves the exception chain");
+        assertEq("rethrow", upsert.callstack_type, "the rethrow location is recorded in the call stack");
+        assertTrue(upsert.desc.equalPartial(raw.desc + " (SQL: insert into "),
+            "the description keeps the driver message and appends the statement");
+        assertRegex("on conflict", upsert.desc, "the rejected statement is the native upsert");
+        assertTrue(upsert.desc.contains(probe.secret),
+            "the bind arguments are reported to the caller in the exception description");
+        assertNothing(probe.result.constraint.restart_reason, "a constraint violation is not retryable");
+    }
+
+    private connectionLossTest(string form) {
+        hash<PgsqlUpsertDiagnosticsProbeRun> probe = getProbe(form);
+        if (probe.result.connection_loss_skipped) {
+            testSkip(probe.result.connection_loss_skipped);
+        }
+        hash<auto> raw = probe.result.connection_loss.raw;
+        hash<auto> upsert = probe.result.connection_loss.upsert;
+
+        assertEq("DBI:PGSQL:CONNECTION-ERROR", raw.err, "the driver reports the lost connection");
+        assertGt(0, raw.next.size(), "the driver chains the underlying error");
+        assertTrue(exists probe.result.connection_loss.raw_restart_reason,
+            "the driver's lost connection error is retryable");
+        assertEq(raw.err, upsert.err, "the upsert preserves the error code");
+        assertEq(raw.arg, upsert.arg, "the upsert preserves the exception argument");
+        assertEq(raw.next, upsert.next, "the upsert preserves the exception chain");
+        assertEq("rethrow", upsert.callstack_type, "the rethrow location is recorded in the call stack");
+        assertTrue(upsert.desc.equalPartial(raw.desc + " (SQL: insert into "),
+            "the description keeps the driver message and appends the statement");
+        assertTrue(exists probe.result.connection_loss.restart_reason,
+            "a lost connection during an upsert remains retryable");
+    }
+
+    private sqlCallbackTest(string form) {
+        hash<PgsqlUpsertDiagnosticsProbeRun> probe = getProbe(form);
+        hash<auto> ex = probe.result.sql_callback.exception;
+
+        assertEq("SQL-CALLBACK-REJECTED", ex.err, "the callback exception is rethrown");
+        assertEq("the SQL callback rejected the statement", ex.desc, "the callback description is unchanged");
+        assertRegex("^alter table .* add diagnostic_extra ", probe.result.sql_callback.callback_sql,
+            "the error callback receives the rejected SQL");
+        assertTrue(probe.result.sql_callback.callback_sql.contains(probe.secret),
+            "the rejected SQL contains the default value");
+    }
+
+    #! runs the probe once for each module form and returns the cached result
+    private hash<PgsqlUpsertDiagnosticsProbeRun> getProbe(string form) {
+        if (!probes{form}) {
+            probes{form} = runProbe(form);
+        }
+        if (probes{form}.skip) {
+            testSkip(probes{form}.skip);
+        }
+        assertNothing(probes{form}.result.probe_error, "the probe completed");
+        return probes{form};
+    }
+
+    private hash<PgsqlUpsertDiagnosticsProbeRun> runProbe(string form) {
+%ifdef NoPgsql
+        return <PgsqlUpsertDiagnosticsProbeRun>{"skip": "the pgsql module is not available"};
+%else
+        *string conn = m_options.connstr ?? ENV.QORE_DB_CONNSTR_PGSQL;
+        if (!conn) {
+            return <PgsqlUpsertDiagnosticsProbeRun>{
+                "skip": "no PostgreSQL connection; use --conn or QORE_DB_CONNSTR_PGSQL",
+            };
+        }
+        if (*string err = checkConnection(conn)) {
+            return <PgsqlUpsertDiagnosticsProbeRun>{"skip": err};
+        }
+        if (form == "qmod") {
+            foreach string qmod in ("SqlUtil/SqlUtil.qmod", "PgsqlSqlUtilBase.qmod", "PgsqlSqlUtil.qmod") {
+                if (!is_file(qlib_dir + "/" + qmod)) {
+                    return <PgsqlUpsertDiagnosticsProbeRun>{"skip": sprintf("%s has not been built", qmod)};
+                }
+            }
+        }
+
+        string suffix = get_random_string(12, 1).lwr();
+        hash<PgsqlUpsertDiagnosticsProbeRun> probe = <PgsqlUpsertDiagnosticsProbeRun>{
+            "table": sprintf("qore_upsert_diag_%s_%s", form, suffix),
+            "key": "rejected-key-" + suffix,
+            "secret": "synthetic-secret-" + suffix,
+        };
+
+        # the connection string is passed in the environment to keep it out of the command line
+        setenv("QORE_DB_CONNSTR_PGSQL", conn);
+        setenv("QORE_TEST_PGSQL_DIAG_TABLE", probe.table);
+        setenv("QORE_TEST_PGSQL_DIAG_KEY", probe.key);
+        setenv("QORE_TEST_PGSQL_DIAG_SECRET", probe.secret);
+
+        string tmp_dir = make_tmp_dir("pgsql-upsert-diagnostics-");
+        on_exit remove_tree(tmp_dir);
+
+        string result_path = tmp_dir + "/result.bin";
+        string stdout_path = tmp_dir + "/stdout.txt";
+        string stderr_path = tmp_dir + "/stderr.txt";
+        probe.rc = system(sprintf("%s %s%s %s > %s 2> %s", shellQuote(ENV.QORE_EXECUTABLE ?? "qore"),
+            form == "source" ? "-DSourceModules " : "", shellQuote(probe_path), shellQuote(result_path),
+            shellQuote(stdout_path), shellQuote(stderr_path)));
+        probe.stdout = ReadOnlyFile::readTextFile(stdout_path);
+        probe.stderr = ReadOnlyFile::readTextFile(stderr_path);
+        probe.result = is_file(result_path)
+            ? Serializable::deserialize(ReadOnlyFile::readBinaryFile(result_path))
+            : {"probe_error": "the probe did not write a result"};
+        return probe;
+%endif
+    }
+
+    #! returns a skip reason if the connection cannot be used for the test
+    private static *string checkConnection(string conn) {
+        try {
+            Datasource ds(conn);
+            if (ds.getDriverName() != "pgsql") {
+                return sprintf("the connection uses driver %y, not pgsql", ds.getDriverName());
+            }
+            ds.open();
+        } catch (hash<ExceptionInfo> ex) {
+            return sprintf("cannot connect to PostgreSQL: %s: %s", ex.err, ex.desc);
+        }
+    }
+
+    private static string shellQuote(string value) {
+        return "'" + replace(value, "'", "'\"'\"'") + "'";
+    }
+}

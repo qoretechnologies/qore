@@ -167,6 +167,8 @@ module SqlUtil {
       invalidate it with @ref SqlUtil::sqlutil_clear_table_cache() "sqlutil_clear_table_cache()".  Nothing is
       cached unless a resolver is registered, so a table whose definition changes is never described by a stale
       object that the caller cannot reach
+    - fixed an exception raised by an @ref sql_callback "sql_callback" for a list of SQL statements writing the
+      failed statement to standard output; the statement is only passed to the @ref error_callback "error_callback"
 
     @subsection sqlutilv3_1_0 SqlUtil v3.1.0
     - added a portable temporary-table abstraction: @ref SqlUtil::AbstractDatabase::supportsTempTables()

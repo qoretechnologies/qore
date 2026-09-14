@@ -366,7 +366,6 @@ public class AbstractDatabase inherits AbstractSqlUtilBase {
                 if (opt.error_callback) {
                     opt.error_callback(ac, type, name, table, new_name, info, my_sql, ex);
                 }
-                printf("ERR: %y\n", my_sql);
                 rethrow;
             }
         }

@@ -179,6 +179,10 @@ $function$
       so a bound that kept one could never match the day the database stores
     - fixed introspection of a text bound containing the cast separator (\c "::"): the literal was truncated at
       the first occurrence, which discarded both bounds of the partition
+    - fixed a failed native upsert writing the database error, the SQL statement, and its bind arguments to
+      standard output before the exception reached the caller; the statement and arguments are now only added to
+      the exception description, and the original error code, exception argument (including the SQLSTATE), and
+      exception chain are preserved
 
     @subsection pgsqlsqlutilbasev19 PgsqlSqlUtilBase v1.9
     - \c hasArrayBind() now checks the @ref Qore::SQL::DBI_CAP_HAS_ARRAY_BIND capability flag
@@ -3399,7 +3403,7 @@ public class PgsqlTable inherits SqlUtil::AbstractTable {
 
         return int sub (hash<auto> crow) {
             list<auto> args = crow.values() + crow{updc}.values();
-            on_error rethrow $1.err, printf("%s (SQL: %s args: %y)", $1.desc, sql, args);
+            on_error rethrow $1.err, sprintf("%s (SQL: %s args: %y)", $1.desc, sql, args);
             ds.vexec(sql, args);
             return UR_Verified;
         };
