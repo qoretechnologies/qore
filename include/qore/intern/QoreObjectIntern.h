@@ -574,6 +574,21 @@ public:
 
     DLLLOCAL AbstractPrivateData* tryGetReferencedPrivateData(qore_classid_t key, ExceptionSink* xsink) const;
 
+    //! Returns referenced private data for a deterministic garbage collection scan, or nullptr
+    /** Never raises an exception.  A scan probes every scannable object for each private data type that can hold
+        references, so an object of another class (or one already deleted) is the normal case, not an error.
+
+        Raising here would also capture a call stack, and call stack capture calls external language stack
+        location helpers - the Python helper acquires the GIL - while the scan holds r-sections that other threads
+        wait for.  A thread holding the GIL and waiting for such an object then deadlocks with the scan.
+
+        @param key the class ID of the private data to return
+
+        @return the referenced private data (the caller must dereference it), or nullptr if the object is deleted
+        or has no private data for \a key
+    */
+    DLLLOCAL AbstractPrivateData* getScanPrivateData(qore_classid_t key) const;
+
     DLLLOCAL QoreValue evalBuiltinMethodWithPrivateData(const QoreMethod& method,
             const BuiltinNormalMethodVariantBase* meth, const QoreListNode* args, RuntimeConfig& rc,
             ExceptionSink* xsink);

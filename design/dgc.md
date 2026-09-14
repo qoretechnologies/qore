@@ -240,12 +240,16 @@ The dispatcher in `qore_object_private::scanMembers` (`lib/QoreObject.cpp:399-44
 
 ```cpp
 if (scan_private_data) {
-    ReferenceHolder<Queue> q(...);   if (*q) q_priv->scanMembers(*this, rsh);
-    ReferenceHolder<TreeMapData> tm(...); if (*tm) tm->scanMembers(*this, rsh);
+    ReferenceHolder<Queue> q(reinterpret_cast<Queue*>(getScanPrivateData(CID_QUEUE)), &xsink);
+    if (*q && qore_queue_private::get(**q)->scanMembers(*this, rsh)) return true;
+    ReferenceHolder<TreeMapData> tm(static_cast<TreeMapData*>(getScanPrivateData(CID_TREEMAP)), &xsink);
+    if (*tm && tm->scanMembers(*this, rsh)) return true;
 }
 ```
 
 **When you introduce a new C++ container class that can hold `QoreValue` and be stored as private data, you must add a `scanMembers` method and register it in this dispatcher**, and the enclosing object must set `scan_private_data = true` (or override `needsScan` to return true when appropriate).
+
+**Look the private data up with `getScanPrivateData()`, never with a raising lookup such as `getReferencedPrivateData(key, xsink)`.** Most scanned objects do not have the data being probed for, so a raising lookup creates and discards an exception for nearly every object. Creating an exception captures the call stack, and call stack capture calls external language stack location helpers: the Python helper acquires the GIL. The scan holds r-sections at that point, so a thread that holds the GIL and waits for one of those objects (for example a Python thread whose Qore thread initialization dereferences an object) deadlocks with the scan. Nothing in a scan may raise an exception or call into user or foreign-language code.
 
 Failing to do this produces exactly the symptom that motivated this document: a cycle with an "invisible" edge through a C++ container; DGC sees `rcount < references` on some member, calls `canDelete` → returns 0, and the cycle leaks forever.
 

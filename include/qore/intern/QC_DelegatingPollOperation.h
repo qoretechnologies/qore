@@ -46,10 +46,12 @@ DLLLOCAL extern qore_classid_t CID_DELEGATINGPOLLOPERATION;
 //! (rather than the priv class itself) so callers don't need the priv
 //! class's full definition, which lives in @c QC_DelegatingPollOperation.qpp.
 //!
-//! See @c design/dgc.md Pattern B.  @c obj is the @c RObject wrapping
-//! the priv; @c rsh is the scanner helper.  Returns the result of the
-//! scanner (currently always @c false).
-DLLLOCAL bool qore_delegating_poll_op_scan_members(class QoreObject& qobj,
+//! See @c design/dgc.md Pattern B.  @c priv_data is the object's referenced
+//! private data for @c CID_DELEGATINGPOLLOPERATION as returned by the
+//! non-raising scan lookup (or nullptr), and is dereferenced here; @c obj is
+//! the @c RObject wrapping the priv; @c rsh is the scanner helper.  Returns
+//! the result of the scanner (currently always @c false).
+DLLLOCAL bool qore_delegating_poll_op_scan_members(class AbstractPrivateData* priv_data,
     RObject& obj, RSetHelper& rsh, ExceptionSink* xsink);
 
 #endif // _QORE_INTERN_QC_DELEGATINGPOLLOPERATION_H

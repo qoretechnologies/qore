@@ -3033,6 +3033,11 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       containers, and includes reachable objects with real references when establishing a complete cycle.
       Teardown also releases remaining subcycles when a shared container survives the initiating object's
       destruction, including when a destructor raises an exception or retains another object.
+    - Fixed a deadlock between a reference cycle scan and a thread running embedded Python code. While looking
+      for the internal data of queues, tree maps and asynchronous I/O operations, the scanner raised and discarded
+      an exception for every object without that data; building the exception asked Python for its call stack,
+      which waited for the Python global interpreter lock while the scan held locks that a thread holding that
+      lock was waiting for. The scanner now checks for the data without raising exceptions.
     - Fixed reference cycles never being collected after the references that blocked them went away. The
       reference counts computed for a cycle are a snapshot taken when it was detected, and they were trusted
       indefinitely; a container in the cycle losing its last holder outside it, or an object in another cycle

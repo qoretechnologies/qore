@@ -141,11 +141,6 @@ public:
     // return value must be dereferenced
     DLLLOCAL QoreValue take(QoreObject* self, const QoreStringNode* key, ExceptionSink* xsink);
 
-    // static accessor for QoreObject.cpp DGC support
-    DLLLOCAL static TreeMapData* get(QoreObject& obj, ExceptionSink* xsink) {
-        return static_cast<TreeMapData*>(obj.getReferencedPrivateData(CID_TREEMAP, xsink));
-    }
-
 private:
     typedef std::map<std::string, QoreValue> Map;
     Map data;

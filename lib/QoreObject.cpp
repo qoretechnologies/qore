@@ -485,32 +485,26 @@ bool qore_object_private::scanMembers(RSetHelper& rsh) {
     }
 
     if (scan_private_data) {
+        // Each probe below looks for private data that most scanned objects do not have, so the lookups must
+        // not raise exceptions: see getScanPrivateData().  The sink only receives private data dereferences, and
+        // is cleared on every exit, as before, so the scan never reports them.
         ExceptionSink xsink;
+        ON_BLOCK_EXIT_OBJ(xsink, &ExceptionSink::clear);
         printd(5, "qore_object_private::checkIntern() scanning internals of object of class '%s'\n",
             theclass->getName());
         {
             // issue #3101: check Queue entries for cycles
-            ReferenceHolder<Queue> q(reinterpret_cast<Queue*>(getReferencedPrivateData(CID_QUEUE, &xsink)), &xsink);
-            if (!xsink && *q) {
-                if (qore_queue_private::get(**q)->scanMembers(*this, rsh)) {
-                    return true;
-                }
+            ReferenceHolder<Queue> q(reinterpret_cast<Queue*>(getScanPrivateData(CID_QUEUE)), &xsink);
+            if (*q && qore_queue_private::get(**q)->scanMembers(*this, rsh)) {
+                return true;
             }
-        }
-        if (xsink) {
-            xsink.clear();
         }
         {
             // issue #5028: check TreeMap entries for cycles
-            ReferenceHolder<TreeMapData> tm(TreeMapData::get(*obj, &xsink), &xsink);
-            if (!xsink && *tm) {
-                if (tm->scanMembers(*this, rsh)) {
-                    return true;
-                }
+            ReferenceHolder<TreeMapData> tm(static_cast<TreeMapData*>(getScanPrivateData(CID_TREEMAP)), &xsink);
+            if (*tm && tm->scanMembers(*this, rsh)) {
+                return true;
             }
-        }
-        if (xsink) {
-            xsink.clear();
         }
         {
             // HTTP/2 client poll op — scan stream_queues and
@@ -519,27 +513,18 @@ bool qore_object_private::scanMembers(RSetHelper& rsh) {
             // the normal data/cdmap walk.  See design/dgc.md Pattern B.
             ReferenceHolder<Http2ClientPollOperationPriv> h2pop(
                 reinterpret_cast<Http2ClientPollOperationPriv*>(
-                    getReferencedPrivateData(CID_HTTP2CLIENTPOLLOPERATIONBASE, &xsink)),
+                    getScanPrivateData(CID_HTTP2CLIENTPOLLOPERATIONBASE)),
                 &xsink);
-            if (!xsink && *h2pop) {
-                if ((*h2pop)->scanMembers(*this, rsh)) {
-                    return true;
-                }
-            }
-        }
-        if (xsink) {
-            xsink.clear();
-        }
-        {
-            // DelegatingPollOperation — scan inner_obj, counter_obj,
-            // on_complete_code held as raw C++ pointers in the priv.
-            // See design/dgc.md Pattern B.
-            if (qore_delegating_poll_op_scan_members(*obj, *this, rsh, &xsink)) {
+            if (*h2pop && (*h2pop)->scanMembers(*this, rsh)) {
                 return true;
             }
         }
-        if (xsink) {
-            xsink.clear();
+        // DelegatingPollOperation — scan inner_obj, counter_obj,
+        // on_complete_code held as raw C++ pointers in the priv.
+        // See design/dgc.md Pattern B.
+        if (qore_delegating_poll_op_scan_members(getScanPrivateData(CID_DELEGATINGPOLLOPERATION), *this, rsh,
+                &xsink)) {
+            return true;
         }
     }
 
@@ -1184,6 +1169,16 @@ AbstractPrivateData* qore_object_private::tryGetReferencedPrivateData(qore_class
 
     if (!privateData)
         return 0;
+
+    return privateData->getReferencedPrivateData(key);
+}
+
+AbstractPrivateData* qore_object_private::getScanPrivateData(qore_classid_t key) const {
+    QoreSafeVarRWReadLocker sl(rml);
+
+    if (status == OS_DELETED || !privateData) {
+        return nullptr;
+    }
 
     return privateData->getReferencedPrivateData(key);
 }

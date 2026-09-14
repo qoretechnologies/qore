@@ -220,13 +220,11 @@ static bool qore_delegating_poll_op_has_override(const QoreClass* cls, const cha
 }
 
 // DGC dispatch entry point — see QC_DelegatingPollOperation.h.
-bool qore_delegating_poll_op_scan_members(QoreObject& qobj, RObject& obj,
+bool qore_delegating_poll_op_scan_members(AbstractPrivateData* priv_data, RObject& obj,
         RSetHelper& rsh, ExceptionSink* xsink) {
     ReferenceHolder<DelegatingPollOperationPriv> priv(
-        reinterpret_cast<DelegatingPollOperationPriv*>(
-            qobj.getReferencedPrivateData(CID_DELEGATINGPOLLOPERATION, xsink)),
-        xsink);
-    if (*xsink || !*priv) {
+        reinterpret_cast<DelegatingPollOperationPriv*>(priv_data), xsink);
+    if (!*priv) {
         return false;
     }
     return (*priv)->scanMembers(obj, rsh);
