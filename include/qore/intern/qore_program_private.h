@@ -1853,6 +1853,16 @@ public:
         return rv;
     }
 
+    //! Auto-enables %modern for a source file unless its extension is exactly '.q' (legacy by design) or the
+    //! QORE_OLD_STYLE_DEFAULT environment variable disables the default globally; see should_auto_enable_modern()
+    DLLLOCAL void applyModernSourceDefault(const char* filename) {
+        if (should_auto_enable_modern(filename)) {
+            pwo.parse_options |= PO_MODERN;
+            applyParseOptionImplications();
+            pgm->setWarningMask(QP_WARN_ALL);
+        }
+    }
+
     DLLLOCAL void parseFile(const char* filename, ExceptionSink* xsink, ExceptionSink* wS, int wm) {
         QORE_TRACE("QoreProgram::parseFile()");
 
@@ -1867,14 +1877,7 @@ public:
         }
         ON_BLOCK_EXIT(fclose, fp);
 
-        // Auto-enable %modern for every file except when the extension is exactly
-        // '.q' (legacy by design) or the QORE_OLD_STYLE_DEFAULT env var is set to
-        // disable the default globally.  See should_auto_enable_modern().
-        if (should_auto_enable_modern(filename)) {
-            pwo.parse_options |= PO_MODERN;
-            applyParseOptionImplications();
-            pgm->setWarningMask(QP_WARN_ALL);
-        }
+        applyModernSourceDefault(filename);
 
         setScriptPath(filename);
 

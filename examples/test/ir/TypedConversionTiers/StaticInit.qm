@@ -1,0 +1,32 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+module StaticInit {
+    version = "1.0";
+    desc = "static initializer conversions in an AOT-compiled module";
+    author = "Qore Technologies, s.r.o.";
+}
+
+public namespace StaticInit {
+    auto sub computed() {
+        return "fv";
+    }
+
+    auto sub nine() {
+        return 9;
+    }
+
+    public class Holder {
+        public {
+            static softlist<string> strings = "m";
+            static softstring text = 9;
+            static softlist<string> computed_list = computed();
+            static int computed_int = nine();
+            softlist<string> member = "i";
+        }
+
+        static string describe() {
+            return sprintf("%y %y %y %y %y", strings, text, computed_list, computed_int, (new Holder()).member);
+        }
+    }
+}

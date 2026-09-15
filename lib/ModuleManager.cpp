@@ -1919,6 +1919,9 @@ QoreAbstractModule* QoreModuleManager::loadSeparatedModule(ExceptionSink& xsink,
 
     std::string moduleCode = QoreDir::get_file_content(modulePath.c_str());
 
+    // the module's sources are parsed from memory, so apply the default a file-based module gets from parseFile()
+    qore_program_private::get(*userModule->getProgram())->applyModernSourceDefault(modulePath.c_str());
+
     {
         ModuleLoadMapHelper mlmh(feature, xsink);
 

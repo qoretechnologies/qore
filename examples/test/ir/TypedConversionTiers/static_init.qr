@@ -1,0 +1,2 @@
+# Copyright 2026 Qore Technologies, s.r.o.
+printf("%s\n", StaticInit::Holder::describe());

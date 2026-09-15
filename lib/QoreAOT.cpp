@@ -25252,6 +25252,8 @@ bool QoreAOT::compileModule(const char* source_text, int source_len,
     // We need PO_IN_MODULE for the parser to handle the module block
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE | PO_NO_TOP_LEVEL_STATEMENTS
         | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
+    // a module is parsed as modern by default when loaded, so it must be compiled the same way
+    applyAOTModernSourceDefault(mod_po, {label});
 
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -25674,6 +25676,8 @@ bool QoreAOT::compileSeparatedModule(const char* dir_path,
     // Step 5: Create QoreProgram and set up module context
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE | PO_NO_TOP_LEVEL_STATEMENTS
         | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
+    // a module is parsed as modern by default when loaded, so it must be compiled the same way
+    applyAOTModernSourceDefault(mod_po, {qm_path});
 
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -29587,6 +29591,8 @@ bool QoreAOT::compileSeparatedModuleFile(const char* dir_path,
 
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE
         | PO_NO_TOP_LEVEL_STATEMENTS | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
+    // a module is parsed as modern by default when loaded, so it must be compiled the same way
+    applyAOTModernSourceDefault(mod_po, {qm_path});
 
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -30117,6 +30123,8 @@ bool QoreAOT::compileModuleFromObjects(const char* dir_path,
 
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE
         | PO_NO_TOP_LEVEL_STATEMENTS | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
+    // a module is parsed as modern by default when loaded, so it must be compiled the same way
+    applyAOTModernSourceDefault(mod_po, {qm_path});
 
     ExceptionSink xsink;
     ExceptionSink wsink;
@@ -30618,6 +30626,8 @@ bool QoreAOT::archiveModuleFromObjects(const char* dir_path,
 
     QoreParseOptions mod_po = parse_options | QoreParseOptions(PO_IN_MODULE
         | PO_NO_TOP_LEVEL_STATEMENTS | PO_REQUIRE_PROTOTYPES | PO_REQUIRE_OUR);
+    // a module is parsed as modern by default when loaded, so it must be compiled the same way
+    applyAOTModernSourceDefault(mod_po, {qm_path});
 
     ExceptionSink xsink;
     ExceptionSink wsink;

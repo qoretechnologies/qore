@@ -1,0 +1,8 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright 2026 Qore Technologies, s.r.o.
+
+module SplitInit {
+    version = "1.0";
+    desc = "a split module without parse directives compiled like the loader parses it";
+    author = "Qore Technologies, s.r.o.";
+}

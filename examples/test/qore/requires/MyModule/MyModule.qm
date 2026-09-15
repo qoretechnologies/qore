@@ -5,10 +5,7 @@
     located at the same directory
 */
 
-%new-style
-%enable-all-warnings
-%require-types
-%strict-args
+%modern
 
 module MyModule {
     version = "0.1.1";
