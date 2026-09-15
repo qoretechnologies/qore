@@ -12335,11 +12335,13 @@ struct AOTModuleInitRunResult {
     bool attempted = false;
     bool success = true;
     bool hard_error = false;
+    //! set when the attempt gave up waiting for another thread to populate the module's shared shadow Program
+    bool shadow_wait_timeout = false;
     std::string error;
 };
 
 static void retryPendingAOTModuleInitsForProgram(QoreProgram* tpgm,
-        ExceptionSink& xsink);
+        ExceptionSink& xsink, bool allow_shadow_wait = true);
 
 static void aotFindInitConstantEntries(const AOTInitFuncDescriptor& desc, QoreProgram* pgm,
         QoreProgram* shadow_pgm, ConstantEntry*& target_ce, ConstantEntry*& shadow_ce);
@@ -12425,8 +12427,13 @@ static bool aotInitDescriptorNeedsExecution(const AOTInitFuncDescriptor& desc, Q
     return true;
 }
 
+//! Runs a module's AOT initializers for one Program
+/** @param allow_shadow_wait whether this call may wait for another thread to populate the module's shared shadow
+    Program; the wait runs with the target Program's parse lock held, so a caller that has already waited once for
+    this module passes false rather than holding that lock for a second timeout
+*/
 static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_name,
-        QoreProgram* tpgm, ExceptionSink& xsink) {
+        QoreProgram* tpgm, ExceptionSink& xsink, bool allow_shadow_wait = true) {
     AOTModuleInitRunResult result;
     if (mod_name.empty() || !tpgm) {
         return result;
@@ -12445,6 +12452,8 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
     // whether this run is the one that populates the shared shadow (module-own) Program; set
     // exactly once per module under the state lock (see AotModuleState::shadow_init_state)
     bool write_shadow = false;
+    //! true while this thread owns the module's shadow population claim, including on nested re-entry
+    bool holds_shadow_claim = false;
 
     // RAII backstop: if this run claims the one-time shadow population but does not reach finish()
     // below (early return or C++ unwind), release the claim and wake any waiters so a concurrent
@@ -12538,6 +12547,17 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
             }
             if (sit->second.shadow_init_state == AotModuleState::SHADOW_IN_PROGRESS
                     && sit->second.shadow_init_tid != q_gettid()) {
+                if (!allow_shadow_wait) {
+                    // an earlier attempt in this call already gave up waiting for this population while holding
+                    // this Program's parse lock; waiting again would hold it for a second full timeout
+                    target_pp->initializing_aot_modules.erase(mod_name);
+                    result.attempted = true;
+                    result.success = false;
+                    result.shadow_wait_timeout = true;
+                    result.error = "another thread is still populating the shared AOT shadow Program for module '"
+                        + mod_name + "'; not waiting for it again with the target Program's parse lock held";
+                    return result;
+                }
                 int wait_rc = get_aot_shadow_init_cond().waitWithInterrupt(
                     get_aot_module_state_lock(), AOT_SHADOW_INIT_WAIT_TIMEOUT_MS, &xsink);
                 if (wait_rc == QORE_COND_RESULT_INTERRUPTED) {
@@ -12550,6 +12570,7 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
                     target_pp->initializing_aot_modules.erase(mod_name);
                     result.attempted = true;
                     result.success = false;
+                    result.shadow_wait_timeout = true;
                     result.error = "timed out waiting for another thread to populate the shared "
                         "AOT shadow Program for module '" + mod_name + "'; releasing the target "
                         "Program's parse lock and leaving this initialization to be retried";
@@ -12562,6 +12583,10 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
                 sit->second.shadow_init_tid = q_gettid();
                 write_shadow = true;
             }
+            // the claim is also held here when this thread is re-entering for the same module (nested recursion),
+            // in which case other importers are waiting for this thread without write_shadow being set
+            holds_shadow_claim = sit->second.shadow_init_state == AotModuleState::SHADOW_IN_PROGRESS
+                && sit->second.shadow_init_tid == q_gettid();
             // else SHADOW_DONE, or SHADOW_IN_PROGRESS by this same thread (nested recursion):
             // read the shadow, do not (re)populate it -> write_shadow stays false
             break;
@@ -12696,10 +12721,24 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
             init_metadata->data(), static_cast<int>(init_metadata->size()));
     }
     {
-        // Lock the thread-current Program before the per-module shadow builder.  Static method references decoded
+        // Lock a Program's parse context before the per-module shadow builder.  Static method references decoded
         // below acquire this parse context.  Taking the shadow lock first can deadlock with the first importer,
         // which already owns the shadow Program's parse context and is waiting to build the same module's contexts.
-        CurrentProgramRuntimeParseContextHelper current_pch;
+        //
+        // While this thread holds the shadow claim, every other importer of this module waits for it (see
+        // shadow_init_state above), each holding the parse lock of the Program it is importing into.  Locking the
+        // Program this thread happens to be executing in would therefore deadlock whenever that Program is one of
+        // theirs: this thread's current Program is incidental to the population and is not always the import
+        // target -- Program::loadModule() imports into another Program without changing it.  Lock the Program that
+        // owns the shadow instead, which no waiting importer holds.  Retiring the process-global module-load lock
+        // (see QoreModuleLoadLockHelper) left this as the only serialization, on the invariant that AOT
+        // initialization takes no cross-Program parse-ownership lock.
+        // without the claim no importer can be waiting for this thread, so the thread-current Program is kept
+        QoreProgram* parse_ctx_pgm = holds_shadow_claim ? init_ctx_pgm : getProgram();
+        ProgramRuntimeParseContextHelper current_pch(&xsink, parse_ctx_pgm);
+        if (xsink) {
+            return finish(false);
+        }
         // Serialize only builders for this module's shared shadow Program.  Context
         // deserialization can resolve APIs in another Program and wait for its parse
         // lock; taking that context above gives every same-module importer one lock order
@@ -12755,7 +12794,7 @@ static AOTModuleInitRunResult runAOTModuleInitForProgram(const std::string& mod_
 }
 
 static void retryPendingAOTModuleInitsForProgram(QoreProgram* tpgm,
-        ExceptionSink& xsink) {
+        ExceptionSink& xsink, bool allow_shadow_wait) {
     if (!tpgm) {
         return;
     }
@@ -12787,7 +12826,7 @@ static void retryPendingAOTModuleInitsForProgram(QoreProgram* tpgm,
         bool attempted_any = false;
         for (const std::string& name : pending) {
             AOTModuleInitRunResult r =
-                runAOTModuleInitForProgram(name, tpgm, xsink);
+                runAOTModuleInitForProgram(name, tpgm, xsink, allow_shadow_wait);
             if (xsink) {
                 return;
             }
@@ -13864,7 +13903,9 @@ static void qore_aot_module_ns_init_impl(QoreNamespace* root_ns, QoreNamespace* 
                 + (mod_name ? mod_name : "(unknown)") + "': " + init_result.error);
             return;
         }
-        retryPendingAOTModuleInitsForProgram(tpgm, xsink);
+        // a retry that follows an attempt that gave up waiting for another thread's shadow population must not
+        // wait for it again: this call still holds the target Program's parse lock
+        retryPendingAOTModuleInitsForProgram(tpgm, xsink, !init_result.shadow_wait_timeout);
         if (xsink) {
             if (!external_xsink) {
                 xsink.handleExceptions();
@@ -13993,7 +14034,8 @@ DLLLOCAL int qore_aot_initialize_module(const char* name, ExceptionSink& xsink) 
             result.error.c_str());
         return -1;
     }
-    retryPendingAOTModuleInitsForProgram(pgm, xsink);
+    // see the same call in qore_aot_module_ns_init_impl()
+    retryPendingAOTModuleInitsForProgram(pgm, xsink, !result.shadow_wait_timeout);
     return xsink ? -1 : 0;
 }
 
