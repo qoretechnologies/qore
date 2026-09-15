@@ -194,6 +194,11 @@ public:
         return ti && hasType(ti) ? ti->parseAcceptsReturns(t) : true;
     }
 
+    // returns true if a value of the given base type may be accepted, possibly with a conversion
+    DLLLOCAL static bool parseAcceptsBaseType(const QoreTypeInfo* ti, qore_type_t t) {
+        return ti && hasType(ti) ? ti->parseAcceptsBaseType(t) : true;
+    }
+
     // static version of method, checking for null pointer
     DLLLOCAL static qore_type_result_e parseReturns(const QoreTypeInfo* ti, QoreTypeSpec t) {
         return ti && hasType(ti) ? ti->parseReturns(t) : QTI_WILDCARD;
@@ -457,6 +462,19 @@ public:
             || ti == softAutoListOrNothingTypeInfo
             ? autoTypeInfo
             : ti->return_vec[0].spec.getComplexList();
+    }
+
+    // static version of method, checking for null pointer; returns the element type of softlist<T> or *softlist<T>
+    DLLLOCAL static const QoreTypeInfo* getReturnComplexSoftListOrNothing(const QoreTypeInfo* ti) {
+        if (!ti || !hasType(ti)) {
+            return nullptr;
+        }
+        if (ti->return_vec.size() > 1) {
+            if (ti->return_vec.size() != 2 || (ti->return_vec[1].spec.match(NT_NOTHING) != QTI_IDENT)) {
+                return nullptr;
+            }
+        }
+        return ti->return_vec[0].spec.getComplexSoftList();
     }
 
     // static version of method, checking for null pointer
@@ -914,18 +932,21 @@ protected:
         return spec.getTypeSpec() == QTS_TYPEPARAM ? NT_ALL : spec.getType();
     }
 
-    DLLLOCAL bool parseAcceptsReturns(qore_type_t t) const {
-        bool ok = false;
+    // returns true if a value of the given base type may be accepted, possibly with a conversion
+    DLLLOCAL bool parseAcceptsBaseType(qore_type_t t) const {
         for (auto& i : getAcceptSpecs()) {
             if (i.spec.matchType(t) != QTI_NOT_EQUAL) {
-                ok = true;
-                break;
+                return true;
             }
         }
-        if (!ok)
+        return false;
+    }
+
+    DLLLOCAL bool parseAcceptsReturns(qore_type_t t) const {
+        if (!parseAcceptsBaseType(t))
             return false;
         for (auto& i : return_vec) {
-            if (i.spec.matchType(t) != QTI_NOT_EQUAL)
+            if (i.spec.matchReturnType(t) != QTI_NOT_EQUAL)
                 return true;
         }
         return false;

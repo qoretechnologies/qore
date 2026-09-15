@@ -1,0 +1,254 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/reflection"
+%requires ../../../../qlib/QUnit.qm
+%requires reflection
+
+%exec-class SoftListOptionalityTest
+
+class SoftListItem {
+}
+
+class SoftListInitializers {
+    public {
+        softlist<softlist<string>> nested = "a";
+        softlist<softlist<auto>> nested_auto = 1;
+        softlist<softint> converted = "1";
+        softlist<softstring> stringified = 2;
+        softlist<*string> nullable = NULL;
+        *softlist<softint> optional_converted = "5";
+    }
+}
+
+auto sub softlist_missing(softlist<string> c) {
+    return c;
+}
+
+auto sub softlist_missing_nullable(softlist<*string> c) {
+    return c;
+}
+
+auto sub softlist_missing_auto(softlist<auto> c) {
+    return c;
+}
+
+auto sub softlist_missing_plain(softlist c) {
+    return c;
+}
+
+auto sub softlist_missing_optional(*softlist<string> c) {
+    return c;
+}
+
+auto sub softlist_missing_trailing(int i, softlist<string> c, softlist<auto> d) {
+    return (c, d);
+}
+
+auto sub softlist_missing_overload(int i, softlist<string> c) {
+    return c;
+}
+
+auto sub softlist_missing_overload(string s) {
+    return s;
+}
+
+auto sub softlist_missing_recursive(int n, softlist<string> c) {
+    if (n) {
+        return softlist_missing_recursive(n - 1);
+    }
+    return c;
+}
+
+class SoftListMissingArgs {
+    auto m(softlist<*string> x) {
+        return x;
+    }
+
+    auto selfM() {
+        return m();
+    }
+
+    static auto sm(softlist<auto> x) {
+        return x;
+    }
+}
+
+class SoftListOptionalityTest inherits QUnit::Test {
+    public {
+        #! element types used for soft list conversions; nullable members must not make the list optional
+        const ElementTypes = (
+            "string", "*string", "softstring", "*softstring", "hash<auto>", "*hash<auto>", "SoftListItem",
+            "*SoftListItem", "list<string>", "*list<string>", "softlist<string>", "auto",
+        );
+
+        #! values accepted and rejected by soft lists of each element type
+        const Conversions = (
+            {"element": "string", "value": "a", "expected": "a", "invalid": 1, "nullable": False},
+            {"element": "*string", "value": "a", "expected": "a", "invalid": 1, "nullable": True},
+            {"element": "softint", "value": "1", "expected": 1, "invalid": {}, "nullable": False},
+            {"element": "*softint", "value": "1", "expected": 1, "invalid": {}, "nullable": True},
+            {"element": "hash<auto>", "value": {"id": "a"}, "expected": {"id": "a"}, "invalid": "a",
+                "nullable": False},
+            {"element": "*hash<auto>", "value": {"id": "a"}, "expected": {"id": "a"}, "invalid": "a",
+                "nullable": True},
+        );
+    }
+
+    constructor() : QUnit::Test("soft list optionality", "1.0") {
+        addTestCase("adding optionality keeps a soft list", \optionalConversion());
+        addTestCase("removing optionality keeps a soft list", \mandatoryConversion());
+        addTestCase("hard lists remain hard lists", \hardListControls());
+        addTestCase("converted soft lists keep their value conversions", \conversionPreserved());
+        addTestCase("soft list initializers convert through element acceptance", \initializers());
+        addTestCase("missing soft list arguments bind empty lists", \missingArguments());
+        set_return_value(main());
+    }
+
+    optionalConversion() {
+        foreach string element in (ElementTypes) {
+            Type original("softlist<" + element + ">");
+            Type declared("*softlist<" + element + ">");
+            assertFalse(original.isOrNothingType(), element);
+            assertTrue(declared.isOrNothingType(), element);
+
+            Type optional = original.getOrNothingType();
+            assertTrue(optional.isOrNothingType(), element);
+            assertEq("*" + original.getName(), optional.getName(), element);
+            assertTrue(optional.isEqual(declared), element);
+            assertTrue(optional.getOrNothingType().isEqual(optional), element);
+            assertTrue(optional.getBaseType().isEqual(original), element);
+        }
+
+        # plain soft lists are unchanged
+        assertEq("*softlist", (new Type("softlist")).getOrNothingType().getName());
+        assertEq("*softlist", (new Type("*softlist")).getOrNothingType().getName());
+    }
+
+    mandatoryConversion() {
+        foreach string element in (ElementTypes) {
+            Type original("softlist<" + element + ">");
+            Type declared("*softlist<" + element + ">");
+
+            Type mandatory = declared.getMandatoryType();
+            assertFalse(mandatory.isOrNothingType(), element);
+            assertEq(original.getName(), mandatory.getName(), element);
+            assertTrue(mandatory.isEqual(original), element);
+            assertTrue(mandatory.getMandatoryType().isEqual(mandatory), element);
+            assertTrue(original.getMandatoryType().isEqual(original), element);
+            assertTrue(original.getOrNothingType().getMandatoryType().isEqual(original), element);
+        }
+
+        assertEq("softlist", (new Type("*softlist")).getMandatoryType().getName());
+        assertEq("softlist", (new Type("softlist")).getMandatoryType().getName());
+    }
+
+    hardListControls() {
+        foreach hash<auto> conversion in (Conversions) {
+            string element = conversion.element;
+            Type original("list<" + element + ">");
+            Type optional = original.getOrNothingType();
+            assertTrue(optional.isOrNothingType(), element);
+            assertEq("*list<" + element + ">", optional.getName(), element);
+            Type mandatory = optional.getMandatoryType();
+            assertFalse(mandatory.isOrNothingType(), element);
+            assertTrue(mandatory.isEqual(original), element);
+            # a hard list never converts a single value to a list
+            foreach Type type in (original, optional, mandatory) {
+                assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), (conversion.value,), element);
+            }
+        }
+    }
+
+    conversionPreserved() {
+        foreach hash<auto> conversion in (Conversions) {
+            string element = conversion.element;
+            Type mandatory = (new Type("*softlist<" + element + ">")).getMandatoryType();
+            Type optional = (new Type("softlist<" + element + ">")).getOrNothingType();
+
+            # a missing collection is an empty list or no value; neither involves the element type
+            assertEq((), mandatory.acceptsValue(NOTHING), element);
+            assertEq(NOTHING, optional.acceptsValue(NOTHING), element);
+
+            foreach Type type in (mandatory, optional) {
+                string label = sprintf("%s: %s", type.getName(), element);
+                assertEq((), type.acceptsValue(()), label);
+                assertEq((conversion.expected,), type.acceptsValue(conversion.value), label);
+                assertEq((conversion.expected, conversion.expected),
+                    type.acceptsValue((conversion.value, conversion.value)), label);
+                assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), (conversion.invalid,), label);
+                assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), ((conversion.value, conversion.invalid),),
+                    label);
+                # explicit missing members are accepted only by nullable element types
+                if (conversion.nullable) {
+                    list<auto> members = type.acceptsValue((conversion.value, NOTHING));
+                    assertEq(2, members.size(), label);
+                    assertEq(conversion.expected, members[0], label);
+                    assertNothing(members[1], label);
+                } else {
+                    assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), ((conversion.value, NOTHING),), label);
+                }
+            }
+        }
+
+        # an object element is converted to a single-element list after either conversion
+        SoftListItem item();
+        foreach Type type in ((new Type("*softlist<SoftListItem>")).getMandatoryType(),
+                (new Type("softlist<*SoftListItem>")).getOrNothingType()) {
+            list<auto> l = type.acceptsValue(item);
+            assertEq(1, l.size(), type.getName());
+            assertTrue(l[0] == item, type.getName());
+            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), ("a",), type.getName());
+        }
+    }
+
+    initializers() {
+        SoftListInitializers obj();
+        assertEq((("a",),), obj.nested);
+        assertEq(((1,),), obj.nested_auto);
+        assertEq((1,), obj.converted);
+        assertEq(("2",), obj.stringified);
+        assertEq((NOTHING,), obj.nullable);
+        assertEq((5,), obj.optional_converted);
+
+        code nested_default = softlist<softlist<string>> sub (softlist<softlist<string>> x = "d") { return x; };
+        assertEq((("d",),), nested_default());
+        assertEq((("e",),), nested_default("e"));
+        code converted_default = softlist<softint> sub (softlist<softint> x = "4") { return x; };
+        assertEq((4,), converted_default());
+
+        # an untyped container value folds into a list of soft lists
+        list<hash<auto>> records = ({"a": "x"},);
+        auto source = records;
+        list<softlist<hash<string, string>>> folded = source;
+        assertEq((({"a": "x"},),), folded);
+        hash<string, hash<auto>> keyed = {"k": {"a": "x"}};
+        auto keyed_source = keyed;
+        hash<string, softlist<hash<string, string>>> keyed_folded = keyed_source;
+        assertEq({"k": ({"a": "x"},)}, keyed_folded);
+    }
+
+    missingArguments() {
+        SoftListMissingArgs obj();
+        # repeat the calls so that tiered execution promotes the calling code
+        for (int i = 0; i < 20; ++i) {
+            assertEq(NT_LIST, softlist_missing().typeCode());
+            assertEq((), softlist_missing());
+            assertEq((), softlist_missing(NOTHING));
+            assertEq((), softlist_missing_nullable());
+            assertEq((), softlist_missing_auto());
+            assertEq((), softlist_missing_plain());
+            assertNothing(softlist_missing_optional());
+            assertEq(((), ()), softlist_missing_trailing(1));
+            assertEq((("a",), ()), softlist_missing_trailing(1, "a"));
+            assertEq((), softlist_missing_overload(1));
+            assertEq((), softlist_missing_recursive(2));
+            assertEq((), obj.m());
+            assertEq((), obj.selfM());
+            assertEq((), SoftListMissingArgs::sm());
+        }
+    }
+}

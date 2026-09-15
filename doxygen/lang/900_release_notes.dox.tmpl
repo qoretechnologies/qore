@@ -1550,6 +1550,8 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         <a href="https://github.com/qoretechnologies/module-amqp">amqp</a> module
 
     - @ref dataproviderintro "DataProvider" module
+      - fixed optional @ref DataProvider::SoftListDataType "soft list" types whose elements accept @ref nothing
+        reporting themselves as mandatory, so that a hash type rejected a value omitting such a field
       - action option generation returns an empty hash for operations without input fields
       - fixed short-description derivation corrupting words and literal braces when help text contains quoted parameter names or numbers
       - added DPQL (Data Provider Query Language) — a human/AI-readable query syntax with a tokenizer,
@@ -3005,6 +3007,12 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed @ref Qore::Reflection::Type::getOrNothingType() "Type::getOrNothingType()" returning a mandatory type
+      for a soft list whose element type accepts @ref nothing, such as \c softlist<*string> or \c softlist<auto>,
+      and @ref Qore::Reflection::Type::getMandatoryType() "Type::getMandatoryType()" converting an optional soft
+      list to a plain list that no longer converts a single value to a list; soft lists of soft lists and of
+      element types that convert a value, such as \c softlist<softint>, also left unconverted values in
+      initialized members and default arguments
     - Fixed @ref Qore::Serializable "Serializable" serializing a container as a reference to a different,
       previously serialized container when a container created during serialization was released and its
       memory was reused, for example containers returned by a \c serializeMembers() method or created by the

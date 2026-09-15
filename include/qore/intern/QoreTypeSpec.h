@@ -277,7 +277,13 @@ public:
         return nullptr;
     }
 
+    // matches a base type against this spec as an accept spec; a soft list also matches the types its element type
+    // accepts, since such values are converted to a list
     DLLLOCAL qore_type_result_e matchType(qore_type_t t) const;
+
+    // matches a base type against this spec as a return spec; a soft list always returns a list, so a nullable or
+    // scalar element type does not make it return the element's base type
+    DLLLOCAL qore_type_result_e matchReturnType(qore_type_t t) const;
 
     // this is the "expecting" type, t is the type to match
     // ex: this = class, t = NT_OBJECT, result = AMBIGUOUS

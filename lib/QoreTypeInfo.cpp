@@ -755,6 +755,14 @@ static const QoreTypeInfo* get_value_type_intern(const QoreTypeInfo* typeInfo) {
         }
     }
 
+    // a soft list must be tested before a list, since its return spec also describes a complex list
+    {
+        const QoreTypeInfo* ti = QoreTypeInfo::getReturnComplexSoftListOrNothing(typeInfo);
+        if (ti) {
+            return qore_get_complex_softlist_type(ti);
+        }
+    }
+
     {
         const QoreTypeInfo* ti = QoreTypeInfo::getReturnComplexListOrNothing(typeInfo);
         if (ti) {
@@ -2760,7 +2768,8 @@ qore_type_result_e QoreTypeSpec::matchType(qore_type_t t) const {
         if (t == NT_LIST) {
             return QTI_IDENT;
         }
-        return QoreTypeInfo::parseAcceptsReturns(u.ti, t) ? QTI_NEAR : QTI_NOT_EQUAL;
+        // any value accepted by the element type is converted to a single-element list
+        return QoreTypeInfo::parseAcceptsBaseType(u.ti, t) ? QTI_NEAR : QTI_NOT_EQUAL;
     } else if (typespec == QTS_COMPLEXHARDREF || typespec == QTS_HARDREF) {
         return t == NT_REFERENCE ? QTI_IDENT : QTI_NOT_EQUAL;
     } else if (typespec == QTS_COMPLEXREF) {
@@ -2780,6 +2789,13 @@ qore_type_result_e QoreTypeSpec::matchType(qore_type_t t) const {
         return QTI_WILDCARD;
     }
     return u.t == t ? QTI_IDENT : QTI_NOT_EQUAL;
+}
+
+qore_type_result_e QoreTypeSpec::matchReturnType(qore_type_t t) const {
+    if (typespec == QTS_COMPLEXSOFTLIST) {
+        return t == NT_LIST ? QTI_IDENT : QTI_NOT_EQUAL;
+    }
+    return matchType(t);
 }
 
 static bool type_spec_accept_object(const QoreClass& type_class, const QoreClass& object_class, bool& priv_error) {
@@ -2808,13 +2824,13 @@ static bool qore_generic_container_value_may_fold_to(const QoreTypeInfo* target_
 
     const QoreTypeInfo* hash_value_type = QoreTypeInfo::getComplexHashValueType(source_ti);
     if ((hash_value_type == autoTypeInfo || hash_value_type == autoNoNarrowTypeInfo)
-            && QoreTypeInfo::parseAcceptsReturns(target_ti, NT_HASH)) {
+            && QoreTypeInfo::parseAcceptsBaseType(target_ti, NT_HASH)) {
         return true;
     }
 
     const QoreTypeInfo* list_value_type = QoreTypeInfo::getComplexListValueType(source_ti);
     return (list_value_type == autoTypeInfo || list_value_type == autoNoNarrowTypeInfo)
-        && QoreTypeInfo::parseAcceptsReturns(target_ti, NT_LIST);
+        && QoreTypeInfo::parseAcceptsBaseType(target_ti, NT_LIST);
 }
 
 bool QoreTypeSpec::acceptInputComplexHash(ExceptionSink* xsink, const QoreTypeInfo& typeInfo, const char* arg_type,
@@ -2895,7 +2911,8 @@ bool QoreTypeSpec::acceptInputComplexList(ExceptionSink* xsink, const QoreTypeIn
     // we have to get a new list
     qore_list_private* lp;
     if (!l->is_unique()) {
-        AbstractQoreNode* p = n.assign(l = qore_list_private::get(*l)->copy(get_value_type(&typeInfo)));
+        // the copy is a list value, so it gets the list type even when the target type is a soft list
+        AbstractQoreNode* p = n.assign(l = qore_list_private::get(*l)->copy(qore_get_complex_list_type(u.ti)));
         if (lvhelper) {
             lvhelper->saveTemp(p);
         } else {
@@ -3668,10 +3685,9 @@ const QoreTypeInfo* QoreTypeInfo::getHardReference(const QoreTypeInfo* ti) {
         }
     }
     const QoreComplexReferenceOrNothingTypeInfo* type = dynamic_cast<const QoreComplexReferenceOrNothingTypeInfo*>(ti);
-    // ti is not itself a reference type: a container with an "auto" element (e.g. softlist<auto>,
-    // list<auto>, hash<auto>) makes parseAcceptsReturns(ti, NT_REFERENCE) true because it accepts a
-    // reference as an element, even though ti is a list/hash type.  There is no hard-reference form to
-    // substitute for such a type, so return it unchanged rather than dereferencing a null cast.
+    // ti is not itself a reference type, but its specs match any base type, including a reference (e.g. a
+    // symbolic type parameter).  There is no hard-reference form to substitute for such a type, so return it
+    // unchanged rather than dereferencing a null cast.
     if (!type) {
         return ti;
     }
