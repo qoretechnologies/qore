@@ -553,6 +553,9 @@ public:
     DLLLOCAL static void acceptInputMember(const QoreTypeInfo* ti, const char* member_name, QoreValue& n,
             ExceptionSink* xsink) {
         if (hasType(ti)) {
+            if (ti->acceptsRuntimeValueWithoutFilter(n)) {
+                return;
+            }
             ti->acceptInputIntern(xsink, "member", true, -1, member_name, n);
         } else if (ti != autoTypeInfo) {
             stripTypeInfo(n, xsink);

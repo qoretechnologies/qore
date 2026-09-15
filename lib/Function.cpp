@@ -1408,9 +1408,10 @@ int CodeEvaluationHelper::prepareDefaultArgs(ExceptionSink* xsink, const Abstrac
                     return -1;
                 }
 
-                // process default argument with accepting type's filter if necessary
+                // process default argument with accepting type's filter; a typed param is always checked, since a
+                // default value may need its elements converted or may not match the type at all
                 const QoreTypeInfo* pti = get_param_type_info();
-                if (QoreTypeInfo::mayRequireFilter(pti, p)) {
+                if (QoreTypeInfo::hasType(pti) || QoreTypeInfo::mayRequireFilter(pti, p)) {
                     QoreTypeInfo::acceptInputParam(pti, i, sig->getName(i), p, xsink);
                     if (*xsink) {
                         return -1;

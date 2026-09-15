@@ -15323,24 +15323,53 @@ static int executeInitFunctions(
                 // clean QoreLValue (avoids assert in debug builds / leak in
                 // release builds). refSelf() on result each time because
                 // assignInit takes ownership.
+                // assignInitFiltered() applies the declared type's input conversion like
+                // QoreVarInfo::evalInit() does for interpreted initializers
+                auto store_static_value = [&desc, &result, &xsink](QoreVarInfo* vi) -> int {
+                    vi->val.removeValue(true).discard(&xsink);
+                    int rc = vi->assignInitFiltered(desc.item_name.c_str(), result.refSelf(), &xsink);
+                    // a variable whose initialization failed has no value; marking it initialized would make a
+                    // later lazy read return NOTHING as if it had been evaluated
+                    if (!rc) {
+                        vi->eval_init = true;
+                    }
+                    return rc;
+                };
+                printd(2, "AOT init: initializing static var '%s::%s' type=%s\n",
+                    desc.ns_path.c_str(), desc.item_name.c_str(), result.getTypeName());
+                int store_rc = 0;
                 if (target_vi && !target_has_concrete_value) {
-                    target_vi->val.removeValue(true).discard(&xsink);
-                    target_vi->assignInit(result.refSelf());
-                    target_vi->eval_init = true;
+                    store_rc = store_static_value(target_vi);
                 }
                 // The shadow module program is shared by all imports of this
                 // AOT module.  Initialize it once, but do not reset live
                 // module static state when the same module is imported into a
                 // transient dependency program.
-                if (write_shadow && shadow_vi && shadow_vi != target_vi && !shadow_has_concrete_value) {
-                    shadow_vi->val.removeValue(true).discard(&xsink);
-                    shadow_vi->assignInit(result.refSelf());
-                    shadow_vi->eval_init = true;
+                if (!store_rc && write_shadow && shadow_vi && shadow_vi != target_vi && !shadow_has_concrete_value) {
+                    store_rc = store_static_value(shadow_vi);
                 }
                 result.discard(&xsink);
+                if (store_rc) {
+                    // a value the declared type rejects fails initialization like an init function exception; the
+                    // error is recorded like the call path above, so that the sink does not report it again when
+                    // it is destroyed
+                    if (xsink.isException()) {
+                        QoreValue err_val = xsink.getExceptionErr();
+                        QoreValue desc_val = xsink.getExceptionDesc();
+                        QoreStringValueHelper err_str(err_val);
+                        QoreStringValueHelper desc_str(desc_val);
+                        last_error[di] = err_val.getType() == NT_STRING ? err_str->c_str() : "?";
+                        last_desc[di] = desc_val.getType() == NT_STRING ? desc_str->c_str() : "?";
+                        last_error_pending[di] = qore_is_deferred_runtime_init_exception(&xsink);
+                        if (failure_sink && !*failure_sink && run_module_init) {
+                            failure_sink->raiseException(last_error[di].c_str(), "%s", last_desc[di].c_str());
+                        }
+                        xsink.clear();
+                    }
+                    ++failed;
+                    break;
+                }
                 ++executed;
-                printd(2, "AOT init: initialized static var '%s::%s' type=%s\n",
-                    desc.ns_path.c_str(), desc.item_name.c_str(), result.getTypeName());
                 break;
             }
 

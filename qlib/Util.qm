@@ -615,7 +615,8 @@ string path = normalize_dir(path);
     - @ref Util::normalize_dir_windows()
 
     @param path the path to normalize
-    @param cwd the current working directory for normalizing relative paths
+    @param cwd the current working directory for normalizing relative paths; if not given and the current working
+    directory cannot be determined, relative paths are normalized relative to the root directory
 
     @return a normalized path name for the current platform
 
@@ -623,7 +624,7 @@ string path = normalize_dir(path);
     - @ref Util::normalize_dir_unix() or
     - @ref Util::normalize_dir_windows()
     */
-public string sub normalize_dir(string path, string cwd = getcwd()) {
+public string sub normalize_dir(string path, string cwd = getcwd() ?? "") {
     return PlatformOS != "Windows" ? normalize_dir_unix(path, cwd) : normalize_dir_windows(path, cwd);
 }
 
@@ -639,11 +640,12 @@ string path = normalize_dir_unix(path, "/var/tmp");
     @code{.py} "/opt/qorus/test/dir" @endcode
 
     @param path the path to normalize
-    @param cwd the current working directory
+    @param cwd the current working directory; if not given and the current working
+    directory cannot be determined, relative paths are normalized relative to the root directory
 
     @return a normalized path name (starting from /, eliminates \c ".", \c "..", and \c "//")
     */
-public string sub normalize_dir_unix(string path, string cwd = getcwd()) {
+public string sub normalize_dir_unix(string path, string cwd = getcwd() ?? "") {
     # if the path begins with a ".", prefix the cwd to the string
     if (!absolute_path_unix(path))
         path = cwd + "/" + path;
@@ -688,11 +690,12 @@ string path = normalize_dir_windows(path, "c:\\qore"));
     @code{.py} "c:\\lang\\test\\dir" @endcode
 
     @param path the path to normalize
-    @param cwd the current working directory
+    @param cwd the current working directory; if not given and the current working
+    directory cannot be determined, relative paths are normalized relative to the root directory
 
     @return a normalized path name; eliminates \c ".", \c "..", and \c "\\" (except at the beginning of a UNC path)
     */
-public string sub normalize_dir_windows(string path, string cwd = getcwd()) {
+public string sub normalize_dir_windows(string path, string cwd = getcwd() ?? "") {
     # change all occurrences of "/" to "\"
     path =~ s/\//\\/g;
 
@@ -736,13 +739,15 @@ string path = get_relative_path("/var/tmp", path);
 
     @param basedir the directory that the result will be relative to
     @param path the path to return as a relative path from \a base
-    @param cwd the current working directory, used in case \a base or \a path are relative paths
+    @param cwd the current working directory, used in case \a base or \a path are relative paths; if not given
+    and the current working directory cannot be determined, relative paths are normalized relative to the root
+    directory
 
     @return a path as a relative path from another directory
 
     @since %Util 1.8
 */
-public string sub get_relative_path(string basedir, string path, string cwd = getcwd()) {
+public string sub get_relative_path(string basedir, string path, string cwd = getcwd() ?? "") {
     basedir = normalize_dir(basedir, cwd);
     string dir = normalize_dir(dirname(path), cwd);
     string file = basename(path);

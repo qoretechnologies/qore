@@ -3015,6 +3015,10 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       list to a plain list that no longer converts a single value to a list; soft lists of soft lists and of
       element types that convert a value, such as \c softlist<softint>, also left unconverted values in
       initialized members and default arguments
+    - Fixed class member and static class variable initializers and default argument values bypassing their
+      declared types: container elements were not converted, for example \c list<softstring> initialized with
+      <tt>(1, 2)</tt>, and a value of another type was stored without an error; an uninitialized static class
+      variable of a @ref hashdecl type now also receives the hashdecl's member defaults instead of an untyped hash
     - Fixed @ref Qore::Serializable "Serializable" serializing a container as a reference to a different,
       previously serialized container when a container created during serialization was released and its
       memory was reused, for example containers returned by a \c serializeMembers() method or created by the

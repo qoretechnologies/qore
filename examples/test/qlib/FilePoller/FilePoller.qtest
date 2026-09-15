@@ -61,9 +61,14 @@ public class FilePollerTest inherits QUnit::Test {
     private filePollerTest() {
         string dir = tmp_location() + DirSep + get_random_string();
         mkdir(dir);
+        *string cwd = getcwd();
         chdir(dir);
         on_exit
             rmdir(dir);
+        # restore the working directory before the directory is removed, so later test cases have one
+        on_exit if (cwd) {
+            chdir(cwd);
+        }
 
         File f();
         map f.open2($1, O_CREAT|O_TRUNC|O_WRONLY), Files;

@@ -16567,17 +16567,31 @@ bool QoreAOTBinaryDeserializer::resolveStaticMembers(std::string& error) {
             // value, silently losing it.
             vi->parseInit(psm.name.c_str());
 
+            // Add to class's vars list first, so the class owns the variable if installing its value fails
+            priv->vars.addNoCheck(strdup(psm.name.c_str()), vi);
+
             // Install the serialized initial value (if any). Takes
             // ownership of the ref held in psm.default_val.
             if (psm.default_val.hasNode() || psm.default_val.getType() != NT_NOTHING) {
                 QoreValue v = psm.default_val;
                 psm.default_val = QoreValue();  // transfer ownership
-                vi->assignInit(v);
-                vi->eval_init = true;
+                if (v.needsEval()) {
+                    // the generated init function provides the value when the module is loaded; like an
+                    // interpreted initializer, the expression is otherwise evaluated once on first access.  It
+                    // must not be stored as the value, since a slot with an optimized value type cannot hold it.
+                    // parseInit() has already run, so the expression is not initialized again
+                    assert(vi->exp.isNothing());
+                    vi->exp = v;
+                } else {
+                    ExceptionSink xsink;
+                    if (vi->assignInitFiltered(psm.name.c_str(), v, &xsink)) {
+                        error = std::string("cannot initialize static variable ") + qc->getName() + "::"
+                            + psm.name.c_str() + ": " + qoreAOTExceptionText(xsink);
+                        return false;
+                    }
+                    vi->eval_init = true;
+                }
             }
-
-            // Add to class's vars list
-            priv->vars.addNoCheck(strdup(psm.name.c_str()), vi);
 
             printd(5, "AOT deser: added static member '%s' to class '%s'\n",
                 psm.name.c_str(), qc->getName());

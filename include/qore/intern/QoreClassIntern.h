@@ -1227,6 +1227,8 @@ public:
 
         @return 0 for OK, -1 if an exception was raised
     */
+    DLLLOCAL int assignInitFiltered(const char* name, QoreValue v, ExceptionSink* xsink);
+
 #ifdef DEBUG
     DLLLOCAL void del() {
         assert(!val.hasValue());
@@ -1291,7 +1293,7 @@ public:
     }
 
     // returns 0 for OK, -1 if an exception was raised
-    DLLLOCAL void init() {
+    DLLLOCAL int init(ExceptionSink* xsink) {
         val.set(getTypeInfo());
         const QoreTypeInfo* ti = getTypeInfo();
         // Initialize the actual node value for complex types that need a default container
@@ -1300,9 +1302,19 @@ public:
         // Nullable types (*hash<T>, *list<T>) should default to NOTHING
         if (QoreTypeInfo::isHashType(ti)
                 && QoreTypeInfo::parseReturns(ti, NT_NOTHING) == QTI_NOT_EQUAL) {
-            // getReturnComplexHashOrNothing() extracts element type T from hash<string,T>
-            // QoreHashNode(valueType) sets complexTypeInfo via qore_get_complex_hash_type()
-            val.assignInitial(new QoreHashNode(QoreTypeInfo::getReturnComplexHashOrNothing(ti)));
+            const TypedHashDecl* hd = QoreTypeInfo::getUniqueReturnHashDecl(ti);
+            if (hd) {
+                // a hashdecl hash gets its member defaults, as with "static hash<T> v();"
+                ReferenceHolder<QoreHashNode> h(new QoreHashNode(hd, xsink), xsink);
+                if (*xsink) {
+                    return -1;
+                }
+                val.assignInitial(h.release());
+            } else {
+                // getReturnComplexHashOrNothing() extracts element type T from hash<string,T>
+                // QoreHashNode(valueType) sets complexTypeInfo via qore_get_complex_hash_type()
+                val.assignInitial(new QoreHashNode(QoreTypeInfo::getReturnComplexHashOrNothing(ti)));
+            }
         }
         // Check if the typeInfo is for a list type and create empty list
         // Only for non-nullable types
@@ -1314,6 +1326,7 @@ public:
         }
         // For other types (primitives, objects), the default is NOTHING
         // which is correct for uninitialized references
+        return 0;
     }
 
     // can be called during parse initialization, in which case the variable must be initialized first

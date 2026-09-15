@@ -1025,8 +1025,11 @@ void qore_class_private::addBuiltinStaticVar(const char* vname, QoreValue value,
         has_sig_changes = true;
     }
 
-    vars.addNoCheck(strdup(vname), new QoreVarInfo(&loc_builtin, vTypeInfo, 0, value, access));
+    QoreVarInfo* vi = new QoreVarInfo(&loc_builtin, vTypeInfo, nullptr, value, access);
+    vi->builtin_value = true;
+    vars.addNoCheck(strdup(vname), vi);
 }
+
 void qore_class_private::addBuiltinStaticVarWithAccessors(const char* vname, ClassAccess access,
         const QoreTypeInfo* vTypeInfo, q_static_var_get_t get, q_static_var_set_t set, const void* ptr,
         q_static_var_del_t del) {
@@ -1462,7 +1465,9 @@ int qore_class_private::initMember(QoreObject& o, bool& need_scan, const char* m
             member_name, QoreTypeInfo::getPath(member_type),
             val->getFullTypeName(true),
             QoreTypeInfo::mayRequireFilter(member_type, *val));
-        if (QoreTypeInfo::mayRequireFilter(member_type, *val)) {
+        // a typed member is always checked: a value may need its elements converted or may not match the type at
+        // all, neither of which requires a mapping filter
+        if (QoreTypeInfo::hasType(member_type) || QoreTypeInfo::mayRequireFilter(member_type, *val)) {
             val.ensureReferencedValue();
             QoreTypeInfo::acceptInputMember(member_type, member_name, *val, xsink);
             if (*xsink) {
@@ -5818,6 +5823,7 @@ void QoreClass::addBuiltinStaticVar(const char* name, QoreValue value, ClassAcce
         const QoreTypeInfo* typeInfo) {
     priv->addBuiltinStaticVar(name, value, access, typeInfo);
 }
+
 void QoreClass::addBuiltinStaticVarWithAccessors(const char* name, ClassAccess access, const QoreTypeInfo* typeInfo,
         q_static_var_get_t get, q_static_var_set_t set, const void* ptr, q_static_var_del_t del) {
     priv->addBuiltinStaticVarWithAccessors(name, access, typeInfo, get, set, ptr, del);
@@ -6977,26 +6983,46 @@ int QoreVarInfo::evalInit(const char* name, ExceptionSink* xsink) {
             }
             return -1;
         }
-        if (QoreTypeInfo::mayRequireFilter(getTypeInfo(), *val)) {
-            val.ensureReferencedValue();
-            QoreTypeInfo::acceptInputMember(getTypeInfo(), name, *val, xsink);
-            if (*xsink) {
-                if (qore_is_deferred_runtime_init_exception(xsink)) {
-                    xsink->clear();
-                    eval_init = false;
-                    return 0;
-                }
-                return -1;
+        if (assignInitFiltered(name, val.takeReferencedValue(), xsink)) {
+            if (qore_is_deferred_runtime_init_exception(xsink)) {
+                xsink->clear();
+                eval_init = false;
+                return 0;
             }
+            return -1;
         }
-
-        discard(assignInit(val.takeReferencedValue()), xsink);
     } else {
         eval_init = true;
-        init();
+        if (init(xsink)) {
+            if (qore_is_deferred_runtime_init_exception(xsink)) {
+                xsink->clear();
+                eval_init = false;
+                return 0;
+            }
+            return -1;
+        }
     }
 
     return 0;
+}
+
+int QoreVarInfo::assignInitFiltered(const char* name, QoreValue v, ExceptionSink* xsink) {
+    ValueHolder holder(v, xsink);
+    // the outcome must reflect only this initialization; deriving it from the sink state would report a spurious
+    // failure whenever the caller's sink already held an unrelated exception
+    ScopedTypeCheckSink ts(xsink);
+    // a Qore initializer is always checked against a declared type, as with member initializers; the value of a
+    // builtin class variable is supplied by its module, which is responsible for its type, and is only converted
+    if ((!builtin_value && QoreTypeInfo::hasType(getTypeInfo()))
+            || QoreTypeInfo::mayRequireFilter(getTypeInfo(), *holder)) {
+        QoreTypeInfo::acceptInputMember(getTypeInfo(), name, *holder, *ts);
+        if (ts.raised()) {
+            return -1;
+        }
+    }
+    // a slot with an optimized value type returns any value it cannot store
+    discard(assignInit(holder.release()), *ts);
+    return ts.raised() ? -1 : 0;
 }
 
 QoreParseClassHelper::QoreParseClassHelper(QoreClass* new_cls, qore_ns_private* new_ns) {
