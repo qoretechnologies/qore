@@ -122,19 +122,22 @@ public:
     //! @param arg_kinds maps parameters to their native or boxed ABI representation
     //! @param borrowed_args boxed parameters proven not to escape the call
     //! @param return_kind native or boxed fast-entry return ABI
-    //! @param rejects_nothing_return true when the declared return type rejects NOTHING
+    //! @param return_type the declared return type from the signature; a fast entry applies it to its return
+    //! values itself, since it is called directly instead of through a runtime helper that applies it
     void setFastEntryMode(const std::string& name,
             const std::unordered_map<const void*, llvm::Value*>* args,
             const std::unordered_map<const void*, BatchCalleeParamKind>* arg_kinds = nullptr,
             const std::unordered_set<const void*>* borrowed_args = nullptr,
             BatchCalleeReturnKind return_kind = BatchCalleeReturnKind::Boxed,
-            bool rejects_nothing_return = false) {
+            const QoreTypeInfo* return_type = nullptr) {
         fast_entry_name = name;
         fast_entry_args = args;
         fast_entry_arg_kinds = arg_kinds;
         fast_entry_borrowed_args = borrowed_args;
         fast_entry_return_kind = return_kind;
-        fast_entry_rejects_nothing_return = rejects_nothing_return;
+        fast_entry_return_type = return_type;
+        fast_entry_rejects_nothing_return = QoreTypeInfo::hasType(return_type)
+            && !QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING);
     }
 
     //! Set the name of an AOT self-recursive fast entry function.
@@ -273,6 +276,8 @@ private:
     const std::unordered_set<const void*>* fast_entry_borrowed_args = nullptr;
     BatchCalleeReturnKind fast_entry_return_kind = BatchCalleeReturnKind::Boxed;
     bool fast_entry_rejects_nothing_return = false;
+    //! the declared return type of a fast entry
+    const QoreTypeInfo* fast_entry_return_type = nullptr;
 
     // AOT self-recursive fast entry: when set, self-recursive CallDirect in AOT mode
     // emits direct LLVM calls to this function instead of qore_rt_call_direct_aot.
@@ -885,6 +890,12 @@ private:
     bool fastEntryNativeArgsNeedNothingGuard(const BatchCalleeInfo& info,
             const std::vector<uint32_t>& raw_arg_ids) const;
     llvm::Constant* getNothingReturnValue() const;
+    //! Emits the declared return type's conversion of a returned value, or of a missing return value when
+    //! @p boxed is null, and returns the converted NaN-boxed value; the result is released by invoke cleanup
+    llvm::Value* emitReturnTypeConversion(llvm::Module& module, llvm::Function* llvm_func,
+            const QoreIRInstruction* inst, llvm::Value* boxed, const QoreTypeInfo* return_type);
+    //! Converts a NaN-boxed return value to the fast-entry return ABI
+    llvm::Value* getFastEntryReturnValue(llvm::Module& module, llvm::Value* boxed);
     bool selfRecursiveFastEntryArgsNeedNothingGuard(
             const std::vector<uint32_t>& raw_arg_ids) const;
 
@@ -1569,5 +1580,21 @@ private:
             const QoreIRInstruction* call_inst, llvm::Function* llvm_func,
             llvm::Module& module, std::string& error);
 };
+
+//! Returns true if a returned value with the given facts must be converted or checked by the declared return type
+DLLLOCAL bool qore_ir_return_needs_coercion(const QoreTypeInfo* return_type, const QoreIRValueFacts* value_facts);
+
+//! Returns true if a returned value with the given facts may need a conversion or type check by the declared return
+//! type, apart from the rejection of a NOTHING value
+DLLLOCAL bool qore_ir_return_value_needs_conversion(const QoreTypeInfo* return_type,
+    const QoreIRValueFacts* value_facts);
+
+//! Returns true if the declared return type converts or rejects a missing return value
+DLLLOCAL bool qore_ir_nothing_return_needs_filter(const QoreTypeInfo* return_type);
+
+//! Returns true if the declared return type leaves every value returned by the function unchanged
+/** A call-site summary that substitutes the callee's returned value is only valid in this case
+*/
+DLLLOCAL bool qore_ir_function_returns_pass_through(const QoreIRFunction& func, const QoreTypeInfo* return_type);
 
 #endif

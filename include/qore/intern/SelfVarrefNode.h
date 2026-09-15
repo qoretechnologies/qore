@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -62,6 +62,11 @@ public:
 
     // returns the string, caller owns the memory
     DLLLOCAL char* takeString();
+
+    //! returns the declared type of the member set when the node was initialized
+    DLLLOCAL const QoreTypeInfo* getMemberTypeInfo() const {
+        return returnTypeInfo;
+    }
 
 protected:
     const QoreTypeInfo* returnTypeInfo;

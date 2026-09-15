@@ -1427,6 +1427,12 @@ public:
     bool has_value = false;
     QoreIRValue value{};
 
+    //! Transient (never serialized): the parse-time type of the returned expression, if known
+    /** SSA facts do not describe every value, so this lets callers that decide whether the declared return type
+        can change a returned value (such as call-site summaries) use the type the parser checked
+    */
+    const QoreTypeInfo* value_parse_type = nullptr;
+
     //! Transient (never serialized): set by the AOT function-body outliner on
     //! returns moved into a helper.  The lowering emits
     //! qore_rt_outline_signal_return() immediately before the ret so the

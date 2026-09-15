@@ -1507,7 +1507,17 @@ bool QoreIRLowering::lowerStatement(const AbstractStatement* stmt, std::string& 
         for (int i = 0; i < catch_cleanup_depth; ++i) {
             builder.createCatchCleanup(stmt->loc);
         }
-        builder.createReturn(lowered);
+        QoreIRReturnInstruction* ret = builder.createReturn(lowered);
+        // record the parse-time type of the returned expression: the declared type of a member or otherwise the
+        // type recorded for the expression; ParseNode::getTypeInfo() is not used generally, since some nodes (such as
+        // method calls) resolve their types with parse-time APIs that are not available when lowering
+        if (auto* self_ref = dynamic_cast<const SelfVarrefNode*>(expr.getInternalNode())) {
+            ret->value_parse_type = self_ref->getMemberTypeInfo();
+        } else if (!expr.hasNode()) {
+            ret->value_parse_type = expr.getFullTypeInfo();
+        } else {
+            ret->value_parse_type = getExprTypeInfo(expr);
+        }
         return true;
     }
     if (auto* if_stmt = dynamic_cast<const IfStatement*>(stmt)) {

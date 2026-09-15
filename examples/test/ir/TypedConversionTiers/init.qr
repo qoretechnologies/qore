@@ -1,0 +1,39 @@
+# Copyright 2026 Qore Technologies, s.r.o.
+hashdecl InitDecl { int a = 1; string b = "x"; }
+auto sub i_string() { return "s"; }
+auto sub i_int() { return 5; }
+class Statics {
+    public {
+        static softlist<string> strings = "x";
+        static softlist<softint> ints = "3";
+        static softlist<softlist<string>> nested = "b";
+        static softstring text = 1;
+        static list<softstring> element_list = (1, 2);
+        static hash<string, softstring> values = {"x": 1};
+        static int computed = i_int();
+        static softlist<string> computed_list = i_string();
+        static hash<InitDecl> decl;
+        softlist<softlist<string>> m_nested = "a";
+        softlist<softint> m_ints = "1";
+        list<softstring> m_element_list = (1, 2);
+        softlist<*string> m_nullable = NULL;
+    }
+}
+class BadMember {
+    public {
+        hash<auto> bad = i_string();
+    }
+}
+string sub run() {
+    string rv;
+    for (int i = 0; i < 20; ++i) {
+        Statics s();
+        string bad;
+        try { BadMember b(); bad = sprintf("%y", b.bad); } catch (hash<ExceptionInfo> ex) { bad = ex.err; }
+        rv = sprintf("%y %y %y %y %y %y %y %y %y|%y %y %y %y|%s", Statics::strings, Statics::ints, Statics::nested,
+            Statics::text, Statics::element_list, Statics::values, Statics::computed, Statics::computed_list,
+            Statics::decl, s.m_nested, s.m_ints, s.m_element_list, s.m_nullable, bad);
+    }
+    return rv;
+}
+printf("%s\n", run());

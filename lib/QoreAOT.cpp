@@ -12725,6 +12725,21 @@ bool qore_ir_resolve_batch_function_summaries(
                 summary.param_may_modify;
         }
     }
+    // Member access, string and collection summaries replace a call with the value the callee's body returns, and
+    // an inferred boxed return kind describes that value, so they are only derived from functions whose declared
+    // return type leaves every returned value unchanged; a caller composed from a converting callee then keeps the
+    // call.  The native numeric and aggregate summaries produce values of the declared return type themselves.
+    std::unordered_set<const AbstractQoreFunctionVariant*> pass_through_variants;
+    for (const auto& entry : functions) {
+        if (++check_count % 100 == 0
+                && qore_check_cancel(nullptr, "AOT batch return conversion analysis")) {
+            return false;
+        }
+        if (entry.second && qore_ir_function_returns_pass_through(*entry.second,
+                get_declared_return_type(entry.first, nullptr))) {
+            pass_through_variants.insert(entry.first);
+        }
+    }
     if (!std::getenv("QORE_DISABLE_AOT_EXACT_BOXED_RETURN_FACTS")) {
         for (const auto& [variant, func] : functions) {
                 if (++check_count % 100 == 0
@@ -12744,6 +12759,9 @@ bool qore_ir_resolve_batch_function_summaries(
                 if (declared_kind
                         != BatchCalleeBoxedReturnKind::Unknown) {
                     callee->second.boxed_return_kind = declared_kind;
+                    continue;
+                }
+                if (!pass_through_variants.count(variant)) {
                     continue;
                 }
                 BatchCalleeBoxedReturnKind kind =
@@ -13497,7 +13515,8 @@ bool qore_ir_resolve_batch_function_summaries(
         if (callee_it == batch_callees.end() || !sig) {
             continue;
         }
-        if (callee_it->second.implicit_self_method) {
+        bool pass_through_return = pass_through_variants.count(variant) != 0;
+        if (callee_it->second.implicit_self_method && pass_through_return) {
             get_object_getter(func, static_cast<int>(sig->numParams()),
                 callee_it->second.object_getter_member);
         }
@@ -13510,7 +13529,7 @@ bool qore_ir_resolve_batch_function_summaries(
             dynamic_cast<const MethodVariantBase*>(variant);
         const QoreMethod* method = method_variant
             ? method_variant->method() : nullptr;
-        if (method && !method->isStatic()
+        if (pass_through_return && method && !method->isStatic()
                 && isAOTFastMethodCallEligible(variant, true)) {
             std::string set_member;
             int8_t set_param = -1;
@@ -13546,7 +13565,7 @@ bool qore_ir_resolve_batch_function_summaries(
             }
         }
         AOTStringOpInfo string_op;
-        if (qore_aot_get_string_op(*func, *sig, string_op)) {
+        if (pass_through_return && qore_aot_get_string_op(*func, *sig, string_op)) {
             auto param_kind_is = [&](int8_t param, BatchCalleeParamKind kind) {
                 return param >= 0
                     && static_cast<size_t>(param) < callee_it->second.param_kinds.size()
@@ -13581,7 +13600,7 @@ bool qore_ir_resolve_batch_function_summaries(
             }
         }
         AOTStringExpressionInfo string_expression;
-        if (!callee_it->second.string_op
+        if (pass_through_return && !callee_it->second.string_op
                 && qore_aot_get_string_expression(
                     *func, *sig, string_expression, &batch_callees)
                 && qore_aot_string_expression_fast_entry_compatible(
@@ -13590,7 +13609,7 @@ bool qore_ir_resolve_batch_function_summaries(
                 std::move(string_expression);
         }
         AOTCollectionOpInfo collection_op;
-        if (qore_aot_get_collection_op(*func, *sig, collection_op)) {
+        if (pass_through_return && qore_aot_get_collection_op(*func, *sig, collection_op)) {
             callee_it->second.collection_op = std::move(collection_op);
         }
         AOTAggregateReturnInfo aggregate_return;
@@ -13930,7 +13949,8 @@ bool qore_ir_resolve_batch_function_summaries(
                     uvb ? uvb->getUserSignature() : nullptr;
                 if (callee == batch_callees.end() || !sig
                         || callee->second.string_op
-                        || callee->second.string_expression) {
+                        || callee->second.string_expression
+                        || !pass_through_variants.count(variant)) {
                     continue;
                 }
                 AOTStringExpressionInfo expression;
@@ -17571,7 +17591,7 @@ static bool compileAOTClosureBodiesForOwner(size_t owner_index, QoreProgram* pgm
                     }
                     fast_lowerer.setFastEntryMode(fast_name, &param_map,
                         &param_kind_map, &borrowed_params,
-                        return_kind, dispatch_never_returns_nothing);
+                        return_kind, ir_func->specializeType(sig->getReturnTypeInfo()));
                     fast_lowered = fast_lowerer.lowerFunction(*ir_func, module,
                         fast_error);
                 }
@@ -20079,11 +20099,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                         const QoreTypeInfo* fast_return_type =
                             fast_ir_func->specializeType(
                                 sig->getReturnTypeInfo());
-                        bool fast_rejects_nothing_return = QoreTypeInfo::hasType(fast_return_type)
-                            && !QoreTypeInfo::parseAcceptsReturns(fast_return_type, NT_NOTHING);
                         fast_lowerer.setFastEntryMode(fast_entry_name, &param_map,
                                 &param_kind_map, &borrowed_param_map, fast_return_kind,
-                                fast_rejects_nothing_return);
+                                fast_return_type);
                         if (self_rec_eligible) {
                             fast_lowerer.setAOTSelfRecursiveFastEntry(fast_entry_name,
                                     fe, &fast_entry_param_kinds,
@@ -20589,11 +20607,9 @@ static void compileNamespaceFunctions(qore_ns_private* ns, QoreProgram* pgm,
                             const QoreTypeInfo* fast_return_type =
                                 fast_ir_func->specializeType(
                                     sig->getReturnTypeInfo());
-                            bool fast_rejects_nothing_return = QoreTypeInfo::hasType(fast_return_type)
-                                && !QoreTypeInfo::parseAcceptsReturns(fast_return_type, NT_NOTHING);
                             fast_lowerer.setFastEntryMode(fast_entry_name, &param_map,
                                     &param_kind_map, &borrowed_param_map, fast_return_kind,
-                                    fast_rejects_nothing_return);
+                                    fast_return_type);
                             std::string fast_error;
                             if (!fast_lowerer.lowerFunction(
                                     *fast_ir_func, module, fast_error)) {

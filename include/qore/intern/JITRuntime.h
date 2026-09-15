@@ -264,6 +264,19 @@ int64_t qore_rt_guard_not_nothing(uint64_t val);
 //! Raise the runtime type error required when a non-NOTHING return yields NOTHING.
 void qore_rt_raise_return_nothing(ExceptionSink* xsink);
 
+class QoreTypeInfo;
+
+//! Applies the declared return type to a returned value in a fast entry
+/** @return the converted value, which is also stored in @p cleanup when given
+*/
+uint64_t qore_rt_coerce_return(const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup, ExceptionSink* xsink);
+
+//! Applies the declared return type to a missing return value in a fast entry, as for a block without a return
+//! statement
+/** @return the converted value, which is also stored in @p cleanup when given
+*/
+uint64_t qore_rt_coerce_nothing_return(const QoreTypeInfo* ti, uint64_t* cleanup, ExceptionSink* xsink);
+
 //! Check if a NaN-boxed QoreValue is an int; returns 1 if int, 0 otherwise
 int64_t qore_rt_guard_int(uint64_t val);
 

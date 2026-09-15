@@ -172,6 +172,8 @@ static const QoreJITRuntimeSymbolInfo qore_jit_runtime_symbols[] = {
     { "qore_rt_deopt", reinterpret_cast<void*>(&qore_rt_deopt) },
     { "qore_rt_guard_not_nothing", reinterpret_cast<void*>(&qore_rt_guard_not_nothing) },
     { "qore_rt_raise_return_nothing", reinterpret_cast<void*>(&qore_rt_raise_return_nothing) },
+    { "qore_rt_coerce_return", reinterpret_cast<void*>(&qore_rt_coerce_return) },
+    { "qore_rt_coerce_nothing_return", reinterpret_cast<void*>(&qore_rt_coerce_nothing_return) },
     { "qore_rt_guard_int", reinterpret_cast<void*>(&qore_rt_guard_int) },
     { "qore_rt_guard_float", reinterpret_cast<void*>(&qore_rt_guard_float) },
     { "qore_rt_instantiate_local", reinterpret_cast<void*>(&qore_rt_instantiate_local) },
@@ -3863,6 +3865,70 @@ extern "C" DLLEXPORT uint64_t qore_rt_coerce_return_by_type_path_aot(
     }
     return qore_rt_coerce_return_value(
         type_info, value, cleanup_ptr, xsink);
+}
+
+// applies the declared return type to a missing return value like the caller of a standard entry does
+static uint64_t qore_rt_coerce_nothing_return_value(const QoreTypeInfo* ti, uint64_t* cleanup_ptr,
+        ExceptionSink* xsink) {
+    ti = qore_substitute_type_params_if_needed(ti);
+    QoreValue val;
+    QoreTypeInfo::acceptAssignment(ti, "<block return>", val, xsink, nullptr);
+    if (*xsink) {
+        xsink->appendLastDescription(": block missing return statement");
+        val.discard(xsink);
+        return toBits(QoreValue());
+    }
+    uint64_t result = toBits(val);
+    if (cleanup_ptr) {
+        *cleanup_ptr = result;
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_nothing_return_by_type_path_aot(
+        QoreAOTContext* ctx, const char* type_path, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    const QoreTypeInfo* type_info = nullptr;
+    if (type_path && *type_path) {
+        type_info = qore_rt_resolve_full_type_path_cached(
+            ctx, type_path, "return type", xsink);
+        if (xsink && *xsink) {
+            return toBits(QoreValue());
+        }
+    }
+    return qore_rt_coerce_nothing_return_value(type_info, cleanup_ptr, xsink);
+}
+
+// applies an lvalue type identified by its type path; unlike qore_rt_coerce_value_aot(), this does not require the
+// local to have a runtime slot
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_value_by_type_path_aot(QoreAOTContext* ctx, const char* type_path,
+        uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    const QoreTypeInfo* type_info = nullptr;
+    if (type_path && *type_path) {
+        type_info = qore_rt_resolve_full_type_path_cached(ctx, type_path, "local variable type", xsink);
+        if (xsink && *xsink) {
+            return toBits(QoreValue());
+        }
+    }
+    return qore_rt_coerce_value(type_info, value, cleanup_ptr, xsink);
+}
+
+extern "C" DLLEXPORT __attribute__((noinline)) uint64_t qore_rt_coerce_value_by_type_path_aot_throwing(
+        QoreAOTContext* ctx, const char* type_path, uint64_t value, uint64_t* cleanup_ptr, ExceptionSink* xsink) {
+    uint64_t result = qore_rt_coerce_value_by_type_path_aot(ctx, type_path, value, cleanup_ptr, xsink);
+    if (xsink && *xsink) {
+        throw QoreJITException();
+    }
+    return result;
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_return(const QoreTypeInfo* ti, uint64_t value, uint64_t* cleanup,
+        ExceptionSink* xsink) {
+    return qore_rt_coerce_return_value(ti, value, cleanup, xsink);
+}
+
+extern "C" DLLEXPORT uint64_t qore_rt_coerce_nothing_return(const QoreTypeInfo* ti, uint64_t* cleanup,
+        ExceptionSink* xsink) {
+    return qore_rt_coerce_nothing_return_value(ti, cleanup, xsink);
 }
 
 static uint64_t qore_rt_new_complex_hash_from_hash_impl(const QoreTypeInfo* typeInfo,
@@ -9961,14 +10027,15 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
                 return -1;
             }
 
-            // Apply type filter like the standard path in lib/Function.cpp:404-410
+            // Apply type filter like CodeEvaluationHelper::prepareDefaultArgs(): a typed param is always checked
             const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
             if (receiver_type_info) {
                 paramTypeInfo = qore_substitute_type_params_if_needed(paramTypeInfo, receiver_type_info);
             }
-            if (QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)) {
+            if (QoreTypeInfo::hasType(paramTypeInfo) || QoreTypeInfo::mayRequireFilter(paramTypeInfo, val)) {
                 QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), val, xsink);
                 if (*xsink) {
+                    val.discard(xsink);
                     // Uninstantiate already-instantiated params in reverse
                     for (int j = (int)i - 1; j >= 0; --j) {
                         sig->lv[j]->uninstantiate(xsink);
@@ -9990,7 +10057,28 @@ static int instantiateFastCallParams(const UserSignature* sig, unsigned num_para
 
             sig->lv[i]->instantiate(val);
         } else {
-            sig->lv[i]->instantiate(QoreValue());
+            // Match CodeEvaluationHelper::prepareDefaultArgs() for missing args: a typed param filters the missing
+            // value, so a soft list param receives an empty list rather than NOTHING
+            QoreValue val;
+            const QoreTypeInfo* paramTypeInfo = sig->getParamTypeInfo(i);
+            if (receiver_type_info) {
+                paramTypeInfo = qore_substitute_type_params_if_needed(paramTypeInfo, receiver_type_info);
+            }
+            if (QoreTypeInfo::hasType(paramTypeInfo)) {
+                QoreTypeInfo::acceptInputParam(paramTypeInfo, i, sig->getName(i), val, xsink);
+            }
+            if (!*xsink) {
+                sig->lv[i]->applyNoNarrowContainerType(val, xsink);
+            }
+            if (*xsink) {
+                val.discard(xsink);
+                for (int j = (int)i - 1; j >= 0; --j) {
+                    sig->lv[j]->uninstantiate(xsink);
+                }
+                return -1;
+            }
+
+            sig->lv[i]->instantiate(val);
         }
     }
     return 0;

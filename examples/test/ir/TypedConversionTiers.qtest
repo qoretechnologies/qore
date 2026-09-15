@@ -1,0 +1,135 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../qlib"
+%requires ../../../qlib/QUnit.qm
+%requires ../../../qlib/FsUtil.qm
+
+%exec-class TypedConversionTiersTest
+
+#! Checks that every execution tier applies declared types the same way
+/** Each script in the TypedConversionTiers directory prints one line, which must match its .expected file when run
+    by the AST interpreter, the IR interpreter, natively compiled JIT code and an AOT-compiled executable.  The scripts
+    cover the places where compiled code used to bypass a declared type:
+    - return values of fast entries, getters and call-site summaries (soft list and soft scalar conversions)
+    - missing soft list arguments, default arguments and member, static and hashdecl initializers
+    - native int, float and bool returns called inside a try block, and native scalar and hashdecl local assignments
+    - hashdecl key assignments whose exception must be caught without leaving a key in the hash
+    - types with type parameters of generic functions and methods, which an AOT executable resolves for each call
+    - containers left unchanged by an assignment that their type rejects, with the same error in every tier
+*/
+class TypedConversionTiersTest inherits QUnit::Test {
+    public {
+        #! scenario scripts in the support directory
+        const Scenarios = ("returns", "args", "native", "init", "hashdecl", "generics", "lvalue");
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+        string dir;
+    }
+
+    constructor() : QUnit::Test("TypedConversionTiersTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+        dir = get_script_dir() + "/TypedConversionTiers";
+
+        foreach string scenario in (Scenarios) {
+            addTestCase(scenario + " in interpreted and native tiers", \testTiers(), scenario);
+            addTestCase(scenario + " in an AOT executable", \testAot(), scenario);
+        }
+        addTestCase("static initializers in an AOT module", \testAotModule());
+        addTestCase("split module parse defaults", \testSplitModule());
+        addTestCase("functions sharing a callee are compiled natively", \testSharedCallee());
+        set_return_value(main());
+    }
+
+    testTiers(string scenario) {
+        string expected = getExpected(scenario);
+        string script = dir + "/" + scenario + ".qr";
+        foreach string mode in ("ast", "ir", "jit") {
+            assertEq(expected, run(sprintf("%s %s -b --exec-mode=%s %s", getEnv(mode), qore_bin, mode, script)),
+                sprintf("%s in %s mode", scenario, mode));
+        }
+    }
+
+    testAot(string scenario) {
+        TmpDir tmp("qore-typed-conversion-tiers-");
+        string exe = tmp.path + "/" + scenario;
+        string compile_out = run(sprintf("%s %s -b --compile --output=%s %s 2>&1", getLibEnv(), qore_bin, exe,
+            dir + "/" + scenario + ".qr"));
+        assertTrue(is_file(exe), sprintf("%s compiled: %s", scenario, compile_out));
+        # standard error is included, since an error left pending by a type resolution is reported when the program
+        # exits
+        assertEq(getExpected(scenario), run(sprintf("%s %s -b 2>&1", getLibEnv(), exe)),
+            scenario + " as AOT executable");
+    }
+
+    testAotModule() {
+        TmpDir tmp("qore-typed-conversion-module-");
+        string qmod = tmp.path + "/StaticInit.qmod";
+        string compile_out = run(sprintf("%s %s -m -o %s %s 2>&1", getLibEnv(), qcc_bin, qmod,
+            dir + "/StaticInit.qm"));
+        assertTrue(is_file(qmod), "module compiled: " + compile_out);
+        string expected = getExpected("static_init");
+        string script = dir + "/static_init.qr";
+        foreach string mode in ("ast", "ir", "jit") {
+            assertEq(expected, run(sprintf("%s %s -b --exec-mode=%s -l %s %s", getEnv(mode), qore_bin, mode, qmod,
+                script)), "compiled module static initializers used in " + mode + " mode");
+        }
+        # the source module is the reference for the compiled one
+        assertEq(expected, run(sprintf("%s -b -l %s %s", qore_bin, dir + "/StaticInit.qm", script)),
+            "source module static initializers");
+    }
+
+    #! a split module without parse directives is loaded and compiled as modern code
+    testSplitModule() {
+        TmpDir tmp("qore-typed-conversion-split-");
+        string qmod = tmp.path + "/SplitInit.qmod";
+        string compile_out = run(sprintf("%s %s -m -o %s %s 2>&1", getLibEnv(), qcc_bin, qmod, dir + "/SplitInit"));
+        assertTrue(is_file(qmod), "split module compiled: " + compile_out);
+        string code = "printf(\"%s\\n\", SplitInit::Holder::describe());";
+        string expected = "[\"s\"] \"3\"\n";
+        assertEq(expected, run(sprintf("QORE_MODULE_DIR=%s %s -b -ne '%%requires SplitInit\n%s'", dir, qore_bin,
+            code)), "source split module");
+        assertEq(expected, run(sprintf("%s -b -l %s -ne '%s'", qore_bin, qmod, code)), "compiled split module");
+    }
+
+    testSharedCallee() {
+        string script = dir + "/shared_callee.qr";
+        string out = run(sprintf("QORE_JIT_TIMING=1 %s %s -b --exec-mode=jit %s 2>&1", getEnv("jit"), qore_bin,
+            script));
+        # a second function calling an already compiled callee used to fail with a duplicate fast entry symbol and
+        # remain in the IR interpreter
+        assertEq(-1, out.find("failed to compile"), out);
+        assertNeq(-1, out.find("compiled 'second@"), out);
+        assertEq(getExpected("shared_callee"), run(sprintf("%s %s -b --exec-mode=jit %s", getEnv("jit"), qore_bin,
+            script)));
+    }
+
+    private string getExpected(string name) {
+        return ReadOnlyFile::readTextFile(dir + "/" + name + ".expected");
+    }
+
+    #! native compilation must complete before the code runs so that the native code is what is tested
+    private string getEnv(string mode) {
+        return mode == "jit" ? "QORE_JIT_SYNC_COMPILE=1" : "";
+    }
+
+    private string getLibEnv() {
+        return sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s", libqore_dir, libqore_dir);
+    }
+
+    #! returns standard output only, so parse warnings cannot affect the comparison
+    private string run(string cmd) {
+        return backquote(cmd);
+    }
+}

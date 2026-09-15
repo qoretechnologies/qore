@@ -1,0 +1,41 @@
+# Copyright 2026 Qore Technologies, s.r.o.
+softlist<string> sub r_strings() { }
+softlist<*string> sub r_nullable() { }
+softlist<auto> sub r_auto() { return; }
+softlist sub r_plain() { return; }
+*softlist<string> sub r_optional() { }
+softlist<*string> sub r_maybe(*string s) { if (s) { return s; } }
+softstring sub r_softstring() { return 1; }
+softint sub r_softint() { return "2"; }
+softlist<string> sub r_wrap() { return "x"; }
+softlist<string> sub r_concat(string a, string b) { return a + b; }
+softlist<int> sub r_size(list<int> l) { return l.size(); }
+softstring sub r_int_string(string a) { return a.size(); }
+softint sub r_missing() { }
+final class Getters {
+    public {
+        auto unset;
+        auto value = "1";
+        auto number = 7;
+    }
+    softlist<string> getUnset() { return unset; }
+    softlist<string> getValue() { return value; }
+    softstring getNumber() { return number; }
+    softlist<string> setGet(auto x) { unset = x; return unset; }
+    static softlist<string> none() { }
+}
+softlist<string> sub r_recursive(int n) { if (n) { return r_recursive(n - 1); } }
+string sub run() {
+    Getters g();
+    string rv;
+    for (int i = 0; i < 20; ++i) {
+        string missing;
+        try { r_missing(); missing = "no error"; } catch (hash<ExceptionInfo> ex) { missing = ex.err; }
+        rv = sprintf("%y %y %y %y %y %y %y %y %y %y %y %y %s|%y %y %y %y %y %y %y", r_strings(), r_nullable(),
+            r_auto(), r_plain(), r_optional(), r_maybe(), r_maybe("a"), r_softstring(), r_softint(), r_wrap(),
+            r_concat("a", "b"), r_size((1, 2)), missing, g.getUnset(), g.getValue(), g.getNumber(),
+            g.setGet("z"), Getters::none(), r_recursive(2), r_int_string("abc"));
+    }
+    return rv;
+}
+printf("%s\n", run());

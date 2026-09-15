@@ -1112,7 +1112,7 @@ static std::string qore_ir_get_type_path(const QoreTypeInfo* ti) {
     return qore_get_aot_serializable_type_path(ti);
 }
 
-static bool qore_ir_aot_return_needs_coercion(
+bool qore_ir_return_value_needs_conversion(
         const QoreTypeInfo* return_type, const QoreIRValueFacts* value_facts) {
     // Compiler-generated AOT helpers use nullptr for raw transport returns;
     // user functions without a concrete declared type use auto/any.
@@ -1130,22 +1130,97 @@ static bool qore_ir_aot_return_needs_coercion(
     if (!value_type) {
         return true;
     }
+    // a NOTHING value is not converted by a type that accepts NOTHING without a filter and is otherwise rejected,
+    // which is checked separately; compare the type of the value without NOTHING, if the type has such a form: a
+    // type without one (such as a type parameter, which may be instantiated with an optional type) is compared as is
+    if (QoreTypeInfo::hasType(value_type)) {
+        const QoreTypeInfo* nonoptional_value_type = qore_get_value_type(value_type);
+        if (nonoptional_value_type != autoTypeInfo) {
+            value_type = nonoptional_value_type;
+        }
+    }
 
     bool may_not_match = false;
     bool may_need_filter = false;
     qore_type_result_e max_result = QTI_NOT_EQUAL;
     qore_type_result_e match = QoreTypeInfo::parseAccepts(
         return_type, value_type, may_not_match, may_need_filter, max_result);
-    if (match == QTI_NOT_EQUAL || may_not_match || may_need_filter) {
+    return match == QTI_NOT_EQUAL || may_not_match || may_need_filter;
+}
+
+bool qore_ir_return_needs_coercion(
+        const QoreTypeInfo* return_type, const QoreIRValueFacts* value_facts) {
+    if (!return_type || return_type == autoTypeInfo) {
+        return false;
+    }
+    if (qore_ir_return_value_needs_conversion(return_type, value_facts)) {
         return true;
     }
+    if (return_type == anyTypeInfo) {
+        return false;
+    }
 
-    if (QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING)) {
+    if (QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING)
+            && !QoreTypeInfo::mayRequireFilter(return_type, QoreValue())) {
         return false;
     }
     return !value_facts
         || value_facts->assigned_state != QoreIRAssignedState::Assigned
         || !value_facts->never_nothing;
+}
+
+bool qore_ir_nothing_return_needs_filter(const QoreTypeInfo* return_type) {
+    return QoreTypeInfo::hasType(return_type)
+        && (!QoreTypeInfo::parseAcceptsReturns(return_type, NT_NOTHING)
+            || QoreTypeInfo::mayRequireFilter(return_type, QoreValue()));
+}
+
+bool qore_ir_function_returns_pass_through(const QoreIRFunction& func, const QoreTypeInfo* return_type) {
+    return_type = func.specializeType(return_type);
+    size_t check_count = 0;
+    for (const auto& block : func.blocks) {
+        for (const auto& inst : block->instructions) {
+            // a cancelled scan reports a converting return, which only prevents a summary; the caller aborts on its
+            // own cancellation check
+            if (++check_count % 100 == 0 && qore_check_cancel(nullptr, "IR return conversion scan")) {
+                return false;
+            }
+            if (inst->opcode == QoreIROpcode::Return) {
+                const auto* ret = static_cast<const QoreIRReturnInstruction*>(inst.get());
+                if (!ret->has_value) {
+                    if (qore_ir_nothing_return_needs_filter(return_type)) {
+                        return false;
+                    }
+                    continue;
+                }
+                const QoreIRValueFacts* facts = func.getValueFacts(ret->value);
+                // SSA facts do not type every value; the parser checked the returned expression's type
+                QoreIRValueFacts parse_facts;
+                if (ret->value_parse_type && QoreTypeInfo::hasType(ret->value_parse_type)
+                        && (!facts || !QoreTypeInfo::hasType(facts->type_info))) {
+                    if (facts) {
+                        parse_facts = *facts;
+                    }
+                    parse_facts.type_info = func.specializeType(ret->value_parse_type);
+                    facts = &parse_facts;
+                }
+                if (qore_ir_return_value_needs_conversion(return_type, facts)) {
+                    return false;
+                }
+                // a value that may be NOTHING is unchanged unless the type converts NOTHING (as a soft list does);
+                // imported summaries reject NOTHING for a type that does not accept it at runtime
+                if (QoreTypeInfo::hasType(return_type) && QoreTypeInfo::mayRequireFilter(return_type, QoreValue())
+                        && (!facts || facts->assigned_state != QoreIRAssignedState::Assigned
+                            || !facts->never_nothing)) {
+                    return false;
+                }
+            } else if (inst->opcode == QoreIROpcode::ReturnNothing
+                    && qore_ir_nothing_return_needs_filter(return_type)) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 static std::string qore_ir_get_cast_type_path(QoreIROpcode opcode, const QoreCastOperatorNode* cast_node,
@@ -5181,6 +5256,68 @@ BatchCalleeParamKind QoreIRToLLVM::getFastEntryParamKind(
         const BatchCalleeInfo& info, unsigned index) const {
     return index < info.param_kinds.size()
         ? info.param_kinds[index] : BatchCalleeParamKind::Boxed;
+}
+
+llvm::Value* QoreIRToLLVM::emitReturnTypeConversion(llvm::Module& module, llvm::Function* llvm_func,
+        const QoreIRInstruction* inst, llvm::Value* boxed, const QoreTypeInfo* return_type) {
+    llvm::Function* func = builder->GetInsertBlock()->getParent();
+    llvm::BasicBlock* entry = &func->getEntryBlock();
+    llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+    auto* cleanup = alloca_builder.CreateAlloca(i64_type, nullptr, "return_coerce_cleanup");
+    alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
+    registerInvokeCleanupAlloca(cleanup);
+
+    llvm::Value* result;
+    if (aot_mode) {
+        llvm::Value* type_path = return_type
+            ? getTypePathArg(return_type)
+            : llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(ptr_type));
+        if (boxed) {
+            auto helper = module.getOrInsertFunction("qore_rt_coerce_return_by_type_path_aot",
+                llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, i64_type, ptr_type, ptr_type}, false));
+            result = builder->CreateCall(helper, {aot_ctx_arg, type_path, boxed, cleanup, xsink_arg});
+        } else {
+            auto helper = module.getOrInsertFunction("qore_rt_coerce_nothing_return_by_type_path_aot",
+                llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type, ptr_type}, false));
+            result = builder->CreateCall(helper, {aot_ctx_arg, type_path, cleanup, xsink_arg});
+        }
+    } else {
+        llvm::Value* type_info = getTypeInfoPointerArg(return_type);
+        if (boxed) {
+            auto helper = module.getOrInsertFunction("qore_rt_coerce_return",
+                llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type}, false));
+            result = builder->CreateCall(helper, {type_info, boxed, cleanup, xsink_arg});
+        } else {
+            auto helper = module.getOrInsertFunction("qore_rt_coerce_nothing_return",
+                llvm::FunctionType::get(i64_type, {ptr_type, ptr_type, ptr_type}, false));
+            result = builder->CreateCall(helper, {type_info, cleanup, xsink_arg});
+        }
+    }
+    emitExceptionCheck(module, llvm_func, inst);
+    return result;
+}
+
+llvm::Value* QoreIRToLLVM::getFastEntryReturnValue(llvm::Module& module, llvm::Value* boxed) {
+    switch (fast_entry_return_kind) {
+        case BatchCalleeReturnKind::NativeInt: {
+            auto to_int = module.getOrInsertFunction("qore_rt_to_int",
+                llvm::FunctionType::get(i64_type, {i64_type}, false));
+            return builder->CreateCall(to_int, {boxed});
+        }
+        case BatchCalleeReturnKind::NativeFloat: {
+            auto to_float = module.getOrInsertFunction("qore_rt_to_float",
+                llvm::FunctionType::get(double_type, {i64_type}, false));
+            return builder->CreateCall(to_float, {boxed});
+        }
+        case BatchCalleeReturnKind::NativeBool: {
+            auto to_bool = module.getOrInsertFunction("qore_rt_to_bool",
+                llvm::FunctionType::get(i64_type, {i64_type}, false));
+            return builder->CreateICmpNE(builder->CreateCall(to_bool, {boxed}),
+                llvm::ConstantInt::get(i64_type, 0));
+        }
+        default:
+            return boxed;
+    }
 }
 
 llvm::Constant* QoreIRToLLVM::getNothingReturnValue() const {
@@ -13686,11 +13823,58 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 it = local_allocas.find(key);
             }
 
+            // A native local holds a value of its own type.  A NaN-boxed operand that is not known to be accepted
+            // unchanged is checked and converted like an assignment to a boxed local, so an unsuitable value raises
+            // an error instead of being converted silently; returns the converted NaN-boxed value, or nullptr if
+            // the operand needs no check
+            auto check_native_local_value = [&]() -> llvm::Value* {
+                const QoreTypeInfo* local_type = linst->local
+                    ? specializeType(linst->local->getTypeInfoForLValue()) : nullptr;
+                if (!QoreTypeInfo::hasType(local_type) || !nanboxed_values.count(inst->operands[0].id)
+                        || !qore_ir_return_needs_coercion(local_type, current_ir_func
+                            ? current_ir_func->getValueFacts(inst->operands[0]) : nullptr)) {
+                    return nullptr;
+                }
+                llvm::Function* func = builder->GetInsertBlock()->getParent();
+                llvm::BasicBlock* entry = &func->getEntryBlock();
+                llvm::IRBuilder<> alloca_builder(entry, entry->begin());
+                auto* cleanup = alloca_builder.CreateAlloca(i64_type, nullptr, "native_check_cleanup");
+                alloca_builder.CreateStore(llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
+                clear_cleanup_before_reuse(cleanup);
+                llvm::Value* checked;
+                if (aot_mode) {
+                    // the type is passed by path: a native local has no runtime slot to resolve it from
+                    auto cv_aot_ft = llvm::FunctionType::get(i64_type,
+                            {ptr_type, ptr_type, i64_type, ptr_type, ptr_type}, false);
+                    checked = emitMaybeInvoke(
+                            module.getOrInsertFunction("qore_rt_coerce_value_by_type_path_aot", cv_aot_ft),
+                            module.getOrInsertFunction("qore_rt_coerce_value_by_type_path_aot_throwing", cv_aot_ft),
+                            {aot_ctx_arg, getTypePathArg(local_type), val, cleanup, xsink_arg},
+                            module, llvm_func, inst);
+                } else {
+                    auto cv_ft = llvm::FunctionType::get(i64_type, {ptr_type, i64_type, ptr_type, ptr_type}, false);
+                    checked = emitMaybeInvoke(module.getOrInsertFunction("qore_rt_coerce_value", cv_ft),
+                            module.getOrInsertFunction("qore_rt_coerce_value_throwing", cv_ft),
+                            {getTypeInfoPointerArg(local_type), val, cleanup, xsink_arg},
+                            module, llvm_func, inst);
+                }
+                emitExceptionCheck(module, llvm_func, inst);
+                registerInvokeCleanupAlloca(cleanup);
+                if (block_scoped_locals.count(key)) {
+                    local_cleanup_allocas[key].push_back(cleanup);
+                }
+                return checked;
+            };
+
             // Native int local: store native i64 directly (no boxing)
             if (is_native_int) {
                 const QoreTypeInfo* local_type = linst->local
                     ? specializeType(linst->local->getTypeInfoForLValue()) : nullptr;
-                llvm::Value* native_val = QoreTypeInfo::equal(
+                llvm::Value* checked = check_native_local_value();
+                llvm::Value* native_val = checked
+                    ? builder->CreateCall(module.getOrInsertFunction("qore_rt_to_int",
+                        llvm::FunctionType::get(i64_type, {i64_type}, false)), {checked})
+                    : QoreTypeInfo::equal(
                         local_type, timeoutTypeInfo)
                     ? ensureTimeoutTypeInline(val, inst->operands[0].id)
                     : ensureIntTypeInline(val, inst->operands[0].id);
@@ -13705,7 +13889,11 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             // Native float local: store native double directly (no boxing)
             if (is_native_float) {
-                llvm::Value* native_val = ensureFloatType(val, inst->operands[0].id, module);
+                llvm::Value* checked = check_native_local_value();
+                llvm::Value* native_val = checked
+                    ? builder->CreateCall(module.getOrInsertFunction("qore_rt_to_float",
+                        llvm::FunctionType::get(double_type, {i64_type}, false)), {checked})
+                    : ensureFloatType(val, inst->operands[0].id, module);
                 builder->CreateStore(native_val, it->second);
                 markLocalCacheFresh(key, llvm_func);
                 if (inst->result.isValid()) {
@@ -13717,9 +13905,10 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
 
             // Native bool local: convert once at assignment and keep i1 in the alloca.
             if (is_native_bool) {
-                llvm::Value* native_val = val;
+                llvm::Value* checked = check_native_local_value();
+                llvm::Value* native_val = checked ? checked : val;
                 if (native_val->getType() != i1_type) {
-                    llvm::Value* boxed = boxValue(val, inst->operands[0].id);
+                    llvm::Value* boxed = checked ? checked : boxValue(val, inst->operands[0].id);
                     auto to_bool = module.getOrInsertFunction("qore_rt_to_bool",
                             llvm::FunctionType::get(i64_type, {i64_type}, false));
                     native_val = builder->CreateICmpNE(
@@ -13785,15 +13974,14 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                 exact_fresh_container_values.count(
                     inst->operands[0].id);
 
-            // Case 1: Complex hash/list types (not hashdecl) need type coercion
+            // Case 1: Complex hash/list and hashdecl types need type coercion
             // via acceptAssignment() to set complexTypeInfo for runtime variant
-            // matching (e.g., list<hash<auto>> matches typed signatures).
-            // Hashdecl types must NOT go through coercion — it strips hashdecl
-            // annotations.  Use getTypedHash() to detect hashdecl types.
+            // matching (e.g., list<hash<auto>> matches typed signatures) and to
+            // reject values of another type; a value that already has the
+            // hashdecl type is accepted unchanged.
             bool is_complex_typed = linst->local
                 && QoreTypeInfo::isComplex(local_ti)
                 && !QoreTypeInfo::isReference(local_ti)
-                && !QoreTypeInfo::getTypedHash(local_ti)
                 && !exact_fresh_container;
 
             // Case 2: Plain hash/list types need type STRIPPING.
@@ -14018,16 +14206,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     builder->SetInsertPoint(after_reinst);
                 }
 
-                // For pre-coerced, type-stripped, or hashdecl locals, use no-coerce variant.
+                // For pre-coerced or type-stripped locals, use no-coerce variant.
                 // Typed values: coercion was already applied above via qore_rt_coerce_value.
                 // Type-stripped: qore_rt_coerce_value already produced the
                 // plain hash/list value.
-                // Hashdecl types: runtime type checking via acceptAssignment rejects hashes
-                // that have complexTypeInfo set instead of hashdecl (a valid state that the
-                // IR interpreter's fast path accepts). Using no-coerce aligns with IR behavior.
                 bool use_no_coerce = needs_value_coerce || needs_type_strip
-                    || exact_fresh_container || linst->weak
-                    || QoreTypeInfo::getTypedHash(local_ti);
+                    || exact_fresh_container || linst->weak;
                 const char* aot_helper_name = linst->weak ? "qore_rt_assign_local_no_coerce_aot"
                         : (use_no_coerce ? "qore_rt_assign_local_no_coerce_eval_weak_aot"
                             : "qore_rt_assign_local_eval_weak_aot");
@@ -15068,17 +15252,25 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             // scalar fast entries extract the value before releasing that source.
             llvm::Value* return_value = nullptr;
             bool boxed_return = fast_entry_return_kind == BatchCalleeReturnKind::Boxed;
-            const QoreTypeInfo* return_type = current_ir_func
-                ? specializeType(current_ir_func->return_type_info) : nullptr;
+            const QoreTypeInfo* return_type = !fast_entry_name.empty()
+                ? specializeType(fast_entry_return_type)
+                : (current_ir_func ? specializeType(current_ir_func->return_type_info) : nullptr);
             bool timeout_return = QoreTypeInfo::equal(
                 return_type, timeoutTypeInfo);
             bool optional_timeout_return = QoreTypeInfo::equal(
                 return_type, timeoutOrNothingTypeInfo);
             const QoreIRValueFacts* return_value_facts = current_ir_func
                 ? current_ir_func->getValueFacts(ret->value) : nullptr;
+            bool coerce_return = false;
             if (ret->has_value) {
                 auto* val = getVal(ret->value.id, error);
                 if (!val) { return false; }
+                // a fast entry is called directly by compiled code instead of through a runtime call helper that
+                // applies the declared return type, so like an AOT standard entry it converts the value itself;
+                // the conversion must precede extraction of a native return value
+                coerce_return = !timeout_return && !optional_timeout_return
+                    && (aot_mode || !fast_entry_name.empty())
+                    && qore_ir_return_needs_coercion(return_type, return_value_facts);
                 if (timeout_return) {
                     llvm::Value* timeout_value = ensureTimeoutTypeInline(
                         val, ret->value.id);
@@ -15092,6 +15284,9 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             i64_type, {i64_type}, false));
                     return_value = builder->CreateCall(
                         coerce_timeout, {boxed});
+                } else if (coerce_return) {
+                    return_value = getFastEntryReturnValue(module, emitReturnTypeConversion(module, llvm_func,
+                        inst, boxValue(val, ret->value.id), return_type));
                 } else if (fast_entry_return_kind == BatchCalleeReturnKind::NativeInt) {
                     return_value = ensureIntTypeInline(val, ret->value.id);
                 } else if (fast_entry_return_kind == BatchCalleeReturnKind::NativeFloat) {
@@ -15109,32 +15304,6 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         return_value = builder->CreateICmpNE(bool_value,
                             llvm::ConstantInt::get(i64_type, 0));
                     }
-                } else if (aot_mode && qore_ir_aot_return_needs_coercion(
-                        return_type, return_value_facts)) {
-                    llvm::Value* boxed = boxValue(val, ret->value.id);
-                    llvm::Function* func = builder->GetInsertBlock()->getParent();
-                    llvm::BasicBlock* entry = &func->getEntryBlock();
-                    llvm::IRBuilder<> alloca_builder(entry, entry->begin());
-                    auto* cleanup = alloca_builder.CreateAlloca(
-                        i64_type, nullptr, "return_coerce_cleanup");
-                    alloca_builder.CreateStore(
-                        llvm::ConstantInt::get(i64_type, VAL_NOTHING), cleanup);
-                    registerInvokeCleanupAlloca(cleanup);
-
-                    auto helper = module.getOrInsertFunction(
-                        "qore_rt_coerce_return_by_type_path_aot",
-                        llvm::FunctionType::get(
-                            i64_type,
-                            {ptr_type, ptr_type, i64_type, ptr_type, ptr_type},
-                            false));
-                    llvm::Value* type_path = return_type
-                        ? getTypePathArg(return_type)
-                        : llvm::ConstantPointerNull::get(
-                            llvm::cast<llvm::PointerType>(ptr_type));
-                    return_value = builder->CreateCall(
-                        helper,
-                        {aot_ctx_arg, type_path, boxed, cleanup, xsink_arg});
-                    emitExceptionCheck(module, llvm_func, inst);
                 } else if (nanboxed_values.count(ret->value.id)) {
                     return_value = val;
                 } else if (val->getType() == i64_type) {
@@ -15147,7 +15316,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     error = "unsupported return value type for LLVM lowering";
                     return false;
                 }
-                if (!fast_entry_name.empty() && boxed_return
+                if (!fast_entry_name.empty() && boxed_return && !coerce_return
                         && fast_entry_rejects_nothing_return) {
                     llvm::BasicBlock* reject = llvm::BasicBlock::Create(
                         ctx, "return_nothing", llvm_func);
@@ -15225,10 +15394,15 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
             return true;
         }
         case QoreIROpcode::ReturnNothing: {
-            if (!fast_entry_name.empty() && fast_entry_rejects_nothing_return) {
-                auto raise = module.getOrInsertFunction("qore_rt_raise_return_nothing",
-                    llvm::FunctionType::get(void_type, {ptr_type}, false));
-                builder->CreateCall(raise, {xsink_arg});
+            llvm::Value* return_value = nullptr;
+            if (!fast_entry_name.empty()) {
+                // a fast entry applies the declared return type to a missing return value like the caller of a
+                // standard entry does: a soft list becomes an empty list, and a type rejecting NOTHING raises
+                const QoreTypeInfo* return_type = specializeType(fast_entry_return_type);
+                if (qore_ir_nothing_return_needs_filter(return_type)) {
+                    return_value = getFastEntryReturnValue(module, emitReturnTypeConversion(module, llvm_func,
+                        inst, nullptr, return_type));
+                }
             }
             // Deferred exception check for init functions (Phase 3: LLVM hang fix)
             if (deferred_exception_checking && deferred_check_needed) {
@@ -15249,6 +15423,12 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                         error_return_block, cont);
                 builder->SetInsertPoint(cont);
             }
+            if (return_value && fast_entry_return_kind == BatchCalleeReturnKind::Boxed) {
+                // the converted value is also released by invoke cleanup
+                auto incref_fn = module.getOrInsertFunction("qore_rt_incref",
+                    llvm::FunctionType::get(void_type, {i64_type}, false));
+                builder->CreateCall(incref_fn, {return_value});
+            }
             emitOnBlockExitExec(module);
             emitIteratorCleanup(module);
             emitPreinstantiatedCleanup(module);
@@ -15263,7 +15443,7 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                     llvm::FunctionType::get(void_type, {}, false));
                 builder->CreateCall(signal_fn, {});
             }
-            builder->CreateRet(getNothingReturnValue());
+            builder->CreateRet(return_value ? return_value : getNothingReturnValue());
             return true;
         }
 
@@ -15786,6 +15966,8 @@ bool QoreIRToLLVM::lowerInstruction(const QoreIRInstruction* inst, llvm::Functio
                             }
                             call_args.push_back(xsink_arg);
                             result = builder->CreateCall(fast_fn, call_args);
+                            // a native scalar result must not be treated as a NaN-boxed value
+                            invoke_return_kind = callee_info.return_kind;
                             if (has_arg_cleanups) {
                                 auto clear_helper = module.getOrInsertFunction(
                                         "qore_rt_clear_arg_cleanups",

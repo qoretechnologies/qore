@@ -1,0 +1,44 @@
+# Copyright 2026 Qore Technologies, s.r.o.
+softint sub n_softint() { return "2"; }
+int sub n_int() { return 7; }
+int sub n_negative() { return -1; }
+int sub n_tagged() { return -1688849860259840; }
+float sub n_float() { return 1.5; }
+bool sub n_bool() { return True; }
+int sub n_add(int a, int b) { return a + b; }
+auto sub gstr() { return "abc"; }
+string sub run() {
+    string rv;
+    for (int i = 0; i < 20; ++i) {
+        string inside;
+        try {
+            inside = sprintf("%y %y %y %y %y %y %y", n_softint(), n_int(), n_negative(), n_tagged(), n_float(),
+                n_bool(), n_add(1, 2));
+        } catch (hash<ExceptionInfo> ex) {
+            inside = ex.err;
+        }
+        list<string> errs;
+        try {
+            int x = gstr();
+            errs += sprintf("int=%y", x);
+        } catch (hash<ExceptionInfo> ex) {
+            errs += "int:" + ex.err;
+        }
+        try {
+            float x = gstr();
+            errs += sprintf("float=%y", x);
+        } catch (hash<ExceptionInfo> ex) {
+            errs += "float:" + ex.err;
+        }
+        try {
+            bool x = gstr();
+            errs += sprintf("bool=%y", x);
+        } catch (hash<ExceptionInfo> ex) {
+            errs += "bool:" + ex.err;
+        }
+        softint si = gstr();
+        rv = sprintf("%s|%y %y %s|%y", inside, n_softint(), n_int(), errs.join(","), si);
+    }
+    return rv;
+}
+printf("%s\n", run());

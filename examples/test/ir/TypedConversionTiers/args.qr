@@ -1,0 +1,28 @@
+# Copyright 2026 Qore Technologies, s.r.o.
+auto sub a_strings(softlist<string> c) { return c; }
+auto sub a_nullable(softlist<*string> c) { return c; }
+auto sub a_auto(softlist<auto> c) { return c; }
+auto sub a_plain(softlist c) { return c; }
+auto sub a_optional(*softlist<string> c) { return c; }
+auto sub a_trailing(int i, softlist<string> c, softlist<auto> d) { return (c, d); }
+auto sub a_overload(int i, softlist<string> c) { return c; }
+auto sub a_overload(string s) { return s; }
+auto sub a_default(softlist<softint> c = "4") { return c; }
+auto sub a_nested(softlist<softlist<string>> c = "d") { return c; }
+auto sub a_list_default(list<softstring> c = (1, 2)) { return c; }
+class ArgMethods {
+    auto m(softlist<*string> x) { return x; }
+    auto selfM() { return m(); }
+    static auto sm(softlist<auto> x) { return x; }
+}
+string sub run() {
+    ArgMethods o();
+    string rv;
+    for (int i = 0; i < 20; ++i) {
+        rv = sprintf("%y %y %y %y %y %y %y %y %y %y %y %y %y %y %y", a_strings(), a_strings(NOTHING), a_nullable(),
+            a_auto(), a_plain(), a_optional(), a_trailing(1), a_overload(1), a_default(), a_nested(),
+            a_list_default(), o.m(), o.selfM(), ArgMethods::sm(), a_strings("s"));
+    }
+    return rv;
+}
+printf("%s\n", run());

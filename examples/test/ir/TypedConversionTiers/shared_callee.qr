@@ -1,0 +1,8 @@
+# Copyright 2026 Qore Technologies, s.r.o.
+string sub shared(auto v) { return sprintf("%y", v); }
+string sub first() { return shared(1); }
+string sub second() { return shared(2); }
+string rv;
+for (int i = 0; i < 20; ++i) { rv = first(); }
+for (int i = 0; i < 20; ++i) { rv += second(); }
+printf("%s\n", rv);
