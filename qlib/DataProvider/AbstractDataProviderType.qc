@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! Qore AbstractDataProviderType class definition
 
-/** AbstractDataProviderType.qc Copyright 2019 - 2024 Qore Technologies, s.r.o.
+/** AbstractDataProviderType.qc Copyright 2019 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -1015,6 +1015,10 @@ public class AbstractDataProviderType inherits Qore::Serializable {
 
     #! Returns an appropriate object for the given type description
     /** @param info the description of the type
+
+        @note A list type is restored as a @ref SoftListDataType when its name is a soft list type name such as
+        \c "softlist<string>" or \c "*softlist<string>", so that it converts a single value to a list like the
+        described type does; a list type with any other name is restored as a @ref ListDataType
     */
     static AbstractDataProviderType get(hash<DataTypeInfo> info) {
         if (info.path) {
@@ -1034,8 +1038,16 @@ public class AbstractDataProviderType inherits Qore::Serializable {
             return rv;
         }
         if ((info.base_type == "list" || info.name =~ /^.?list</) && info.element_type) {
-            return new ListDataType(info.name, AbstractDataProviderType::get(info.element_type), !info.mandatory,
-                info.options, info.tags, info.default_value, attr ? cast<hash<NameDescInfo>>(attr) : NOTHING);
+            AbstractDataProviderType element_type = AbstractDataProviderType::get(info.element_type);
+            *hash<NameDescInfo> name_desc = attr ? cast<hash<NameDescInfo>>(attr) : NOTHING;
+            # like a soft scalar type, a soft list is identified by its type name; it converts a single element to a
+            # list, so restoring it as a plain list would reject values the original type accepts
+            if (info.name =~ /^\*?softlist</) {
+                return new SoftListDataType(info.name, element_type, !info.mandatory, info.options, info.tags,
+                    info.default_value, name_desc);
+            }
+            return new ListDataType(info.name, element_type, !info.mandatory, info.options, info.tags,
+                info.default_value, name_desc);
         }
         *Type t = DataTypeMap{info.name};
         if (!t && info.name) {

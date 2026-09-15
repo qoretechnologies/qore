@@ -31,6 +31,9 @@ class SoftListMissingValuesTest inherits QUnit::Test {
         addTestCase("Mandatory copies retain item validation", \mandatory());
         addTestCase("Missing collection defaults are validated as collections", \defaults());
         addTestCase("Record fields distinguish missing lists from invalid items", \records());
+        addTestCase("Nullable items do not make a collection optional", \nullableItems());
+        addTestCase("Records may omit optional collections of nullable records", \nullableRecords());
+        addTestCase("Saved type descriptions keep soft lists", \savedDescriptions());
         set_return_value(main());
     }
     optional() {
@@ -110,6 +113,136 @@ class SoftListMissingValuesTest inherits QUnit::Test {
             assertThrows("RUNTIME-TYPE-ERROR", "ITEM-MISSING", \type.acceptsValue(), ({"numbers": (NOTHING,)},));
             assertThrows("RUNTIME-TYPE-ERROR", "ITEM-VALUE", \type.acceptsValue(), ({"numbers": (-1,)},));
             assertEq((0,), type.acceptsValue({"numbers": 0}).numbers);
+        }
+    }
+
+    nullableItems() {
+        HashDataType record("record");
+        record.addField(new QoreDataField({"name": "id", "type": StringOrNothingType}));
+        foreach AbstractDataProviderType item in (record.getOrNothingType(), AbstractDataProviderType::get("*string"),
+                AbstractDataProviderType::get("*int")) {
+            string label = item.getName();
+            SoftListDataType collection(item);
+            AbstractDataProviderType optional = collection.getOrNothingType();
+            AbstractDataProviderType declared = new SoftListDataType(item, True);
+            AbstractDataProviderType mandatory = optional.getMandatoryType();
+            foreach AbstractDataProviderType type in (collection, mandatory) {
+                foreach AbstractDataProviderType copy in (type, Serializable::deserialize(type.serialize())) {
+                    assertTrue(copy.isMandatory(), label);
+                    assertFalse(copy.isOrNothingType(), label);
+                    assertTrue(copy.getInfo().mandatory, label);
+                    assertEq("softlist<" + item.getValueType().getName() + ">", copy.getValueType().getName(), label);
+                }
+            }
+            foreach AbstractDataProviderType type in (optional, declared) {
+                foreach AbstractDataProviderType copy in (type, Serializable::deserialize(type.serialize())) {
+                    assertFalse(copy.isMandatory(), label);
+                    assertTrue(copy.isOrNothingType(), label);
+                    assertFalse(copy.getInfo().mandatory, label);
+                    assertEq("*softlist<" + item.getValueType().getName() + ">", copy.getValueType().getName(),
+                        label);
+                    assertEq(NOTHING, copy.acceptsValue(NOTHING), label);
+                }
+            }
+            assertTrue(optional.getOrNothingType().isOrNothingType(), label);
+            assertTrue(mandatory.getMandatoryType().isMandatory(), label);
+        }
+
+        # a native soft list type behaves the same way
+        foreach string name in ("softlist<*string>", "softlist<*hash<auto>>", "softlist<auto>") {
+            AbstractDataProviderType type = AbstractDataProviderType::get(new Type(name));
+            assertTrue(type.isMandatory(), name);
+            AbstractDataProviderType optional = type.getOrNothingType();
+            assertFalse(optional.isMandatory(), name);
+            assertEq("*" + name, optional.getValueType().getName());
+            assertEq(name, optional.getMandatoryType().getValueType().getName());
+        }
+    }
+
+    nullableRecords() {
+        HashDataType record("record");
+        record.addField(new QoreDataField({"name": "id", "type": StringOrNothingType}));
+        SoftListDataType rows(record.getOrNothingType());
+
+        HashDataType optional_container("container");
+        optional_container.addField(new QoreDataField({"name": "rows", "type": rows.getOrNothingType()}));
+        HashDataType required_container("required container");
+        required_container.addField(new QoreDataField({"name": "rows", "type": rows}));
+
+        foreach AbstractDataProviderType type in (optional_container,
+                Serializable::deserialize(optional_container.serialize()),
+                AbstractDataProviderType::get(optional_container.getInfo())) {
+            assertFalse(type.getField("rows").getType().isMandatory());
+            assertEq({}, type.acceptsValue({}));
+            assertFalse(type.acceptsValue({}).hasKey("rows"));
+            assertEq(NOTHING, type.acceptsValue({"rows": NOTHING}).rows);
+            assertEq((), type.acceptsValue({"rows": ()}).rows);
+            assertEq(({"id": "one"},), type.acceptsValue({"rows": {"id": "one"}}).rows);
+            assertEq(({},), type.acceptsValue({"rows": {}}).rows);
+            list<auto> occurrences = type.acceptsValue({"rows": ({"id": "one"}, NOTHING)}).rows;
+            assertEq(2, occurrences.size());
+            assertEq({"id": "one"}, occurrences[0]);
+            assertNothing(occurrences[1]);
+            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), ({"rows": ("one",)},));
+            assertThrows("RUNTIME-TYPE-ERROR", \type.acceptsValue(), ({"rows": "one"},));
+        }
+
+        foreach AbstractDataProviderType type in (required_container,
+                Serializable::deserialize(required_container.serialize()),
+                AbstractDataProviderType::get(required_container.getInfo())) {
+            assertTrue(type.getField("rows").getType().isMandatory());
+            assertThrows("MISSING-VALUE-ERROR", \type.acceptsValue(), ({},));
+            assertEq(({"id": "one"},), type.acceptsValue({"rows": {"id": "one"}}).rows);
+            assertEq((), type.acceptsValue({"rows": ()}).rows);
+        }
+
+        # a default applies only to a missing collection
+        SoftListDataType defaulted(record.getOrNothingType(), True, NOTHING, NOTHING, ({"id": "default"},));
+        foreach AbstractDataProviderType type in (defaulted, defaulted.getMandatoryType().getOrNothingType()) {
+            assertEq(({"id": "default"},), type.acceptsValue(NOTHING));
+            assertEq(({"id": "one"},), type.acceptsValue({"id": "one"}));
+            assertEq((), type.acceptsValue(()));
+        }
+    }
+
+    #! returns the accepted value or the exception code for a value
+    static auto getOutcome(AbstractDataProviderType type, auto value) {
+        try {
+            return {"value": type.acceptsValue(value)};
+        } catch (hash<ExceptionInfo> ex) {
+            return {"err": ex.err};
+        }
+    }
+
+    savedDescriptions() {
+        foreach AbstractDataProviderType type in (new SoftListDataType(StringType),
+                new SoftListDataType(StringType, True), new SoftListDataType(StringOrNothingType),
+                AbstractDataProviderType::get(new Type("softlist<string>")),
+                AbstractDataProviderType::get(new Type("*softlist<*string>"))) {
+            string label = type.getName();
+            AbstractDataProviderType restored = AbstractDataProviderType::get(type.getInfo());
+            assertEq(type.getName(), restored.getName(), label);
+            assertEq(type.isMandatory(), restored.isMandatory(), label);
+            assertEq(type.getValueType().getName(), restored.getValueType().getName(), label);
+            assertEq(("a",), restored.acceptsValue("a"), label);
+            assertEq(("a", "b"), restored.acceptsValue(("a", "b")), label);
+            assertThrows("RUNTIME-TYPE-ERROR", \restored.acceptsValue(), (1,), label);
+            assertTrue(restored instanceof SoftListDataType, label);
+            if (!type.isMandatory()) {
+                assertEq(NOTHING, restored.acceptsValue(NOTHING), label);
+            } else if (type instanceof SoftListDataType) {
+                # a missing mandatory collection is still validated by the restored element type
+                assertEq(SoftListMissingValuesTest::getOutcome(type, NOTHING),
+                    SoftListMissingValuesTest::getOutcome(restored, NOTHING), label);
+            }
+        }
+
+        # a hard list is still restored as a hard list
+        foreach AbstractDataProviderType type in (new ListDataType(StringType), new ListDataType(StringType, True)) {
+            AbstractDataProviderType restored = AbstractDataProviderType::get(type.getInfo());
+            assertEq(type.getName(), restored.getName());
+            assertThrows("RUNTIME-TYPE-ERROR", \restored.acceptsValue(), ("a",));
+            assertEq(("a",), restored.acceptsValue(("a",)));
         }
     }
 }

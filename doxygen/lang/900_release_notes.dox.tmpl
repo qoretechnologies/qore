@@ -1552,6 +1552,8 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
     - @ref dataproviderintro "DataProvider" module
       - fixed optional @ref DataProvider::SoftListDataType "soft list" types whose elements accept @ref nothing
         reporting themselves as mandatory, so that a hash type rejected a value omitting such a field
+      - fixed @ref DataProvider::AbstractDataProviderType::get() "AbstractDataProviderType::get()" restoring a soft
+        list type from its type description as a plain list type that rejected single values
       - action option generation returns an empty hash for operations without input fields
       - fixed short-description derivation corrupting words and literal braces when help text contains quoted parameter names or numbers
       - added DPQL (Data Provider Query Language) — a human/AI-readable query syntax with a tokenizer,
