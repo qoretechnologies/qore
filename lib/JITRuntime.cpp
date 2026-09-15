@@ -3730,6 +3730,21 @@ extern "C" DLLEXPORT uint64_t qore_rt_create_empty_list(ExceptionSink* xsink) {
     return toBits(QoreValue(list));
 }
 
+//! Resolves an AOT type path for a value in the current call and substitutes its type parameters
+/** a type parameter of a generic function or method signature is resolved with the signature of the type parameter
+    instantiation of the current call, which also provides its type argument
+*/
+static const QoreTypeInfo* qore_rt_resolve_call_type_path(QoreAOTTypeResolver& resolver, const char* type_path,
+        const QoreTypeInfo* receiver_type_info, std::string& error) {
+    if (qore_aot_type_path_has_signature_type_param(type_path)) {
+        const QoreTypeParamInstantiation* type_param_inst = runtime_get_type_param_instantiation();
+        const QoreTypeInfo* ti = resolver.resolveForSignature(type_path, error,
+            type_param_inst ? type_param_inst->owner : nullptr);
+        return qore_substitute_type_params_if_needed(ti, receiver_type_info, type_param_inst);
+    }
+    return qore_substitute_type_params_if_needed(resolver.resolve(type_path, error), receiver_type_info);
+}
+
 static const QoreTypeInfo* qore_rt_resolve_element_type_path(const char* type_path, const char* op,
         ExceptionSink* xsink) {
     if (!type_path || !*type_path) {
@@ -3747,12 +3762,13 @@ static const QoreTypeInfo* qore_rt_resolve_element_type_path(const char* type_pa
 
     std::string error;
     QoreAOTTypeResolver resolver(pgm);
-    const QoreTypeInfo* ti = resolver.resolve(type_path, error);
+    const QoreTypeInfo* ti = qore_rt_resolve_call_type_path(resolver, type_path,
+        qore_get_current_receiver_type_info(), error);
     if (!ti && xsink) {
         xsink->raiseException("AOT-TYPE-ERROR",
             "%s cannot resolve list element type '%s': %s", op, type_path, error.c_str());
     }
-    return qore_substitute_type_params_if_needed(ti);
+    return ti;
 }
 
 static const QoreTypeInfo* qore_rt_resolve_full_type_path(const char* type_path, const char* op,
@@ -3772,19 +3788,21 @@ static const QoreTypeInfo* qore_rt_resolve_full_type_path(const char* type_path,
 
     std::string error;
     QoreAOTTypeResolver resolver(pgm);
-    const QoreTypeInfo* ti = resolver.resolve(type_path, error);
+    const QoreTypeInfo* ti = qore_rt_resolve_call_type_path(resolver, type_path,
+        qore_get_current_receiver_type_info(), error);
     if (!ti && xsink) {
         xsink->raiseException("AOT-TYPE-ERROR",
             "%s cannot resolve container type '%s': %s", op, type_path, error.c_str());
     }
-    return qore_substitute_type_params_if_needed(ti);
+    return ti;
 }
 
 static const QoreTypeInfo* qore_rt_resolve_full_type_path_cached(QoreAOTContext* ctx,
         const char* type_path, const char* op, ExceptionSink* xsink) {
     static const bool cache_enabled =
         std::getenv("QORE_DISABLE_AOT_FULL_TYPE_PATH_CACHE") == nullptr;
-    if (!cache_enabled || !ctx || !type_path || !*type_path) {
+    // the type of a signature type parameter depends on the instantiation of the current call, so it is not cached
+    if (!cache_enabled || !ctx || !type_path || !*type_path || qore_aot_type_path_has_signature_type_param(type_path)) {
         return qore_rt_resolve_full_type_path(type_path, op, xsink);
     }
 

@@ -6111,6 +6111,14 @@ const QoreTypeInfo* QoreAOTTypeResolver::resolveComplexType(const char* path) {
         return qore_get_aot_deferred_type_info(nullptr, hash_args[0].c_str(), hash_or_nothing, true);
     }
 
+    // type parameters have AOT-specific spellings that the type parser does not accept; a path with a type parameter
+    // that was not resolved above cannot be resolved by the parser, and at runtime its parse errors would be left
+    // pending in the Program
+    if (strstr(path, "typeparam<")) {
+        assert(!qore_aot_type_path_has_signature_type_param(path) || !signature_type_param_owner);
+        return nullptr;
+    }
+
     // Use the existing parser infrastructure to resolve complex type strings
     // qore_get_type_from_string_intern() handles: list<T>, hash<T>, *T, reference<T>, etc.
     // We need to set up the program context so that class lookups like object<ClassName>

@@ -1,0 +1,32 @@
+# Copyright 2026 Qore Technologies, s.r.o.
+softlist<T> sub g_wrap<T>(T v) { return v; }
+softlist<T> sub g_local<T>(T v) { softlist<T> l = v; return l; }
+list<T> sub g_list<T>(T v) { list<T> l = (v,); return l; }
+T sub g_ident<T>(T v) { return v; }
+*T sub g_optional<T>(*T v) { return v; }
+softlist<T> sub g_none<T>() { }
+*softlist<T> sub g_optional_none<T>() { }
+softlist<U> sub g_outer<U>(U v) { auto inner = g_wrap<int>(1); return v; }
+class GenericHolder {
+    *T get<T>(*T v) { return v; }
+}
+class GenericBox<T> {
+    public {
+        *T optional;
+    }
+    *T getOptional() { return optional; }
+    softlist<T> wrap(T v) { return v; }
+}
+string sub run() {
+    GenericHolder holder();
+    GenericBox<int> box();
+    string rv;
+    for (int i = 0; i < 20; ++i) {
+        rv = sprintf("%y %y %y %y %y %y %y %y %y %y %y %y %y %y %y %y", g_wrap<int>(1), g_wrap(2), g_local<string>("a"),
+            g_list<int>(3), g_ident<softlist<string>>("b"), g_ident<*softlist<string>>(), g_optional<int>(4),
+            g_optional<int>(), g_optional<softlist<string>>(), g_none<string>(), g_optional_none<string>(),
+            g_outer<string>("c"), holder.get<int>(5), holder.get<int>(), box.getOptional(), box.wrap(6));
+    }
+    return rv;
+}
+printf("%s\n", run());

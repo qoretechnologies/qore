@@ -1320,6 +1320,14 @@ static inline unsigned qore_aot_line_size(const QoreAOTBinaryReader& reader) {
     return reader.getHeader().version >= 11 ? 4 : 2;
 }
 
+//! Returns true if an AOT type path contains a type parameter of a generic function or method signature
+/** such a type parameter is serialized without its owner, since the path of a signature is not stable; it can only
+    be resolved with the signature that owns it (see QoreAOTTypeResolver::resolveForSignature())
+*/
+static inline bool qore_aot_type_path_has_signature_type_param(const char* type_path) {
+    return type_path && strstr(type_path, "typeparam<,") != nullptr;
+}
+
 //! Type resolver: maps type path strings back to const QoreTypeInfo* pointers at runtime
 /** In batch mode (multiple AOT blobs registered into one Program),
     every session's methods reference the same builtin types (`string`,
