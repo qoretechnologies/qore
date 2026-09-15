@@ -1320,6 +1320,56 @@ public class DataProviderTest inherits QUnit::Test {
         });
         assertEq("{category} in ([\"A\", \"B\", \"C\"])", str);
 
+        # a conditional template part reads an argument that was given as given, and its default only when the
+        # argument was omitted; an argument set to False must not be rendered as its True default, or the
+        # description states the opposite of what the expression does
+        hash<DataProviderExpressionInfo> caseexp = <DataProviderExpressionInfo>{
+            "type": DET_Operator,
+            "name": "in-list",
+            "display_name": "In List",
+            "short_desc": "Returns True if the first argument is found in the second argument",
+            "desc": "Returns `True` if the first argument is found in the second argument; the optional third "
+                "argument selects a case-insensitive comparison",
+            "symbol": "in",
+            "render_template": "$arg[0] in ($arg[1])${arg[2] ? [IGNORE-CASE]:}",
+            "groups": "Comparison",
+            "args": (DataProviderSignatureAnyType, DataProviderSignatureListType, DataProviderSignatureBoolType),
+            "arg_info": (
+                <DataProviderArgInfo>{"display_name": "Value"},
+                <DataProviderArgInfo>{"display_name": "List"},
+                <DataProviderArgInfo>{"display_name": "Ignore Case?", "default_value": True},
+            ),
+            "return_type": AbstractDataProviderTypeMap."bool",
+        };
+        code render_case = auto sub (*softbool ignore_case, *bool omit) {
+            hash<DataProviderExpression> cexp = <DataProviderExpression>{
+                "exp": "in-list",
+                "args": omit
+                    ? (<DataProviderFieldReference>{"field": "category"}, ("A", "B"))
+                    : (<DataProviderFieldReference>{"field": "category"}, ("A", "B"), ignore_case),
+            };
+            return DataProvider::renderExpression(cexp, DataProviderGenericExpressions + {"in-list": caseexp});
+        };
+        assertEq("{category} in ([\"A\", \"B\"]) [IGNORE-CASE]", render_case(NOTHING, True),
+            "an omitted argument renders its True default");
+        assertEq("{category} in ([\"A\", \"B\"]) [IGNORE-CASE]", render_case(True, False),
+            "an argument given as True renders the part");
+        assertEq("{category} in ([\"A\", \"B\"])", render_case(False, False),
+            "an argument given as False does not render the part despite the True default");
+
+        # the same with a False default: only an argument given as True renders the part
+        caseexp.arg_info = (
+            <DataProviderArgInfo>{"display_name": "Value"},
+            <DataProviderArgInfo>{"display_name": "List"},
+            <DataProviderArgInfo>{"display_name": "Ignore Case?", "default_value": False},
+        );
+        assertEq("{category} in ([\"A\", \"B\"])", render_case(NOTHING, True),
+            "an omitted argument renders its False default");
+        assertEq("{category} in ([\"A\", \"B\"])", render_case(False, False),
+            "an argument given as False does not render the part");
+        assertEq("{category} in ([\"A\", \"B\"]) [IGNORE-CASE]", render_case(True, False),
+            "an argument given as True renders the part with a False default");
+
         opexp = <DataProviderExpressionInfo>{
             "type": DET_Operator,
             "name": "in-list",

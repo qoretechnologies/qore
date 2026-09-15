@@ -2021,7 +2021,11 @@ if (errors) {
         # look for substitutions with curly bracks and optional ternary expressions
         foreach string t in (str =~ x/\$\{(arg\[[0-9]+\](?:\s*\?[^:\}]*:[^\}]*)?)\}/) {
             (softint n, *string t0, *string t1) = (t =~ x/arg\[([0-9]+)\](?:\s*\?([^:]*):(.*))?$/);
-            if (exp.args[n].val() || info.arg_info[n].default_value.val()) {
+            # an argument that was given is read as given, and its default only when it was not: the value of an
+            # argument set to @ref False "False" is not its default, and the description must state what the
+            # expression does.  This is the rule the expression evaluation applies to the same arguments
+            auto given = exp.args[n];
+            if (exists given ? given.val() : info.arg_info[n].default_value.val()) {
                 str = replace(str, "${" + t + "}", t0);
             } else {
                 str = replace(str, "${" + t + "}", t1);
