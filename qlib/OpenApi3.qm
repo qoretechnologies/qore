@@ -4877,8 +4877,12 @@ public class OpenApi3DiscriminatorDataType inherits QoreUnionDataType {
     #! Returns a "soft" type equivalent to the current type
     /** @return a type selecting the same branches, each accepting soft values */
     AbstractDataProviderType getSoftType() {
+        # hold one conversion scope for the whole union, so that a type shared by more than one branch is
+        # converted once; see AbstractDataProviderType::getSoftTypeShared()
+        AbstractDataProviderType::softTypeScopeEnter();
+        on_exit AbstractDataProviderType::softTypeScopeExit();
         return new OpenApi3DiscriminatorDataType(discriminator,
-            map {$1.key: $1.value.getSoftType()}, alternatives.pairIterator());
+            map {$1.key: AbstractDataProviderType::getSoftTypeShared($1.value)}, alternatives.pairIterator());
     }
 
     #! Returns an "or nothing" type equivalent to the current type
@@ -5087,7 +5091,8 @@ public class OpenApi3UnionDataType inherits QoreUnionDataType {
 
     #! Returns a "soft" type equivalent to the current type
     AbstractDataProviderType getSoftType() {
-        return new OpenApi3UnionDataType((map $1.getSoftType(), getUnionTypes()), composition_keyword, schemas, multipart_wire_types);
+        return new OpenApi3UnionDataType(AbstractDataProviderType::getSoftTypesShared(getUnionTypes()),
+            composition_keyword, schemas, multipart_wire_types);
     }
 
     #! Returns an "or nothing" type equivalent to the current type

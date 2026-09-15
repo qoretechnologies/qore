@@ -305,7 +305,7 @@ public class QoreUnionDataType inherits AbstractDataProviderType {
         @since DataProvider 3.5.1
     */
     AbstractDataProviderType getSoftType() {
-        return new QoreUnionDataType(map $1.getSoftType(), types);
+        return new QoreUnionDataType(AbstractDataProviderType::getSoftTypesShared(types));
     }
 
     #! Returns an "or nothing" type equivalent to the current type

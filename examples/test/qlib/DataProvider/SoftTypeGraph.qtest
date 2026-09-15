@@ -1,0 +1,419 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/DataProvider
+
+%exec-class SoftTypeGraphTest
+
+#! Counts conversions of itself while keeping its own type
+class CountingLeaf inherits QoreDataType {
+    public {
+        #! the number of times this type was converted
+        int calls = 0;
+    }
+
+    constructor() : QoreDataType(BoolType) {
+    }
+
+    AbstractDataProviderType getSoftType() {
+        ++calls;
+        return self;
+    }
+}
+
+#! A type whose soft conversion produces a distinct type of its own
+class CustomConverterLeaf inherits QoreDataType {
+    public {
+        int calls = 0;
+    }
+
+    constructor() : QoreDataType(IntType) {
+    }
+
+    AbstractDataProviderType getSoftType() {
+        ++calls;
+        return new QoreDataType(SoftIntType);
+    }
+}
+
+#! Checks that a soft conversion processes each distinct source type once
+/** A type reachable by more than one path used to be converted once per path, which is exponential in the depth
+    of the graph; a recursive type could not be converted at all.
+*/
+class SoftTypeGraphTest inherits QUnit::Test {
+    constructor() : QUnit::Test("SoftTypeGraphTest", "1.0", \ARGV) {
+        addTestCase("shared descendants are converted once", \sharedGraph());
+        addTestCase("recursive and mutually recursive graphs", \recursiveGraph());
+        addTestCase("hashdecl, list and default other field types", \otherContainers());
+        addTestCase("list element types are converted", \listTypes());
+        addTestCase("union alternatives are converted once", \unionTypes());
+        addTestCase("a record type is converted as one graph", \providerRecord());
+        addTestCase("a saved and restored graph converts once", \savedGraph());
+        addTestCase("custom converters and repeated conversions", \customAndRepeated());
+        addTestCase("type metadata is preserved", \metadata());
+        addTestCase("a failed conversion releases the memo", \failureCleanup());
+        addTestCase("concurrent conversions do not share state", \concurrent());
+        set_return_value(main());
+    }
+
+    #! builds a diamond graph where every hash has two fields holding the same child type
+    private static HashDataType makeDiamond(int depth, AbstractDataProviderType leaf) {
+        AbstractDataProviderType type = leaf;
+        for (int i = 0; i < depth; ++i) {
+            HashDataType parent(sprintf("Level %d", i));
+            parent.addField(new QoreDataField({"name": "left", "type": type}));
+            parent.addField(new QoreDataField({"name": "right", "type": type}));
+            type = parent;
+        }
+        return cast<HashDataType>(type);
+    }
+
+    sharedGraph() {
+        # the work must depend on the number of distinct types, not on the number of paths to them
+        foreach int depth in ((4, 8, 12)) {
+            CountingLeaf leaf();
+            AbstractDataProviderType soft = makeDiamond(depth, leaf).getSoftType();
+            assertEq(1, leaf.calls, sprintf("depth %d converts the shared leaf once", depth));
+            assertTrue(soft.getFields().hasKey("left"), "the soft type has the left field");
+            assertTrue(soft.getFields().hasKey("right"), "the soft type has the right field");
+            # both paths reach the same converted type, as they did in the source graph
+            assertEq(soft.getFields().left.getType().uniqueHash(), soft.getFields().right.getType().uniqueHash(),
+                "shared source types stay shared after conversion");
+        }
+    }
+
+    recursiveGraph() {
+        # a type that holds itself: the conversion must terminate and stay self-referential
+        HashDataType node("Node");
+        node.addField(new QoreDataField({"name": "value", "type": new QoreDataType(StringType)}));
+        node.addField(new QoreDataField({"name": "self", "type": node}));
+        HashDataType soft = cast<HashDataType>(node.getSoftType());
+        assertEq(soft.uniqueHash(), soft.getFields()."self".getType().uniqueHash(),
+            "a recursive edge points at the converted type itself");
+
+        # two types holding each other
+        HashDataType a("A");
+        HashDataType b("B");
+        a.addField(new QoreDataField({"name": "b", "type": b}));
+        b.addField(new QoreDataField({"name": "a", "type": a}));
+        HashDataType soft_a = cast<HashDataType>(a.getSoftType());
+        AbstractDataProviderType soft_b = soft_a.getFields().b.getType();
+        assertEq(soft_a.uniqueHash(), soft_b.getFields().a.getType().uniqueHash(),
+            "mutual recursion resolves to the converted types");
+    }
+
+    otherContainers() {
+        # a hashdecl type converts its fields the same way
+        CountingLeaf leaf();
+        HashDataType inner("Inner");
+        inner.addField(new QoreDataField({"name": "l", "type": leaf}));
+        inner.addField(new QoreDataField({"name": "r", "type": leaf}));
+        HashDataType outer("Outer");
+        outer.addField(new QoreDataField({"name": "a", "type": inner}));
+        outer.addField(new QoreDataField({"name": "b", "type": inner}));
+        outer.getSoftType();
+        assertEq(1, leaf.calls, "a type shared through two levels is converted once");
+
+        # a default field type for unknown fields is converted with the rest of the graph
+        CountingLeaf other_leaf();
+        HashDataType with_default("WithDefault");
+        with_default.setDefaultOtherFieldType(other_leaf);
+        with_default.addField(new QoreDataField({"name": "known", "type": other_leaf}));
+        HashDataType soft = cast<HashDataType>(with_default.getSoftType());
+        assertEq(1, other_leaf.calls, "the default other field type shares the conversion");
+        assertTrue(exists soft.getDefaultOtherFieldType(), "the converted type keeps its default other field type");
+    }
+
+    listTypes() {
+        # a list must convert its element type, or nothing below a list is converted at all
+        ListDataType booleans(BoolType);
+        AbstractDataProviderType soft_booleans = booleans.getSoftType();
+        assertEq("list<softbool>", soft_booleans.getName(), "the element type of a list is converted");
+        assertEq("list<softbool>", soft_booleans.getValueType().getName(),
+            "the Qore type describes the converted element type");
+        assertEq((True,), soft_booleans.acceptsValue(("1",)), "the converted list accepts a soft element value");
+        assertThrows("RUNTIME-TYPE-ERROR", \booleans.acceptsValue(), (("1",),),
+            "the source list still rejects the value");
+
+        # the kind of list is preserved: a soft list stays a soft list, an optional list stays optional
+        SoftListDataType soft_list(BoolType);
+        assertEq("softlist<softbool>", soft_list.getSoftType().getName(), "a soft list stays a soft list");
+        assertEq((True,), soft_list.getSoftType().acceptsValue("1"),
+            "a converted soft list still wraps a single value");
+        ListDataType optional(BoolType, True);
+        assertEq("*list<softbool>", optional.getSoftType().getName(), "an optional list stays optional");
+
+        # a name that was given rather than generated is kept, but the type still describes the new element
+        ListDataType named("Order Lines", new QoreDataType(BoolType));
+        AbstractDataProviderType soft_named = named.getSoftType();
+        assertEq("Order Lines", soft_named.getName(), "an explicit name is preserved");
+        assertEq("list<softbool>", soft_named.getValueType().getName(), "the Qore type is still updated");
+
+        # an unparameterized list keeps the soft equivalent the base class gives it: it has no element type to
+        # describe, and a soft list of anything accepts a single value in place of a list
+        ListDataType untyped(<QoreTypeInfo>{"type": new Type("list")});
+        AbstractDataProviderType soft_untyped = untyped.getSoftType();
+        assertEq("softlist<auto>", soft_untyped.getName(), "an unparameterized list keeps its soft equivalent");
+        assertEq(("x",), soft_untyped.acceptsValue("x"), "the soft equivalent wraps a single value");
+
+        # a type shared between a list element and a field is converted once
+        CountingLeaf leaf();
+        HashDataType h("WithList");
+        h.addField(new QoreDataField({"name": "one", "type": leaf}));
+        h.addField(new QoreDataField({"name": "many", "type": new ListDataType(leaf)}));
+        HashDataType soft = cast<HashDataType>(h.getSoftType());
+        assertEq(1, leaf.calls, "a type shared by a field and a list element is converted once");
+        assertEq(soft.getFields().one.getType().uniqueHash(),
+            soft.getFields().many.getType().getElementType().uniqueHash(),
+            "the field and the list element hold the same converted type");
+
+        # the conversion copies the list rather than converting the source graph in place
+        assertNeq(h.getFields().many.getType().uniqueHash(), soft.getFields().many.getType().uniqueHash(),
+            "the converted list is a copy of the source list");
+        assertEq("list<bool>", h.getFields().many.getType().getValueType().getName(),
+            "the source list is unchanged");
+
+        # a recursive edge that runs through a list terminates and points at the converted type
+        HashDataType tree("Tree");
+        tree.addField(new QoreDataField({"name": "value", "type": new QoreDataType(StringType)}));
+        tree.addField(new QoreDataField({"name": "children", "type": new ListDataType(tree)}));
+        HashDataType soft_tree = cast<HashDataType>(tree.getSoftType());
+        assertEq(soft_tree.uniqueHash(), soft_tree.getFields().children.getType().getElementType().uniqueHash(),
+            "a recursive edge through a list resolves to the converted type");
+        assertEq("softstring", soft_tree.getFields().value.getType().getName(),
+            "the rest of the recursive type is still converted");
+
+        # replacing the element type of a list regenerates the type information derived from it; without this the
+        # list goes on describing - and accepting - values of the element type it no longer has
+        ListDataType source(BoolType);
+        ListDataType replaced = source.copyWithElementType(new QoreDataType(StringType));
+        assertEq("list<string>", replaced.getValueType().getName(),
+            "copyWithElementType() updates the Qore type");
+        assertEq(("x",), replaced.acceptsValue(("x",)), "the copy accepts values of its new element type");
+        assertEq("list<bool>", source.getValueType().getName(), "the source list keeps its own element type");
+        source.updateElementType(new QoreDataType(StringType));
+        assertEq("list<string>", source.getValueType().getName(), "updateElementType() updates the Qore type");
+        assertEq(("x",), source.acceptsValue(("x",)), "the updated list accepts values of its new element type");
+
+        # a soft list of a type with no single Qore type stays a soft list: accepting a single value in place of
+        # a list is the one thing a soft list always does, whatever its element type is
+        QoreUnionDataType branches((new QoreDataType(StringType), new QoreDataType(IntType)));
+        assertNothing(branches.getValueType(), "a union has no single Qore type");
+        SoftListDataType soft_union(branches);
+        assertEq("softlist<auto>", soft_union.getValueType().getName(),
+            "a soft list of a union falls back to an untyped soft list");
+        assertEq(("x",), soft_union.acceptsValue("x"), "it still wraps a single value");
+        SoftListDataType replaced_union(BoolType);
+        replaced_union.updateElementType(branches);
+        assertEq("softlist<auto>", replaced_union.getValueType().getName(),
+            "replacing the element type with a union keeps the list soft");
+        SoftListDataType optional_union(branches, True);
+        assertEq("*softlist<auto>", optional_union.getValueType().getName(),
+            "an optional soft list of a union stays optional and soft");
+        assertNothing(optional_union.acceptsValue(), "the optional soft list still accepts no value");
+    }
+
+    unionTypes() {
+        # a type reached through more than one alternative of a union is converted once
+        CountingLeaf leaf();
+        HashDataType a("A");
+        a.addField(new QoreDataField({"name": "f", "type": leaf}));
+        HashDataType b("B");
+        b.addField(new QoreDataField({"name": "f", "type": leaf}));
+        QoreUnionDataType u((a, b));
+        QoreUnionDataType soft = cast<QoreUnionDataType>(u.getSoftType());
+        assertEq(1, leaf.calls, "a type shared by two union alternatives is converted once");
+        assertEq(2, soft.getUnionTypes().size(), "the converted union keeps its alternatives");
+        assertEq(soft.getUnionTypes()[0].getFields().f.getType().uniqueHash(),
+            soft.getUnionTypes()[1].getFields().f.getType().uniqueHash(),
+            "both alternatives hold the same converted type");
+
+        # a union reached from a hash shares the conversion with the rest of the graph
+        CountingLeaf shared();
+        HashDataType alt1("Alt1");
+        alt1.addField(new QoreDataField({"name": "f", "type": shared}));
+        HashDataType alt2("Alt2");
+        alt2.addField(new QoreDataField({"name": "f", "type": shared}));
+        HashDataType outer("Outer");
+        outer.addField(new QoreDataField({"name": "direct", "type": shared}));
+        outer.addField(new QoreDataField({"name": "either", "type": new QoreUnionDataType((alt1, alt2))}));
+        outer.getSoftType();
+        assertEq(1, shared.calls, "a union takes part in the conversion of the graph around it");
+
+        # a recursive type whose alternatives lead back to it terminates
+        HashDataType node("UnionNode");
+        HashDataType wrapper("Wrapper");
+        wrapper.addField(new QoreDataField({"name": "node", "type": node}));
+        node.addField(new QoreDataField({"name": "next",
+            "type": new QoreUnionDataType((wrapper, new QoreDataType(StringType)))}));
+        HashDataType soft_node = cast<HashDataType>(node.getSoftType());
+        QoreUnionDataType next = cast<QoreUnionDataType>(soft_node.getFields().next.getType());
+        assertEq(soft_node.uniqueHash(), next.getUnionTypes()[0].getFields().node.getType().uniqueHash(),
+            "a recursive edge through a union resolves to the converted type");
+    }
+
+    providerRecord() {
+        # the fields of a record are one graph: a type shared by two fields is converted once
+        SoftGraphTestProvider provider();
+        *hash<string, AbstractDataField> soft = provider.getSoftRecordType();
+        assertEq(1, provider.leaf.calls, "a type shared by two record fields is converted once");
+        assertEq(soft.first.getType().uniqueHash(), soft.second.getType().uniqueHash(),
+            "both record fields hold the same converted type");
+        assertEq("softstring", soft.plain.getType().getName(), "the other record fields are converted too");
+    }
+
+    savedGraph() {
+        # a graph that has been serialized and restored keeps its shared structure, and so must its conversion
+        HashDataType inner("Inner");
+        inner.addField(new QoreDataField({"name": "s", "type": new QoreDataType(StringType)}));
+        HashDataType outer("Outer");
+        outer.addField(new QoreDataField({"name": "left", "type": inner}));
+        outer.addField(new QoreDataField({"name": "right", "type": inner}));
+        HashDataType restored = cast<HashDataType>(Serializable::deserialize(outer.serialize()));
+        assertEq(restored.getFields().left.getType().uniqueHash(),
+            restored.getFields().right.getType().uniqueHash(), "a restored graph is still shared");
+
+        HashDataType soft = cast<HashDataType>(restored.getSoftType());
+        assertEq(soft.getFields().left.getType().uniqueHash(), soft.getFields().right.getType().uniqueHash(),
+            "converting a restored graph preserves sharing");
+        assertEq("softstring", soft.getFields().left.getType().getFields().s.getType().getName(),
+            "a restored graph is converted");
+
+        # the converted graph can be saved in turn, and comes back with its sharing intact
+        HashDataType soft_restored = cast<HashDataType>(Serializable::deserialize(soft.serialize()));
+        assertEq(soft_restored.getFields().left.getType().uniqueHash(),
+            soft_restored.getFields().right.getType().uniqueHash(),
+            "a converted graph can be saved and restored as a graph");
+        assertEq("softstring", soft_restored.getFields().right.getType().getFields().s.getType().getName(),
+            "the restored converted graph keeps its soft types");
+
+        # a recursive converted graph can be saved and restored as well
+        HashDataType node("Node");
+        node.addField(new QoreDataField({"name": "self", "type": node}));
+        HashDataType soft_node = cast<HashDataType>(node.getSoftType());
+        HashDataType node_restored = cast<HashDataType>(Serializable::deserialize(soft_node.serialize()));
+        assertEq(node_restored.uniqueHash(), node_restored.getFields()."self".getType().uniqueHash(),
+            "a restored recursive converted type is still recursive");
+    }
+
+    customAndRepeated() {
+        # a type whose conversion returns a different type is still converted once per graph
+        CustomConverterLeaf custom();
+        HashDataType h = makeDiamond(6, custom);
+        HashDataType soft = cast<HashDataType>(h.getSoftType());
+        assertEq(1, custom.calls, "a custom converter runs once for a shared type");
+        # descend to the converted leaf: every level holds the same child type
+        AbstractDataProviderType leaf_type = soft;
+        while (leaf_type.getFields().left) {
+            leaf_type = leaf_type.getFields().left.getType();
+        }
+        assertTrue(leaf_type.getName() =~ /int/,
+            sprintf("the custom converted type is used: %y", leaf_type.getName()));
+
+        # a later call is independent: it converts the source graph again
+        CountingLeaf leaf();
+        HashDataType graph = makeDiamond(4, leaf);
+        graph.getSoftType();
+        assertEq(1, leaf.calls, "the first conversion converts the leaf once");
+        graph.getSoftType();
+        assertEq(2, leaf.calls, "a later conversion is independent of the first");
+
+        # converting an already soft type returns it unchanged
+        HashDataType soft_once = cast<HashDataType>(makeDiamond(3, new CountingLeaf()).getSoftType());
+        assertEq(soft_once.uniqueHash(), soft_once.getSoftType().uniqueHash(),
+            "converting a soft type returns the same type");
+    }
+
+    metadata() {
+        # conversion must preserve everything that describes the type
+        HashDataType h("Described");
+        h.addField(new QoreDataField("a", NOTHING, new QoreDataType(StringType), "default-a"));
+        h.addField(new QoreDataField("b", NOTHING, new QoreDataType(StringType)));
+        # a required group names fields that must be supplied together
+        h.setRequiredGroups((("a", "b"),));
+        HashDataType soft = cast<HashDataType>(h.getSoftType());
+        assertEq("Described", soft.getName(), "the name is preserved");
+        # the converted type carries the same options the source ended up with
+        assertEq(h.getOptions(), soft.getOptions(), "options are preserved");
+        assertEq((("a", "b"),), soft.getRequiredGroups(), "required groups are preserved");
+        assertEq("default-a", soft.getFields().a.getDefaultValue(), "field defaults are preserved");
+        # the conversion is a copy: the source graph is unchanged
+        assertEq(2, h.getFields().size(), "the source type still has its own fields");
+    }
+
+    failureCleanup() {
+        # a conversion that throws must not leave memo state behind for the next one
+        HashDataType h("Failing");
+        h.addField(new QoreDataField({"name": "bad", "type": new ThrowingLeaf()}));
+        assertThrows("SOFT-CONVERSION-ERROR", \h.getSoftType());
+
+        CountingLeaf leaf();
+        HashDataType clean = makeDiamond(4, leaf);
+        clean.getSoftType();
+        assertEq(1, leaf.calls, "a conversion after a failure works normally");
+    }
+
+    concurrent() {
+        # the memo is per conversion and per thread: concurrent conversions must not see each other's types
+        Counter c(4);
+        list<auto> results = ();
+        Mutex m();
+        for (int i = 0; i < 4; ++i) {
+            background sub () {
+                on_exit c.dec();
+                CountingLeaf leaf();
+                HashDataType graph = makeDiamond(6, leaf);
+                HashDataType soft = cast<HashDataType>(graph.getSoftType());
+                AutoLock al(m);
+                results += {"calls": leaf.calls, "has_left": soft.getFields().hasKey("left")};
+            }();
+        }
+        c.waitForZero();
+        assertEq(4, results.size(), "every thread produced a result");
+        map assertEq(1, $1.calls, "each thread converts its own leaf once"), results;
+        map assertTrue($1.has_left, "each thread produced a complete type"), results;
+    }
+}
+
+#! A provider whose record type holds the same type in two fields
+class SoftGraphTestProvider inherits AbstractDataProvider {
+    public {
+        #! the type shared by two record fields
+        CountingLeaf leaf();
+    }
+
+    string getName() {
+        return "SoftGraphTestProvider";
+    }
+
+    private hash<DataProviderInfo> getStaticInfoImpl() {
+        return <DataProviderInfo>{
+            "name": "soft-graph-test",
+            "desc": "test provider with a shared type in its record",
+            "type": "soft-graph-test",
+            "has_record": True,
+        };
+    }
+
+    private *hash<string, AbstractDataField> getRecordTypeImpl(*hash<auto> search_options) {
+        return {
+            "first": new QoreDataField({"name": "first", "type": leaf}),
+            "second": new QoreDataField({"name": "second", "type": leaf}),
+            "plain": new QoreDataField({"name": "plain", "type": new QoreDataType(StringType)}),
+        };
+    }
+}
+
+#! raises an exception when converted, to test cleanup on failure
+class ThrowingLeaf inherits QoreDataType {
+    constructor() : QoreDataType(BoolType) {
+    }
+
+    AbstractDataProviderType getSoftType() {
+        throw "SOFT-CONVERSION-ERROR", "cannot convert this type";
+    }
+}

@@ -450,9 +450,16 @@ invoice.addField(new QoreDataField("approved", "Approval status", BoolOrNothingT
         if (soft_type) {
             return self;
         }
+        # hold a conversion scope for the whole graph below this type, so that every type shared by more than one
+        # field is converted once; the memo is released when the outermost conversion returns or fails
+        AbstractDataProviderType::softTypeScopeEnter();
+        on_exit AbstractDataProviderType::softTypeScopeExit();
         HashDataType rv(type, name, options, tags, default_value);
+        # publish the new type before converting fields: a field reaching this type again (a recursive type, or any
+        # other path to it in the graph) then uses this object instead of converting this type a second time
+        AbstractDataProviderType::publishSoftType(self, rv);
         if (manual_default_other_field_type && default_other_field_type) {
-            rv.setDefaultOtherFieldType(default_other_field_type.getSoftType());
+            rv.setDefaultOtherFieldType(AbstractDataProviderType::getSoftTypeShared(default_other_field_type));
         }
         map rv.addField($1.getSoftType()), getFields().iterator();
         if (required_groups) {

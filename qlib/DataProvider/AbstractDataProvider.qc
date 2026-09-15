@@ -6482,6 +6482,10 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Returns the description of the record type with soft types, if any
     *hash<string, AbstractDataField> getSoftRecordType(*hash<auto> search_options) {
+        # hold one conversion scope for the whole record, so that a type shared by more than one field is
+        # converted once; see AbstractDataProviderType::getSoftTypeShared()
+        AbstractDataProviderType::softTypeScopeEnter();
+        on_exit AbstractDataProviderType::softTypeScopeExit();
         return map {
             $1.key: $1.value.getSoftType()
         }, getRecordType(search_options).pairIterator();
@@ -6558,6 +6562,10 @@ public class AbstractDataProvider inherits Logger::LoggerWrapper, Qore::Serializ
 
     #! Returns the description of the record type with soft types, if any
     *hash<string, AbstractDataField> getSoftRecordTypeWithOptions(*hash<auto> options, *hash<auto> search_options) {
+        # hold one conversion scope for the whole record, so that a type shared by more than one field is
+        # converted once; see AbstractDataProviderType::getSoftTypeShared()
+        AbstractDataProviderType::softTypeScopeEnter();
+        on_exit AbstractDataProviderType::softTypeScopeExit();
         return map {
             $1.key: $1.value.getSoftType()
         }, getRecordTypeWithOptions(options, search_options).pairIterator();

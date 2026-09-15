@@ -86,8 +86,8 @@ public class RestSchemaConvertedUnionDataType inherits QoreUnionDataType {
     #! Returns a "soft" type equivalent to the current type
     /** @return a type with the same conversion and wire contract over soft branches */
     AbstractDataProviderType getSoftType() {
-        return new RestSchemaConvertedUnionDataType(wire_type, (map $1.getSoftType(), getUnionTypes()),
-            conversion);
+        return new RestSchemaConvertedUnionDataType(wire_type,
+            AbstractDataProviderType::getSoftTypesShared(getUnionTypes()), conversion);
     }
 
     #! Returns an "or nothing" type equivalent to the current type

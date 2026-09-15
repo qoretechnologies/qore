@@ -769,6 +769,90 @@ public class AbstractDataProviderType inherits Qore::Serializable {
         return self;
     }
 
+    #! Returns the soft type for \a type, reusing the one already made for it in this conversion
+    /** Preserves the identity of a type shared by more than one parent: without this, each path to a shared type
+        converts it again, which is exponential in the depth of the graph, and a recursive type never terminates.
+
+        The memo lives only for the duration of the outermost conversion, so no state is shared between calls or
+        between threads, and a later call sees any change made to the source graph in the meantime.
+
+        @param type the source type to convert
+
+        @return the soft type equivalent to \a type
+
+        @since DataProvider 3.8
+    */
+    static AbstractDataProviderType getSoftTypeShared(AbstractDataProviderType type) {
+        string uh = type.uniqueHash();
+        if (*hash<SoftTypeMemoInfo> cached = smap{uh}) {
+            return cached.soft;
+        }
+        AbstractDataProviderType::softTypeScopeEnter();
+        on_exit AbstractDataProviderType::softTypeScopeExit();
+        AbstractDataProviderType rv = type.getSoftType();
+        # a composite type publishes its own placeholder before converting its fields; keep that object
+        if (*hash<SoftTypeMemoInfo> published = smap{uh}) {
+            return published.soft;
+        }
+        smap{uh} = <SoftTypeMemoInfo>{
+            "src": type,
+            "soft": rv,
+        };
+        return rv;
+    }
+
+    #! Returns the soft types for \a types, converting each type shared between them only once
+    /** @param types the source types to convert
+
+        @return the soft types equivalent to \a types, in the same order
+
+        @since DataProvider 3.8
+    */
+    static list<AbstractDataProviderType> getSoftTypesShared(list<AbstractDataProviderType> types) {
+        AbstractDataProviderType::softTypeScopeEnter();
+        on_exit AbstractDataProviderType::softTypeScopeExit();
+        return map AbstractDataProviderType::getSoftTypeShared($1), types;
+    }
+
+    #! Publishes the soft type of a composite type before its members are converted
+    /** A recursive edge back to \a src then resolves to \a soft instead of converting \a src again.
+
+        @param src the source type being converted
+        @param soft the soft type being built for \a src
+
+        @since DataProvider 3.8
+    */
+    static publishSoftType(AbstractDataProviderType src, AbstractDataProviderType soft) {
+        if (sdepth) {
+            smap{src.uniqueHash()} = <SoftTypeMemoInfo>{
+                "src": src,
+                "soft": soft,
+            };
+        }
+    }
+
+    #! Starts a soft conversion scope; a composite type holds one while converting its members
+    /** A composite type must hold a scope for the whole of its member conversion; the memo is released by the
+        outermost scope, so without one each member would be converted with a memo of its own, and types shared
+        between the members would be converted once per member.
+
+        @since DataProvider 3.8
+    */
+    static softTypeScopeEnter() {
+        ++sdepth;
+    }
+
+    #! Ends a soft conversion scope, releasing the memo with the outermost one
+    /** Call this from an @ref on_exit "on_exit" block, so that the memo is also released when a conversion fails.
+
+        @since DataProvider 3.8
+    */
+    static softTypeScopeExit() {
+        if (!--sdepth) {
+            remove smap;
+        }
+    }
+
     #! Returns an "or nothing" type equivalent to the current type
     /** The base class method returns the same type; this method must be overridden in child classes to return a
         usable "or nothing" type
@@ -1193,4 +1277,27 @@ thread_local hash<string, hash<auto!>> exmap;
 
 #! Counts cycle truncations during a getExampleValue() traversal, so that path-dependent values are not memoized
 thread_local int extrunc;
+
+#! An entry in the soft type conversion memo
+hashdecl SoftTypeMemoInfo {
+    #! The source type, retained so that no other type can take its identity while the memo is live
+    /** The \c uniqueHash() object pseudo-method identifies an object by its address, so a source type released
+        during the conversion could otherwise be replaced at the same address by an unrelated type, which would
+        then be given the first type's soft type.  Holding a reference here keeps the address unavailable.
+    */
+    AbstractDataProviderType src;
+
+    #! The soft type created for \a src
+    AbstractDataProviderType soft;
+}
+
+#! Memoizes soft types for the duration of a single getSoftType() conversion, keyed by source type object identity
+/** Without this, a type object shared by more than one parent in a type DAG is converted once per path, which is
+    exponential in the depth of the graph.  A composite type publishes its soft type here before converting its
+    fields, so that a recursive edge back to it resolves to the same object instead of recursing forever.
+*/
+thread_local hash<string, hash<SoftTypeMemoInfo>> smap;
+
+#! Tracks the nesting depth of getSoftType() conversions, so that the memo is released by the outermost call
+thread_local int sdepth;
 }

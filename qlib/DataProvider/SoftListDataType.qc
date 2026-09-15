@@ -134,6 +134,17 @@ public class SoftListDataType inherits ListDataType {
         }
     }
 
+    #! Returns the type name generated for a list of the given element type
+    /** @param element_type the element type
+
+        @return the type name generated for a soft list of \a element_type
+
+        @since DataProvider 3.8
+    */
+    private string getListTypeName(AbstractDataProviderType element_type) {
+        return sprintf("%ssoftlist<%s>", or_nothing_type ? "*" : "", element_type.getName());
+    }
+
     #! Returns the underlying %Qore type for this type
     private Type getQoreType(Type element_type, bool or_nothing) {
         return new Type(sprintf("%ssoftlist<%s>", or_nothing ? "*" : "", element_type.getName()));
@@ -142,7 +153,10 @@ public class SoftListDataType inherits ListDataType {
     #! Returns the underlying %Qore type for this type
     /** Not every data type has a single %Qore type behind it -- a union type produced by an OpenAPI
         \c anyOf or \c oneOf has none -- so a list of such elements falls back to an untyped list rather
-        than failing to resolve a type name.
+        than failing to resolve a type name.  The fallback is an untyped *soft* list; this type accepts a
+        single value in place of a list whatever its element type is, so a plain list would advertise an
+        acceptance rule that @ref DataProvider::SoftListDataType::acceptsValue() "acceptsValue()" does not
+        apply.
 
         @since DataProvider 3.8
     */
@@ -150,7 +164,7 @@ public class SoftListDataType inherits ListDataType {
         *Type qtype = element_type.getValueType();
         return qtype
             ? SoftListDataType::getQoreType(qtype, or_nothing)
-            : (or_nothing ? AutoListOrNothingType : AutoListType);
+            : (or_nothing ? SoftAutoListOrNothingType : SoftAutoListType);
     }
 }
 }

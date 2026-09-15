@@ -1433,6 +1433,25 @@ fetch
       @ref DataProvider::DpqlSerializer::getOperatorPrecedence() "DpqlSerializer::getOperatorPrecedence()" and
       @ref DataProvider::DpqlSerializer::getArgumentContext() "DpqlSerializer::getArgumentContext()", so that
       any renderer can parenthesize expressions by the same rule the parser reads them by
+    - fixed @ref DataProvider::AbstractDataProviderType::getSoftType() "soft type conversion" to convert each
+      distinct type in a type graph once; a type reached by more than one path was converted once per path, which
+      is exponential in the depth of the graph, so a schema with shared subtypes could not be converted in
+      bounded time or memory, and a recursive type could not be converted at all
+    - soft type conversion now converts the element type of a @ref DataProvider::ListDataType "list type"; a type
+      reachable only through a list was left strict, so a soft record could still reject values it was meant to
+      accept
+    - fixed @ref DataProvider::ListDataType::copyWithElementType() "ListDataType::copyWithElementType()" and
+      @ref DataProvider::ListDataType::updateElementType() "updateElementType()" to regenerate the %Qore type, the
+      accepted and returned type hashes, and a generated name from the new element type; the list went on
+      describing - and accepting - values of the element type it no longer had.  A list whose element type is
+      replaced therefore reports the type it actually holds, which changes the generated presentation identity of
+      such a list, and with it the message IDs of the translation catalogs that describe it; the affected
+      catalogs have been regenerated
+    - fixed @ref DataProvider::SoftListDataType "SoftListDataType" to fall back to an untyped \b soft list when
+      its element type has no single %Qore type - one produced by an OpenAPI \c anyOf or \c oneOf, say - instead
+      of a plain untyped list; the plain list advertised that a single value could not be given in place of a
+      list, which is the one thing a soft list always accepts, and which
+      @ref DataProvider::SoftListDataType::acceptsValue() "SoftListDataType::acceptsValue()" accepted anyway
 
     @subsection dataprovider_v3_7 DataProvider v3.7
     - generated date examples now use a fixed UTC sample instead of the current time, making repeated metadata
