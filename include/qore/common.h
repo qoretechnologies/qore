@@ -546,6 +546,43 @@ typedef QoreHashNode* (*q_serializer_t)(const QoreObject& self, const AbstractPr
 typedef void (*q_deserializer_t)(QoreObject& self, const QoreHashNode* sdata, QoreDeserializationContext& context,
     RuntimeConfig& rc, ExceptionSink* xsink);
 
+//! the type used to read the value of a static class variable held in external storage
+/** @param cls the class holding the variable
+    @param ptr the module data registered with the variable
+    @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
+
+    @return a new reference to the variable's current value
+
+    @note called without any %Qore lock held; the module makes its own storage safe for concurrent access
+
+    @see QoreClass::addBuiltinStaticVarWithAccessors()
+
+    @since %Qore 3.0
+ */
+typedef QoreValue (*q_static_var_get_t)(const QoreClass& cls, const void* ptr, ExceptionSink* xsink);
+
+//! the type used to write the value of a static class variable held in external storage
+/** @param cls the class holding the variable
+    @param ptr the module data registered with the variable
+    @param val a new reference to the value assigned; the function takes ownership of the value
+    @param xsink Qore-language exception information should be stored here by calling ExceptionSink::raiseException()
+
+    @see QoreClass::addBuiltinStaticVarWithAccessors()
+
+    @since %Qore 3.0
+ */
+typedef void (*q_static_var_set_t)(const QoreClass& cls, const void* ptr, QoreValue val, ExceptionSink* xsink);
+
+//! the type used to release the module data registered with a static class variable
+/** @param cls the class holding the variable
+    @param ptr the module data registered with the variable
+
+    @see QoreClass::addBuiltinStaticVarWithAccessors()
+
+    @since %Qore 3.0
+ */
+typedef void (*q_static_var_del_t)(const QoreClass& cls, const void* ptr);
+
 //! type for thread resource IDs (unique within a single running qore library process)
 /** @see qore_get_trid()
  */

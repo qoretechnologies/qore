@@ -1194,6 +1194,14 @@ public:
     bool finalized;
     // flag telling if the static var has been evaluated
     bool eval_init = false;
+    // flag telling if the initial value was provided by a builtin class rather than a Qore initializer
+    bool builtin_value = false;
+    //! set when the variable's value is held in external storage owned by a module
+    q_static_var_get_t get_cb = nullptr;
+    q_static_var_set_t set_cb = nullptr;
+    q_static_var_del_t del_cb = nullptr;
+    const void* cb_data = nullptr;
+    const QoreClass* cb_cls = nullptr;
 
     DLLLOCAL QoreVarInfo(const QoreProgramLocation* loc, const QoreTypeInfo* n_typeinfo = nullptr,
             QoreParseTypeInfo* n_parseTypeInfo = nullptr, QoreValue e = QoreValue(), ClassAccess n_access = Public) :
@@ -1201,7 +1209,11 @@ public:
     }
 
     DLLLOCAL QoreVarInfo(const QoreVarInfo& old, ClassAccess n_access = Public)
-            : QoreMemberInfoBaseAccess(old, n_access), val(old.val), finalized(old.finalized), eval_init(old.eval_init) {
+            : QoreMemberInfoBaseAccess(old, n_access), val(old.val), finalized(old.finalized), eval_init(old.eval_init),
+            builtin_value(old.builtin_value),
+            // an imported copy reads and writes the same external storage as the original; del_cb is deliberately
+            // not copied, since the module data belongs to the variable the module registered
+            get_cb(old.get_cb), set_cb(old.set_cb), cb_data(old.cb_data), cb_cls(old.cb_cls) {
     }
 
     DLLLOCAL ~QoreVarInfo() {
@@ -1210,6 +1222,11 @@ public:
 
     DLLLOCAL int evalInit(const char* name, ExceptionSink* xsink);
 
+    //! assigns the initial value after applying the declared type's input conversion
+    /** takes ownership of the value in all cases
+
+        @return 0 for OK, -1 if an exception was raised
+    */
 #ifdef DEBUG
     DLLLOCAL void del() {
         assert(!val.hasValue());
@@ -1225,7 +1242,20 @@ public:
         tmp = val.removeValue(true);
     }
 
+    //! releases the module data registered with an accessor-backed variable
+    DLLLOCAL void delAccessorData() {
+        if (del_cb) {
+            assert(cb_cls);
+            del_cb(*cb_cls, cb_data);
+            del_cb = nullptr;
+            get_cb = nullptr;
+            set_cb = nullptr;
+            cb_data = nullptr;
+        }
+    }
+
     DLLLOCAL void delVar(ExceptionSink* xsink) {
+        delAccessorData();
 #ifdef DEBUG
         QoreMemberInfoBaseAccess::del();
 #else
@@ -1241,6 +1271,14 @@ public:
     }
 
     DLLLOCAL int getLValue(LValueHelper& lvh, const char* name = "<static variable>") {
+        if (get_cb) {
+            if (checkFinalized(lvh.vl.xsink)) {
+                return -1;
+            }
+            // the value lives in external storage: the assignment is made to a temporary value that is written
+            // back through the accessor when the lvalue is released
+            return lvh.setStaticVarAccessorLValue(*this);
+        }
         if (!eval_init && evalInit(name, lvh.vl.xsink)) {
             return -1;
         }
@@ -1252,6 +1290,7 @@ public:
         return 0;
     }
 
+    // returns 0 for OK, -1 if an exception was raised
     DLLLOCAL void init() {
         val.set(getTypeInfo());
         const QoreTypeInfo* ti = getTypeInfo();
@@ -1279,28 +1318,79 @@ public:
 
     // can be called during parse initialization, in which case the variable must be initialized first
     DLLLOCAL QoreValue getReferencedValue(const char* name, ExceptionSink* xsink) {
+        if (get_cb) {
+            return getAccessorValue(xsink);
+        }
         if (!eval_init && evalInit(name, xsink)) {
             return QoreValue();
         }
         return getRuntimeReferencedValue();
     }
 
+    //! reads the value from external storage; returns a new reference
+    DLLLOCAL QoreValue getAccessorValue(ExceptionSink* xsink) const {
+        assert(get_cb && cb_cls);
+        ValueHolder rv(get_cb(*cb_cls, cb_data, xsink), xsink);
+        if (*xsink) {
+            return QoreValue();
+        }
+        // the declared type applies to a value from external storage as it does to one assigned in Qore code
+        if (QoreTypeInfo::hasType(getTypeInfo())) {
+            QoreTypeInfo::acceptInputMember(getTypeInfo(), "<static variable>", *rv, xsink);
+            if (*xsink) {
+                return QoreValue();
+            }
+        }
+        return rv.release();
+    }
+
+    //! writes the value to external storage, taking ownership of \a v
+    DLLLOCAL void setAccessorValue(QoreValue v, ExceptionSink* xsink) const {
+        assert(set_cb && cb_cls);
+        set_cb(*cb_cls, cb_data, v, xsink);
+    }
+
     DLLLOCAL QoreValue getRuntimeReferencedValue() const {
+        if (get_cb) {
+            ExceptionSink xsink;
+            ValueHolder rv(getAccessorValue(&xsink), &xsink);
+            // this API cannot report an exception; a failed read yields no value, as an unset variable does
+            xsink.clear();
+            return rv.release();
+        }
         QoreAutoVarRWReadLocker al(rwl);
         return val.getReferencedValue();
     }
 
     DLLLOCAL int64 getAsBigInt() const {
+        if (get_cb) {
+            ExceptionSink xsink;
+            ValueHolder v(getAccessorValue(&xsink), &xsink);
+            xsink.clear();
+            return v->getAsBigInt();
+        }
         QoreAutoVarRWReadLocker al(rwl);
         return val.getAsBigInt();
     }
 
     DLLLOCAL double getAsFloat() const {
+        if (get_cb) {
+            ExceptionSink xsink;
+            ValueHolder v(getAccessorValue(&xsink), &xsink);
+            xsink.clear();
+            return v->getAsFloat();
+        }
         QoreAutoVarRWReadLocker al(rwl);
         return val.getAsFloat();
     }
 
     DLLLOCAL bool getAsBool() const {
+        if (get_cb) {
+            ExceptionSink xsink;
+            ValueHolder v(getAccessorValue(&xsink), &xsink);
+            xsink.clear();
+            return v->getAsBool();
+        }
         QoreAutoVarRWReadLocker al(rwl);
         return val.getAsBool();
     }
@@ -2898,6 +2988,10 @@ public:
     }
 
     DLLLOCAL void addBuiltinStaticVar(const char* vname, QoreValue value, ClassAccess access = Public, const QoreTypeInfo* vTypeInfo = nullptr);
+
+    DLLLOCAL void addBuiltinStaticVarWithAccessors(const char* vname, ClassAccess access,
+            const QoreTypeInfo* vTypeInfo, q_static_var_get_t get, q_static_var_set_t set, const void* ptr,
+            q_static_var_del_t del);
 
     DLLLOCAL void parseAssimilateConstants(ConstantList &cmap, ClassAccess access) {
         assert(!sys && !committed);

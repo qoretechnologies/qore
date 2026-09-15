@@ -1210,6 +1210,31 @@ public:
     */
     DLLEXPORT void addBuiltinStaticVar(const char* name, QoreValue value, ClassAccess access = Public, const QoreTypeInfo* typeInfo = nullptr);
 
+    //! Adds a static variable whose value is read from and written to external storage
+    /** Use this instead of addBuiltinStaticVar() when the variable mirrors a value owned by the module (such as a
+        field of a foreign runtime) that can change independently of %Qore code; a variable holding a copy of such a
+        value silently diverges from it.  Every read calls \a get, and every assignment calls \a set once the
+        assignment is complete.
+
+        @param name the name of the variable
+        @param access the access permission for the variable
+        @param typeInfo the type of the variable; a value returned by \a get that the type rejects raises an
+        exception in the reading code, as an assignment of such a value would
+        @param get called to read the variable's value; must return a new reference
+        @param set called with a new reference to the value assigned; takes ownership of the value
+        @param ptr module data passed to \a get and \a set
+        @param del called with \a ptr when the variable is deleted, to release the module data
+
+        @note %Qore serializes neither the accessors nor a read-modify-write of the variable (such as
+        <tt>Class::var++</tt>), since the value is not held by the variable; the module must make its own storage
+        safe for concurrent access
+
+        @since %Qore 3.0
+    */
+    DLLEXPORT void addBuiltinStaticVarWithAccessors(const char* name, ClassAccess access,
+            const QoreTypeInfo* typeInfo, q_static_var_get_t get, q_static_var_set_t set, const void* ptr = nullptr,
+            q_static_var_del_t del = nullptr);
+
     //! rescan builtin parent classes in a class hierarchy; to be used with out-of-order class hierarchy construction
     /** For example, when Qore classes are generated externally such as with the jni module, parent class
         information may need to be rescanned after adding to the class hierarchy to ensure that all

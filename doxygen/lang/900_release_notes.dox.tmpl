@@ -691,6 +691,18 @@ cargo install tree-sitter-cli@0.26.5
     @ref user_module_children "Child Modules" for details.
     @endparblock
 
+    @par Static Class Variables Backed by Module Storage
+    @parblock
+    A binary module can register a static class variable whose value is read from and written to the module's own
+    storage with @ref QoreClass::addBuiltinStaticVarWithAccessors() "QoreClass::addBuiltinStaticVarWithAccessors()",
+    instead of holding a copy of a value the module owns.  Use it when the value can change independently of %Qore
+    code, such as a field of a foreign runtime: a variable holding a copy silently diverges from the value it
+    mirrors as soon as either side changes it.  Every read calls the module's \c get function and every assignment
+    calls its \c set function once the assignment is complete, so both sides always agree.
+
+    The <a href="../../modules/jni/html/index.html">jni</a> module uses this to mirror mutable Java static fields.
+    @endparblock
+
     @par Versioned C++ APIs Between Binary Modules
     @parblock
     A binary module can now publish a C++ API for other binary modules to consume, without the

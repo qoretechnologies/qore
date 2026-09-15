@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -99,6 +99,8 @@ union qore_gvar_ref_u {
 DLLLOCAL void get_thread_local_lvalue(void* ptr, QoreLValue<qore_gvar_ref_u>*& lvar, bool& is_new, bool& finalized);
 
 class LValueHelper;
+class QoreVarInfo;
+
 class LValueRemoveHelper;
 class RSetHelper;
 class QoreVarInfo;
@@ -459,6 +461,12 @@ protected:
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, bool for_remove);
     DLLLOCAL int doListLValue(const QoreSquareBracketsOperatorNode* op, RuntimeConfig& rc, bool for_remove);
     DLLLOCAL int setBufferElementLValue(QoreBufferNode* b, size_t index);
+public:
+    //! binds the lvalue to a temporary holding a static variable's value read from external storage
+    /** the value is written back through the variable's accessor when this object is destroyed
+    */
+    DLLLOCAL int setStaticVarAccessorLValue(QoreVarInfo& vi);
+protected:
     DLLLOCAL int doHashLValue(qore_type_t t, const char* mem, bool for_remove);
     DLLLOCAL int doObjLValue(QoreObject* o, const char* mem, bool for_remove);
     DLLLOCAL int doObjLValue(QoreObject* o, const char* mem, bool for_remove, const qore_class_private* class_ctx);
@@ -497,7 +505,11 @@ private:
     // recursive delta: change to recursive reference count
     int rdt = 0;
 
+
     RObject* robj = nullptr;
+    //! set when the lvalue is a static variable whose value is held in external storage
+    QoreVarInfo* static_var_lvalue = nullptr;
+    QoreValue static_var_lvalue_value;
     QoreBufferNode* buffer_lvalue = nullptr;
     size_t buffer_lvalue_index = 0;
     QoreValue buffer_lvalue_value;

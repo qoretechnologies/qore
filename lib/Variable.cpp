@@ -688,6 +688,18 @@ LValueHelper::~LValueHelper() {
     // first free any locks
     vl.del();
 
+    if (static_var_lvalue) {
+        // write the value back to the storage the variable mirrors, after the object-count bookkeeping above and
+        // with the lvalue locks released: the module stores the value with its own code, which can run anywhere
+        if (!*vl.xsink) {
+            static_var_lvalue->setAccessorValue(static_var_lvalue_value, vl.xsink);
+        } else {
+            static_var_lvalue_value.discard(vl.xsink);
+        }
+        static_var_lvalue = nullptr;
+        static_var_lvalue_value = QoreValue();
+    }
+
     // now delete temporary values (if any)
     for (nvec_t::iterator i = tvec.begin(), e = tvec.end(); i != e; ++i) {
         discard(*i, vl.xsink);
@@ -1016,6 +1028,18 @@ int LValueHelper::setBufferElementLValue(QoreBufferNode* b, size_t index) {
         return -1;
     }
     resetValue(buffer_lvalue_value, b->getElementTypeInfo());
+    return 0;
+}
+
+int LValueHelper::setStaticVarAccessorLValue(QoreVarInfo& vi) {
+    static_var_lvalue_value = vi.getAccessorValue(vl.xsink);
+    if (*vl.xsink) {
+        clearPtr();
+        return -1;
+    }
+    static_var_lvalue = &vi;
+    // this is the first binding of the lvalue: neither slot is set yet, so the value is set rather than replaced
+    setValue(static_var_lvalue_value, vi.getTypeInfo());
     return 0;
 }
 

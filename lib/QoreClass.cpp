@@ -1027,6 +1027,30 @@ void qore_class_private::addBuiltinStaticVar(const char* vname, QoreValue value,
 
     vars.addNoCheck(strdup(vname), new QoreVarInfo(&loc_builtin, vTypeInfo, 0, value, access));
 }
+void qore_class_private::addBuiltinStaticVarWithAccessors(const char* vname, ClassAccess access,
+        const QoreTypeInfo* vTypeInfo, q_static_var_get_t get, q_static_var_set_t set, const void* ptr,
+        q_static_var_del_t del) {
+    assert(!vars.inList(vname));
+    assert(get && set);
+
+    if (!sys) {
+        sys = committed = true;
+    }
+    if (!has_sig_changes) {
+        has_sig_changes = true;
+    }
+
+    std::unique_ptr<QoreVarInfo> vi(new QoreVarInfo(&loc_builtin, vTypeInfo, nullptr, QoreValue(), access));
+    vi->builtin_value = true;
+    // the value is read from and written to the module's storage, so the variable holds no value of its own
+    vi->eval_init = true;
+    vi->get_cb = get;
+    vi->set_cb = set;
+    vi->del_cb = del;
+    vi->cb_data = ptr;
+    vi->cb_cls = cls;
+    vars.addNoCheck(strdup(vname), vi.release());
+}
 
 const QoreMethod* qore_class_private::doParseMethodAccess(const QoreMethod* m, const qore_class_private* class_ctx) {
    assert(m);
@@ -5793,6 +5817,10 @@ void QoreClass::addBuiltinConstant(const char* name, QoreValue value, ClassAcces
 void QoreClass::addBuiltinStaticVar(const char* name, QoreValue value, ClassAccess access,
         const QoreTypeInfo* typeInfo) {
     priv->addBuiltinStaticVar(name, value, access, typeInfo);
+}
+void QoreClass::addBuiltinStaticVarWithAccessors(const char* name, ClassAccess access, const QoreTypeInfo* typeInfo,
+        q_static_var_get_t get, q_static_var_set_t set, const void* ptr, q_static_var_del_t del) {
+    priv->addBuiltinStaticVarWithAccessors(name, access, typeInfo, get, set, ptr, del);
 }
 
 void QoreClass::rescanParents() {
