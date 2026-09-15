@@ -1249,6 +1249,25 @@ bool QoreJIT::compileFunctionBatchLocked(const QoreIRFunction& root_func, std::s
     return compileFunctionBatchInternal(root_func, error, root_deopt_counter, callees);
 }
 
+//! Returns the ABI identity of a fast entry: its parameter, capture and return kinds
+/** the LLVM signature of a fast entry is derived from the analysis of the batch that lowers it, so an entry
+    defined by an earlier batch can only be called by a later one when both derive the same ABI
+*/
+static std::string qore_jit_fast_entry_abi_key(const BatchCalleeInfo& info) {
+    std::string rv;
+    rv.reserve(info.param_kinds.size() + info.capture_kinds.size() + 3);
+    for (BatchCalleeParamKind kind : info.param_kinds) {
+        rv += static_cast<char>('a' + static_cast<int>(kind));
+    }
+    rv += '|';
+    for (BatchCalleeParamKind kind : info.capture_kinds) {
+        rv += static_cast<char>('a' + static_cast<int>(kind));
+    }
+    rv += '|';
+    rv += static_cast<char>('a' + static_cast<int>(info.return_kind));
+    return rv;
+}
+
 bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std::string& error,
         void* root_deopt_counter,
         const std::vector<BatchCallee>& callees,
@@ -1392,15 +1411,36 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     // Determine which callees need their bodies compiled vs just forward-declared.
     // Callees already JIT-compiled just need a declaration (LLVM will resolve the
     // existing symbol); callees not yet compiled need full lowering.
+    // A callee fast entry defined by an earlier batch module is likewise only declared.
     std::unordered_set<std::string> already_compiled;
+    std::unordered_set<std::string> already_defined_fast;
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
         for (const auto& callee : callees) {
-            if (compiled_functions.find(callee.ir_func->name) != compiled_functions.end()) {
+            if (compiled_functions.find(callee.ir_func->name) != compiled_functions.end()
+                    || defined_batch_symbols.count(callee.ir_func->name)) {
                 already_compiled.insert(callee.ir_func->name);
+            }
+            std::string fast_name = callee.ir_func->name + "_fast";
+            auto fast_abi = defined_fast_entry_abi.find(fast_name);
+            if (fast_abi != defined_fast_entry_abi.end()) {
+                auto info_i = batch_callee_map.find(callee.variant);
+                // the fast entry's signature comes from the analysis of the batch that defined it; when this
+                // batch derives a different ABI for the same function, its callers must use the standard entry,
+                // since the symbol cannot be defined a second time
+                if (info_i != batch_callee_map.end() && info_i->second.approach_b_eligible
+                        && fast_abi->second != qore_jit_fast_entry_abi_key(info_i->second)) {
+                    info_i->second.approach_b_eligible = false;
+                } else {
+                    already_defined_fast.insert(std::move(fast_name));
+                }
             }
         }
     }
+    // symbols defined by this module, recorded once the module has been added to the JIT
+    std::vector<std::string> new_batch_symbols;
+    // the ABI of each fast entry defined by this module, recorded with its symbol
+    std::vector<std::pair<std::string, std::string>> new_fast_entry_abis;
 
     // Pre-copy all callee names before any LLVM operations.
     // After addIRModule()/lookup(), LLVM 21 on Linux can corrupt adjacent heap memory
@@ -1508,11 +1548,16 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             }
         }
 
+        if (!already_compiled.count(callee.ir_func->name)) {
+            new_batch_symbols.push_back(callee.ir_func->name);
+        }
+
         // Lower fast entry for Approach B eligible callees (even if standard entry
-        // is already compiled — the fast entry is new and needs its body)
+        // is already compiled) unless an earlier batch module already defined it
         auto fast_info = batch_callee_map.find(callee.variant);
         if (fast_info != batch_callee_map.end()
-                && fast_info->second.approach_b_eligible) {
+                && fast_info->second.approach_b_eligible
+                && !already_defined_fast.count(callee.ir_func->name + "_fast")) {
             std::string fast_name = callee.ir_func->name + "_fast";
             llvm::Function* fast_fn = module->getFunction(fast_name);
             assert(fast_fn && "fast entry function must be forward-declared");
@@ -1552,11 +1597,8 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
             }
             fast_lowering.setBatchCallees(&batch_callee_map);
             fast_lowering.setSharedDebugInfo(&di_builder, di_cu);
-            const QoreTypeInfo* fast_return_type = sig->getReturnTypeInfo();
-            bool fast_rejects_nothing_return = QoreTypeInfo::hasType(fast_return_type)
-                && !QoreTypeInfo::parseAcceptsReturns(fast_return_type, NT_NOTHING);
             fast_lowering.setFastEntryMode(fast_name, &param_map, &param_kind_map,
-                nullptr, callee_info.return_kind, fast_rejects_nothing_return);
+                nullptr, callee_info.return_kind, sig->getReturnTypeInfo());
             if (!fast_lowering.lowerFunction(*callee.ir_func, *module, error)) {
                 // Fast entry failure is non-fatal: fall back to standard entry
                 printd(2, "QoreJIT::compileFunctionBatch() fast entry '%s' lowering failed: %s\n",
@@ -1567,6 +1609,12 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
                 if (map_it != batch_callee_map.end()) {
                     map_it->second.approach_b_eligible = false;
                 }
+            } else {
+                // the ABI is recorded with the symbol only once the entry is actually defined: a later batch that
+                // finds the name skips lowering the body, so recording a failed entry would bind its callers to a
+                // symbol that was never defined
+                new_fast_entry_abis.emplace_back(fast_name, qore_jit_fast_entry_abi_key(fast_info->second));
+                new_batch_symbols.push_back(std::move(fast_name));
             }
         }
     }
@@ -1604,6 +1652,15 @@ bool QoreJIT::compileFunctionBatchInternal(const QoreIRFunction& root_func, std:
     if (err) {
         error = "failed to add batch module to JIT: " + llvm::toString(std::move(err));
         return false;
+    }
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex);
+        for (auto& name : new_batch_symbols) {
+            defined_batch_symbols.insert(std::move(name));
+        }
+        for (auto& fast_abi : new_fast_entry_abis) {
+            defined_fast_entry_abi.emplace(std::move(fast_abi.first), std::move(fast_abi.second));
+        }
     }
 
     // Look up the root function (triggers materialization/code generation)
@@ -2185,6 +2242,8 @@ void QoreJIT::shutdown() {
     {
         std::lock_guard<std::mutex> lock(cache_mutex);
         compiled_functions.clear();
+        defined_batch_symbols.clear();
+        defined_fast_entry_abi.clear();
     }
     init_success = false;
 }

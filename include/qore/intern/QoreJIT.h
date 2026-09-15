@@ -740,6 +740,10 @@ private:
     // Mutex to serialize JIT compilations (LLJIT operations are not fully thread-safe)
     std::mutex compile_mutex;
     std::unordered_map<std::string, JitFunctionPtr> compiled_functions;
+    //! Standard and fast entry symbols defined by batch modules added to the JIT; a later batch only declares them
+    std::unordered_set<std::string> defined_batch_symbols;
+    //! The ABI of each defined fast entry; a later batch can only call one whose ABI matches its own analysis
+    std::unordered_map<std::string, std::string> defined_fast_entry_abi;
     std::once_flag init_flag;
     bool init_success = false;
     std::string init_error;
