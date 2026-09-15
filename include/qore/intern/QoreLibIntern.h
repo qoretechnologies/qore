@@ -1214,8 +1214,11 @@ public:
     qore_hash_private& h;
     HashMember* om = nullptr;
     qore_object_private* o = nullptr;
+    //! true if the member did not exist and was created for this assignment
+    bool created_member = false;
 
-    DLLLOCAL hash_assignment_priv(qore_hash_private& n_h, HashMember* n_om) : h(n_h), om(n_om) {
+    DLLLOCAL hash_assignment_priv(qore_hash_private& n_h, HashMember* n_om, bool n_created_member = false)
+            : h(n_h), om(n_om), created_member(n_created_member) {
     }
 
     DLLLOCAL hash_assignment_priv(qore_hash_private& n_h, const char* key, bool must_already_exist = false,
@@ -1259,6 +1262,11 @@ public:
     DLLLOCAL QoreValue swap(QoreValue v) {
         return swapImpl(v);
     }
+
+    //! removes a member created for this assignment when the assignment was rejected
+    /** a member declared by a hashdecl belongs to the hash even when it was created here, so it is kept
+    */
+    DLLLOCAL void removeMemberCreatedForAssignment();
 
     DLLLOCAL static hash_assignment_priv* get(HashAssignmentHelper& h) {
         return h.priv;

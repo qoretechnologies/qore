@@ -5859,7 +5859,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         if (QoreTypeInfo::hasType(vti)
                 && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
             QoreTypeInfo::acceptAssignment(vti,
-                "<list element assignment>", entry, xsink);
+                "<lvalue>", entry, xsink, QLVTS_List);
         }
         if (!*xsink) {
             l->setEntry(index, entry, xsink);
@@ -5884,7 +5884,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow(
         if (QoreTypeInfo::hasType(vti)
                 && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
             QoreTypeInfo::acceptAssignment(vti,
-                "<list element assignment>", entry, xsink);
+                "<lvalue>", entry, xsink, QLVTS_List);
         }
         if (!*xsink) {
             new_l->setEntry(index, entry, xsink);
@@ -5949,7 +5949,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         if (QoreTypeInfo::hasType(vti)
                 && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
             QoreTypeInfo::acceptAssignment(vti,
-                "<list element assignment>", entry, xsink);
+                "<lvalue>", entry, xsink, QLVTS_List);
         }
         if (!*xsink) {
             l->setEntry(index, entry, xsink);
@@ -5975,7 +5975,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_list_index_store_cow_aot(
         if (QoreTypeInfo::hasType(vti)
                 && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
             QoreTypeInfo::acceptAssignment(vti,
-                "<list element assignment>", entry, xsink);
+                "<lvalue>", entry, xsink, QLVTS_List);
         }
         if (!*xsink) {
             new_l->setEntry(index, entry, xsink);
@@ -12554,7 +12554,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_assign(
     if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
         return toBits(QoreValue());
     }
-    if (lvh.assign(assign_val.refSelf(), "<lvalue path assign>", true, inst->weak)) {
+    if (lvh.assign(assign_val.refSelf(), "<lvalue>", true, inst->weak)) {
         return toBits(QoreValue());
     }
     return toBits(lvh.getReferencedValue());

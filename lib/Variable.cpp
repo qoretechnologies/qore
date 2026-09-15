@@ -860,12 +860,16 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, bool fo
             if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo) {
                 // issue #3429 assign an untyped list if required
                 assignNodeIntern((l = new QoreListNode));
+                // the container was created for this assignment; a rejected assignment removes it again
+                trackVivifiedContainer();
             } else {
                 const QoreTypeInfo* sti = typeInfo == autoTypeInfo
                     ? autoTypeInfo
                     : QoreTypeInfo::getReturnComplexListOrNothing(typeInfo);
                 if (sti) {
                     assignNodeIntern((l = new QoreListNode(sti)));
+                    // the container was created for this assignment; a rejected assignment removes it again
+                    trackVivifiedContainer();
                 }
             }
         }
@@ -982,12 +986,16 @@ int LValueHelper::doListLValue(const QoreSquareBracketsOperatorNode* op, Runtime
             if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo || typeInfo == listOrNothingTypeInfo) {
                 // issue #3429 assign an untyped list if required
                 assignNodeIntern((l = new QoreListNode));
+                // the container was created for this assignment; a rejected assignment removes it again
+                trackVivifiedContainer();
             } else {
                 const QoreTypeInfo* sti = typeInfo == autoTypeInfo
                     ? autoTypeInfo
                     : QoreTypeInfo::getReturnComplexListOrNothing(typeInfo);
                 if (sti) {
                     assignNodeIntern((l = new QoreListNode(sti)));
+                    // the container was created for this assignment; a rejected assignment removes it again
+                    trackVivifiedContainer();
                 }
             }
         }
@@ -1072,6 +1080,8 @@ int LValueHelper::doHashLValue(qore_type_t t, const char* mem, bool for_remove) 
                 || typeInfo == hashOrNothingTypeInfo) {
                 // issue #3429 assign an untyped hash if required
                 assignNodeIntern((h = new QoreHashNode));
+                // the container was created for this assignment; a rejected assignment removes it again
+                trackVivifiedContainer();
             } else {
                 // issue #2652: assign the current runtime type based on the declared complex hash type
                 const QoreTypeInfo* sti = typeInfo == autoTypeInfo
@@ -1079,6 +1089,8 @@ int LValueHelper::doHashLValue(qore_type_t t, const char* mem, bool for_remove) 
                     : QoreTypeInfo::getReturnComplexHashOrNothing(typeInfo);
                 if (sti) {
                     assignNodeIntern((h = new QoreHashNode(sti)));
+                    // the container was created for this assignment; a rejected assignment removes it again
+                    trackVivifiedContainer();
                 } else {
                     const TypedHashDecl* thd = QoreTypeInfo::getUniqueReturnHashDecl(typeInfo);
                     if (thd) {
@@ -1711,12 +1723,16 @@ int LValueHelper::navigatePath(const LVPathStep* steps, uint32_t num_steps, bool
                         if (!typeInfo || typeInfo == anyTypeInfo || typeInfo == listTypeInfo
                             || typeInfo == listOrNothingTypeInfo) {
                             assignNodeIntern((l = new QoreListNode));
+                            // the container was created for this assignment; a rejected assignment removes it again
+                            trackVivifiedContainer();
                         } else {
                             const QoreTypeInfo* sti = typeInfo == autoTypeInfo
                                 ? autoTypeInfo
                                 : QoreTypeInfo::getReturnComplexListOrNothing(typeInfo);
                             if (sti) {
                                 assignNodeIntern((l = new QoreListNode(sti)));
+                                // the container was created for this assignment; a rejected assignment removes it again
+                                trackVivifiedContainer();
                             }
                         }
                     }
@@ -1777,6 +1793,59 @@ q_lvalue_vts_e QoreTypeInfo::lvalueValueTypeSource(LValueHelper* lvhelper) {
     return lvhelper ? lvhelper->getValueTypeSource() : QLVTS_None;
 }
 
+void LValueHelper::trackVivifiedKey(qore_hash_private* h, const char* key) {
+    assert(h && key);
+    VivifiedEntry entry;
+    entry.hash = h;
+    entry.key = key;
+    vivified.push_back(std::move(entry));
+}
+
+void LValueHelper::trackVivifiedListSize(qore_list_private* l, size_t size) {
+    assert(l);
+    VivifiedEntry entry;
+    entry.list = l;
+    entry.list_size = size;
+    vivified.push_back(std::move(entry));
+}
+
+void LValueHelper::trackVivifiedContainer() {
+    if (!val && !qv) {
+        return;
+    }
+    VivifiedEntry entry;
+    entry.slot_val = val;
+    entry.slot_qv = val ? nullptr : qv;
+    vivified.push_back(std::move(entry));
+}
+
+void LValueHelper::rollbackVivification() {
+    if (vivified.empty()) {
+        return;
+    }
+    while (!vivified.empty()) {
+        VivifiedEntry& entry = vivified.back();
+        if (entry.hash) {
+            bool exists;
+            saveTemp(entry.hash->takeKeyValueIntern(entry.key.c_str(), exists));
+        } else if (entry.list) {
+            for (size_t i = entry.list->length; i > entry.list_size; --i) {
+                saveTemp(entry.list->takeExists(i - 1));
+            }
+            entry.list->resize(entry.list_size);
+        } else if (entry.slot_val) {
+            QoreValue nothing;
+            saveTemp(entry.slot_val->assignAssume(nothing));
+        } else if (entry.slot_qv) {
+            saveTemp(entry.slot_qv->takeIfNode());
+            *entry.slot_qv = QoreValue();
+        }
+        vivified.pop_back();
+    }
+    // the lvalue target was removed with the entries that led to it
+    clearPtr();
+}
+
 int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool weak_assignment) {
     assert(!*vl.xsink);
     if (n.hasNode() && n.getInternalNode() == &Nothing) {
@@ -1793,6 +1862,8 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool w
             //printd(5, "LValueHelper::assign() this: %p saving type-rejected value: %p '%s'\n", this, n,
             //    get_type_name(n));
             saveTempRef(n);
+            // the containers navigated to reach the target must not keep the entries created for this assignment
+            rollbackVivification();
             return -1;
         }
     }
@@ -1801,7 +1872,10 @@ int LValueHelper::assign(QoreValue n, const char* desc, bool check_types, bool w
         && (lvid_set->find(lvalue_ref::get(reinterpret_cast<const ReferenceNode*>(n.getInternalNode()))->lvalue_id)
             != lvid_set->end())) {
         saveTempRef(n);
-        return doRecursiveException();
+        int rc = doRecursiveException();
+        // as for a rejected type, the containers navigated to reach the target keep no entry for this assignment
+        rollbackVivification();
+        return rc;
     }
 
     // Strip narrowed type from hash/list when assigning to hash<auto!>/list<auto!> variables

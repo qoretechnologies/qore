@@ -190,6 +190,11 @@ int qore_hash_private::getLValue(const char* key, LValueHelper& lvh, bool for_re
             return -1;
         }
         m = findCreateMember(key);
+        // the key was created for this assignment; a rejected assignment removes it again.  A hashdecl member is
+        // declared by the hashdecl and must stay, even when the hash did not hold it yet
+        if (!hashdecl) {
+            lvh.trackVivifiedKey(this, key);
+        }
     } else {
         m = (*(i->second));
     }
@@ -1173,16 +1178,19 @@ bool ReverseConstHashIterator::prev() {
 }
 
 hash_assignment_priv::hash_assignment_priv(qore_hash_private& n_h, const char* key, bool must_already_exist,
-        qore_object_private* obj) : h(n_h), om(must_already_exist ? h.findMember(key)
-            : h.findCreateMember(key)), o(obj) {
+        qore_object_private* obj) : h(n_h), o(obj) {
+    // the member is looked up in the body, since created_member is initialized after om
+    om = must_already_exist ? h.findMember(key) : h.findCreateMember(key, created_member);
 }
 
 hash_assignment_priv::hash_assignment_priv(QoreHashNode& n_h, const char* key, bool must_already_exist)
-        : h(*n_h.priv), om(must_already_exist ? h.findMember(key) : h.findCreateMember(key)) {
+        : h(*n_h.priv) {
+    om = must_already_exist ? h.findMember(key) : h.findCreateMember(key, created_member);
 }
 
 hash_assignment_priv::hash_assignment_priv(QoreHashNode& n_h, const std::string& key, bool must_already_exist)
-        : h(*n_h.priv), om(must_already_exist ? h.findMember(key.c_str()) : h.findCreateMember(key.c_str())) {
+        : h(*n_h.priv) {
+    om = must_already_exist ? h.findMember(key.c_str()) : h.findCreateMember(key.c_str(), created_member);
 }
 
 hash_assignment_priv::hash_assignment_priv(ExceptionSink* xsink, QoreHashNode& n_h, const QoreString& key,
@@ -1191,7 +1199,7 @@ hash_assignment_priv::hash_assignment_priv(ExceptionSink* xsink, QoreHashNode& n
     if (*xsink)
         return;
 
-    om = must_already_exist ? h.findMember(k->c_str()) : h.findCreateMember(k->c_str());
+    om = must_already_exist ? h.findMember(k->c_str()) : h.findCreateMember(k->c_str(), created_member);
 }
 
 hash_assignment_priv::hash_assignment_priv(ExceptionSink* xsink, QoreHashNode& n_h, const QoreString* key,
@@ -1200,11 +1208,12 @@ hash_assignment_priv::hash_assignment_priv(ExceptionSink* xsink, QoreHashNode& n
     if (*xsink)
         return;
 
-    om = must_already_exist ? h.findMember(k->c_str()) : h.findCreateMember(k->c_str());
+    om = must_already_exist ? h.findMember(k->c_str()) : h.findCreateMember(k->c_str(), created_member);
 }
 
 void hash_assignment_priv::reassign(const char* key, bool must_already_exist) {
-    om = must_already_exist ? h.findMember(key) : h.findCreateMember(key);
+    created_member = false;
+    om = must_already_exist ? h.findMember(key) : h.findCreateMember(key, created_member);
 }
 
 const char* hash_assignment_priv::getKey() const {
@@ -1235,10 +1244,27 @@ QoreValue hash_assignment_priv::swapImpl(QoreValue v) {
     return old;
 }
 
+void hash_assignment_priv::removeMemberCreatedForAssignment() {
+    // only a member created here and still without a value can belong to the rejected assignment
+    if (!created_member || !om || !om->val.isNothing()) {
+        return;
+    }
+    // a member declared by a hashdecl belongs to the hash even when this assignment created it
+    if (h.hashdecl && typed_hash_decl_private::get(*h.hashdecl)->findMember(om->key.c_str())) {
+        return;
+    }
+    std::string key = om->key;
+    om = nullptr;
+    created_member = false;
+    bool exists;
+    h.takeKeyValueIntern(key.c_str(), exists);
+}
+
 int hash_assignment_priv::assign(QoreValue v, ExceptionSink* xsink) {
     ValueHolder val(v, xsink);
     if (h.hashdecl) {
         if (typed_hash_decl_private::get(*h.hashdecl)->runtimeAssignKey(om->key.c_str(), val, xsink)) {
+            removeMemberCreatedForAssignment();
             return -1;
         }
     } else if (h.complexTypeInfo) {
@@ -1248,6 +1274,7 @@ int hash_assignment_priv::assign(QoreValue v, ExceptionSink* xsink) {
         QoreTypeInfo::acceptInputKey(QoreTypeInfo::getUniqueReturnComplexHash(h.complexTypeInfo), om->key.c_str(),
             *val, *ts);
         if (ts.raised()) {
+            removeMemberCreatedForAssignment();
             return -1;
         }
     } else {
@@ -1264,6 +1291,7 @@ int hash_assignment_priv::assign(QoreValue v, SafeDerefHelper& sdh, ExceptionSin
     ValueHolder val(v, xsink);
     if (h.hashdecl) {
         if (typed_hash_decl_private::get(*h.hashdecl)->runtimeAssignKey(om->key.c_str(), val, xsink)) {
+            removeMemberCreatedForAssignment();
             return -1;
         }
     } else if (h.complexTypeInfo) {
@@ -1272,6 +1300,7 @@ int hash_assignment_priv::assign(QoreValue v, SafeDerefHelper& sdh, ExceptionSin
         QoreTypeInfo::acceptInputKey(QoreTypeInfo::getUniqueReturnComplexHash(h.complexTypeInfo), om->key.c_str(),
             *val, *ts);
         if (ts.raised()) {
+            removeMemberCreatedForAssignment();
             return -1;
         }
     } else {
@@ -1285,7 +1314,8 @@ int hash_assignment_priv::assign(QoreValue v, SafeDerefHelper& sdh, ExceptionSin
 }
 
 QoreValue hash_assignment_priv::getImpl() const {
-    return om->val;
+    // the member is removed when an assignment through this helper is rejected by the hash's type
+    return om ? om->val : QoreValue();
 }
 
 HashAssignmentHelper::HashAssignmentHelper(QoreHashNode& h, const char* key, bool must_already_exist)

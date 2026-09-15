@@ -182,6 +182,7 @@ public:
     DLLLOCAL QoreValue getKeyValueExistenceIntern(const char* key, bool& exists) const;
 
     DLLLOCAL int checkKey(const char* key, ExceptionSink* xsink) const;
+
     // raises an INVALID-MEMBER exception if the key cannot be assigned in a hashdecl hash
     /** @return 0 for OK, -1 if an exception was raised
     */
@@ -279,6 +280,18 @@ public:
         if (om)
             return om;
 
+        return createMemberKnownAbsent(key);
+    }
+
+    // as above; "created" is set to true if the member did not exist and was created here
+    DLLLOCAL HashMember* findCreateMember(const char* key, bool& created) {
+        HashMember* om = findMember(key);
+        if (om) {
+            created = false;
+            return om;
+        }
+
+        created = true;
         return createMemberKnownAbsent(key);
     }
 
@@ -531,7 +544,8 @@ public:
     }
 
     DLLLOCAL void setKeyValueKnownAbsent(const char* key, QoreValue val, ExceptionSink* xsink) {
-        hash_assignment_priv ha(*this, createMemberKnownAbsent(key));
+        // the member is created here, so a rejected assignment removes it again
+        hash_assignment_priv ha(*this, createMemberKnownAbsent(key), true);
         ha.assign(val, xsink);
     }
 

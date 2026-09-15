@@ -588,6 +588,20 @@ public:
         }
     }
 
+    //! As above, for a caller that knows the container kind but has no LValueHelper
+    /** compiled code stores container elements through runtime helpers instead of an LValueHelper, and must report
+        the same diagnostic as the AST interpreter for the same assignment
+    */
+    DLLLOCAL static void acceptAssignment(const QoreTypeInfo* ti, const char* text, QoreValue& n,
+            ExceptionSink* xsink, q_lvalue_vts_e vts) {
+        assert(text && text[0] == '<');
+        if (hasType(ti)) {
+            ti->acceptInputIntern(xsink, "lvalue", false, -1, text, n, nullptr, vts);
+        } else if (ti != autoTypeInfo) {
+            stripTypeInfo(n, xsink, nullptr);
+        }
+    }
+
     //! Returns true for the hash<auto!>/list<auto!> (no-narrow) marker types
     DLLLOCAL static bool isNoNarrowContainer(const QoreTypeInfo* ti) {
         return ti == autoNoNarrowHashTypeInfo || ti == autoNoNarrowHashOrNothingTypeInfo

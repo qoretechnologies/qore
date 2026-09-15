@@ -1,0 +1,35 @@
+# Copyright 2026 Qore Technologies, s.r.o.
+hashdecl LvHd {
+    int i = 7;
+}
+auto sub untyped(auto v) { return v; }
+#! returns the state of the container after an assignment that its type must reject
+string sub rejected(string label, code<nothing()> assign, code<auto()> show) {
+    try {
+        assign();
+        return label + "=no error";
+    } catch (hash<ExceptionInfo> ex) {
+        return sprintf("%s=%y %s", label, show(), ex.desc);
+    }
+}
+string sub run() {
+    string rv;
+    for (int i = 0; i < 20; ++i) {
+        hash<string, int> empty;
+        hash<string, int> existing = {"a": 1};
+        hash<string, hash<string, int>> nested;
+        hash<LvHd> hd = new hash<LvHd>();
+        list<int> l = (1, 2);
+        string key = "b";
+        rv = sprintf("%s|%s|%s|%s|%s|%s|%s",
+            rejected("empty", sub () { empty{key} = untyped("x"); }, auto sub () { return empty; }),
+            rejected("existing", sub () { existing{key} = untyped("x"); }, auto sub () { return existing; }),
+            rejected("dot", sub () { existing.c = untyped("x"); }, auto sub () { return existing; }),
+            rejected("nested", sub () { nested.x.y = untyped("x"); }, auto sub () { return nested; }),
+            rejected("hashdecl", sub () { hd.i = untyped("x"); }, auto sub () { return hd; }),
+            rejected("element", sub () { l[0] = untyped("x"); }, auto sub () { return l; }),
+            rejected("beyond", sub () { l[5] = untyped("x"); }, auto sub () { return l; }));
+    }
+    return rv;
+}
+printf("%s\n", run());

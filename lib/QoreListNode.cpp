@@ -100,6 +100,8 @@ int qore_list_private::getLValue(size_t ind, LValueHelper& lvh, bool for_remove,
     }
 
     if (ind >= length) {
+        // the elements are added for this assignment; a rejected assignment removes them again
+        lvh.trackVivifiedListSize(this, length);
         resize(ind + 1);
     }
 

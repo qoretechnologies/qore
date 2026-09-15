@@ -8838,7 +8838,7 @@ load_local_done:
                             if (QoreTypeInfo::hasType(vti)
                                     && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
                                 QoreTypeInfo::acceptAssignment(vti,
-                                    "<list element assignment>", entry, xsink);
+                                    "<lvalue>", entry, xsink, QLVTS_List);
                             }
                             if (xsink && *xsink) {
                                 entry.discard(xsink);
@@ -8903,7 +8903,7 @@ load_local_done:
                             if (QoreTypeInfo::hasType(vti)
                                     && !QoreTypeInfo::superSetOf(vti, entry.getTypeInfo())) {
                                 QoreTypeInfo::acceptAssignment(vti,
-                                    "<list element assignment>", entry, xsink);
+                                    "<lvalue>", entry, xsink, QLVTS_List);
                             }
                             if (!(xsink && *xsink)) {
                                 new_l->setEntry(index, entry, xsink);
@@ -12596,7 +12596,7 @@ load_local_done:
                     LValueHelper lvh(xsink);
                     if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
                         assignment_failed = true;
-                    } else if (lvh.assign(assign_val.refSelf(), "<lvalue path assign>",
+                    } else if (lvh.assign(assign_val.refSelf(), "<lvalue>",
                             true, path_inst->weak)) {
                         assignment_failed = true;
                     } else {

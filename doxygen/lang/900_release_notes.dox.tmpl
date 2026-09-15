@@ -3015,6 +3015,10 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       list to a plain list that no longer converts a single value to a list; soft lists of soft lists and of
       element types that convert a value, such as \c softlist<softint>, also left unconverted values in
       initialized members and default arguments
+    - Fixed an assignment rejected by the declared type of a container leaving an empty entry behind: assigning a
+      value of the wrong type to a new key of a typed hash or to a list element past the end of a typed list left
+      that key or those elements in the container with no value, and a rejected assignment through a path such as
+      <tt>h.x.y</tt> left the whole path behind; the containers are now unchanged by a rejected assignment
     - Fixed class member and static class variable initializers and default argument values bypassing their
       declared types: container elements were not converted, for example \c list<softstring> initialized with
       <tt>(1, 2)</tt>, and a value of another type was stored without an error; an uninitialized static class

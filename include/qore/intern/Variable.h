@@ -100,7 +100,8 @@ DLLLOCAL void get_thread_local_lvalue(void* ptr, QoreLValue<qore_gvar_ref_u>*& l
 
 class LValueHelper;
 class QoreVarInfo;
-
+class qore_hash_private;
+struct qore_list_private;
 class LValueRemoveHelper;
 class RSetHelper;
 class QoreVarInfo;
@@ -505,6 +506,28 @@ private:
     // recursive delta: change to recursive reference count
     int rdt = 0;
 
+    //! an entry created while navigating to the lvalue target
+    /** a container entry (a hash key or list elements) or a container created for an lvalue slot that had no
+        value.  A rejected assignment removes these in reverse order, so that the entries created to reach the
+        target do not outlive it.  A container created in place of a value of another type is not recorded, since
+        that value was already released to make room for it and cannot be restored.
+    */
+    struct VivifiedEntry {
+        //! the hash that received a new key, if any
+        qore_hash_private* hash = nullptr;
+        //! the key created in \a hash
+        std::string key;
+        //! the list that was extended, if any
+        qore_list_private* list = nullptr;
+        //! the size \a list had before it was extended
+        size_t list_size = 0;
+        //! the lvalue slot that received a new container, if any
+        QoreLValueGeneric* slot_val = nullptr;
+        //! the value slot that received a new container, if any
+        QoreValue* slot_qv = nullptr;
+    };
+    typedef std::vector<VivifiedEntry> vivvec_t;
+    vivvec_t vivified;
 
     RObject* robj = nullptr;
     //! set when the lvalue is a static variable whose value is held in external storage
@@ -560,6 +583,20 @@ public:
     DLLLOCAL void suppressObjectScan() {
         no_object_scan = true;
     }
+
+    //! records a hash key created while navigating to the lvalue target
+    DLLLOCAL void trackVivifiedKey(qore_hash_private* h, const char* key);
+
+    //! records the size a list had before it was extended while navigating to the lvalue target
+    DLLLOCAL void trackVivifiedListSize(qore_list_private* l, size_t size);
+
+    //! records that the current lvalue slot received a container created while navigating to the target
+    DLLLOCAL void trackVivifiedContainer();
+
+    //! removes every entry created while navigating to an lvalue whose assignment was rejected
+    /** the removed values are saved and dereferenced when the lvalue locks are released
+    */
+    DLLLOCAL void rollbackVivification();
 
     DLLLOCAL void saveTemp(QoreValue n);
 
