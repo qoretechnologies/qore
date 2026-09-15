@@ -1,0 +1,41 @@
+# Copyright 2026 Qore Technologies, s.r.o.
+
+# pop and shift are applied to a non-list on purpose
+%disable-warning invalid-operation
+hashdecl StoreDecl { int a = 1; }
+hashdecl OtherDecl { int a = 1; }
+auto sub h_untyped() { return {"a": 2}; }
+auto sub h_int() { return 1; }
+auto sub h_other() { return <OtherDecl>{}; }
+string sub attempt(code c) {
+    try {
+        return sprintf("%y", c());
+    } catch (hash<ExceptionInfo> ex) {
+        return ex.err;
+    }
+}
+string sub run() {
+    string rv;
+    for (int i = 0; i < 20; ++i) {
+        list<string> l;
+        l += attempt(auto sub () { hash<StoreDecl> h = h_untyped(); return h; });
+        l += attempt(auto sub () { hash<StoreDecl> h = h_int(); return h; });
+        l += attempt(auto sub () { hash<StoreDecl> h = h_other(); return h; });
+        l += attempt(auto sub () { hash<StoreDecl> h = <StoreDecl>{}; return h; });
+        hash<StoreDecl> h = <StoreDecl>{};
+        string k = "zz";
+        try { h{k} = 1; l += "assigned"; } catch (hash<ExceptionInfo> ex) { l += ex.err + ":" + ex.desc; }
+        try { h{k} += 1; l += "added"; } catch (hash<ExceptionInfo> ex) { l += ex.err; }
+        try { ++h{k}; l += "incremented"; } catch (hash<ExceptionInfo> ex) { l += ex.err + ":" + ex.desc; }
+        try { h{k}--; l += "decremented"; } catch (hash<ExceptionInfo> ex) { l += ex.err; }
+        try { h += {k: 1}; l += "merged"; } catch (hash<ExceptionInfo> ex) { l += ex.err; }
+        try { extract h{k}, 0, 1; l += "extracted"; } catch (hash<ExceptionInfo> ex) { l += ex.err; }
+        hash<string, int> hi = {"a": 1};
+        string ka = "a";
+        try { pop hi{ka}; l += "popped"; } catch (hash<ExceptionInfo> ex) { l += ex.err; }
+        try { shift hi{ka}; l += "shifted"; } catch (hash<ExceptionInfo> ex) { l += ex.err; }
+        rv = sprintf("%s|%y", l.join(","), h);
+    }
+    return rv;
+}
+printf("%s\n", run());

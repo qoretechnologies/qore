@@ -182,6 +182,10 @@ public:
     DLLLOCAL QoreValue getKeyValueExistenceIntern(const char* key, bool& exists) const;
 
     DLLLOCAL int checkKey(const char* key, ExceptionSink* xsink) const;
+    // raises an INVALID-MEMBER exception if the key cannot be assigned in a hashdecl hash
+    /** @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int checkLValueKey(const char* key, ExceptionSink* xsink) const;
 
     DLLLOCAL QoreValue getReferencedKeyValueIntern(const char* key) const {
         bool exists;

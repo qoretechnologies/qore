@@ -1,0 +1,1 @@
+RUNTIME-TYPE-ERROR,RUNTIME-TYPE-ERROR,RUNTIME-TYPE-ERROR,{a: 1},INVALID-MEMBER:'zz' is not a registered member of hashdecl 'StoreDecl',INVALID-MEMBER,INVALID-MEMBER:'zz' is not a registered member of hashdecl 'StoreDecl',INVALID-MEMBER,HASHDECL-KEY-ERROR,INVALID-MEMBER,POP-ERROR,SHIFT-ERROR|{a: 1}

@@ -8438,135 +8438,140 @@ load_local_done:
                 QoreValue hash_val = getIRValue(values, hks_inst->operands[0]);
                 QoreValue val      = getIRValue(values, hks_inst->operands[1]);
                 ValueHolder val_holder(val.refSelf(), xsink);
-                if (hash_val.getType() == NT_HASH) {
-                    QoreHashNode* h = hash_val.get<QoreHashNode>();
+                // every error exit of the store returns from this lambda, so that the exception is dispatched to an
+                // enclosing catch block by the common tail below; a false return aborts without an exception
+                auto store_key = [&]() -> bool {
+                    if (hash_val.getType() == NT_HASH) {
+                        QoreHashNode* h = hash_val.get<QoreHashNode>();
 
-                    // Drop this frame's bookkeeping refs to the container before the
-                    // uniqueness check so a read-then-write loop does not CoW on every
-                    // store; see releaseContainerBookkeepingRefs() for the rationale
-                    // and the non-closure restriction
-                    if ((hks_inst->container_lv || hks_inst->container)
-                            && !isClosureContainer(hks_inst->container_lv, hks_inst->container)) {
-                        releaseContainerBookkeepingRefs(hks_inst->container_slot_id,
-                            hks_inst->operands[0].id);
-                    }
+                        // Drop this frame's bookkeeping refs to the container before the
+                        // uniqueness check so a read-then-write loop does not CoW on every
+                        // store; see releaseContainerBookkeepingRefs() for the rationale
+                        // and the non-closure restriction
+                        if ((hks_inst->container_lv || hks_inst->container)
+                                && !isClosureContainer(hks_inst->container_lv, hks_inst->container)) {
+                            releaseContainerBookkeepingRefs(hks_inst->container_slot_id,
+                                hks_inst->operands[0].id);
+                        }
 
-                    // Keep RHS referenced before COW, matching QoreAssignmentOperatorNode.
-                    // This makes `h.b = h` copy the outer hash before storing the original.
-                    if (h->reference_count() > 1) {
-                        // COW: create unique copy and update the local variable.
-                        // Pass new_h via TRANSFER (no refSelf) so the typed-lvalue coercion
-                        // in LValueHelper::assign takes the "unique" in-place branch for
-                        // hash<auto!> etc., leaving new_h in TLS at refcount 1.
-                        QoreHashNode* new_h = h->copy();  // refcount 1, unique
-                        // Prefer container_lv (set at AOT deser time) over
-                        // container->ref.id (fresh-parse path); the container
-                        // VarRefNode is not serialized, so AOT-loaded closure
-                        // bodies have container==nullptr and must use _lv.
+                        // Keep RHS referenced before COW, matching QoreAssignmentOperatorNode.
+                        // This makes `h.b = h` copy the outer hash before storing the original.
+                        if (h->reference_count() > 1) {
+                            // COW: create unique copy and update the local variable.
+                            // Pass new_h via TRANSFER (no refSelf) so the typed-lvalue coercion
+                            // in LValueHelper::assign takes the "unique" in-place branch for
+                            // hash<auto!> etc., leaving new_h in TLS at refcount 1.
+                            QoreHashNode* new_h = h->copy();  // refcount 1, unique
+                            // Prefer container_lv (set at AOT deser time) over
+                            // container->ref.id (fresh-parse path); the container
+                            // VarRefNode is not serialized, so AOT-loaded closure
+                            // bodies have container==nullptr and must use _lv.
+                            LocalVar* lv;
+                            bool is_closure;
+                            if (hks_inst->container_lv) {
+                                lv = hks_inst->container_lv;
+                                // Check at runtime: closureUse may be set after AOT
+                                // deser time when a later closure captures this var.
+                                is_closure = lv->closureUse();
+                            } else {
+                                lv = const_cast<LocalVar*>(
+                                    reinterpret_cast<const LocalVar*>(hks_inst->container->ref.id));
+                                is_closure = (hks_inst->container->getType() == VT_CLOSURE);
+                            }
+                            if (is_closure) {
+                                assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
+                            } else {
+                                assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
+                            }
+                            // After COW, LoadClosure's `closures` cache still holds a ref
+                            // to the pre-COW hash (old contents).  Invalidate so the next
+                            // load re-reads through the CVV and sees the new hash.
+                            invalidateClosureCacheLv(lv);
+                            if (xsink && *xsink) {
+                                // new_h's ref was consumed by assign*Transfer (either stored
+                                // in TLS or discarded on failure). Do not deref here.
+                                return true;
+                            }
+                            // new_h is now in TLS with refcount 1 — safe for setKeyValue's
+                            // reference_count() == 1 assertion.
+                            h = new_h;
+                        }
+
+                        // Make the update with already-referenced value.
+                        // (hash is already in TLS and will be cleaned up normally)
+                        h->setKeyValue(hks_inst->key_name.c_str(), val.refSelf(), xsink);
+
+                        // Cleanup must happen AFTER modification completes and locks are released.
+                        // Defer clearing refs that may trigger destructors.
+                        // Release any auto_ref=true LoadLocal result slots for this container variable.
+                        clearLoadSlots(hks_inst->container_slot_id);
+
+                        // Release the slot cache ref.
+                        uint32_t csid = hks_inst->container_slot_id;
+                        if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
+                            locals_slot_cache[csid].discard(xsink);
+                        }
+
+                        // Clear the container slot so cleanup doesn't try to discard it
+                        // (it's held by TLS and managed separately)
+                        discardContainerValueSlot(hks_inst->operands[0].id, hks_inst->container_slot_id,
+                            isClosureContainer(hks_inst->container_lv, hks_inst->container));
+                    } else if (hash_val.isNothing()) {
                         LocalVar* lv;
                         bool is_closure;
                         if (hks_inst->container_lv) {
                             lv = hks_inst->container_lv;
-                            // Check at runtime: closureUse may be set after AOT
-                            // deser time when a later closure captures this var.
                             is_closure = lv->closureUse();
                         } else {
                             lv = const_cast<LocalVar*>(
                                 reinterpret_cast<const LocalVar*>(hks_inst->container->ref.id));
                             is_closure = (hks_inst->container->getType() == VT_CLOSURE);
                         }
+
+                        // Auto-vivify according to the declared lvalue type, matching
+                        // LValueHelper::doHashLValue() including hashdecl error behavior.
+                        const QoreTypeInfo* ti = lv ? lv->getTypeInfoForLValue() : nullptr;
+                        ti = qore_substitute_type_params_if_needed(ti);
+                        QoreHashNode* new_h = makeImplicitHashForLValueType(ti, xsink);
+                        if (!new_h || (xsink && *xsink)) {
+                            // the helper always raises when it returns no hash; a failure without an exception
+                            // cannot be reported to a catch block, so the instruction aborts
+                            return new_h || (xsink && *xsink);
+                        }
+                        new_h->setKeyValue(hks_inst->key_name.c_str(), val.refSelf(), xsink);
+                        if (xsink && *xsink) {
+                            // the hash was created for this store only, so the rejected store leaves no value behind
+                            new_h->deref(xsink);
+                            return true;
+                        }
                         if (is_closure) {
                             assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
                         } else {
                             assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
                         }
-                        // After COW, LoadClosure's `closures` cache still holds a ref
-                        // to the pre-COW hash (old contents).  Invalidate so the next
-                        // load re-reads through the CVV and sees the new hash.
+                        // Auto-vivify replaces NOTHING with a new hash; any prior LoadClosure
+                        // of this var cached a stale NOTHING (or empty hash) — invalidate.
                         invalidateClosureCacheLv(lv);
                         if (xsink && *xsink) {
-                            // new_h's ref was consumed by assign*Transfer (either stored
-                            // in TLS or discarded on failure). Do not deref here.
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupLocalCaches();
-                            return false;
+                            return true;
                         }
-                        // new_h is now in TLS with refcount 1 — safe for setKeyValue's
-                        // reference_count() == 1 assertion.
-                        h = new_h;
+                        clearLoadSlots(hks_inst->container_slot_id);
+                        uint32_t csid = hks_inst->container_slot_id;
+                        if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
+                            locals_slot_cache[csid].discard(xsink);
+                        }
+                        discardContainerValueSlot(hks_inst->operands[0].id, hks_inst->container_slot_id,
+                            isClosureContainer(hks_inst->container_lv, hks_inst->container));
+                    } else if (hash_val.getType() == NT_OBJECT) {
+                        assignObjectMemberValue(const_cast<QoreObject*>(hash_val.get<const QoreObject>()),
+                            hks_inst->key_name.c_str(), val, xsink);
                     }
-
-                    // Make the update with already-referenced value.
-                    // (hash is already in TLS and will be cleaned up normally)
-                    h->setKeyValue(hks_inst->key_name.c_str(), val.refSelf(), xsink);
-
-                    // Cleanup must happen AFTER modification completes and locks are released.
-                    // Defer clearing refs that may trigger destructors.
-                    // Release any auto_ref=true LoadLocal result slots for this container variable.
-                    clearLoadSlots(hks_inst->container_slot_id);
-
-                    // Release the slot cache ref.
-                    uint32_t csid = hks_inst->container_slot_id;
-                    if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                        locals_slot_cache[csid].discard(xsink);
-                    }
-
-                    // Clear the container slot so cleanup doesn't try to discard it
-                    // (it's held by TLS and managed separately)
-                    discardContainerValueSlot(hks_inst->operands[0].id, hks_inst->container_slot_id,
-                        isClosureContainer(hks_inst->container_lv, hks_inst->container));
-                } else if (hash_val.isNothing()) {
-                    LocalVar* lv;
-                    bool is_closure;
-                    if (hks_inst->container_lv) {
-                        lv = hks_inst->container_lv;
-                        is_closure = lv->closureUse();
-                    } else {
-                        lv = const_cast<LocalVar*>(
-                            reinterpret_cast<const LocalVar*>(hks_inst->container->ref.id));
-                        is_closure = (hks_inst->container->getType() == VT_CLOSURE);
-                    }
-
-                    // Auto-vivify according to the declared lvalue type, matching
-                    // LValueHelper::doHashLValue() including hashdecl error behavior.
-                    const QoreTypeInfo* ti = lv ? lv->getTypeInfoForLValue() : nullptr;
-                    ti = qore_substitute_type_params_if_needed(ti);
-                    QoreHashNode* new_h = makeImplicitHashForLValueType(ti, xsink);
-                    if (!new_h || (xsink && *xsink)) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    new_h->setKeyValue(hks_inst->key_name.c_str(), val.refSelf(), xsink);
-                    if (xsink && *xsink) {
-                        new_h->deref(xsink);
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    if (is_closure) {
-                        assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
-                    } else {
-                        assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
-                    }
-                    // Auto-vivify replaces NOTHING with a new hash; any prior LoadClosure
-                    // of this var cached a stale NOTHING (or empty hash) — invalidate.
-                    invalidateClosureCacheLv(lv);
-                    if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    clearLoadSlots(hks_inst->container_slot_id);
-                    uint32_t csid = hks_inst->container_slot_id;
-                    if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                        locals_slot_cache[csid].discard(xsink);
-                    }
-                    discardContainerValueSlot(hks_inst->operands[0].id, hks_inst->container_slot_id,
-                        isClosureContainer(hks_inst->container_lv, hks_inst->container));
-                } else if (hash_val.getType() == NT_OBJECT) {
-                    assignObjectMemberValue(const_cast<QoreObject*>(hash_val.get<const QoreObject>()),
-                        hks_inst->key_name.c_str(), val, xsink);
+                    return true;
+                };
+                if (!store_key()) {
+                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                    cleanupLocalCaches();
+                    return false;
                 }
                 if (xsink && *xsink) {
                     if (inst->exception_target) {
@@ -8593,22 +8598,61 @@ load_local_done:
                 ValueHolder val_holder(val.refSelf(), xsink);
                 // Convert key to string
                 QoreStringValueHelper key_str(key_val);
-                if (hash_val.getType() == NT_HASH) {
-                    QoreHashNode* h = hash_val.get<QoreHashNode>();
+                // every error exit of the store returns from this function, so that the exception is dispatched to an
+                // enclosing catch block below
+                auto store_dynamic_key = [&]() {
+                    if (hash_val.getType() == NT_HASH) {
+                        QoreHashNode* h = hash_val.get<QoreHashNode>();
 
-                    // Drop this frame's bookkeeping refs to the container before the
-                    // uniqueness check so a read-then-write loop does not CoW on every
-                    // store; see releaseContainerBookkeepingRefs() for the rationale
-                    // and the non-closure restriction
-                    if ((hksd_inst->container_lv || hksd_inst->container)
-                            && !isClosureContainer(hksd_inst->container_lv, hksd_inst->container)) {
-                        releaseContainerBookkeepingRefs(hksd_inst->container_slot_id,
-                            hksd_inst->operands[0].id);
-                    }
+                        // Drop this frame's bookkeeping refs to the container before the
+                        // uniqueness check so a read-then-write loop does not CoW on every
+                        // store; see releaseContainerBookkeepingRefs() for the rationale
+                        // and the non-closure restriction
+                        if ((hksd_inst->container_lv || hksd_inst->container)
+                                && !isClosureContainer(hksd_inst->container_lv, hksd_inst->container)) {
+                            releaseContainerBookkeepingRefs(hksd_inst->container_slot_id,
+                                hksd_inst->operands[0].id);
+                        }
 
-                    if (h->reference_count() > 1) {
-                        // COW: see HashKeyStore above for rationale on *Transfer variants
-                        QoreHashNode* new_h = h->copy();  // refcount 1, unique
+                        // check hashdecl key validity before copying or changing the hash
+                        if (qore_hash_private::get(*h)->checkLValueKey(key_str->c_str(), xsink)) {
+                            return;
+                        }
+
+                        if (h->reference_count() > 1) {
+                            // COW: see HashKeyStore above for rationale on *Transfer variants
+                            QoreHashNode* new_h = h->copy();  // refcount 1, unique
+                            LocalVar* lv;
+                            bool is_closure;
+                            if (hksd_inst->container_lv) {
+                                lv = hksd_inst->container_lv;
+                                is_closure = lv->closureUse();
+                            } else {
+                                lv = const_cast<LocalVar*>(
+                                    reinterpret_cast<const LocalVar*>(hksd_inst->container->ref.id));
+                                is_closure = (hksd_inst->container->getType() == VT_CLOSURE);
+                            }
+                            if (is_closure) {
+                                assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
+                            } else {
+                                assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
+                            }
+                            // After COW, invalidate stale LoadClosure cache entry
+                            invalidateClosureCacheLv(lv);
+                            if (xsink && *xsink) {
+                                return;
+                            }
+                            h = new_h;
+                        }
+                        h->setKeyValue(key_str->c_str(), val.refSelf(), xsink);
+                        clearLoadSlots(hksd_inst->container_slot_id);
+                        uint32_t csid = hksd_inst->container_slot_id;
+                        if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
+                            locals_slot_cache[csid].discard(xsink);
+                        }
+                        discardContainerValueSlot(hksd_inst->operands[0].id, hksd_inst->container_slot_id,
+                            isClosureContainer(hksd_inst->container_lv, hksd_inst->container));
+                    } else if (hash_val.isNothing()) {
                         LocalVar* lv;
                         bool is_closure;
                         if (hksd_inst->container_lv) {
@@ -8619,87 +8663,54 @@ load_local_done:
                                 reinterpret_cast<const LocalVar*>(hksd_inst->container->ref.id));
                             is_closure = (hksd_inst->container->getType() == VT_CLOSURE);
                         }
+
+                        // Auto-vivify according to the declared lvalue type, matching
+                        // LValueHelper::doHashLValue() including hashdecl error behavior.
+                        const QoreTypeInfo* ti = lv ? lv->getTypeInfoForLValue() : nullptr;
+                        ti = qore_substitute_type_params_if_needed(ti);
+                        QoreHashNode* new_h = makeImplicitHashForLValueType(ti, xsink);
+                        if (!new_h || (xsink && *xsink)) {
+                            return;
+                        }
+                        if (qore_hash_private::get(*new_h)->checkLValueKey(key_str->c_str(), xsink)) {
+                            new_h->deref(xsink);
+                            return;
+                        }
+                        new_h->setKeyValue(key_str->c_str(), val.refSelf(), xsink);
+                        if (xsink && *xsink) {
+                            new_h->deref(xsink);
+                            return;
+                        }
                         if (is_closure) {
                             assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
                         } else {
                             assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
                         }
-                        // After COW, invalidate stale LoadClosure cache entry
+                        // Auto-vivify replaces NOTHING; invalidate stale LoadClosure cache
                         invalidateClosureCacheLv(lv);
                         if (xsink && *xsink) {
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupLocalCaches();
-                            return false;
+                            return;
                         }
-                        h = new_h;
+                        clearLoadSlots(hksd_inst->container_slot_id);
+                        uint32_t csid = hksd_inst->container_slot_id;
+                        if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
+                            locals_slot_cache[csid].discard(xsink);
+                        }
+                        discardContainerValueSlot(hksd_inst->operands[0].id, hksd_inst->container_slot_id,
+                            isClosureContainer(hksd_inst->container_lv, hksd_inst->container));
+                    } else if (hash_val.getType() == NT_OBJECT) {
+                        assignObjectMemberValue(const_cast<QoreObject*>(hash_val.get<const QoreObject>()),
+                            key_str->c_str(), val, xsink);
                     }
-                    // Check hashdecl key validity before assignment
-                    if (qore_hash_private::get(*h)->checkKey(key_str->c_str(), xsink)) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    h->setKeyValue(key_str->c_str(), val.refSelf(), xsink);
-                    clearLoadSlots(hksd_inst->container_slot_id);
-                    uint32_t csid = hksd_inst->container_slot_id;
-                    if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                        locals_slot_cache[csid].discard(xsink);
-                    }
-                    discardContainerValueSlot(hksd_inst->operands[0].id, hksd_inst->container_slot_id,
-                        isClosureContainer(hksd_inst->container_lv, hksd_inst->container));
-                } else if (hash_val.isNothing()) {
-                    LocalVar* lv;
-                    bool is_closure;
-                    if (hksd_inst->container_lv) {
-                        lv = hksd_inst->container_lv;
-                        is_closure = lv->closureUse();
-                    } else {
-                        lv = const_cast<LocalVar*>(
-                            reinterpret_cast<const LocalVar*>(hksd_inst->container->ref.id));
-                        is_closure = (hksd_inst->container->getType() == VT_CLOSURE);
-                    }
-
-                    // Auto-vivify according to the declared lvalue type, matching
-                    // LValueHelper::doHashLValue() including hashdecl error behavior.
-                    const QoreTypeInfo* ti = lv ? lv->getTypeInfoForLValue() : nullptr;
-                    ti = qore_substitute_type_params_if_needed(ti);
-                    QoreHashNode* new_h = makeImplicitHashForLValueType(ti, xsink);
-                    if (!new_h || (xsink && *xsink)) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    new_h->setKeyValue(key_str->c_str(), val.refSelf(), xsink);
-                    if (xsink && *xsink) {
-                        new_h->deref(xsink);
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    if (is_closure) {
-                        assignClosureVarValueTransfer(lv, QoreValue(new_h), xsink);
-                    } else {
-                        assignLocalVarValueTransfer(lv, QoreValue(new_h), xsink);
-                    }
-                    // Auto-vivify replaces NOTHING; invalidate stale LoadClosure cache
-                    invalidateClosureCacheLv(lv);
-                    if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    clearLoadSlots(hksd_inst->container_slot_id);
-                    uint32_t csid = hksd_inst->container_slot_id;
-                    if (csid != UINT32_MAX && csid < locals_slot_cache.size()) {
-                        locals_slot_cache[csid].discard(xsink);
-                    }
-                    discardContainerValueSlot(hksd_inst->operands[0].id, hksd_inst->container_slot_id,
-                        isClosureContainer(hksd_inst->container_lv, hksd_inst->container));
-                } else if (hash_val.getType() == NT_OBJECT) {
-                    assignObjectMemberValue(const_cast<QoreObject*>(hash_val.get<const QoreObject>()),
-                        key_str->c_str(), val, xsink);
-                }
+                };
+                store_dynamic_key();
                 if (xsink && *xsink) {
+                    if (inst->exception_target) {
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
+                    }
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
@@ -12663,93 +12674,94 @@ load_local_done:
                 // Scope the LValueHelper so it releases the object lock
                 // BEFORE cache invalidation (which may deref objects and
                 // try to acquire the same lock for GC scanning).
+                bool navigation_failed = false;
                 {
                     LValueHelper lvh(xsink);
-                    if (lvh.navigatePath(path_copy.data(), path_copy.size(), false)) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    switch (path_inst->compound_op) {
-                        case LVCompoundOp::AddAssign:
-                            res = doPlusEqualsOnLValue(lvh, rhs, xsink);
-                            break;
-                        case LVCompoundOp::SubAssign:
-                            res = doMinusEqualsOnLValue(lvh, rhs, xsink);
-                            break;
-                        default: {
-                            qore_type_t vtype = lvh.getType();
-                            if (vtype == NT_NUMBER || rhs.getType() == NT_NUMBER) {
-                                switch (path_inst->compound_op) {
-                                    case LVCompoundOp::MulAssign:
-                                        lvh.multiplyEqualsNumber(rhs);
-                                        if (!*xsink) {
-                                            res = lvh.getReferencedValue();
-                                        }
-                                        break;
-                                    case LVCompoundOp::DivAssign:
-                                        if (rhs.getAsFloat() == 0.0) {
-                                            xsink->raiseException("DIVISION-BY-ZERO",
-                                                "division by zero in arbitrary-precision numeric expression");
-                                        } else {
-                                            lvh.divideEqualsNumber(rhs);
+                    navigation_failed = lvh.navigatePath(path_copy.data(), path_copy.size(), false);
+                    if (!navigation_failed) {
+                        switch (path_inst->compound_op) {
+                            case LVCompoundOp::AddAssign:
+                                res = doPlusEqualsOnLValue(lvh, rhs, xsink);
+                                break;
+                            case LVCompoundOp::SubAssign:
+                                res = doMinusEqualsOnLValue(lvh, rhs, xsink);
+                                break;
+                            default: {
+                                qore_type_t vtype = lvh.getType();
+                                if (vtype == NT_NUMBER || rhs.getType() == NT_NUMBER) {
+                                    switch (path_inst->compound_op) {
+                                        case LVCompoundOp::MulAssign:
+                                            lvh.multiplyEqualsNumber(rhs);
                                             if (!*xsink) {
                                                 res = lvh.getReferencedValue();
                                             }
-                                        }
-                                        break;
-                                    default: res = QoreValue(); break;
+                                            break;
+                                        case LVCompoundOp::DivAssign:
+                                            if (rhs.getAsFloat() == 0.0) {
+                                                xsink->raiseException("DIVISION-BY-ZERO",
+                                                    "division by zero in arbitrary-precision numeric expression");
+                                            } else {
+                                                lvh.divideEqualsNumber(rhs);
+                                                if (!*xsink) {
+                                                    res = lvh.getReferencedValue();
+                                                }
+                                            }
+                                            break;
+                                        default: res = QoreValue(); break;
+                                    }
+                                } else if (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT) {
+                                    double rv = rhs.getAsFloat();
+                                    switch (path_inst->compound_op) {
+                                        case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsFloat(rv); break;
+                                        case LVCompoundOp::DivAssign:
+                                            if (rv == 0.0) {
+                                                xsink->raiseException("DIVISION-BY-ZERO",
+                                                    "division by zero in floating-point expression");
+                                            } else {
+                                                res = lvh.divideEqualsFloat(rv);
+                                            }
+                                            break;
+                                        default: res = QoreValue(); break;
+                                    }
+                                } else {
+                                    int64 rv = rhs.getAsBigInt();
+                                    switch (path_inst->compound_op) {
+                                        case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsBigInt(rv); break;
+                                        case LVCompoundOp::DivAssign:
+                                            if (!rv) {
+                                                xsink->raiseException("DIVISION-BY-ZERO",
+                                                    "division by zero in integer expression");
+                                            } else {
+                                                res = lvh.divideEqualsBigInt(rv);
+                                            }
+                                            break;
+                                        case LVCompoundOp::ModAssign:
+                                            if (!rv) {
+                                                lvh.assign(0ll, "<%= operator>");
+                                                res = 0ll;
+                                            } else {
+                                                res = lvh.modulaEqualsBigInt(rv);
+                                            }
+                                            break;
+                                        case LVCompoundOp::AndAssign: res = lvh.andEqualsBigInt(rv); break;
+                                        case LVCompoundOp::OrAssign: res = lvh.orEqualsBigInt(rv); break;
+                                        case LVCompoundOp::XorAssign: res = lvh.xorEqualsBigInt(rv); break;
+                                        case LVCompoundOp::ShlAssign: res = lvh.shiftLeftEqualsBigInt(rv); break;
+                                        case LVCompoundOp::ShrAssign: res = lvh.shiftRightEqualsBigInt(rv); break;
+                                        default: break;
+                                    }
                                 }
-                            } else if (vtype == NT_FLOAT || rhs.getType() == NT_FLOAT) {
-                                double rv = rhs.getAsFloat();
-                                switch (path_inst->compound_op) {
-                                    case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsFloat(rv); break;
-                                    case LVCompoundOp::DivAssign:
-                                        if (rv == 0.0) {
-                                            xsink->raiseException("DIVISION-BY-ZERO",
-                                                "division by zero in floating-point expression");
-                                        } else {
-                                            res = lvh.divideEqualsFloat(rv);
-                                        }
-                                        break;
-                                    default: res = QoreValue(); break;
-                                }
-                            } else {
-                                int64 rv = rhs.getAsBigInt();
-                                switch (path_inst->compound_op) {
-                                    case LVCompoundOp::MulAssign: res = lvh.multiplyEqualsBigInt(rv); break;
-                                    case LVCompoundOp::DivAssign:
-                                        if (!rv) {
-                                            xsink->raiseException("DIVISION-BY-ZERO",
-                                                "division by zero in integer expression");
-                                        } else {
-                                            res = lvh.divideEqualsBigInt(rv);
-                                        }
-                                        break;
-                                    case LVCompoundOp::ModAssign:
-                                        if (!rv) {
-                                            lvh.assign(0ll, "<%= operator>");
-                                            res = 0ll;
-                                        } else {
-                                            res = lvh.modulaEqualsBigInt(rv);
-                                        }
-                                        break;
-                                    case LVCompoundOp::AndAssign: res = lvh.andEqualsBigInt(rv); break;
-                                    case LVCompoundOp::OrAssign: res = lvh.orEqualsBigInt(rv); break;
-                                    case LVCompoundOp::XorAssign: res = lvh.xorEqualsBigInt(rv); break;
-                                    case LVCompoundOp::ShlAssign: res = lvh.shiftLeftEqualsBigInt(rv); break;
-                                    case LVCompoundOp::ShrAssign: res = lvh.shiftRightEqualsBigInt(rv); break;
-                                    default: break;
-                                }
+                                break;
                             }
-                            break;
                         }
                     }
                 }
                 // lvh is now destructed — object lock released
                 invalidateLValuePathClosureCache(path_inst);
-                if (xsink && *xsink) {
-                    if (inst->exception_target) {
+                if (navigation_failed || (xsink && *xsink)) {
+                    res.discard(xsink);
+                    res = QoreValue();
+                    if (xsink && *xsink && inst->exception_target) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
                         prev_block = block;
                         block = inst->exception_target;
@@ -12836,419 +12848,419 @@ load_local_done:
                     value = QoreValue();
                     return !*xsink;
                 };
-                if (is_remove && path_copy.size() == 1
-                        && path_copy[0].kind == LVPathStepKind::SelfMember) {
-                    QoreObject* obj = runtime_get_stack_object();
-                    if (!obj) {
-                        xsink->raiseException("LVALUE-ERROR",
-                            "no object context for self member remove");
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
+                // the operation runs in a function so that every error exit releases the lvalue lock before the
+                // exception is dispatched to an enclosing catch block
+                auto run_unary = [&]() -> int {
+                    if (is_remove && path_copy.size() == 1
+                            && path_copy[0].kind == LVPathStepKind::SelfMember) {
+                        QoreObject* obj = runtime_get_stack_object();
+                        if (!obj) {
+                            xsink->raiseException("LVALUE-ERROR",
+                                "no object context for self member remove");
+                            return -1;
+                        }
+                        if (qore_ir_check_closure_self_valid(obj, xsink)) {
+                            return -1;
+                        }
+                        res = qore_object_private::takeMember(*obj, xsink,
+                            path_copy[0].name.c_str(), false);
+                        if ((xsink && *xsink) || !finish_delete_result(res)) {
+                            return -1;
+                        }
+                        return 0;
                     }
-                    if (qore_ir_check_closure_self_valid(obj, xsink)) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    res = qore_object_private::takeMember(*obj, xsink,
-                        path_copy[0].name.c_str(), false);
-                    if ((xsink && *xsink) || !finish_delete_result(res)) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    goto lvalue_path_unary_done;
-                }
-                if (is_remove && path_inst->path.size() >= 2) {
-                    // For multi-step paths, navigate to the PARENT container, then
-                    // remove/delete the key/element. LValueHelper::remove() only clears
-                    // the value without removing the hash key; we need container-level removal.
-                    LValueHelper lvh(xsink);
-                    // Navigate to parent (for_remove=true: don't vivify intermediates)
-                    if (!lvh.navigatePath(path_copy.data(), path_copy.size() - 1, true)) {
-                        // Now remove/delete the final key/element from the container
-                        const LVPathStep& last_step = path_copy.back();
-                        QoreValue container = lvh.getValue();
-                        qore_type_t ct = container.getType();
-                        bool last_is_hash = (last_step.kind == LVPathStepKind::HashKeyConst
-                                || last_step.kind == LVPathStepKind::HashKey);
-                        bool last_is_hash_list = last_is_hash && last_step.slice_values.size() == 1
-                                && last_step.slice_values[0].getType() == NT_LIST;
-                        if ((last_step.kind == LVPathStepKind::HashKeySlice || last_is_hash_list)
-                                && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
-                            res = executeLVHashKeySliceRemove(lvh, ct, last_step,
-                                    path_inst->unary_op, xsink);
-                        } else if ((last_step.kind == LVPathStepKind::HashKeyConst
-                                || last_step.kind == LVPathStepKind::HashKey) && ct == NT_HASH) {
-                            lvh.ensureUnique();
-                            QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
-                            res = h->takeKeyValue(last_step.name.c_str());
-                            finish_delete_result(res);
-                        } else if ((last_step.kind == LVPathStepKind::HashKeyConst
-                                || last_step.kind == LVPathStepKind::HashKey)
-                                && (ct == NT_OBJECT || ct == NT_WEAKREF)) {
-                            QoreObject* o = ct == NT_OBJECT
-                                ? lvh.getValue().get<QoreObject>()
-                                : lvh.getValue().get<const WeakReferenceNode>()->get();
-                            if (o) {
-                                res = qore_object_private::takeMember(*o, lvh, last_step.name.c_str());
+                    if (is_remove && path_inst->path.size() >= 2) {
+                        // For multi-step paths, navigate to the PARENT container, then
+                        // remove/delete the key/element. LValueHelper::remove() only clears
+                        // the value without removing the hash key; we need container-level removal.
+                        LValueHelper lvh(xsink);
+                        // Navigate to parent (for_remove=true: don't vivify intermediates)
+                        if (!lvh.navigatePath(path_copy.data(), path_copy.size() - 1, true)) {
+                            // Now remove/delete the final key/element from the container
+                            const LVPathStep& last_step = path_copy.back();
+                            QoreValue container = lvh.getValue();
+                            qore_type_t ct = container.getType();
+                            bool last_is_hash = (last_step.kind == LVPathStepKind::HashKeyConst
+                                    || last_step.kind == LVPathStepKind::HashKey);
+                            bool last_is_hash_list = last_is_hash && last_step.slice_values.size() == 1
+                                    && last_step.slice_values[0].getType() == NT_LIST;
+                            if ((last_step.kind == LVPathStepKind::HashKeySlice || last_is_hash_list)
+                                    && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
+                                res = executeLVHashKeySliceRemove(lvh, ct, last_step,
+                                        path_inst->unary_op, xsink);
+                            } else if ((last_step.kind == LVPathStepKind::HashKeyConst
+                                    || last_step.kind == LVPathStepKind::HashKey) && ct == NT_HASH) {
+                                lvh.ensureUnique();
+                                QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
+                                res = h->takeKeyValue(last_step.name.c_str());
                                 finish_delete_result(res);
-                            }
-                        } else if (last_step.kind == LVPathStepKind::ListIndex && ct == NT_LIST) {
-                            lvh.ensureUnique();
-                            QoreListNode* l = lvh.getValue().get<QoreListNode>();
-                            int64_t idx = last_step.index;
-                            if (runtime_check_parse_option(PO_NEGATIVE_OFFSETS) && idx < 0) {
-                                idx += static_cast<int64_t>(l->size());
-                            }
-                            if (idx >= 0 && static_cast<size_t>(idx) < l->size()) {
-                                if (path_inst->unary_op == LVUnaryOp::Remove) {
-                                    res = l->retrieveEntry(static_cast<size_t>(idx)).refSelf();
+                            } else if ((last_step.kind == LVPathStepKind::HashKeyConst
+                                    || last_step.kind == LVPathStepKind::HashKey)
+                                    && (ct == NT_OBJECT || ct == NT_WEAKREF)) {
+                                QoreObject* o = ct == NT_OBJECT
+                                    ? lvh.getValue().get<QoreObject>()
+                                    : lvh.getValue().get<const WeakReferenceNode>()->get();
+                                if (o) {
+                                    res = qore_object_private::takeMember(*o, lvh, last_step.name.c_str());
+                                    finish_delete_result(res);
                                 }
-                                l->setEntry(static_cast<size_t>(idx), QoreValue(), xsink);
-                            }
-                        } else if (last_step.kind == LVPathStepKind::HashKeySlice
-                                && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
-                            res = executeLVHashKeySliceRemove(lvh, ct, last_step,
-                                    path_inst->unary_op, xsink);
-                        } else if (last_step.kind == LVPathStepKind::ListIndexSlice
-                                && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
-                            res = executeLVListIndexSliceRemove(lvh, ct, last_step,
-                                    path_inst->unary_op, xsink);
-                        } else if (last_step.kind == LVPathStepKind::ListRangeSlice
-                                && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
-                            res = executeLVListRangeSliceRemove(lvh, ct, last_step,
-                                    path_inst->unary_op, xsink);
-                        }
-                        // NT_NOTHING or other parent types: nothing to remove, fall through
-                        if (xsink && *xsink) {
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupLocalCaches();
-                            return false;
-                        }
-                    } else if (xsink && *xsink) {
-                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
-                    }
-                    // navigatePath failed without exception: parent doesn't exist, skip
-                } else if (is_remove) {
-                    // Single-step path: navigate to the variable itself and clear.
-                    //
-                    // Special case: if the variable holds a ReferenceNode (e.g.
-                    // `reference<hash> r = \h.b; delete r;`), delegate to the AST
-                    // LValueRemoveHelper on the reference — it dispatches through the
-                    // reference's vexp to the correct container-level removal (hash
-                    // takeKeyValue / list setEntry), matching AST semantics. Bare
-                    // lvh.remove() on a reference-target only clears the slot and leaves
-                    // the hash key behind; AST fallback here would trigger a spurious
-                    // re-run of the function body (execute() returning false without an
-                    // exception).
-                    if (path_inst->path.size() == 1
-                        && (path_inst->path[0].kind == LVPathStepKind::LocalVar
-                            || path_inst->path[0].kind == LVPathStepKind::ClosureVar)) {
-                        const LocalVar* lv = static_cast<const LocalVar*>(path_inst->path[0].ref_ptr);
-                        // Peek at the raw slot value (LocalVarValue / ClosureVarValue) to
-                        // detect a ReferenceNode — lv->eval() would dereference through the
-                        // reference's vexp and hide the NT_REFERENCE marker. Use the variable's
-                        // closure_use flag (NOT the LVPath step kind) to pick the right stack,
-                        // since for VT_LOCAL_TS the path kind is LocalVar but the CVV lives on
-                        // cvstack; thread_find_lvar would walk past the lvstack root and crash.
-                        ReferenceNode* ref = nullptr;
-                        if (lv) {
-                            if (!lv->closureUse()) {
-                                LocalVarValue* lvv = thread_try_find_lvar(lv);
-                                if (lvv && lvv->val.getType() == NT_REFERENCE) {
-                                    ref = reinterpret_cast<ReferenceNode*>(lvv->val.v.n);
+                            } else if (last_step.kind == LVPathStepKind::ListIndex && ct == NT_LIST) {
+                                lvh.ensureUnique();
+                                QoreListNode* l = lvh.getValue().get<QoreListNode>();
+                                int64_t idx = last_step.index;
+                                if (runtime_check_parse_option(PO_NEGATIVE_OFFSETS) && idx < 0) {
+                                    idx += static_cast<int64_t>(l->size());
                                 }
-                            } else {
-                                ClosureVarValue* cvv = resolve_closure_var_value(lv);
-                                if (cvv && cvv->val.getType() == NT_REFERENCE) {
-                                    ref = reinterpret_cast<ReferenceNode*>(cvv->val.v.n);
+                                if (idx >= 0 && static_cast<size_t>(idx) < l->size()) {
+                                    if (path_inst->unary_op == LVUnaryOp::Remove) {
+                                        res = l->retrieveEntry(static_cast<size_t>(idx)).refSelf();
+                                    }
+                                    l->setEntry(static_cast<size_t>(idx), QoreValue(), xsink);
                                 }
+                            } else if (last_step.kind == LVPathStepKind::HashKeySlice
+                                    && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
+                                res = executeLVHashKeySliceRemove(lvh, ct, last_step,
+                                        path_inst->unary_op, xsink);
+                            } else if (last_step.kind == LVPathStepKind::ListIndexSlice
+                                    && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
+                                res = executeLVListIndexSliceRemove(lvh, ct, last_step,
+                                        path_inst->unary_op, xsink);
+                            } else if (last_step.kind == LVPathStepKind::ListRangeSlice
+                                    && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
+                                res = executeLVListRangeSliceRemove(lvh, ct, last_step,
+                                        path_inst->unary_op, xsink);
                             }
+                            // NT_NOTHING or other parent types: nothing to remove, fall through
+                            if (xsink && *xsink) {
+                                return -1;
+                            }
+                        } else if (xsink && *xsink) {
+                            return -1;
                         }
-                        if (ref) {
-                            bool is_delete = (path_inst->unary_op == LVUnaryOp::Delete);
-                            LValueRemoveHelper lvrh(*ref, xsink, is_delete);
-                            if (lvrh && !*xsink) {
-                                if (is_delete) {
-                                    lvrh.deleteLValue();
-                                    res = QoreValue();
+                        // navigatePath failed without exception: parent doesn't exist, skip
+                    } else if (is_remove) {
+                        // Single-step path: navigate to the variable itself and clear.
+                        //
+                        // Special case: if the variable holds a ReferenceNode (e.g.
+                        // `reference<hash> r = \h.b; delete r;`), delegate to the AST
+                        // LValueRemoveHelper on the reference — it dispatches through the
+                        // reference's vexp to the correct container-level removal (hash
+                        // takeKeyValue / list setEntry), matching AST semantics. Bare
+                        // lvh.remove() on a reference-target only clears the slot and leaves
+                        // the hash key behind; AST fallback here would trigger a spurious
+                        // re-run of the function body (execute() returning false without an
+                        // exception).
+                        if (path_inst->path.size() == 1
+                            && (path_inst->path[0].kind == LVPathStepKind::LocalVar
+                                || path_inst->path[0].kind == LVPathStepKind::ClosureVar)) {
+                            const LocalVar* lv = static_cast<const LocalVar*>(path_inst->path[0].ref_ptr);
+                            // Peek at the raw slot value (LocalVarValue / ClosureVarValue) to
+                            // detect a ReferenceNode — lv->eval() would dereference through the
+                            // reference's vexp and hide the NT_REFERENCE marker. Use the variable's
+                            // closure_use flag (NOT the LVPath step kind) to pick the right stack,
+                            // since for VT_LOCAL_TS the path kind is LocalVar but the CVV lives on
+                            // cvstack; thread_find_lvar would walk past the lvstack root and crash.
+                            ReferenceNode* ref = nullptr;
+                            if (lv) {
+                                if (!lv->closureUse()) {
+                                    LocalVarValue* lvv = thread_try_find_lvar(lv);
+                                    if (lvv && lvv->val.getType() == NT_REFERENCE) {
+                                        ref = reinterpret_cast<ReferenceNode*>(lvv->val.v.n);
+                                    }
                                 } else {
-                                    res = lvrh.removeValue();
+                                    ClosureVarValue* cvv = resolve_closure_var_value(lv);
+                                    if (cvv && cvv->val.getType() == NT_REFERENCE) {
+                                        ref = reinterpret_cast<ReferenceNode*>(cvv->val.v.n);
+                                    }
                                 }
                             }
+                            if (ref) {
+                                bool is_delete = (path_inst->unary_op == LVUnaryOp::Delete);
+                                LValueRemoveHelper lvrh(*ref, xsink, is_delete);
+                                if (lvrh && !*xsink) {
+                                    if (is_delete) {
+                                        lvrh.deleteLValue();
+                                        res = QoreValue();
+                                    } else {
+                                        res = lvrh.removeValue();
+                                    }
+                                }
+                                if (*xsink) {
+                                    return -1;
+                                }
+                                goto single_step_remove_done;
+                            }
+                        }
+                        {
+                        LValueHelper lvh(xsink);
+                        if (lvh.navigatePath(path_copy.data(), path_copy.size(), true)) {
                             if (*xsink) {
-                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                                cleanupLocalCaches();
-                                return false;
+                                // Real error during navigation — propagate
+                                return -1;
                             }
-                            goto single_step_remove_done;
-                        }
-                    }
-                    {
-                    LValueHelper lvh(xsink);
-                    if (lvh.navigatePath(path_copy.data(), path_copy.size(), true)) {
-                        if (*xsink) {
-                            // Real error during navigation — propagate
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupLocalCaches();
-                            return false;
-                        }
-                        // navigatePath failed without exception: target doesn't exist
-                        // (e.g. `delete r` where r is a reference<hash> to an unassigned
-                        // hash member h.b, and for_remove=true refuses to vivify the parent).
-                        // Treat as no-op — matches AST semantics (QoreDeleteOperatorNode /
-                        // QoreRemoveOperatorNode on a missing target both succeed silently)
-                        // and the multi-step path case at :6736. Returning false here would
-                        // trigger a false AST deopt and silently re-run the function body.
-                        res = QoreValue();
-                    } else if (path_inst->unary_op == LVUnaryOp::Remove) {
-                        // `remove self` on a static_assignment lvalue (borrowed ref)
-                        // must not propagate the borrowed value — discard it and return
-                        // NOTHING.  Matches LValueRemoveHelper::deleteLValue's clearTemp
-                        // behaviour when static_assignment is set.
-                        bool static_assignment = false;
-                        res = lvh.remove(static_assignment);
-                        if (static_assignment) {
+                            // navigatePath failed without exception: target doesn't exist
+                            // (e.g. `delete r` where r is a reference<hash> to an unassigned
+                            // hash member h.b, and for_remove=true refuses to vivify the parent).
+                            // Treat as no-op — matches AST semantics (QoreDeleteOperatorNode /
+                            // QoreRemoveOperatorNode on a missing target both succeed silently)
+                            // and the multi-step path case at :6736. Returning false here would
+                            // trigger a false AST deopt and silently re-run the function body.
                             res = QoreValue();
+                        } else if (path_inst->unary_op == LVUnaryOp::Remove) {
+                            // `remove self` on a static_assignment lvalue (borrowed ref)
+                            // must not propagate the borrowed value — discard it and return
+                            // NOTHING.  Matches LValueRemoveHelper::deleteLValue's clearTemp
+                            // behaviour when static_assignment is set.
+                            bool static_assignment = false;
+                            res = lvh.remove(static_assignment);
+                            if (static_assignment) {
+                                res = QoreValue();
+                            }
+                        } else {
+                            // Delete: use remove(static_assignment) instead of removeValue(true)
+                            // so `delete self` correctly handles the borrowed-ref case (self is
+                            // instantiated via instantiateSelf with static_assignment=true —
+                            // removeValue asserts !static_assignment and, with assertions off,
+                            // would return the borrowed value and cause a double-free via the
+                            // subsequent res.discard).  Mirrors LValueRemoveHelper::deleteLValue.
+                            bool static_assignment = false;
+                            res = lvh.remove(static_assignment);
+                            if (res.getType() == NT_OBJECT) {
+                                QoreObject* o = res.get<QoreObject>();
+                                if (!o->isSystemObject()) {
+                                    o->doDelete(xsink);
+                                }
+                                // Only deref non-borrowed refs.  static_assignment means the
+                                // LocalVarValue didn't own the +1 (e.g. `self`); the caller's
+                                // ref covers the object lifetime until the method frame unwinds.
+                                if (!static_assignment) {
+                                    res.discard(xsink);
+                                }
+                                res = QoreValue();
+                            } else if (static_assignment) {
+                                // Non-object with static_assignment (shouldn't occur for self
+                                // but handle defensively) — borrowed ref, don't discard below.
+                                res = QoreValue();
+                            }
                         }
+                        }  // end of LValueHelper scope
+                        single_step_remove_done:;
                     } else {
-                        // Delete: use remove(static_assignment) instead of removeValue(true)
-                        // so `delete self` correctly handles the borrowed-ref case (self is
-                        // instantiated via instantiateSelf with static_assignment=true —
-                        // removeValue asserts !static_assignment and, with assertions off,
-                        // would return the borrowed value and cause a double-free via the
-                        // subsequent res.discard).  Mirrors LValueRemoveHelper::deleteLValue.
-                        bool static_assignment = false;
-                        res = lvh.remove(static_assignment);
-                        if (res.getType() == NT_OBJECT) {
-                            QoreObject* o = res.get<QoreObject>();
-                            if (!o->isSystemObject()) {
-                                o->doDelete(xsink);
+                        // Pop, Shift, Trim, Chomp use for_remove=true to avoid vivification:
+                        // if the target is NOTHING, these should be no-ops rather than creating
+                        // empty containers.  Pre/PostInc/Dec use for_remove=false since they
+                        // legitimately need to create a value if NOTHING.
+                        bool no_vivify = (path_inst->unary_op == LVUnaryOp::Pop
+                            || path_inst->unary_op == LVUnaryOp::Shift
+                            || path_inst->unary_op == LVUnaryOp::Trim
+                            || path_inst->unary_op == LVUnaryOp::Chomp);
+                        LValueHelper lvh(xsink);
+                        if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
+                            if (no_vivify && !*xsink) {
+                                // navigatePath failed without error — lvalue doesn't exist, no-op
+                                return 0;
                             }
-                            // Only deref non-borrowed refs.  static_assignment means the
-                            // LocalVarValue didn't own the +1 (e.g. `self`); the caller's
-                            // ref covers the object lifetime until the method frame unwinds.
-                            if (!static_assignment) {
-                                res.discard(xsink);
+                            return -1;
+                        }
+                        switch (path_inst->unary_op) {
+                            case LVUnaryOp::PreInc: {
+                                qore_type_t t = lvh.getType();
+                                if (t == NT_NUMBER) {
+                                    lvh.preIncrementNumber();
+                                    res = lvh.getReferencedValue();
+                                } else if (t == NT_FLOAT) {
+                                    res = lvh.preIncrementFloat();
+                                } else {
+                                    res = lvh.preIncrementBigInt();
+                                }
+                                break;
                             }
-                            res = QoreValue();
-                        } else if (static_assignment) {
-                            // Non-object with static_assignment (shouldn't occur for self
-                            // but handle defensively) — borrowed ref, don't discard below.
-                            res = QoreValue();
+                            case LVUnaryOp::PreDec: {
+                                qore_type_t t = lvh.getType();
+                                if (t == NT_NUMBER) {
+                                    lvh.preDecrementNumber();
+                                    res = lvh.getReferencedValue();
+                                } else if (t == NT_FLOAT) {
+                                    res = lvh.preDecrementFloat();
+                                } else {
+                                    res = lvh.preDecrementBigInt();
+                                }
+                                break;
+                            }
+                            case LVUnaryOp::PostInc: {
+                                qore_type_t t = lvh.getType();
+                                if (t == NT_NUMBER) {
+                                    QoreNumberNode* n = lvh.postIncrementNumber(true);
+                                    if (n) {
+                                        res = n;
+                                    }
+                                } else if (t == NT_FLOAT) {
+                                    res = lvh.postIncrementFloat();
+                                } else {
+                                    res = lvh.postIncrementBigInt();
+                                }
+                                break;
+                            }
+                            case LVUnaryOp::PostDec: {
+                                qore_type_t t = lvh.getType();
+                                if (t == NT_NUMBER) {
+                                    QoreNumberNode* n = lvh.postDecrementNumber(true);
+                                    if (n) {
+                                        res = n;
+                                    }
+                                } else if (t == NT_FLOAT) {
+                                    res = lvh.postDecrementFloat();
+                                } else {
+                                    res = lvh.postDecrementBigInt();
+                                }
+                                break;
+                            }
+                            case LVUnaryOp::Shift: {
+                                if (lvh.getType() != NT_LIST) {
+                                    // matches QoreShiftOperatorNode::evalImpl()
+                                    if (lvh.getType() != NT_NOTHING && runtime_check_parse_option(PO_STRICT_ARGS)) {
+                                        xsink->raiseException("SHIFT-ERROR", "the lvalue argument to shift is type "
+                                            "\"%s\"; expecting \"list\"", lvh.getTypeName());
+                                    }
+                                    break;
+                                }
+                                lvh.ensureUnique();
+                                QoreListNode* l = lvh.getValue().get<QoreListNode>();
+                                if (l && l->size() > 0) {
+                                    res = l->shift();
+                                }
+                                break;
+                            }
+                            case LVUnaryOp::Pop: {
+                                if (lvh.getType() != NT_LIST) {
+                                    // matches QorePopOperatorNode::evalImpl()
+                                    if (lvh.getType() != NT_NOTHING && runtime_check_parse_option(PO_STRICT_ARGS)) {
+                                        xsink->raiseException("POP-ERROR", "the lvalue argument to pop is type "
+                                            "\"%s\"; expecting \"list\"", lvh.getTypeName());
+                                    }
+                                    break;
+                                }
+                                lvh.ensureUnique();
+                                QoreListNode* l = lvh.getValue().get<QoreListNode>();
+                                if (l && l->size() > 0) {
+                                    res = l->pop();
+                                }
+                                break;
+                            }
+                            case LVUnaryOp::Trim: {
+                                qore_type_t vtype = lvh.getType();
+                                if (vtype == NT_STRING) {
+                                    lvh.ensureUnique();
+                                    QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
+                                    if (str && str->trim(xsink)) {
+                                        return -1;
+                                    }
+                                } else if (vtype == NT_LIST) {
+                                    lvh.ensureUnique();
+                                    QoreListNode* l = lvh.getValue().get<QoreListNode>();
+                                    if (l) {
+                                        qore_list_private* ll = qore_list_private::get(*l);
+                                        for (size_t i = 0, e = l->size(); i < e; ++i) {
+                                            QoreValue& v = ll->getEntryReference(i);
+                                            if (v.getType() == NT_STRING) {
+                                                ensure_unique(v, xsink);
+                                                if (v.get<QoreStringNode>()->trim(xsink)) {
+                                                    return -1;
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else if (vtype == NT_HASH) {
+                                    lvh.ensureUnique();
+                                    QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
+                                    if (h) {
+                                        HashIterator hi(h);
+                                        while (hi.next()) {
+                                            if (hi.get().getType() == NT_STRING) {
+                                                QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+                                                ensure_unique(v, xsink);
+                                                if (v.get<QoreStringNode>()->trim(xsink)) {
+                                                    return -1;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                res = lvh.getReferencedValue();
+                                break;
+                            }
+                            case LVUnaryOp::Chomp: {
+                                qore_type_t vtype = lvh.getType();
+                                if (vtype == NT_STRING) {
+                                    lvh.ensureUnique();
+                                    QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
+                                    if (str) {
+                                        res = QoreValue(static_cast<int64>(str->chomp()));
+                                    }
+                                } else if (vtype == NT_LIST) {
+                                    lvh.ensureUnique();
+                                    QoreListNode* l = lvh.getValue().get<QoreListNode>();
+                                    if (l) {
+                                        int64 count = 0;
+                                        qore_list_private* ll = qore_list_private::get(*l);
+                                        for (size_t i = 0, e = l->size(); i < e; ++i) {
+                                            QoreValue& v = ll->getEntryReference(i);
+                                            if (v.getType() == NT_STRING) {
+                                                ensure_unique(v, xsink);
+                                                count += static_cast<int64>(
+                                                    v.get<QoreStringNode>()->chomp());
+                                            }
+                                        }
+                                        res = QoreValue(count);
+                                    }
+                                } else if (vtype == NT_HASH) {
+                                    lvh.ensureUnique();
+                                    QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
+                                    if (h) {
+                                        int64 count = 0;
+                                        HashIterator hi(h);
+                                        while (hi.next()) {
+                                            if (hi.get().getType() == NT_STRING) {
+                                                QoreValue& v = (*qhi_priv::get(hi)->i)->val;
+                                                ensure_unique(v, xsink);
+                                                if (*xsink) {
+                                                    return -1;
+                                                }
+                                                QoreStringNode* vs = v.get<QoreStringNode>();
+                                                count += static_cast<int64>(vs->chomp());
+                                            }
+                                        }
+                                        res = QoreValue(count);
+                                    }
+                                }
+                                break;
+                            }
+                            default:
+                                xsink->raiseException("IR-EXEC-ERROR",
+                                    "unsupported unary op %d in lvalue.path.unary",
+                                    (int)path_inst->unary_op);
+                                return -1;
                         }
                     }
-                    }  // end of LValueHelper scope
-                    single_step_remove_done:;
-                } else {
-                    // Pop, Shift, Trim, Chomp use for_remove=true to avoid vivification:
-                    // if the target is NOTHING, these should be no-ops rather than creating
-                    // empty containers.  Pre/PostInc/Dec use for_remove=false since they
-                    // legitimately need to create a value if NOTHING.
-                    bool no_vivify = (path_inst->unary_op == LVUnaryOp::Pop
-                        || path_inst->unary_op == LVUnaryOp::Shift
-                        || path_inst->unary_op == LVUnaryOp::Trim
-                        || path_inst->unary_op == LVUnaryOp::Chomp);
-                    LValueHelper lvh(xsink);
-                    if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
-                        if (no_vivify && !*xsink) {
-                            // navigatePath failed without error — lvalue doesn't exist, no-op
-                            goto lvalue_path_unary_done;
-                        }
+                    if (xsink && *xsink) {
+                        return -1;
+                    }
+                    return 0;
+                };
+                if (run_unary()) {
+                    res.discard(xsink);
+                    res = QoreValue();
+                    if (xsink && *xsink && inst->exception_target) {
                         cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                        cleanupLocalCaches();
-                        return false;
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
+                        break;
                     }
-                    switch (path_inst->unary_op) {
-                        case LVUnaryOp::PreInc: {
-                            qore_type_t t = lvh.getType();
-                            if (t == NT_NUMBER) {
-                                lvh.preIncrementNumber();
-                                res = lvh.getReferencedValue();
-                            } else if (t == NT_FLOAT) {
-                                res = lvh.preIncrementFloat();
-                            } else {
-                                res = lvh.preIncrementBigInt();
-                            }
-                            break;
-                        }
-                        case LVUnaryOp::PreDec: {
-                            qore_type_t t = lvh.getType();
-                            if (t == NT_NUMBER) {
-                                lvh.preDecrementNumber();
-                                res = lvh.getReferencedValue();
-                            } else if (t == NT_FLOAT) {
-                                res = lvh.preDecrementFloat();
-                            } else {
-                                res = lvh.preDecrementBigInt();
-                            }
-                            break;
-                        }
-                        case LVUnaryOp::PostInc: {
-                            qore_type_t t = lvh.getType();
-                            if (t == NT_NUMBER) {
-                                QoreNumberNode* n = lvh.postIncrementNumber(true);
-                                if (n) {
-                                    res = n;
-                                }
-                            } else if (t == NT_FLOAT) {
-                                res = lvh.postIncrementFloat();
-                            } else {
-                                res = lvh.postIncrementBigInt();
-                            }
-                            break;
-                        }
-                        case LVUnaryOp::PostDec: {
-                            qore_type_t t = lvh.getType();
-                            if (t == NT_NUMBER) {
-                                QoreNumberNode* n = lvh.postDecrementNumber(true);
-                                if (n) {
-                                    res = n;
-                                }
-                            } else if (t == NT_FLOAT) {
-                                res = lvh.postDecrementFloat();
-                            } else {
-                                res = lvh.postDecrementBigInt();
-                            }
-                            break;
-                        }
-                        case LVUnaryOp::Shift: {
-                            if (lvh.getType() != NT_LIST) {
-                                break;
-                            }
-                            lvh.ensureUnique();
-                            QoreListNode* l = lvh.getValue().get<QoreListNode>();
-                            if (l && l->size() > 0) {
-                                res = l->shift();
-                            }
-                            break;
-                        }
-                        case LVUnaryOp::Pop: {
-                            if (lvh.getType() != NT_LIST) {
-                                break;
-                            }
-                            lvh.ensureUnique();
-                            QoreListNode* l = lvh.getValue().get<QoreListNode>();
-                            if (l && l->size() > 0) {
-                                res = l->pop();
-                            }
-                            break;
-                        }
-                        case LVUnaryOp::Trim: {
-                            qore_type_t vtype = lvh.getType();
-                            if (vtype == NT_STRING) {
-                                lvh.ensureUnique();
-                                QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
-                                if (str && str->trim(xsink)) {
-                                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                                    cleanupLocalCaches();
-                                    return false;
-                                }
-                            } else if (vtype == NT_LIST) {
-                                lvh.ensureUnique();
-                                QoreListNode* l = lvh.getValue().get<QoreListNode>();
-                                if (l) {
-                                    qore_list_private* ll = qore_list_private::get(*l);
-                                    for (size_t i = 0, e = l->size(); i < e; ++i) {
-                                        QoreValue& v = ll->getEntryReference(i);
-                                        if (v.getType() == NT_STRING) {
-                                            ensure_unique(v, xsink);
-                                            if (v.get<QoreStringNode>()->trim(xsink)) {
-                                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                                                cleanupLocalCaches();
-                                                return false;
-                                            }
-                                        }
-                                    }
-                                }
-                            } else if (vtype == NT_HASH) {
-                                lvh.ensureUnique();
-                                QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
-                                if (h) {
-                                    HashIterator hi(h);
-                                    while (hi.next()) {
-                                        if (hi.get().getType() == NT_STRING) {
-                                            QoreValue& v = (*qhi_priv::get(hi)->i)->val;
-                                            ensure_unique(v, xsink);
-                                            if (v.get<QoreStringNode>()->trim(xsink)) {
-                                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                                                cleanupLocalCaches();
-                                                return false;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            res = lvh.getReferencedValue();
-                            break;
-                        }
-                        case LVUnaryOp::Chomp: {
-                            qore_type_t vtype = lvh.getType();
-                            if (vtype == NT_STRING) {
-                                lvh.ensureUnique();
-                                QoreStringNode* str = lvh.getValue().get<QoreStringNode>();
-                                if (str) {
-                                    res = QoreValue(static_cast<int64>(str->chomp()));
-                                }
-                            } else if (vtype == NT_LIST) {
-                                lvh.ensureUnique();
-                                QoreListNode* l = lvh.getValue().get<QoreListNode>();
-                                if (l) {
-                                    int64 count = 0;
-                                    qore_list_private* ll = qore_list_private::get(*l);
-                                    for (size_t i = 0, e = l->size(); i < e; ++i) {
-                                        QoreValue& v = ll->getEntryReference(i);
-                                        if (v.getType() == NT_STRING) {
-                                            ensure_unique(v, xsink);
-                                            count += static_cast<int64>(
-                                                v.get<QoreStringNode>()->chomp());
-                                        }
-                                    }
-                                    res = QoreValue(count);
-                                }
-                            } else if (vtype == NT_HASH) {
-                                lvh.ensureUnique();
-                                QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
-                                if (h) {
-                                    int64 count = 0;
-                                    HashIterator hi(h);
-                                    while (hi.next()) {
-                                        if (hi.get().getType() == NT_STRING) {
-                                            QoreValue& v = (*qhi_priv::get(hi)->i)->val;
-                                            ensure_unique(v, xsink);
-                                            if (*xsink) {
-                                                cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                                                cleanupLocalCaches();
-                                                return false;
-                                            }
-                                            QoreStringNode* vs = v.get<QoreStringNode>();
-                                            count += static_cast<int64>(vs->chomp());
-                                        }
-                                    }
-                                    res = QoreValue(count);
-                                }
-                            }
-                            break;
-                        }
-                        default:
-                            xsink->raiseException("IR-EXEC-ERROR",
-                                "unsupported unary op %d in lvalue.path.unary",
-                                (int)path_inst->unary_op);
-                            cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                            cleanupLocalCaches();
-                            return false;
-                    }
-                }
-                if (xsink && *xsink) {
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;
                 }
-lvalue_path_unary_done:
                 invalidateLValuePathClosureCache(path_inst);
                 if (path_inst->lvalue_slot_id < locals_slot_cache.size()) {
                     locals_slot_cache[path_inst->lvalue_slot_id].discard(xsink);
@@ -13442,150 +13454,163 @@ lvalue_path_unary_done:
                 // Navigate to lvalue; for extract without replacement, avoid vivification
                 bool no_vivify = (path_inst->ternary_op == LVTernaryOp::Extract
                     && replacement_val.isNothing());
-                ReferenceHolder<QoreListNode> removed_list(xsink);
-                LValueHelper lvh(xsink);
-                if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
-                    if (no_vivify && !*xsink) {
-                        // Lvalue doesn't exist — no-op, return NOTHING
-                        if (path_inst->result.isValid()) {
-                            setValueSlot(values, path_inst->result.id, QoreValue(), xsink);
+                QoreValue res;
+                // the operation runs in a function so that the lvalue lock is released before values are cleaned
+                // up or the exception is dispatched to an enclosing catch block; returns 1 if the lvalue does not
+                // exist, -1 for an error, 0 for OK
+                auto run_ternary = [&]() -> int {
+                    ReferenceHolder<QoreListNode> removed_list(xsink);
+                    LValueHelper lvh(xsink);
+                    if (lvh.navigatePath(path_copy.data(), path_copy.size(), no_vivify)) {
+                        return no_vivify && !*xsink ? 1 : -1;
+                    }
+                    qore_type_t vt = lvh.getType();
+                    if (vt == NT_NOTHING) {
+                        // Mirror AST behavior: if the lvalue has a default list/string type,
+                        // auto-initialize it before extract/splice.
+                        const QoreTypeInfo* ti = lvh.getTypeInfo();
+                        if (ti == softListTypeInfo || ti == listTypeInfo || ti == stringTypeInfo
+                                || ti == softStringTypeInfo) {
+                            if (!lvh.assign(QoreTypeInfo::getDefaultQoreValue(ti))) {
+                                vt = lvh.getType();
+                            }
                         }
-                        ++ip;
+                    }
+                    if (vt == NT_NOTHING) {
+                        // Nothing to extract/splice — return NOTHING
+                    } else if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
+                        xsink->raiseException("EXTRACT-ERROR",
+                            "first (lvalue) argument to the extract operator is not a list, "
+                            "string, or binary object");
+                    } else {
+                        lvh.ensureUnique();
+                        size_t offset = static_cast<size_t>(offset_val.getAsBigInt());
+                        if (path_inst->ternary_op == LVTernaryOp::Splice) {
+                            if (vt == NT_LIST) {
+                                QoreListNode* vl = lvh.getValue().get<QoreListNode>();
+                                if (length_val.isNothing() && replacement_val.isNothing()) {
+                                    removed_list = vl->splice(offset);
+                                } else {
+                                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                                    if (replacement_val.isNothing()) {
+                                        removed_list = vl->splice(offset, length);
+                                    } else {
+                                        removed_list = vl->splice(offset, length, replacement_val, xsink);
+                                    }
+                                }
+                            } else if (vt == NT_STRING) {
+                                QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
+                                if (length_val.isNothing() && replacement_val.isNothing()) {
+                                    vs->splice(offset, xsink);
+                                } else {
+                                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                                    if (replacement_val.isNothing()) {
+                                        vs->splice(offset, length, xsink);
+                                    } else {
+                                        vs->splice(offset, length, replacement_val, xsink);
+                                    }
+                                }
+                            } else { // NT_BINARY
+                                BinaryNode* b = lvh.getValue().get<BinaryNode>();
+                                if (length_val.isNothing() && replacement_val.isNothing()) {
+                                    b->splice(offset, b->size());
+                                } else {
+                                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                                    if (replacement_val.isNothing()) {
+                                        b->splice(offset, length);
+                                    } else {
+                                        if (replacement_val.getType() == NT_BINARY) {
+                                            const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
+                                            b->splice(offset, length, b1->getPtr(), b1->size());
+                                        } else {
+                                            QoreStringNodeValueHelper sv(replacement_val);
+                                            if (!sv->strlen()) {
+                                                b->splice(offset, length);
+                                            } else {
+                                                b->splice(offset, length, sv->getBuffer(), sv->size());
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if (path_inst->ref_rv && !*xsink) {
+                                res = lvh.getReferencedValue();
+                            }
+                        } else {
+                            if (vt == NT_LIST) {
+                                QoreListNode* vl = lvh.getValue().get<QoreListNode>();
+                                if (length_val.isNothing() && replacement_val.isNothing()) {
+                                    res = vl->extract(offset);
+                                } else {
+                                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                                    if (replacement_val.isNothing()) {
+                                        res = vl->extract(offset, length);
+                                    } else {
+                                        res = vl->extract(offset, length, replacement_val, xsink);
+                                    }
+                                }
+                            } else if (vt == NT_STRING) {
+                                // note: safe; lvh.ensureUnique() above materializes any inline
+                                // short string
+                                QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
+                                if (length_val.isNothing() && replacement_val.isNothing()) {
+                                    res = vs->extract(offset, xsink);
+                                } else {
+                                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                                    if (replacement_val.isNothing()) {
+                                        res = vs->extract(offset, length, xsink);
+                                    } else {
+                                        res = vs->extract(offset, length, replacement_val, xsink);
+                                    }
+                                }
+                            } else { // NT_BINARY
+                                BinaryNode* b = lvh.getValue().get<BinaryNode>();
+                                BinaryNode* bout = new BinaryNode;
+                                if (length_val.isNothing() && replacement_val.isNothing()) {
+                                    b->splice(offset, b->size(), bout);
+                                } else {
+                                    size_t length = static_cast<size_t>(length_val.getAsBigInt());
+                                    if (replacement_val.isNothing()) {
+                                        b->splice(offset, length, bout);
+                                    } else {
+                                        if (replacement_val.getType() == NT_BINARY) {
+                                            const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
+                                            b->splice(offset, length, b1->getPtr(), b1->size(), bout);
+                                        } else {
+                                            QoreStringNodeValueHelper sv(replacement_val);
+                                            if (!sv->strlen()) {
+                                                b->splice(offset, length, bout);
+                                            } else {
+                                                b->splice(offset, length, sv->getBuffer(), sv->size(), bout);
+                                            }
+                                        }
+                                    }
+                                }
+                                res = bout;
+                            }
+                        }
+                    }
+                    return *xsink ? -1 : 0;
+                };
+                int ternary_rc = run_ternary();
+                if (ternary_rc > 0) {
+                    // Lvalue doesn't exist — no-op, return NOTHING
+                    if (path_inst->result.isValid()) {
+                        setValueSlot(values, path_inst->result.id, QoreValue(), xsink);
+                    }
+                    ++ip;
+                    break;
+                }
+                if (ternary_rc < 0) {
+                    res.discard(xsink);
+                    res = QoreValue();
+                    if (xsink && *xsink && inst->exception_target) {
+                        cleanupValues(values, cleanup, xsink, true, cleanup_log);
+                        prev_block = block;
+                        block = inst->exception_target;
+                        ip = 0;
                         break;
                     }
-                    cleanupValues(values, cleanup, xsink, true, cleanup_log);
-                    cleanupLocalCaches();
-                    return false;
-                }
-                QoreValue res;
-                qore_type_t vt = lvh.getType();
-                if (vt == NT_NOTHING) {
-                    // Mirror AST behavior: if the lvalue has a default list/string type,
-                    // auto-initialize it before extract/splice.
-                    const QoreTypeInfo* ti = lvh.getTypeInfo();
-                    if (ti == softListTypeInfo || ti == listTypeInfo || ti == stringTypeInfo
-                            || ti == softStringTypeInfo) {
-                        if (!lvh.assign(QoreTypeInfo::getDefaultQoreValue(ti))) {
-                            vt = lvh.getType();
-                        }
-                    }
-                }
-                if (vt == NT_NOTHING) {
-                    // Nothing to extract/splice — return NOTHING
-                } else if (vt != NT_LIST && vt != NT_STRING && vt != NT_BINARY) {
-                    xsink->raiseException("EXTRACT-ERROR",
-                        "first (lvalue) argument to the extract operator is not a list, "
-                        "string, or binary object");
-                } else {
-                    lvh.ensureUnique();
-                    size_t offset = static_cast<size_t>(offset_val.getAsBigInt());
-                    if (path_inst->ternary_op == LVTernaryOp::Splice) {
-                        if (vt == NT_LIST) {
-                            QoreListNode* vl = lvh.getValue().get<QoreListNode>();
-                            if (length_val.isNothing() && replacement_val.isNothing()) {
-                                removed_list = vl->splice(offset);
-                            } else {
-                                size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                                if (replacement_val.isNothing()) {
-                                    removed_list = vl->splice(offset, length);
-                                } else {
-                                    removed_list = vl->splice(offset, length, replacement_val, xsink);
-                                }
-                            }
-                        } else if (vt == NT_STRING) {
-                            QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
-                            if (length_val.isNothing() && replacement_val.isNothing()) {
-                                vs->splice(offset, xsink);
-                            } else {
-                                size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                                if (replacement_val.isNothing()) {
-                                    vs->splice(offset, length, xsink);
-                                } else {
-                                    vs->splice(offset, length, replacement_val, xsink);
-                                }
-                            }
-                        } else { // NT_BINARY
-                            BinaryNode* b = lvh.getValue().get<BinaryNode>();
-                            if (length_val.isNothing() && replacement_val.isNothing()) {
-                                b->splice(offset, b->size());
-                            } else {
-                                size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                                if (replacement_val.isNothing()) {
-                                    b->splice(offset, length);
-                                } else {
-                                    if (replacement_val.getType() == NT_BINARY) {
-                                        const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
-                                        b->splice(offset, length, b1->getPtr(), b1->size());
-                                    } else {
-                                        QoreStringNodeValueHelper sv(replacement_val);
-                                        if (!sv->strlen()) {
-                                            b->splice(offset, length);
-                                        } else {
-                                            b->splice(offset, length, sv->getBuffer(), sv->size());
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        if (path_inst->ref_rv && !*xsink) {
-                            res = lvh.getReferencedValue();
-                        }
-                    } else {
-                        if (vt == NT_LIST) {
-                            QoreListNode* vl = lvh.getValue().get<QoreListNode>();
-                            if (length_val.isNothing() && replacement_val.isNothing()) {
-                                res = vl->extract(offset);
-                            } else {
-                                size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                                if (replacement_val.isNothing()) {
-                                    res = vl->extract(offset, length);
-                                } else {
-                                    res = vl->extract(offset, length, replacement_val, xsink);
-                                }
-                            }
-                        } else if (vt == NT_STRING) {
-                            // note: safe; lvh.ensureUnique() above materializes any inline
-                            // short string
-                            QoreStringNode* vs = lvh.getValue().get<QoreStringNode>();
-                            if (length_val.isNothing() && replacement_val.isNothing()) {
-                                res = vs->extract(offset, xsink);
-                            } else {
-                                size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                                if (replacement_val.isNothing()) {
-                                    res = vs->extract(offset, length, xsink);
-                                } else {
-                                    res = vs->extract(offset, length, replacement_val, xsink);
-                                }
-                            }
-                        } else { // NT_BINARY
-                            BinaryNode* b = lvh.getValue().get<BinaryNode>();
-                            BinaryNode* bout = new BinaryNode;
-                            if (length_val.isNothing() && replacement_val.isNothing()) {
-                                b->splice(offset, b->size(), bout);
-                            } else {
-                                size_t length = static_cast<size_t>(length_val.getAsBigInt());
-                                if (replacement_val.isNothing()) {
-                                    b->splice(offset, length, bout);
-                                } else {
-                                    if (replacement_val.getType() == NT_BINARY) {
-                                        const BinaryNode* b1 = replacement_val.get<const BinaryNode>();
-                                        b->splice(offset, length, b1->getPtr(), b1->size(), bout);
-                                    } else {
-                                        QoreStringNodeValueHelper sv(replacement_val);
-                                        if (!sv->strlen()) {
-                                            b->splice(offset, length, bout);
-                                        } else {
-                                            b->splice(offset, length, sv->getBuffer(), sv->size(), bout);
-                                        }
-                                    }
-                                }
-                            }
-                            res = bout;
-                        }
-                    }
-                }
-                if (*xsink) {
-                    res.discard(xsink);
                     cleanupValues(values, cleanup, xsink, true, cleanup_log);
                     cleanupLocalCaches();
                     return false;

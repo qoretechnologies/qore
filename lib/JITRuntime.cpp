@@ -5687,6 +5687,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
     ValueHolder val_holder(val.refSelf(), xsink);
     if (hv.getType() == NT_HASH) {
         QoreHashNode* h = hv.get<QoreHashNode>();
+        // check hashdecl key validity before copying or changing the hash, as an lvalue assignment does
+        if (qore_hash_private::get(*h)->checkLValueKey(key, xsink)) {
+            return toBits(QoreValue());
+        }
         // Keep RHS referenced before COW, matching QoreAssignmentOperatorNode.
         // This makes `h.b = h` copy the outer hash before storing the original.
         if (h->reference_count() > 1) {
@@ -5708,6 +5712,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow(
         // LValueHelper::doHashLValue() including hashdecl error behavior.
         QoreHashNode* new_h = qore_rt_make_implicit_hash_for_lvalue(var, xsink);
         if (!new_h) {
+            return toBits(QoreValue());
+        }
+        if (qore_hash_private::get(*new_h)->checkLValueKey(key, xsink)) {
+            new_h->deref(xsink);
             return toBits(QoreValue());
         }
         new_h->setKeyValue(key, val.refSelf(), xsink);
@@ -5735,6 +5743,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
     ValueHolder val_holder(val.refSelf(), xsink);
     if (hv.getType() == NT_HASH) {
         QoreHashNode* h = hv.get<QoreHashNode>();
+        // check hashdecl key validity before copying or changing the hash, as an lvalue assignment does
+        if (qore_hash_private::get(*h)->checkLValueKey(key, xsink)) {
+            return toBits(QoreValue());
+        }
         // Keep RHS referenced before COW, matching QoreAssignmentOperatorNode.
         // This makes `h.b = h` copy the outer hash before storing the original.
         if (h->reference_count() > 1) {
@@ -5760,6 +5772,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_hash_key_store_cow_aot(
             ? ctx->locals[local_slot] : nullptr;
         QoreHashNode* new_h = qore_rt_make_implicit_hash_for_lvalue(var, xsink);
         if (!new_h) {
+            return toBits(QoreValue());
+        }
+        if (qore_hash_private::get(*new_h)->checkLValueKey(key, xsink)) {
+            new_h->deref(xsink);
             return toBits(QoreValue());
         }
         new_h->setKeyValue(key, val.refSelf(), xsink);
@@ -13511,6 +13527,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     if (l && l->size() > 0) {
                         res = l->shift();
                     }
+                } else if (lvh.getType() != NT_NOTHING && runtime_check_parse_option(PO_STRICT_ARGS)) {
+                    // matches QoreShiftOperatorNode::evalImpl()
+                    xsink->raiseException("SHIFT-ERROR", "the lvalue argument to shift is type \"%s\"; "
+                        "expecting \"list\"", lvh.getTypeName());
                 }
                 break;
             case LVUnaryOp::Pop:
@@ -13520,6 +13540,10 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     if (l && l->size() > 0) {
                         res = l->pop();
                     }
+                } else if (lvh.getType() != NT_NOTHING && runtime_check_parse_option(PO_STRICT_ARGS)) {
+                    // matches QorePopOperatorNode::evalImpl()
+                    xsink->raiseException("POP-ERROR", "the lvalue argument to pop is type \"%s\"; "
+                        "expecting \"list\"", lvh.getTypeName());
                 }
                 break;
             case LVUnaryOp::Trim:

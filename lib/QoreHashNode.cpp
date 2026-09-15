@@ -173,8 +173,7 @@ int qore_hash_private::getLValue(const char* key, LValueHelper& lvh, bool for_re
     if (hashdecl) {
         const HashDeclMemberInfo* m = typed_hash_decl_private::get(*hashdecl)->findMember(key);
         if (!m) {
-            xsink->raiseException("INVALID-MEMBER", "'%s' is not a registered member of hashdecl '%s'", key,
-                hashdecl->getName());
+            checkLValueKey(key, xsink);
             lvh.clearPtr();
             return -1;
         }
@@ -418,6 +417,16 @@ QoreHashNode* qore_hash_private::newComplexHashFromHash(const QoreTypeInfo* type
     }
 
     return init.release();
+}
+
+int qore_hash_private::checkLValueKey(const char* key, ExceptionSink* xsink) const {
+    if (hashdecl && !typed_hash_decl_private::get(*hashdecl)->findMember(key)) {
+        xsink->raiseException("INVALID-MEMBER", "'%s' is not a registered member of hashdecl '%s'", key,
+            hashdecl->getName());
+        return -1;
+    }
+
+    return 0;
 }
 
 int qore_hash_private::checkKey(const char* key, ExceptionSink* xsink) const {

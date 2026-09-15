@@ -8210,6 +8210,26 @@ QoreIRValue QoreIRLowering::lowerXorEquals(const QoreValue& expr, std::string& e
     return result;
 }
 
+//! Returns true if a hash subscript of this container can raise an invalid hashdecl member error at runtime
+/** the load-compute-store fast paths for a pre-increment or pre-decrement read the member before storing it, so
+    they report an invalid member as a failed read, while an assignment (as the AST interpreter performs for the
+    whole operation) reports it as an invalid assignment target.  A container declared with a value type can never
+    hold a hashdecl hash, and a member named by a constant key in a declared hashdecl is checked when parsing, so
+    those cases keep the fast path
+*/
+static bool qore_ir_hash_subscript_may_raise_invalid_member(const VarRefNode* container_var, bool const_key) {
+    const QoreTypeInfo* ti = container_var ? container_var->getTypeInfo() : nullptr;
+    // hash<auto> accepts a hashdecl hash unchanged, so only a value type that rejects one rules it out
+    const QoreTypeInfo* value_type = QoreTypeInfo::getUniqueReturnComplexHash(ti);
+    if (value_type && value_type != autoTypeInfo) {
+        return false;
+    }
+    if (QoreTypeInfo::getUniqueReturnHashDecl(ti)) {
+        return !const_key;
+    }
+    return true;
+}
+
 QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string& error) {
     const AbstractQoreNode* node = expr.getInternalNode();
     auto* op = dynamic_cast<const QorePreIncrementOperatorNode*>(node);
@@ -8262,18 +8282,20 @@ QoreIRValue QoreIRLowering::lowerPreIncrement(const QoreValue& expr, std::string
         const VarRefNode* container_var = nullptr;
         std::string key_name;
         QoreValue key_expr;
-        if (isConstKeyHashSubscript(lvexp, container_var, key_name, key_expr)) {
+        if (isConstKeyHashSubscript(lvexp, container_var, key_name, key_expr)
+                && !qore_ir_hash_subscript_may_raise_invalid_member(container_var, true)) {
             QoreIRValue one = builder.createConstInt(1, op->loc)->result;
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 QoreIROpcode::AddAssignInt, one, expr, op->loc, error);
         }
-        if (isDynamicKeyHashSubscript(lvexp, container_var, key_expr)) {
+        if (isDynamicKeyHashSubscript(lvexp, container_var, key_expr)
+                && !qore_ir_hash_subscript_may_raise_invalid_member(container_var, false)) {
             QoreIRValue one = builder.createConstInt(1, op->loc)->result;
             return emitHashKeyDynamicCompoundOp(container_var, key_expr,
                 QoreIROpcode::AddAssignInt, one, expr, op->loc, error);
         }
     }
-    // Path-based unary for complex lvalues (member chains, nested subscripts)
+    // Path-based unary for complex lvalues
     {
         QoreIRValue path_result = tryEmitLValuePathOp(QoreIROpcode::LValuePathUnary,
             lvexp, nullptr, op->loc, error, false, LVCompoundOp::AddAssign, LVUnaryOp::PreInc);
@@ -8439,12 +8461,14 @@ QoreIRValue QoreIRLowering::lowerPreDecrement(const QoreValue& expr, std::string
         const VarRefNode* container_var = nullptr;
         std::string key_name;
         QoreValue key_expr;
-        if (isConstKeyHashSubscript(lvexp, container_var, key_name, key_expr)) {
+        if (isConstKeyHashSubscript(lvexp, container_var, key_name, key_expr)
+                && !qore_ir_hash_subscript_may_raise_invalid_member(container_var, true)) {
             QoreIRValue one = builder.createConstInt(1, op->loc)->result;
             return emitHashKeyCompoundOp(container_var, key_name, key_expr,
                 QoreIROpcode::SubAssignInt, one, expr, op->loc, error);
         }
-        if (isDynamicKeyHashSubscript(lvexp, container_var, key_expr)) {
+        if (isDynamicKeyHashSubscript(lvexp, container_var, key_expr)
+                && !qore_ir_hash_subscript_may_raise_invalid_member(container_var, false)) {
             QoreIRValue one = builder.createConstInt(1, op->loc)->result;
             return emitHashKeyDynamicCompoundOp(container_var, key_expr,
                 QoreIROpcode::SubAssignInt, one, expr, op->loc, error);
@@ -10144,6 +10168,9 @@ QoreIRValue QoreIRLowering::lowerExtract(const QoreValue& expr, std::string& err
             path_inst->loc = op->loc;
             // Copy ref_rv flag
             path_inst->ref_rv = op->needsReturnValue();
+            if (QoreIRBasicBlock* handler = getCurrentExceptionTarget()) {
+                path_inst->exception_target = handler;
+            }
             // Operands: [0]=offset, [1]=length, [2]=replacement, then dynamic key/index operands
             path_inst->operands.push_back(offset_val);
             path_inst->operands.push_back(length_val);
