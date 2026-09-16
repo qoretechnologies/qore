@@ -58,6 +58,34 @@ These rules determine the syntax tree for valid code:
 - `class` and `module` parse like any other identifier outside declarations,
   including named arguments, parameters, `::` paths and top-level statements.
 
+## Type names
+
+`lib/scanner.lpp` has no reserved type names: `int`, `string`, `hash`, `data`,
+`timeout` and the other built-in type names are identifiers that the parser
+resolves as types. The grammar has keyword tokens for them, listed in
+`TYPE_NAMES` in `grammar.js`, so that it can parse types. They are also valid in
+two other places:
+
+- `_type_keyword`, an expression such as the call `int("1")` or the variable
+  `data`
+- `_declared_name`, the name of a declaration, aliased to `identifier`, as in
+  `our int;`, `const hash = {};`, `sub f(data) {}`, `class C { data() {} }`,
+  `foreach my int in (l)`, `catch (int)` and `my (int, data) = l;`
+
+After a type, a type name can only be the declared name. Without a type, the
+token after the name decides: `our int;` declares `int`, and `our int x;`
+declares `x`. The GLR conflicts for this are listed together in `grammar.js`.
+Without a type or a `my`, `our` or `thread_local` keyword, a type name is an
+expression, as in the runtime: `data += 1;` assigns and `code(a, b);` calls, so
+the untyped local declarator only accepts an `identifier`. A type before `sub`
+makes a closure with a return type, as in `hash<auto> sub () {}`, rather than
+comparisons, and `instanceof` is always followed by a type.
+
+`examples/test/modules/astparser/declarations.qtest` checks the declarations
+that the runtime accepts with type names and some that it rejects.
+
+## Changing and testing the keyword rules
+
 When `lib/scanner.lpp` changes these rules, update the table in `src/scanner.c`,
 keeping it sorted, and the keyword lists in both tests. Then regenerate
 `parser.c`, `grammar.json` and `node-types.json` with Node 24 and

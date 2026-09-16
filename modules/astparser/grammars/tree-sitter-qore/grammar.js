@@ -9,6 +9,15 @@
 /// <reference types="tree-sitter-cli/dsl" />
 // @ts-check
 
+// lib/scanner.lpp has no reserved type names: these are identifiers that name built-in types
+const TYPE_NAMES = [
+  'string', 'int', 'float', 'number', 'bool', 'binary', 'date',
+  'char', 'list', 'hash', 'softint', 'softfloat', 'softnumber', 'softbool',
+  'softstring', 'softchar', 'softdate', 'softlist', 'timeout',
+  'object', 'code', 'reference', 'nothing', 'any', 'auto', 'data',
+  'union',
+];
+
 const PREC = {
   // Operator precedence (based on Qore's parser)
   COMMA: 1,
@@ -64,46 +73,46 @@ module.exports = grammar({
   conflicts: $ => [
     [$.hash_literal, $.block],
     [$.hash_literal, $._statement],
-    [$.variable_declarator, $.primary_expression],
+    [$._untyped_variable_declarator, $.primary_expression],
     [$.parenthesized_expression, $.list_literal],
     [$.list_literal, $.paren_hash_literal],
-    [$.function_declaration, $.closure_expression],
     [$.function_declaration, $.primary_expression, $.generic_type],
     [$.argument_list, $.parameter_list],
-    [$.parameter, $.primary_expression],
     [$._statement, $._top_level_item],
     [$.module_spec],
-    // list_assignment conflicts with expressions starting with '('
-    [$.list_assignment, $.primary_expression],
     // type keywords as expressions conflict with type usage
     [$._type_keyword, $.complex_type],
     [$._type_keyword, $.simple_type],
     [$.simple_type, $.complex_type],
     [$.simple_type, $.generic_type],
     [$.type_parameter, $.simple_type],
-    [$._type_keyword, $.simple_type, $.complex_type],
     // case < identifier could be comparison value or start of <Type> cast
     [$.primary_expression, $.simple_type],
     [$.primary_expression, $.generic_type],
     [$.generic_type, $.generic_scoped_identifier],
     [$.generic_scoped_identifier, $.scoped_identifier],
-    [$.primary_expression, $.simple_type, $.generic_type],
     // conditional_declaration in if/while vs as primary_expression
     [$.if_statement, $.primary_expression],
     [$.while_statement, $.primary_expression],
-    // conditional_declaration vs local_variable_declaration
-    [$.variable_declarator, $.conditional_declaration],
-    [$.parameter, $.conditional_declaration],
-    // @debug(type var) vs @debug (expression) and list_assignment
-    [$.debug_statement, $.list_assignment, $.primary_expression],
     // map/select optional filter comma vs enclosing comma (hash/list trailing comma)
     [$.map_expression],
     [$.select_expression],
     [$.simple_type, $.streaming_terminal_expression],
     [$._type_keyword, $.streaming_keyword_identifier, $.streaming_terminal_expression],
-    [$._type_keyword, $.streaming_keyword_identifier, $.streaming_terminal_expression, $.simple_type],
     [$._type_keyword, $.streaming_keyword_identifier],
     [$._type_keyword, $.streaming_keyword_identifier, $.simple_type],
+    // a declared name vs an expression: local declarations, parameters and lists of declarations, such as
+    // (int a, b) = ..., vs expressions starting with a name or "("
+    [$.primary_expression, $._declared_name],
+    [$.conditional_declaration, $._declared_name],
+    // @debug(type var) vs @debug (expression) and a list of declarations
+    [$.debug_statement, $._declared_name],
+    [$.debug_statement, $.primary_expression, $._declared_name],
+    // a type name as an expression, the name of an untyped declaration or the start of a type
+    [$._type_keyword, $._declared_name],
+    [$._declared_name, $.generic_type],
+    [$._declared_name, $.complex_type],
+    [$._type_keyword, $._declared_name, $.streaming_keyword_identifier],
     [$.streaming_keyword_identifier, $.streaming_terminal_expression],
     [$.streaming_keyword_identifier, $.streaming_limited_expression],
     [$.streaming_keyword_identifier, $.streaming_boundary_expression],
@@ -430,7 +439,7 @@ module.exports = grammar({
     member_declaration: $ => seq(
       optional($.modifiers),
       field('type', optional($.type)),
-      field('name', $.identifier),
+      field('name', $._declared_name),
       optional(choice(
         seq('=', field('default', $._expression)),
         $.argument_list,  // constructor arguments: static Mutex m();
@@ -441,7 +450,7 @@ module.exports = grammar({
     method_declaration: $ => prec.dynamic(1, seq(
       optional($.modifiers),
       optional(field('return_type', $.type)),
-      field('name', $.identifier),
+      field('name', $._declared_name),
       optional(field('type_parameters', $.type_parameter_list)),
       $.parameter_list,
       optional($.method_qualifier),
@@ -478,9 +487,12 @@ module.exports = grammar({
       optional($.modifiers),
       'copy',
       '(',
-      optional(choice(
-        seq(commaSep1($.parameter), optional(seq(',', '...'))),
-        '...',
+      optional(seq(
+        choice(
+          seq(commaSep1($.parameter), optional(seq(',', '...'))),
+          '...',
+        ),
+        optional(','),
       )),
       ')',
       choice(
@@ -501,19 +513,18 @@ module.exports = grammar({
     ),
 
     // ==================== Function ====================
+    // lib/parser.ypp: sub_def and scoped_sub_def, which require a block, and outofline_methoddef, which may end
+    // with ";" only after method modifiers
     function_declaration: $ => choice(
       seq(
         optional($.modifiers),
         optional(field('return_type', $.type)),
         'sub',
-        field('name', optional(choice($.identifier, $.scoped_identifier))),
+        field('name', choice($.identifier, $.scoped_identifier)),
         optional(field('type_parameters', $.type_parameter_list)),
         $.parameter_list,
         optional(seq('returns', field('returns', $.type))),
-        choice(
-          $.block,
-          ';',
-        ),
+        $.block,
       ),
       seq(
         optional($.modifiers),
@@ -523,22 +534,17 @@ module.exports = grammar({
         $.parameter_list,
         optional($.method_qualifier),
         optional(seq('returns', field('returns', $.type))),
-        choice(
-          $.block,
-          ';',
-        ),
+        $.block,
       ),
       seq(
-        optional($.modifiers),
+        $.modifiers,
         optional(field('return_type', $.type)),
-        field('name', $.identifier),
+        field('name', $.scoped_identifier),
         optional(field('type_parameters', $.type_parameter_list)),
         $.parameter_list,
+        optional($.method_qualifier),
         optional(seq('returns', field('returns', $.type))),
-        choice(
-          $.block,
-          ';',
-        ),
+        ';',
       ),
     ),
 
@@ -561,7 +567,7 @@ module.exports = grammar({
       optional($.modifiers),
       optional('const'),
       optional(field('type', $.type)),
-      field('name', $.identifier),
+      field('name', $._declared_name),
       optional(seq('=', field('default', $._expression))),
     ),
 
@@ -570,8 +576,8 @@ module.exports = grammar({
       optional($.modifiers),
       'const',
       choice(
-        seq(field('type', $.type), field('name', choice($.identifier, $.scoped_identifier))),
-        field('name', choice($.identifier, $.scoped_identifier)),
+        seq(field('type', $.type), field('name', choice($._declared_name, $.scoped_identifier))),
+        field('name', choice($._declared_name, $.scoped_identifier)),
       ),
       '=',
       field('value', $._expression),
@@ -593,25 +599,10 @@ module.exports = grammar({
       optional(seq(choice('=', '+=', ':='), field('value', $._expression))),
     ),
 
-    variable_declarator: $ => choice(
-      seq(
-        field('name', $.variable_name),
-        optional(seq(choice('=', '+=', ':='), field('value', $._expression))),
-      ),
-      // Object construction: identifier(args) or just identifier
-      // Also: hash member init: hash sd.type = 'event'
-      seq(
-        field('name', $.identifier),
-        optional(choice(
-          seq(choice('=', '+=', ':='), field('value', $._expression)),
-          $.argument_list,  // Constructor arguments
-          // Hash member init via dot notation: hash sd.member = value
-          // Also supports dynamic member: hash rv.(expr) = value
-          // Also supports string keys: hash res."DAV:href" = value
-          seq(repeat1(seq('.', choice($.identifier, $.string, seq('(', $._expression, ')')))), '=', field('value', $._expression)),
-        )),
-      ),
-    ),
+    variable_declarator: $ => variableDeclarator($, $._declared_name),
+
+    // lib/parser.ypp reads a type name without a declared type or scope as an expression, as in "data = 1;"
+    _untyped_variable_declarator: $ => variableDeclarator($, $.identifier),
 
     // ==================== Hashdecl ====================
     hashdecl_declaration: $ => seq(
@@ -777,7 +768,7 @@ module.exports = grammar({
       'foreach',
       optional('my'),
       optional(field('type', $.type)),
-      field('variable', $.identifier),
+      field('variable', $._declared_name),
       'in',
       '(',
       commaSep1($._expression),
@@ -836,7 +827,7 @@ module.exports = grammar({
       optional(seq(
         optional('my'),
         optional(field('type', $.type)),
-        field('parameter', choice($.identifier, $.variable_name)),
+        field('parameter', choice($._declared_name, $.variable_name)),
       )),
       ')',
       field('body', $._statement),
@@ -925,22 +916,29 @@ module.exports = grammar({
       field('body', $._statement),
     ),
 
+    // a read-only local variable requires a type in lib/parser.ypp
     local_variable_declaration: $ => prec.dynamic(2, seq(
-      optional('const'),
-      optional(field('type', $.type)),
-      commaSep1($.variable_declarator),
+      choice(
+        seq(optional('const'), field('type', $.type), commaSep1($.variable_declarator)),
+        commaSep1(alias($._untyped_variable_declarator, $.variable_declarator)),
+      ),
       ';',
     )),
 
-    // List destructuring assignment: (type1 var1, type2 var2) = expression;
-    // Also: my (type1 var1, type2 var2) = expression;
+    // A list of declarations: (type1 var1, type2 var2) = expression;
+    // with my, our or thread_local, the assignment is optional, and old-style variables may be declared:
+    // our (type1 var1, $var2);
     list_assignment: $ => seq(
-      optional('my'),
-      '(',
-      commaSep1(seq(optional($.type), $.identifier)),
-      ')',
-      '=',
-      $._expression,
+      choice(
+        seq(
+          choice('my', 'our', 'thread_local'),
+          '(',
+          commaSep1(seq(optional($.type), choice($._declared_name, $.variable_name))),
+          ')',
+          optional(seq('=', $._expression)),
+        ),
+        seq('(', commaSep1(seq(optional($.type), $._declared_name)), ')', '=', $._expression),
+      ),
       ';',
     ),
 
@@ -990,7 +988,8 @@ module.exports = grammar({
       prec.left(PREC.EQUALITY, seq($._expression, '!~', alias($._match_regex, $.regex))),
       // Comparison
       prec.left(PREC.COMPARISON, seq($._expression, choice('<', '>', '<=', '>=', '<=>'), $._expression)),
-      prec.left(PREC.COMPARISON, seq($._expression, 'instanceof', choice($.type, $._expression))),
+      // lib/parser.ypp: exp TOK_INSTANCEOF uncqtypedef
+      prec.left(PREC.COMPARISON, seq($._expression, 'instanceof', $.type)),
       // Shift
       prec.left(PREC.SHIFT, seq($._expression, choice('<<', '>>'), $._expression)),
       // Arithmetic
@@ -1089,16 +1088,11 @@ module.exports = grammar({
       $.argument_list,
     )),
 
-    // Type keywords that can also be used as variable names or cast functions.
-    // All simple type keywords are included so they can appear in expression context.
-    // 'union' is included because it is not a reserved word in Qore.
-    _type_keyword: $ => choice(
-      'string', 'int', 'float', 'number', 'bool', 'binary', 'date',
-      'char', 'list', 'hash', 'softint', 'softfloat', 'softnumber', 'softbool',
-      'softstring', 'softchar', 'softdate', 'softlist', 'timeout',
-      'object', 'code', 'reference', 'nothing', 'any', 'auto', 'data',
-      'union',
-    ),
+    // Type names used as variable names or cast functions in expressions
+    _type_keyword: $ => choice(...TYPE_NAMES),
+
+    // The name of a declaration, which may be a type name, as in "our int;"
+    _declared_name: $ => choice($.identifier, alias(choice(...TYPE_NAMES), $.identifier)),
 
     streaming_keyword_identifier: $ => choice(
       'iterate', 'first', 'any', 'all', 'count',
@@ -1201,11 +1195,19 @@ module.exports = grammar({
 
     parenthesized_expression: $ => seq('(', $._expression, ')'),
 
-    closure_expression: $ => seq(
-      optional(field('return_type', $.type)),
-      'sub',
-      $.parameter_list,
-      $.block,
+    closure_expression: $ => choice(
+      // lib/scanner.lpp reads a return type such as hash<auto> before "sub" as a type, not as comparisons
+      prec.dynamic(1, seq(
+        field('return_type', $.type),
+        'sub',
+        $.parameter_list,
+        $.block,
+      )),
+      seq(
+        'sub',
+        $.parameter_list,
+        $.block,
+      ),
     ),
 
     // Higher-order functions
@@ -1770,6 +1772,32 @@ module.exports = grammar({
  */
 function commaSep1(rule) {
   return seq(rule, repeat(seq(',', rule)));
+}
+
+/**
+ * Creates the rule for a variable declarator with the given name rule.
+ */
+function variableDeclarator($, name) {
+  return choice(
+    seq(
+      field('name', $.variable_name),
+      optional(seq(choice('=', '+=', ':='), field('value', $._expression))),
+    ),
+    // Object construction: identifier(args) or just identifier
+    // Also: hash member init: hash sd.type = 'event'
+    seq(
+      field('name', name),
+      optional(choice(
+        seq(choice('=', '+=', ':='), field('value', $._expression)),
+        $.argument_list,  // Constructor arguments
+        // Hash member init via dot notation: hash sd.member = value
+        // Also supports dynamic member: hash rv.(expr) = value
+        // Also supports string keys: hash res."DAV:href" = value
+        seq(repeat1(seq('.', choice($.identifier, $.string, seq('(', $._expression, ')')))), '=',
+          field('value', $._expression)),
+      )),
+    ),
+  );
 }
 
 /**

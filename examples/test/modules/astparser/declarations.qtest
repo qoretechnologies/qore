@@ -13,6 +13,10 @@ class DeclarationsTest inherits QUnit::Test {
     constructor() : QUnit::Test("astparser declarations", "1.0") {
         addTestCase("Catch clauses", \catchClauses());
         addTestCase("Parameter lists", \parameterLists());
+        addTestCase("Type names as declared names", \typeNames());
+        addTestCase("Lists of declarations", \declarationLists());
+        addTestCase("Function declarations and top-level calls", \functionDeclarations());
+        addTestCase("Type names in expressions", \typeNameExpressions());
         set_return_value(main());
     }
 
@@ -65,6 +69,142 @@ class DeclarationsTest inherits QUnit::Test {
             "sub f(int a,, ,) {",
             "sub f(int a string b) {}",
         ));
+    }
+
+    typeNames() {
+        # lib/scanner.lpp has no reserved type names, so an untyped declaration may be named with one
+        checkValid((
+            "our int;",
+            "our data;",
+            "our timeout = 1;",
+            "thread_local list;",
+            "public const int = 1;",
+            "const hash = {};",
+            "namespace N { const data = 1; }",
+            "class C { const int = 1; }",
+            "class C { public { data; } }",
+            "class C { private:internal { list; } }",
+            "class C { data() {} }",
+            "class C { int() {} }",
+            "class C { copy(C old,) {} }",
+            "sub f(string) {}",
+            "sub f(data, int) {}",
+            "sub f() { code c = sub (data) {}; }",
+            "sub f() { my int = 1; my data = 2; my timeout; }",
+            "sub f() { my list = (1,); my hash = {}; my code = sub () {}; }",
+            "sub f() { foreach my int in (1) {} }",
+            "sub f() { try { g(); } catch (int) {} }",
+            "sub f() { my (int, data) = (1, 2); }",
+            # a type name as a name after a type
+            "our int int;",
+            "sub f(*int int, string string = \"\") {}",
+            "class C { string string() { return \"\"; } }",
+            "sub f() { foreach string string in (\"a\") {} }",
+        ));
+        checkInvalid((
+            "our int",
+            "sub f(int string string) {}",
+            "sub f() { my int int int; }",
+            "const int = ;",
+            "class C { public { int; data } }",
+        ));
+    }
+
+    declarationLists() {
+        # a list of declarations with my, our or thread_local needs no assignment
+        checkValid((
+            "our (a, b);",
+            "our (int a, string b);",
+            "our (int a, string b) = (1, \"x\");",
+            "our (a, b) = (1, 2);",
+            "thread_local (a, b);",
+            "sub f() { my (a, b); }",
+            "sub f() { my (int a, b) = (1, 2); }",
+            "sub f() { (int a, string b) = (1, \"x\"); }",
+        ));
+        checkValid((
+            "our ($a, $b);",
+            "sub f() { my ($a, int $b) = (1, 2); }",
+        ), 0);
+        checkInvalid((
+            "our ();",
+            "our (a, b) = ;",
+            "sub f() { my (1, b); }",
+            "sub f() { my (a, b) }",
+        ));
+    }
+
+    functionDeclarations() {
+        # a function needs "sub" and a block; a name followed by arguments and ";" is a call
+        hash<string, list<string>> sources = {
+            "sub k(auto x) {}\nk(1);\n": ("function_declaration", "expression_statement"),
+            "class C { static m() {} }\nC::m();\n": ("class_declaration", "expression_statement"),
+            "class C { static m() {} }\nC::m() {}\n": ("class_declaration", "function_declaration"),
+            "public sub foo() {}\n": ("function_declaration",),
+            "namespace N { sub foo() {} }\n": ("namespace_declaration",),
+        };
+        foreach hash<auto> i in (sources.pairIterator()) {
+            AstParser parser();
+            AstTree tree = parser.parseString(i.key);
+            assertEq(0, parser.getErrorCount(), i.key);
+            assertEq(i.value, map $1.type, tree.getNodesInfo(), i.key);
+        }
+        checkValid(("sub k(auto x) {}\nk(1);", "class C { static m() {} }\nC::m();",
+            "public sub foo() {}", "namespace N { sub foo() {} }"));
+        checkInvalid(("foo() {}", "int foo() { return 1; }", "sub foo();", "namespace N { foo() {} }",
+            "sub () {}"));
+    }
+
+    typeNameExpressions() {
+        # without a type or a scope keyword, a type name is an expression, as in lib/parser.ypp
+        string source = "sub code(auto a, auto b) {}
+class C {}
+list<auto> sub f(object o) {
+    string data = \"\";
+    data += \"x\";
+    code(1, 2);
+    code c = hash<auto> sub (int first) { int last = first + 1; return {\"last\": last}; };
+    return (o instanceof C ? 1 : 2, c);
+}
+";
+        checkValid((source,));
+
+        AstParser parser();
+        AstTree tree = parser.parseString(source);
+        assertEq(0, parser.getErrorCount());
+        list<hash<auto>> nodes = tree.getNodesInfo();
+        assertEq(("function_declaration", "class_declaration", "function_declaration"), map $1.type, nodes);
+        hash<auto> body = findNodes(nodes[2].children, "block")[0];
+        assertEq(("local_variable_declaration", "expression_statement", "expression_statement",
+            "local_variable_declaration", "return_statement"), map $1.type, body.children);
+        assertEq("assignment_expression", body.children[1].children[0].type);
+        assertEq("call_expression", findNodes(body.children[2].children, "call_expression")[0].type);
+
+        # the closure has a return type, and "first + 1" adds to the parameter
+        list<hash<auto>> closures = findNodes(body.children[3].children, "closure_expression");
+        assertEq(1, closures.size());
+        assertEq(1, findNodes(closures[0].children, "complex_type").size());
+        assertEq(1, findNodes(closures[0].children, "binary_expression").size());
+        assertEq((), findNodes(closures[0].children, "streaming_terminal_expression"));
+
+        # instanceof takes a type
+        list<hash<auto>> ternaries = findNodes(body.children[4].children, "ternary_expression");
+        assertEq(1, ternaries.size());
+        list<hash<auto>> instanceofs = findNodes(ternaries[0].children, "binary_expression");
+        assertEq("type", instanceofs[0].children[1].type);
+    }
+
+    private static list<hash<auto>> findNodes(list<auto> nodes, string type) {
+        list<hash<auto>> rv = ();
+        foreach hash<auto> node in (nodes) {
+            if (node.type == type) {
+                rv += node;
+            }
+            if (node.children) {
+                rv += findNodes(node.children, type);
+            }
+        }
+        return rv;
     }
 
     private checkValid(list<string> sources, int options = PO_NEW_STYLE) {
