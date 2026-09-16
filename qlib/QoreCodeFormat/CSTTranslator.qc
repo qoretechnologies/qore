@@ -1053,7 +1053,9 @@ public class CSTTranslator {
         # Find variable_declarator children
         list<hash<auto>> declarators = findAllType(node, "variable_declarator");
         if (declarators.size() == 1) {
-            *hash<auto> nameNode = findField(declarators[0], "name");
+            hash<auto> declarator = declarators[0];
+            *hash<auto> nameNode = findField(declarator, "name");
+            *hash<auto> valueNode = findField(declarator, "value");
             hash<auto> result = {
                 "nodetype": ANT_Declaration,
                 "kind": ADK_Variable,
@@ -1063,13 +1065,27 @@ public class CSTTranslator {
             if (exists mods) {
                 result.modifiers = mods;
             }
+            # The our, my or thread_local keyword is an anonymous token before the type or name
+            *string scope = (extractTextBeforeChild(node, typeNode ?? declarator)
+                =~ x/(?:^|\s)(our|my|thread_local)(?:\s|$)/)[0];
+            if (exists scope) {
+                result.scope = scope;
+            }
             if (exists typeNode) {
                 result.typeName = {"name": extractText(typeNode)};
+            }
+            # Only a name with an optional value is formatted; a declarator with constructor arguments or a
+            # member path is emitted as written
+            if (!exists nameNode || declarator.children.size() != (exists valueNode ? 2 : 1)) {
+                result.verbatim = True;
+            } else if (exists valueNode) {
+                result.assignOp = extractBinaryOp(declarator, nameNode, valueNode);
+                result.value = translateExpression(valueNode);
             }
             return result;
         }
 
-        # Multiple declarators: ADK_VarList
+        # Multiple declarators: ADK_VarList, which is emitted as written
         hash<auto> result = {
             "nodetype": ANT_Declaration,
             "kind": ADK_VarList,

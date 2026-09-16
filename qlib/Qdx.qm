@@ -2159,7 +2159,7 @@ string doxygen_output = proc.process();
 
             string typeName = var.typeName && var.typeName.name ? var.typeName.name : "auto";
             string varDecl = "";
-            if (var.modifiers && var.modifiers =~ /our/) {
+            if (var.scope == "our") {
                 varDecl += "extern ";
             }
             varDecl += formatType(typeName) + " " + var.name.name + ";";

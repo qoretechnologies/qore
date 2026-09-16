@@ -721,6 +721,9 @@ public class CodeFormatter {
             case ADK_Variable:
                 emitVariableDecl(node);
                 break;
+            case ADK_VarList:
+                emitVerbatimDecl(node);
+                break;
             case ADK_Hash:
                 emitHashDecl(node);
                 break;
@@ -1285,8 +1288,19 @@ public class CodeFormatter {
         }
     }
 
+    #! Emit a declaration as written, for forms that the formatter does not model
+    private emitVerbatimDecl(hash<auto> node) {
+        emitter.emitLine(extractSourceText(node.loc));
+        # The emitted source text includes any comments within the declaration
+        skipCommentsInRange(node.loc.start_line + 1, node.loc.end_line + 1);
+    }
+
     #! Emit variable declaration
     private emitVariableDecl(hash<auto> node) {
+        if (node.verbatim) {
+            emitVerbatimDecl(node);
+            return;
+        }
         string mods = getModifierStr(node.modifiers);
         string name = node.name.name;
 
@@ -1294,11 +1308,22 @@ public class CodeFormatter {
         if (mods != "") {
             line += mods + " ";
         }
+        if (exists node.scope) {
+            line += node.scope + " ";
+        }
         if (exists node.typeName && exists node.typeName.name && node.typeName.name != "") {
             line += node.typeName.name + " ";
         }
         line += name;
-        emitter.emitLine(line + ";");
+        if (!exists node.value) {
+            emitter.emitLine(line + ";");
+            return;
+        }
+        emitExprLine(line + " " + node.assignOp + " ", node.value, ";");
+        # Skip comments within the declaration's source range, which source-extracted value text may include
+        if (exists node.loc) {
+            skipCommentsInRange(node.loc.start_line + 1, node.loc.end_line + 1);
+        }
     }
 
     #! Emit hashdecl declaration

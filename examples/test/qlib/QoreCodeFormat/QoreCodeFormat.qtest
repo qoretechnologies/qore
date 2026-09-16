@@ -3,6 +3,8 @@
 # Copyright (C) 2026 Qore Technologies, s.r.o.
 
 %modern
+# the formatted source is also run in a child program with top-level statements
+%no-child-restrictions
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
 %prepend-module-path "${SCRIPT_DIR}/../../../../build/modules/astparser"
@@ -60,6 +62,7 @@ class QoreCodeFormatTest inherits QUnit::Test {
         addTestCase("single-item list literals", \testSingleItemListLiterals());
         addTestCase("streaming operators", \testStreamingOperators());
         addTestCase("find modifiers", \testFindModifiers());
+        addTestCase("global variable declarations", \testGlobalVariables());
 
         set_return_value(main());
     }
@@ -1342,6 +1345,58 @@ sub legacy_find(hash<auto> data) {
         assertRegex("no-find-modifiers directive preserved", "^%no-find-modifiers$", legacyResult);
         assertRegex("legacy find preserved", "auto id = find %id in data where \\(%name == \"root\"\\);",
             legacyResult);
+    }
+
+    testGlobalVariables() {
+        # strong encapsulation in %modern would reject the scoped global variables
+        string src = "namespace N {
+    our int x;
+    thread_local string y;
+}
+
+class Foo {
+    public {
+        int v = 1;
+    }
+
+    constructor() {
+    }
+}
+
+our int ::g = 6;
+our int N::h = 2;
+our Foo ::f = new Foo();
+my int m = 3;
+our int sum = 10 + 20;
+our int total += 4;
+our hash h.b = 5;
+our Foo foo();
+our Foo weak := ::f;
+thread_local int t = 7;
+
+int sub run() {
+    return ::g + N::h + ::f.v + m + sum + total + h.b + foo.v + weak.v + t;
+}
+";
+        QoreCodeFormat::CodeFormatter fmt();
+        string result = fmt.format(src);
+        list<string> lines = map trim($1), result.split("\n");
+        foreach string decl in ("our int x;", "thread_local string y;", "our int ::g = 6;", "our int N::h = 2;",
+                "our Foo ::f = new Foo();", "my int m = 3;", "our int sum = 10 + 20;", "our int total += 4;",
+                "our hash h.b = 5;", "our Foo foo();", "our Foo weak := ::f;", "thread_local int t = 7;") {
+            assertTrue(lines.contains(decl), decl);
+        }
+
+        QoreCodeFormat::CodeFormatter fmt2();
+        assertEq(result, fmt2.format(result), "global variable declaration idempotency");
+
+        # the formatted program keeps the meaning of the original program
+        foreach string source in ((src, result)) {
+            Program p(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_ALLOW_WEAK_REFERENCES);
+            p.parse(source, "global variables");
+            p.run();
+            assertEq(60, p.callFunction("run"), "formatted global variables keep their values");
+        }
     }
 
     private assertRegex(string label, string pattern, string text) {

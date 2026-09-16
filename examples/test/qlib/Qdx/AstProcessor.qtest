@@ -39,6 +39,7 @@ public class AstProcessorTests inherits QUnit::Test {
         addTestCase("Hashdecl processing", \testHashdeclBasic());
         addTestCase("Function processing", \testFunctionBasic());
         addTestCase("Constant processing", \testConstantBasic());
+        addTestCase("Global variable processing", \testGlobalVariables());
         addTestCase("Doc comment conversion", \testDocCommentConversion());
         addTestCase("Block comment handling", \testBlockComments());
         addTestCase("Soft type formatting", \testSoftTypeFormatting());
@@ -118,6 +119,22 @@ public class AstProcessorTests inherits QUnit::Test {
         string output = processCode(code);
 
         assertTrue(output =~ /myFunc\(\);/, "function declaration");
+    }
+
+    testGlobalVariables() {
+        string code = "namespace N {
+#! the counter
+our int counter;
+#! the per-thread value
+thread_local string value;
+#! the connection
+our Foo conn();
+}";
+        string output = processCode(code);
+
+        assertTrue(output =~ /extern int counter;/, "our variable is documented as extern: " + output);
+        assertTrue(output =~ /(?:^|\n)\s*string value;/, "thread_local variable is not extern: " + output);
+        assertTrue(output =~ /extern Foo conn;/, "variable with constructor arguments is documented: " + output);
     }
 
     testConstantBasic() {
