@@ -18,6 +18,9 @@ enum TokenType {
     MODULE_KEYWORD,
     // matched by the generated lexer
     NEWLINE,
+    DIRECTIVE_ARGUMENT,
+    DEFINE_VALUE,
+    SAME_LINE,
     TOKEN_COUNT,
 };
 
@@ -217,6 +220,28 @@ static bool keyword_token(TSLexer* lexer, const bool* valid_symbols) {
     return false;
 }
 
+/* Matches the rest of a directive line after spaces and tabs, as lib/scanner.lpp reads directive arguments, ending
+ * the token after the last character that is not a space or tab. A directive argument may not start with a quote,
+ * which starts a string instead, and neither argument may start with a comment.
+ */
+static bool rest_of_line(TSLexer* lexer, bool quote) {
+    while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+        lexer->advance(lexer, true);
+    }
+    int32_t c = lexer->lookahead;
+    if (lexer->eof(lexer) || c == '\n' || c == '\r' || c == '#' || (!quote && (c == '"' || c == '\''))) {
+        return false;
+    }
+    while (!lexer->eof(lexer) && lexer->lookahead != '\n' && lexer->lookahead != '\r') {
+        bool blank = lexer->lookahead == ' ' || lexer->lookahead == '\t';
+        lexer->advance(lexer, false);
+        if (!blank) {
+            lexer->mark_end(lexer);
+        }
+    }
+    return true;
+}
+
 /* The grammar has already consumed the opening brace. No allocation or shared
  * state is needed; every successful iteration consumes source input.
  */
@@ -279,6 +304,26 @@ bool tree_sitter_qore_external_scanner_scan(void* payload, TSLexer* lexer, const
         }
     }
     if (type == TOKEN_COUNT) {
+        // an empty token before a directive argument, which lib/scanner.lpp reads from the same line
+        if (valid_symbols[SAME_LINE]) {
+            while (lexer->lookahead == ' ' || lexer->lookahead == '\t') {
+                lexer->advance(lexer, true);
+            }
+            if (lexer->eof(lexer) || lexer->lookahead == '\n' || lexer->lookahead == '\r') {
+                return false;
+            }
+            lexer->mark_end(lexer);
+            lexer->result_symbol = SAME_LINE;
+            return true;
+        }
+        // a directive argument is only valid right after its directive, where no brace token is valid
+        if (valid_symbols[DIRECTIVE_ARGUMENT] || valid_symbols[DEFINE_VALUE]) {
+            bool define = valid_symbols[DEFINE_VALUE];
+            if (rest_of_line(lexer, define)) {
+                lexer->result_symbol = define ? DEFINE_VALUE : DIRECTIVE_ARGUMENT;
+                return true;
+            }
+        }
         return keyword_token(lexer, valid_symbols);
     }
     if (!body(lexer)) {

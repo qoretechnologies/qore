@@ -3931,6 +3931,10 @@
           "named": true
         },
         {
+          "type": "module_path",
+          "named": true
+        },
+        {
           "type": "scoped_identifier",
           "named": true
         }
@@ -4476,6 +4480,10 @@
       "required": false,
       "types": [
         {
+          "type": "directive_argument",
+          "named": true
+        },
+        {
           "type": "identifier",
           "named": true
         },
@@ -4489,6 +4497,10 @@
         },
         {
           "type": "string",
+          "named": true
+        },
+        {
+          "type": "variable_name",
           "named": true
         }
       ]
@@ -7154,6 +7166,18 @@
     "named": false
   },
   {
+    "type": "%allow-reparse",
+    "named": false
+  },
+  {
+    "type": "%allow-returns",
+    "named": false
+  },
+  {
+    "type": "%allow-statement-no-effect",
+    "named": false
+  },
+  {
     "type": "%allow-weak-references",
     "named": false
   },
@@ -7171,6 +7195,122 @@
   },
   {
     "type": "%assume-local",
+    "named": false
+  },
+  {
+    "type": "%broken-auto-cast",
+    "named": false
+  },
+  {
+    "type": "%broken-cast",
+    "named": false
+  },
+  {
+    "type": "%broken-int-assignments",
+    "named": false
+  },
+  {
+    "type": "%broken-list-parsing",
+    "named": false
+  },
+  {
+    "type": "%broken-list-range",
+    "named": false
+  },
+  {
+    "type": "%broken-logic-precedence",
+    "named": false
+  },
+  {
+    "type": "%broken-loop-statement",
+    "named": false
+  },
+  {
+    "type": "%broken-namespace-resolution",
+    "named": false
+  },
+  {
+    "type": "%broken-narrowed-types",
+    "named": false
+  },
+  {
+    "type": "%broken-operators",
+    "named": false
+  },
+  {
+    "type": "%broken-range",
+    "named": false
+  },
+  {
+    "type": "%broken-references",
+    "named": false
+  },
+  {
+    "type": "%broken-soft-types",
+    "named": false
+  },
+  {
+    "type": "%broken-sprintf",
+    "named": false
+  },
+  {
+    "type": "%broken-varargs",
+    "named": false
+  },
+  {
+    "type": "%correct-cast",
+    "named": false
+  },
+  {
+    "type": "%correct-int-assignments",
+    "named": false
+  },
+  {
+    "type": "%correct-list-parsing",
+    "named": false
+  },
+  {
+    "type": "%correct-list-range",
+    "named": false
+  },
+  {
+    "type": "%correct-logic-precedence",
+    "named": false
+  },
+  {
+    "type": "%correct-loop-statement",
+    "named": false
+  },
+  {
+    "type": "%correct-namespace-resolution",
+    "named": false
+  },
+  {
+    "type": "%correct-narrowed-types",
+    "named": false
+  },
+  {
+    "type": "%correct-operators",
+    "named": false
+  },
+  {
+    "type": "%correct-range",
+    "named": false
+  },
+  {
+    "type": "%correct-references",
+    "named": false
+  },
+  {
+    "type": "%correct-soft-types",
+    "named": false
+  },
+  {
+    "type": "%correct-sprintf",
+    "named": false
+  },
+  {
+    "type": "%correct-varargs",
     "named": false
   },
   {
@@ -7198,11 +7338,31 @@
     "named": false
   },
   {
+    "type": "%fp-fast-math",
+    "named": false
+  },
+  {
     "type": "%include",
     "named": false
   },
   {
+    "type": "%lock-options",
+    "named": false
+  },
+  {
+    "type": "%lock-warnings",
+    "named": false
+  },
+  {
     "type": "%lockdown",
+    "named": false
+  },
+  {
+    "type": "%loose-args",
+    "named": false
+  },
+  {
+    "type": "%loose-types",
     "named": false
   },
   {
@@ -7234,6 +7394,14 @@
     "named": false
   },
   {
+    "type": "%no-class-defs",
+    "named": false
+  },
+  {
+    "type": "%no-constant-defs",
+    "named": false
+  },
+  {
     "type": "%no-count",
     "named": false
   },
@@ -7255,6 +7423,10 @@
   },
   {
     "type": "%no-external-access",
+    "named": false
+  },
+  {
+    "type": "%no-external-info",
     "named": false
   },
   {
@@ -7294,7 +7466,15 @@
     "named": false
   },
   {
+    "type": "%no-module-path-directives",
+    "named": false
+  },
+  {
     "type": "%no-modules",
+    "named": false
+  },
+  {
+    "type": "%no-namespace-defs",
     "named": false
   },
   {
@@ -7314,6 +7494,10 @@
     "named": false
   },
   {
+    "type": "%no-reflection",
+    "named": false
+  },
+  {
     "type": "%no-stream-fusion",
     "named": false
   },
@@ -7323,6 +7507,14 @@
   },
   {
     "type": "%no-string-index-char",
+    "named": false
+  },
+  {
+    "type": "%no-subroutine-defs",
+    "named": false
+  },
+  {
+    "type": "%no-summarize",
     "named": false
   },
   {
@@ -7386,6 +7578,10 @@
     "named": false
   },
   {
+    "type": "%require-dollar",
+    "named": false
+  },
+  {
     "type": "%require-our",
     "named": false
   },
@@ -7402,6 +7598,10 @@
     "named": false
   },
   {
+    "type": "%set-time-zone",
+    "named": false
+  },
+  {
     "type": "%streaming-any",
     "named": false
   },
@@ -7415,6 +7615,14 @@
   },
   {
     "type": "%strict-types",
+    "named": false
+  },
+  {
+    "type": "%strict-warnings",
+    "named": false
+  },
+  {
+    "type": "%strong-encapsulation",
     "named": false
   },
   {
@@ -7780,6 +7988,10 @@
     "named": false
   },
   {
+    "type": "directive_argument",
+    "named": true
+  },
+  {
     "type": "do",
     "named": false
   },
@@ -7919,6 +8131,10 @@
   {
     "type": "module",
     "named": false
+  },
+  {
+    "type": "module_path",
+    "named": true
   },
   {
     "type": "my",

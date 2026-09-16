@@ -45,6 +45,13 @@ module.exports = grammar({
     // matched by the newline rule; listed so that src/scanner.c knows when a
     // newline is valid and leaves it to the generated lexer
     $.newline,
+    // the rest of a directive line, which lib/scanner.lpp reads as the
+    // argument; a quoted argument is a string, and a comment is not an argument
+    $.directive_argument,
+    // the rest of a %define line, which may be a quoted string
+    $._define_value,
+    // an empty token that requires a directive's argument on the same line
+    $._same_line,
   ],
 
   extras: $ => [
@@ -186,14 +193,15 @@ module.exports = grammar({
         '%enable-all-warnings',
         '%disable-all-warnings',
         // Module directives
-        seq('%requires', $.module_spec),
-        seq('%requires', '(', 'reexport', ')', $.module_spec),
-        seq('%try-module', $.module_spec),
-        seq('%try-reexport-module', $.module_spec),
-        seq('%try-child-module', $.module_spec),
+        seq('%requires', $._same_line, $.module_spec),
+        seq('%requires', $._same_line, '(', 'reexport', ')', $.module_spec),
+        seq('%try-module', $._same_line, optional($._try_module_variable), $.module_spec),
+        seq('%try-reexport-module', $._same_line, optional($._try_module_variable), $.module_spec),
+        seq('%try-child-module', $._same_line, $.module_spec),
         '%endtry',
-        // Define directive for conditional compilation
-        seq('%define', $.identifier),
+        // Define directive for conditional compilation, with an optional value
+        seq('%define', $._same_line, $.identifier, optional(alias($._define_value, $.directive_argument))),
+        seq('%set-time-zone', $.directive_argument),
         // Other common directives
         '%strict-args',
         '%allow-weak-references',
@@ -222,10 +230,60 @@ module.exports = grammar({
         '%no-negative-offsets',
         '%lockdown',
         '%modern',
-        seq('%append-include-path', $.string),
-        seq('%append-module-path', $.string),
-        seq('%prepend-module-path', $.string),
-        seq('%include', $.string),
+        // the include path and legacy module path forms are unquoted
+        seq('%append-include-path', $._same_line, choice($.string, $.directive_argument)),
+        seq('%append-module-path', $._same_line, choice($.string, $.directive_argument)),
+        seq('%prepend-module-path', $._same_line, $.string),
+        seq('%include', $._same_line, choice($.string, $.directive_argument)),
+        // Parse options without arguments that lib/scanner.lpp accepts
+        '%allow-reparse',
+        '%allow-returns',
+        '%allow-statement-no-effect',
+        '%broken-auto-cast',
+        '%broken-cast',
+        '%broken-int-assignments',
+        '%broken-list-parsing',
+        '%broken-list-range',
+        '%broken-logic-precedence',
+        '%broken-loop-statement',
+        '%broken-namespace-resolution',
+        '%broken-narrowed-types',
+        '%broken-operators',
+        '%broken-range',
+        '%broken-references',
+        '%broken-soft-types',
+        '%broken-sprintf',
+        '%broken-varargs',
+        '%correct-cast',
+        '%correct-int-assignments',
+        '%correct-list-parsing',
+        '%correct-list-range',
+        '%correct-logic-precedence',
+        '%correct-loop-statement',
+        '%correct-namespace-resolution',
+        '%correct-narrowed-types',
+        '%correct-operators',
+        '%correct-range',
+        '%correct-references',
+        '%correct-soft-types',
+        '%correct-sprintf',
+        '%correct-varargs',
+        '%fp-fast-math',
+        '%lock-options',
+        '%lock-warnings',
+        '%loose-args',
+        '%loose-types',
+        '%no-class-defs',
+        '%no-constant-defs',
+        '%no-external-info',
+        '%no-module-path-directives',
+        '%no-namespace-defs',
+        '%no-reflection',
+        '%no-subroutine-defs',
+        '%no-summarize',
+        '%require-dollar',
+        '%strict-warnings',
+        '%strong-encapsulation',
       ),
       optional($.newline),
     ),
@@ -256,7 +314,16 @@ module.exports = grammar({
     module_name: $ => choice(
       $.identifier,
       $.scoped_identifier,
+      $.module_path,
     ),
+
+    // A module file given by a relative or absolute path, such as
+    // ../../qlib/QUnit.qm
+    module_path: $ => /[^\s()<>=]*[.\/][^\s()<>=]*/,
+
+    // %try-module (ex) module: the variable that receives a load exception,
+    // followed by the module on the same line
+    _try_module_variable: $ => seq('(', choice($.variable_name, $.identifier), ')', $._same_line),
 
     // Module specification with optional version constraint
     // e.g., "qore >= 1.0.3", "json", "xml <= 2.0"

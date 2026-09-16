@@ -1,0 +1,184 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires astparser
+
+%exec-class ParseDirectivesTest
+
+class ParseDirectivesTest inherits QUnit::Test {
+    public {
+        #! Parse option directives without arguments that are not covered elsewhere
+        const Flags = (
+            "%allow-reparse", "%allow-returns", "%allow-statement-no-effect", "%broken-auto-cast", "%broken-cast",
+            "%broken-int-assignments", "%broken-list-parsing", "%broken-list-range", "%broken-logic-precedence",
+            "%broken-loop-statement", "%broken-namespace-resolution", "%broken-narrowed-types",
+            "%broken-operators", "%broken-range", "%broken-references", "%broken-soft-types", "%broken-sprintf",
+            "%broken-varargs", "%correct-cast", "%correct-int-assignments", "%correct-list-parsing",
+            "%correct-list-range", "%correct-logic-precedence", "%correct-loop-statement",
+            "%correct-namespace-resolution", "%correct-narrowed-types", "%correct-operators", "%correct-range",
+            "%correct-references", "%correct-soft-types", "%correct-sprintf", "%correct-varargs", "%fp-fast-math",
+            "%lock-options", "%lock-warnings", "%loose-args", "%loose-types", "%no-class-defs",
+            "%no-constant-defs", "%no-external-info", "%no-module-path-directives", "%no-namespace-defs",
+            "%no-reflection", "%no-subroutine-defs", "%no-summarize", "%require-dollar", "%strict-warnings",
+            "%strong-encapsulation",
+        );
+    }
+
+    constructor() : QUnit::Test("astparser parse directives", "1.0") {
+        addTestCase("Parse option directives match the runtime parser", \flags());
+        addTestCase("Module paths match the runtime parser", \modulePaths());
+        addTestCase("Directive arguments extend to the end of the line", \arguments());
+        addTestCase("Missing directive arguments are rejected", \invalid());
+        set_return_value(main());
+    }
+
+    private static list<hash<auto>> findNodes(list<auto> nodes, string type) {
+        list<hash<auto>> rv = ();
+        foreach hash<auto> node in (nodes) {
+            if (node.type == type) {
+                rv += node;
+            }
+            if (node.children) {
+                rv += findNodes(node.children, type);
+            }
+        }
+        return rv;
+    }
+
+    #! Parses @p source with AstParser, asserts that it has no errors and returns its nodes
+    private list<auto> parse(string source, string label) {
+        AstParser parser();
+        AstTree tree = parser.parseString(source);
+        assertEq(0, parser.getErrorCount(), sprintf("%s: %y", label, parser.getDiagnostics()));
+        return tree.getNodesInfo();
+    }
+
+    #! Parses and runs @p source with the runtime and returns the result of its run() function
+    /** the child program's parse options are not locked, so that directives can change them
+    */
+    private static auto run(string source, string label) {
+        Program runtime(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES | PO_NO_CHILD_PO_RESTRICTIONS);
+        runtime.parse(source, label);
+        return runtime.callFunction("run");
+    }
+
+    flags() {
+        foreach string flag in (Flags) {
+            string source;
+            string declaration = "function_declaration";
+            switch (flag) {
+                case "%no-subroutine-defs":
+                    source = "our int x = 1;";
+                    declaration = "global_variable_declaration";
+                    break;
+                default:
+                    source = "int sub run() { return 1; }";
+                    break;
+            }
+            source = flag + "\n" + source + "\n";
+            if (declaration == "function_declaration") {
+                assertEq(1, run(source, flag), flag);
+            } else {
+                Program runtime(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+                runtime.parse(source, flag);
+            }
+            list<auto> nodes = parse(source, flag);
+            assertEq(1, findNodes(nodes, "parse_directive").size(), flag);
+            assertEq(1, findNodes(nodes, declaration).size(), flag);
+        }
+    }
+
+    modulePaths() {
+        TmpDir dir("parse-directives-");
+        mkdir(dir.path + "/lib");
+        string mod = "%modern
+module RelativeDirectiveModule {
+    version = \"1.0\";
+    desc = \"test module\";
+    author = \"Qore Technologies, s.r.o.\";
+    url = \"https://qore.org\";
+}
+
+public namespace RelativeDirectiveModule {
+public int sub value() { return 5; }
+}
+";
+        File f();
+        f.open2(dir.path + "/lib/RelativeDirectiveModule.qm", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(mod);
+        f.close();
+
+        foreach string directive in ("%requires " + dir.path + "/lib/RelativeDirectiveModule.qm",
+                "%requires(reexport) " + dir.path + "/lib/RelativeDirectiveModule.qm",
+                "%try-module (ex) " + dir.path + "/lib/RelativeDirectiveModule.qm\n%endtry",
+                "%try-module(ex) " + dir.path + "/lib/RelativeDirectiveModule.qm >= 1.0\n%endtry",
+                "%try-reexport-module " + dir.path + "/lib/RelativeDirectiveModule.qm\n%endtry") {
+            string source = directive + "\nint sub run() { return RelativeDirectiveModule::value(); }\n";
+            assertEq(5, run(source, directive), directive);
+            list<auto> nodes = parse(source, directive);
+            assertEq(1, findNodes(nodes, "module_path").size(), directive);
+            assertEq(dir.path + "/lib/RelativeDirectiveModule.qm", findNodes(nodes, "module_path")[0].text,
+                directive);
+        }
+
+        # relative and module name forms, which depend on the current directory and module path
+        foreach string path in ("../../qlib/WSDL.qm", "./Local.qm", "QUnit.qm", "../x/y.qc") {
+            list<auto> nodes = parse("%requires " + path + "\nint x;\n", path);
+            assertEq((path,), map $1.text, findNodes(nodes, "module_path"));
+            assertEq(1, findNodes(nodes, "local_variable_declaration").size(), path);
+        }
+        foreach string name in ("json >= 1.3", "Foo::Bar", "QUnit") {
+            list<auto> nodes = parse("%requires " + name + "\n", name);
+            assertEq(0, findNodes(nodes, "module_path").size(), name);
+        }
+    }
+
+    arguments() {
+        TmpDir dir("parse-directives-");
+        File f();
+        f.open2(dir.path + "/inc.q", O_CREAT | O_WRONLY | O_TRUNC);
+        f.write("int sub included() { return 7; }\n");
+        f.close();
+
+        foreach string directive in ("%include " + dir.path + "/inc.q", "%include \"" + dir.path + "/inc.q\"") {
+            string source = directive + "\nint sub run() { return included(); }\n";
+            assertEq(7, run(source, directive), directive);
+            list<auto> nodes = parse(source, directive);
+            assertEq(1, findNodes(nodes, "function_declaration").size(), directive);
+        }
+
+        # an argument consumes the rest of its line only; AstParser evaluates %define lines itself, so their
+        # values are checked by the astparser-parse-directives-test grammar test
+        string source = "%set-time-zone   Europe/Prague \t\nint sub run() { return 1; }\n";
+        assertEq(1, run(source, "time zone"));
+        list<auto> nodes = parse(source, "time zone");
+        assertEq(("Europe/Prague",), map $1.text, findNodes(nodes, "directive_argument"));
+        assertEq(1, findNodes(nodes, "function_declaration").size());
+
+        # the legacy module path form changes the process module path, so only the parser is checked here
+        foreach string directive in ("%append-module-path /var/opt/qorus/qlib:$OMQ_DIR/qlib",
+                "%append-include-path ../include") {
+            list<auto> nodes = parse(directive + "\nint x;\n", directive);
+            assertEq(1, findNodes(nodes, "directive_argument").size(), directive);
+            assertEq(1, findNodes(nodes, "local_variable_declaration").size(), directive);
+        }
+    }
+
+    invalid() {
+        AstParser parser();
+        # an argument on the following line is not an argument
+        foreach string directive in ("%include", "%set-time-zone", "%requires", "%define",
+                "%try-module\njson\n%endtry", "%include\n\"file.q\"") {
+            string source = directive + "\nint sub run() { return 1; }\n";
+            Program runtime(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("PARSE-EXCEPTION", \runtime.parse(), (source, "invalid"), directive);
+            parser.parseString(source);
+            assertGt(0, parser.getErrorCount(), directive);
+        }
+    }
+}

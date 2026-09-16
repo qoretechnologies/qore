@@ -85,6 +85,8 @@ add_executable(astparser-brace-regex-test EXCLUDE_FROM_ALL test/brace-regex.c)
 target_link_libraries(astparser-brace-regex-test PRIVATE tree-sitter-qore-grammar tree-sitter-lib)
 add_executable(astparser-keyword-identifier-test EXCLUDE_FROM_ALL test/keyword-identifier.c)
 target_link_libraries(astparser-keyword-identifier-test PRIVATE tree-sitter-qore-grammar tree-sitter-lib)
+add_executable(astparser-parse-directives-test EXCLUDE_FROM_ALL test/parse-directives.c)
+target_link_libraries(astparser-parse-directives-test PRIVATE tree-sitter-qore-grammar tree-sitter-lib)
 
 # start of hacks to simulate installed QoreConfig.cmake
 # which cannot be available yet - the QORE_LIBRARY is missing
