@@ -863,14 +863,17 @@ public:
               api_major(mod_info.api_major), api_minor(mod_info.api_minor),
               module_init(mod_info.init), module_ns_init(mod_info.ns_init),
               module_delete(mod_info.del), module_parse_cmd(mod_info.parse_cmd),
-              info(info), dlptr(dlptr) {
+              info(info), dlptr(dlptr), feature(mod_info.name) {
     }
 
     DLLLOCAL virtual ~QoreBuiltinModule() {
-        printd(5, "QoreBuiltinModule::~QoreBuiltinModule() '%s': %s calling module_delete: %p\n", name.c_str(),
-            filename.c_str(), module_delete);
-        // Set the module context name so module_delete() can identify which module is being unloaded
-        const char* old_ctx_name = set_module_context_name(name.c_str());
+        printd(5, "QoreBuiltinModule::~QoreBuiltinModule() '%s' (feature '%s'): %s calling module_delete: %p\n",
+            name.c_str(), feature.c_str(), filename.c_str(), module_delete);
+        // Set the module context name so module_delete() can identify which module is being unloaded; this must be
+        // the feature name the module was initialized with and not its current name, which is changed when the
+        // module is replaced by a reinjection (see QoreModuleManager::reinjectModule()), while the module's own
+        // code (e.g. qore_aot_module_delete()) identifies its state by the feature name
+        const char* old_ctx_name = set_module_context_name(feature.c_str());
         module_delete();
         set_module_context_name(old_ctx_name);
         // we do not close binary modules because we may have thread local data that needs to be
@@ -910,6 +913,8 @@ protected:
     qore_module_parse_cmd_t module_parse_cmd;
     QoreHashNode* info;
     const void* dlptr;
+    //! the feature name the module was initialized with; unlike QoreAbstractModule::name, it is never renamed
+    const QoreString feature;
 
     DLLLOCAL virtual void addToProgramImpl(QoreProgram* pgm, ExceptionSink& xsink) const override;
 };

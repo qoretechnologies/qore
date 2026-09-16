@@ -1,0 +1,202 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires ../../../../../qlib/QUnit.qm
+%requires ../../../../../qlib/FsUtil.qm
+
+%exec-class AotModuleReinjectionTest
+
+#! Verifies that the originals of a reinjected module are torn down when the process exits
+/** Program::loadApplyToUserModule() with the reinject flag set replaces a loaded module with a new copy loaded
+    from source; the original is kept under a unique name and deleted when the process exits.  An AOT-compiled
+    original identifies its module Program by the feature name it was initialized with, so deleting it under its
+    unique name found nothing: its module Program was never torn down, and everything it owned was leaked.
+
+    The probe module registers a thread initialization closure from a constant initializer.  The closure belongs
+    to the Program that the initializer runs in, which is the module's own Program, and it holds an object that
+    reports its destruction.  Only the teardown of that Program destroys the object, so the probe process must
+    report one destruction for every registration: one for the original module and one for each reinjected copy.
+*/
+class AotModuleReinjectionTest inherits QUnit::Test {
+    public {
+        const ModuleName = "AotReinjectProbe";
+
+        #! printed by the probe module when it registers its thread initialization closure
+        const Created = "MARKER-CREATED";
+
+        #! printed by the probe module when the object held by the closure is destroyed
+        const Destroyed = "MARKER-DESTROYED";
+
+        #! printed by the probe script when it reaches its end
+        const Sentinel = "PROBE-COMPLETE";
+
+        #! the number of times the probe script reinjects the module
+        const Reinjections = 2;
+    }
+
+    private {
+        string qore_bin;
+        string qcc_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("AotModuleReinjectionTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+        qcc_bin = ENV.QCC ?? ENV.QORE_QCC ?? ENV.QORE_QCC_EXECUTABLE
+            ?? (is_file(libqore_dir + "/qcc") ? libqore_dir + "/qcc" : "qcc");
+
+        addTestCase("reinjected source module originals are torn down", \testSourceModule());
+        addTestCase("reinjected AOT module originals are torn down", \testAotModule());
+        set_return_value(main());
+    }
+
+    #! The probe module; its source is also what every reinjection loads
+    private string moduleSource() {
+        return "module " + ModuleName + " {\n"
+            "    version = \"1.0\";\n"
+            "    desc = \"reinjected module teardown probe\";\n"
+            "    author = \"Qore Technologies, s.r.o.\";\n"
+            "    license = \"MIT\";\n"
+            "}\n"
+            "\n"
+            "class AotReinjectProbeMarker {\n"
+            "    destructor() {\n"
+            "        printf(\"" + Destroyed + "\\n\");\n"
+            "    }\n"
+            "}\n"
+            "\n"
+            "bool sub aot_reinject_probe_register() {\n"
+            "    AotReinjectProbeMarker marker();\n"
+            "    printf(\"" + Created + "\\n\");\n"
+            "    # the closure belongs to the Program running this initializer and is released with it\n"
+            "    set_thread_init(sub () { AotReinjectProbeMarker m = marker; });\n"
+            "    return True;\n"
+            "}\n"
+            "\n"
+            "public namespace " + ModuleName + " {\n"
+            "    const Registered = aot_reinject_probe_register();\n"
+            "\n"
+            "    public bool sub registered() {\n"
+            "        return Registered;\n"
+            "    }\n"
+            "}\n";
+    }
+
+    #! A script that loads the module and then reinjects it; the originals are deleted when it exits
+    private string probeSource() {
+        return "%allow-injection\n"
+            "%requires " + ModuleName + "\n"
+            "\n"
+            "for (int i = 0; i < " + Reinjections + "; ++i) {\n"
+            "    Program p(PO_NO_USER_API);\n"
+            "    p.loadApplyToUserModule(" + sprintf("%y", ModuleName) + ", True);\n"
+            "}\n"
+            "if (!" + ModuleName + "::registered()) {\n"
+            "    throw \"PROBE-ERROR\", \"the module constant was not initialized\";\n"
+            "}\n"
+            "foreach hash<auto> h in (get_module_hash().values()) {\n"
+            "    if (h.name =~ /" + ModuleName + "/) {\n"
+            "        printf(\"MODULE: %s %s\\n\", h.name, h.filename);\n"
+            "    }\n"
+            "}\n"
+            "printf(\"" + Sentinel + "\\n\");\n";
+    }
+
+    private write(string path, string body) {
+        File f();
+        f.open2(path, O_WRONLY | O_CREAT | O_TRUNC);
+        f.write(body);
+    }
+
+    #! Runs the probe in its own process, whose exit deletes the module and its originals
+    private string runProbe(string dir) {
+        string mdir = dir;
+        if (ENV.QORE_MODULE_DIR) {
+            mdir += ":" + ENV.QORE_MODULE_DIR;
+        }
+        int rc;
+        string out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s %s %s 2>&1",
+            libqore_dir, libqore_dir, mdir, qore_bin, dir + "/probe.qr"), \rc);
+        assertEq(0, rc, "probe exit status: " + out);
+        return out;
+    }
+
+    #! Returns the module files registered by the probe: the current module and its originals
+    private hash<string, string> getModules(string out) {
+        hash<string, string> rv;
+        foreach string line in (out.split("\n")) {
+            *list<*string> m = line =~ x/^MODULE: ([^ ]+) (.+)$/;
+            if (m) {
+                rv{m[0]} = m[1];
+            }
+        }
+        return rv;
+    }
+
+    #! Asserts that the probe completed and that every registered closure was released at exit
+    private checkProbe(string out) {
+        assertEq(True, out.find(Sentinel) != -1, "the probe must complete: " + out);
+        list<string> lines = out.split("\n");
+        int created = (select lines, $1 == Created).size();
+        int destroyed = (select lines, $1 == Destroyed).size();
+        # the original module and each reinjected copy run the initializer in their own Program
+        assertEq(Reinjections + 1, created, out);
+        # the destructions follow the sentinel, because they happen when the modules are deleted at exit
+        assertEq(True, out.find(Destroyed, out.find(Sentinel)) != -1, out);
+        assertEq(created, destroyed,
+            "the Program of every original of a reinjected module must be torn down at exit: " + out);
+    }
+
+    #! baseline: the module is loaded from source
+    testSourceModule() {
+        TmpDir tmp("qore-aot-module-reinjection-src-");
+        write(tmp.path + "/" + ModuleName + ".qm", moduleSource());
+        write(tmp.path + "/probe.qr", probeSource());
+
+        string out = runProbe(tmp.path);
+        checkProbe(out);
+
+        hash<string, string> modules = getModules(out);
+        assertEq(Reinjections + 1, modules.size(), out);
+        foreach hash<auto> i in (modules.pairIterator()) {
+            assertRegex("\\.qm$", i.value, i.key);
+        }
+    }
+
+    #! the original module is AOT-compiled; every reinjection loads the source next to it
+    testAotModule() {
+        TmpDir tmp("qore-aot-module-reinjection-aot-");
+        string src = tmp.path + "/" + ModuleName + ".qm";
+        string qmod = tmp.path + "/" + ModuleName + ".qmod";
+        write(src, moduleSource());
+
+        string mdir = ENV.QORE_MODULE_DIR ? ":" + ENV.QORE_MODULE_DIR : "";
+        string compile_out = backquote(sprintf("LD_LIBRARY_PATH=%s QORE_LIBDIR=%s QORE_MODULE_DIR=%s%s "
+            "%s --module --strip-source -o %s %s 2>&1",
+            libqore_dir, libqore_dir, tmp.path, mdir, qcc_bin, qmod, src));
+        if (!is_file(qmod)) {
+            testSkip("qcc could not compile the probe module: " + compile_out);
+        }
+        write(tmp.path + "/probe.qr", probeSource());
+
+        string out = runProbe(tmp.path);
+        checkProbe(out);
+
+        # the binary module is preferred for the initial load, while a reinjection can only load the source
+        hash<string, string> modules = getModules(out);
+        assertEq(Reinjections + 1, modules.size(), out);
+        assertEq(True, modules{ModuleName} =~ /\.qm$/, out);
+        list<string> aot_modules = ();
+        foreach hash<auto> i in (modules.pairIterator()) {
+            if (i.value =~ /\.qmod$/) {
+                aot_modules += i.key;
+            }
+        }
+        assertEq(1, aot_modules.size(), out);
+        assertEq(True, aot_modules[0] =~ /^!!orig-/, out);
+    }
+}

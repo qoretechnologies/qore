@@ -16,6 +16,8 @@ Relevant code:
   `qore_program_private::createLocalVar()`
 - `examples/test/ir/AOTModuleSharedClosureLifetime.qtest` — the regression test
 - `examples/test/qore/classes/Program/program-memory.qtest` — the reclamation test
+- `include/qore/intern/ModuleInfo.h` — `QoreBuiltinModule::~QoreBuiltinModule()`
+- `examples/test/qore/misc/module-loader/aot-module-reinjection.qtest` — the shadow teardown test
 
 ## Two Programs, not one
 
@@ -82,6 +84,21 @@ calls an ordinary constant closure; the Program that poisoned it may have been
 created and destroyed by unrelated code much earlier, and a throwaway `Program`
 used to inspect or validate something is an ordinary pattern. The result was a
 process kill, not a failed request.
+
+## Tearing down the shadow Program
+
+The shadow Program is released when the module manager deletes the module at exit:
+`~QoreBuiltinModule()` sets the module context name and calls the module's delete function,
+`qore_aot_module_delete()`, which finds the module's state in `aot_module_map` by that name. The map is
+keyed by the feature name the module was initialized with. A reinjection
+(`Program::loadApplyToUserModule()` with the reinject flag) keeps the original module under a unique name
+such as `!!orig--Qorize-1` (`QoreModuleManager::reinjectModule()`), so the destructor sets the feature name
+it saved when the module was loaded (`QoreBuiltinModule::feature`), not the module's current name; with the
+current name, the lookup found nothing and the original's shadow Program was never released.
+
+`aot-module-reinjection.qtest` compiles a module whose constant initializer registers a thread
+initialization closure holding an object that reports its destruction, reinjects the module twice in a
+child process, and checks that each original and copy reports one destruction at exit.
 
 ## Testing
 
