@@ -1,0 +1,96 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires astparser
+
+%exec-class AstParserSandboxTest
+
+class AstParserSandboxTest inherits QUnit::Test {
+    constructor() : QUnit::Test("astparser sandbox", "1.0") {
+        addTestCase("File access follows the sandbox of the calling program", \sandboxedFileAccess());
+        addTestCase("File access requires the filesystem domain", \filesystemDomain());
+        addTestCase("A tree that cannot be written raises an error", \printTreeErrors());
+        set_return_value(main());
+    }
+
+    sandboxedFileAccess() {
+        FsUtil::TmpDir allowed("astparser-allowed-");
+        FsUtil::TmpDir denied("astparser-denied-");
+        string source = "int sub run() { return 1; }\n";
+        string allowedFile = join_paths(allowed.path, "source.q");
+        string deniedFile = join_paths(denied.path, "source.q");
+        File f();
+        f.open2(allowedFile, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(source);
+        f.close();
+        f.open2(deniedFile, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(source);
+        f.close();
+
+        SandboxManager sm();
+        sm.setFilesystemDefaultPolicy(False);
+        sm.addFilesystemAllowedPath(allowed.path, QSEC_READ | QSEC_WRITE | QSEC_CREATE);
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.parse("%requires astparser
+*int sub parse_file(string path) {
+    AstParser parser();
+    *AstTree tree = parser.parseFile(path);
+    return tree ? parser.getErrorCount() : NOTHING;
+}
+sub print_tree(string path) {
+    AstParser parser();
+    AstTree tree = parser.parseString(\"int sub run() { return 1; }\\n\");
+    tree.printTree(path);
+}
+", "sandboxed");
+
+        assertEq(0, p.callFunction("parse_file", allowedFile));
+        assertNothing(p.callFunction("parse_file", join_paths(allowed.path, "missing.q")));
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("parse_file", deniedFile));
+
+        string allowedTree = join_paths(allowed.path, "tree.txt");
+        p.callFunction("print_tree", allowedTree);
+        assertRegex("^\\(source_file \\(function_declaration", ReadOnlyFile::readTextFile(allowedTree));
+
+        # a denied file is neither created nor truncated
+        string deniedTree = join_paths(denied.path, "tree.txt");
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("print_tree", deniedTree));
+        assertFalse(is_file(deniedTree));
+        assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), ("print_tree", deniedFile));
+        assertEq(source, ReadOnlyFile::readTextFile(deniedFile));
+    }
+
+    filesystemDomain() {
+        foreach string call in ("AstParser parser(); parser.parseFile(\"x.q\");",
+                "AstParser parser(); AstTree tree = parser.parseString(\"\"); tree.printTree(\"x.txt\");") {
+            Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM | PO_NO_CHILD_PO_RESTRICTIONS);
+            assertThrows("PARSE-EXCEPTION", \p.parse(), ("%requires astparser\nsub run() { " + call + " }\n",
+                "no-filesystem"), call);
+        }
+
+        # parsing a string needs no filesystem access
+        Program p(PO_NEW_STYLE | PO_NO_FILESYSTEM | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("%requires astparser
+int sub run() {
+    AstParser parser();
+    parser.parseString(\"int sub run() { return 1; }\\n\");
+    return parser.getErrorCount();
+}
+", "no-filesystem");
+        assertEq(0, p.callFunction("run"));
+    }
+
+    printTreeErrors() {
+        FsUtil::TmpDir dir("astparser-print-");
+        AstParser parser();
+        AstTree tree = parser.parseString("int sub run() { return 1; }\n");
+        assertThrows("FILE-OPEN-ERROR", \tree.printTree(), join_paths(dir.path, "missing", "tree.txt"));
+        assertThrows("FILE-OPEN-ERROR", \tree.printTree(), dir.path);
+    }
+}

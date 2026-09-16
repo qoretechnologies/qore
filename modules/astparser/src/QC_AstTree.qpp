@@ -24,9 +24,11 @@
   DEALINGS IN THE SOFTWARE.
 */
 
+#include <cerrno>
 #include <fstream>
 
 #include "qore/Qore.h"
+#include "qore/QoreSandboxManager.h"
 
 #include "AstTreeHolder.h"
 
@@ -46,11 +48,28 @@ AstTree::constructor() {
 
 //! Print tree.
 /**
-    @param file name of file where to print out the tree
+    @param file name of file where to print out the tree; an existing file is truncated
+
+    @throw FILESYSTEM-ACCESS-DENIED the sandbox of the calling program does not allow the file to be created or
+    written
+    @throw FILE-OPEN-ERROR the file cannot be opened for writing
+    @throw FILE-WRITE-ERROR the tree cannot be written to the file
  */
-AstTree::printTree(string file) {
+AstTree::printTree(string file) [dom=FILESYSTEM] {
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh && !smh->checkFilesystemAccess(file->c_str(), QSEC_WRITE | QSEC_CREATE, xsink)) {
+        return QoreValue();
+    }
+
     std::ofstream ofs(file->c_str(), std::ofstream::out | std::ofstream::trunc);
+    if (!ofs.is_open()) {
+        xsink->raiseErrnoException("FILE-OPEN-ERROR", errno, "cannot open '%s' for writing", file->c_str());
+        return QoreValue();
+    }
     ath->printTree(ofs);
+    if (!ofs) {
+        xsink->raiseException("FILE-WRITE-ERROR", "cannot write the tree to '%s'", file->c_str());
+    }
 }
 
 //! Get info about nodes in the tree.

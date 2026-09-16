@@ -1519,6 +1519,11 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - added @ref astparser::AstTreeSearcher::findScopeSymbols() "AstTreeSearcher::findScopeSymbols()" for
         scope-aware symbol completion, plus new typedef and enum AST declaration/symbol/usage constants
         (<a href="https://github.com/qoretechnologies/qore/issues/5125">issue 5125</a>)
+      - fixed @ref astparser::AstParser::parseFile() "AstParser::parseFile()" and
+        @ref astparser::AstTree::printTree() "AstTree::printTree()" reading and writing files in programs without
+        filesystem access; they now require the filesystem functional domain, follow the filesystem policy of a
+        @ref Qore::SandboxManager "SandboxManager", and \c printTree() raises an exception when the file cannot
+        be written
 
     - @ref awsrestclientintro "AwsRestClient" module
       - added the full AWS credential chain: AWS_* environment variables, ECS task-role, IMDSv2

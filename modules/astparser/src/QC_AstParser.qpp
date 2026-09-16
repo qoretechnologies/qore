@@ -27,6 +27,7 @@
 #include <memory>
 
 #include "qore/Qore.h"
+#include "qore/QoreSandboxManager.h"
 
 #include "AstParserHolder.h"
 #include "AstTreeHolder.h"
@@ -52,9 +53,16 @@ AstParser::constructor() {
 //! Parse file.
 /**
     @param filename file's name including path
-    @return parsed AST tree
+    @return parsed AST tree, or @ref nothing if the file cannot be read
+
+    @throw FILESYSTEM-ACCESS-DENIED the sandbox of the calling program does not allow the file to be read
  */
-*AstTree AstParser::parseFile(string filename) {
+*AstTree AstParser::parseFile(string filename) [dom=FILESYSTEM] {
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (smh && !smh->checkFilesystemAccess(filename->c_str(), QSEC_READ, xsink)) {
+        return QoreValue();
+    }
+
     std::unique_ptr<AstParseResult> result(aph->parseFile(filename->getBuffer()));
     if (!result)
         return QoreValue();
