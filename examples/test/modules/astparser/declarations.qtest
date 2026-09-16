@@ -178,7 +178,11 @@ list<auto> sub f(object o) {
         assertEq(("local_variable_declaration", "expression_statement", "expression_statement",
             "local_variable_declaration", "return_statement"), map $1.type, body.children);
         assertEq("assignment_expression", body.children[1].children[0].type);
-        assertEq("call_expression", findNodes(body.children[2].children, "call_expression")[0].type);
+        # a type name used as a variable or called is a visible identifier
+        list<hash<auto>> names = findNodes(body.children[1].children, "identifier");
+        assertEq(("data",), map $1.text, names);
+        hash<auto> call = findNodes(body.children[2].children, "call_expression")[0];
+        assertEq({"field": "function", "type": "identifier", "text": "code"}, call.children[0]{"field", "type", "text"});
 
         # the closure has a return type, and "first + 1" adds to the parameter
         list<hash<auto>> closures = findNodes(body.children[3].children, "closure_expression");

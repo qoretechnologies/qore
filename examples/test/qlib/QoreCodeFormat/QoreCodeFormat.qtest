@@ -68,6 +68,19 @@ class QoreCodeFormatTest inherits QUnit::Test {
         addTestCase("hash slices", \testHashSlices());
         addTestCase("catch and foreach declarations", \testCatchAndForeachDeclarations());
         addTestCase("try statement bodies", \testTryStatementBodies());
+        addTestCase("member slices", \testMemberSlices());
+        addTestCase("parentheses", \testParentheses());
+        addTestCase("empty statements", \testEmptyStatements());
+        addTestCase("nested blocks", \testNestedBlocks());
+        addTestCase("type name calls", \testTypeNameCalls());
+        addTestCase("streaming keyword names", \testStreamingKeywordNames());
+        addTestCase("weak assignments", \testWeakAssignments());
+        addTestCase("trailing comments", \testTrailingComments());
+        addTestCase("multi-line literals", \testMultiLineLiterals());
+        addTestCase("hashdecl inheritance", \testHashdeclInheritance());
+        addTestCase("list operators in containers", \testListOperatorsInContainers());
+        addTestCase("long slices", \testLongSlices());
+        addTestCase("wrapped generic parameters", \testWrappedGenericParameters());
 
         set_return_value(main());
     }
@@ -1560,6 +1573,434 @@ string sub run() {
             p.parse(source, "try statement bodies");
             assertEq("Ab", p.callFunction("run"), "formatted try statements keep their meaning");
         }
+    }
+
+    testMemberSlices() {
+        list<string> lines = (
+            "    auto dynamic = h.(key);",
+            "    auto computed = h.(\"b\" + key.substr(1));",
+            "    hash<auto> both = h.(\"a\", \"b\");",
+            "    hash<auto> one = h.(\"a\",);",
+            "    hash<auto> listed = h.(names());",
+        );
+        string src = "%modern
+list<string> sub names() {
+    return (\"b\", \"c\");
+}
+
+hash<auto> sub values(hash<auto> h, string key) {
+" + lines.join("\n") + "
+    return {\"dynamic\": dynamic, \"computed\": computed, \"both\": both, \"one\": one, \"listed\": listed};
+}
+";
+        QoreCodeFormat::CodeFormatter fmt();
+        string result = fmt.format(src);
+        list<string> resultLines = result.split("\n");
+        foreach string line in (lines) {
+            assertTrue(resultLines.contains(line), "member slice retained: " + line);
+        }
+        QoreCodeFormat::CodeFormatter fmt2();
+        assertEq(result, fmt2.format(result), "member slice idempotency");
+
+        hash<auto> h = {"a": 1, "b": 2, "c": 3};
+        foreach string source in ((src, result)) {
+            Program p(PO_NEW_STYLE);
+            p.parse(source, "member slices");
+            assertEq({"dynamic": 1, "computed": 2, "both": {"a": 1, "b": 2}, "one": {"a": 1},
+                "listed": {"b": 2, "c": 3}}, p.callFunction("values", h, "a"),
+                "formatted member slices keep their keys");
+        }
+    }
+
+    testParentheses() {
+        list<string> lines = (
+            "    int grouped = (a + b) * c;",
+            "    int negated = -(a + b);",
+            "    int nested = ((a + b));",
+            "    bool inverted = !(a > b && b > c);",
+            "    int chosen = (a > b ? a : b) + c;",
+            "    int assigned = (x = a) + b;",
+            "    list<int> single = (a,);",
+            "    int right = a - (b - c);",
+            "    string text = (a + b).toString();",
+        );
+        string src = "%modern
+hash<auto> sub values(int a, int b, int c) {
+    int x;
+" + lines.join("\n") + "
+    return {\"grouped\": grouped, \"negated\": negated, \"nested\": nested, \"inverted\": inverted,
+        \"chosen\": chosen, \"assigned\": assigned, \"single\": single, \"right\": right, \"text\": text,
+        \"total\": (a + b + c + a + b + c + a + b + c + a + b + c + a + b + c + a + b + c + a + b + c + a + b + c)};
+}
+";
+        QoreCodeFormat::CodeFormatter fmt();
+        string result = fmt.format(src);
+        list<string> resultLines = result.split("\n");
+        foreach string line in (lines) {
+            assertTrue(resultLines.contains(line), "parentheses retained: " + line);
+        }
+        # a long expression in parentheses is wrapped inside the parentheses rather than made a list
+        assertRegex("wrapped parentheses", "\"total\": \\(a \\+ b", result);
+        assertFalse(result =~ /c,\n\s*\)/, "a parenthesized expression is not made a list");
+        QoreCodeFormat::CodeFormatter fmt2();
+        assertEq(result, fmt2.format(result), "parentheses idempotency");
+
+        foreach string source in ((src, result)) {
+            Program p(PO_NEW_STYLE);
+            p.parse(source, "parentheses");
+            assertEq({"grouped": 14, "negated": -7, "nested": 7, "inverted": False, "chosen": 6, "assigned": 7,
+                "single": (4,), "right": 3, "text": "7", "total": 72}, p.callFunction("values", 4, 3, 2),
+                "formatted parentheses keep their meaning");
+        }
+    }
+
+    testEmptyStatements() {
+        string src = "%modern
+int sub count(list<int> l) {
+    int n = 0;
+    while (n < l.size() && l[n] > 0 && ++n);
+    if (n > 1) {
+        ++n;
+    };
+    for (int i = 0; i < 2; ++i) ;
+    for (int i = 0, int j = 10; i < j; ++i, --j) {
+        ++n;
+    }
+    if (exists (*int first = l[0])) {
+        n += first;
+    }
+    return n;
+}
+";
+        QoreCodeFormat::CodeFormatter fmt();
+        string result = fmt.format(src);
+        assertFalse(result =~ /;;/, "an empty statement is not doubled");
+        assertFalse(result =~ /^\s*;\s*$/m, "an empty statement is not written");
+        assertTrue(result =~ /for \(int i = 0, int j = 10; i < j; \+\+i, --j\)/,
+            "for statements keep their declarations and all of their expressions");
+        assertTrue(result =~ /exists \(\*int first = l\[0\]\)/, "declarations in expressions keep their type");
+        QoreCodeFormat::CodeFormatter fmt2();
+        assertEq(result, fmt2.format(result), "empty statement idempotency");
+
+        foreach string source in ((src, result)) {
+            Program p(PO_NEW_STYLE);
+            p.parse(source, "empty statements");
+            assertEq(10, p.callFunction("count", (1, 2, 3)), "formatted empty statements keep their meaning");
+        }
+    }
+
+    testNestedBlocks() {
+        string src = "%modern
+int sub total() {
+    int sum = 0;
+    {
+        int value = 1;
+        sum += value;
+    }
+    {
+        int value = 2;
+        {
+            int inner = 3;
+            sum += value + inner;
+        }
+    }
+    return sum;
+}
+";
+        QoreCodeFormat::CodeFormatter fmt();
+        string result = fmt.format(src);
+        assertEq(src, result, "nested blocks keep their braces");
+
+        Program p(PO_NEW_STYLE);
+        p.parse(result, "nested blocks");
+        assertEq(6, p.callFunction("total"));
+    }
+
+    testTypeNameCalls() {
+        string src = "%modern
+hash<auto> sub convert(string s) {
+    binary b = binary(s);
+    string t = string(s);
+    hash<auto> h = hash();
+    list<auto> l = list(1, 2);
+    int i = int(\"12\");
+    auto data = t;
+    return {\"b\": b, \"t\": t, \"h\": h, \"l\": l, \"i\": i, \"data\": data};
+}
+";
+        QoreCodeFormat::CodeFormatter fmt();
+        string result = fmt.format(src);
+        assertEq(src, result, "calls of type names keep their names");
+
+        Program p(PO_NEW_STYLE);
+        p.parse(result, "type name calls");
+        assertEq({"b": <61>, "t": "a", "h": {}, "l": (1, 2), "i": 12, "data": "a"}, p.callFunction("convert", "a"));
+
+        # a named argument can be named after a type
+        string named = "%modern
+binary sub data_of(binary data, int count = 1) {
+    return data;
+}
+
+binary sub call() {
+    return data_of(data: <0102>, count: 2);
+}
+";
+        result = fmt.format(named);
+        assertEq(named, result, "named arguments named after types");
+        Program p2(PO_NEW_STYLE);
+        p2.parse(result, "named arguments");
+        assertEq(<0102>, p2.callFunction("call"));
+    }
+
+    testStreamingKeywordNames() {
+        # the characters after a streaming operator keyword decide whether it is a name or an operator
+        string src = "%modern
+int sub stats(list<int> values) {
+    int count = values.size();
+    int first = values[0];
+    int result = count - first + (count <> first ? 1 : 0);
+    result += count -$1 < -1, values;
+    result += first +$1 > 2, values;
+    return result + count;
+}
+";
+        QoreCodeFormat::CodeFormatter fmt();
+        string result = fmt.format(src);
+        assertEq(replace(src, "<>", "!="), result, "streaming keyword names and operators");
+        QoreCodeFormat::CodeFormatter fmt2();
+        assertEq(result, fmt2.format(result), "streaming keyword idempotency");
+
+        foreach string source in ((src, result)) {
+            Program p(PO_NEW_STYLE);
+            p.parse(source, "streaming keyword names");
+            assertEq(11, p.callFunction("stats", (1, 2, 3)), "formatted streaming keywords keep their meaning");
+        }
+    }
+
+    testWeakAssignments() {
+        string src = "%modern
+class Node {
+    public {
+        *Node parent;
+    }
+}
+
+bool sub link() {
+    Node parent();
+    Node child();
+    child.parent := parent;
+    Node other := parent;
+    return child.parent == other;
+}
+";
+        QoreCodeFormat::CodeFormatter fmt();
+        string result = fmt.format(src);
+        assertEq(src, result, "weak assignments keep their operator");
+
+        Program p(PO_NEW_STYLE | PO_ALLOW_WEAK_REFERENCES);
+        p.parse(result, "weak assignments");
+        assertTrue(p.callFunction("link"));
+    }
+
+    testTrailingComments() {
+        string src = "%modern
+const Limit = 10; # the default limit
+
+our int calls = 0; # the number of calls
+
+class Tally {
+    public {
+        int total = 0; # the total
+    }
+
+    int add(int n) {
+        total += n; # add the value
+        if (total > Limit) {
+            total = Limit;
+        } # clamped
+        return total;
+        # after the last statement
+    }
+}
+
+enum Color {
+    Red = 1, # first
+    Green = 2,
+}
+
+int sub run() {
+    Tally c();
+    c.add(5); # five
+    ++calls;
+    return c.add(20);
+    # the end
+}
+";
+        QoreCodeFormat::CodeFormatter fmt();
+        string result = fmt.format(src);
+        assertEq(src, result, "trailing comments");
+
+        Program p(PO_NEW_STYLE);
+        p.parse(result, "trailing comments");
+        assertEq(10, p.callFunction("run"));
+    }
+
+    testLongSlices() {
+        string src = "%modern
+hash<auto> sub slice(hash<auto> h) {
+    return h{\"aaaaaaaaaaaaaaaaaaaa\", \"bbbbbbbbbbbbbbbbbbbbbbbbb\", \"cccccccccccccccccccccccccc\", \"dddddddddddddddddddddddddd\", \"e\"};
+}
+
+hash<auto> sub assign(hash<auto> h) {
+    hash<auto> rv = h{\"aaaaaaaaaaaaaaaaaaaa\", \"bbbbbbbbbbbbbbbbbbbbbbbbb\", \"cccccccccccccccccccccccccc\", \"dddddddddddddddd\"};
+    return rv;
+}
+";
+        QoreCodeFormat::CodeFormatter fmt();
+        string result = fmt.format(src);
+        assertEq("%modern
+hash<auto> sub slice(hash<auto> h) {
+    return h{
+        \"aaaaaaaaaaaaaaaaaaaa\",
+        \"bbbbbbbbbbbbbbbbbbbbbbbbb\",
+        \"cccccccccccccccccccccccccc\",
+        \"dddddddddddddddddddddddddd\",
+        \"e\",
+    };
+}
+
+hash<auto> sub assign(hash<auto> h) {
+    hash<auto> rv = h{
+        \"aaaaaaaaaaaaaaaaaaaa\",
+        \"bbbbbbbbbbbbbbbbbbbbbbbbb\",
+        \"cccccccccccccccccccccccccc\",
+        \"dddddddddddddddd\",
+    };
+    return rv;
+}
+", result);
+        QoreCodeFormat::CodeFormatter fmt2();
+        assertEq(result, fmt2.format(result), "long slice idempotency");
+
+        hash<auto> h = {"aaaaaaaaaaaaaaaaaaaa": 1, "e": 2, "x": 3};
+        foreach string source in ((src, result)) {
+            Program p(PO_NEW_STYLE);
+            p.parse(source, "long slices");
+            assertEq({"aaaaaaaaaaaaaaaaaaaa": 1, "e": 2}, p.callFunction("slice", h));
+            assertEq({"aaaaaaaaaaaaaaaaaaaa": 1}, p.callFunction("assign", h));
+        }
+    }
+
+    testListOperatorsInContainers() {
+        # a list operator takes the container's trailing comma, which the formatter writes once
+        string src = "%modern
+hash<auto> sub make(list<int> values) {
+    return {
+        \"first\": values[0],
+        \"doubled\": map $1 * 2, values,
+    };
+}
+
+list<auto> sub select_large(list<int> values) {
+    return (
+        values.size(),
+        select values, $1 > 1,
+    );
+}
+";
+        QoreCodeFormat::CodeFormatter fmt();
+        string result = fmt.format(src);
+        assertFalse(result =~ /,\s*,/, "a trailing comma is written once");
+        QoreCodeFormat::CodeFormatter fmt2();
+        assertEq(result, fmt2.format(result), "list operator idempotency");
+
+        Program p(PO_NEW_STYLE);
+        p.parse(result, "list operators");
+        assertEq({"first": 1, "doubled": (2, 4)}, p.callFunction("make", (1, 2)));
+        assertEq((2, (2,)), p.callFunction("select_large", (1, 2)));
+    }
+
+    testHashdeclInheritance() {
+        # the word "inherits" in a member's comment is not an inherited hashdecl
+        string src = "%modern
+hashdecl Base {
+    #! a value that inherits nothing
+    int a = 1;
+}
+
+hashdecl Child inherits Base {
+    int b = 2;
+}
+
+int sub total() {
+    hash<Child> c();
+    return c.a + c.b;
+}
+";
+        QoreCodeFormat::CodeFormatter fmt();
+        string result = fmt.format(src);
+        assertEq(src, result, "hashdecl inheritance");
+
+        Program p(PO_NEW_STYLE);
+        p.parse(result, "hashdecl inheritance");
+        assertEq(3, p.callFunction("total"));
+    }
+
+    testMultiLineLiterals() {
+        # the line breaks and indentation in literals are part of their values
+        string src = "%modern
+hash<auto> sub values(string name) {
+        string sql = \"select *
+        from table
+    where name = \" + name + \"
+      and x = 1\";
+    list<string> parts = map $1 + \"
+  !\", ('a
+    b', \"c\"
+            \"d\");
+            bool matched = \"ab\" =~ /a
+ b # the second letter
+/x;
+    return {\"sql\": sql, \"parts\": parts, \"matched\": matched};
+}
+";
+        QoreCodeFormat::CodeFormatter fmt();
+        string result = fmt.format(src);
+        QoreCodeFormat::CodeFormatter fmt2();
+        assertEq(result, fmt2.format(result), "multi-line literal idempotency");
+
+        list<hash<auto>> values = ();
+        foreach string source in ((src, result)) {
+            Program p(PO_NEW_STYLE);
+            p.parse(source, "multi-line literals");
+            values += p.callFunction("values", "x");
+        }
+        assertEq(values[0], values[1], "formatted literals keep their values");
+        assertEq("select *\n        from table\n    where name = x\n      and x = 1", values[1].sql);
+    }
+
+    testWrappedGenericParameters() {
+        string src = "%modern
+int sub count_entries(string source_directory, string project_name, hash<string, hash<string, hash<string, string>>> owners) {
+    return owners.size() + source_directory.size() + project_name.size();
+}
+";
+        QoreCodeFormat::CodeFormatter fmt();
+        string result = fmt.format(src);
+        assertEq("%modern
+int sub count_entries(
+        string source_directory,
+        string project_name,
+        hash<string, hash<string, hash<string, string>>> owners
+) {
+    return owners.size() + source_directory.size() + project_name.size();
+}
+", result, "a parameter with a generic type is not split");
+
+        Program p(PO_NEW_STYLE);
+        p.parse(result, "wrapped generic parameters");
+        assertEq(3, p.callFunction("count_entries", "a", "b", {"x": {}}));
     }
 
     testHashSlices() {

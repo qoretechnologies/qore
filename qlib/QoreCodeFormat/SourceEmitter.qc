@@ -128,6 +128,21 @@ public class SourceEmitter {
         consecutiveBlankLines = 0;
     }
 
+    #! Appends text to the last emitted line, separated by a space
+    /** Used for a comment that follows code on the same line
+
+        @param text the text to append
+    */
+    appendToLastLine(string text) {
+        if (atLineStart && buf =~ /\n$/) {
+            chomp buf;
+            buf += " " + text + "\n";
+        } else {
+            emit(" " + text);
+        }
+        consecutiveBlankLines = 0;
+    }
+
     #! Emit a newline
     newline() {
         buf += "\n";

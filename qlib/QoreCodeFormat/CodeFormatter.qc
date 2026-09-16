@@ -108,6 +108,18 @@ public const AEK_HashdeclHash = 30;
 public const AEK_StringConcat = 31;
 public const AEK_NamedArgument = 32;
 
+#! The syntax tree node types of literals whose line breaks are part of their values
+const LiteralNodeTypes = {
+    "single_quoted_string": True,
+    "double_quoted_string": True,
+    "backquote_expression": True,
+    "regex": True,
+    "regex_literal": True,
+    "regex_subst": True,
+    "regex_trans": True,
+    "regex_extract": True,
+};
+
 #! Operator string mapping
 public const OperatorStrings = {
     "AOK_Plus": "+",
@@ -384,8 +396,6 @@ public class CodeFormatter {
         @throw FORMAT-ERROR if the source code has parse errors
     */
     string format(string source) {
-        sourceText = source;
-        sourceLines = source.split("\n");
         emitter.reset();
         nextCommentIdx = 0;
         inClassContext = False;
@@ -393,15 +403,18 @@ public class CodeFormatter {
         # Parse the source
         AstParser parser();
         *AstTree tree = parser.parseString(source);
+        checkParse(parser, tree);
 
-        if (!exists tree || parser.getErrorCount() > 0) {
-            string msg = "parse errors in source code";
-            *list<hash<auto>> diags = parser.getDiagnostics();
-            if (exists diags && diags.size() > 0) {
-                msg += ": " + diags[0].message;
-            }
-            throw "FORMAT-ERROR", msg;
+        # the line breaks in literals are part of their values, so the lines that follow them are not reindented
+        string sentinel = getLineBreakSentinel(source);
+        string protectedSource = protectLiteralLineBreaks(source, tree, sentinel);
+        if (protectedSource != source) {
+            source = protectedSource;
+            tree = parser.parseString(source);
+            checkParse(parser, tree);
         }
+        sourceText = source;
+        sourceLines = source.split("\n");
 
         # Get CST nodes and translate to old AST format
         *list<hash<auto>> rawNodes = tree.getNodesInfo();
@@ -426,7 +439,7 @@ public class CodeFormatter {
                 emitter.emitLineAtColumn0(parseDirectives[i].text);
             }
             emitRemainingComments();
-            return emitter.getOutput();
+            return replace(emitter.getOutput(), sentinel, "\n");
         }
 
         # Determine which source lines contain AST nodes (real code)
@@ -490,7 +503,64 @@ public class CodeFormatter {
         # Emit any remaining comments
         emitRemainingComments();
 
-        return emitter.getOutput();
+        return replace(emitter.getOutput(), sentinel, "\n");
+    }
+
+    #! Throws a \c FORMAT-ERROR exception if the source has parse errors
+    private static checkParse(AstParser parser, *AstTree tree) {
+        if (!exists tree || parser.getErrorCount() > 0) {
+            string msg = "parse errors in source code";
+            *list<hash<auto>> diags = parser.getDiagnostics();
+            if (exists diags && diags.size() > 0) {
+                msg += ": " + diags[0].message;
+            }
+            throw "FORMAT-ERROR", msg;
+        }
+    }
+
+    #! Returns a private use character that does not occur in the source
+    private static string getLineBreakSentinel(string source) {
+        for (int cp = 0xe000; cp <= 0xf8ff; ++cp) {
+            string c = binary_to_string(parse_hex_string(sprintf("%02x%02x%02x", 0xe0 | (cp >> 12),
+                0x80 | ((cp >> 6) & 0x3f), 0x80 | (cp & 0x3f))), "UTF-8");
+            if (source.find(c) == -1) {
+                return c;
+            }
+        }
+        throw "FORMAT-ERROR", "the source contains every private use character";
+    }
+
+    #! Returns the source with the line breaks in multi-line literals replaced by the given character
+    /** The formatter changes the indentation of lines, which would change the values of such literals.
+    */
+    private static string protectLiteralLineBreaks(string source, AstTree tree, string sentinel) {
+        # the source lines (0-based) whose line breaks are in literals
+        hash<string, bool> breaks = {};
+        list<hash<auto>> pending = tree.getNodesInfo() ?? ();
+        while (pending) {
+            hash<auto> node = pop pending;
+            if (LiteralNodeTypes{node.type}) {
+                for (int i = node.loc.start_line; i < node.loc.end_line; ++i) {
+                    breaks{i} = True;
+                }
+                continue;
+            }
+            if (node.children) {
+                pending += node.children;
+            }
+        }
+        if (!breaks) {
+            return source;
+        }
+        list<string> lines = source.split("\n");
+        string rv;
+        foreach string line in (lines) {
+            if ($# > 0) {
+                rv += breaks{$# - 1} ? sentinel : "\n";
+            }
+            rv += line;
+        }
+        return rv;
     }
 
     #! Find the real source line (1-indexed) where an AST node's code starts
@@ -628,31 +698,63 @@ public class CodeFormatter {
         }
     }
 
-    #! Skip (advance past) comments that fall within the given 1-indexed line range
-    /** Called after emitting a node whose source text was extracted verbatim,
-        to prevent comments embedded in that source text from being double-emitted.
+    #! Advances past the comments in a node's source range after the node has been emitted
+    /** Comments within the range may be part of source-extracted text; a comment that follows the node on its last
+        line is appended to the last emitted line.
+
+        @param loc the node's location with 0-based lines and columns
     */
-    private skipCommentsInRange(int startLine1, int endLine1) {
+    private skipNodeComments(hash<auto> loc) {
+        int startLine1 = loc.start_line + 1;
+        int endLine1 = loc.end_line + 1;
         while (nextCommentIdx < allComments.size()) {
             hash<CommentInfo> c = allComments[nextCommentIdx];
-            if (c.loc.firstLine >= startLine1 && c.loc.lastLine <= endLine1) {
-                ++nextCommentIdx;
-            } else {
+            if (c.loc.firstLine < startLine1 || c.loc.lastLine > endLine1) {
                 break;
             }
+            # comment columns are 1-based
+            if (c.loc.firstLine == endLine1 && c.loc.firstCol - 1 >= loc.end_column) {
+                emitter.appendToLastLine(getCommentText(c));
+            }
+            ++nextCommentIdx;
         }
     }
 
-    #! Emit a single comment
-    private emitComment(hash<CommentInfo> c) {
+    #! Returns true if a comment is within a node's source range
+    /** @param loc the node's location with 0-based lines and columns
+    */
+    private bool hasCommentInRange(hash<auto> loc) {
+        foreach hash<CommentInfo> c in (allComments) {
+            # comment lines and columns are 1-based
+            int line = c.loc.firstLine - 1;
+            int col = c.loc.firstCol - 1;
+            if (line > loc.end_line || (line == loc.end_line && col >= loc.end_column)) {
+                break;
+            }
+            if (line > loc.start_line || (line == loc.start_line && col >= loc.start_column)) {
+                return True;
+            }
+        }
+        return False;
+    }
+
+    #! Returns the text of a comment, with a space after the \c # or \c #! of a line comment
+    private static string getCommentText(hash<CommentInfo> c) {
         string text = c.text;
         if (c.kind == ACK_Line || c.kind == ACK_DocLine) {
-            # Line comments - ensure space after # or #!
             if (text =~ /^#[^!\s]/ && text != "#") {
                 text = "# " + text.substr(1);
             } else if (text =~ /^#![^\s]/) {
                 text = "#! " + text.substr(2);
             }
+        }
+        return text;
+    }
+
+    #! Emit a single comment
+    private emitComment(hash<CommentInfo> c) {
+        string text = getCommentText(c);
+        if (c.kind == ACK_Line || c.kind == ACK_DocLine) {
             emitter.emitLine(text);
         } else {
             # Block comments - use emitMultiLine for multi-line comments to
@@ -689,8 +791,7 @@ public class CodeFormatter {
         # Skip comments that fall within this node's source range, since they
         # may have been included in source-extracted text (avoiding double-emission)
         if (exists node.loc) {
-            int endLine1 = node.loc.end_line + 1;
-            skipCommentsInRange(node.loc.start_line + 1, endLine1);
+            skipNodeComments(node.loc);
         }
     }
 
@@ -793,10 +894,12 @@ public class CodeFormatter {
 
         # Recurse into left child if it's the same binary operator
         if (exists node.left && exists node.left.kind && node.left.kind == AEK_Binary
-                && exists node.left.op && node.left.op == myOp) {
+                && exists node.left.op && node.left.op == myOp && !node.left.parens) {
             result = flattenBinaryChain(node.left);
         } else {
-            result += {"operand": emitExpressionStr(node.left)};
+            string leftStr = emitExpressionStr(node.left);
+            result += {"operand": needsParens(node.left, getOperatorPrecedence(myOp), False) ? "(" + leftStr + ")"
+                : leftStr};
         }
 
         # Add right operand with operator
@@ -804,12 +907,7 @@ public class CodeFormatter {
         string rightStr = emitExpressionStr(node.right);
         # Parenthesize right child if lower or equal precedence (right-assoc protection)
         int myPrec = getOperatorPrecedence(myOp);
-        if (exists node.right.kind && node.right.kind == AEK_Binary && exists node.right.op) {
-            if (getOperatorPrecedence(node.right.op) <= myPrec) {
-                rightStr = "(" + rightStr + ")";
-            }
-        }
-        if (exists node.right.kind && node.right.kind == AEK_Ternary) {
+        if (needsParens(node.right, myPrec, True)) {
             rightStr = "(" + rightStr + ")";
         }
         result += {"op": opStr, "operand": rightStr};
@@ -836,6 +934,9 @@ public class CodeFormatter {
         }
 
         # Try wrapping based on expression kind
+        if (exists exprNode) {
+            exprNode = moveParens(exprNode, \prefix, \suffix);
+        }
         if (exists exprNode && exists exprNode.kind) {
             if (exprNode.kind == AEK_Binary && !isCompoundAssignOp(exprNode.op ?? "")) {
                 emitWrappedBinaryLine(prefix, exprNode, suffix);
@@ -868,22 +969,31 @@ public class CodeFormatter {
                 emitWrappedStringConcatLine(prefix, exprNode, suffix);
                 return;
             }
+            if (isWrappableSlice(exprNode)) {
+                emitWrappedSliceLine(prefix, exprNode, suffix);
+                return;
+            }
+            if (exprNode.kind == AEK_Assignment && isWrappableSlice(exprNode.right)) {
+                emitWrappedSliceLine(prefix + emitExpressionStr(exprNode.left) + getAssignmentOp(exprNode),
+                    exprNode.right, suffix);
+                return;
+            }
             if (exprNode.kind == AEK_Assignment && exists exprNode.right
                     && exists exprNode.right.kind && exprNode.right.kind == AEK_Binary) {
                 # Assignment with binary RHS: wrap the RHS
-                string assignPrefix = prefix + emitExpressionStr(exprNode.left) + " = ";
+                string assignPrefix = prefix + emitExpressionStr(exprNode.left) + getAssignmentOp(exprNode);
                 emitWrappedBinaryLine(assignPrefix, exprNode.right, suffix);
                 return;
             }
             if (exprNode.kind == AEK_Assignment && exists exprNode.right
                     && exists exprNode.right.kind && exprNode.right.kind == AEK_Ternary) {
-                string assignPrefix = prefix + emitExpressionStr(exprNode.left) + " = ";
+                string assignPrefix = prefix + emitExpressionStr(exprNode.left) + getAssignmentOp(exprNode);
                 emitWrappedTernaryLine(assignPrefix, exprNode.right, suffix);
                 return;
             }
             if (exprNode.kind == AEK_Assignment && exists exprNode.right
                     && exists exprNode.right.kind && exprNode.right.kind == AEK_StringConcat) {
-                string assignPrefix = prefix + emitExpressionStr(exprNode.left) + " = ";
+                string assignPrefix = prefix + emitExpressionStr(exprNode.left) + getAssignmentOp(exprNode);
                 emitWrappedStringConcatLine(assignPrefix, exprNode.right, suffix);
                 return;
             }
@@ -897,18 +1007,31 @@ public class CodeFormatter {
         }
     }
 
+    #! Moves the parentheses around an expression to the prefix and suffix of a wrapped line
+    /** @return the expression without its parentheses
+    */
+    private hash<auto> moveParens(hash<auto> node, reference<string> prefix, reference<string> suffix) {
+        if (node.parens) {
+            prefix += strmul("(", node.parens);
+            suffix = strmul(")", node.parens) + suffix;
+            node -= "parens";
+        }
+        return node;
+    }
+
     #! Emit a wrapped binary expression line with operator-leading continuation
     private emitWrappedBinaryLine(string prefix, hash<auto> node, string suffix) {
+        node = moveParens(node, \prefix, \suffix);
         list<hash<auto>> chain = flattenBinaryChain(node);
         string baseIndent = strmul("    ", emitter.getIndentLevel());
         string contIndent = baseIndent + "    ";  # single-indent (+4) continuation
 
         # Emit first operand with prefix
-        emitter.emitLine(prefix + chain[0].operand);
+        emitter.emitLine(prefix + reindentContinuation(chain[0].operand, baseIndent));
 
         # Emit continuation operands
         for (int i = 1; i < chain.size(); ++i) {
-            string line = chain[i].op + " " + chain[i].operand;
+            string line = chain[i].op + " " + reindentContinuation(chain[i].operand, contIndent);
             if (i == chain.size() - 1) {
                 line += suffix;
             }
@@ -917,29 +1040,91 @@ public class CodeFormatter {
 
         # Skip comments within the expression's source range
         if (exists node.loc) {
-            skipCommentsInRange(node.loc.start_line + 1, node.loc.end_line + 1);
+            skipNodeComments(node.loc);
         }
+    }
+
+    #! Returns true for a hash or member slice, which has more than one key or a trailing comma
+    private static bool isWrappableSlice(*hash<auto> node) {
+        return exists node && node.kind == AEK_Index && exists node.keys
+            && (node.keys.size() > 1 || node.trailingComma);
+    }
+
+    #! Emits a hash or member slice with one key per line
+    /** Each key is followed by a comma, which keeps a single key a slice
+    */
+    private emitWrappedSliceLine(string prefix, hash<auto> node, string suffix) {
+        node = moveParens(node, \prefix, \suffix);
+        string baseIndent = strmul("    ", emitter.getIndentLevel());
+        string keyIndent = baseIndent + "    ";
+        bool member = node.indexKind == 2;
+        emitter.emitLine(prefix + reindentContinuation(emitExpressionStr(node.variable), baseIndent)
+            + (member ? ".(" : "{"));
+        foreach hash<auto> key in (node.keys) {
+            emitter.emitLineAtColumn0(keyIndent + reindentContinuation(emitExpressionStr(key), keyIndent) + ",");
+        }
+        emitter.emitLineAtColumn0(baseIndent + (member ? ")" : "}") + suffix);
+        if (exists node.loc) {
+            skipNodeComments(node.loc);
+        }
+    }
+
+    #! Indents the lines after the first line of an operand that spans lines
+    /** The lines keep their indentation relative to each other; line breaks in literals are not line breaks here,
+        as they are replaced before formatting.
+
+        @param text the operand
+        @param indent the indentation of the line that the operand starts on, which the least indented line after the
+        first line is given, as a list's closing parenthesis is
+    */
+    private static string reindentContinuation(string text, string indent) {
+        if (text !~ /\n/) {
+            return text;
+        }
+        list<string> lines = text.split("\n");
+        int minIndent = -1;
+        for (int i = 1; i < lines.size(); ++i) {
+            string line = lines[i];
+            if (line !~ /\S/) {
+                continue;
+            }
+            int lead = line.length() - regex_subst(line, "^[ \t]+", "").length();
+            if (minIndent < 0 || lead < minIndent) {
+                minIndent = lead;
+            }
+        }
+        string rv = lines[0];
+        for (int i = 1; i < lines.size(); ++i) {
+            string line = lines[i];
+            rv += "\n";
+            if (line =~ /\S/) {
+                rv += indent + line.substr(minIndent);
+            }
+        }
+        return rv;
     }
 
     #! Emit a wrapped ternary expression line
     private emitWrappedTernaryLine(string prefix, hash<auto> node, string suffix) {
+        node = moveParens(node, \prefix, \suffix);
         string condStr = emitExpressionStr(node.condition);
         string trueStr = emitExpressionStr(node.exprTrue);
         string falseStr = emitExpressionStr(node.exprFalse);
         string baseIndent = strmul("    ", emitter.getIndentLevel());
         string contIndent = baseIndent + "    ";  # single-indent (+4) continuation
 
-        emitter.emitLine(prefix + condStr);
-        emitter.emitLineAtColumn0(contIndent + "? " + trueStr);
-        emitter.emitLineAtColumn0(contIndent + ": " + falseStr + suffix);
+        emitter.emitLine(prefix + reindentContinuation(condStr, baseIndent));
+        emitter.emitLineAtColumn0(contIndent + "? " + reindentContinuation(trueStr, contIndent));
+        emitter.emitLineAtColumn0(contIndent + ": " + reindentContinuation(falseStr, contIndent) + suffix);
 
         if (exists node.loc) {
-            skipCommentsInRange(node.loc.start_line + 1, node.loc.end_line + 1);
+            skipNodeComments(node.loc);
         }
     }
 
     #! Emit a wrapped string concatenation line (implicit adjacent strings)
     private emitWrappedStringConcatLine(string prefix, hash<auto> node, string suffix) {
+        node = moveParens(node, \prefix, \suffix);
         if (!exists node.parts || node.parts.size() == 0) {
             emitter.emitLine(prefix + suffix);
             return;
@@ -948,11 +1133,11 @@ public class CodeFormatter {
         string contIndent = baseIndent + "    ";  # single-indent (+4) continuation
 
         # Emit first part with prefix
-        emitter.emitLine(prefix + emitExpressionStr(node.parts[0]));
+        emitter.emitLine(prefix + reindentContinuation(emitExpressionStr(node.parts[0]), baseIndent));
 
         # Emit remaining parts at continuation indent
         for (int i = 1; i < node.parts.size(); ++i) {
-            string line = emitExpressionStr(node.parts[i]);
+            string line = reindentContinuation(emitExpressionStr(node.parts[i]), contIndent);
             if (i == node.parts.size() - 1) {
                 line += suffix;
             }
@@ -960,7 +1145,7 @@ public class CodeFormatter {
         }
 
         if (exists node.loc) {
-            skipCommentsInRange(node.loc.start_line + 1, node.loc.end_line + 1);
+            skipNodeComments(node.loc);
         }
     }
 
@@ -971,17 +1156,18 @@ public class CodeFormatter {
         confusion with the body.
 
         @param prefix text before the opening paren (e.g., "int sub foo")
-        @param params comma-separated items to potentially wrap (e.g., "int a, string b")
+        @param items the items to potentially wrap (e.g., "int a" and "string b"); an item can contain commas, as in
+        "hash<string, int> h"
         @param openDelim opening delimiter ("(" or " inherits ")
         @param closeDelim closing delimiter (")")
         @param suffix text after the close delimiter (e.g., " {")
     */
-    private emitWrappedHeader(string prefix, string params, string openDelim, string closeDelim,
+    private emitWrappedHeader(string prefix, list<string> items, string openDelim, string closeDelim,
             string suffix) {
-        string oneLine = prefix + openDelim + params + closeDelim + suffix;
+        string oneLine = prefix + openDelim + items.join(", ") + closeDelim + suffix;
         int lineLen = currentIndentWidth() + oneLine.size();
 
-        if (lineLen <= MAX_LINE_LENGTH || params == "") {
+        if (lineLen <= MAX_LINE_LENGTH || !items) {
             # Fits on one line
             emitter.emitLine(oneLine);
             return;
@@ -994,8 +1180,7 @@ public class CodeFormatter {
         # Emit the prefix + opening delimiter on the first line
         emitter.emitLine(prefix + openDelim);
 
-        # Split params by ", " and emit each on its own continuation line
-        list<string> items = params.split(", ");
+        # Emit each item on its own continuation line
         for (int i = 0; i < items.size(); ++i) {
             string item = items[i];
             if (i < items.size() - 1) {
@@ -1017,6 +1202,17 @@ public class CodeFormatter {
 
         # Emit the close delimiter + suffix
         emitter.emitLineAtColumn0(baseIndent + closeDelim + suffix);
+    }
+
+    #! Returns the text of each parameter in a parameter list
+    private list<string> emitParamItems(*hash<auto> params) {
+        if (!exists params) {
+            return ();
+        }
+        if (params.kind == AEK_List && !params.parens) {
+            return map emitExpressionStr($1), params.elements ?? ();
+        }
+        return (emitExpressionStr(params),);
     }
 
     #! Emit modifier string
@@ -1110,6 +1306,9 @@ public class CodeFormatter {
                 } else {
                     emitDeclaration(decl);
                 }
+                if (exists decl.loc) {
+                    skipNodeComments(decl.loc);
+                }
             }
         }
         inClassContext = savedClassContext;
@@ -1192,10 +1391,7 @@ public class CodeFormatter {
         }
 
         # Parameters
-        string params = "";
-        if (exists node.params) {
-            params = emitExpressionStrInner(node.params);
-        }
+        list<string> params = emitParamItems(node.params);
 
         # Constructor initializers
         string initStr = "";
@@ -1255,6 +1451,9 @@ public class CodeFormatter {
                 emitCommentsBeforeLine1(findRealStartLine1(decl));
             }
             emitDeclaration(decl);
+            if (exists decl.loc) {
+                skipNodeComments(decl.loc);
+            }
         }
 
         emitter.newline();
@@ -1284,7 +1483,7 @@ public class CodeFormatter {
         # Skip comments within the constant's source range (they may be included
         # in source-extracted expression text, e.g., hash literals with inline comments)
         if (exists node.loc) {
-            skipCommentsInRange(node.loc.start_line + 1, node.loc.end_line + 1);
+            skipNodeComments(node.loc);
         }
     }
 
@@ -1292,7 +1491,7 @@ public class CodeFormatter {
     private emitVerbatimDecl(hash<auto> node) {
         emitter.emitLine(extractSourceText(node.loc));
         # The emitted source text includes any comments within the declaration
-        skipCommentsInRange(node.loc.start_line + 1, node.loc.end_line + 1);
+        skipNodeComments(node.loc);
     }
 
     #! Emit variable declaration
@@ -1322,7 +1521,7 @@ public class CodeFormatter {
         emitExprLine(line + " " + node.assignOp + " ", node.value, ";");
         # Skip comments within the declaration's source range, which source-extracted value text may include
         if (exists node.loc) {
-            skipCommentsInRange(node.loc.start_line + 1, node.loc.end_line + 1);
+            skipNodeComments(node.loc);
         }
     }
 
@@ -1340,27 +1539,9 @@ public class CodeFormatter {
             header += node.typeParameters;
         }
 
-        # Check for inherits
-        *string inheritsStr;
+        # the translator takes the inherited hashdecls from the syntax tree
         if (exists node.inherits) {
-            inheritsStr = node.inherits;
-        } else {
-            string srcText = extractSourceText(node.loc);
-            if (srcText =~ /inherits\s+/) {
-                int pos = srcText.find("inherits");
-                if (pos >= 0) {
-                    string inherited = srcText.substr(pos + 8);
-                    int brace = inherited.find("{");
-                    if (brace >= 0) {
-                        inherited = inherited.substr(0, brace);
-                    }
-                    inheritsStr = trim(inherited);
-                }
-            }
-        }
-
-        if (exists inheritsStr) {
-            header += " inherits " + inheritsStr;
+            header += " inherits " + node.inherits;
         }
 
         emitter.emitLine(header + " {");
@@ -1373,6 +1554,9 @@ public class CodeFormatter {
                     emitCommentsBeforeLine1(findRealStartLine1(decl));
                 }
                 emitHashMemberDecl(decl);
+                if (exists decl.loc) {
+                    skipNodeComments(decl.loc);
+                }
             }
         }
 
@@ -1396,7 +1580,7 @@ public class CodeFormatter {
         if (exists node.init) {
             emitExprLine(prefix + " = ", node.init, ";");
             if (exists node.loc) {
-                skipCommentsInRange(node.loc.start_line + 1, node.loc.end_line + 1);
+                skipNodeComments(node.loc);
             }
         } else {
             emitter.emitLine(prefix + ";");
@@ -1442,7 +1626,7 @@ public class CodeFormatter {
                 # Skip comments within this member's source range (they are included
                 # in the source-extracted expression text)
                 if (exists member.loc) {
-                    skipCommentsInRange(member.loc.start_line + 1, member.loc.end_line + 1);
+                    skipNodeComments(member.loc);
                 }
             }
         }
@@ -1478,8 +1662,7 @@ public class CodeFormatter {
                     emitter.emitLine(memberName + ",");
                 }
                 if (exists decl.loc) {
-                    skipCommentsInRange(decl.loc.start_line + 1,
-                        decl.loc.end_line + 1);
+                    skipNodeComments(decl.loc);
                 }
             }
         }
@@ -1501,7 +1684,7 @@ public class CodeFormatter {
                 emitExprLine(attr.key + " = ", attr.value, ";");
                 # Skip comments inside source-extracted attribute values (e.g., init closures)
                 if (exists attr.value && exists attr.value.loc) {
-                    skipCommentsInRange(attr.value.loc.start_line + 1, attr.value.loc.end_line + 1);
+                    skipNodeComments(attr.value.loc);
                 }
             }
         }
@@ -1525,13 +1708,10 @@ public class CodeFormatter {
 
         prefix += "sub";
 
-        string params = "";
-        if (exists node.params) {
-            params = emitExpressionStrInner(node.params);
-        }
+        list<string> params = emitParamItems(node.params);
 
         if (!exists node.body) {
-            emitter.emit(prefix + "(" + params + ")");
+            emitter.emit(prefix + "(" + params.join(", ") + ")");
             return;
         }
 
@@ -1643,14 +1823,20 @@ public class CodeFormatter {
                     emitNode(stmt);
                 }
             }
+            # comments after the last statement stay in the block
+            if (exists body.loc) {
+                emitCommentsBeforeLine1(body.loc.end_line + 1);
+            }
         } else {
             # Single statement
             emitNode(body);
         }
     }
 
-    #! Emit block statement
+    #! Emit a block statement, which is nested in another block and keeps its braces, as it is a scope
     private emitBlockStmt(hash<auto> node) {
+        emitter.emitLine("{");
+        emitter.indent();
         if (exists node.statements) {
             for (int i = 0; i < node.statements.size(); ++i) {
                 hash<auto> stmt = node.statements[i];
@@ -1660,6 +1846,12 @@ public class CodeFormatter {
                 emitNode(stmt);
             }
         }
+        # comments after the last statement stay in the block
+        if (exists node.loc) {
+            emitCommentsBeforeLine1(node.loc.end_line + 1);
+        }
+        emitter.dedent();
+        emitter.emitLine("}");
     }
 
     #! Emit if statement
@@ -1713,9 +1905,9 @@ public class CodeFormatter {
 
     #! Emit for statement
     private emitForStmt(hash<auto> node) {
-        string init = exists node.init ? emitExpressionStr(node.init) : "";
-        string cond = exists node.condition ? emitExpressionStr(node.condition) : "";
-        string iter = exists node.iteration ? emitExpressionStr(node.iteration) : "";
+        string init = emitForPart(node.init);
+        string cond = emitForPart(node.condition);
+        string iter = emitForPart(node.iteration);
         string forText = "for (" + init + "; " + cond + "; " + iter + ") {";
         if (forText =~ /\n/) {
             emitter.emitMultiLineLine(forText);
@@ -1726,6 +1918,17 @@ public class CodeFormatter {
         emitStatementBody(node.statement);
         emitter.dedent();
         emitter.emitLine("}");
+    }
+
+    #! Emits a part of a for statement, whose expressions are separated by commas
+    private string emitForPart(*hash<auto> part) {
+        if (!exists part) {
+            return "";
+        }
+        if (part.forList) {
+            return (map emitExpressionStr($1), part.elements).join(", ");
+        }
+        return emitExpressionStr(part);
     }
 
     #! Emit foreach statement
@@ -1835,7 +2038,7 @@ public class CodeFormatter {
         if (text =~ /\n/) {
             emitter.emitMultiLineLine(text);
             if (exists node.loc) {
-                skipCommentsInRange(node.loc.start_line + 1, node.loc.end_line + 1);
+                skipNodeComments(node.loc);
             }
         } else {
             emitter.emitLine(text);
@@ -1852,7 +2055,7 @@ public class CodeFormatter {
         if (text =~ /\n/) {
             emitter.emitMultiLineLine(text);
             if (exists node.loc) {
-                skipCommentsInRange(node.loc.start_line + 1, node.loc.end_line + 1);
+                skipNodeComments(node.loc);
             }
         } else {
             emitter.emitLine(text);
@@ -1872,7 +2075,7 @@ public class CodeFormatter {
         if (!exists node) {
             return "";
         }
-        if (exists node.kind && node.kind == AEK_List) {
+        if (exists node.kind && node.kind == AEK_List && !node.parens) {
             # Emit list items as comma-separated without surrounding parens
             if (!exists node.elements || node.elements.size() == 0) {
                 return "";
@@ -1894,11 +2097,20 @@ public class CodeFormatter {
         return regex_subst(text, ";\\s*$", "");
     }
 
-    #! Emit expression as string
+    #! Emit expression as string, with the parentheses that the source has around it
     private string emitExpressionStr(*hash<auto> node) {
         if (!exists node) {
             return "";
         }
+        string str = emitBareExpressionStr(node);
+        if (!node.parens || str == "") {
+            return str;
+        }
+        return strmul("(", node.parens) + str + strmul(")", node.parens);
+    }
+
+    #! Emit expression as string, without the parentheses that the source has around it
+    private string emitBareExpressionStr(hash<auto> node) {
         if (!exists node.kind) {
             # Might be a name node
             if (exists node.name) {
@@ -2054,7 +2266,7 @@ public class CodeFormatter {
     private string emitAccessExpr(hash<auto> node) {
         string var = emitExpressionStr(node.variable);
         string member = emitExpressionStr(node.member);
-        if (exists node.variable.kind
+        if (exists node.variable.kind && !node.variable.parens
                 && (node.variable.kind == AEK_Binary
                     || node.variable.kind == AEK_Ternary
                     || node.variable.kind == AEK_Assignment)) {
@@ -2067,7 +2279,12 @@ public class CodeFormatter {
     private string emitAssignmentExpr(hash<auto> node) {
         string left = emitExpressionStr(node.left);
         string right = emitExpressionStr(node.right);
-        return left + " = " + right;
+        return left + getAssignmentOp(node) + right;
+    }
+
+    #! Returns the operator of an assignment with the spaces around it: \c := for a weak assignment
+    private static string getAssignmentOp(hash<auto> node) {
+        return node.weak ? " := " : " = ";
     }
 
     #! Resolve operator name to symbol string
@@ -2105,27 +2322,36 @@ public class CodeFormatter {
         string opStr = resolveOperator(op);
 
         int myPrec = getOperatorPrecedence(op);
-        # Parenthesize left child if lower precedence
-        if (exists node.left.kind && node.left.kind == AEK_Binary && exists node.left.op) {
-            if (getOperatorPrecedence(node.left.op) < myPrec) {
-                left = "(" + left + ")";
-            }
-        }
-        # Parenthesize right child if lower or equal precedence (right-assoc protection)
-        if (exists node.right.kind && node.right.kind == AEK_Binary && exists node.right.op) {
-            if (getOperatorPrecedence(node.right.op) <= myPrec) {
-                right = "(" + right + ")";
-            }
-        }
-        # Parenthesize ternary children
-        if (exists node.left.kind && node.left.kind == AEK_Ternary) {
+        if (needsParens(node.left, myPrec, False)) {
             left = "(" + left + ")";
         }
-        if (exists node.right.kind && node.right.kind == AEK_Ternary) {
+        if (needsParens(node.right, myPrec, True)) {
             right = "(" + right + ")";
         }
 
         return left + " " + opStr + " " + right;
+    }
+
+    #! Returns True if an operand of a binary operator needs parentheses that the source does not have
+    /** A binary operand with a lower precedence needs them, as does a right operand with the same precedence, as
+        binary operators are left-associative. A ternary operand always needs them.
+
+        @param operand the operand
+        @param prec the precedence of the binary operator
+        @param right True for the right operand
+    */
+    private bool needsParens(*hash<auto> operand, int prec, bool right) {
+        if (!exists operand.kind || operand.parens) {
+            return False;
+        }
+        if (operand.kind == AEK_Ternary) {
+            return True;
+        }
+        if (operand.kind != AEK_Binary || !exists operand.op) {
+            return False;
+        }
+        int operandPrec = getOperatorPrecedence(operand.op);
+        return right ? operandPrec <= prec : operandPrec < prec;
     }
 
     #! Emit call expression
@@ -2140,6 +2366,13 @@ public class CodeFormatter {
 
     #! Emit unary expression
     private string emitUnaryExpr(hash<auto> node) {
+        if (exists node.operands) {
+            # a multi-line map, select, foldl or foldr expression; one with a comment is kept as written
+            if (hasCommentInRange(node.loc)) {
+                return stripTrailingSemicolon(extractNormalizedSourceText(node.loc));
+            }
+            return resolveOperator(node.op) + " " + (map emitExpressionStr($1), node.operands).join(", ");
+        }
         string operand = emitExpressionStr(node.expression);
         string op = node.op ?? "";
 
@@ -2172,8 +2405,9 @@ public class CodeFormatter {
         string var = emitExpressionStr(node.variable);
         if (exists node.keys) {
             # a trailing comma makes a single key a hash slice rather than a lookup
-            return var + "{" + (map emitExpressionStr($1), node.keys).join(", ") + (node.trailingComma ? "," : "")
-                + "}";
+            string keyList = (map emitExpressionStr($1), node.keys).join(", ") + (node.trailingComma ? "," : "");
+            # indexKind 2: member slice or dynamic member, as in obj.(key)
+            return node.indexKind == 2 ? var + ".(" + keyList + ")" : var + "{" + keyList + "}";
         }
         string idx = emitExpressionStr(node.index);
         # Strip surrounding brackets if source extraction included them
@@ -2183,7 +2417,7 @@ public class CodeFormatter {
         if (idx =~ /^\{.*\}$/) {
             idx = idx.substr(1, idx.length() - 2);
         }
-        # indexKind: 0 = square brackets (list/array), 1 = curly brackets (hash)
+        # indexKind: 0 = square brackets (list/array), 1 = curly brackets (hash), 2 = member slice (with keys)
         if (node.indexKind == 1) {
             return var + "{" + idx + "}";
         }

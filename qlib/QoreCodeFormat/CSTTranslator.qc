@@ -171,6 +171,10 @@ public class CSTTranslator {
             case "parse_directive":
             case "conditional_directive":
                 return;
+
+            # an empty statement has no effect, and the formatter writes braces around the body of a statement
+            case "empty_statement":
+                return;
         }
 
         # Fallback: return raw with source location for extractSourceText
@@ -1354,9 +1358,6 @@ public class CSTTranslator {
     }
 
     private hash<auto> translateForStmt(hash<auto> node) {
-        *hash<auto> initNode = findField(node, "init");
-        *hash<auto> condNode = findField(node, "condition");
-        *hash<auto> updateNode = findField(node, "update");
         *hash<auto> bodyNode = findField(node, "body");
 
         hash<auto> result = {
@@ -1364,19 +1365,52 @@ public class CSTTranslator {
             "kind": ASK_For,
             "loc": node.loc,
         };
-        if (exists initNode) {
-            result."init" = translateExpression(initNode);
+        *hash<auto> init = translateForPart(node, "init");
+        if (exists init) {
+            result."init" = init;
         }
-        if (exists condNode) {
-            result.condition = translateExpression(condNode);
+        *hash<auto> condition = translateForPart(node, "condition");
+        if (exists condition) {
+            result.condition = condition;
         }
-        if (exists updateNode) {
-            result.iteration = translateExpression(updateNode);
+        *hash<auto> iteration = translateForPart(node, "update");
+        if (exists iteration) {
+            result.iteration = iteration;
         }
         if (exists bodyNode) {
             result.statement = translateNode(bodyNode);
         }
         return result;
+    }
+
+    #! Translates the comma-separated expressions of a part of a for statement
+    /** @return the expression, or a list of the expressions with the \c forList key if there are several
+    */
+    private *hash<auto> translateForPart(hash<auto> node, string field) {
+        list<hash<auto>> exprs = ();
+        foreach hash<auto> child in (node.children ?? ()) {
+            if (child.field == field) {
+                *hash<auto> expr = translateExpression(child);
+                if (exists expr) {
+                    exprs += expr;
+                }
+            }
+        }
+        if (exprs.size() < 2) {
+            return exprs[0];
+        }
+        return {
+            "nodetype": ANT_Expression,
+            "kind": AEK_List,
+            "elements": exprs,
+            "forList": True,
+            "loc": {
+                "start_line": exprs[0].loc.start_line,
+                "start_column": exprs[0].loc.start_column,
+                "end_line": exprs[-1].loc.end_line,
+                "end_column": exprs[-1].loc.end_column,
+            },
+        };
     }
 
     private hash<auto> translateForeachStmt(hash<auto> node) {
@@ -1737,6 +1771,7 @@ public class CSTTranslator {
             case ">>": return "AOK_ShiftRight";
             case "==": return "AOK_Equals";
             case "!=": return "AOK_NotEquals";
+            case "<>": return "AOK_NotEquals";
             case "<=>": return "AOK_Comparison";
             case ">": return "AOK_GreaterThan";
             case ">=": return "AOK_GreaterThanOrEquals";
@@ -1877,6 +1912,9 @@ public class CSTTranslator {
                 "kind": AEK_Assignment,
                 "loc": node.loc,
             };
+            if (op == ":=") {
+                result.weak = True;
+            }
             if (exists leftNode) {
                 result.left = translateExpression(leftNode);
             }
@@ -2111,10 +2149,14 @@ public class CSTTranslator {
     }
 
     private *hash<auto> translateParenExpr(hash<auto> node) {
-        # Unwrap parenthesized expression - pass through to inner expression
+        # the inner expression records the number of parentheses around it, which the formatter writes back
         if (exists node.children) {
             foreach hash<auto> child in (node.children) {
-                return translateExpression(child);
+                *hash<auto> expr = translateExpression(child);
+                if (exists expr) {
+                    expr.parens = (expr.parens ?? 0) + 1;
+                }
+                return expr;
             }
         }
     }
@@ -2479,7 +2521,7 @@ public class CSTTranslator {
         # map expr, list [, filter] — keyword prefix with comma-separated args
         # If expression spans multiple lines, fall back to source text to preserve indentation
         if (node.loc.start_line != node.loc.end_line) {
-            return {"nodetype": ANT_Expression, "kind": AEK_Decl, "loc": node.loc};
+            return translateMultiLineListOperator(node, "AOK_Map");
         }
         # Extract args text (everything after "map " keyword)
         string argsText;
@@ -2495,6 +2537,9 @@ public class CSTTranslator {
         } else {
             argsText = extractText(node);
         }
+        # a trailing comma is part of the operator's argument list, where it has no effect, but in a list or hash,
+        # the formatter adds its own
+        argsText = regex_subst(argsText, "\\s*,\\s*$", "");
 
         return {
             "nodetype": ANT_Expression,
@@ -2509,7 +2554,7 @@ public class CSTTranslator {
     private hash<auto> translateSelectExpr(hash<auto> node) {
         # select listExpr, filterExpr — keyword prefix with comma-separated args
         if (node.loc.start_line != node.loc.end_line) {
-            return {"nodetype": ANT_Expression, "kind": AEK_Decl, "loc": node.loc};
+            return translateMultiLineListOperator(node, "AOK_Select");
         }
         string argsText;
         if (exists node.children && node.children.size() > 0) {
@@ -2524,6 +2569,9 @@ public class CSTTranslator {
         } else {
             argsText = extractText(node);
         }
+        # a trailing comma is part of the operator's argument list, where it has no effect, but in a list or hash,
+        # the formatter adds its own
+        argsText = regex_subst(argsText, "\\s*,\\s*$", "");
 
         return {
             "nodetype": ANT_Expression,
@@ -2538,7 +2586,7 @@ public class CSTTranslator {
     private hash<auto> translateFoldlExpr(hash<auto> node) {
         # foldl expr, list — keyword prefix with comma-separated args
         if (node.loc.start_line != node.loc.end_line) {
-            return {"nodetype": ANT_Expression, "kind": AEK_Decl, "loc": node.loc};
+            return translateMultiLineListOperator(node, "AOK_Foldl");
         }
         string argsText;
         if (exists node.children && node.children.size() > 0) {
@@ -2553,6 +2601,9 @@ public class CSTTranslator {
         } else {
             argsText = extractText(node);
         }
+        # a trailing comma is part of the operator's argument list, where it has no effect, but in a list or hash,
+        # the formatter adds its own
+        argsText = regex_subst(argsText, "\\s*,\\s*$", "");
 
         return {
             "nodetype": ANT_Expression,
@@ -2567,7 +2618,7 @@ public class CSTTranslator {
     private hash<auto> translateFoldrExpr(hash<auto> node) {
         # foldr expr, list — keyword prefix with comma-separated args
         if (node.loc.start_line != node.loc.end_line) {
-            return {"nodetype": ANT_Expression, "kind": AEK_Decl, "loc": node.loc};
+            return translateMultiLineListOperator(node, "AOK_Foldr");
         }
         string argsText;
         if (exists node.children && node.children.size() > 0) {
@@ -2582,6 +2633,9 @@ public class CSTTranslator {
         } else {
             argsText = extractText(node);
         }
+        # a trailing comma is part of the operator's argument list, where it has no effect, but in a list or hash,
+        # the formatter adds its own
+        argsText = regex_subst(argsText, "\\s*,\\s*$", "");
 
         return {
             "nodetype": ANT_Expression,
@@ -2645,6 +2699,30 @@ public class CSTTranslator {
         return translateKeywordExpr(node, opName ?? node.type);
     }
 
+    #! Translates a map, select, foldl or foldr expression that spans lines
+    /** The operands are translated, so that they are formatted; the formatter keeps an expression with a comment as
+        written, as the translated form would lose the comment.
+    */
+    private hash<auto> translateMultiLineListOperator(hash<auto> node, string opName) {
+        list<hash<auto>> operands = ();
+        foreach hash<auto> child in (node.children ?? ()) {
+            if (child.field == "expression" || child.field == "list" || child.field == "filter") {
+                operands += translateExpression(child);
+            }
+        }
+        if (operands.size() < 2) {
+            return {"nodetype": ANT_Expression, "kind": AEK_Decl, "loc": node.loc};
+        }
+        # a trailing comma is part of the operator's argument list, where it has no effect, so it is not kept
+        return {
+            "nodetype": ANT_Expression,
+            "kind": AEK_Unary,
+            "op": opName,
+            "operands": operands,
+            "loc": node.loc,
+        };
+    }
+
     private hash<auto> translateMultiArgExpr(hash<auto> node) {
         # push, unshift, splice, extract - all become unary with the operator name
         string opName;
@@ -2681,31 +2759,35 @@ public class CSTTranslator {
         };
     }
 
+    #! Translates a member slice or a dynamic member, as in obj.("a", "b") or obj.(key)
     private hash<auto> translateSliceExpr(hash<auto> node) {
         *hash<auto> objNode = findField(node, "object");
-        *hash<auto> rangeStart = findField(node, "range_start");
-        *hash<auto> rangeEnd = findField(node, "range_end");
-
-        hash<auto> rangeExpr = {
-            "nodetype": ANT_Expression,
-            "kind": AEK_Range,
-            "loc": node.loc,
-        };
-        if (exists rangeStart) {
-            rangeExpr.left = translateExpression(rangeStart);
-        }
-        if (exists rangeEnd) {
-            rangeExpr.right = translateExpression(rangeEnd);
-        }
-
-        return {
+        # the member expressions are the children without a field
+        list<hash<auto>> keyNodes = select node.children ?? (), !exists $1.field;
+        hash<auto> result = {
             "nodetype": ANT_Expression,
             "kind": AEK_Index,
-            "indexKind": 0,
-            "variable": exists objNode ? translateExpression(objNode) : NOTHING,
-            "index": rangeExpr,
+            "indexKind": 2,
+            "keys": (map translateExpression($1), keyNodes),
             "loc": node.loc,
         };
+        if (exists objNode) {
+            result.variable = translateExpression(objNode);
+        }
+        # only whitespace, comments and the comma can follow the last member expression
+        if (keyNodes) {
+            hash<auto> last = keyNodes[-1];
+            string after = extractText({"loc": {
+                "start_line": last.loc.end_line,
+                "start_column": last.loc.end_column,
+                "end_line": node.loc.end_line,
+                "end_column": node.loc.end_column,
+            }});
+            after = regex_subst(after, "/\\*.*?\\*/", "", RE_Global | RE_DotAll);
+            after = regex_subst(after, "#[^\\n]*", "", RE_Global);
+            result.trailingComma = after =~ /,/;
+        }
+        return result;
     }
 
     private hash<auto> translateParameterList(hash<auto> node) {
@@ -2880,6 +2962,7 @@ public class CSTTranslator {
                     "left": declExpr,
                     "right": translateExpression(valueNode),
                     "loc": node.loc,
+                    "weak": op == ":=",
                 };
             }
 
@@ -2974,6 +3057,7 @@ public class CSTTranslator {
                         "left": declExpr,
                         "right": translateExpression(valueNode),
                         "loc": node.loc,
+                        "weak": op == ":=",
                     };
                 }
 
@@ -3017,21 +3101,26 @@ public class CSTTranslator {
         return {"nodetype": ANT_Expression, "kind": AEK_Decl, "loc": node.loc};
     }
 
+    #! Translates a typed declaration with a value in an expression, as in "for (int i = 0; ...)"
     private hash<auto> translateConditionalDecl(hash<auto> node) {
+        *hash<auto> typeNode = findField(node, "type");
         *hash<auto> nameNode = findField(node, "name");
         *hash<auto> valueNode = findField(node, "value");
 
+        # the declaration includes its type
+        hash<auto> decl = exists nameNode
+            ? makeDeclExpr(node, typeNode, nameNode)
+            : {"nodetype": ANT_Expression, "kind": AEK_Decl, "loc": node.loc};
         if (exists valueNode) {
-            hash<auto> declLoc = exists nameNode ? nameNode.loc : node.loc;
             return {
                 "nodetype": ANT_Expression,
                 "kind": AEK_Assignment,
-                "left": {"nodetype": ANT_Expression, "kind": AEK_Decl, "loc": declLoc},
+                "left": decl,
                 "right": translateExpression(valueNode),
                 "loc": node.loc,
             };
         }
-        return {"nodetype": ANT_Expression, "kind": AEK_Decl, "loc": node.loc};
+        return decl;
     }
 
     private hash<auto> translateListAssignment(hash<auto> node) {

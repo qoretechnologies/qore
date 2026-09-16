@@ -22,6 +22,40 @@ class KeywordCallTest inherits QUnit::Test {
         #! Keywords that lib/scanner.lpp also accepts with spaces or tabs before the "("
         const SpacedKeywords = ("default", "deprecated", "module", "public", "returns", "static");
 
+        #! Streaming operator keywords, which lib/scanner.lpp reads as names when SOFT_IDENTIFIER_FOLLOW follows
+        const StreamingKeywords = ("all", "any", "count", "drop", "first", "iterate", "take", "takeuntil",
+            "takewhile");
+
+        #! Uses @KW@ as a name before each character sequence that makes it a name; run() returns 25
+        const SoftNameSource = "class C {}
+int sub f(int @KW@ = 0) { return @KW@; }
+int sub g(int a, int b) { return a + b; }
+int sub h(C @KW@) { return @KW@ instanceof C ? 1 : 0; }
+int sub total(list<int> l) {
+    int r;
+    foreach int @KW@ in (l) {
+        r += @KW@;
+    }
+    return r;
+}
+int sub run() {
+    int @KW@ = 1;
+    int r = @KW@ - 1 + @KW@+1 + @KW@-1 + @KW@ * 2 + (@KW@) + (@KW@ ? 1 : 0);
+    list<int> l = (@KW@, 2);
+    C c();
+    r += l[@KW@] + f(@KW@: 2) + g(@KW@ - 1, 3) + h(c) + total(l);
+    @KW@++;
+    @KW@ -= 1;
+    @KW@ += 2;
+    r += @KW@ != 0 ? 1 : 0;
+    hash<auto> m = {\"a\": @KW@};
+    r += m.a;
+    r += @KW@
+        + 1;
+    return r;
+}
+";
+
         #! Keywords that lib/scanner.lpp reads as identifiers unless a declaration name follows
         const UnreservedKeywords = ("class", "module");
 
@@ -80,6 +114,8 @@ int sub run() {
         addTestCase("Spaced keyword calls follow the runtime scanner", \spacedCalls());
         addTestCase("Unreserved keywords are identifiers without a declaration name", \unreserved());
         addTestCase("Spaced operators retain their operator nodes", \operators());
+        addTestCase("Streaming keywords are names before operators and delimiters", \softNames());
+        addTestCase("Streaming operators follow the runtime scanner", \streamingOperators());
         addTestCase("Keyword call names are complete words", \boundaries());
         addTestCase("Malformed calls are rejected by both parsers", \invalid());
         set_return_value(main());
@@ -204,9 +240,11 @@ int sub run() { return total; }
             assertEq(6, run(source, kw), kw);
             list<auto> nodes = parse(source, kw);
             assertEq(3, findCalls(nodes, kw).size(), kw + " calls");
-            # the declaration and both assignments, which the grammar represents as untyped declarations
-            assertEq(3, (select findNodes(nodes, "variable_declarator"), getField($1, "name").text == kw).size(),
+            # the declaration, and two assignments, as in the runtime
+            assertEq(1, (select findNodes(nodes, "variable_declarator"), getField($1, "name").text == kw).size(),
                 kw + " variables");
+            assertEq(2, (select findNodes(nodes, "assignment_expression"), getField($1, "left").children[0].text == kw).size(),
+                kw + " assignments");
             assertEq(0, findNodes(nodes, "class_declaration").size() + findNodes(nodes, "module_declaration").size(),
                 kw + " declarations");
         }
@@ -266,6 +304,59 @@ int sub run() {
             string name = (expression =~ x/^(\w+)/)[0];
             assertEq(0, findCalls(nodes, name).size(), expression + " is not a call");
         }
+    }
+
+    softNames() {
+        foreach string kw in (StreamingKeywords) {
+            string source = replace(SoftNameSource, "@KW@", kw);
+            assertEq(25, run(source, kw), kw);
+            list<auto> nodes = parse(source, kw);
+            foreach string type in (OperatorTypes) {
+                assertEq(0, findNodes(nodes, type).size(), kw + " has no " + type);
+            }
+            # every use of the keyword is an identifier
+            int uses = (select (source =~ x/(\w+)/g), $1 == kw).size();
+            assertEq(uses, (select findNodes(nodes, "identifier"), $1.text == kw).size(), kw + " identifiers");
+            assertEq(1, findNodes(nodes, "named_argument").size(), kw + " named argument");
+        }
+    }
+
+    streamingOperators() {
+        list<list<auto>> cases = (
+            # "-" and "+" are operators only when followed by whitespace, "=" or the same character
+            ("count -$1 < -1, inputs", 2, "streaming_terminal_expression"),
+            ("drop +1, inputs", (2, 3), "streaming_limited_expression"),
+            # "in" and "instanceof" make a name only as complete words
+            ("count inputs", 3, "streaming_terminal_expression"),
+            ("first instances", 4, "streaming_terminal_expression"),
+            ("take index, inputs", (1,), "streaming_limited_expression"),
+            # "!" is an operator unless "=" follows
+            ("any !$1, (0, 1)", True, "streaming_terminal_expression"),
+            ("takeuntil \"c\" == $1, words", ("a", "b"), "streaming_boundary_expression"),
+            ("count iterate inputs", 3, "streaming_terminal_expression"),
+            ("all\n$1 > 0, inputs", True, "streaming_terminal_expression"),
+        );
+        foreach list<auto> test in (cases) {
+            string expression = test[0];
+            string source = "auto sub run() { list<int> inputs = (1, 2, 3); list<int> instances = (4, 5); "
+                "int index = 1; list<string> words = (\"a\", \"b\", \"c\"); return " + expression + "; }";
+            assertEq(test[1], run(source, expression), expression);
+            list<auto> nodes = parse(source, expression);
+            assertEq(1, findNodes(nodes, test[2]).size(), expression);
+        }
+
+        # "first", "last" and "one" followed by whitespace after "find" are the find mode
+        string source = "int sub first(int a) { return a * 10; }
+list<auto> sub run() {
+    hash<auto> q = {\"name\": (\"a\", \"b\"), \"age\": (1, 2)};
+    return (find first %name in q where (%age > 0), find last %name in q where (%age > 0),
+        find first(%age) in q where (%age > 1));
+}
+";
+        assertEq(("a", "b", 20), run(source, "find"));
+        list<auto> nodes = parse(source, "find");
+        assertEq(("first", "last"), map $1.text, findNodes(nodes, "find_modifier"));
+        assertEq(1, findCalls(nodes, "first").size());
     }
 
     boundaries() {

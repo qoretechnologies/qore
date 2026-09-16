@@ -51,6 +51,11 @@ module.exports = grammar({
     $._keyword_identifier,
     $._class_keyword,
     $._module_keyword,
+    // a streaming operator keyword that lib/scanner.lpp reads as a name because of the characters that follow it,
+    // as in "count - 1" or "first;"
+    $._soft_identifier,
+    // "first", "last" or "one" followed by whitespace after "find", which lib/scanner.lpp reads as the find mode
+    $._find_modifier,
     // matched by the newline rule; listed so that src/scanner.c knows when a
     // newline is valid and leaves it to the generated lexer
     $.newline,
@@ -73,8 +78,6 @@ module.exports = grammar({
   conflicts: $ => [
     [$.hash_literal, $.block],
     [$.hash_literal, $._statement],
-    [$._untyped_variable_declarator, $.primary_expression],
-    [$.parenthesized_expression, $.list_literal],
     [$.list_literal, $.paren_hash_literal],
     [$.function_declaration, $.primary_expression, $.generic_type],
     [$.argument_list, $.parameter_list],
@@ -98,9 +101,7 @@ module.exports = grammar({
     [$.map_expression],
     [$.select_expression],
     [$.simple_type, $.streaming_terminal_expression],
-    [$._type_keyword, $.streaming_keyword_identifier, $.streaming_terminal_expression],
-    [$._type_keyword, $.streaming_keyword_identifier],
-    [$._type_keyword, $.streaming_keyword_identifier, $.simple_type],
+    [$._type_keyword, $.streaming_terminal_expression],
     // a declared name vs an expression: local declarations, parameters and lists of declarations, such as
     // (int a, b) = ..., vs expressions starting with a name or "("
     [$.primary_expression, $._declared_name],
@@ -112,10 +113,6 @@ module.exports = grammar({
     [$._type_keyword, $._declared_name],
     [$._declared_name, $.generic_type],
     [$._declared_name, $.complex_type],
-    [$._type_keyword, $._declared_name, $.streaming_keyword_identifier],
-    [$.streaming_keyword_identifier, $.streaming_terminal_expression],
-    [$.streaming_keyword_identifier, $.streaming_limited_expression],
-    [$.streaming_keyword_identifier, $.streaming_boundary_expression],
   ],
 
   rules: {
@@ -601,8 +598,6 @@ module.exports = grammar({
 
     variable_declarator: $ => variableDeclarator($, $._declared_name),
 
-    // lib/parser.ypp reads a type name without a declared type or scope as an expression, as in "data = 1;"
-    _untyped_variable_declarator: $ => variableDeclarator($, $.identifier),
 
     // ==================== Hashdecl ====================
     hashdecl_declaration: $ => seq(
@@ -916,12 +911,10 @@ module.exports = grammar({
       field('body', $._statement),
     ),
 
-    // a read-only local variable requires a type in lib/parser.ypp
+    // a read-only local variable requires a type in lib/parser.ypp; without a type or a scope keyword, a name is an
+    // expression, as in "data = 1;" or "h.key = 1;"
     local_variable_declaration: $ => prec.dynamic(2, seq(
-      choice(
-        seq(optional('const'), field('type', $.type), commaSep1($.variable_declarator)),
-        commaSep1(alias($._untyped_variable_declarator, $.variable_declarator)),
-      ),
+      optional('const'), field('type', $.type), commaSep1($.variable_declarator),
       ';',
     )),
 
@@ -981,7 +974,7 @@ module.exports = grammar({
       prec.left(PREC.BITWISE_XOR, seq($._expression, '^', $._expression)),
       prec.left(PREC.BITWISE_AND, seq($._expression, '&', $._expression)),
       // Equality
-      prec.left(PREC.EQUALITY, seq($._expression, choice('==', '!=', '===', '!=='), $._expression)),
+      prec.left(PREC.EQUALITY, seq($._expression, choice('==', '!=', '<>', '===', '!=='), $._expression)),
       // Regex prefixes are reserved only after a regex operator (or case).
       // In ordinary expressions, m{key}, s{key}, tr{key} and x{key} are hash lookups.
       prec.left(PREC.EQUALITY, seq($._expression, '=~', $.regex)),
@@ -1019,11 +1012,12 @@ module.exports = grammar({
 
     primary_expression: $ => choice(
       $.identifier,
-      $.streaming_keyword_identifier,
+      alias($._soft_identifier, $.identifier),
       $.variable_name,
       $.generic_scoped_identifier,
       $.scoped_identifier,
-      $._type_keyword,  // type keywords used as variable names (data, hash, etc.)
+      // type keywords used as variable names (data, hash, etc.); an alias makes the name visible
+      alias($._type_keyword, $.identifier),
       $.literal,
       $.string,
       $.string_concatenation,
@@ -1073,7 +1067,6 @@ module.exports = grammar({
         // is a call, while select (x), y is the select operator. See
         // design/astparser-keyword-identifiers.md.
         alias($._keyword_identifier, $.identifier),
-        $.streaming_keyword_identifier,
         $.generic_scoped_identifier,
         $.scoped_identifier,
         $.member_expression,
@@ -1083,7 +1076,7 @@ module.exports = grammar({
         $.closure_expression,   // sub() { ... }() — immediate closure invocation
         $.variable_name,        // $func()
         $.implicit_argument,    // $1() — calling implicit arg as closure
-        $._type_keyword,        // string(), int(), etc.
+        alias($._type_keyword, $.identifier),  // string(), int(), etc.
       )),
       $.argument_list,
     )),
@@ -1092,14 +1085,16 @@ module.exports = grammar({
     _type_keyword: $ => choice(...TYPE_NAMES),
 
     // The name of a declaration, which may be a type name, as in "our int;"
-    _declared_name: $ => choice($.identifier, alias(choice(...TYPE_NAMES), $.identifier)),
+    _declared_name: $ => choice(
+      $.identifier,
+      alias(choice(...TYPE_NAMES), $.identifier),
+      alias($._soft_identifier, $.identifier),
+    ),
 
     streaming_keyword_identifier: $ => choice(
       'iterate', 'first', 'any', 'all', 'count',
       'take', 'drop', 'takewhile', 'takeuntil',
     ),
-
-    find_modifier: $ => prec(1, choice('first', 'last', 'one')),
 
     argument_list: $ => seq(
       '(',
@@ -1116,7 +1111,8 @@ module.exports = grammar({
     ),
 
     named_argument: $ => seq(
-      field('name', choice($.identifier, $.streaming_keyword_identifier, $._type_keyword)),
+      field('name', choice($.identifier, alias($._soft_identifier, $.identifier),
+        alias($._type_keyword, $.identifier))),
       ':',
       field('value', $._expression),
     ),
@@ -1221,9 +1217,10 @@ module.exports = grammar({
       field('expression', $._expression),
       ',',
       field('list', $._expression),
+      // as in lib/parser.ypp, the operator takes all of the following comma-separated expressions
       optional(choice(
-        prec.dynamic(-1, seq(',', field('filter', $._expression), optional(','))),
-        prec.dynamic(-2, ','),
+        prec.dynamic(1, seq(',', field('filter', $._expression), optional(','))),
+        ',',
       )),
     ),
 
@@ -1232,9 +1229,10 @@ module.exports = grammar({
       field('expression', $._expression),
       ',',
       field('list', $._expression),
+      // as in lib/parser.ypp, the operator takes all of the following comma-separated expressions
       optional(choice(
-        prec.dynamic(-1, seq(',', field('filter', $._expression), optional(','))),
-        prec.dynamic(-2, ','),
+        prec.dynamic(1, seq(',', field('filter', $._expression), optional(','))),
+        ',',
       )),
     ),
 
@@ -1257,7 +1255,7 @@ module.exports = grammar({
     find_expression: $ => prec.right(PREC.UNARY, choice(
       seq(
         'find',
-        field('mode', $.find_modifier),
+        field('mode', alias($._find_modifier, $.find_modifier)),
         field('value', $._expression),
         'in',
         field('source', $._expression),
@@ -1286,9 +1284,10 @@ module.exports = grammar({
     streaming_terminal_expression: $ => prec.right(seq(
       field('operator', choice('first', 'any', 'all', 'count')),
       field('expression', $._expression),
+      // as in lib/parser.ypp, the operator takes all of the following comma-separated expressions
       optional(choice(
-        prec.dynamic(-1, seq(',', field('source', $._expression), optional(','))),
-        prec.dynamic(-2, ','),
+        prec.dynamic(1, seq(',', field('source', $._expression), optional(','))),
+        ',',
       )),
     )),
 
@@ -1474,13 +1473,20 @@ module.exports = grammar({
         repeat($.parse_directive),
         optional(seq(
           $._expression,
-          repeat(seq(
-            ',',
-            repeat($.parse_directive),
-            $._expression,
-          )),
-          optional(','),
-          repeat($.parse_directive),
+          choice(
+            // a single element is a list only with a trailing comma, as (x)
+            // is a parenthesized expression
+            seq(',', repeat($.parse_directive)),
+            seq(
+              repeat1(seq(
+                ',',
+                repeat($.parse_directive),
+                $._expression,
+              )),
+              optional(','),
+              repeat($.parse_directive),
+            ),
+          ),
         )),
       )),
       ')',
@@ -1538,33 +1544,34 @@ module.exports = grammar({
       $.regex_extract,
     ),
 
+    // lib/scanner.lpp reads line breaks in slash-delimited expressions as part of the expression
     regex_literal: $ => choice(token(prec(-1, seq(
       '/',
-      /([^\/\n\\]|\\.)*/,
+      /([^\/\\]|\\.)*/,
       '/',
       optional(/[gimxsun]+/),
     ))), seq('m{', $._brace_regex_match)),
 
     regex_subst: $ => choice(token(seq(
       's/',
-      /([^\/\n\\]|\\.)*/,
+      /([^\/\\]|\\.)*/,
       '/',
-      /([^\/\n\\]|\\.)*/,
+      /([^\/\\]|\\.)*/,
       '/',
       optional(/[gimxsun]+/),
     )), seq('s{', $._brace_regex_subst)),
 
     regex_trans: $ => choice(token(seq(
       'tr/',
-      /([^\/\n\\]|\\.)*/,
+      /([^\/\\]|\\.)*/,
       '/',
-      /([^\/\n\\]|\\.)*/,
+      /([^\/\\]|\\.)*/,
       '/',
     )), seq('tr{', $._brace_regex_trans)),
 
     regex_extract: $ => choice(token(seq(
       'x/',
-      /([^\/\n\\]|\\.)*/,
+      /([^\/\\]|\\.)*/,
       '/',
       optional(/[gimxsun]+/),
     )), seq('x{', $._brace_regex_extract)),
@@ -1675,9 +1682,12 @@ module.exports = grammar({
 
     generic_type: $ => seq(
       field('base', choice($.identifier, $.scoped_identifier)),
-      '<',
-      commaSep1($.type),
-      '>',
+      choice(
+        seq('<', commaSep1($.type), '>'),
+        // lib/scanner.lpp: TYPE_ARGS may be empty, which uses the defaults of all type parameters
+        seq('<', '>'),
+        '<>',
+      ),
     ),
 
     // lib/scanner.lpp matches the longest word<args>::word<args> sequence as

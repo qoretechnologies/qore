@@ -116,6 +116,11 @@ class BraceRegexTest inherits QUnit::Test {
         check("value =~ s/abc/new/", "new");
         check("value =~ tr/abc/xyz/", "xyz");
         check("value =~ x/(a)(bc)/", ("a", "bc"));
+        # line breaks are part of slash-delimited operations
+        check("value =~ /a\n b\nc/x", True);
+        check("value =~ s/a\n b/\n/x", "\nc");
+        check("value =~ tr/a\n/\nx/", "\nbc");
+        check("value =~ x/(a)\n(bc)/x", ("a", "bc"));
         foreach string name in ("m", "s", "tr", "x") {
             string source = "%modern\nint sub lookup() { hash<string, int> " + name
                 + " = (\"abc\": 7,); return " + name + "{\"abc\"}; }\n";

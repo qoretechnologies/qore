@@ -389,56 +389,16 @@
         "required": true,
         "types": [
           {
-            "type": "any",
-            "named": false
-          },
-          {
-            "type": "auto",
-            "named": false
-          },
-          {
-            "type": "binary",
-            "named": false
-          },
-          {
-            "type": "bool",
-            "named": false
-          },
-          {
             "type": "call_expression",
             "named": true
-          },
-          {
-            "type": "char",
-            "named": false
           },
           {
             "type": "closure_expression",
             "named": true
           },
           {
-            "type": "code",
-            "named": false
-          },
-          {
-            "type": "data",
-            "named": false
-          },
-          {
-            "type": "date",
-            "named": false
-          },
-          {
-            "type": "float",
-            "named": false
-          },
-          {
             "type": "generic_scoped_identifier",
             "named": true
-          },
-          {
-            "type": "hash",
-            "named": false
           },
           {
             "type": "identifier",
@@ -453,88 +413,16 @@
             "named": true
           },
           {
-            "type": "int",
-            "named": false
-          },
-          {
-            "type": "list",
-            "named": false
-          },
-          {
             "type": "member_expression",
             "named": true
-          },
-          {
-            "type": "nothing",
-            "named": false
-          },
-          {
-            "type": "number",
-            "named": false
-          },
-          {
-            "type": "object",
-            "named": false
           },
           {
             "type": "parenthesized_expression",
             "named": true
           },
           {
-            "type": "reference",
-            "named": false
-          },
-          {
             "type": "scoped_identifier",
             "named": true
-          },
-          {
-            "type": "softbool",
-            "named": false
-          },
-          {
-            "type": "softchar",
-            "named": false
-          },
-          {
-            "type": "softdate",
-            "named": false
-          },
-          {
-            "type": "softfloat",
-            "named": false
-          },
-          {
-            "type": "softint",
-            "named": false
-          },
-          {
-            "type": "softlist",
-            "named": false
-          },
-          {
-            "type": "softnumber",
-            "named": false
-          },
-          {
-            "type": "softstring",
-            "named": false
-          },
-          {
-            "type": "streaming_keyword_identifier",
-            "named": true
-          },
-          {
-            "type": "string",
-            "named": false
-          },
-          {
-            "type": "timeout",
-            "named": false
-          },
-          {
-            "type": "union",
-            "named": false
           },
           {
             "type": "variable_name",
@@ -2106,11 +1994,6 @@
     }
   },
   {
-    "type": "find_modifier",
-    "named": true,
-    "fields": {}
-  },
-  {
     "type": "foldl_expression",
     "named": true,
     "fields": {
@@ -2730,7 +2613,7 @@
     },
     "children": {
       "multiple": true,
-      "required": true,
+      "required": false,
       "types": [
         {
           "type": "type",
@@ -3568,7 +3451,7 @@
     "fields": {
       "type": {
         "multiple": false,
-        "required": false,
+        "required": true,
         "types": [
           {
             "type": "type",
@@ -4073,120 +3956,8 @@
         "required": true,
         "types": [
           {
-            "type": "any",
-            "named": false
-          },
-          {
-            "type": "auto",
-            "named": false
-          },
-          {
-            "type": "binary",
-            "named": false
-          },
-          {
-            "type": "bool",
-            "named": false
-          },
-          {
-            "type": "char",
-            "named": false
-          },
-          {
-            "type": "code",
-            "named": false
-          },
-          {
-            "type": "data",
-            "named": false
-          },
-          {
-            "type": "date",
-            "named": false
-          },
-          {
-            "type": "float",
-            "named": false
-          },
-          {
-            "type": "hash",
-            "named": false
-          },
-          {
             "type": "identifier",
             "named": true
-          },
-          {
-            "type": "int",
-            "named": false
-          },
-          {
-            "type": "list",
-            "named": false
-          },
-          {
-            "type": "nothing",
-            "named": false
-          },
-          {
-            "type": "number",
-            "named": false
-          },
-          {
-            "type": "object",
-            "named": false
-          },
-          {
-            "type": "reference",
-            "named": false
-          },
-          {
-            "type": "softbool",
-            "named": false
-          },
-          {
-            "type": "softchar",
-            "named": false
-          },
-          {
-            "type": "softdate",
-            "named": false
-          },
-          {
-            "type": "softfloat",
-            "named": false
-          },
-          {
-            "type": "softint",
-            "named": false
-          },
-          {
-            "type": "softlist",
-            "named": false
-          },
-          {
-            "type": "softnumber",
-            "named": false
-          },
-          {
-            "type": "softstring",
-            "named": false
-          },
-          {
-            "type": "streaming_keyword_identifier",
-            "named": true
-          },
-          {
-            "type": "string",
-            "named": false
-          },
-          {
-            "type": "timeout",
-            "named": false
-          },
-          {
-            "type": "union",
-            "named": false
           }
         ]
       },
@@ -4666,7 +4437,7 @@
     "fields": {},
     "children": {
       "multiple": false,
-      "required": false,
+      "required": true,
       "types": [
         {
           "type": "backquote_expression",
@@ -4786,10 +4557,6 @@
         },
         {
           "type": "streaming_boundary_expression",
-          "named": true
-        },
-        {
-          "type": "streaming_keyword_identifier",
           "named": true
         },
         {
@@ -7954,6 +7721,10 @@
     "named": false
   },
   {
+    "type": "<>",
+    "named": false
+  },
+  {
     "type": "=",
     "named": false
   },
@@ -8236,6 +8007,10 @@
     "named": false
   },
   {
+    "type": "find_modifier",
+    "named": true
+  },
+  {
     "type": "first",
     "named": false
   },
@@ -8305,10 +8080,6 @@
   },
   {
     "type": "keys",
-    "named": false
-  },
-  {
-    "type": "last",
     "named": false
   },
   {
@@ -8394,10 +8165,6 @@
   },
   {
     "type": "on_success",
-    "named": false
-  },
-  {
-    "type": "one",
     "named": false
   },
   {

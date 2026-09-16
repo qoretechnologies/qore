@@ -16,6 +16,8 @@ enum TokenType {
     KEYWORD_IDENTIFIER,
     CLASS_KEYWORD,
     MODULE_KEYWORD,
+    SOFT_IDENTIFIER,
+    FIND_MODIFIER,
     // matched by the generated lexer
     NEWLINE,
     DIRECTIVE_ARGUMENT,
@@ -29,6 +31,9 @@ typedef enum {
     KEYWORD_CALL,
     // KW_IDENTIFIER_OPENPAREN when {WS}* and "(" follow
     KEYWORD_SPACED_CALL,
+    // a streaming operator: KW_IDENTIFIER_OPENPAREN when "(" follows immediately; IDENTIFIER when
+    // SOFT_IDENTIFIER_FOLLOW follows
+    KEYWORD_STREAMING,
     // a class declaration when {WS}+ and {WORD} or (::{WORD})+ follow; otherwise IDENTIFIER
     KEYWORD_CLASS,
     // a module declaration when {WS}+ and {WORD} follow; otherwise IDENTIFIER
@@ -42,25 +47,25 @@ typedef struct {
 
 // The keywords that lib/scanner.lpp reads depending on the following characters, sorted by name
 static const Keyword keywords[] = {
-    {"all", KEYWORD_CALL},
-    {"any", KEYWORD_CALL},
+    {"all", KEYWORD_STREAMING},
+    {"any", KEYWORD_STREAMING},
     {"background", KEYWORD_CALL},
     {"case", KEYWORD_CALL},
     {"chomp", KEYWORD_CALL},
     {"class", KEYWORD_CLASS},
-    {"count", KEYWORD_CALL},
+    {"count", KEYWORD_STREAMING},
     {"default", KEYWORD_SPACED_CALL},
     {"delete", KEYWORD_CALL},
     {"deprecated", KEYWORD_SPACED_CALL},
-    {"drop", KEYWORD_CALL},
+    {"drop", KEYWORD_STREAMING},
     {"exists", KEYWORD_CALL},
     {"final", KEYWORD_CALL},
     {"find", KEYWORD_CALL},
-    {"first", KEYWORD_CALL},
+    {"first", KEYWORD_STREAMING},
     {"foldl", KEYWORD_CALL},
     {"foldr", KEYWORD_CALL},
     {"inherits", KEYWORD_CALL},
-    {"iterate", KEYWORD_CALL},
+    {"iterate", KEYWORD_STREAMING},
     {"map", KEYWORD_CALL},
     {"module", KEYWORD_MODULE},
     {"new", KEYWORD_CALL},
@@ -73,9 +78,9 @@ static const Keyword keywords[] = {
     {"shift", KEYWORD_CALL},
     {"splice", KEYWORD_CALL},
     {"static", KEYWORD_SPACED_CALL},
-    {"take", KEYWORD_CALL},
-    {"takeuntil", KEYWORD_CALL},
-    {"takewhile", KEYWORD_CALL},
+    {"take", KEYWORD_STREAMING},
+    {"takeuntil", KEYWORD_STREAMING},
+    {"takewhile", KEYWORD_STREAMING},
     {"trim", KEYWORD_CALL},
     {"unshift", KEYWORD_CALL},
 };
@@ -143,6 +148,48 @@ static const Keyword* find_keyword(const char* word) {
     return NULL;
 }
 
+/* Returns true if SOFT_IDENTIFIER_FOLLOW in lib/scanner.lpp matches: the characters after a streaming operator
+ * keyword that make the keyword a name, as in "count - 1", "count;" or "first in l"
+ */
+static bool soft_identifier_follows(TSLexer* lexer) {
+    if (lexer->lookahead == '+' || lexer->lookahead == '-') {
+        return true;
+    }
+    bool space = false;
+    while (whitespace(lexer->lookahead)) {
+        space = true;
+        lexer->advance(lexer, false);
+    }
+    int32_t c = lexer->lookahead;
+    switch (c) {
+        case '=': case ';': case ',': case ')': case ']': case '}': case '{': case '*': case '/': case '%':
+        case '&': case '|': case '^': case '<': case '>': case '?': case ':': case '.': case '[': case '~':
+            return true;
+        // ++, --, +=, -=, or the operator followed by whitespace
+        case '+':
+        case '-':
+            lexer->advance(lexer, false);
+            return lexer->lookahead == c || lexer->lookahead == '=' || whitespace(lexer->lookahead);
+        case '!':
+            lexer->advance(lexer, false);
+            return lexer->lookahead == '=';
+        // "in" or "instanceof" as a complete word
+        case 'i': {
+            if (!space) {
+                return false;
+            }
+            static const char instanceof[] = "instanceof";
+            size_t len = 0;
+            while (instanceof[len] && lexer->lookahead == instanceof[len]) {
+                lexer->advance(lexer, false);
+                ++len;
+            }
+            return (len == 2 || !instanceof[len]) && !word_char(lexer->lookahead) && !lexer->eof(lexer);
+        }
+    }
+    return false;
+}
+
 static void skip_keyword_space(TSLexer* lexer) {
     while (keyword_space(lexer->lookahead)) {
         lexer->advance(lexer, false);
@@ -185,12 +232,33 @@ static bool keyword_token(TSLexer* lexer, const bool* valid_symbols) {
     } while (word_char(lexer->lookahead));
     word[len] = '\0';
 
+    // the find_state start condition after "find"
+    if (valid_symbols[FIND_MODIFIER] && whitespace(lexer->lookahead)
+        && (!strcmp(word, "first") || !strcmp(word, "last") || !strcmp(word, "one"))) {
+        lexer->mark_end(lexer);
+        lexer->result_symbol = FIND_MODIFIER;
+        return true;
+    }
+
     const Keyword* keyword = find_keyword(word);
     if (!keyword) {
         return false;
     }
     lexer->mark_end(lexer);
     switch (keyword->kind) {
+        case KEYWORD_STREAMING:
+            if (lexer->lookahead == '(') {
+                if (!valid_symbols[KEYWORD_IDENTIFIER]) {
+                    return false;
+                }
+                lexer->result_symbol = KEYWORD_IDENTIFIER;
+                return true;
+            }
+            if (!valid_symbols[SOFT_IDENTIFIER] || !soft_identifier_follows(lexer)) {
+                return false;
+            }
+            lexer->result_symbol = SOFT_IDENTIFIER;
+            return true;
         case KEYWORD_CALL:
         case KEYWORD_SPACED_CALL:
             if (!valid_symbols[KEYWORD_IDENTIFIER]) {
