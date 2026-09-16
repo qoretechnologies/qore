@@ -1,0 +1,206 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class DeepNestingTest
+
+class DeepNestingTest inherits QUnit::Test {
+    public {
+        #! code nested this deeply exceeds the parser's limit
+        const Depth = 100000;
+        #! code nested this deeply is supported
+        const Moderate = 50;
+        #! the stack size of a test thread
+        const StackSize = 512 * 1024;
+        #! the error for code that is nested too deeply
+        const DepthError = "the code is nested too deeply; the parser supports up to 1000 nested syntax elements, "
+            "including each operator in an expression";
+
+        #! The kinds of nesting
+        const Kinds = ("add", "paren", "call", "list", "hash", "ternary", "negation", "not", "complement", "exists",
+            "assignment", "coalescing", "block", "if", "elseif", "closure");
+
+        #! Kinds of nesting with prefix operators
+        const PrefixKinds = ("negation", "not", "complement", "exists");
+    }
+
+    constructor() : QUnit::Test("parser nesting depth", "1.0") {
+        addTestCase("Deeply nested code is rejected", \deepCode());
+        addTestCase("Pending prefix operators are limited", \pendingOperators());
+        addTestCase("Moderately nested code runs", \moderateCode());
+        addTestCase("Long flat code parses", \flatCode());
+        set_return_value(main());
+    }
+
+    deepCode() {
+        inThread(sub () {
+            foreach string kind in (Kinds) {
+                Program p = newProgram();
+                try {
+                    p.parse(makeSource(kind, Depth), kind);
+                    fail(kind + " was accepted");
+                } catch (hash<ExceptionInfo> ex) {
+                    assertEq("PARSE-EXCEPTION", ex.err, kind);
+                    assertEq(DepthError, ex.desc, kind);
+                }
+                # the parse error does not affect the next parse
+                p.parse("int sub other() { return 2; }", "other");
+                assertEq(2, p.callFunction("other"), kind);
+            }
+        });
+    }
+
+    pendingOperators() {
+        # the parser reduces pending prefix operators without reading another token, so the stack limit bounds
+        # the nesting of the expression that it builds; such an expression is either rejected or runs
+        inThread(sub () {
+            foreach string kind in (PrefixKinds) {
+                int rejected;
+                for (int n = 900; n <= 1010; n += 5) {
+                    string label = sprintf("%s %d", kind, n);
+                    Program p = newProgram();
+                    bool parsed;
+                    try {
+                        p.parse(makeSource(kind, n), label);
+                        parsed = True;
+                    } catch (hash<ExceptionInfo> ex) {
+                        assertEq(DepthError, ex.desc, label);
+                        ++rejected;
+                    }
+                    if (parsed) {
+                        assertEq(getResult(kind, n), p.callFunction("run"), label);
+                    }
+                }
+                assertGt(0, rejected, kind);
+            }
+        });
+    }
+
+    moderateCode() {
+        foreach ExecMode mode in (EM_AST, EM_IR) {
+            inThread(sub () {
+                foreach string kind in (Kinds) {
+                    string label = sprintf("%s in mode %y", kind, mode);
+                    Program p = newProgram(mode);
+                    p.parse(makeSource(kind, Moderate), label);
+                    auto result = p.callFunction("run");
+                    if (kind == "list") {
+                        while (result.typeCode() == NT_LIST) {
+                            assertEq(1, result.size(), label);
+                            result = result[0];
+                        }
+                    } else if (kind == "hash") {
+                        for (int j = 0; j < Moderate; ++j) {
+                            result = result.a;
+                        }
+                    }
+                    assertEq(getResult(kind, Moderate), result, label);
+                }
+            });
+        }
+    }
+
+    flatCode() {
+        inThread(sub () {
+            int n = 20000;
+            Program p = newProgram();
+            string src = "list<int> sub listElements() { return (" + (map $1.toString(), xrange(n)).join(", ")
+                + "); }\n";
+            src += "hash<auto> sub hashEntries() { return {" + (map sprintf("\"k%d\": %d", $1, $1), xrange(n)).join(", ")
+                + "}; }\n";
+            src += "int sub statementCount() { int x; " + strmul("++x; ", n) + "return x; }\n";
+            src += "string sub adjacentStrings() { return " + strmul("\"a\" ", n) + "; }\n";
+            src += "int sub argumentCount(...) { return argv.size(); } int sub callWithArguments() { "
+                "return argumentCount("
+                + (map $1.toString(), xrange(n)).join(", ") + "); }\n";
+            src += "int sub switchCases(int v) { switch (v) { " + (map sprintf("case %d: return %d; ", $1, $1),
+                xrange(1000)).join("") + "} return -1; }\n";
+            src += "class Methods { " + (map sprintf("int m%d() { return %d; } ", $1, $1), xrange(1000)).join("")
+                + "}\n";
+            src += "namespace Constants { " + (map sprintf("const C%d = %d; ", $1, $1), xrange(n)).join("") + "}\n";
+            src += (map sprintf("our int g%d; ", $1), xrange(n)).join("");
+            p.parse(src, "flat");
+            assertEq(n, p.callFunction("listElements").size());
+            assertEq(n, p.callFunction("hashEntries").size());
+            assertEq(n, p.callFunction("statementCount"));
+            assertEq(strmul("a", n), p.callFunction("adjacentStrings"));
+            assertEq(n, p.callFunction("callWithArguments"));
+            assertEq(999, p.callFunction("switchCases", 999));
+            bool found;
+            p.getGlobalVariable("g" + (n - 1), \found);
+            assertTrue(found);
+        });
+    }
+
+    #! Returns a Program for the tests
+    private static Program newProgram(*ExecMode mode) {
+        Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES | PO_STRICT_ARGS | PO_NO_CHILD_PO_RESTRICTIONS);
+        if (exists mode) {
+            p.setExecMode(mode);
+        }
+        return p;
+    }
+
+    #! Returns a source with a run() function whose body is nested to the given depth
+    private static string makeSource(string kind, int n) {
+        string body;
+        switch (kind) {
+            case "add": body = "return " + strmul("1 + ", n) + "1;"; break;
+            case "paren": body = "return " + strmul("(", n) + "1" + strmul(")", n) + ";"; break;
+            case "call": body = "return " + strmul("id(", n) + "1" + strmul(")", n) + ";"; break;
+            case "list": body = "return " + strmul("(", n) + "1," + strmul("),", n) + ";"; break;
+            case "hash": body = "return " + strmul("{\"a\": ", n) + "1" + strmul("}", n) + ";"; break;
+            case "ternary": body = "return " + strmul("True ? ", n) + "1" + strmul(" : 0", n) + ";"; break;
+            case "negation": body = "return " + strmul("- ", n) + "1;"; break;
+            case "not": body = "return " + strmul("!", n) + "True ? 1 : 0;"; break;
+            case "complement": body = "return " + strmul("~", n) + "1;"; break;
+            case "exists": body = "return " + strmul("exists ", n) + "1 ? 1 : 0;"; break;
+            case "assignment": body = "int x; return " + strmul("x = ", n) + "1;"; break;
+            case "coalescing": body = "*int x; return " + strmul("x ?? ", n) + "1;"; break;
+            case "block": body = strmul("{ ", n) + "return 1;" + strmul(" }", n); break;
+            case "if": body = strmul("if (True) ", n) + "return 1; return 0;"; break;
+            case "elseif": body = "int i = 0; " + strmul("if (i) { return 0; } else ", n) + "{ return 1; }"; break;
+            case "closure": body = "return " + strmul("auto sub () { return ", n) + "1" + strmul("; }()", n) + ";"; break;
+            default: throw "UNKNOWN-KIND", kind;
+        }
+        return "auto sub id(auto x) { return x; }\nauto sub run() { " + body + " }\n";
+    }
+
+    #! Returns the result of run() for the given kind and depth
+    private static int getResult(string kind, int n) {
+        switch (kind) {
+            case "add": return n + 1;
+            case "negation": return n % 2 ? -1 : 1;
+            case "not": return n % 2 ? 0 : 1;
+            case "complement": return n % 2 ? -2 : 1;
+        }
+        return 1;
+    }
+
+    private inThread(code test) {
+        if (!HAVE_MANAGE_STACK) {
+            testSkip("stack management is not available");
+        }
+        int defaultSize = get_default_thread_stack_size();
+        set_default_thread_stack_size(StackSize);
+        on_exit set_default_thread_stack_size(defaultSize);
+
+        Counter c(1);
+        *hash<ExceptionInfo> ex;
+        background sub () {
+            on_exit c.dec();
+            try {
+                test();
+            } catch (hash<ExceptionInfo> e) {
+                ex = e;
+            }
+        }();
+        c.waitForZero();
+        if (ex) {
+            throw ex.err, ex.desc, ex.arg;
+        }
+    }
+}

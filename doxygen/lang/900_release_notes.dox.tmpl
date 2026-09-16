@@ -247,6 +247,15 @@
 
     @subsection qore_3_0_0_compatibility Changes That Can Affect Backwards-Compatibility
 
+    @par Parse Depth Limit
+    @parblock
+    The parser supports up to 1000 nested syntax elements, counting each operator in an expression, and raises a
+    \c PARSE-EXCEPTION for code that is nested more deeply.  For example, an expression that adds more than
+    about 1000 terms with \c + is rejected.  Such code could crash the parser or the program in previous versions,
+    depending on the stack size of the thread.  Long lists, hashes, argument lists, statement lists and adjacent
+    string literals are not nested and are not limited.
+    @endparblock
+
     @par Parse-Time Type Narrowing
     @parblock
     %Qore now performs parse-time type narrowing for element/value types in variables declared with
@@ -3035,6 +3044,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed crashes when parsing, running or freeing deeply nested code, such as an expression with thousands of
+      operators; the parser now rejects code that is nested more deeply than it supports with a
+      \c PARSE-EXCEPTION (see @ref qore_3_0_0_compatibility)
     - Fixed a crash after the parse error for a \c my, \c our or \c thread_local list declaration whose first
       element is not a variable, such as <tt>my (1, b);</tt>
     - Fixed @ref Qore::Reflection::Type::getOrNothingType() "Type::getOrNothingType()" returning a mandatory type

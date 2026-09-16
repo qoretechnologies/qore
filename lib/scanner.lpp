@@ -1113,11 +1113,12 @@ static bool angle_balanced(const char* p) {
     /* get last parse state */ YY_BUFFER_STATE yybs = (YY_BUFFER_STATE)endParsing(); \
     if (yybs) { /* need to close file and switch to previous buffer */ \
         fclose(yyin); if (yybs) yy_switch_to_buffer(yybs, yyscanner); \
-    } else yyterminate();  \
+    } else { yyextra->ended = true; yyterminate(); } \
 }
 %}
 
 %option noyywrap nomain noyy_top_state warn
+%option extra-type="QoreParseState*"
 %option reentrant bison-bridge bison-locations
 %option stack
 %option yylineno
@@ -1158,6 +1159,13 @@ RDATETIME       P(-?[0-9]+(\.[0-9]+)?[YMD])+T(-?[0-9]+(\.[0-9]+)?[HMSu])+
 RTIME           PT(-?[0-9]+(\.[0-9]+)?[HMSu])+
 
 %%
+%{
+    // the input ends after an error that stops the parse
+    if (yyextra->stop) {
+        qore_scanner_end_input(yyscanner);
+        yyterminate();
+    }
+%}
 ^%no-global-vars{WS}*$                  parse_set_parse_options(yylloc, PO_NO_GLOBAL_VARS);
 ^%no-subroutine-defs{WS}*$              parse_set_parse_options(yylloc, PO_NO_SUBROUTINE_DEFS);
 ^%no-threads{WS}*$                      parse_set_parse_options(yylloc, PO_NO_THREADS);
@@ -3404,3 +3412,22 @@ hash\<{WORD}\>\{                        {
 {WSNL}+                                 /* ignore whitespace */
 .                                       { return scanner_return_char_token(yytext[0]); }
 %%
+
+void qore_scanner_end_input(yyscan_t yyscanner) {
+    struct yyguts_t* yyg = (struct yyguts_t*)yyscanner;
+    if (yyextra->ended) {
+        return;
+    }
+    yyextra->ended = true;
+    // the sources being parsed are ended as at the end of their input, including any sources included by %include,
+    // but without errors for conditional blocks left open
+    while (true) {
+        yy_delete_buffer(YY_CURRENT_BUFFER, yyscanner);
+        YY_BUFFER_STATE yybs = (YY_BUFFER_STATE)endParsing(false);
+        if (!yybs) {
+            break;
+        }
+        fclose(yyin);
+        yy_switch_to_buffer(yybs, yyscanner);
+    }
+}

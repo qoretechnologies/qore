@@ -83,14 +83,28 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
+// the parse stops at the first rule nested more deeply than this, as the passes over the parse tree that follow
+// use the call stack for each level of the tree
+#define QORE_MAX_PARSE_DEPTH 1000
+
 #define YYINITDEPTH 300
+// The parser grows its stack on the heap, which bison only does for a C++ parser whose semantic value and location
+// types can be copied with memcpy() (checked below). The stack holds a symbol for each pending operator of a nested
+// expression, and when the parser reduces them, it nests one node in the next without reading another token, so
+// the parse depth check cannot stop it before the end. The maximum therefore limits pending nesting to the depth
+// that the parse depth check allows (QORE_MAX_PARSE_DEPTH), and exceeding it is reported as the same error.
+#define YYMAXDEPTH QORE_MAX_PARSE_DEPTH
+#define YYLTYPE_IS_TRIVIAL 1
+#define YYSTYPE_IS_TRIVIAL 1
 //#define YYDEBUG 1
 
 static int check_strong_encapsulation(const QoreProgramLocation* loc, const char* type, const char* name);
 
+// the nesting depth of a rule is one more than that of its deepest symbol
 #define YYLLOC_DEFAULT(Current, Rhs, N)                         \
     do {                                                        \
         if (N) {                                                \
@@ -98,13 +112,45 @@ static int check_strong_encapsulation(const QoreProgramLocation* loc, const char
             (Current).first_col  = YYRHSLOC(Rhs, 1).first_col;  \
             (Current).last_line  = YYRHSLOC(Rhs, N).last_line;  \
             (Current).last_col   = YYRHSLOC(Rhs, N).last_col;   \
+            unsigned yydepth = 0;                               \
+            for (int yyi = 1; yyi <= (N); ++yyi) {              \
+                if (YYRHSLOC(Rhs, yyi).depth > yydepth) {       \
+                    yydepth = YYRHSLOC(Rhs, yyi).depth;         \
+                }                                               \
+            }                                                   \
+            (Current).depth = yydepth + 1;                      \
+            check_parse_depth(Current, yyscanner);              \
         } else {                                                \
             (Current).first_line = (Current).last_line =        \
                 YYRHSLOC(Rhs, 0).last_line;                     \
             (Current).first_col = (Current).last_col =          \
                 YYRHSLOC(Rhs, 0).last_col;                      \
+            (Current).depth = 0;                                \
         }                                                       \
     } while (0)
+
+// a list that the parser builds from left to right is as deep as its deepest element
+#define QORE_LIST_DEPTH(list, element) std::max((list).depth, (element).depth + 1)
+
+static void raise_parse_depth_error(const QoreParserLocation& loc) {
+    const QoreProgramLocation* qloc = qore_program_private::get(*getProgram())->getLocation(loc.first_line,
+        loc.last_line, loc.first_col, loc.last_col);
+    parse_error(*qloc, "the code is nested too deeply; the parser supports up to %d nested syntax elements, "
+        "including each operator in an expression", QORE_MAX_PARSE_DEPTH);
+}
+
+// stops the parse at a rule that is nested too deeply: the scanner ends the input, so the parser discards the symbols
+// on its stack; a rule cannot be aborted before its action, as the parser would not release the rule's symbols
+static void check_parse_depth(const QoreParserLocation& loc, yyscan_t yyscanner) {
+    if (loc.depth <= QORE_MAX_PARSE_DEPTH) {
+        return;
+    }
+    QoreParseState* state = yyget_extra(yyscanner);
+    if (!state->stop) {
+        state->stop = true;
+        raise_parse_depth_error(loc);
+    }
+}
 
 // to fix the start location of an expression
 static void fix_start_location(int val, QoreParserLocation& loc, QoreParserLocation& exp_loc) {
@@ -2472,6 +2518,8 @@ static void check_operator_bin_xor(const QoreProgramLocation* loc, QoreValue n, 
 %lex-param {yyscan_t yyscanner}
 %parse-param {yyscan_t yyscanner}
 %locations
+// the location is initialized as a trivial type (see YYLTYPE_IS_TRIVIAL), which would start columns at 1
+%initial-action { @$ = QoreParserLocation(); }
 // remove this and use the following line when bison is updated on all build environments enough to support parse.error verbose
 %error-verbose
 
@@ -2555,6 +2603,10 @@ static void check_operator_bin_xor(const QoreProgramLocation* loc, QoreValue n, 
 %destructor { if ($$) $$->deref(nullptr); } <num>
 
 %{
+// the parser copies its stack with memcpy() when it grows (see YYSTYPE_IS_TRIVIAL)
+static_assert(std::is_trivially_copyable<YYSTYPE>::value, "YYSTYPE must be trivially copyable");
+static_assert(std::is_trivially_copyable<YYLTYPE>::value, "YYLTYPE must be trivially copyable");
+
 #define LEX_PARAMETERS YYSTYPE *lvalp, YYLTYPE *loc, yyscan_t scanner
 
 DLLLOCAL int yylex(LEX_PARAMETERS);
@@ -2577,6 +2629,17 @@ static const char* qore_syntax_hint(const char* str) {
 }
 
 DLLLOCAL void yyerror(YYLTYPE* loc, yyscan_t scanner, const char* str) {
+    QoreParseState* state = yyget_extra(scanner);
+    // the scanner ends the input after an error that stops the parse
+    if (state->stop) {
+        return;
+    }
+    // the parser's stack is only exhausted by symbols nested too deeply
+    if (!strcmp(str, "memory exhausted")) {
+        state->stop = true;
+        raise_parse_depth_error(*loc);
+        return;
+    }
     //printd(5, "yyerror() location: %d:%d - %d:%d \"%s\"\n", loc->first_line, loc->first_col, loc->last_line, loc->last_col, str);
     const QoreProgramLocation* qloc = qore_program_private::get(*getProgram())->getLocation(loc->first_line, loc->last_line, loc->first_col, loc->last_col);
     const char* hint = qore_syntax_hint(str);
@@ -2892,6 +2955,7 @@ program:
 top_level_commands:
     top_level_command
     | top_level_commands top_level_command
+    { @$.depth = QORE_LIST_DEPTH(@1, @2); }
     ;
 
 top_level_command:
@@ -3016,6 +3080,7 @@ module_decls:
     module_decl {
     }
     | module_decls module_decl {
+        @$.depth = QORE_LIST_DEPTH(@1, @2);
     }
     ;
 
@@ -3216,6 +3281,7 @@ namespace_decls:
             $$->push_back($1);
     }
     | namespace_decls namespace_decl {
+        @$.depth = QORE_LIST_DEPTH(@1, @2);
         $$ = $1;
         if ($2)
             $$->push_back($2);
@@ -3361,9 +3427,9 @@ statements:
     | block
     { $$ = new StatementBlock(@1.first_line, @1.last_line, $1); }
     | statements block
-    { $1->addStatement($2); $$ = $1; }
+    { @$.depth = QORE_LIST_DEPTH(@1, @2); $1->addStatement($2); $$ = $1; }
     | statements statement
-    { $1->addStatement($2); $$ = $1; }
+    { @$.depth = QORE_LIST_DEPTH(@1, @2); $1->addStatement($2); $$ = $1; }
     ;
 
 optname:
@@ -3507,6 +3573,7 @@ context_mods:
     // empty
     { $$ = 0; }
     | context_mods context_mod {
+        @$.depth = QORE_LIST_DEPTH(@1, @2);
         if (!$1)
             $$ = new ContextModList($2);
         else {
@@ -3547,6 +3614,7 @@ case_block:
     }
     | case_block case_code
     {
+        @$.depth = QORE_LIST_DEPTH(@1, @2);
         $1->addCase($2);
         $$ = $1;
     }
@@ -3756,6 +3824,7 @@ named_arg_list:
         add_named_call_arg($$, $1, $3, loc);
     }
     | named_arg_list ',' identifier ':' exp {
+        @$.depth = QORE_LIST_DEPTH(@1, @5);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(
             @3.first_line, @5.last_line, 
             @3.first_col, @5.last_col);
@@ -3763,9 +3832,11 @@ named_arg_list:
         $$ = $1;
     }
     | named_arg_list ',' {
+        @$.depth = @1.depth;
         $$ = $1;
     }
     | named_arg_list ',' exp {
+        @$.depth = QORE_LIST_DEPTH(@1, @3);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(
             @3.first_line, @3.last_line, 
             @3.first_col, @3.last_col);
@@ -3869,10 +3940,12 @@ enum_members:
         $$->add($1);
     }
     | enum_members ',' enum_member {
+        @$.depth = QORE_LIST_DEPTH(@1, @3);
         $$ = $1;
         $$->add($3);
     }
     | enum_members ',' {
+        @$.depth = @1.depth;
         $$ = $1;  // trailing comma is allowed
     }
     ;
@@ -4000,6 +4073,7 @@ class_compat_attrs:
     // nothing
     { $$ = 0; }
     | class_compat_attrs class_compat_attr {
+        @$.depth = QORE_LIST_DEPTH(@1, @2);
         if (($1 | $2) == $1) {
             const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
             parse_error(*loc, "class compatibility attribute given twice");
@@ -4029,6 +4103,7 @@ superclass_list:
         $$ = new BCList($1);
     }
     | superclass_list ',' superclass {
+        @$.depth = QORE_LIST_DEPTH(@1, @3);
         $1->push_back($3);
         $$ = $1;
     }
@@ -4107,6 +4182,7 @@ hashdecl_attrs:
         }
     }
     | hashdecl_attrs hashdecl_member {
+        @$.depth = QORE_LIST_DEPTH(@1, @2);
         if ($2) {
             if ($1->hasMember($2->name)) {
                 parse_error(*$2->loc, "duplicate hashdecl member declaration '%s'", $2->name);
@@ -4217,25 +4293,30 @@ class_attributes:
         delete $1;
     }
     | class_attributes inline_methoddef {
+        @$.depth = QORE_LIST_DEPTH(@1, @2);
         $2->addAndDelete($1);
         $$ = $1;
     }
     | class_attributes internal_member_list {
+        @$.depth = QORE_LIST_DEPTH(@1, @2);
         $2->merge($1, Internal);
         $$ = $1;
         delete $2;
     }
     | class_attributes private_member_list {
+        @$.depth = QORE_LIST_DEPTH(@1, @2);
         $2->merge($1, Private);
         $$ = $1;
         delete $2;
     }
     | class_attributes public_member_list {
+        @$.depth = QORE_LIST_DEPTH(@1, @2);
         $2->merge($1, Public);
         $$ = $1;
         delete $2;
     }
     | class_attributes unscoped_const_decl {
+        @$.depth = QORE_LIST_DEPTH(@1, @2);
         const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@2.first_line, @2.last_line, @2.first_col, @2.last_col);
         if (parse_check_parse_option(QoreParseOptions::NO_CONSTANT_DEFS)) {
             parse_error(*loc, "constant '%s' cannot be defined with parse option NO_CONSTANT_DEFS set",
@@ -4567,10 +4648,12 @@ member_list:
         $$ = new MemberList($1);
     }
     | member_list ',' member {
+        @$.depth = QORE_LIST_DEPTH(@1, @3);
         $1->add($3);
         $$ = $1;
     }
     | member_list ',' transient_member {
+        @$.depth = QORE_LIST_DEPTH(@1, @3);
         $1->add($3);
         $$ = $1;
     }
@@ -4584,10 +4667,12 @@ member_list2:
         $$ = new MemberList($1);
     }
     | member_list2 member2 {
+        @$.depth = QORE_LIST_DEPTH(@1, @2);
         $1->add($2);
         $$ = $1;
     }
     | member_list2 transient_member2 {
+        @$.depth = QORE_LIST_DEPTH(@1, @2);
         $1->add($2);
         $$ = $1;
     }
@@ -4840,6 +4925,7 @@ base_constructors:
         $$ = new BCAList($1);
     }
     | base_constructors ',' base_constructor {
+        @$.depth = QORE_LIST_DEPTH(@1, @3);
         $1->push_back($3);
         $$ = $1;
     }
@@ -4875,6 +4961,7 @@ method_qualifier:
 method_modifiers:
     method_modifier { $$ = $1; }
     | method_modifiers method_modifier {
+        @$.depth = QORE_LIST_DEPTH(@1, @2);
         if (($1 | $2) == $1) {
             const QoreProgramLocation* loc = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col);
             parse_error(*loc, "modifier given twice");
@@ -5016,6 +5103,7 @@ scoped_sub_def:
 
 list:
     exp ',' exp {
+        @$.depth = QORE_LIST_DEPTH(@1, @3);
         const QoreProgramLocation* loc1 = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         const QoreProgramLocation* loc3 = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = splice_expressions($1, $3, loc1, loc3);
@@ -5041,6 +5129,7 @@ list:
 
 list_n:
     exp_n ',' exp {
+        @$.depth = QORE_LIST_DEPTH(@1, @3);
         const QoreProgramLocation* loc1 = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         const QoreProgramLocation* loc3 = qore_program_private::get(*getProgram())->getLocation(@1.first_line, @1.last_line, @1.first_col, @1.last_col);
         $$ = splice_expressions($1, $3, loc1, loc3);
@@ -5066,11 +5155,12 @@ hash:
         $1->addDelete($$);
     }
     | hash ',' hash_element {
+        @$.depth = QORE_LIST_DEPTH(@1, @3);
         $3->addDelete($1);
         $$ = $1;
     }
     | hash ','
-    { /* empty ',' on end of hash */ $$ = $1; }
+    { /* empty ',' on end of hash */ @$.depth = @1.depth; $$ = $1; }
     ;
 
 hash_element:
@@ -5834,7 +5924,7 @@ exp_c:
 
 exp:
     exp_c                               { $$ = $1; }
-    | list                              { $$ = $1; }
+    | list                              { @$.depth = @1.depth; $$ = $1; }
     | alt_hash                          { $$ = $1; }
     | immediate_typed_hash              { $$ = $1; }
     | '{' '}'                           { $$ = (new QoreParseHashNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @2.last_line, @1.first_col, @2.last_col), true)); }
@@ -5944,7 +6034,7 @@ exp:
 
 exp_n:
     exp_c                                 { $$ = $1; }
-    | list_n                              { $$ = $1; }
+    | list_n                              { @$.depth = @1.depth; $$ = $1; }
     | exp_n PLUS_EQUALS exp               { $$ = (new QorePlusEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
     | exp_n MINUS_EQUALS exp              { $$ = (new QoreMinusEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
     | exp_n AND_EQUALS exp                { $$ = (new QoreAndEqualsOperatorNode(qore_program_private::get(*getProgram())->getLocation(@1.first_line, @3.last_line, @1.first_col, @3.last_col), $1, $3)); }
@@ -6051,11 +6141,14 @@ exp_n:
     | exp_n DOT_HARD_KEYWORD              { $$ = process_hard_keyword_member(@2.first_line, @2.first_col, $1, $2); }
     ;
 
+// adjacent strings are concatenated; the rule is left-recursive so that the parser's stack does not grow with
+// the number of strings
 string:
     QUOTED_WORD {
         $$ = $1;
     }
-    | QUOTED_WORD string {
+    | string QUOTED_WORD {
+        @$.depth = @1.depth;
         $$ = $1;
         qore_string_private::get($$)->concat($2);
         $2->deref();

@@ -50,6 +50,9 @@ public:
    int saved_first_line = 0;
    int saved_first_col = 0;
 
+   //! the nesting depth of the rule in the parse tree; 0 for a token
+   unsigned depth = 0;
+
    DLLLOCAL void saveFirst() {
       //printd(0, "QoreParserLocation::setFirst: current: %d:%d - %d:%d\n", first_line, first_col, last_line, last_col);
       saved_first_line = first_line;
@@ -114,11 +117,22 @@ struct TryModuleError {
 
 #define YYLTYPE class QoreParserLocation
 
+//! The state of a parse that the parser shares with its scanner
+struct QoreParseState {
+   //! true if the parse stops at an error, and the scanner ends the input
+   bool stop = false;
+   //! true if the scanner has ended the input
+   bool ended = false;
+};
+
 // private interface to bison/flex parser/scanner
 typedef void* yyscan_t;
+DLLLOCAL extern int yylex_init_extra(QoreParseState* state, yyscan_t* scanner);
+DLLLOCAL extern QoreParseState* yyget_extra(yyscan_t scanner);
+//! Ends the input of a parse that has not reached the end of its input, as when the parser's stack is exhausted
+DLLLOCAL void qore_scanner_end_input(yyscan_t scanner);
 DLLLOCAL extern int yyparse(yyscan_t yyscanner);
 DLLLOCAL extern struct yy_buffer_state* yy_scan_string(const char*, yyscan_t scanner);
-DLLLOCAL int yylex_init(yyscan_t* scanner);
 DLLLOCAL void yyset_in(FILE* in_str, yyscan_t yyscanner);
 DLLLOCAL int yylex_destroy(yyscan_t yyscanner);
 DLLLOCAL void yyset_lineno(int line_number, yyscan_t yyscanner);

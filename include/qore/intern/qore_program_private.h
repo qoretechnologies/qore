@@ -1416,12 +1416,15 @@ public:
         //printd(5, "qore_program_private::internParsePending() parsing tag: %s (%p): '%s'\n", label, label, code);
 
         yyscan_t lexer;
-        yylex_init(&lexer);
+        QoreParseState state;
+        yylex_init_extra(&state, &lexer);
 
         yy_scan_string(code, lexer);
         yyset_lineno(1, lexer);
         // yyparse() will call endParsing() and restore old pgm position
         yyparse(lexer);
+        // the parser returns before the end of the input if its stack is exhausted
+        qore_scanner_end_input(lexer);
 
         printd(5, "qore_program_private::internParsePending() returned from yyparse()\n");
         int rc = 0;
@@ -1611,6 +1614,7 @@ public:
         ungetc(c, fp);
 
         yyscan_t lexer;
+        QoreParseState state;
 
         {
             ProgramRuntimeParseCommitContextHelper pch(xsink, pgm);
@@ -1642,10 +1646,12 @@ public:
             }
 
             //printd(5, "QoreProgram::parse(): about to call yyparse()\n");
-            yylex_init(&lexer);
+            yylex_init_extra(&state, &lexer);
             yyset_in(fp, lexer);
             // yyparse() will call endParsing() and restore old pgm position
             yyparse(lexer);
+            // the parser returns before the end of the input if its stack is exhausted
+            qore_scanner_end_input(lexer);
 
             // finalize parsing, back out or commit all changes
             internParseCommit();

@@ -250,7 +250,11 @@ DLLLOCAL void purge_thread_resources(ExceptionSink* xsink);
 DLLLOCAL void purge_pgm_thread_resources(const QoreProgram* pgm, ExceptionSink* xsink);
 DLLLOCAL void mark_thread_resources();
 DLLLOCAL void beginParsing(const char* file, void* ps = NULL, const char* src = nullptr, int offset = 0);
-DLLLOCAL void* endParsing();
+//! Ends parsing the current source and returns the parse state of the source that included it
+/** @param report_open_blocks if false, conditional and %try-module blocks left open are discarded without errors, as
+    when the parse is stopped before the end of the source
+*/
+DLLLOCAL void* endParsing(bool report_open_blocks = true);
 DLLLOCAL Context* get_context_stack();
 DLLLOCAL void update_context_stack(Context* cstack);
 

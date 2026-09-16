@@ -197,10 +197,12 @@ struct ParseCountHelper {
         return !--count;
     }
 
-    DLLLOCAL void purge() {
+    DLLLOCAL void purge(bool report) {
         if (count) {
-            parse_error(QoreProgramLocation(), "%d %%try-module block%s left open at end of file", count,
-                count == 1 ? "" : "s");
+            if (report) {
+                parse_error(QoreProgramLocation(), "%d %%try-module block%s left open at end of file", count,
+                    count == 1 ? "" : "s");
+            }
             count = 0;
         }
     }
@@ -293,10 +295,12 @@ struct ParseConditionalStack {
         return false;
     }
 
-    DLLLOCAL void purge() {
+    DLLLOCAL void purge(bool report) {
         if (count) {
-            parse_error(QoreProgramLocation(), "%d conditional block%s left open at end of file", count,
-                count == 1 ? "" : "s");
+            if (report) {
+                parse_error(QoreProgramLocation(), "%d conditional block%s left open at end of file", count,
+                    count == 1 ? "" : "s");
+            }
             count = 0;
             markvec.clear();
         }
@@ -625,13 +629,13 @@ public:
         delete trlist;
     }
 
-    DLLLOCAL void endFileParsing() {
+    DLLLOCAL void endFileParsing(bool report_open_blocks) {
         if (pcs) {
-            pcs->purge();
+            pcs->purge(report_open_blocks);
             delete pcs;
             pcs = 0;
         }
-        tm.purge();
+        tm.purge(report_open_blocks);
     }
 
     DLLLOCAL int getElement() {
@@ -1699,7 +1703,7 @@ void beginParsing(const char* file, void* ps, const char* src, int offset) {
     td->pcs = 0;
 }
 
-void* endParsing() {
+void* endParsing(bool report_open_blocks) {
     ThreadData* td = thread_data.get();
     //printd(5, "endParsing() td: %p restoreParseOptions pgm: %p parse_file: %p '%s' src: %s:%d\n", td, td->current_pgm, td->parse_loc.getFile(), td->parse_loc.getFile(), td->parse_loc.getSource() ? td->parse_loc.getSource() : "(null)", td->parse_loc.offset);
     qore_program_private::get(*td->current_pgm)->restoreParseOptions(td->parse_file);
@@ -1707,7 +1711,7 @@ void* endParsing() {
     void* rv = td->parseState;
 
     // ensure there are no conditional blocks left open at EOF
-    td->endFileParsing();
+    td->endFileParsing(report_open_blocks);
 
     assert(td->plStack);
     assert(!td->pcs);
