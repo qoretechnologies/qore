@@ -63,6 +63,7 @@ class QoreCodeFormatTest inherits QUnit::Test {
         addTestCase("streaming operators", \testStreamingOperators());
         addTestCase("find modifiers", \testFindModifiers());
         addTestCase("global variable declarations", \testGlobalVariables());
+        addTestCase("long multi-line list literals", \testLongMultiLineLists());
 
         set_return_value(main());
     }
@@ -1396,6 +1397,37 @@ int sub run() {
             p.parse(source, "global variables");
             p.run();
             assertEq(60, p.callFunction("run"), "formatted global variables keep their values");
+        }
+    }
+
+    testLongMultiLineLists() {
+        # the one-line form of each list exceeds the width, so the lists remain multi-line
+        string src = "%modern
+list<string> sub values() {
+    list<string> l = (
+        \"aaaaaaaaaaaaaaaaaaaaaaaaa\",
+        \"bbbbbbbbbbbbbbbbbbbbbbbbb\",
+        \"ccccccccccccccccccccccccc\",
+        \"ddddd\",
+    );
+    return l + (\"eeeeeeeeeeeeeeeeeeeeeeeee\", \"fffffffffffffffffffffffff\", \"ggggggggggggggggggggggggg\",
+        \"hhhhh\");
+}
+";
+        QoreCodeFormat::CodeFormatter fmt();
+        string result = fmt.format(src);
+        QoreCodeFormat::CodeFormatter fmt2();
+        assertEq(result, fmt2.format(result), "long multi-line list idempotency");
+        foreach string letter in ("a", "b", "c", "d", "e", "f", "g", "h") {
+            assertRegex("element " + letter + " retained", "^\\s+\"" + letter + "+\",$", result);
+        }
+
+        list<string> expected = map strmul($1, $1 == "d" || $1 == "h" ? 5 : 25), ("a", "b", "c", "d", "e", "f",
+            "g", "h");
+        foreach string source in ((src, result)) {
+            Program p(PO_NEW_STYLE);
+            p.parse(source, "long lists");
+            assertEq(expected, p.callFunction("values"), "formatted lists keep their elements");
         }
     }
 

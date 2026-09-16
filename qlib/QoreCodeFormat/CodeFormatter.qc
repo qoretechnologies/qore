@@ -2222,9 +2222,7 @@ public class CodeFormatter {
             }
             indentedItems += indented;
         }
-        if (node.trailingComma) {
-            return "(\n" + indentedItems[0] + ",\n)";
-        }
+        # a multi-line list always ends with a trailing comma
         return "(\n" + indentedItems.join(",\n") + ",\n)";
     }
 
