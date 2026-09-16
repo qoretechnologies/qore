@@ -13007,15 +13007,13 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
                 lvh.setDelta(-1);
             }
         }
-            // dereference the removed values once the lvalue locks are released: a destructor is
-            // Qore code that can re-enter the runtime for the container this lvalue came from
+        // dereference the spliced-out entries once the lvalue locks are released: a destructor is
+        // Qore code that can re-enter the runtime for the container this lvalue came from
         if (holder) {
             lvh.saveTemp(holder.release());
         }
-        if (is_delete) {
-            lvh.saveTemp(v.release());
-            return QoreValue();
-        }
+        // the caller finishes a "delete" with the lvalue locks released and needs the removed elements
+        // to run their destructors
         return v.release();
     }
     if (ct == NT_STRING) {
@@ -13184,12 +13182,8 @@ QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
         if (reverse) {
             nl = nl->reverse();
         }
-        if (is_delete) {
-            // dereference the removed values once the lvalue locks are released: a destructor is
-            // Qore code that can re-enter the runtime for the container this lvalue came from
-            lvh.saveTemp(nl.release());
-            return QoreValue();
-        }
+        // the caller finishes a "delete" with the lvalue locks released and needs the removed elements
+        // to run their destructors
         return nl.release();
     }
 
@@ -13248,18 +13242,32 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
     bool is_remove = (inst->unary_op == LVUnaryOp::Remove || inst->unary_op == LVUnaryOp::Delete);
     QoreValue res;
 
-    auto finish_delete_result = [&](QoreValue& value) -> bool {
+    // deletes the object in a removed value, raising the same error as the AST path for system objects
+    auto delete_removed_object = [&](QoreValue value) {
+        QoreObject* o = value.get<QoreObject>();
+        if (o->isSystemObject()) {
+            xsink->raiseException("SYSTEM-OBJECT-ERROR",
+                "cannot delete a system constant object (class '%s')", o->getClassName());
+            return;
+        }
+        o->doDelete(xsink);
+    };
+    // direct_list: the removed value is the synthetic list of elements a list index or range slice took
+    // out of the container rather than a value stored in it, so "delete" applies to each element.  This
+    // mirrors LValueRemoveHelper::deleteLValue(), which is what the AST path uses.
+    auto finish_delete_result = [&](QoreValue& value, bool direct_list = false) -> bool {
         if (inst->unary_op != LVUnaryOp::Delete) {
             return true;
         }
-        if (value.getType() == NT_OBJECT) {
-            QoreObject* o = value.get<QoreObject>();
-            if (o->isSystemObject()) {
-                xsink->raiseException("SYSTEM-OBJECT-ERROR",
-                    "cannot delete a system constant object (class '%s')", o->getClassName());
-            } else {
-                o->doDelete(xsink);
+        if (direct_list && value.getType() == NT_LIST) {
+            ListIterator li(value.get<QoreListNode>());
+            while (li.next()) {
+                if (li.getValue().getType() == NT_OBJECT) {
+                    delete_removed_object(li.getValue());
+                }
             }
+        } else if (value.getType() == NT_OBJECT) {
+            delete_removed_object(value);
         }
         value.discard(xsink);
         value = QoreValue();
@@ -13301,6 +13309,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
     // "delete" runs the target object's destructor, which is Qore code; it must not run while the
     // LValueHelper below still holds the container's locks (see the comment at the end of this block)
     bool pending_delete_finish = false;
+    bool pending_delete_direct_list = false;
     if (is_remove && path_copy.size() >= 2) {
         const LVPathStep& last_step = path_copy.back();
         bool last_is_hash = (last_step.kind == LVPathStepKind::HashKeyConst
@@ -13351,11 +13360,11 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     idx += static_cast<int64_t>(l->size());
                 }
                 if (idx >= 0 && static_cast<size_t>(idx) < l->size()) {
-                    if (inst->unary_op == LVUnaryOp::Remove) {
-                        res = l->retrieveEntry(static_cast<size_t>(idx)).refSelf();
-                    }
-                    // dereference the old entry once the lvalue locks are released
-                    lvh.saveTemp(l->retrieveEntry(static_cast<size_t>(idx)).refSelf());
+                    // hold the removed entry in res: it is the caller's result for "remove", and for
+                    // "delete" it keeps the value alive until the destructor can be run below, with the
+                    // lvalue locks released
+                    res = l->retrieveEntry(static_cast<size_t>(idx)).refSelf();
+                    pending_delete_finish = true;
                     l->setEntry(static_cast<size_t>(idx), QoreValue(), xsink);
                 }
                 handled_multistep_remove = true;
@@ -13367,11 +13376,13 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
                 res = executeLVListIndexSliceRemove(lvh, ct, last_step,
                         inst->unary_op, xsink);
+                pending_delete_finish = pending_delete_direct_list = true;
                 handled_multistep_remove = true;
             } else if (last_is_list_range
                     && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
                 res = executeLVListRangeSliceRemove(lvh, ct, last_step,
                         inst->unary_op, xsink);
+                pending_delete_finish = pending_delete_direct_list = true;
                 handled_multistep_remove = true;
             } else if (ct == NT_NOTHING) {
                 // Parent slot is empty: there is nothing to remove.
@@ -13386,7 +13397,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
         // container's write lock still held, that scan would wait for a lock owned by this very thread.
         // ~LValueHelper() releases its locks before discarding its own temporaries for the same reason.
         if (pending_delete_finish) {
-            finish_delete_result(res);
+            finish_delete_result(res, pending_delete_direct_list);
         }
     }
 

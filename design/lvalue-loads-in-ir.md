@@ -121,6 +121,30 @@ exact parent slot cache before handler execution, track dirty slots, and publish
 dirty values back to runtime locals afterward. This prevents name-based lookup
 collisions and keeps native alloca caches coherent with handler writes.
 
+## Removal Semantics: `remove` and `delete`
+
+The AST engine implements both operators with `LValueRemoveHelper`, and that class defines the
+behaviour every other engine has to reproduce.  Two parts of it are easy to lose in a reimplementation:
+
+- **`delete` runs destructors; `remove` never does.**  `LValueRemoveHelper::deleteLValue()` calls
+  `QoreObject::doDelete()` on the removed value when it is an object, and raises `SYSTEM-OBJECT-ERROR`
+  for a system object.  Clearing the slot and letting the reference count collect the object later is
+  not the same thing: `delete` is defined to destroy it immediately however many references remain.
+- **The "direct list" form.**  A list index slice or range slice removes a *set* of elements, and the
+  removed value is a synthetic list holding them rather than a value that was stored in the container.
+  `delete` applies to each element of such a list.  A hash slice and an object member slice remove a
+  *hash* instead, which `deleteLValue()` does not iterate, so those release their values without
+  deleting them.
+
+Destructors are Qore code, so they must run with the lvalue locks released - see the same rule in
+`design/dgc.md`.  `~LValueHelper()` drops its locks before discarding its own temporaries, and
+`LValueHelper::saveTemp()` defers a removed value's dereference to that point; a removal that has to
+run `doDelete()` defers it until after the `LValueHelper` has been destroyed.
+
+Regression coverage: `examples/test/qore/misc/lvalue-delete-semantics.qtest` pins every shape in
+whatever engine it is run under, and `examples/test/qore/misc/lvalue-delete-cycle-scan.qtest` covers
+the lock-release requirement.
+
 ## Review Checklist
 
 When adding a new lvalue opcode or helper:
@@ -133,4 +157,6 @@ When adding a new lvalue opcode or helper:
 - Caches are invalidated before mutation.
 - COW replacement writes back to the runtime local.
 - JIT and AOT variants preserve the same writeback behavior.
+- Removal opcodes match `LValueRemoveHelper` semantics, including which forms run
+  destructors, and run them with the lvalue locks released.
 - Tests cover unique and shared-container mutation.

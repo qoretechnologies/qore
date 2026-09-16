@@ -1,0 +1,185 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class LValueDeleteSemanticsTest
+
+#! Counts destructor calls so each case can tell "delete" apart from an ordinary dereference
+class Tracked {
+    public {
+        static int destroyed = 0;
+        string name;
+    }
+
+    constructor(string n) {
+        name = n;
+    }
+
+    destructor() {
+        ++Tracked::destroyed;
+    }
+}
+
+#! Holds object members for the member and member-slice cases
+class Box {
+    public {
+        *Tracked m;
+        *Tracked m2;
+    }
+}
+
+#! `delete` runs the target's destructor immediately, whatever else still references it
+/** Every case below keeps an extra reference to the value being deleted, so the destructor can only
+    run because `delete` asked for it and never because the last reference went away.  The list cases
+    are the ones the IR, JIT and AOT engines used to get wrong: they cleared the slot and left the
+    destructor to run whenever the last reference happened to be released, while the AST engine ran it
+    at the delete.  `LValueRemoveHelper::deleteLValue()` defines the contract, including the
+    "direct list" form a list index or range slice removes.
+*/
+public class LValueDeleteSemanticsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("LValueDeleteSemanticsTest", "1.0") {
+        addTestCase("local variable", \localVariable());
+        addTestCase("hash key", \hashKey());
+        addTestCase("nested hash key", \nestedHashKey());
+        addTestCase("object member", \objectMember());
+        addTestCase("list element", \listElement());
+        addTestCase("list index slice", \listIndexSlice());
+        addTestCase("list range slice", \listRangeSlice());
+        addTestCase("hash slice releases without deleting", \hashSlice());
+        addTestCase("object member slice releases without deleting", \objectMemberSlice());
+        addTestCase("remove does not delete", \removeDoesNotDelete());
+        addTestCase("no-op deletes", \noOpDeletes());
+        set_return_value(main());
+    }
+
+    localVariable() {
+        *Tracked o = new Tracked("lv");
+        Tracked keep = o;
+        Tracked::destroyed = 0;
+        delete o;
+        assertEq(1, Tracked::destroyed, "destructor ran at the delete");
+        assertNothing(o, "variable cleared");
+    }
+
+    hashKey() {
+        hash<auto> h = {"k": new Tracked("hk")};
+        auto keep = h;
+        Tracked::destroyed = 0;
+        delete h.k;
+        assertEq(1, Tracked::destroyed, "destructor ran at the delete");
+        assertFalse(h.hasKey("k"), "key removed");
+        assertTrue(keep.hasKey("k"), "the copy still has the key");
+    }
+
+    nestedHashKey() {
+        hash<auto> h = {"a": {"b": new Tracked("nhk")}};
+        auto keep = h;
+        Tracked::destroyed = 0;
+        delete h.a.b;
+        assertEq(1, Tracked::destroyed, "destructor ran at the delete");
+        assertFalse(h.a.hasKey("b"), "nested key removed");
+    }
+
+    objectMember() {
+        Box b();
+        b.m = new Tracked("om");
+        Tracked keep = b.m;
+        Tracked::destroyed = 0;
+        delete b.m;
+        assertEq(1, Tracked::destroyed, "destructor ran at the delete");
+        assertNothing(b.m, "member cleared");
+    }
+
+    listElement() {
+        list<auto> l = (new Tracked("le"),);
+        list<auto> keep = l;
+        Tracked::destroyed = 0;
+        delete l[0];
+        assertEq(1, Tracked::destroyed, "destructor ran at the delete");
+        assertNothing(l[0], "slot cleared");
+        assertEq(1, keep.size(), "the copy still holds the element");
+    }
+
+    listIndexSlice() {
+        list<auto> l = (new Tracked("s0"), new Tracked("s1"), new Tracked("s2"));
+        list<auto> keep = l;
+        Tracked::destroyed = 0;
+        delete l[0, 1];
+        assertEq(2, Tracked::destroyed, "both destructors ran at the delete");
+        assertEq(1, l.size(), "both elements removed from the list");
+        assertEq(3, keep.size(), "the copy is unchanged");
+    }
+
+    listRangeSlice() {
+        list<auto> l = (new Tracked("r0"), new Tracked("r1"), new Tracked("r2"));
+        list<auto> keep = l;
+        Tracked::destroyed = 0;
+        delete l[0..1];
+        assertEq(2, Tracked::destroyed, "both destructors ran at the delete");
+        assertEq(1, l.size(), "both elements removed from the list");
+        assertEq(3, keep.size(), "the copy is unchanged");
+    }
+
+    #! a hash slice removes a hash of values, which `delete` releases without running destructors
+    hashSlice() {
+        hash<auto> h = {"a": new Tracked("h0"), "b": new Tracked("h1")};
+        auto keep = h;
+        Tracked::destroyed = 0;
+        delete h.("a", "b");
+        assertEq(0, Tracked::destroyed, "a removed hash of values is released, not deleted");
+        assertEq(0, h.size(), "both keys removed");
+    }
+
+    #! an object member slice behaves the same way as a hash slice
+    objectMemberSlice() {
+        Box b();
+        b.m = new Tracked("om0");
+        b.m2 = new Tracked("om1");
+        list<auto> keep = (b.m, b.m2);
+        Tracked::destroyed = 0;
+        delete b.("m", "m2");
+        assertEq(0, Tracked::destroyed, "a removed hash of members is released, not deleted");
+        assertNothing(b.m, "first member cleared");
+        assertNothing(b.m2, "second member cleared");
+    }
+
+    #! `remove` returns the value and must never run its destructor
+    removeDoesNotDelete() {
+        list<auto> l = (new Tracked("rm"),);
+        list<auto> keep = l;
+        Tracked::destroyed = 0;
+        auto v = remove l[0];
+        assertEq(0, Tracked::destroyed, "remove did not run the destructor");
+        assertEq("rm", v.name, "remove returned the element");
+        assertNothing(l[0], "slot cleared");
+
+        hash<auto> h = {"k": new Tracked("rm2")};
+        auto keeph = h;
+        Tracked::destroyed = 0;
+        auto hv = remove h.k;
+        assertEq(0, Tracked::destroyed, "remove did not run the destructor");
+        assertEq("rm2", hv.name, "remove returned the value");
+    }
+
+    #! deleting something that is not there changes nothing and raises no exception
+    noOpDeletes() {
+        list<auto> l = (new Tracked("n0"),);
+        list<auto> keep = l;
+        Tracked::destroyed = 0;
+        delete l[7];
+        assertEq(0, Tracked::destroyed, "out of range list index deleted nothing");
+        assertEq(1, l.size(), "list unchanged");
+
+        hash<auto> h = {"a": new Tracked("n1")};
+        auto keeph = h;
+        Tracked::destroyed = 0;
+        delete h.missing;
+        assertEq(0, Tracked::destroyed, "absent hash key deleted nothing");
+        assertTrue(h.hasKey("a"), "existing key untouched");
+    }
+}

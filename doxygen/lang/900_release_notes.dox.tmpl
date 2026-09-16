@@ -3099,6 +3099,12 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       this state kept its listeners bound and its connections open but answered no request. Deleting a value
       from an lvalue now runs the destructor after the lvalue locks are released, and a scan recognizes a
       write lock already held by the scanning thread as the exclusive access it needs.
+    - Fixed @ref delete "delete" on a list element or a list slice not running the deleted objects'
+      destructors when the code was run by the IR, JIT or AOT engines. `delete` ran the destructor
+      immediately for a variable, a hash key and an object member, but for `list[i]`, `list[i,j]` and
+      `list[i..j]` it only cleared the slots, leaving each object to be destroyed whenever its last
+      remaining reference happened to go away - so a destructor with side effects ran late, or not at all
+      while anything else still referenced the object. The AST engine was not affected.
     - Fixed reference cycles never being collected after the references that blocked them went away. The
       reference counts computed for a cycle are a snapshot taken when it was detected, and they were trusted
       indefinitely; a container in the cycle losing its last holder outside it, or an object in another cycle

@@ -12831,18 +12831,33 @@ load_local_done:
                 QoreValue res;
                 bool is_remove = (path_inst->unary_op == LVUnaryOp::Remove
                                 || path_inst->unary_op == LVUnaryOp::Delete);
-                auto finish_delete_result = [&](QoreValue& value) -> bool {
+                // deletes the object in a removed value, raising the same error as the AST path for
+                // system objects
+                auto delete_removed_object = [&](QoreValue value) {
+                    QoreObject* o = value.get<QoreObject>();
+                    if (o->isSystemObject()) {
+                        xsink->raiseException("SYSTEM-OBJECT-ERROR",
+                            "cannot delete a system constant object (class '%s')", o->getClassName());
+                        return;
+                    }
+                    o->doDelete(xsink);
+                };
+                // direct_list: the removed value is the synthetic list of elements a list index or range
+                // slice took out of the container rather than a value stored in it, so "delete" applies
+                // to each element.  This mirrors LValueRemoveHelper::deleteLValue(), used by the AST path.
+                auto finish_delete_result = [&](QoreValue& value, bool direct_list = false) -> bool {
                     if (path_inst->unary_op != LVUnaryOp::Delete) {
                         return true;
                     }
-                    if (value.getType() == NT_OBJECT) {
-                        QoreObject* o = value.get<QoreObject>();
-                        if (o->isSystemObject()) {
-                            xsink->raiseException("SYSTEM-OBJECT-ERROR",
-                                "cannot delete a system constant object (class '%s')", o->getClassName());
-                        } else {
-                            o->doDelete(xsink);
+                    if (direct_list && value.getType() == NT_LIST) {
+                        ListIterator li(value.get<QoreListNode>());
+                        while (li.next()) {
+                            if (li.getValue().getType() == NT_OBJECT) {
+                                delete_removed_object(li.getValue());
+                            }
                         }
+                    } else if (value.getType() == NT_OBJECT) {
+                        delete_removed_object(value);
                     }
                     value.discard(xsink);
                     value = QoreValue();
@@ -12876,6 +12891,7 @@ load_local_done:
                         // "delete" runs the target object's destructor, which is Qore code; it must not run while
                         // the LValueHelper below still holds the container's locks (see below)
                         bool pending_delete_finish = false;
+                        bool pending_delete_direct_list = false;
                         {
                             LValueHelper lvh(xsink);
                             // Navigate to parent (for_remove=true: don't vivify intermediates)
@@ -12916,11 +12932,11 @@ load_local_done:
                                         idx += static_cast<int64_t>(l->size());
                                     }
                                     if (idx >= 0 && static_cast<size_t>(idx) < l->size()) {
-                                        if (path_inst->unary_op == LVUnaryOp::Remove) {
-                                            res = l->retrieveEntry(static_cast<size_t>(idx)).refSelf();
-                                        }
-                                        // dereference the old entry once the lvalue locks are released
-                                        lvh.saveTemp(l->retrieveEntry(static_cast<size_t>(idx)).refSelf());
+                                        // hold the removed entry in res: it is the caller's result for
+                                        // "remove", and for "delete" it keeps the value alive until the
+                                        // destructor can be run with the lvalue locks released
+                                        res = l->retrieveEntry(static_cast<size_t>(idx)).refSelf();
+                                        pending_delete_finish = true;
                                         l->setEntry(static_cast<size_t>(idx), QoreValue(), xsink);
                                     }
                                 } else if (last_step.kind == LVPathStepKind::HashKeySlice
@@ -12931,10 +12947,12 @@ load_local_done:
                                         && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
                                     res = executeLVListIndexSliceRemove(lvh, ct, last_step,
                                             path_inst->unary_op, xsink);
+                                    pending_delete_finish = pending_delete_direct_list = true;
                                 } else if (last_step.kind == LVPathStepKind::ListRangeSlice
                                         && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
                                     res = executeLVListRangeSliceRemove(lvh, ct, last_step,
                                             path_inst->unary_op, xsink);
+                                    pending_delete_finish = pending_delete_direct_list = true;
                                 }
                                 // NT_NOTHING or other parent types: nothing to remove, fall through
                                 if (xsink && *xsink) {
@@ -12952,7 +12970,7 @@ load_local_done:
                         // thread.  ~LValueHelper() releases its locks before discarding its own temporaries for the
                         // same reason.
                         if (pending_delete_finish) {
-                            finish_delete_result(res);
+                            finish_delete_result(res, pending_delete_direct_list);
                         }
                     } else if (is_remove) {
                         // Single-step path: navigate to the variable itself and clear.
