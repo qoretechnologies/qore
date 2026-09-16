@@ -3776,7 +3776,7 @@ size_t q_thread_stack_used() {
 #ifdef STACK_DIRECTION_DOWN
     return td->stack_start - get_stack_pos();
 #else
-    return get_stack_pos() = td->stack_start;
+    return get_stack_pos() - td->stack_start;
 #endif // #ifdef STACK_DIRECTION_DOWN
 #else
     return 0;
