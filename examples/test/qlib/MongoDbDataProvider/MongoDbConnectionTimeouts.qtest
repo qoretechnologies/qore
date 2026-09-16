@@ -1,0 +1,149 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+# Use relative paths for qlib modules to test current development version
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+%requires ConnectionProvider
+
+# mongodb builtin module - optional, may not be built if libmongoc is not available
+%try-module mongodb
+%define NoMongoDB
+%endtry
+
+# Module under test - also optional since it requires mongodb
+%ifndef NoMongoDB
+%requires MongoDbDataProvider
+%endif
+
+%exec-class MongoDbConnectionTimeoutsTest
+
+%ifndef NoMongoDB
+#! Exposes the bounded URI builder so the ping's client configuration can be asserted directly
+class UriProbe inherits MongoDbDataProvider::MongoDbConnection {
+    constructor(string n, string d, string u, hash<auto> a, hash<auto> o) : MongoDbConnection(n, d, u, a, o) {
+    }
+
+    string pingUri(int ms) {
+        return getUriIntern(ms);
+    }
+}
+%endif
+
+#! Every timeout a MongoDB client honours comes from its URI, so these are URI assertions
+/** `MongoClient::ping()` passes no timeout of its own to libmongoc, so the URI the connection builds
+    is the only thing bounding a ping.  A ping runs unattended, on a timer, in a monitor thread that
+    shutdown waits on, so it needs an upper bound whatever the URL and the other options say.
+*/
+public class MongoDbConnectionTimeoutsTest inherits QUnit::Test {
+    private {
+        const Url = "mongodb://localhost:27017/db";
+    }
+
+    constructor() : Test("MongoDbConnectionTimeoutsTest", "1.0") {
+%ifndef NoMongoDB
+        addTestCase("socket timeout is always emitted", \socketTimeoutEmitted());
+        addTestCase("socket timeout option is honoured", \socketTimeoutOption());
+        addTestCase("url wins for data operations", \urlWinsForData());
+        addTestCase("ping uri is bounded", \pingUriBounded());
+        addTestCase("ping uri overrides an unbounded url", \pingUriOverridesUnbounded());
+        addTestCase("ping timeout default matches the platform", \pingTimeoutDefault());
+        addTestCase("ping against a silent server is bounded", \silentServerPingBounded());
+%endif
+        set_return_value(main());
+    }
+
+%ifndef NoMongoDB
+    #! returns the query options of a MongoDB URI as a hash
+    private static hash<string, string> query(string uri) {
+        hash<string, string> rv = {};
+        *string qs = uri =~ x/\?(.*)$/[0];
+        foreach string pair in ((qs ?? "").split("&")) {
+            if (!pair.val()) {
+                continue;
+            }
+            list<string> kv = pair.split("=");
+            rv{kv[0]} = kv.size() > 1 ? kv[1] : "";
+        }
+        return rv;
+    }
+
+    #! without socketTimeoutMS a server that answers the handshake and then goes silent is bounded
+    #! only by whatever default the driver happens to apply
+    socketTimeoutEmitted() {
+        MongoDbDataProvider::MongoDbConnection c("m", "d", Url, {}, {});
+        hash<string, string> q = query(c.getUri());
+        assertEq("300000", q.socketTimeoutMS, "socketTimeoutMS is emitted with its default");
+        assertEq("10000", q.connectTimeoutMS, "connectTimeoutMS is still emitted");
+        assertEq("30000", q.serverSelectionTimeoutMS, "serverSelectionTimeoutMS is still emitted");
+    }
+
+    socketTimeoutOption() {
+        MongoDbDataProvider::MongoDbConnection c("m", "d", Url, {}, {"socket_timeout": 5000});
+        assertEq("5000", query(c.getUri()).socketTimeoutMS, "the option is sent as socketTimeoutMS");
+
+        MongoDbDataProvider::MongoDbConnection d("m", "d", Url, {}, {"socket_timeout": 7s});
+        assertEq("7000", query(d.getUri()).socketTimeoutMS, "a duration is converted to milliseconds");
+    }
+
+    #! a URL written by hand is never overridden for data operations
+    urlWinsForData() {
+        MongoDbDataProvider::MongoDbConnection c("m", "d", Url + "?socketTimeoutMS=1234", {},
+            {"socket_timeout": 5000});
+        assertEq("1234", query(c.getUri()).socketTimeoutMS, "the URL value is kept");
+    }
+
+    #! the ping's client caps every timeout, so the ping cannot outlast its bound
+    pingUriBounded() {
+        UriProbe c("m", "d", Url, {}, {});
+        hash<string, string> q = query(c.pingUri(3000));
+        assertEq("3000", q.socketTimeoutMS, "socket timeout capped");
+        assertEq("3000", q.connectTimeoutMS, "connect timeout capped");
+        assertEq("3000", q.serverSelectionTimeoutMS, "server selection timeout capped");
+
+        # a bound never raises a timeout that is already shorter
+        hash<string, string> lower = query(c.pingUri(300000));
+        assertEq("10000", lower.connectTimeoutMS, "a shorter timeout is left alone");
+    }
+
+    #! MongoDB reads 0 as "wait forever", which is exactly what a monitor ping must never do
+    pingUriOverridesUnbounded() {
+        UriProbe c("m", "d", Url + "?socketTimeoutMS=0&connectTimeoutMS=0", {}, {});
+        hash<string, string> data = query(c.getUri());
+        assertEq("0", data.socketTimeoutMS, "the URL still wins for data operations");
+
+        hash<string, string> ping = query(c.pingUri(3000));
+        assertEq("3000", ping.socketTimeoutMS, "an unbounded URL value is replaced for the ping");
+        assertEq("3000", ping.connectTimeoutMS, "an unbounded URL value is replaced for the ping");
+    }
+
+    pingTimeoutDefault() {
+        assertEq(ConnectionProvider::PollingConnectionMonitor::DefaultPingTimeout,
+            MongoDbDataProvider::MongoDbConnection::ConnectionOptions.ping_timeout.default_value,
+            "the connection uses the platform's ping timeout");
+    }
+
+    #! a listener that completes the handshake and never answers must not pin the caller
+    /** Without the fix the ping is bounded only by the driver's handling of the connect timeout;
+        with it the ping is bounded by \c ping_timeout, which this case sets well below that.
+    */
+    silentServerPingBounded() {
+        Socket s();
+        s.bind("localhost:0", True);
+        s.listen();
+        int port = s.getSocketInfo().port;
+
+        MongoDbDataProvider::MongoDbConnection c("m", "silent server",
+            sprintf("mongodb://localhost:%d/db", port), {}, {"ping_timeout": 3s});
+        date start = now_us();
+        hash<auto> rv = c.ping();
+        date delta = now_us() - start;
+
+        assertFalse(rv.ok, "the ping failed rather than hanging");
+        assertTrue(delta < 8s, sprintf("the ping was bounded by ping_timeout (took %y)", delta));
+    }
+%endif
+}

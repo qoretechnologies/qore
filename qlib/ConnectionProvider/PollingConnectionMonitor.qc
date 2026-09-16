@@ -94,8 +94,14 @@ public class PollingConnectionMonitor inherits LoggerWrapper {
 
         #! ping repeat duration
         date ping_repeat = DefaultPingRepeat;
+    }
 
+    public {
         #! Default ping timeout duration
+        /** Public so that connection classes that cannot use the polling API can bound their own
+            pings with the same value; a ping runs unattended, on a timer, in a thread that
+            something else waits on, so it needs an upper bound whichever path monitors it.
+        */
         const DefaultPingTimeout = 30s;
 
         #! Default ping repeat duration

@@ -134,7 +134,38 @@ public class MongoDbConnection inherits ConnectionProvider::AbstractConnectionWi
                     "because the driver selects a server before it connects to one.",
                 "default_value": 30000,
             },
+            "socket_timeout": <ConnectionOptionInfo>{
+                "display_name": "Socket Timeout",
+                "short_desc": "How long to wait for a reply on an established connection",
+                "type": "timeout",
+                "desc": "How long to wait for a reply on an established connection, sent as the "
+                    "`socketTimeoutMS` URI option.\n\n"
+                    "This is the only timeout that bounds a server which completes the TCP "
+                    "handshake and then stops answering - a hung `mongod`, a firewall dropping an "
+                    "established flow, a stale NAT mapping, a suspended container - because "
+                    "`connect_timeout` and `server_selection_timeout` have both finished by the "
+                    "time a reply is awaited.\n\n"
+                    "**It applies to every operation on the client**, so it has to be longer than "
+                    "the slowest query the connection is expected to run; to bound an unattended "
+                    "monitor ping, set `ping_timeout` rather than lowering this.",
+                "default_value": 300000,
+            },
+            "ping_timeout": <ConnectionOptionInfo>{
+                "display_name": "Ping Timeout",
+                "short_desc": "The upper bound on a single connection ping",
+                "type": "timeout",
+                "desc": "The upper bound on a single connection ping.\n\n"
+                    "A ping runs unattended, on a timer, in a thread that something else waits on, "
+                    "so it is bounded independently of the timeouts that apply to data operations: "
+                    "the client the ping uses caps `connectTimeoutMS`, `serverSelectionTimeoutMS` "
+                    "and `socketTimeoutMS` at this value, whatever the URL or the other options "
+                    "say, and the client returned for data operations is left alone.",
+                "default_value": ConnectionProvider::PollingConnectionMonitor::DefaultPingTimeout,
+            },
         };
+
+        #! The URI options carrying a timeout, all of which a bounded client caps
+        const TimeoutUriOptions = ("connectTimeoutMS", "serverSelectionTimeoutMS", "socketTimeoutMS");
 
         #! Maps a connection option to the MongoDB URI option carrying it
         /** Only options that map straight through appear here; the credentials and the timeouts
@@ -207,6 +238,19 @@ public class MongoDbConnection inherits ConnectionProvider::AbstractConnectionWi
         @throw MONGODB-CONNECTION-ERROR a password was given without a username
     */
     string getUri() {
+        return getUriIntern();
+    }
+
+    #! Returns the MongoDB URI, optionally capping every timeout it carries
+    /** @param bound_ms when set, no timeout is emitted larger than this many milliseconds and none
+        is left unbounded, whatever the URL or the options ask for; a URI built this way is what
+        gives @ref pingImpl() a hard upper bound without constraining data operations
+
+        @return the URI the \c MongoClient object is created with
+
+        @throw MONGODB-CONNECTION-ERROR a password was given without a username
+    */
+    private string getUriIntern(*softint bound_ms) {
         hash<UrlInfo> h = parse_url(url);
         string scheme = h.protocol ?? "mongodb";
 
@@ -245,10 +289,15 @@ public class MongoDbConnection inherits ConnectionProvider::AbstractConnectionWi
         }
         # timeouts are given to the connection as timeouts and to MongoDB as milliseconds
         if (exists opts.connect_timeout && !exists query.connectTimeoutMS) {
-            add.connectTimeoutMS = get_ms(opts.connect_timeout);
+            add.connectTimeoutMS = sprintf("%d", get_ms(opts.connect_timeout, bound_ms));
         }
         if (exists opts.server_selection_timeout && !exists query.serverSelectionTimeoutMS) {
-            add.serverSelectionTimeoutMS = get_ms(opts.server_selection_timeout);
+            add.serverSelectionTimeoutMS = sprintf("%d", get_ms(opts.server_selection_timeout, bound_ms));
+        }
+        # socketTimeoutMS is the only option that bounds a server which answered the handshake and
+        # then went silent; without it such a server is bounded only by the driver's own default
+        if (exists opts.socket_timeout && !exists query.socketTimeoutMS) {
+            add.socketTimeoutMS = sprintf("%d", get_ms(opts.socket_timeout, bound_ms));
         }
 
         # the path component of a MongoDB URI is the default database; note that splitting an
@@ -259,6 +308,14 @@ public class MongoDbConnection inherits ConnectionProvider::AbstractConnectionWi
         }
 
         query += add;
+        # a URL wins over the options for data operations, but a bounded client must be bounded
+        # whatever the URL says, so every timeout it carries - including one it omits, which would
+        # otherwise fall back to the driver's default - is capped here
+        if (bound_ms) {
+            foreach string key in (TimeoutUriOptions) {
+                query{key} = sprintf("%d", get_ms(query{key} ?? bound_ms, bound_ms));
+            }
+        }
         string rv = sprintf("%s://%s%s%s", scheme, userinfo, host, path);
         if (query) {
             rv += "?" + (map sprintf("%s=%s", $1.key, encode_url($1.value, True)),
@@ -284,11 +341,23 @@ public class MongoDbConnection inherits ConnectionProvider::AbstractConnectionWi
         return rv;
     }
 
-    #! Returns the number of milliseconds in a timeout option
-    private static string get_ms(auto value) {
-        return value.typeCode() == NT_DATE
-            ? sprintf("%d", cast<date>(value).durationMilliseconds())
-            : sprintf("%d", value.toInt());
+    #! Returns the number of milliseconds in a timeout option, capped at a bound if one is given
+    /** @param value the timeout option value, as a duration or a number of milliseconds
+        @param bound_ms an upper bound in milliseconds, if any
+
+        @return the timeout in milliseconds
+
+        @note MongoDB reads \c 0 as "wait forever", so a bound has to replace that value rather
+        than cap it
+    */
+    private static int get_ms(auto value, *softint bound_ms) {
+        int ms = value.typeCode() == NT_DATE
+            ? cast<date>(value).durationMilliseconds()
+            : value.toInt();
+        if (bound_ms && (!ms || ms > bound_ms)) {
+            ms = bound_ms;
+        }
+        return ms;
     }
 
     #! Returns the connection object
@@ -309,6 +378,26 @@ public class MongoDbConnection inherits ConnectionProvider::AbstractConnectionWi
             }
         }
         return client;
+    }
+
+    #! Performs the connection ping with a client bounded by \c ping_timeout
+    /** The base class implementation pings by calling @ref get(), which returns a client configured
+        for data operations.  Those timeouts can legitimately be long - \c socket_timeout has to
+        outlast the slowest query the connection runs - but a ping cannot be: it runs unattended, on
+        a timer, in a monitor thread that shutdown waits on, so an unbounded one stops the process
+        from ever finishing shutting down.
+
+        The ping therefore builds its own client, with every timeout capped at \c ping_timeout, and
+        the client @ref get() returns is left alone.
+
+        @throw MONGODB-CONNECTION-ERROR the server did not answer the ping
+    */
+    private pingImpl() {
+        MongoClient client(getUriIntern(get_ms(opts.ping_timeout
+            ?? ConnectionProvider::PollingConnectionMonitor::DefaultPingTimeout)));
+        if (!client.ping()) {
+            throw "MONGODB-CONNECTION-ERROR", "failed to ping MongoDB server";
+        }
     }
 
     #! Returns the ConnectionSchemeInfo hash

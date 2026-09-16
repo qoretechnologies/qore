@@ -132,6 +132,12 @@ $env:QORE_CONNECTION_PROVIDERS="MyConnectionProvider;OtherConnectionProvider"
     @section connectionproviderrelnotes Release Notes
 
     @subsection connectionprovider_3_1 ConnectionProvider 3.1
+    - made the default ping timings public so that connections monitored on a dedicated thread can bound
+      their own pings with the same values:
+      - @ref ConnectionProvider::PollingConnectionMonitor::DefaultPingTimeout
+        "PollingConnectionMonitor::DefaultPingTimeout"
+      - @ref ConnectionProvider::PollingConnectionMonitor::DefaultPingRepeat
+        "PollingConnectionMonitor::DefaultPingRepeat"
     - added async connection acquisition for the built-in connection types that have native async transports:
       - @ref ConnectionProvider::HttpConnection::getAsync() "HttpConnection::getAsync()" returns a
         @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager"
