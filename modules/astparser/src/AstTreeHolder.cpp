@@ -44,14 +44,16 @@ AstTreeHolder::~AstTreeHolder() {
     delete result;
 }
 
-void AstTreeHolder::printTree(std::ostream& os) {
+void AstTreeHolder::printTree(std::ostream& os, ExceptionSink* xsink) {
     if (result) {
-        AstTreePrinter::printTree(os, result);
+        CSTCancelCheck cancel(xsink, "printing an astparser syntax tree");
+        AstTreePrinter::printTree(os, result, cancel);
     }
 }
 
-QoreListNode* AstTreeHolder::getNodesInfo() {
-    return GetNodesInfoQuery::get(result);
+QoreListNode* AstTreeHolder::getNodesInfo(ExceptionSink* xsink) {
+    CSTCancelCheck cancel(xsink, "getting astparser node info");
+    return GetNodesInfoQuery::get(result, cancel);
 }
 
 //! Determine the comment kind from the node type and text.
@@ -75,8 +77,9 @@ static ASTCommentKind classifyComment(const char* nodeType, const std::string& t
 //! Collect all comment nodes from the tree-sitter CST.
 /** @return false if an exception was raised
 */
-static bool collectComments(TSNode root, const AstParseResult* result, QoreListNode* lst, ExceptionSink* xsink) {
-    return cst_walk(root, [&](const TSTreeCursor*, TSNode node, uint32_t) {
+static bool collectComments(TSNode root, const AstParseResult* result, QoreListNode* lst, CSTCancelCheck& cancel) {
+    ExceptionSink* xsink = cancel.getSink();
+    return cst_walk(root, cancel, [&](const TSTreeCursor*, TSNode node, uint32_t) {
         const char* type = ts_node_type(node);
         if (strcmp(type, "comment") && strcmp(type, "line_comment")) {
             // Walk all children (including unnamed/extra nodes)
@@ -116,22 +119,14 @@ static bool collectComments(TSNode root, const AstParseResult* result, QoreListN
     });
 }
 
-QoreListNode* AstTreeHolder::getComments() {
+QoreListNode* AstTreeHolder::getComments(ExceptionSink* xsink) {
     if (!result) {
         return nullptr;
     }
 
-    ExceptionSink xsink;
-    ReferenceHolder<QoreListNode> lst(new QoreListNode, &xsink);
-    if (xsink) {
-        lst = nullptr;
-        xsink.clear();
-        return nullptr;
-    }
-
-    if (!collectComments(result->getRootNode(), result, *lst, &xsink) || xsink) {
-        lst = nullptr;
-        xsink.clear();
+    ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
+    CSTCancelCheck cancel(xsink, "getting astparser comments");
+    if (!collectComments(result->getRootNode(), result, *lst, cancel) || *xsink) {
         return nullptr;
     }
 

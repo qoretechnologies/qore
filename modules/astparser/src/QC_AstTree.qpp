@@ -54,6 +54,8 @@ AstTree::constructor() {
     written
     @throw FILE-OPEN-ERROR the file cannot be opened for writing
     @throw FILE-WRITE-ERROR the tree cannot be written to the file
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
  */
 AstTree::printTree(string file) [dom=FILESYSTEM] {
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
@@ -66,7 +68,10 @@ AstTree::printTree(string file) [dom=FILESYSTEM] {
         xsink->raiseErrnoException("FILE-OPEN-ERROR", errno, "cannot open '%s' for writing", file->c_str());
         return QoreValue();
     }
-    ath->printTree(ofs);
+    ath->printTree(ofs, xsink);
+    if (*xsink) {
+        return QoreValue();
+    }
     if (!ofs) {
         xsink->raiseException("FILE-WRITE-ERROR", "cannot write the tree to '%s'", file->c_str());
     }
@@ -75,9 +80,12 @@ AstTree::printTree(string file) [dom=FILESYSTEM] {
 //! Get info about nodes in the tree.
 /** Export the tree structure to Qore hashes and lists.
     @return list of node info hashes
+
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
  */
 list AstTree::getNodesInfo() {
-    return ath->getNodesInfo();
+    return ath->getNodesInfo(xsink);
 }
 
 //! Returns a list of all comments found in the source code.
@@ -88,8 +96,11 @@ list AstTree::getNodesInfo() {
 
     @return list of comment hashes, or @ref nothing if no tree is set
 
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
+
     @since astparser 2.0
  */
 *list<hash<auto>> AstTree::getComments() {
-    return ath->getComments();
+    return ath->getComments(xsink);
 }

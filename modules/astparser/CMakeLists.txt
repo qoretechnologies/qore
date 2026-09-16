@@ -118,6 +118,7 @@ set(ASTPARSER_DIRECT_CPP_SRC
     src/AstTreeHolder.cpp
     src/AstTreePrinter.cpp
     src/CSTSearcher.cpp
+    src/CSTWalk.cpp
     src/queries/GetNodesInfoQuery.cpp
 )
 # NOTE: The old Bison parser and AST-node searcher implementation has been

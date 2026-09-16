@@ -51,7 +51,7 @@ static void writeNodeString(std::string& out, TSNode node) {
     }
 }
 
-void AstTreePrinter::printTree(std::ostream& os, AstParseResult* result) {
+void AstTreePrinter::printTree(std::ostream& os, AstParseResult* result, CSTCancelCheck& cancel) {
     if (!result) {
         os << "no tree to print out\n";
         return;
@@ -64,7 +64,7 @@ void AstTreePrinter::printTree(std::ostream& os, AstParseResult* result) {
     std::unordered_map<const void*, uint32_t> highNodes;
     // the height of the tallest child of the node at each depth
     std::vector<uint32_t> childHeights;
-    cst_walk(root, [&](const TSTreeCursor*, TSNode, uint32_t depth) {
+    if (!cst_walk(root, cancel, [&](const TSTreeCursor*, TSNode, uint32_t depth) {
         if (childHeights.size() <= depth) {
             childHeights.resize(depth + 1);
         }
@@ -78,7 +78,9 @@ void AstTreePrinter::printTree(std::ostream& os, AstParseResult* result) {
         if (depth && height > childHeights[depth - 1]) {
             childHeights[depth - 1] = height;
         }
-    });
+    })) {
+        return;
+    }
 
     std::string out;
     if (highNodes.find(root.id) == highNodes.end()) {
@@ -88,7 +90,7 @@ void AstTreePrinter::printTree(std::ostream& os, AstParseResult* result) {
         // cannot return a missing token of a hidden rule, so such a token is only written in the subtrees written
         // with ts_node_string()
         std::vector<bool> closeNode;
-        cst_walk(root, [&](const TSTreeCursor* cursor, TSNode node, uint32_t depth) {
+        bool ok = cst_walk(root, cancel, [&](const TSTreeCursor* cursor, TSNode node, uint32_t depth) {
             if (closeNode.size() <= depth) {
                 closeNode.resize(depth + 1);
             }
@@ -119,6 +121,9 @@ void AstTreePrinter::printTree(std::ostream& os, AstParseResult* result) {
                 out += ')';
             }
         });
+        if (!ok) {
+            return;
+        }
     }
 
     os << out << "\n";

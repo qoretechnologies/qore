@@ -1,0 +1,190 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires astparser
+
+%exec-class LargeSourcesTest
+
+class LargeSourcesTest inherits QUnit::Test {
+    public {
+        #! the number of declarations in a small source
+        const Small = 400;
+        #! the number of declarations in a large source
+        const Large = 3200;
+        #! the largest acceptable ratio between the search times for the large and the small source
+        /** The searches take linear time, so the ratio is about 8; it was over 60 when finding the doc comment of
+            each declaration took time linear in the number of its siblings.
+        */
+        const MaxScalingRatio = 24.0;
+    }
+
+    constructor() : QUnit::Test("astparser large sources", "1.0") {
+        addTestCase("Doc comments and declarations of large sources", \docComments());
+        addTestCase("Search time scales linearly", \scaling());
+        addTestCase("Operations can be cancelled", \cancellation());
+        set_return_value(main());
+    }
+
+    docComments() {
+        AstParser parser();
+        AstTree tree = parser.parseString(makeSource(Small));
+        AstTreeSearcher searcher();
+
+        list<auto> symbols = searcher.findSymbols(tree, "u");
+        assertEq(2 * Small + 1, symbols.size());
+        hash<string, auto> byName = map {$1.name: $1}, symbols;
+        assertEq("#! method 7", byName."C::m7".docComment);
+        assertEq("/** function 9 */\n#! second line", byName."f9".docComment);
+        # a blank line ends a doc comment
+        assertEq(NOTHING, byName."f0".docComment);
+        # a comment that is not a doc comment ends a doc comment
+        assertEq(NOTHING, byName."C::m0".docComment);
+
+        list<auto> members = searcher.findTypeMembers(tree, "u", "C");
+        assertEq(Small, members.size());
+        assertEq("#! method 7", (select members, $1.name == "m7")[0].docComment);
+        assertEq("int", (select members, $1.name == "m7")[0].returnType);
+
+        # the scope of the body of m1 includes its parameter, the class members, the class and the functions
+        list<auto> scope = searcher.findScopeSymbolsDetailed(tree, "u", 5, 31);
+        assertEq(Small + Small + 2, scope.size());
+        hash<auto> param = (select scope, $1.name == "p1")[0];
+        assertEq("string", param.typeName);
+        hash<auto> f9 = (select scope, $1.name == "f9")[0];
+        assertEq("/** function 9 */\n#! second line", f9.docComment);
+    }
+
+    scaling() {
+        AstParser parser();
+        AstTree small = parser.parseString(makeSource(Small));
+        AstTree large = parser.parseString(makeSource(Large));
+        AstTreeSearcher searcher();
+
+        float smallTime = searchTime(searcher, small);
+        float largeTime = searchTime(searcher, large);
+        float ratio = largeTime / smallTime;
+        if (m_options.verbose) {
+            printf("search time: %d declarations: %.3f us; %d declarations: %.3f us; ratio: %.2f\n", Small,
+                smallTime, Large, largeTime, ratio);
+        }
+        assertLt(MaxScalingRatio, ratio);
+    }
+
+    cancellation() {
+        string source = makeSource(Large);
+        AstParser parser();
+        AstTree tree = parser.parseString(source);
+        FsUtil::TmpDir dir("astparser-cancel-");
+        string file = join_paths(dir.path, "source.q");
+        File f();
+        f.open2(file, O_CREAT | O_WRONLY | O_TRUNC);
+        f.write(source);
+        f.close();
+
+        Queue ready();
+        Queue go();
+        Queue results();
+        background sub () {
+            ready.push(gettid());
+            # a cancelled thread stays cancelled after the exception, so each call below is cancelled at its first
+            # cancellation point; the calls are made without loops, which are cancellation points as well
+            try {
+                go.get();
+            } catch (hash<ExceptionInfo> ex) {
+                results.push({"wait": ex.err});
+            }
+            results.push(tryCall("parseString", sub () { AstParser p(); p.parseString(source); }));
+            results.push(tryCall("parseFile", sub () { AstParser p(); p.parseFile(file); }));
+            results.push(tryCall("getNodesInfo", sub () { tree.getNodesInfo(); }));
+            results.push(tryCall("getComments", sub () { tree.getComments(); }));
+            results.push(tryCall("printTree", sub () { tree.printTree(join_paths(dir.path, "tree.txt")); }));
+            AstTreeSearcher searcher();
+            results.push(tryCall("findSymbols", sub () { searcher.findSymbols(tree, "u"); }));
+            results.push(tryCall("findMatchingSymbols", sub () { searcher.findMatchingSymbols(tree, "u", "f"); }));
+            results.push(tryCall("findTypeMembers", sub () { searcher.findTypeMembers(tree, "u", "C"); }));
+            results.push(tryCall("findScopeSymbols", sub () { searcher.findScopeSymbols(tree, "u", 5, 31); }));
+            results.push(tryCall("findScopeSymbolsDetailed", sub () {
+                searcher.findScopeSymbolsDetailed(tree, "u", 5, 31);
+            }));
+            results.push(tryCall("getSemanticTokens", sub () { searcher.getSemanticTokens(tree); }));
+            results.push(tryCall("findReferences", sub () { searcher.findReferences(tree, "u", 5, 18, True); }));
+            results.push(tryCall("findReferencesCrossDoc", sub () {
+                searcher.findReferencesCrossDoc(tree, "u", 5, 18, True, {"u2": tree});
+            }));
+            clear_thread_cancel();
+            results.push("done");
+        }();
+
+        int tid = ready.get();
+        assertTrue(cancel_thread(tid, "astparser cancellation test"));
+        # the thread receives the cancellation while waiting, or before it waits
+        go.push(True);
+
+        hash<string, string> errors = {};
+        while (True) {
+            auto result = results.get();
+            if (result == "done") {
+                break;
+            }
+            errors += result;
+        }
+        assertEq("THREAD-CANCELLED", errors.wait);
+        foreach string api in ("parseString", "parseFile", "getNodesInfo", "getComments", "printTree",
+                "findSymbols", "findMatchingSymbols", "findTypeMembers", "findScopeSymbols",
+                "findScopeSymbolsDetailed", "getSemanticTokens", "findReferences", "findReferencesCrossDoc") {
+            assertEq("THREAD-CANCELLED", errors{api}, api);
+        }
+    }
+
+    #! Returns the error raised by a call, or "none"
+    private static hash<string, string> tryCall(string api, code c) {
+        try {
+            c();
+        } catch (hash<ExceptionInfo> ex) {
+            return {api: ex.err};
+        }
+        return {api: "none"};
+    }
+
+    #! Returns the average time of the searches of a tree in microseconds
+    private static float searchTime(AstTreeSearcher searcher, AstTree tree) {
+        int count = 0;
+        date start = now_us();
+        do {
+            searcher.findSymbols(tree, "u");
+            searcher.findScopeSymbolsDetailed(tree, "u", 5, 31);
+            searcher.findTypeMembers(tree, "u", "C");
+            ++count;
+        } while ((now_us() - start).durationMicroseconds() < 200000);
+        return (now_us() - start).durationMicroseconds().toFloat() / count;
+    }
+
+    #! Returns a source with a class with the given number of methods and the same number of functions
+    private static string makeSource(int count) {
+        string src = "class C {\n";
+        for (int i = 0; i < count; ++i) {
+            if (!i) {
+                # a comment that is not a doc comment ends the doc comment before it
+                src += "    #! not documenting m0\n    # plain comment\n";
+            } else {
+                src += sprintf("    #! method %d\n", i);
+            }
+            src += sprintf("    int m%d(string p%d) { return %d; }\n", i, i, i);
+        }
+        src += "}\n";
+        for (int i = 0; i < count; ++i) {
+            if (!i) {
+                # a blank line ends the doc comment before it
+                src += "#! not documenting f0\n\n";
+            } else {
+                src += sprintf("/** function %d */\n#! second line\n", i);
+            }
+            src += sprintf("sub f%d() {}\n", i);
+        }
+        return src;
+    }
+}

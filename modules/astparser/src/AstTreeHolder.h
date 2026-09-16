@@ -44,12 +44,12 @@ public:
     AstTreeHolder(AstParseResult* r = nullptr);
     ~AstTreeHolder();
 
-    void printTree(std::ostream& os);
+    void printTree(std::ostream& os, ExceptionSink* xsink);
 
-    QoreListNode* getNodesInfo();
+    QoreListNode* getNodesInfo(ExceptionSink* xsink);
 
     //! Get all comments from the tree.
-    QoreListNode* getComments();
+    QoreListNode* getComments(ExceptionSink* xsink);
 
     void set(AstParseResult* r);
     AstParseResult* get();

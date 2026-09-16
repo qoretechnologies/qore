@@ -64,22 +64,18 @@ static bool isComment(const char* type) {
     return !strcmp(type, "comment") || !strcmp(type, "line_comment");
 }
 
-QoreListNode* GetNodesInfoQuery::get(AstParseResult* result) {
+QoreListNode* GetNodesInfoQuery::get(AstParseResult* result, CSTCancelCheck& cancel) {
     if (!result) {
         return nullptr;
     }
 
-    ExceptionSink xsink;
-    ReferenceHolder<QoreListNode> lst(new QoreListNode, &xsink);
-    if (xsink) {
-        xsink.clear();
-        return nullptr;
-    }
+    ExceptionSink* xsink = cancel.getSink();
+    ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
 
     // lists[depth] receives the hashes of the named children of the node at that depth; the list of each node is
     // owned by the node's hash, which is owned by its parent's list
     std::vector<QoreListNode*> lists;
-    bool ok = cst_walk(result->getRootNode(), [&](const TSTreeCursor* cursor, TSNode node, uint32_t depth) {
+    bool ok = cst_walk(result->getRootNode(), cancel, [&](const TSTreeCursor* cursor, TSNode node, uint32_t depth) {
         if (!depth) {
             // the root node itself is not included; its named children are the top-level list
             lists.assign(1, *lst);
@@ -92,31 +88,28 @@ QoreListNode* GetNodesInfoQuery::get(AstParseResult* result) {
             return CSTWalkAction::Skip;
         }
 
-        ReferenceHolder<QoreHashNode> info(new QoreHashNode, &xsink);
-        if (xsink) {
-            return CSTWalkAction::Stop;
-        }
-        info->setKeyValue("type", new QoreStringNode(type), &xsink);
-        info->setKeyValue("loc", getLocation(node, &xsink), &xsink);
-        if (xsink) {
+        ReferenceHolder<QoreHashNode> info(new QoreHashNode, xsink);
+        info->setKeyValue("type", new QoreStringNode(type), xsink);
+        info->setKeyValue("loc", getLocation(node, xsink), xsink);
+        if (*xsink) {
             return CSTWalkAction::Stop;
         }
 
         // For leaf/terminal nodes, include the text; for other nodes, include the children
         CSTWalkAction action;
         if (!ts_node_named_child_count(node)) {
-            info->setKeyValue("text", new QoreStringNode(result->getNodeText(node)), &xsink);
+            info->setKeyValue("text", new QoreStringNode(result->getNodeText(node)), xsink);
             action = CSTWalkAction::Skip;
         } else {
             QoreListNode* children = new QoreListNode;
-            info->setKeyValue("children", children, &xsink);
+            info->setKeyValue("children", children, xsink);
             if (lists.size() <= depth) {
                 lists.resize(depth + 1);
             }
             lists[depth] = children;
             action = CSTWalkAction::Descend;
         }
-        if (xsink) {
+        if (*xsink) {
             return CSTWalkAction::Stop;
         }
 
@@ -124,19 +117,18 @@ QoreListNode* GetNodesInfoQuery::get(AstParseResult* result) {
         if (depth > 1) {
             const char* fieldName = ts_tree_cursor_current_field_name(cursor);
             if (fieldName) {
-                info->setKeyValue("field", new QoreStringNode(fieldName), &xsink);
-                if (xsink) {
+                info->setKeyValue("field", new QoreStringNode(fieldName), xsink);
+                if (*xsink) {
                     return CSTWalkAction::Stop;
                 }
             }
         }
 
-        lists[depth - 1]->push(info.release(), &xsink);
-        return xsink ? CSTWalkAction::Stop : action;
+        lists[depth - 1]->push(info.release(), xsink);
+        return *xsink ? CSTWalkAction::Stop : action;
     });
 
-    if (!ok || xsink) {
-        xsink.clear();
+    if (!ok || *xsink) {
         return nullptr;
     }
     return lst.release();

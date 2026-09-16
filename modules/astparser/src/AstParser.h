@@ -36,6 +36,8 @@
 
 #include "AstParseErrorLog.h"
 
+class CSTCancelCheck;
+
 //! Holds the result of a tree-sitter parse: the TSTree and the source text.
 class AstParseResult {
 public:
@@ -102,30 +104,18 @@ public:
     //! Parse Qore source file.
     /**
         @param filename source file name
-        @return parsed tree result, or nullptr on failure
+        @param cancel the cancellation check of the parse
+        @return parsed tree result, or nullptr on failure or cancellation
      */
-    AstParseResult* parseFile(const char* filename);
-
-    //! Parse Qore source file.
-    /**
-        @param filename source file name
-        @return parsed tree result, or nullptr on failure
-     */
-    AstParseResult* parseFile(std::string& filename);
+    AstParseResult* parseFile(const char* filename, CSTCancelCheck& cancel);
 
     //! Parse Qore code from string.
     /**
         @param str Qore code
-        @return parsed tree result, or nullptr on failure
+        @param cancel the cancellation check of the parse
+        @return parsed tree result, or nullptr on failure or cancellation
      */
-    AstParseResult* parseString(const char* str);
-
-    //! Parse Qore code from string.
-    /**
-        @param str Qore code
-        @return parsed tree result, or nullptr on failure
-     */
-    AstParseResult* parseString(std::string& str);
+    AstParseResult* parseString(const char* str, CSTCancelCheck& cancel);
 
     //! Enable or disable conditional parsing mode.
     /**
@@ -166,8 +156,11 @@ private:
     bool conditionalParsing = false;
     std::vector<std::string> defines;
 
+    //! Preprocesses and parses source code
+    AstParseResult* parse(const std::string& source, CSTCancelCheck& cancel);
+
     //! Extract parse errors from tree-sitter ERROR/MISSING nodes.
-    void collectErrors(TSNode node, const std::string& source);
+    void collectErrors(TSNode node, const std::string& source, CSTCancelCheck& cancel);
 
     //! Preprocess source to resolve conditional compilation directives.
     /** Evaluates %ifdef/%ifndef/%if/%elif/%else/%endif directives using
@@ -175,27 +168,23 @@ private:
         to preserve line numbers.  Always runs when conditional directives
         are detected in the source.
         @param source source text to preprocess
+        @param cancel the cancellation check of the parse
         @return preprocessed source with inactive branches blanked out
     */
-    std::string preprocessConditionals(const std::string& source) const;
+    std::string preprocessConditionals(const std::string& source, CSTCancelCheck& cancel) const;
 
     //! Check if a symbol is defined.
     bool isDefined(const std::string& name) const;
 
-    //! Evaluate a %if/%elif condition expression.
+    //! Evaluate a parse-directive condition using a custom lookup function.
     /** Supports: defined(X), !defined(X), &&, ||, parentheses.
         @param expr condition expression string
-        @return evaluation result
-    */
-    bool evaluateCondition(const std::string& expr) const;
-
-    //! Evaluate a parse-directive condition using a custom lookup function.
-    /** @param expr condition expression string
         @param isDefinedFn function that returns true if a name is defined
-        @return evaluation result
+        @param cancel the cancellation check of the parse
+        @return evaluation result; false if the evaluation was cancelled
     */
     static bool evaluateCondition(const std::string& expr,
-        const std::function<bool(const std::string&)>& isDefinedFn);
+        const std::function<bool(const std::string&)>& isDefinedFn, CSTCancelCheck& cancel);
 };
 
 #endif // _QLS_ASTPARSER_H

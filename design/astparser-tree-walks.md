@@ -31,6 +31,20 @@ written if its parent is in the upper levels of a very high tree.
 stack of parenthesized expressions, as a directive line may nest any number of
 parentheses and negations.
 
+## Cancellation and linear child iteration
+
+Every operation over a tree takes a `CSTCancelCheck`, which calls `qore_check_cancel()` every 100 nodes and ends
+the operation once any exception has been raised, so every enclosing loop that uses the same check ends in turn.
+`cst_walk()` and `cst_for_each_child()` make the check for each node; `AstParser`, `AstTree` and
+`AstTreeSearcher` methods then raise `THREAD-CANCELLED` or `PROGRAM-INTERRUPTED`.
+
+`ts_node_child()` and `ts_node_named_child()` walk the preceding children on each call, so loops over children
+use `cst_for_each_child()` or `cst_find_named_child()`, which use a cursor. Doc comments, the run of `/**` and
+`#!` comments directly before a declaration, are recorded by `CSTDocComments` while the children of a node are
+visited in order, instead of walking backwards over the preceding siblings of each declaration.
+`examples/test/modules/astparser/large-sources.qtest` checks that the time to search sources with many members
+grows linearly.
+
 `examples/test/modules/astparser/deep-trees.qtest` runs the parser, the error
 and comment collection, the printer, the searcher and the conditional directives
 on deep trees in a thread with a 512KB stack.

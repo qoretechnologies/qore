@@ -57,16 +57,23 @@ AstTreeSearcher::constructor() {
     @param col on what column lies the symbol we want to get info about (0-indexed)
 
     @return hash with hover info containing "description" key, or NOTHING if not found
+
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
  */
 *hash<auto> AstTreeSearcher::hoverInfo(astparser::AstTree[AstTreeHolder] tree, int kind, int line, int col) {
     AstParseResult* result = tree->get();
     if (!result) {
         return QoreValue();
     }
+    CSTCancelCheck cancel(xsink, "searching an astparser syntax tree");
 
     std::string desc = CSTSearcher::buildHoverInfo(
         result, static_cast<ASTSymbolKind>(kind),
-        static_cast<uint32_t>(line), static_cast<uint32_t>(col));
+        static_cast<uint32_t>(line), static_cast<uint32_t>(col), cancel);
+    if (*xsink) {
+        return QoreValue();
+    }
 
     if (desc.empty()) {
         return QoreValue();
@@ -90,15 +97,22 @@ AstTreeSearcher::constructor() {
     @param col on what column lies the symbol we want to get info about (0-indexed)
 
     @return hash with symbol info (kind, usage, name, range) or NOTHING if not found
+
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
  */
 *hash<auto> AstTreeSearcher::findSymbolInfo(astparser::AstTree[AstTreeHolder] tree, int line, int col) {
     AstParseResult* result = tree->get();
     if (!result) {
         return QoreValue();
     }
+    CSTCancelCheck cancel(xsink, "searching an astparser syntax tree");
 
     CSTSymbolInfo si = CSTSearcher::findSymbolInfo(
-        result, static_cast<uint32_t>(line), static_cast<uint32_t>(col));
+        result, static_cast<uint32_t>(line), static_cast<uint32_t>(col), cancel);
+    if (*xsink) {
+        return QoreValue();
+    }
 
     // Return NOTHING if no useful result
     if (si.kind == ASYK_None && si.usage == ASUK_None) {
@@ -154,22 +168,29 @@ AstTreeSearcher::constructor() {
     @param includeDecl whether to include a reference at the passed position
 
     @return list of reference locations, or NOTHING if none found
+
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
  */
 *list<auto> AstTreeSearcher::findReferences(astparser::AstTree[AstTreeHolder] tree, string uri, int line, int col, bool includeDecl) {
     AstParseResult* result = tree->get();
     if (!result) {
         return QoreValue();
     }
+    CSTCancelCheck cancel(xsink, "searching an astparser syntax tree");
 
     std::unique_ptr<std::vector<TSNode>> vec(
         CSTSearcher::findReferences(result,
-            static_cast<uint32_t>(line), static_cast<uint32_t>(col), includeDecl));
-    if (!vec) {
+            static_cast<uint32_t>(line), static_cast<uint32_t>(col), includeDecl, cancel));
+    if (!vec || *xsink) {
         return QoreValue();
     }
 
     ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
     for (size_t i = 0, count = vec->size(); i < count; i++) {
+        if (cancel()) {
+            return QoreValue();
+        }
         TSNode node = vec->at(i);
         QoreHashNode* location = CSTSearcher::makeLocation(
             node, std::string(uri->c_str()), xsink);
@@ -196,6 +217,9 @@ AstTreeSearcher::constructor() {
 
     @return list of location hashes {uri, range}, or NOTHING if not found
 
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
+
     @since %Qore 2.2
  */
 *list<auto> AstTreeSearcher::resolveDefinition(astparser::AstTree[AstTreeHolder] tree, string uri, int line, int col) {
@@ -203,16 +227,20 @@ AstTreeSearcher::constructor() {
     if (!result) {
         return QoreValue();
     }
+    CSTCancelCheck cancel(xsink, "searching an astparser syntax tree");
 
     std::unique_ptr<std::vector<TSNode>> vec(
         CSTSearcher::resolveDefinition(result,
-            static_cast<uint32_t>(line), static_cast<uint32_t>(col)));
-    if (!vec) {
+            static_cast<uint32_t>(line), static_cast<uint32_t>(col), cancel));
+    if (!vec || *xsink) {
         return QoreValue();
     }
 
     ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
     for (size_t i = 0, count = vec->size(); i < count; i++) {
+        if (cancel()) {
+            return QoreValue();
+        }
         TSNode node = vec->at(i);
         QoreHashNode* location = CSTSearcher::makeLocation(
             node, std::string(uri->c_str()), xsink);
@@ -240,6 +268,9 @@ AstTreeSearcher::constructor() {
 
     @return list of location hashes {uri, range}, or NOTHING if not found
 
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
+
     @since %Qore 3.0
  */
 *list<auto> AstTreeSearcher::resolveDefinitionCrossDoc(astparser::AstTree[AstTreeHolder] tree, string uri, int line, int col, *hash<auto> otherDocs) {
@@ -247,6 +278,7 @@ AstTreeSearcher::constructor() {
     if (!result) {
         return QoreValue();
     }
+    CSTCancelCheck cancel(xsink, "searching an astparser syntax tree");
 
     // RAII guard for referenced AstTreeHolder pointers
     struct HolderGuard {
@@ -273,6 +305,9 @@ AstTreeSearcher::constructor() {
     if (otherDocs && otherDocs->size()) {
         ConstHashIterator hi(otherDocs);
         while (hi.next()) {
+            if (cancel()) {
+                return QoreValue();
+            }
             QoreValue val = hi.get();
             if (val.getType() != NT_OBJECT) {
                 continue;
@@ -298,14 +333,17 @@ AstTreeSearcher::constructor() {
     std::string currentUri(uri->c_str());
     std::unique_ptr<std::vector<DefinitionResult>> vec(
         CSTSearcher::resolveDefinitionCrossDoc(result,
-            static_cast<uint32_t>(line), static_cast<uint32_t>(col), docRefs));
+            static_cast<uint32_t>(line), static_cast<uint32_t>(col), docRefs, cancel));
 
-    if (!vec) {
+    if (!vec || *xsink) {
         return QoreValue();
     }
 
     ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
     for (size_t i = 0, count = vec->size(); i < count; i++) {
+        if (cancel()) {
+            return QoreValue();
+        }
         const DefinitionResult& dr = vec->at(i);
         // Use the result's URI if set, otherwise use current document URI
         std::string nodeUri = dr.uri.empty() ? currentUri : dr.uri;
@@ -332,21 +370,28 @@ AstTreeSearcher::constructor() {
     @param bareNames whether to return bare symbol names (without namespace and class prefixes)
 
     @return list of symbols, or NOTHING if none found
+
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
  */
 *list<auto> AstTreeSearcher::findSymbols(astparser::AstTree[AstTreeHolder] tree, string uri, bool fixSymbols = True, bool bareNames = False) {
     AstParseResult* result = tree->get();
     if (!result) {
         return QoreValue();
     }
+    CSTCancelCheck cancel(xsink, "searching an astparser syntax tree");
 
     std::unique_ptr<std::vector<CSTSymbolInfo>> vec(
-        CSTSearcher::collectSymbols(result, fixSymbols, bareNames));
-    if (!vec) {
+        CSTSearcher::collectSymbols(result, cancel, fixSymbols, bareNames));
+    if (!vec || *xsink) {
         return QoreValue();
     }
 
     ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
     for (size_t i = 0, count = vec->size(); i < count; i++) {
+        if (cancel()) {
+            return QoreValue();
+        }
         const CSTSymbolInfo& si = vec->at(i);
         ReferenceHolder<QoreHashNode> symbolInfo(new QoreHashNode, xsink);
         if (*xsink) {
@@ -408,22 +453,29 @@ AstTreeSearcher::constructor() {
     @param bareNames whether to return bare symbol names (without namespace and class prefixes)
 
     @return list of symbols, or NOTHING if none found
+
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
  */
 *list<auto> AstTreeSearcher::findMatchingSymbols(astparser::AstTree[AstTreeHolder] tree, string uri, string query, bool exactMatch = False, bool fixSymbols = True, bool bareNames = False) {
     AstParseResult* result = tree->get();
     if (!result) {
         return QoreValue();
     }
+    CSTCancelCheck cancel(xsink, "searching an astparser syntax tree");
 
     std::string queryStr(query->c_str());
     std::unique_ptr<std::vector<CSTSymbolInfo>> vec(
-        CSTSearcher::findMatchingSymbols(result, queryStr, exactMatch, fixSymbols, bareNames));
-    if (!vec) {
+        CSTSearcher::findMatchingSymbols(result, queryStr, cancel, exactMatch, fixSymbols, bareNames));
+    if (!vec || *xsink) {
         return QoreValue();
     }
 
     ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
     for (size_t i = 0, count = vec->size(); i < count; i++) {
+        if (cancel()) {
+            return QoreValue();
+        }
         const CSTSymbolInfo& si = vec->at(i);
         ReferenceHolder<QoreHashNode> symbolInfo(new QoreHashNode, xsink);
         if (*xsink) {
@@ -488,6 +540,9 @@ AstTreeSearcher::constructor() {
     - 2: Namespace-level symbols
     - 3+: Outer namespaces
 
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
+
     @since %Qore 2.2
  */
 *list<auto> AstTreeSearcher::findScopeSymbols(astparser::AstTree[AstTreeHolder] tree, string uri, int line, int col) {
@@ -495,17 +550,21 @@ AstTreeSearcher::constructor() {
     if (!result) {
         return QoreValue();
     }
+    CSTCancelCheck cancel(xsink, "searching an astparser syntax tree");
 
     // tree-sitter uses 0-indexed, same as our API — no conversion needed
     std::unique_ptr<std::vector<CSTScopeSymbolInfo>> vec(
         CSTSearcher::findScopeSymbols(result,
-            static_cast<uint32_t>(line), static_cast<uint32_t>(col)));
-    if (!vec) {
+            static_cast<uint32_t>(line), static_cast<uint32_t>(col), cancel));
+    if (!vec || *xsink) {
         return QoreValue();
     }
 
     ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
     for (size_t i = 0, count = vec->size(); i < count; i++) {
+        if (cancel()) {
+            return QoreValue();
+        }
         const CSTScopeSymbolInfo& ssi = vec->at(i);
         const CSTSymbolInfo& si = ssi.symbol;
 
@@ -568,6 +627,9 @@ AstTreeSearcher::constructor() {
 
     @return list of detailed symbols with returnType, typeName, access, isStatic, isConstMethod, params, or NOTHING
 
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
+
     @since %Qore 2.2
  */
 *list<auto> AstTreeSearcher::findScopeSymbolsDetailed(astparser::AstTree[AstTreeHolder] tree, string uri, int line, int col) {
@@ -575,16 +637,20 @@ AstTreeSearcher::constructor() {
     if (!result) {
         return QoreValue();
     }
+    CSTCancelCheck cancel(xsink, "searching an astparser syntax tree");
 
     std::unique_ptr<std::vector<CSTSymbolDetail>> vec(
         CSTSearcher::findScopeSymbolsDetailed(result,
-            static_cast<uint32_t>(line), static_cast<uint32_t>(col)));
-    if (!vec) {
+            static_cast<uint32_t>(line), static_cast<uint32_t>(col), cancel));
+    if (!vec || *xsink) {
         return QoreValue();
     }
 
     ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
     for (size_t i = 0, count = vec->size(); i < count; i++) {
+        if (cancel()) {
+            return QoreValue();
+        }
         const CSTSymbolDetail& sd = vec->at(i);
         const CSTSymbolInfo& si = sd.symbol;
 
@@ -648,6 +714,9 @@ AstTreeSearcher::constructor() {
         if (!sd.params.empty()) {
             ReferenceHolder<QoreListNode> paramList(new QoreListNode, xsink);
             for (const auto& p : sd.params) {
+                if (cancel()) {
+                    return QoreValue();
+                }
                 ReferenceHolder<QoreHashNode> paramHash(new QoreHashNode, xsink);
                 if (*xsink) {
                     return QoreValue();
@@ -683,8 +752,8 @@ AstTreeSearcher::constructor() {
 
     @return type name string, or NOTHING if not found
 
-    @throw THREAD-CANCELLED the current thread was cancelled while resolving a large scope
-    @throw PROGRAM-INTERRUPTED the current program was interrupted while resolving a large scope
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
 
     @since %Qore 2.2
  */
@@ -694,9 +763,10 @@ AstTreeSearcher::constructor() {
     if (!result) {
         return QoreValue();
     }
+    CSTCancelCheck cancel(xsink, "searching an astparser syntax tree");
 
     std::string typeName = CSTSearcher::getSymbolType(
-        result, static_cast<uint32_t>(line), static_cast<uint32_t>(col), xsink);
+        result, static_cast<uint32_t>(line), static_cast<uint32_t>(col), cancel);
 
     if (*xsink) {
         return QoreValue();
@@ -718,6 +788,9 @@ AstTreeSearcher::constructor() {
 
     @return list of detailed member symbols, or NOTHING if not found
 
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
+
     @since %Qore 2.2
  */
 *list<auto> AstTreeSearcher::findTypeMembers(astparser::AstTree[AstTreeHolder] tree, string uri, string typeName, bool includeInherited = True) {
@@ -725,16 +798,20 @@ AstTreeSearcher::constructor() {
     if (!result) {
         return QoreValue();
     }
+    CSTCancelCheck cancel(xsink, "searching an astparser syntax tree");
 
     std::string typeStr(typeName->c_str());
     std::unique_ptr<std::vector<CSTSymbolDetail>> vec(
-        CSTSearcher::findTypeMembers(result, typeStr, includeInherited));
-    if (!vec) {
+        CSTSearcher::findTypeMembers(result, typeStr, cancel, includeInherited));
+    if (!vec || *xsink) {
         return QoreValue();
     }
 
     ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
     for (size_t i = 0, count = vec->size(); i < count; i++) {
+        if (cancel()) {
+            return QoreValue();
+        }
         const CSTSymbolDetail& sd = vec->at(i);
         const CSTSymbolInfo& si = sd.symbol;
 
@@ -796,6 +873,9 @@ AstTreeSearcher::constructor() {
         if (!sd.params.empty()) {
             ReferenceHolder<QoreListNode> paramList(new QoreListNode, xsink);
             for (const auto& p : sd.params) {
+                if (cancel()) {
+                    return QoreValue();
+                }
                 ReferenceHolder<QoreHashNode> paramHash(new QoreHashNode, xsink);
                 if (*xsink) {
                     return QoreValue();
@@ -833,6 +913,9 @@ AstTreeSearcher::constructor() {
 
     Each element is a hash with key "range" containing {start: {line, character}, end: {line, character}}.
 
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
+
     @since %Qore 3.0
  */
 *list<auto> AstTreeSearcher::findNodeAndParents(astparser::AstTree[AstTreeHolder] tree, int line, int col) {
@@ -840,16 +923,20 @@ AstTreeSearcher::constructor() {
     if (!result) {
         return QoreValue();
     }
+    CSTCancelCheck cancel(xsink, "searching an astparser syntax tree");
 
     std::vector<TSNode> ancestors = CSTSearcher::findNodeAndParents(
-        result, static_cast<uint32_t>(line), static_cast<uint32_t>(col));
+        result, static_cast<uint32_t>(line), static_cast<uint32_t>(col), cancel);
 
-    if (ancestors.empty()) {
+    if (ancestors.empty() || *xsink) {
         return QoreValue();
     }
 
     ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
     for (size_t i = 0, count = ancestors.size(); i < count; i++) {
+        if (cancel()) {
+            return QoreValue();
+        }
         TSNode node = ancestors[i];
         QoreHashNode* rangeHash = CSTSearcher::makeRange(node, xsink);
         if (*xsink) {
@@ -883,6 +970,9 @@ AstTreeSearcher::constructor() {
 
     @return list of superclass name strings, or NOTHING if not a class or no parents
 
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
+
     @since %Qore 3.0
  */
 *list<string> AstTreeSearcher::getSuperclassNames(astparser::AstTree[AstTreeHolder] tree, int line, int col) {
@@ -890,16 +980,20 @@ AstTreeSearcher::constructor() {
     if (!result) {
         return QoreValue();
     }
+    CSTCancelCheck cancel(xsink, "searching an astparser syntax tree");
 
     std::unique_ptr<std::vector<std::string>> vec(
         CSTSearcher::getSuperclassNames(result,
-            static_cast<uint32_t>(line), static_cast<uint32_t>(col)));
-    if (!vec) {
+            static_cast<uint32_t>(line), static_cast<uint32_t>(col), cancel));
+    if (!vec || *xsink) {
         return QoreValue();
     }
 
     ReferenceHolder<QoreListNode> lst(new QoreListNode(autoTypeInfo), xsink);
     for (size_t i = 0, count = vec->size(); i < count; i++) {
+        if (cancel()) {
+            return QoreValue();
+        }
         lst->push(new QoreStringNode(vec->at(i)), xsink);
         if (*xsink) {
             return QoreValue();
@@ -920,6 +1014,9 @@ AstTreeSearcher::constructor() {
 
     @return list of location hashes {uri, range}, or NOTHING if none found
 
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
+
     @since %Qore 3.0
  */
 *list<auto> AstTreeSearcher::findReferencesCrossDoc(astparser::AstTree[AstTreeHolder] tree, string uri, int line, int col, bool includeDecl, *hash<auto> otherDocs) {
@@ -927,6 +1024,7 @@ AstTreeSearcher::constructor() {
     if (!result) {
         return QoreValue();
     }
+    CSTCancelCheck cancel(xsink, "searching an astparser syntax tree");
 
     // RAII guard for referenced AstTreeHolder pointers
     struct HolderGuard {
@@ -952,6 +1050,9 @@ AstTreeSearcher::constructor() {
     if (otherDocs && otherDocs->size()) {
         ConstHashIterator hi(otherDocs);
         while (hi.next()) {
+            if (cancel()) {
+                return QoreValue();
+            }
             QoreValue val = hi.get();
             if (val.getType() != NT_OBJECT) {
                 continue;
@@ -978,14 +1079,17 @@ AstTreeSearcher::constructor() {
     std::unique_ptr<std::vector<DefinitionResult>> vec(
         CSTSearcher::findReferencesCrossDoc(result,
             static_cast<uint32_t>(line), static_cast<uint32_t>(col),
-            includeDecl, docRefs));
+            includeDecl, docRefs, cancel));
 
-    if (!vec) {
+    if (!vec || *xsink) {
         return QoreValue();
     }
 
     ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
     for (size_t i = 0, count = vec->size(); i < count; i++) {
+        if (cancel()) {
+            return QoreValue();
+        }
         const DefinitionResult& dr = vec->at(i);
         std::string nodeUri = dr.uri.empty() ? currentUri : dr.uri;
         QoreHashNode* location = CSTSearcher::makeLocation(dr.node, nodeUri, xsink);
@@ -1012,6 +1116,9 @@ AstTreeSearcher::constructor() {
     @return list of token hashes {line, startChar, length, tokenType, tokenModifiers},
             sorted by position, or NOTHING if no tokens
 
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
+
     @since %Qore 3.0
  */
 *list<auto> AstTreeSearcher::getSemanticTokens(astparser::AstTree[AstTreeHolder] tree, int startLine = -1, int endLine = -1) {
@@ -1019,18 +1126,22 @@ AstTreeSearcher::constructor() {
     if (!result) {
         return QoreValue();
     }
+    CSTCancelCheck cancel(xsink, "searching an astparser syntax tree");
 
     uint32_t sLine = startLine >= 0 ? static_cast<uint32_t>(startLine) : 0;
     uint32_t eLine = endLine >= 0 ? static_cast<uint32_t>(endLine) : UINT32_MAX;
 
     std::unique_ptr<std::vector<SemanticToken>> vec(
-        CSTSearcher::collectSemanticTokens(result, sLine, eLine));
-    if (!vec) {
+        CSTSearcher::collectSemanticTokens(result, cancel, sLine, eLine));
+    if (!vec || *xsink) {
         return QoreValue();
     }
 
     ReferenceHolder<QoreListNode> lst(new QoreListNode, xsink);
     for (size_t i = 0, count = vec->size(); i < count; i++) {
+        if (cancel()) {
+            return QoreValue();
+        }
         const SemanticToken& st = vec->at(i);
         ReferenceHolder<QoreHashNode> tokenHash(new QoreHashNode, xsink);
         if (*xsink) {

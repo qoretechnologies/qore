@@ -32,6 +32,7 @@
 #include "AstParserHolder.h"
 #include "AstTreeHolder.h"
 #include "AstParser.h"
+#include "CSTWalk.h"
 #include "ast/ASTParseError.h"
 
 #include "QC_AstTree.h"
@@ -56,6 +57,8 @@ AstParser::constructor() {
     @return parsed AST tree, or @ref nothing if the file cannot be read
 
     @throw FILESYSTEM-ACCESS-DENIED the sandbox of the calling program does not allow the file to be read
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
  */
 *AstTree AstParser::parseFile(string filename) [dom=FILESYSTEM] {
     QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
@@ -63,9 +66,11 @@ AstParser::constructor() {
         return QoreValue();
     }
 
-    std::unique_ptr<AstParseResult> result(aph->parseFile(filename->getBuffer()));
-    if (!result)
+    CSTCancelCheck cancel(xsink, "parsing a file with astparser");
+    std::unique_ptr<AstParseResult> result(aph->parseFile(filename->getBuffer(), cancel));
+    if (!result || *xsink) {
         return QoreValue();
+    }
 
     std::unique_ptr<AstTreeHolder> ath(new AstTreeHolder(result.release()));
     return new QoreObject(QC_ASTTREE, getProgram(), ath.release());
@@ -75,11 +80,16 @@ AstParser::constructor() {
 /**
     @param str string with code
     @return parsed AST tree
+
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
  */
 *AstTree AstParser::parseString(string str) {
-    std::unique_ptr<AstParseResult> result(aph->parseString(str->getBuffer()));
-    if (!result)
+    CSTCancelCheck cancel(xsink, "parsing a string with astparser");
+    std::unique_ptr<AstParseResult> result(aph->parseString(str->getBuffer(), cancel));
+    if (!result || *xsink) {
         return QoreValue();
+    }
 
     std::unique_ptr<AstTreeHolder> ath(new AstTreeHolder(result.release()));
     return new QoreObject(QC_ASTTREE, getProgram(), ath.release());

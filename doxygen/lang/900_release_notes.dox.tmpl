@@ -1524,6 +1524,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         filesystem access; they now require the filesystem functional domain, follow the filesystem policy of a
         @ref Qore::SandboxManager "SandboxManager", and \c printTree() raises an exception when the file cannot
         be written
+      - parsing, printing and searching syntax trees can now be @ref thread_cancellation "cancelled"; the methods
+        raise \c THREAD-CANCELLED or \c PROGRAM-INTERRUPTED when the thread is cancelled or the program is
+        interrupted
 
     - @ref awsrestclientintro "AwsRestClient" module
       - added the full AWS credential chain: AWS_* environment variables, ECS task-role, IMDSv2

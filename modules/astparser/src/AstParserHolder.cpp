@@ -36,20 +36,12 @@ AstParserHolder::~AstParserHolder() {
     delete parser;
 }
 
-AstParseResult* AstParserHolder::parseFile(const char* filename) {
-    return parser->parseFile(filename);
+AstParseResult* AstParserHolder::parseFile(const char* filename, CSTCancelCheck& cancel) {
+    return parser->parseFile(filename, cancel);
 }
 
-AstParseResult* AstParserHolder::parseFile(std::string& filename) {
-    return parser->parseFile(filename);
-}
-
-AstParseResult* AstParserHolder::parseString(const char* str) {
-    return parser->parseString(str);
-}
-
-AstParseResult* AstParserHolder::parseString(std::string& str) {
-    return parser->parseString(str);
+AstParseResult* AstParserHolder::parseString(const char* str, CSTCancelCheck& cancel) {
+    return parser->parseString(str, cancel);
 }
 
 void AstParserHolder::setConditionalParsing(bool enabled) {

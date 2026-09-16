@@ -37,6 +37,7 @@
 #include "qore/Qore.h"
 
 #include "AstParser.h"
+#include "CSTWalk.h"
 #include "ast/ASTSymbolKind.h"
 #include "ast/ASTSymbolUsageKind.h"
 
@@ -68,12 +69,14 @@ struct CSTSymbolInfo {
 struct CSTScopeSymbolInfo {
     CSTSymbolInfo symbol;
     int scopeLevel = 0;
+    //! the declaration of the symbol
+    TSNode node = {};
+    //! the parent of the declaration
+    TSNode parent = {};
 
     CSTScopeSymbolInfo() = default;
-    CSTScopeSymbolInfo(CSTSymbolInfo&& sym, int level)
-        : symbol(std::move(sym)), scopeLevel(level) {}
-    CSTScopeSymbolInfo(const CSTSymbolInfo& sym, int level)
-        : symbol(sym), scopeLevel(level) {}
+    CSTScopeSymbolInfo(CSTSymbolInfo&& sym, int level, TSNode node, TSNode parent)
+        : symbol(std::move(sym)), scopeLevel(level), node(node), parent(parent) {}
 };
 
 //! Parameter info for detailed symbol data.
@@ -143,6 +146,9 @@ enum SemanticTokenModifier : uint32_t {
 };
 
 //! Static utility class for searching tree-sitter CST nodes.
+/** Each search checks for cancellation with the CSTCancelCheck of its operation, which also ends the search when an
+    exception has been raised; the caller checks the exception sink after the search.
+*/
 class CSTSearcher {
 public:
     CSTSearcher() = delete;
@@ -154,7 +160,8 @@ public:
 
     //! Find node + all ancestors up to root (0-indexed position).
     static std::vector<TSNode> findNodeAndParents(const AstParseResult* result,
-                                                  uint32_t line, uint32_t col);
+                                                  uint32_t line, uint32_t col,
+                                                  CSTCancelCheck& cancel);
 
     //! Map tree-sitter node type string to ASTSymbolKind.
     static ASTSymbolKind nodeTypeToSymbolKind(const char* type);
@@ -165,12 +172,6 @@ public:
     //! Extract the "name" field from a declaration node.
     static std::string getNodeName(TSNode node, const AstParseResult* result);
 
-    //! Find preceding doc comment (/** or #!) for a node.
-    static std::string findDocComment(TSNode node, const AstParseResult* result);
-
-    //! Find preceding doc comment (/** or #!) for a node with a known parent.
-    static std::string findDocComment(TSNode node, TSNode parent, const AstParseResult* result);
-
     //! Build a QoreHashNode range from a TSNode (0-indexed).
     static QoreHashNode* makeRange(TSNode node, ExceptionSink* xsink);
 
@@ -179,14 +180,16 @@ public:
                                       ExceptionSink* xsink);
 
     //! Collect all declaration symbols from the tree.
-    /** Recursively walks the tree collecting declaration nodes.
+    /** Walks the tree collecting declaration nodes.
         @param result parse result
+        @param cancel the cancellation check of the operation
         @param fixSymbols if true, prefix names with namespace/class scope
         @param bareNames if true, strip all namespace/class prefixes
         @return vector of symbol info
     */
     static std::vector<CSTSymbolInfo>* collectSymbols(
         const AstParseResult* result,
+        CSTCancelCheck& cancel,
         bool fixSymbols = true,
         bool bareNames = false);
 
@@ -194,6 +197,7 @@ public:
     static std::vector<CSTSymbolInfo>* findMatchingSymbols(
         const AstParseResult* result,
         const std::string& query,
+        CSTCancelCheck& cancel,
         bool exactMatch = false,
         bool fixSymbols = true,
         bool bareNames = false);
@@ -201,44 +205,50 @@ public:
     //! Find symbol info at a position (0-indexed).
     static CSTSymbolInfo findSymbolInfo(
         const AstParseResult* result,
-        uint32_t line, uint32_t col);
+        uint32_t line, uint32_t col,
+        CSTCancelCheck& cancel);
 
     //! Find all references to the identifier at position (0-indexed).
     static std::vector<TSNode>* findReferences(
         const AstParseResult* result,
         uint32_t line, uint32_t col,
-        bool includeDecl);
+        bool includeDecl,
+        CSTCancelCheck& cancel);
 
     //! Find symbols accessible from a specific scope position (0-indexed).
     static std::vector<CSTScopeSymbolInfo>* findScopeSymbols(
         const AstParseResult* result,
-        uint32_t line, uint32_t col);
+        uint32_t line, uint32_t col,
+        CSTCancelCheck& cancel);
 
     //! Find scope symbols with detailed metadata (type, access, params, etc.).
     static std::vector<CSTSymbolDetail>* findScopeSymbolsDetailed(
         const AstParseResult* result,
-        uint32_t line, uint32_t col);
+        uint32_t line, uint32_t col,
+        CSTCancelCheck& cancel);
 
     //! Resolve the type of a symbol at position (0-indexed).
     static std::string getSymbolType(
         const AstParseResult* result,
         uint32_t line, uint32_t col,
-        ExceptionSink* xsink = nullptr);
+        CSTCancelCheck& cancel);
 
     //! Find members of a named type (class, namespace, hashdecl, enum).
     static std::vector<CSTSymbolDetail>* findTypeMembers(
         const AstParseResult* result,
         const std::string& typeName,
+        CSTCancelCheck& cancel,
         bool includeInherited = true);
 
     //! Get superclass names for a class at position (0-indexed).
     /** @param result parse result
         @param line 0-indexed line
         @param col 0-indexed column
+        @param cancel the cancellation check of the operation
         @return vector of superclass name strings, or nullptr if not a class or no parents
     */
     static std::vector<std::string>* getSuperclassNames(
-        const AstParseResult* result, uint32_t line, uint32_t col);
+        const AstParseResult* result, uint32_t line, uint32_t col, CSTCancelCheck& cancel);
 
     //! Find all references to the identifier at position across multiple documents.
     /** @param result parse result of the current document
@@ -246,23 +256,27 @@ public:
         @param col 0-indexed column
         @param includeDecl whether to include the declaration itself
         @param otherDocs other documents to search
+        @param cancel the cancellation check of the operation
         @return vector of DefinitionResult (node + URI), or nullptr if not found
     */
     static std::vector<DefinitionResult>* findReferencesCrossDoc(
         const AstParseResult* result,
         uint32_t line, uint32_t col,
         bool includeDecl,
-        const std::vector<DocumentRef>& otherDocs);
+        const std::vector<DocumentRef>& otherDocs,
+        CSTCancelCheck& cancel);
 
     //! Collect semantic tokens from the parse tree.
     /** Walks the tree classifying nodes into semantic token types.
         @param result parse result
+        @param cancel the cancellation check of the operation
         @param startLine start of range (0-indexed, inclusive), default 0
         @param endLine end of range (0-indexed, inclusive), default UINT32_MAX
         @return vector of SemanticToken sorted by position, or nullptr if no tokens
     */
     static std::vector<SemanticToken>* collectSemanticTokens(
         const AstParseResult* result,
+        CSTCancelCheck& cancel,
         uint32_t startLine = 0,
         uint32_t endLine = UINT32_MAX);
 
@@ -270,7 +284,8 @@ public:
     static std::string buildHoverInfo(
         const AstParseResult* result,
         ASTSymbolKind kind,
-        uint32_t line, uint32_t col);
+        uint32_t line, uint32_t col,
+        CSTCancelCheck& cancel);
 
     //! Resolve the definition location for the symbol at position (0-indexed).
     /** Handles local variables, parameters, member access, scoped access,
@@ -278,11 +293,13 @@ public:
         @param result parse result
         @param line 0-indexed line
         @param col 0-indexed column
+        @param cancel the cancellation check of the operation
         @return vector of definition TSNodes, or nullptr if not found
     */
     static std::vector<TSNode>* resolveDefinition(
         const AstParseResult* result,
-        uint32_t line, uint32_t col);
+        uint32_t line, uint32_t col,
+        CSTCancelCheck& cancel);
 
     //! Resolve definition across multiple documents.
     /** Same logic as resolveDefinition but searches other documents when the
@@ -291,12 +308,14 @@ public:
         @param line 0-indexed line
         @param col 0-indexed column
         @param otherDocs other documents to search
+        @param cancel the cancellation check of the operation
         @return vector of DefinitionResult (node + URI), or nullptr if not found
     */
     static std::vector<DefinitionResult>* resolveDefinitionCrossDoc(
         const AstParseResult* result,
         uint32_t line, uint32_t col,
-        const std::vector<DocumentRef>& otherDocs);
+        const std::vector<DocumentRef>& otherDocs,
+        CSTCancelCheck& cancel);
 
 private:
     //! Collect all identifier nodes matching `name` in the tree.
@@ -304,33 +323,36 @@ private:
         @param result the parse result owning the node
         @param name the identifier text to find
         @param vec receives the identifier nodes
-        @param parents if not null, receives the parent of each identifier node (a null node for the root)
+        @param parents receives the parent of each identifier node (a null node for the root)
+        @param cancel the cancellation check of the operation
     */
     static void collectIdentifierRefs(
         TSNode root,
         const AstParseResult* result,
         const std::string& name,
         std::vector<TSNode>* vec,
-        std::vector<TSNode>* parents = nullptr);
+        std::vector<TSNode>* parents,
+        CSTCancelCheck& cancel);
 
     //! Collect scope symbols from ancestors and their siblings.
     static void collectScopeSymbolsFromAncestors(
         const std::vector<TSNode>& ancestors,
         const AstParseResult* result,
         uint32_t line, uint32_t col,
-        std::vector<CSTScopeSymbolInfo>* vec);
+        std::vector<CSTScopeSymbolInfo>* vec,
+        CSTCancelCheck& cancel);
 
     //! Build signature for class declaration.
-    static std::string buildClassSignature(TSNode node, const AstParseResult* result);
+    static std::string buildClassSignature(TSNode node, const AstParseResult* result, CSTCancelCheck& cancel);
 
     //! Build signature for function/method declaration.
-    static std::string buildFunctionSignature(TSNode node, const AstParseResult* result);
+    static std::string buildFunctionSignature(TSNode node, const AstParseResult* result, CSTCancelCheck& cancel);
 
     //! Build signature for constant declaration.
     static std::string buildConstantSignature(TSNode node, const AstParseResult* result);
 
     //! Build signature for variable declaration.
-    static std::string buildVariableSignature(TSNode node, const AstParseResult* result);
+    static std::string buildVariableSignature(TSNode node, const AstParseResult* result, CSTCancelCheck& cancel);
 
     //! Build signature for hashdecl declaration.
     static std::string buildHashdeclSignature(TSNode node, const AstParseResult* result);
@@ -356,14 +378,16 @@ private:
         TSNode scopeNode,
         const AstParseResult* result,
         int scopeLevel,
-        std::vector<CSTScopeSymbolInfo>* vec);
+        std::vector<CSTScopeSymbolInfo>* vec,
+        CSTCancelCheck& cancel);
 
     //! Collect function/method parameters as scope symbols.
     static void collectParameters(
         TSNode funcNode,
         const AstParseResult* result,
         int scopeLevel,
-        std::vector<CSTScopeSymbolInfo>* vec);
+        std::vector<CSTScopeSymbolInfo>* vec,
+        CSTCancelCheck& cancel);
 
     //! Collect local variable declarations from statements before position.
     static void collectLocalsBeforePosition(
@@ -371,34 +395,44 @@ private:
         const AstParseResult* result,
         uint32_t line, uint32_t col,
         int scopeLevel,
-        std::vector<CSTScopeSymbolInfo>* vec);
+        std::vector<CSTScopeSymbolInfo>* vec,
+        CSTCancelCheck& cancel);
 
     //! Case-insensitive substring match.
     static bool matchesQuery(const std::string& name, const std::string& query,
                              bool exactMatch);
 
     //! Extract access modifier from a declaration node or its parent member_group.
-    static std::string extractAccessModifier(TSNode node, const AstParseResult* result);
+    static std::string extractAccessModifier(TSNode node, TSNode parent, const AstParseResult* result,
+                                             CSTCancelCheck& cancel);
 
     //! Check if a declaration has 'static' modifier.
-    static bool hasStaticModifier(TSNode node, const AstParseResult* result);
+    static bool hasStaticModifier(TSNode node, const AstParseResult* result, CSTCancelCheck& cancel);
 
     //! Check if a declaration has trailing 'const' method qualifier.
-    static bool hasConstMethodQualifier(TSNode node, const AstParseResult* result);
+    static bool hasConstMethodQualifier(TSNode node, const AstParseResult* result, CSTCancelCheck& cancel);
 
     //! Extract parameter info from a function/method/constructor node.
     static std::vector<CSTParamInfo> extractParameters(TSNode funcNode,
-                                                        const AstParseResult* result);
+                                                        const AstParseResult* result,
+                                                        CSTCancelCheck& cancel);
 
     //! Extract return type from a function/method node.
     static std::string extractReturnType(TSNode funcNode, const AstParseResult* result);
 
-    //! Extract type name from a variable/member/parameter declaration.
-    static std::string extractTypeName(TSNode node, const AstParseResult* result);
+    //! Extract type name from a variable/member/parameter declaration with a known parent.
+    static std::string extractTypeName(TSNode node, TSNode parent, const AstParseResult* result);
+
+    //! Fills in the details of a declaration, as enrichSymbol() does for the nearest declaration of a symbol
+    /** @return true if the node is a declaration whose details were filled in
+    */
+    static bool fillDeclarationDetail(CSTSymbolDetail& detail, TSNode node, TSNode parent,
+                                      const AstParseResult* result, CSTCancelCheck& cancel);
 
     //! Enrich a scope symbol with detailed metadata from its declaration node.
     static CSTSymbolDetail enrichSymbol(const CSTScopeSymbolInfo& ssi,
-                                         const AstParseResult* result);
+                                         const AstParseResult* result,
+                                         CSTCancelCheck& cancel);
 
     //! Find the declaration of a local variable or parameter in the scope chain.
     static bool findLocalDeclaration(
@@ -406,21 +440,17 @@ private:
         const AstParseResult* result,
         const std::string& name,
         uint32_t line, uint32_t col,
-        TSNode* outNode);
+        TSNode* outNode,
+        CSTCancelCheck& cancel);
 
     //! Find a declaration node by name and type, searching recursively.
     static bool findDeclarationByName(TSNode root, const AstParseResult* result,
                                        const std::string& name, const char* nodeType,
-                                       TSNode* outNode);
+                                       TSNode* outNode, CSTCancelCheck& cancel);
 
     //! Search a class body for a member matching a name, walking the inheritance chain.
     static bool findMemberInClass(TSNode classNode, const AstParseResult* result,
-                                   const std::string& name, TSNode* outNode);
-
-    //! Search a class body for a member matching a name, with visited set for cycle detection.
-    static bool findMemberInClass(TSNode classNode, const AstParseResult* result,
-                                   const std::string& name, TSNode* outNode,
-                                   std::vector<std::string>& visited);
+                                   const std::string& name, TSNode* outNode, CSTCancelCheck& cancel);
 
     //! Search direct members of a class body (no inheritance walk).
     /** Checks method, constructor, destructor, member, and constant declarations
@@ -429,10 +459,11 @@ private:
         @param result parse result owning classNode
         @param name member name to find
         @param outNode receives the found node
+        @param cancel the cancellation check of the operation
         @return true if found
     */
     static bool findMemberInClassBody(TSNode classNode, const AstParseResult* result,
-                                       const std::string& name, TSNode* outNode);
+                                       const std::string& name, TSNode* outNode, CSTCancelCheck& cancel);
 
     //! Find a declaration by name, searching the current document first, then other documents.
     /** @param root root node to search first
@@ -442,13 +473,15 @@ private:
         @param outNode receives the found node
         @param outResult receives the parse result owning the found node
         @param otherDocs other documents to search if not found locally
+        @param cancel the cancellation check of the operation
         @return true if found
     */
     static bool findDeclarationByNameCrossDoc(
         TSNode root, const AstParseResult* result,
         const std::string& name, const char* nodeType,
         TSNode* outNode, const AstParseResult** outResult,
-        const std::vector<DocumentRef>& otherDocs);
+        const std::vector<DocumentRef>& otherDocs,
+        CSTCancelCheck& cancel);
 
     //! Search class body for a member, walking inheritance across documents.
     /** @param classNode class declaration node
@@ -456,51 +489,61 @@ private:
         @param name member name to find
         @param outNode receives the found node
         @param outResult receives the parse result owning the found node
-        @param visited class names already visited (cycle detection)
         @param otherDocs other documents to search for parent classes
+        @param cancel the cancellation check of the operation
         @return true if found
     */
     static bool findMemberInClassCrossDoc(
         TSNode classNode, const AstParseResult* result,
         const std::string& name, TSNode* outNode,
         const AstParseResult** outResult,
-        std::vector<std::string>& visited,
-        const std::vector<DocumentRef>& otherDocs);
+        const std::vector<DocumentRef>& otherDocs,
+        CSTCancelCheck& cancel);
 
     //! Add the members declared in the body of a class to a detail vector.
     static void addOwnClassMembers(TSNode classNode, const AstParseResult* result,
-                                   std::vector<CSTSymbolDetail>* vec);
+                                   std::vector<CSTSymbolDetail>* vec, CSTCancelCheck& cancel);
 
     //! Collect class members into a detail vector.
     static void collectClassMembers(TSNode classNode, const AstParseResult* result,
                                      std::vector<CSTSymbolDetail>* vec,
-                                     std::vector<std::string>* visited = nullptr,
-                                     bool includeInherited = true);
+                                     bool includeInherited,
+                                     CSTCancelCheck& cancel);
 
     //! Collect namespace members into a detail vector.
     static void collectNamespaceMembers(TSNode nsNode, const AstParseResult* result,
-                                         std::vector<CSTSymbolDetail>* vec);
+                                         std::vector<CSTSymbolDetail>* vec, CSTCancelCheck& cancel);
 
     //! Collect hashdecl members into a detail vector.
     static void collectHashdeclMembers(TSNode hdNode, const AstParseResult* result,
-                                        std::vector<CSTSymbolDetail>* vec);
+                                        std::vector<CSTSymbolDetail>* vec, CSTCancelCheck& cancel);
 
     //! Collect enum members into a detail vector.
     static void collectEnumMembers(TSNode enumNode, const AstParseResult* result,
-                                    std::vector<CSTSymbolDetail>* vec);
+                                    std::vector<CSTSymbolDetail>* vec, CSTCancelCheck& cancel);
 
     //! Collect the semantic tokens of a node and its descendants.
     static void collectSemanticTokens(
         TSNode root,
         const AstParseResult* result,
         uint32_t startLine, uint32_t endLine,
-        std::vector<SemanticToken>* vec);
+        std::vector<SemanticToken>* vec,
+        CSTCancelCheck& cancel);
 
     //! Classify a node type to a semantic token type and modifiers.
     /** @return true if the node should generate a token */
-    static bool classifyNode(TSNode node, TSNode parent,
+    /** @param node the node to classify
+        @param parent the node's parent
+        @param isNameField true if the node is the "name" field of its parent
+        @param result the parse result owning the node
+        @param tokenType receives the token type
+        @param tokenModifiers receives the token modifiers
+        @param cancel the cancellation check of the operation
+    */
+    static bool classifyNode(TSNode node, TSNode parent, bool isNameField,
                              const AstParseResult* result,
-                             uint32_t& tokenType, uint32_t& tokenModifiers);
+                             uint32_t& tokenType, uint32_t& tokenModifiers,
+                             CSTCancelCheck& cancel);
 };
 
 #endif // _QLS_CSTSEARCHER_H

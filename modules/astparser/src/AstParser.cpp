@@ -35,6 +35,7 @@
 #include <fstream>
 #include <functional>
 #include <iterator>
+#include <memory>
 #include <set>
 #include <sstream>
 #include <stack>
@@ -59,7 +60,7 @@ AstParser::~AstParser() {
     }
 }
 
-AstParseResult* AstParser::parseFile(const char* filename) {
+AstParseResult* AstParser::parseFile(const char* filename, CSTCancelCheck& cancel) {
     if (!filename) {
         return nullptr;
     }
@@ -74,57 +75,69 @@ AstParseResult* AstParser::parseFile(const char* filename) {
                         std::istreambuf_iterator<char>());
     file.close();
 
-    // Clear previous errors
-    clear();
-
-    // Preprocess conditional directives
-    std::string preprocessed = preprocessConditionals(source);
-
-    // Parse with tree-sitter
-    TSTree* tree = ts_parser_parse_string(parser, nullptr,
-                                          preprocessed.c_str(), static_cast<uint32_t>(preprocessed.size()));
-    if (!tree) {
-        return nullptr;
-    }
-
-    // Collect parse errors from ERROR/MISSING nodes
-    collectErrors(ts_tree_root_node(tree), preprocessed);
-
-    return new AstParseResult(tree, std::move(preprocessed));
+    return parse(source, cancel);
 }
 
-AstParseResult* AstParser::parseFile(std::string& filename) {
-    return parseFile(filename.c_str());
-}
-
-AstParseResult* AstParser::parseString(const char* str) {
+AstParseResult* AstParser::parseString(const char* str, CSTCancelCheck& cancel) {
     if (!str) {
         return nullptr;
     }
 
-    std::string source(str);
+    return parse(std::string(str), cancel);
+}
 
+namespace {
+// the input of a parse: the preprocessed source
+struct ParseInput {
+    const std::string& source;
+    CSTCancelCheck& cancel;
+};
+
+const char* read_parse_input(void* payload, uint32_t byte_index, TSPoint, uint32_t* bytes_read) {
+    const std::string& source = static_cast<ParseInput*>(payload)->source;
+    if (byte_index >= source.size()) {
+        *bytes_read = 0;
+        return "";
+    }
+    *bytes_read = static_cast<uint32_t>(source.size() - byte_index);
+    return source.data() + byte_index;
+}
+
+// returns true to cancel the parse
+bool check_parse_progress(TSParseState* state) {
+    return static_cast<ParseInput*>(state->payload)->cancel();
+}
+}
+
+AstParseResult* AstParser::parse(const std::string& source, CSTCancelCheck& cancel) {
     // Clear previous errors
     clear();
 
     // Preprocess conditional directives
-    std::string preprocessed = preprocessConditionals(source);
-
-    // Parse with tree-sitter
-    TSTree* tree = ts_parser_parse_string(parser, nullptr,
-                                          preprocessed.c_str(), static_cast<uint32_t>(preprocessed.size()));
-    if (!tree) {
+    std::string preprocessed = preprocessConditionals(source, cancel);
+    if (cancel.failed()) {
         return nullptr;
     }
 
+    // Parse with tree-sitter; the progress callback checks for cancellation
+    ParseInput input = {preprocessed, cancel};
+    TSInput tsInput = {&input, read_parse_input, TSInputEncodingUTF8, nullptr};
+    TSParseOptions options = {&input, check_parse_progress};
+    TSTree* tree = ts_parser_parse_with_options(parser, nullptr, tsInput, options);
+    if (!tree) {
+        // a cancelled parse would otherwise be resumed by the next one
+        ts_parser_reset(parser);
+        return nullptr;
+    }
+    std::unique_ptr<AstParseResult> result(new AstParseResult(tree, std::move(preprocessed)));
+
     // Collect parse errors from ERROR/MISSING nodes
-    collectErrors(ts_tree_root_node(tree), preprocessed);
+    collectErrors(result->getRootNode(), result->getSource(), cancel);
+    if (cancel.failed()) {
+        return nullptr;
+    }
 
-    return new AstParseResult(tree, std::move(preprocessed));
-}
-
-AstParseResult* AstParser::parseString(std::string& str) {
-    return parseString(str.c_str());
+    return result.release();
 }
 
 void AstParser::setConditionalParsing(bool enabled) {
@@ -149,15 +162,7 @@ bool AstParser::isDefined(const std::string& name) const {
     return std::find(defines.begin(), defines.end(), name) != defines.end();
 }
 
-// Simple recursive-descent evaluator for %if/%elif conditions.
-// Supports: defined(X), !expr, expr && expr, expr || expr, (expr)
-bool AstParser::evaluateCondition(const std::string& expr) const {
-    return evaluateCondition(expr, [this](const std::string& name) {
-        return isDefined(name);
-    });
-}
-
-// Static version with custom lookup function (avoids code duplication)
+// Evaluator for %if/%elif conditions with a custom lookup function
 //
 // Grammar, evaluated from left to right:
 //   expr    := and ('||' and)*
@@ -167,7 +172,7 @@ bool AstParser::evaluateCondition(const std::string& expr) const {
 // A directive line may nest any number of parentheses and negations, so the parenthesized expressions are kept on
 // an explicit stack; an operand that cannot be parsed is false, and any text after the expression is ignored
 bool AstParser::evaluateCondition(const std::string& expr,
-        const std::function<bool(const std::string&)>& isDefinedFn) {
+        const std::function<bool(const std::string&)>& isDefinedFn, CSTCancelCheck& cancel) {
     size_t pos = 0;
     size_t len = expr.size();
 
@@ -194,6 +199,9 @@ bool AstParser::evaluateCondition(const std::string& expr,
     std::vector<Level> levels(1);
 
     while (true) {
+        if (cancel()) {
+            return false;
+        }
         // unary: the negations before a primary
         size_t negations = 0;
         while (true) {
@@ -279,7 +287,7 @@ bool AstParser::evaluateCondition(const std::string& expr,
     }
 }
 
-std::string AstParser::preprocessConditionals(const std::string& source) const {
+std::string AstParser::preprocessConditionals(const std::string& source, CSTCancelCheck& cancel) const {
     std::string result;
     result.reserve(source.size());
 
@@ -293,7 +301,7 @@ std::string AstParser::preprocessConditionals(const std::string& source) const {
 
     // Local version of evaluateCondition that uses both parser defines and local defines
     auto evalCondLocal = [&](const std::string& expr) -> bool {
-        return evaluateCondition(expr, isDefinedLocal);
+        return evaluateCondition(expr, isDefinedLocal, cancel);
     };
 
     // Track nested conditional state: each level has (active, seen_true_branch)
@@ -314,6 +322,9 @@ std::string AstParser::preprocessConditionals(const std::string& source) const {
 
     size_t pos = 0;
     while (pos < source.size()) {
+        if (cancel()) {
+            return std::string();
+        }
         // Find end of current line
         size_t lineEnd = source.find('\n', pos);
         if (lineEnd == std::string::npos) {
@@ -435,7 +446,7 @@ static ASTParseLocation getNodeLocation(TSNode node) {
         static_cast<ast_loc_t>(endPt.row + 1), static_cast<ast_loc_t>(endPt.column + 1));
 }
 
-void AstParser::collectErrors(TSNode root, const std::string& source) {
+void AstParser::collectErrors(TSNode root, const std::string& source, CSTCancelCheck& cancel) {
     // the state of each node on the path from the root, indexed by depth
     struct PathEntry {
         TSNode node;
@@ -446,7 +457,7 @@ void AstParser::collectErrors(TSNode root, const std::string& source) {
     };
     std::vector<PathEntry> path;
 
-    cst_walk(root, [&](const TSTreeCursor*, TSNode node, uint32_t depth) {
+    cst_walk(root, cancel, [&](const TSTreeCursor*, TSNode node, uint32_t depth) {
         TSNode parent = {};
         TSNode previous = {};
         if (depth) {

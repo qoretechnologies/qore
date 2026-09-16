@@ -29,6 +29,7 @@
 #define _QLS_QUERIES_GETNODESINFOQUERY_H
 
 class AstParseResult;
+class CSTCancelCheck;
 
 class ExceptionSink;
 class QoreHashNode;
@@ -42,9 +43,10 @@ public:
     //! Get info about nodes in the given tree-sitter parse result.
     /**
         @param result tree-sitter parse result to query
-        @return list of info about nodes
+        @param cancel the cancellation check of the operation, which receives any exception
+        @return list of info about nodes, or nullptr if an exception was raised
     */
-    static QoreListNode* get(AstParseResult* result);
+    static QoreListNode* get(AstParseResult* result, CSTCancelCheck& cancel);
 };
 
 #endif // _QLS_QUERIES_GETNODESINFOQUERY_H

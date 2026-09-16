@@ -36,6 +36,7 @@
 class AstParser;
 class AstParseResult;
 class ASTParseError;
+class CSTCancelCheck;
 
 class AstParserHolder : public AbstractPrivateData {
 private:
@@ -45,11 +46,9 @@ public:
     AstParserHolder();
     ~AstParserHolder();
 
-    AstParseResult* parseFile(const char* filename);
-    AstParseResult* parseFile(std::string& filename);
+    AstParseResult* parseFile(const char* filename, CSTCancelCheck& cancel);
 
-    AstParseResult* parseString(const char* str);
-    AstParseResult* parseString(std::string& str);
+    AstParseResult* parseString(const char* str, CSTCancelCheck& cancel);
 
     //! Enable or disable conditional parsing.
     void setConditionalParsing(bool enabled);

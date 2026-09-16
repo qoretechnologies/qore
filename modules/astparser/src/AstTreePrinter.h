@@ -31,11 +31,14 @@
 #include <ostream>
 
 class AstParseResult;
+class CSTCancelCheck;
 
 class AstTreePrinter {
 public:
     //! Print the tree-sitter CST as an S-expression.
-    static void printTree(std::ostream& os, AstParseResult* result);
+    /** Nothing is written if the cancellation check fails.
+    */
+    static void printTree(std::ostream& os, AstParseResult* result, CSTCancelCheck& cancel);
 };
 
 #endif // _QLS_ASTTREEPRINTER_H
