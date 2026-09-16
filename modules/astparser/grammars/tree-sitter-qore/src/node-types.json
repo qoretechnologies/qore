@@ -6794,6 +6794,10 @@
             "named": true
           },
           {
+            "type": "scoped_identifier",
+            "named": true
+          },
+          {
             "type": "variable_name",
             "named": true
           }

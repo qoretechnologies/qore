@@ -1,0 +1,167 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires astparser
+
+%exec-class ScopedNamesTest
+
+class ScopedNamesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("astparser scoped names", "1.0") {
+        addTestCase("Root namespace names match the runtime parser", \rootNames());
+        addTestCase("Scoped global variable declarations match the runtime parser", \globalVariables());
+        addTestCase("Generic scoped names take precedence over comparisons", \genericNames());
+        addTestCase("Separated scope operators are rejected by both parsers", \invalid());
+        set_return_value(main());
+    }
+
+    private static list<hash<auto>> findNodes(list<auto> nodes, string type) {
+        list<hash<auto>> rv = ();
+        foreach hash<auto> node in (nodes) {
+            if (node.type == type) {
+                rv += node;
+            }
+            if (node.children) {
+                rv += findNodes(node.children, type);
+            }
+        }
+        return rv;
+    }
+
+    private static *hash<auto> getField(hash<auto> node, string field) {
+        foreach hash<auto> child in (node.children) {
+            if (child.field == field) {
+                return child;
+            }
+        }
+    }
+
+    #! Returns the source text of a node on a single line
+    private static string getText(string source, hash<auto> node) {
+        hash<auto> loc = node.loc;
+        @assert(loc.start_line == loc.end_line);
+        string line = source.split("\n")[loc.start_line];
+        return line.substr(loc.start_column, loc.end_column - loc.start_column);
+    }
+
+    #! Returns the source text of each node of the given type
+    private static list<string> getTexts(string source, list<auto> nodes, string type) {
+        return map getText(source, $1), findNodes(nodes, type);
+    }
+
+    #! Parses and runs @p source with the runtime and returns the result of its run() function
+    private static auto run(string source, string label,
+            int options = PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES) {
+        Program runtime(options);
+        runtime.parse(source, label);
+        runtime.run();
+        return runtime.callFunction("run");
+    }
+
+    #! Parses @p source with AstParser, asserts that it has no errors and returns its nodes
+    private list<auto> parse(string source, string label) {
+        AstParser parser();
+        AstTree tree = parser.parseString(source);
+        assertEq(0, parser.getErrorCount(), sprintf("%s: %y", label, parser.getDiagnostics()));
+        return tree.getNodesInfo();
+    }
+
+    rootNames() {
+        string source = "int sub foo(int a) { return a; }
+::foo(2);
+hashdecl H { int v = 4; }
+typedef ::T = int;
+class Foo {
+    public { int v = 1; }
+    static int s() { return 2; }
+}
+class ::Root { public { int v = 3; } }
+class Bar inherits ::Foo {}
+int sub f(*::Foo x) { return x.v; }
+int sub g() { return 8; }
+int sub run() {
+    ::Foo x = new ::Foo();
+    ::Foo y();
+    hash<::H> h();
+    ::T t = 5;
+    int r = x.v + y.v + f(new Bar()) + ::Foo::s() + h.v + t + new Root().v;
+    return r + (::Qore::True ? ::foo(1) : ::g());
+}
+";
+        assertEq(18, run(source, "root names"));
+        list<auto> nodes = parse(source, "root names");
+        list<string> names = getTexts(source, nodes, "scoped_identifier");
+        foreach string name in ("::foo", "::T", "::Root", "::Foo", "::Foo::s", "::H", "::Qore::True", "::g") {
+            assertTrue(names.contains(name), name);
+        }
+        assertEq(2, (select findNodes(nodes, "call_expression"),
+            getField($1, "function").type == "scoped_identifier"
+            && getText(source, getField($1, "function")) == "::foo").size());
+        assertEq(("::Root",), map getText(source, getField($1, "name")), findNodes(nodes, "class_declaration"),
+            getField($1, "name").type == "scoped_identifier");
+    }
+
+    globalVariables() {
+        string source = "namespace N {}
+class Foo { public { int v = 1; } }
+our int ::g = 6;
+our int N::h = 3;
+our int N::i;
+thread_local int N::t = 2;
+our Foo ::f = new Foo();
+our N::u;
+int sub run() {
+    N::i = 4;
+    N::u = 5;
+    return ::g * 10000 + N::h * 1000 + N::i * 100 + N::t * 10 + ::f.v + N::u;
+}
+";
+        # an untyped global variable requires parse options without require-types
+        assertEq(63426, run(source, "global variables", PO_NEW_STYLE | PO_STRICT_ARGS));
+        list<auto> nodes = parse(source, "global variables");
+        list<string> names = map getText(source, getField($1, "name")),
+            findNodes(findNodes(nodes, "global_variable_declaration"), "variable_declarator");
+        assertEq(("::g", "N::h", "N::i", "N::t", "::f", "N::u"), names);
+        # a separator after whitespace starts the variable name, so Foo remains the type
+        list<hash<auto>> declarations = findNodes(nodes, "global_variable_declaration");
+        assertEq("Foo", getText(source, getField(declarations[4], "type")));
+        assertNothing(getField(declarations[5], "type"));
+    }
+
+    genericNames() {
+        string source = "class G<T> {
+    static int f() { return 5; }
+    static U pick<U>(T t, U u) { return u; }
+}
+int sub c(int n) { return n; }
+int sub run() {
+    int a = 1;
+    int b = 2;
+    bool less = a < b > ::c(0);
+    return G<int>::f() * 10 + G<int>::pick<int>(1, 2) + (less ? 100 : 0);
+}
+";
+        assertEq(152, run(source, "generic names"));
+        list<auto> nodes = parse(source, "generic names");
+        assertEq(("G<int>::f", "G<int>::pick<int>"), getTexts(source, nodes, "generic_scoped_identifier"));
+        list<hash<auto>> comparisons = select findNodes(nodes, "binary_expression"),
+            getText(source, $1) == "a < b > ::c(0)";
+        assertEq(1, comparisons.size());
+    }
+
+    invalid() {
+        AstParser parser();
+        foreach string expression in ("N ::C", "N :: C", "::") {
+            string source = "namespace N { const C = 1; }\nint sub run() { return " + expression + "; }\n";
+            Program runtime(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("PARSE-EXCEPTION", \runtime.parse(), (source, "invalid"), expression);
+            parser.parseString(source);
+            assertGt(0, parser.getErrorCount(), expression);
+        }
+        parser.parseString("int sub run() { return ::Qore::True ? 1 : 0; }\n");
+        assertEq(0, parser.getErrorCount(), "a failed parse does not affect the next parse");
+    }
+}

@@ -58,7 +58,6 @@ module.exports = grammar({
     [$.hash_literal, $.block],
     [$.hash_literal, $._statement],
     [$.variable_declarator, $.primary_expression],
-    [$.module_name, $.scoped_identifier],
     [$.parenthesized_expression, $.list_literal],
     [$.list_literal, $.paren_hash_literal],
     [$.function_declaration, $.closure_expression],
@@ -74,7 +73,6 @@ module.exports = grammar({
     [$._type_keyword, $.simple_type],
     [$.simple_type, $.complex_type],
     [$.simple_type, $.generic_type],
-    [$.simple_type, $.scoped_identifier],
     [$.type_parameter, $.simple_type],
     [$._type_keyword, $.simple_type, $.complex_type],
     // case < identifier could be comparison value or start of <Type> cast
@@ -513,8 +511,15 @@ module.exports = grammar({
     global_variable_declaration: $ => seq(
       choice('our', 'my', 'thread_local'),
       optional(field('type', $.type)),
-      commaSep1($.variable_declarator),
+      commaSep1(choice($.variable_declarator, alias($._scoped_variable_declarator, $.variable_declarator))),
       ';',
+    ),
+
+    // A global variable in a namespace path; lib/parser.ypp gvardecl accepts
+    // SCOPED_REF names for our and thread_local
+    _scoped_variable_declarator: $ => seq(
+      field('name', $.scoped_identifier),
+      optional(seq(choice('=', '+=', ':='), field('value', $._expression))),
     ),
 
     variable_declarator: $ => choice(
@@ -1597,9 +1602,13 @@ module.exports = grammar({
       '>',
     ),
 
+    // lib/scanner.lpp matches the longest word<args>::word<args> sequence as
+    // one scoped name, so each generic component takes precedence over a
+    // comparison chain such as (a < b) > ::c(d), which requires whitespace
+    // before the separator
     generic_scoped_identifier: $ => prec.left(seq(
-      $.generic_type,
-      repeat1(seq('::', choice($.identifier, $.generic_type))),
+      prec.dynamic(1, $.generic_type),
+      repeat1(seq(token.immediate('::'), choice($.identifier, prec.dynamic(1, $.generic_type)))),
     )),
 
     wildcard_type: $ => seq(
@@ -1648,17 +1657,15 @@ module.exports = grammar({
 
     variable_name: $ => seq('$', /[a-zA-Z_][a-zA-Z0-9_]*/),
 
-    // prec.right so the path is consumed greedily: at `A::B • :: C` the
-    // shift/reduce conflict (extend this scope path vs. reduce `A::B` and let
-    // `::C` start a following scoped_identifier via its optional leading `::`)
-    // resolves toward shift. Without this, declarations whose name may itself be
-    // a scoped_identifier (typed const, typedef) truncate a 3+ component scoped
-    // type to its first two components and fail to parse.
-    scoped_identifier: $ => prec.right(seq(
-      optional('::'),
-      $.identifier,
-      repeat1(seq('::', $.identifier)),
-    )),
+    // lib/scanner.lpp matches a scoped name as one SCOPED_REF token:
+    // ({WORD}::)+{WORD} or (::{WORD})+. A separator after a name is therefore
+    // immediate, while a leading separator may follow whitespace, so `A ::b`
+    // is the name `A` followed by the root namespace name `::b`, as in
+    // `our Type ::name`.
+    scoped_identifier: $ => choice(
+      seq('::', $.identifier, repeat(seq(token.immediate('::'), $.identifier))),
+      seq($.identifier, repeat1(seq(token.immediate('::'), $.identifier))),
+    ),
 
     // ==================== Comments ====================
     comment: $ => token(seq(
