@@ -33,6 +33,7 @@
 
 #include "AstParser.h"
 #include "AstTreePrinter.h"
+#include "CSTWalk.h"
 #include "ast/ASTComment.h"
 #include "queries/GetNodesInfoQuery.h"
 
@@ -71,12 +72,17 @@ static ASTCommentKind classifyComment(const char* nodeType, const std::string& t
     return ACK_Line;
 }
 
-//! Recursively collect all comment nodes from the tree-sitter CST.
-static void collectComments(TSNode node, const AstParseResult* result,
-                            QoreListNode* lst, ExceptionSink* xsink) {
-    const char* type = ts_node_type(node);
+//! Collect all comment nodes from the tree-sitter CST.
+/** @return false if an exception was raised
+*/
+static bool collectComments(TSNode root, const AstParseResult* result, QoreListNode* lst, ExceptionSink* xsink) {
+    return cst_walk(root, [&](const TSTreeCursor*, TSNode node, uint32_t) {
+        const char* type = ts_node_type(node);
+        if (strcmp(type, "comment") && strcmp(type, "line_comment")) {
+            // Walk all children (including unnamed/extra nodes)
+            return CSTWalkAction::Descend;
+        }
 
-    if (strcmp(type, "comment") == 0 || strcmp(type, "line_comment") == 0) {
         std::string text = result->getNodeText(node);
         ASTCommentKind kind = classifyComment(type, text);
 
@@ -85,14 +91,14 @@ static void collectComments(TSNode node, const AstParseResult* result,
 
         ReferenceHolder<QoreHashNode> info(new QoreHashNode, xsink);
         if (*xsink) {
-            return;
+            return CSTWalkAction::Stop;
         }
         info->setKeyValue("kind", static_cast<int64>(kind), xsink);
         info->setKeyValue("text", new QoreStringNode(text), xsink);
 
         ReferenceHolder<QoreHashNode> locHash(new QoreHashNode, xsink);
         if (*xsink) {
-            return;
+            return CSTWalkAction::Stop;
         }
         // tree-sitter uses 0-indexed; our API uses 1-indexed
         locHash->setKeyValue("firstLine", static_cast<int64>(startPt.row + 1), xsink);
@@ -100,25 +106,14 @@ static void collectComments(TSNode node, const AstParseResult* result,
         locHash->setKeyValue("lastLine", static_cast<int64>(endPt.row + 1), xsink);
         locHash->setKeyValue("lastCol", static_cast<int64>(endPt.column + 1), xsink);
         info->setKeyValue("loc", locHash.release(), xsink);
-
         if (*xsink) {
-            return;
+            return CSTWalkAction::Stop;
         }
+
         lst->push(info.release(), xsink);
-        if (*xsink) {
-            return;
-        }
-        return; // Comments don't have children to recurse into
-    }
-
-    // Recurse into all children (including unnamed/extra nodes)
-    uint32_t childCount = ts_node_child_count(node);
-    for (uint32_t i = 0; i < childCount; i++) {
-        collectComments(ts_node_child(node, i), result, lst, xsink);
-        if (*xsink) {
-            return;
-        }
-    }
+        // Comments don't have children to walk
+        return *xsink ? CSTWalkAction::Stop : CSTWalkAction::Skip;
+    });
 }
 
 QoreListNode* AstTreeHolder::getComments() {
@@ -134,10 +129,7 @@ QoreListNode* AstTreeHolder::getComments() {
         return nullptr;
     }
 
-    TSNode root = result->getRootNode();
-    collectComments(root, result, *lst, &xsink);
-
-    if (xsink) {
+    if (!collectComments(result->getRootNode(), result, *lst, &xsink) || xsink) {
         lst = nullptr;
         xsink.clear();
         return nullptr;

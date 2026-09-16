@@ -168,6 +168,9 @@ public:
     //! Find preceding doc comment (/** or #!) for a node.
     static std::string findDocComment(TSNode node, const AstParseResult* result);
 
+    //! Find preceding doc comment (/** or #!) for a node with a known parent.
+    static std::string findDocComment(TSNode node, TSNode parent, const AstParseResult* result);
+
     //! Build a QoreHashNode range from a TSNode (0-indexed).
     static QoreHashNode* makeRange(TSNode node, ExceptionSink* xsink);
 
@@ -296,21 +299,19 @@ public:
         const std::vector<DocumentRef>& otherDocs);
 
 private:
-    //! Recursively collect symbols into vec, tracking scope prefix.
-    static void collectSymbolsRecursive(
-        TSNode node,
-        const AstParseResult* result,
-        const std::string& scopePrefix,
-        bool fixSymbols,
-        bool bareNames,
-        std::vector<CSTSymbolInfo>* vec);
-
     //! Collect all identifier nodes matching `name` in the tree.
+    /** @param root the node to search
+        @param result the parse result owning the node
+        @param name the identifier text to find
+        @param vec receives the identifier nodes
+        @param parents if not null, receives the parent of each identifier node (a null node for the root)
+    */
     static void collectIdentifierRefs(
-        TSNode node,
+        TSNode root,
         const AstParseResult* result,
         const std::string& name,
-        std::vector<TSNode>* vec);
+        std::vector<TSNode>* vec,
+        std::vector<TSNode>* parents = nullptr);
 
     //! Collect scope symbols from ancestors and their siblings.
     static void collectScopeSymbolsFromAncestors(
@@ -466,6 +467,10 @@ private:
         std::vector<std::string>& visited,
         const std::vector<DocumentRef>& otherDocs);
 
+    //! Add the members declared in the body of a class to a detail vector.
+    static void addOwnClassMembers(TSNode classNode, const AstParseResult* result,
+                                   std::vector<CSTSymbolDetail>* vec);
+
     //! Collect class members into a detail vector.
     static void collectClassMembers(TSNode classNode, const AstParseResult* result,
                                      std::vector<CSTSymbolDetail>* vec,
@@ -484,9 +489,9 @@ private:
     static void collectEnumMembers(TSNode enumNode, const AstParseResult* result,
                                     std::vector<CSTSymbolDetail>* vec);
 
-    //! Recursively collect semantic tokens from a node.
-    static void collectSemanticTokensRecursive(
-        TSNode node,
+    //! Collect the semantic tokens of a node and its descendants.
+    static void collectSemanticTokens(
+        TSNode root,
         const AstParseResult* result,
         uint32_t startLine, uint32_t endLine,
         std::vector<SemanticToken>* vec);

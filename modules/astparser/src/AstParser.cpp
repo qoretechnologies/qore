@@ -26,6 +26,7 @@
 */
 
 #include "AstParser.h"
+#include "CSTWalk.h"
 
 #include <algorithm>
 #include <cctype>
@@ -41,14 +42,10 @@
 // The tree-sitter Qore language function, defined in the generated parser.c
 extern "C" const TSLanguage* tree_sitter_qore();
 
-static bool isPositionalAfterNamedArgError(TSNode node) {
-    TSNode parent = ts_node_parent(node);
-    if (ts_node_is_null(parent) || std::strcmp(ts_node_type(parent), "argument_list")) {
-        return false;
-    }
-
-    TSNode previous = ts_node_prev_named_sibling(node);
-    return !ts_node_is_null(previous) && !std::strcmp(ts_node_type(previous), "named_argument");
+// the parent and the previous named sibling are known in the error walk; ts_node_parent() would search from the root
+static bool isPositionalAfterNamedArgError(TSNode parent, TSNode previous) {
+    return !ts_node_is_null(parent) && !std::strcmp(ts_node_type(parent), "argument_list")
+        && !ts_node_is_null(previous) && !std::strcmp(ts_node_type(previous), "named_argument");
 }
 
 AstParser::AstParser() {
@@ -161,6 +158,14 @@ bool AstParser::evaluateCondition(const std::string& expr) const {
 }
 
 // Static version with custom lookup function (avoids code duplication)
+//
+// Grammar, evaluated from left to right:
+//   expr    := and ('||' and)*
+//   and     := unary ('&&' unary)*
+//   unary   := '!' unary | primary
+//   primary := 'defined' '(' IDENT ')' | '(' expr ')' | IDENT
+// A directive line may nest any number of parentheses and negations, so the parenthesized expressions are kept on
+// an explicit stack; an operand that cannot be parsed is false, and any text after the expression is ignored
 bool AstParser::evaluateCondition(const std::string& expr,
         const std::function<bool(const std::string&)>& isDefinedFn) {
     size_t pos = 0;
@@ -171,20 +176,41 @@ bool AstParser::evaluateCondition(const std::string& expr,
             ++pos;
         }
     };
+    auto isIdentStart = [&]() {
+        return pos < len && (std::isalpha(static_cast<unsigned char>(expr[pos])) || expr[pos] == '_');
+    };
 
-    std::function<bool()> parseOr;
-    std::function<bool()> parseAnd;
-    std::function<bool()> parseUnary;
-    std::function<bool()> parsePrimary;
+    // an expression: the whole condition or a parenthesized expression
+    struct Level {
+        // the value of the "||" operands so far
+        bool orValue = false;
+        bool hasOr = false;
+        // the value of the "&&" operands so far in the current "||" operand
+        bool andValue = false;
+        bool hasAnd = false;
+        // the number of negations before the parenthesis that opened the expression
+        size_t negations = 0;
+    };
+    std::vector<Level> levels(1);
 
-    parsePrimary = [&]() -> bool {
-        skipWS();
-        if (pos >= len) {
-            return false;
+    while (true) {
+        // unary: the negations before a primary
+        size_t negations = 0;
+        while (true) {
+            skipWS();
+            if (pos < len && expr[pos] == '!') {
+                ++pos;
+                ++negations;
+            } else {
+                break;
+            }
         }
 
-        // defined(X)
-        if (expr.compare(pos, 7, "defined") == 0 && pos + 7 < len) {
+        // primary
+        bool value = false;
+        skipWS();
+        if (pos < len && expr.compare(pos, 7, "defined") == 0 && pos + 7 < len) {
+            // defined(X)
             pos += 7;
             skipWS();
             if (pos < len && expr[pos] == '(') {
@@ -199,72 +225,58 @@ bool AstParser::evaluateCondition(const std::string& expr,
                 if (pos < len && expr[pos] == ')') {
                     ++pos;
                 }
-                return isDefinedFn(name);
+                value = isDefinedFn(name);
             }
-            return false;
+        } else if (pos < len && expr[pos] == '(') {
+            // (expr)
+            ++pos;
+            levels.emplace_back();
+            levels.back().negations = negations;
+            continue;
+        } else if (isIdentStart()) {
+            // Identifier (treat as defined check)
+            size_t nameStart = pos;
+            while (pos < len && (std::isalnum(static_cast<unsigned char>(expr[pos])) || expr[pos] == '_')) {
+                ++pos;
+            }
+            value = isDefinedFn(expr.substr(nameStart, pos - nameStart));
         }
 
-        // (expr)
-        if (expr[pos] == '(') {
-            ++pos;
-            bool result = parseOr();
+        // apply the operand and the operators that follow it, completing parenthesized expressions
+        while (true) {
+            if (negations & 1) {
+                value = !value;
+            }
+            Level& level = levels.back();
+            level.andValue = level.hasAnd ? (value && level.andValue) : value;
+            skipWS();
+            if (pos + 1 < len && expr[pos] == '&' && expr[pos + 1] == '&') {
+                pos += 2;
+                level.hasAnd = true;
+                break;
+            }
+            level.orValue = level.hasOr ? (level.andValue || level.orValue) : level.andValue;
+            level.hasAnd = false;
+            skipWS();
+            if (pos + 1 < len && expr[pos] == '|' && expr[pos + 1] == '|') {
+                pos += 2;
+                level.hasOr = true;
+                break;
+            }
+
+            // the expression is complete
+            value = level.orValue;
+            negations = level.negations;
+            if (levels.size() == 1) {
+                return value;
+            }
+            levels.pop_back();
             skipWS();
             if (pos < len && expr[pos] == ')') {
                 ++pos;
             }
-            return result;
         }
-
-        // Identifier (treat as defined check)
-        if (std::isalpha(expr[pos]) || expr[pos] == '_') {
-            size_t nameStart = pos;
-            while (pos < len && (std::isalnum(expr[pos]) || expr[pos] == '_')) {
-                ++pos;
-            }
-            return isDefinedFn(expr.substr(nameStart, pos - nameStart));
-        }
-
-        return false;
-    };
-
-    parseUnary = [&]() -> bool {
-        skipWS();
-        if (pos < len && expr[pos] == '!') {
-            ++pos;
-            return !parseUnary();
-        }
-        return parsePrimary();
-    };
-
-    parseAnd = [&]() -> bool {
-        bool result = parseUnary();
-        while (true) {
-            skipWS();
-            if (pos + 1 < len && expr[pos] == '&' && expr[pos + 1] == '&') {
-                pos += 2;
-                result = parseUnary() && result;
-            } else {
-                break;
-            }
-        }
-        return result;
-    };
-
-    parseOr = [&]() -> bool {
-        bool result = parseAnd();
-        while (true) {
-            skipWS();
-            if (pos + 1 < len && expr[pos] == '|' && expr[pos + 1] == '|') {
-                pos += 2;
-                result = parseAnd() || result;
-            } else {
-                break;
-            }
-        }
-        return result;
-    };
-
-    return parseOr();
+    }
 }
 
 std::string AstParser::preprocessConditionals(const std::string& source) const {
@@ -423,65 +435,82 @@ static ASTParseLocation getNodeLocation(TSNode node) {
         static_cast<ast_loc_t>(endPt.row + 1), static_cast<ast_loc_t>(endPt.column + 1));
 }
 
-void AstParser::collectErrors(TSNode node, const std::string& source) {
-    // an error, a missing node and each of their ancestors report an error
-    if (!ts_node_has_error(node)) {
-        return;
-    }
+void AstParser::collectErrors(TSNode root, const std::string& source) {
+    // the state of each node on the path from the root, indexed by depth
+    struct PathEntry {
+        TSNode node;
+        // the last named child entered so far
+        TSNode lastNamedChild;
+        // true once a child with an error has been entered
+        bool childError;
+    };
+    std::vector<PathEntry> path;
 
-    // Check if this node is an error
-    if (ts_node_is_error(node) || ts_node_is_missing(node)) {
-        ASTParseLocation loc = getNodeLocation(node);
+    cst_walk(root, [&](const TSTreeCursor*, TSNode node, uint32_t depth) {
+        TSNode parent = {};
+        TSNode previous = {};
+        if (depth) {
+            PathEntry& parentEntry = path[depth - 1];
+            parent = parentEntry.node;
+            previous = parentEntry.lastNamedChild;
+            if (ts_node_is_named(node)) {
+                parentEntry.lastNamedChild = node;
+            }
+        }
+
+        // an error, a missing node and each of their ancestors report an error
+        if (!ts_node_has_error(node)) {
+            return CSTWalkAction::Skip;
+        }
+        if (depth) {
+            path[depth - 1].childError = true;
+        }
+        path.resize(depth + 1);
+        path[depth] = {node, {}, false};
 
         if (ts_node_is_missing(node)) {
             std::string msg = "Missing ";
             msg += ts_node_type(node);
-            reportError(loc, msg.c_str());
-        } else if (isPositionalAfterNamedArgError(node)) {
-            reportError(loc, "positional argument cannot follow a named argument in a named call; put all "
-                "positional arguments before the first named argument");
-        } else {
-            // Extract a snippet of the source around the error for context
-            uint32_t start = ts_node_start_byte(node);
-            uint32_t end = ts_node_end_byte(node);
-            if (end > start + 50) {
-                end = start + 50;
-            }
-            std::string snippet;
-            if (start < source.size()) {
-                snippet = source.substr(start, end - start);
-                // Replace newlines with spaces for single-line error messages
-                for (char& c : snippet) {
-                    if (c == '\n' || c == '\r') {
-                        c = ' ';
+            reportError(getNodeLocation(node), msg.c_str());
+        } else if (ts_node_is_error(node)) {
+            ASTParseLocation loc = getNodeLocation(node);
+            if (isPositionalAfterNamedArgError(parent, previous)) {
+                reportError(loc, "positional argument cannot follow a named argument in a named call; put all "
+                    "positional arguments before the first named argument");
+            } else {
+                // Extract a snippet of the source around the error for context
+                uint32_t start = ts_node_start_byte(node);
+                uint32_t end = ts_node_end_byte(node);
+                if (end > start + 50) {
+                    end = start + 50;
+                }
+                std::string snippet;
+                if (start < source.size()) {
+                    snippet = source.substr(start, end - start);
+                    // Replace newlines with spaces for single-line error messages
+                    for (char& c : snippet) {
+                        if (c == '\n' || c == '\r') {
+                            c = ' ';
+                        }
                     }
                 }
+                std::string msg = "Syntax error";
+                if (!snippet.empty()) {
+                    msg += " near: " + snippet;
+                }
+                reportError(loc, msg.c_str());
             }
-            std::string msg = "Syntax error";
-            if (!snippet.empty()) {
-                msg += " near: " + snippet;
-            }
-            reportError(loc, msg.c_str());
         }
-    }
-
-    // Recurse into children
-    bool childError = false;
-    uint32_t childCount = ts_node_child_count(node);
-    for (uint32_t i = 0; i < childCount; i++) {
-        TSNode child = ts_node_child(node, i);
-        if (ts_node_has_error(child)) {
-            childError = true;
-            collectErrors(child, source);
+        return CSTWalkAction::Descend;
+    }, [&](TSNode node, uint32_t depth) {
+        // The node API does not return hidden nodes, such as the name token of a variable_name or the empty token
+        // that requires a directive argument on the same line; a missing hidden token is therefore only visible as
+        // an error in its nearest visible ancestor
+        if (ts_node_has_error(node) && !path[depth].childError && !ts_node_is_error(node)
+            && !ts_node_is_missing(node)) {
+            std::string msg = "Missing token in ";
+            msg += ts_node_type(node);
+            reportError(getNodeLocation(node), msg.c_str());
         }
-    }
-
-    // The node API does not return hidden nodes, such as the name token of a variable_name or the empty token
-    // that requires a directive argument on the same line; a missing hidden token is therefore only visible as an
-    // error in its nearest visible ancestor
-    if (!childError && !ts_node_is_error(node) && !ts_node_is_missing(node)) {
-        std::string msg = "Missing token in ";
-        msg += ts_node_type(node);
-        reportError(getNodeLocation(node), msg.c_str());
-    }
+    });
 }

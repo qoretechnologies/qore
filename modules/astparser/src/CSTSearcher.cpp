@@ -26,6 +26,7 @@
 */
 
 #include "CSTSearcher.h"
+#include "CSTWalk.h"
 
 #include <algorithm>
 #include <cctype>
@@ -61,10 +62,19 @@ std::vector<TSNode> CSTSearcher::findNodeAndParents(const AstParseResult* result
                                                     uint32_t line, uint32_t col) {
     std::vector<TSNode> ancestors;
     TSNode node = findNodeAtPosition(result, line, col);
-    while (!ts_node_is_null(node)) {
-        ancestors.push_back(node);
-        node = ts_node_parent(node);
+    if (ts_node_is_null(node)) {
+        return ancestors;
     }
+    // ts_node_parent() searches from the root for each ancestor, so the path is built from the root down
+    TSNode current = result->getRootNode();
+    while (!ts_node_is_null(current)) {
+        ancestors.push_back(current);
+        if (current.id == node.id) {
+            break;
+        }
+        current = ts_node_child_with_descendant(current, node);
+    }
+    std::reverse(ancestors.begin(), ancestors.end());
     return ancestors;
 }
 
@@ -176,9 +186,11 @@ std::string CSTSearcher::findDocComment(TSNode node, const AstParseResult* resul
     if (ts_node_is_null(node) || !result) {
         return std::string();
     }
+    return findDocComment(node, ts_node_parent(node), result);
+}
 
-    TSNode parent = ts_node_parent(node);
-    if (ts_node_is_null(parent)) {
+std::string CSTSearcher::findDocComment(TSNode node, TSNode parent, const AstParseResult* result) {
+    if (ts_node_is_null(node) || ts_node_is_null(parent) || !result) {
         return std::string();
     }
 
@@ -311,74 +323,6 @@ QoreHashNode* CSTSearcher::makeLocation(TSNode node, const std::string& uri,
 // Symbol collection
 // --------------------------------------------------------------------------
 
-void CSTSearcher::collectSymbolsRecursive(
-    TSNode node,
-    const AstParseResult* result,
-    const std::string& scopePrefix,
-    bool fixSymbols,
-    bool bareNames,
-    std::vector<CSTSymbolInfo>* vec) {
-
-    const char* type = ts_node_type(node);
-    ASTSymbolKind kind = nodeTypeToSymbolKind(type);
-
-    if (kind != ASYK_None) {
-        std::string name = getNodeName(node, result);
-        if (!name.empty()) {
-            CSTSymbolInfo si;
-            si.kind = kind;
-
-            // For methods, use ASYK_Method (not ASYK_Function)
-            // nodeTypeToSymbolKind already returns ASYK_Method for method_declaration
-
-            if (fixSymbols && !scopePrefix.empty() && !bareNames) {
-                si.name = scopePrefix + "::" + name;
-            } else {
-                si.name = name;
-            }
-
-            si.docComment = findDocComment(node, result);
-
-            TSPoint start = ts_node_start_point(node);
-            TSPoint end = ts_node_end_point(node);
-            si.startLine = start.row;
-            si.startCol = start.column;
-            si.endLine = end.row;
-            si.endCol = end.column;
-
-            // Build new scope prefix for nested declarations (before moving si)
-            std::string newPrefix;
-            if (strcmp(type, "class_declaration") == 0 ||
-                strcmp(type, "namespace_declaration") == 0) {
-                if (fixSymbols && !bareNames) {
-                    newPrefix = si.name;
-                } else {
-                    newPrefix = scopePrefix.empty() ? name : scopePrefix + "::" + name;
-                }
-            } else {
-                newPrefix = scopePrefix;
-            }
-
-            vec->push_back(std::move(si));
-
-            // Recurse into children for nested declarations
-            uint32_t childCount = ts_node_named_child_count(node);
-            for (uint32_t i = 0; i < childCount; i++) {
-                collectSymbolsRecursive(ts_node_named_child(node, i), result,
-                                        newPrefix, fixSymbols, bareNames, vec);
-            }
-            return; // Don't double-recurse
-        }
-    }
-
-    // Recurse into children
-    uint32_t childCount = ts_node_named_child_count(node);
-    for (uint32_t i = 0; i < childCount; i++) {
-        collectSymbolsRecursive(ts_node_named_child(node, i), result,
-                                scopePrefix, fixSymbols, bareNames, vec);
-    }
-}
-
 std::vector<CSTSymbolInfo>* CSTSearcher::collectSymbols(
     const AstParseResult* result,
     bool fixSymbols,
@@ -388,8 +332,66 @@ std::vector<CSTSymbolInfo>* CSTSearcher::collectSymbols(
     }
 
     std::unique_ptr<std::vector<CSTSymbolInfo>> vec(new std::vector<CSTSymbolInfo>);
-    TSNode root = result->getRootNode();
-    collectSymbolsRecursive(root, result, std::string(), fixSymbols, bareNames, vec.get());
+
+    // the node and the scope prefix for its named children at each depth of the walk
+    struct PathEntry {
+        TSNode node;
+        std::string childPrefix;
+    };
+    std::vector<PathEntry> path;
+    cst_walk(result->getRootNode(), [&](const TSTreeCursor*, TSNode node, uint32_t depth) {
+        if (depth && !ts_node_is_named(node)) {
+            return CSTWalkAction::Skip;
+        }
+        const std::string scopePrefix = depth ? path[depth - 1].childPrefix : std::string();
+        std::string childPrefix = scopePrefix;
+
+        const char* type = ts_node_type(node);
+        ASTSymbolKind kind = nodeTypeToSymbolKind(type);
+        if (kind != ASYK_None) {
+            std::string name = getNodeName(node, result);
+            if (!name.empty()) {
+                CSTSymbolInfo si;
+                si.kind = kind;
+
+                // For methods, use ASYK_Method (not ASYK_Function)
+                // nodeTypeToSymbolKind already returns ASYK_Method for method_declaration
+
+                if (fixSymbols && !scopePrefix.empty() && !bareNames) {
+                    si.name = scopePrefix + "::" + name;
+                } else {
+                    si.name = name;
+                }
+
+                si.docComment = depth ? findDocComment(node, path[depth - 1].node, result) : std::string();
+
+                TSPoint start = ts_node_start_point(node);
+                TSPoint end = ts_node_end_point(node);
+                si.startLine = start.row;
+                si.startCol = start.column;
+                si.endLine = end.row;
+                si.endCol = end.column;
+
+                // Build new scope prefix for nested declarations
+                if (strcmp(type, "class_declaration") == 0 ||
+                    strcmp(type, "namespace_declaration") == 0) {
+                    if (fixSymbols && !bareNames) {
+                        childPrefix = si.name;
+                    } else {
+                        childPrefix = scopePrefix.empty() ? name : scopePrefix + "::" + name;
+                    }
+                }
+
+                vec->push_back(std::move(si));
+            }
+        }
+
+        if (path.size() <= depth) {
+            path.resize(depth + 1);
+        }
+        path[depth] = {node, std::move(childPrefix)};
+        return CSTWalkAction::Descend;
+    });
     return vec.release();
 }
 
@@ -628,27 +630,32 @@ static bool isIdentifierLikeNode(const char* type) {
 }
 
 void CSTSearcher::collectIdentifierRefs(
-    TSNode node,
+    TSNode root,
     const AstParseResult* result,
     const std::string& name,
-    std::vector<TSNode>* vec) {
+    std::vector<TSNode>* vec,
+    std::vector<TSNode>* parents) {
 
-    const char* type = ts_node_type(node);
-
-    // Check identifier nodes
-    if (isIdentifierLikeNode(type)) {
-        std::string text = result->getNodeText(node);
-        if (text == name) {
-            vec->push_back(node);
+    std::vector<TSNode> path;
+    cst_walk(root, [&](const TSTreeCursor*, TSNode node, uint32_t depth) {
+        // Check identifier nodes
+        if (isIdentifierLikeNode(ts_node_type(node))) {
+            if (result->getNodeText(node) == name) {
+                vec->push_back(node);
+                if (parents) {
+                    parents->push_back(depth ? path[depth - 1] : TSNode{});
+                }
+            }
+            return CSTWalkAction::Skip; // Identifiers have no children
         }
-        return; // Identifiers have no children
-    }
 
-    // Recurse into all children (including unnamed) for thorough coverage
-    uint32_t childCount = ts_node_child_count(node);
-    for (uint32_t i = 0; i < childCount; i++) {
-        collectIdentifierRefs(ts_node_child(node, i), result, name, vec);
-    }
+        // Walk all children (including unnamed) for thorough coverage
+        if (path.size() <= depth) {
+            path.resize(depth + 1);
+        }
+        path[depth] = node;
+        return CSTWalkAction::Descend;
+    });
 }
 
 std::vector<TSNode>* CSTSearcher::findReferences(
@@ -1294,50 +1301,83 @@ std::string CSTSearcher::getSymbolType(
 bool CSTSearcher::findDeclarationByName(TSNode root, const AstParseResult* result,
                                           const std::string& name, const char* nodeType,
                                           TSNode* outNode) {
-    uint32_t childCount = ts_node_named_child_count(root);
-    for (uint32_t i = 0; i < childCount; i++) {
-        TSNode child = ts_node_named_child(root, i);
-        const char* type = ts_node_type(child);
-
-        if (nodeType == nullptr || strcmp(type, nodeType) == 0) {
-            std::string nodeName = getNodeName(child, result);
-            if (nodeName == name) {
-                *outNode = child;
-                return true;
-            }
+    bool found = false;
+    cst_walk(root, [&](const TSTreeCursor*, TSNode node, uint32_t depth) {
+        if (!depth) {
+            return CSTWalkAction::Descend;
+        }
+        if (!ts_node_is_named(node)) {
+            return CSTWalkAction::Skip;
         }
 
-        // Recurse into containers
+        const char* type = ts_node_type(node);
+        if ((nodeType == nullptr || strcmp(type, nodeType) == 0) && getNodeName(node, result) == name) {
+            *outNode = node;
+            found = true;
+            return CSTWalkAction::Stop;
+        }
+
+        // Search containers
         if (strcmp(type, "namespace_declaration") == 0 ||
             strcmp(type, "class_declaration") == 0 ||
             strcmp(type, "source_file") == 0 ||
             strcmp(type, "member_group") == 0) {
-            if (findDeclarationByName(child, result, name, nodeType, outNode)) {
-                return true;
+            return CSTWalkAction::Descend;
+        }
+        return CSTWalkAction::Skip;
+    });
+    return found;
+}
+
+//! Returns the names of the parent classes of a class declaration in declaration order
+static std::vector<std::string> getParentClassNames(TSNode classNode, const AstParseResult* result) {
+    std::vector<std::string> names;
+    uint32_t childCount = ts_node_named_child_count(classNode);
+    for (uint32_t i = 0; i < childCount; i++) {
+        TSNode child = ts_node_named_child(classNode, i);
+        if (strcmp(ts_node_type(child), "superclass_list") != 0) {
+            continue;
+        }
+
+        uint32_t superCount = ts_node_named_child_count(child);
+        for (uint32_t j = 0; j < superCount; j++) {
+            TSNode superclass = ts_node_named_child(child, j);
+            if (strcmp(ts_node_type(superclass), "superclass") != 0) {
+                continue;
+            }
+
+            // the parent class name is the first identifier or scoped_identifier
+            uint32_t scCount = ts_node_named_child_count(superclass);
+            for (uint32_t k = 0; k < scCount; k++) {
+                TSNode sc = ts_node_named_child(superclass, k);
+                const char* scType = ts_node_type(sc);
+                if (strcmp(scType, "identifier") == 0 || strcmp(scType, "scoped_identifier") == 0) {
+                    names.push_back(result->getNodeText(sc));
+                    break;
+                }
             }
         }
     }
+    return names;
+}
+
+//! Returns true if the class has already been visited and otherwise records it
+/** A class without a name is never recorded.
+*/
+static bool checkVisitedClass(TSNode classNode, const AstParseResult* result, std::vector<std::string>& visited) {
+    std::string className = CSTSearcher::getNodeName(classNode, result);
+    if (className.empty()) {
+        return false;
+    }
+    if (std::find(visited.begin(), visited.end(), className) != visited.end()) {
+        return true;
+    }
+    visited.push_back(className);
     return false;
 }
 
-void CSTSearcher::collectClassMembers(TSNode classNode, const AstParseResult* result,
-                                       std::vector<CSTSymbolDetail>* vec,
-                                       std::vector<std::string>* visited,
-                                       bool includeInherited) {
-    std::string className = getNodeName(classNode, result);
-
-    // Prevent infinite recursion in inheritance
-    std::vector<std::string> localVisited;
-    if (!visited) {
-        visited = &localVisited;
-    }
-    for (const auto& v : *visited) {
-        if (v == className) {
-            return;
-        }
-    }
-    visited->push_back(className);
-
+void CSTSearcher::addOwnClassMembers(TSNode classNode, const AstParseResult* result,
+                                      std::vector<CSTSymbolDetail>* vec) {
     // Iterate all children
     uint32_t childCount = ts_node_named_child_count(classNode);
     for (uint32_t i = 0; i < childCount; i++) {
@@ -1423,34 +1463,55 @@ void CSTSearcher::collectClassMembers(TSNode classNode, const AstParseResult* re
             vec->push_back(std::move(detail));
         }
 
-        // Handle inherited classes
-        if (includeInherited && strcmp(type, "superclass_list") == 0) {
-            uint32_t superCount = ts_node_named_child_count(child);
-            for (uint32_t j = 0; j < superCount; j++) {
-                TSNode superclass = ts_node_named_child(child, j);
-                if (strcmp(ts_node_type(superclass), "superclass") != 0) {
-                    continue;
-                }
-                // Get the class name from the superclass node
-                uint32_t superChildCount = ts_node_named_child_count(superclass);
-                for (uint32_t k = 0; k < superChildCount; k++) {
-                    TSNode sc = ts_node_named_child(superclass, k);
-                    const char* scType = ts_node_type(sc);
-                    if (strcmp(scType, "identifier") == 0 ||
-                        strcmp(scType, "scoped_identifier") == 0) {
-                        std::string parentName = result->getNodeText(sc);
-                        // Find parent class in tree and collect its members
-                        TSNode rootNode = ts_tree_root_node(result->getTree());
-                        TSNode parentClass = rootNode;  // initialized; overwritten by findDeclarationByName
-                        if (findDeclarationByName(rootNode, result, parentName,
-                                                   "class_declaration", &parentClass)) {
-                            collectClassMembers(parentClass, result, vec, visited, true);
-                        }
-                        break;
-                    }
-                }
-            }
+    }
+}
+
+void CSTSearcher::collectClassMembers(TSNode classNode, const AstParseResult* result,
+                                       std::vector<CSTSymbolDetail>* vec,
+                                       std::vector<std::string>* visited,
+                                       bool includeInherited) {
+    std::vector<std::string> localVisited;
+    if (!visited) {
+        visited = &localVisited;
+    }
+    // Prevent infinite loops in inheritance; the name of each class is recorded before its parents are visited
+    auto enterClass = [&](TSNode cls) -> bool {
+        std::string className = getNodeName(cls, result);
+        if (std::find(visited->begin(), visited->end(), className) != visited->end()) {
+            return false;
         }
+        visited->push_back(std::move(className));
+        return true;
+    };
+    if (!enterClass(classNode)) {
+        return;
+    }
+
+    // The members of the parent classes, depth-first in declaration order, precede the members of each class,
+    // whose superclass_list precedes its body; the stack holds each class with the parent classes still to visit
+    struct ClassFrame {
+        TSNode cls;
+        std::vector<std::string> parents;
+        size_t nextParent;
+    };
+    std::vector<ClassFrame> stack;
+    stack.push_back({classNode, includeInherited ? getParentClassNames(classNode, result)
+        : std::vector<std::string>(), 0});
+    TSNode rootNode = ts_tree_root_node(result->getTree());
+    while (!stack.empty()) {
+        ClassFrame& frame = stack.back();
+        if (frame.nextParent < frame.parents.size()) {
+            // Find parent class in tree and collect its members
+            std::string parentName = frame.parents[frame.nextParent++];
+            TSNode parentClass = rootNode;  // initialized; overwritten by findDeclarationByName
+            if (findDeclarationByName(rootNode, result, parentName, "class_declaration", &parentClass)
+                && enterClass(parentClass)) {
+                stack.push_back({parentClass, getParentClassNames(parentClass, result), 0});
+            }
+            continue;
+        }
+        addOwnClassMembers(frame.cls, result, vec);
+        stack.pop_back();
     }
 }
 
@@ -1678,64 +1739,43 @@ bool CSTSearcher::findMemberInClass(TSNode classNode, const AstParseResult* resu
 bool CSTSearcher::findMemberInClass(TSNode classNode, const AstParseResult* result,
                                      const std::string& name, TSNode* outNode,
                                      std::vector<std::string>& visited) {
-    // Cycle detection
-    std::string className = CSTSearcher::getNodeName(classNode, result);
-    if (!className.empty()) {
-        for (const auto& v : visited) {
-            if (v == className) {
-                return false;
+    // the classes whose parent classes are still to be searched, depth-first in declaration order
+    struct ClassFrame {
+        std::vector<std::string> parents;
+        size_t nextParent;
+    };
+    std::vector<ClassFrame> stack;
+    TSNode root = ts_tree_root_node(result->getTree());
+    TSNode cls = classNode;
+    while (true) {
+        // Cycle detection
+        if (!checkVisitedClass(cls, result, visited)) {
+            // Search direct members
+            if (findMemberInClassBody(cls, result, name, outNode)) {
+                return true;
             }
-        }
-        visited.push_back(className);
-    }
-
-    // Search direct members
-    if (findMemberInClassBody(classNode, result, name, outNode)) {
-        return true;
-    }
-
-    // Walk superclass_list for inherited members
-    uint32_t childCount = ts_node_named_child_count(classNode);
-    for (uint32_t i = 0; i < childCount; i++) {
-        TSNode child = ts_node_named_child(classNode, i);
-        if (strcmp(ts_node_type(child), "superclass_list") != 0) {
-            continue;
+            stack.push_back({getParentClassNames(cls, result), 0});
         }
 
-        uint32_t superCount = ts_node_named_child_count(child);
-        for (uint32_t j = 0; j < superCount; j++) {
-            TSNode superclass = ts_node_named_child(child, j);
-            if (strcmp(ts_node_type(superclass), "superclass") != 0) {
+        // Find the next parent class to search
+        bool next = false;
+        while (!next && !stack.empty()) {
+            ClassFrame& frame = stack.back();
+            if (frame.nextParent == frame.parents.size()) {
+                stack.pop_back();
                 continue;
             }
-
-            // Extract parent class name (identifier or scoped_identifier)
-            uint32_t scCount = ts_node_named_child_count(superclass);
-            for (uint32_t k = 0; k < scCount; k++) {
-                TSNode sc = ts_node_named_child(superclass, k);
-                const char* scType = ts_node_type(sc);
-                if (strcmp(scType, "identifier") != 0 &&
-                    strcmp(scType, "scoped_identifier") != 0) {
-                    continue;
-                }
-
-                std::string parentName = result->getNodeText(sc);
-
-                // Find parent class and recurse
-                TSNode root = ts_tree_root_node(result->getTree());
-                TSNode parentClass = root;
-                if (CSTSearcher::findDeclarationByName(root, result, parentName,
-                                                        "class_declaration", &parentClass)) {
-                    if (findMemberInClass(parentClass, result, name, outNode, visited)) {
-                        return true;
-                    }
-                }
-                break;  // only one name per superclass node
+            const std::string& parentName = frame.parents[frame.nextParent++];
+            TSNode parentClass = root;
+            if (CSTSearcher::findDeclarationByName(root, result, parentName, "class_declaration", &parentClass)) {
+                cls = parentClass;
+                next = true;
             }
         }
+        if (!next) {
+            return false;
+        }
     }
-
-    return false;
 }
 
 bool CSTSearcher::findLocalDeclaration(
@@ -2090,69 +2130,49 @@ bool CSTSearcher::findMemberInClassCrossDoc(
     std::vector<std::string>& visited,
     const std::vector<DocumentRef>& otherDocs) {
 
-    // Cycle detection
-    std::string className = CSTSearcher::getNodeName(classNode, result);
-    if (!className.empty()) {
-        for (const auto& v : visited) {
-            if (v == className) {
-                return false;
+    // the classes whose parent classes are still to be searched, depth-first in declaration order; parent classes
+    // are looked up from the document of the class that names them
+    struct ClassFrame {
+        const AstParseResult* result;
+        std::vector<std::string> parents;
+        size_t nextParent;
+    };
+    std::vector<ClassFrame> stack;
+    TSNode cls = classNode;
+    const AstParseResult* clsResult = result;
+    while (true) {
+        // Cycle detection
+        if (!checkVisitedClass(cls, clsResult, visited)) {
+            // Search direct members using shared helper
+            if (findMemberInClassBody(cls, clsResult, name, outNode)) {
+                *outResult = clsResult;
+                return true;
             }
-        }
-        visited.push_back(className);
-    }
-
-    // Search direct members using shared helper
-    if (findMemberInClassBody(classNode, result, name, outNode)) {
-        *outResult = result;
-        return true;
-    }
-
-    // Walk superclass_list for inherited members — cross-doc aware
-    uint32_t childCount = ts_node_named_child_count(classNode);
-    for (uint32_t i = 0; i < childCount; i++) {
-        TSNode child = ts_node_named_child(classNode, i);
-        if (strcmp(ts_node_type(child), "superclass_list") != 0) {
-            continue;
+            stack.push_back({clsResult, getParentClassNames(cls, clsResult), 0});
         }
 
-        uint32_t superCount = ts_node_named_child_count(child);
-        for (uint32_t j = 0; j < superCount; j++) {
-            TSNode superclass = ts_node_named_child(child, j);
-            if (strcmp(ts_node_type(superclass), "superclass") != 0) {
+        // Find the next parent class to search across all documents
+        bool next = false;
+        while (!next && !stack.empty()) {
+            ClassFrame& frame = stack.back();
+            if (frame.nextParent == frame.parents.size()) {
+                stack.pop_back();
                 continue;
             }
-
-            // Extract parent class name (identifier or scoped_identifier)
-            uint32_t scCount = ts_node_named_child_count(superclass);
-            for (uint32_t k = 0; k < scCount; k++) {
-                TSNode sc = ts_node_named_child(superclass, k);
-                const char* scType = ts_node_type(sc);
-                if (strcmp(scType, "identifier") != 0 &&
-                    strcmp(scType, "scoped_identifier") != 0) {
-                    continue;
-                }
-
-                std::string parentName = result->getNodeText(sc);
-
-                // Find parent class across all documents
-                TSNode parentClass = make_null_node();
-                const AstParseResult* parentResult = nullptr;
-                if (findDeclarationByNameCrossDoc(
-                        result->getRootNode(), result, parentName,
-                        "class_declaration", &parentClass, &parentResult,
-                        otherDocs)) {
-                    if (findMemberInClassCrossDoc(parentClass, parentResult,
-                                                   name, outNode, outResult,
-                                                   visited, otherDocs)) {
-                        return true;
-                    }
-                }
-                break;  // only one name per superclass node
+            const std::string& parentName = frame.parents[frame.nextParent++];
+            TSNode parentClass = make_null_node();
+            const AstParseResult* parentResult = nullptr;
+            if (findDeclarationByNameCrossDoc(frame.result->getRootNode(), frame.result, parentName,
+                    "class_declaration", &parentClass, &parentResult, otherDocs)) {
+                cls = parentClass;
+                clsResult = parentResult;
+                next = true;
             }
         }
+        if (!next) {
+            return false;
+        }
     }
-
-    return false;
 }
 
 //! Look up the URI for a found result — empty string means current document.
@@ -2631,11 +2651,13 @@ std::vector<DefinitionResult>* CSTSearcher::findReferencesCrossDoc(
     // Collect references in current document
     TSNode root = result->getRootNode();
     std::vector<TSNode> localRefs;
-    collectIdentifierRefs(root, result, name, &localRefs);
+    std::vector<TSNode> localParents;
+    collectIdentifierRefs(root, result, name, &localRefs, &localParents);
 
-    for (const auto& ref : localRefs) {
+    for (size_t i = 0; i < localRefs.size(); ++i) {
+        const TSNode& ref = localRefs[i];
         if (!includeDecl) {
-            TSNode parent = ts_node_parent(ref);
+            const TSNode& parent = localParents[i];
             if (!ts_node_is_null(parent) && isNameOfDeclaration(ref, parent)) {
                 continue;
             }
@@ -2650,11 +2672,13 @@ std::vector<DefinitionResult>* CSTSearcher::findReferencesCrossDoc(
         }
         TSNode otherRoot = docRef.result->getRootNode();
         std::vector<TSNode> otherRefs;
-        collectIdentifierRefs(otherRoot, docRef.result, name, &otherRefs);
+        std::vector<TSNode> otherParents;
+        collectIdentifierRefs(otherRoot, docRef.result, name, &otherRefs, &otherParents);
 
-        for (const auto& ref : otherRefs) {
+        for (size_t i = 0; i < otherRefs.size(); ++i) {
+            const TSNode& ref = otherRefs[i];
             if (!includeDecl) {
-                TSNode parent = ts_node_parent(ref);
+                const TSNode& parent = otherParents[i];
                 if (!ts_node_is_null(parent) && isNameOfDeclaration(ref, parent)) {
                     continue;
                 }
@@ -2842,7 +2866,7 @@ std::vector<SemanticToken>* CSTSearcher::collectSemanticTokens(
 
     auto* vec = new std::vector<SemanticToken>();
     TSNode root = ts_tree_root_node(tree);
-    collectSemanticTokensRecursive(root, result, startLine, endLine, vec);
+    collectSemanticTokens(root, result, startLine, endLine, vec);
 
     // Sort by position
     std::sort(vec->begin(), vec->end(),
@@ -2860,31 +2884,32 @@ std::vector<SemanticToken>* CSTSearcher::collectSemanticTokens(
     return vec;
 }
 
-void CSTSearcher::collectSemanticTokensRecursive(
-        TSNode node, const AstParseResult* result,
+void CSTSearcher::collectSemanticTokens(
+        TSNode root, const AstParseResult* result,
         uint32_t startLine, uint32_t endLine,
         std::vector<SemanticToken>* vec) {
-    // Quick range check
-    uint32_t nodeStartLine = ts_node_start_point(node).row;
-    uint32_t nodeEndLine = ts_node_end_point(node).row;
-    if (nodeEndLine < startLine || nodeStartLine > endLine) {
-        return;
-    }
-
-    uint32_t childCount = ts_node_child_count(node);
-    for (uint32_t i = 0; i < childCount; i++) {
-        TSNode child = ts_node_child(node, i);
-        uint32_t tokenType = 0;
-        uint32_t tokenModifiers = 0;
-
-        if (classifyNode(child, node, result, tokenType, tokenModifiers)) {
-            emitToken(child, tokenType, tokenModifiers, startLine, endLine, result, vec);
-            // Don't recurse into classified leaf tokens
-        } else if (ts_node_child_count(child) > 0) {
-            // Recurse into structural nodes
-            collectSemanticTokensRecursive(child, result, startLine, endLine, vec);
+    std::vector<TSNode> path;
+    cst_walk(root, [&](const TSTreeCursor*, TSNode node, uint32_t depth) {
+        if (depth) {
+            uint32_t tokenType = 0;
+            uint32_t tokenModifiers = 0;
+            if (classifyNode(node, path[depth - 1], result, tokenType, tokenModifiers)) {
+                emitToken(node, tokenType, tokenModifiers, startLine, endLine, result, vec);
+                // Don't walk into classified leaf tokens
+                return CSTWalkAction::Skip;
+            }
         }
-    }
+
+        // Quick range check for structural nodes
+        if (ts_node_end_point(node).row < startLine || ts_node_start_point(node).row > endLine) {
+            return CSTWalkAction::Skip;
+        }
+        if (path.size() <= depth) {
+            path.resize(depth + 1);
+        }
+        path[depth] = node;
+        return CSTWalkAction::Descend;
+    });
 }
 
 bool CSTSearcher::classifyNode(TSNode node, TSNode parent,

@@ -1,0 +1,175 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires astparser
+
+%exec-class DeepTreesTest
+
+class DeepTreesTest inherits QUnit::Test {
+    public {
+        # a syntax tree is as deep as the nesting in its source; the tests run in a thread with a small stack
+        const Depth = 20000;
+        const StackSize = 512 * 1024;
+    }
+
+    constructor() : QUnit::Test("astparser deep trees", "1.0") {
+        addTestCase("Parse errors in deep trees", \parseErrors());
+        addTestCase("Printing deep trees", \printTrees());
+        addTestCase("Searching deep trees", \searchTrees());
+        addTestCase("Deep inheritance", \deepInheritance());
+        addTestCase("Deep conditional expressions", \deepConditions());
+        set_return_value(main());
+    }
+
+    parseErrors() {
+        inThread(sub () {
+            AstParser parser();
+            # the missing variable name is the deepest node of the right-associative assignments
+            parser.parseString("sub f() { x = " + strmul("x = ", Depth) + "$; }\n");
+            assertEq(1, parser.getErrorCount());
+            assertEq("Missing token in variable_name", parser.getDiagnostics()[0].message);
+
+            parser.parseString("sub f() { x = " + strmul("(", Depth) + "1" + strmul(")", Depth - 1) + "; }\n");
+            assertEq(1, parser.getErrorCount());
+
+            AstTree tree = parser.parseString("sub f() {" + strmul("{ # comment\n", Depth) + strmul("}", Depth)
+                + "}\n");
+            assertEq(0, parser.getErrorCount());
+            assertEq(Depth, tree.getComments().size());
+        });
+    }
+
+    printTrees() {
+        FsUtil::TmpDir dir("astparser-deep-");
+        string file = join_paths(dir.path, "tree.txt");
+        inThread(sub () {
+            AstParser parser();
+            AstTree tree = parser.parseString("sub f() { int x = " + strmul("1 + ", Depth) + "1; }\n");
+            tree.printTree(file);
+        });
+        # the same S-expression as tree-sitter writes for a shallow tree of the same shape
+        string expected = "(source_file (function_declaration name: (identifier) (parameter_list) (block "
+            + "(local_variable_declaration type: (type (simple_type)) (variable_declarator name: (identifier) value: "
+            + strmul("(binary_expression ", Depth) + "(primary_expression (literal (integer)))"
+            + strmul(" (primary_expression (literal (integer))))", Depth) + ")))))\n";
+        assertTrue(expected == ReadOnlyFile::readTextFile(file));
+
+        # a shallow tree is written by tree-sitter, including a missing token
+        AstParser parser();
+        AstTree tree = parser.parseString("sub f() { return 1 }\n");
+        tree.printTree(file);
+        assertEq("(source_file (function_declaration name: (identifier) (parameter_list) (block (return_statement "
+            + "(primary_expression (literal (integer))) (MISSING \";\")))))\n", ReadOnlyFile::readTextFile(file));
+    }
+
+    searchTrees() {
+        inThread(sub () {
+            string source = "class C { int m() { return x; } }\nsub f(int x) { int y = " + strmul("x + ", Depth)
+                + "x; }\n" + strmul("namespace N { ", 200) + "const K = 1;" + strmul(" }", 200) + "\n";
+            AstParser parser();
+            AstTree tree = parser.parseString(source);
+            assertEq(0, parser.getErrorCount());
+            AstTreeSearcher searcher();
+
+            *list<auto> symbols = searcher.findSymbols(tree, "file:///deep.q");
+            assertEq("K", symbols.last().name.split("::").last());
+            assertEq(200, symbols.last().name.split("::").size() - 1);
+
+            # the first x in the expression is the deepest identifier of the function
+            int line = 1;
+            int col = source.split("\n")[1].find("= x") + 2;
+            *list<auto> refs = searcher.findReferences(tree, "file:///deep.q", line, col, True);
+            # the parameter, the operands and the return value in the method
+            assertEq(Depth + 3, refs.size());
+            refs = searcher.findReferencesCrossDoc(tree, "file:///deep.q", line, col, False, {});
+            assertEq(Depth + 2, refs.size());
+
+            # the identifier, the enclosing expressions and declarations, and the root
+            *list<auto> parents = searcher.findNodeAndParents(tree, line, col);
+            assertGt(Depth, parents.size());
+            assertEq({"line": line, "character": col}, parents[0].range.start);
+            assertEq({"line": 0, "character": 0}, parents.last().range.start);
+
+            # the parameter declares x
+            *list<auto> defs = searcher.resolveDefinition(tree, "file:///deep.q", line, col);
+            assertEq({"line": 1, "character": 10}, defs[0].range.start);
+            assertEq("int", searcher.getSymbolType(tree, line, col));
+            assertEq(("x",), map $1.name, searcher.findScopeSymbolsDetailed(tree, "file:///deep.q", line, col),
+                $1.name == "x");
+
+            *list<auto> tokens = searcher.getSemanticTokens(tree);
+            assertGt(Depth, tokens.size());
+        });
+    }
+
+    deepInheritance() {
+        # each class inherits the previous one, and C0 inherits the last one
+        int classes = 2000;
+        string source = sprintf("class C0 inherits C%d { m0() {} }\n", classes - 1);
+        for (int i = 1; i < classes; ++i) {
+            source += sprintf("class C%d inherits C%d { m%d() {} }\n", i, i - 1, i);
+        }
+        inThread(sub () {
+            AstParser parser();
+            AstTree tree = parser.parseString(source);
+            assertEq(0, parser.getErrorCount());
+            AstTreeSearcher searcher();
+            *list<auto> members = searcher.findTypeMembers(tree, "file:///deep.q", sprintf("C%d", classes - 1));
+            assertEq(classes, members.size());
+            # the members of the most distant parent class come first
+            assertEq("m0", members[0].name);
+            assertEq(sprintf("m%d", classes - 1), members.last().name);
+
+            # a member of the most distant parent class is found from its use in the last class
+            string use = sprintf("class D inherits C%d { d() { m0(); } }\n", classes - 1);
+            AstTree tree2 = parser.parseString(source + use);
+            int col = use.find("m0");
+            *list<auto> defs = searcher.resolveDefinition(tree2, "file:///deep.q", classes, col);
+            assertEq(0, defs[0].range.start.line);
+            defs = searcher.resolveDefinitionCrossDoc(tree2, "file:///deep.q", classes, col, {"file:///c.q": tree});
+            assertEq(0, defs[0].range.start.line);
+        });
+    }
+
+    deepConditions() {
+        inThread(sub () {
+            AstParser parser();
+            parser.setDefines(("X",));
+            foreach string condition in (strmul("!", Depth) + "defined(X)",
+                    strmul("(", Depth) + "defined(X)" + strmul(")", Depth),
+                    strmul("(!", Depth - 1) + "Y" + strmul(")", Depth - 1)) {
+                AstTree tree = parser.parseString("%if " + condition + "\nsub yes() {}\n%else\nsub no() {}\n%endif\n");
+                assertEq(0, parser.getErrorCount(), condition.substr(0, 10));
+                assertEq("yes", tree.getNodesInfo()[0].children[0].text, condition.substr(0, 10));
+            }
+        });
+    }
+
+    private inThread(code test) {
+        if (!HAVE_MANAGE_STACK) {
+            testSkip("stack management is not available");
+        }
+        int defaultSize = get_default_thread_stack_size();
+        set_default_thread_stack_size(StackSize);
+        on_exit set_default_thread_stack_size(defaultSize);
+
+        Counter c(1);
+        *hash<ExceptionInfo> ex;
+        background sub () {
+            on_exit c.dec();
+            try {
+                test();
+            } catch (hash<ExceptionInfo> e) {
+                ex = e;
+            }
+        }();
+        c.waitForZero();
+        if (ex) {
+            throw ex.err, ex.desc, ex.arg;
+        }
+    }
+}
