@@ -171,6 +171,43 @@ i.e. nothing was folded, replaced, or removed — so no object can have entered 
 Do not suppress a scan on the strength of "the value looks the same". Compare node identity, and only after a
 successful assignment; suppressing a scan when the graph did change leaves a cycle undetected, i.e. leaked.
 
+## Scan locking: how the scanner stays deadlock-free and convergent
+
+A scan (`RSetHelper`, `lib/RSet.cpp`) walks an arbitrary object graph and needs the r-section of every object
+it reaches, in whatever order the traversal finds them. **It never blocks to get one.** Every lock a scan takes
+is a try-lock:
+
+- `tryRSectionLockNotifyWaitRead()` (`lib/RSection.cpp`) registers an `RNotifier` against the conflicting owner
+  and returns `-1` rather than waiting.
+- Pattern B private-data scanners (below) use `trylock()` and skip a contended container.
+
+On a conflict the scan **rolls back** — releasing every r-section it holds — waits on the notifier until the
+conflicting owner releases, and starts over. Because a waiting scan holds nothing, scans can never wait on each
+other, and no lock ordering has to be maintained across a graph whose shape is only discovered as it is walked.
+
+Two fields on `RObject` make the restart loop terminate:
+
+| Field | Role |
+|---|---|
+| `rscan` | The scan lock: the TID of the thread scanning this object. One scan per object at a time; other threads wait for it. |
+| `rcycle` | The scan generation: incremented by `setRSet()` for every object a scan commits. |
+
+`RScanHelper` samples `rcycle` **before** waiting for `rscan`, and the sampled value is compared with the
+current one after **both** waits — after acquiring the scan lock, and after waiting for a conflicting
+transaction. A changed generation means another thread has already committed a scan that included this object,
+so its recursive set is current.
+
+**A scan of an object must run at most once per generation, on both wait paths.** Skipping a superseded scan is
+not an optimization. A scan locks the r-section of every object it reaches, so a redundant scan forces every
+other scan in flight that reaches any of those objects to abort and restart. When many threads dereference the
+same object — every accepted connection releasing a local that holds a shared server object, for example — the
+restarts stop converging: every thread sits in `RNotifier::wait()`, no scan finishes, and the work those
+threads were doing never resumes. Native stacks then show many threads parked in `RSetHelper::RSetHelper()`
+with nothing running, which reads like a deadlock but is the restart loop failing to converge.
+
+Regression coverage: `examples/test/qore/misc/concurrent-cycle-scans.qtest`, and `ut_dgc_scan_generation()` in
+`lib/ql_debug.cpp` for the generation invariant itself.
+
 ## Rules for C++ module authors
 
 The platform guarantee holds only if C++ code cooperates. There are two correct patterns.

@@ -4,7 +4,7 @@
 
   Qore Programming Language
 
-  Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+  Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
   Permission is hereby granted, free of charge, to any person obtaining a
   copy of this software and associated documentation files (the "Software"),
@@ -61,10 +61,15 @@ public:
         rcount = 0,         // the number of unique recursive references to this object
         scan_refs = -1,     // "references" as observed when rcount was assigned; -1 = never scanned
         rwaiting = 0,       // the number of threads waiting for a scan of this object
-        rcycle = 0,         // the recursive cycle/transaction number to see if the object has been scanned since a transaction restart
         ref_inprogress = 0, // the number of dereference actions in progress
         ref_waiting = 0,    // the number of threads waiting on a dereference action to complete
         rref_waiting = 0;   // the number of threads waiting on an rset invalidation to complete
+
+    // The scan generation: incremented every time a committed scan assigns this object's recursive set,
+    // so a thread that sampled an older value knows that another thread has scanned this object since.
+    // Atomic because it is sampled without holding any lock, before waiting for the scan lock (see
+    // RScanHelper in lib/RSet.cpp).
+    std::atomic_int rcycle{0};
 
     // the number of "real" refs (i.e. refs not possibly part of a recursive graph)
     // atomic because it is read without rlck in some paths (customDeref, scanMembersIntern)

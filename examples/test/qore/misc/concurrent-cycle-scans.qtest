@@ -1,0 +1,133 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class ConcurrentCycleScanTest
+
+#! Counts destructor calls so the test can prove the graph was actually collected
+class Counted {
+    public {
+        static int dc = 0;
+    }
+
+    destructor() {
+        ++Counted::dc;
+    }
+}
+
+#! A member of the shared cycle
+class Node inherits Counted {
+    public {
+        *Node peer;
+        any data;
+        any hub;
+    }
+
+    int touch() {
+        return 1;
+    }
+}
+
+#! The object every thread dereferences; it is part of a cycle with all its nodes
+class Hub inherits Counted {
+    public {
+        list<auto> nodes = ();
+        any selfref;
+        int counter = 0;
+    }
+
+    int ping() {
+        return ++counter;
+    }
+
+    constructor(int size) {
+        selfref = self;
+        for (int i = 0; i < size; ++i) {
+            Node n();
+            n.hub = self;
+            nodes += n;
+        }
+        for (int i = 0; i < size; ++i) {
+            nodes[i].peer = nodes[(i + 1) % size];
+            nodes[i].data = {"hub": self, "next": nodes[(i + 1) % size]};
+        }
+    }
+
+    #! Adds and drops an intra-cycle reference so the recorded reference counts go stale
+    /** A stale count is what makes the next dereference ask for a rescan, which is the code path
+        under test.
+    */
+    nothing churn(int i) {
+        int size = nodes.size();
+        int k = i % size;
+        nodes[k].data = {
+            "hub": self,
+            "next": nodes[(k + 1) % size],
+            "extra": nodes[(k + 2) % size],
+        };
+        nodes[k].data = {"hub": self, "next": nodes[(k + 1) % size]};
+    }
+}
+
+public class ConcurrentCycleScanTest inherits QUnit::Test {
+    public {
+        const NumThreads = 16;
+        const GraphSize = 24;
+        const Iterations = 200;
+    }
+
+    private {
+        # the hub is held inside a container, so no variable slot holds a "real" reference to it;
+        # that is what lets each dereference start a recursive reference scan
+        list<auto> hub_holder = ();
+        Counter cnt();
+    }
+
+    constructor() : Test("concurrent cycle scan", "1.0", \ARGV) {
+        addTestCase("concurrent dereferences of one shared cycle complete", \concurrentScanTest());
+        set_return_value(main());
+    }
+
+    #! Every thread repeatedly takes and drops a plain reference to the same cyclic object
+    /** Each drop asks the runtime to recalculate the object's recursive set.  The scan lock
+        serializes those scans, and the scan generation must stop each thread that waited for it from
+        repeating a scan another thread has just committed: a scan locks the r-section of every object
+        it reaches, so redundant scans make every other scan in flight abort and restart, and with
+        enough threads the restarts stop converging and no scan ever finishes.
+    */
+    private worker() {
+        on_exit cnt.dec();
+        for (int i = 0; i < Iterations; ++i) {
+            list<auto> tmp = (hub_holder[0],);
+            tmp[0].churn(i);
+            tmp[0].ping();
+            tmp = ();
+        }
+    }
+
+    private concurrentScanTest() {
+        Counted::dc = 0;
+        {
+            Hub h(GraphSize);
+            hub_holder = (h,);
+        }
+
+        for (int i = 0; i < NumThreads; ++i) {
+            cnt.inc();
+            background worker();
+        }
+        # a livelock in the scanner shows up here: this never returns
+        cnt.waitForZero();
+
+        assertEq(0, Counted::dc, "the shared cycle is still alive while it is referenced");
+
+        # drop the last reference: the whole cycle must be collected
+        hub_holder = ();
+        assertEq(GraphSize + 1, Counted::dc, "the whole cycle is collected once the last reference goes");
+    }
+}

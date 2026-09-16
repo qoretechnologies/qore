@@ -820,7 +820,7 @@ bool RSetHelper::checkIntern(RObject& obj, size_t ref) {
                 if (!rset) {
                     rset = new RSet;
                     printd(QRO_LVL, " + %p '%s': rcycle: %d second.rset: %p new RSet: %p\n", oi->first,
-                        oi->first->getName(), obj.rcycle, oi->second.rset, rset);
+                        oi->first->getName(), obj.rcycle.load(), oi->second.rset, rset);
                 }
 
                 if (addToRSet(oi, rset, tid, oi == fi ? ref : orefs[i])) {
@@ -930,7 +930,7 @@ public:
     RObject& obj;
     int rcycle;
 
-    DLLLOCAL RScanHelper(RObject& o) : obj(o), rcycle(o.rcycle) {
+    DLLLOCAL RScanHelper(RObject& o) : obj(o), rcycle(o.rcycle.load()) {
         AutoLocker al(obj.rlck);
         while (obj.rscan) {
             ++obj.rwaiting;
@@ -949,6 +949,11 @@ public:
         obj.rscan = 0;
     }
 
+    //! Returns true if this object still has to be scanned, false if another thread has scanned it since
+    /** The generation is sampled before the scan lock is acquired, so this reports scans committed by
+        other threads both while waiting for the scan lock and while waiting for a conflicting
+        transaction to finish.
+    */
     DLLLOCAL bool needScan() const {
         return rcycle == obj.rcycle;
     }
@@ -971,6 +976,20 @@ RSetHelper::RSetHelper(RObject& obj) {
 
     RScanHelper rsh(obj);
 
+    // The scan lock serializes scans of this object, so threads that arrive while a scan is in flight
+    // wait here; by the time they acquire it, that scan has committed and recalculated this object's
+    // recursive set, and rescanning would only repeat the work.  Skipping it is not just an
+    // optimization: a scan locks the r-section of every object it reaches, so a redundant scan makes
+    // every other scan in flight that reaches any of those objects abort and restart.  When many
+    // threads dereference the same object - every accepted connection releasing a local that holds a
+    // shared server object, for example - the restarts stop converging and no scan finishes at all.
+    // This is the same generation check made below after waiting for a conflicting transaction.
+    if (!rsh.needScan()) {
+        printd(QRO_LVL, "RSetHelper::RSetHelper() this: %p (%p: %s) ALREADY SCANNED IN ANOTHER THREAD\n", this,
+            &obj, obj.getName());
+        return;
+    }
+
     while (true) {
         if (checkIntern(obj, 0)) {
             rollback();
@@ -983,7 +1002,7 @@ RSetHelper::RSetHelper(RObject& obj) {
                 return;
             }
             printd(QRO_LVL, "RSetHelper::RSetHelper() this: %p (%p: %s) RESTARTING TRANSACTION: %d\n", this, &obj,
-                obj.getName(), obj.rcycle);
+                obj.getName(), obj.rcycle.load());
             continue;
         }
 

@@ -498,6 +498,70 @@ static void ut_rsection_try_notify_does_not_block_on_writer(UnitTestCounters& c)
     UT_ASSERT(c, !notifier.setp, "writer release clears registered notification");
 }
 
+//! Minimal RObject for the deterministic garbage collection scan generation test
+/** Nothing about this object participates in a cycle: it exists only to count how often the scanner
+    walks it and to expose the scan generation it maintains.
+*/
+class UtScanObject : public RObject {
+public:
+    std::atomic_int refs{1};
+    int scans = 0;
+
+    DLLLOCAL UtScanObject() : RObject(refs) {
+    }
+
+    DLLLOCAL virtual bool scanMembers(RSetHelper& rsh) {
+        ++scans;
+        return false;
+    }
+
+    DLLLOCAL virtual bool needsScan(bool scan_now) {
+        return true;
+    }
+
+    DLLLOCAL virtual void deleteObject() {
+    }
+
+    DLLLOCAL virtual void releaseCycleReference(ExceptionSink* xsink) {
+    }
+
+    DLLLOCAL virtual const char* getName() const {
+        return "UtScanObject";
+    }
+};
+
+//! A committed reference cycle scan advances the scanned object's generation
+/** The generation is how a thread that waited for an object's scan lock finds out that another thread
+    scanned the object while it waited, so that it can skip its own scan; see \c RSetHelper in
+    \c lib/RSet.cpp and the scan locking section of \c design/dgc.md.  Without the generation
+    advancing on every committed scan, every thread that dereferences a shared object rescans the whole
+    graph, and because a scan locks the r-section of every object it reaches, those redundant scans
+    abort each other indefinitely.
+*/
+static void ut_dgc_scan_generation(UnitTestCounters& c) {
+    if (q_disable_gc) {
+        return;
+    }
+
+    UtScanObject obj;
+
+    int gen = obj.rcycle;
+    {
+        RSetHelper rsh(obj);
+    }
+    UT_ASSERT_EQ(c, 1, obj.scans, "a scan of an unscanned object walks its members");
+    UT_ASSERT(c, obj.rcycle != gen, "committing a scan advances the object's scan generation");
+
+    // a scan that observes the current generation has not been superseded and must do its own work
+    int gen2 = obj.rcycle;
+    UT_ASSERT(c, gen2 != gen, "the generation observed after the first scan differs from the one before it");
+    {
+        RSetHelper rsh(obj);
+    }
+    UT_ASSERT_EQ(c, 2, obj.scans, "a scan that observes the current generation walks the members again");
+    UT_ASSERT(c, obj.rcycle != gen2, "the second committed scan advances the generation again");
+}
+
 //! Unregistering a file descriptor that has been closed - however it has been recycled since
 /** The async I/O controller unregisters an fd it may no longer own: a socket can be closed by
     another thread between the registration and the release, which is why remove() treats EBADF (the
@@ -3815,6 +3879,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_string_data_helper(c);
     ut_qorefile_timed_read_contract(c);
     ut_rsection_try_notify_does_not_block_on_writer(c);
+    ut_dgc_scan_generation(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     return make_unit_test_result(c, xsink);
 }
@@ -3826,6 +3891,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_string_data_helper(c);
     ut_qorefile_timed_read_contract(c);
     ut_rsection_try_notify_does_not_block_on_writer(c);
+    ut_dgc_scan_generation(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
     ut_event_loop_remove_recycled_fd(c);
     ut_asyncio_construction(c);

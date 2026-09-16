@@ -3081,6 +3081,15 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       an exception for every object without that data; building the exception asked Python for its call stack,
       which waited for the Python global interpreter lock while the scan held locks that a thread holding that
       lock was waiting for. The scanner now checks for the data without raising exceptions.
+    - Fixed concurrent dereferences of one shared object in a reference cycle stopping all work on that
+      object's graph. Only one thread scans an object for recursive references at a time; the others wait, and
+      each was then repeating the scan the first had just finished. A scan locks every object it reaches, so
+      each of those redundant scans made every other scan in flight abort and start over, and with enough
+      threads dereferencing the same object - one per accepted connection, for a server object shared by its
+      request handlers - the restarts stopped converging and no scan ever completed. Every thread using the
+      object waited indefinitely: an HTTP server in this state kept its listeners bound and its connections
+      open but answered no request. A thread that waited for another thread's scan of the same object now uses
+      that scan's result, as it already did when waiting for a conflicting scan to finish.
     - Fixed reference cycles never being collected after the references that blocked them went away. The
       reference counts computed for a cycle are a snapshot taken when it was detected, and they were trusted
       indefinitely; a container in the cycle losing its last holder outside it, or an object in another cycle
