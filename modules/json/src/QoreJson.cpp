@@ -203,6 +203,10 @@ static QoreHashNode* get_json_object(const char*& buf, int& line_number, const Q
             JSON_MAX_NESTING_DEPTH, line_number);
         return nullptr;
     }
+    // each nested object or array uses stack space
+    if (q_check_stack(xsink)) {
+        return nullptr;
+    }
     // increment buffer to first character of object description
     buf++;
     ReferenceHolder<QoreHashNode> h(new QoreHashNode(autoTypeInfo), xsink);
@@ -294,6 +298,10 @@ static AbstractQoreNode* get_json_array(const char*& buf, int& line_number, cons
         xsink->raiseException("JSON-PARSE-ERROR",
             "maximum nesting depth (%d) exceeded at line %d",
             JSON_MAX_NESTING_DEPTH, line_number);
+        return nullptr;
+    }
+    // each nested object or array uses stack space
+    if (q_check_stack(xsink)) {
         return nullptr;
     }
     // increment buffer to first character of array description
@@ -456,9 +464,12 @@ static int do_json_value(QoreString* str, QoreValue v, int format, int depth,
 static int do_json_list(ExceptionSink* xsink, QoreString* str, const QoreListNode* l, int format,
         int depth, QoreSandboxManager* sm, unsigned offset = 0) {
     assert(l);
+    // each nested list or hash uses stack space
+    if (q_check_stack(xsink)) {
+        return -1;
+    }
     str->concat("[");
     ConstListIterator li(l);
-    QoreString tmp(str->getEncoding());
     // Iteration counter for periodic interrupt checks (sandbox only)
     unsigned iteration = 0;
     while (li.next()) {
@@ -471,15 +482,14 @@ static int do_json_list(ExceptionSink* xsink, QoreString* str, const QoreListNod
                 return -1;
             }
         }
-        tmp.clear();
-        if (do_json_value(&tmp, li.getValue(), format < 0 ? format : format + 2, depth + 1, sm, xsink)) {
-            return -1;
-        }
         if (format >= 0) {
             str->concat('\n');
             str->addch(' ', format + 2);
         }
-        str->sprintf("%s", tmp.c_str());
+        // values are written directly to the output, so a deeply nested value is not copied at each level
+        if (do_json_value(str, li.getValue(), format < 0 ? format : format + 2, depth + 1, sm, xsink)) {
+            return -1;
+        }
         if (!li.last()) {
             str->concat(",");
         }
@@ -583,10 +593,13 @@ static int do_json_value(QoreString* str, QoreValue v, int format, int depth,
                 JSON_MAX_NESTING_DEPTH);
             return -1;
         }
+        // each nested list or hash uses stack space
+        if (q_check_stack(xsink)) {
+            return -1;
+        }
         const QoreHashNode* h = v.get<const QoreHashNode>();
         str->concat("{");
         ConstHashIterator hi(h);
-        QoreString tmp(str->getEncoding());
         // Iteration counter for periodic interrupt checks (sandbox only)
         unsigned iteration = 0;
         while (hi.next()) {
@@ -595,10 +608,6 @@ static int do_json_value(QoreString* str, QoreValue v, int format, int depth,
                 if (qore_check_cancel(xsink, "serializing JSON object")) {
                     return -1;
                 }
-            }
-            tmp.clear();
-            if (do_json_value(&tmp, hi.get(), format == -1 ? format : format + 2, depth + 1, sm, xsink)) {
-                return -1;
             }
             if (format != -1) {
                 str->concat('\n');
@@ -612,8 +621,10 @@ static int do_json_value(QoreString* str, QoreValue v, int format, int depth,
             if (format >= 0) {
                 str->concat(' ');
             }
-            str->concat(tmp.c_str(), tmp.size());
-            //str->sprintf("\"%s\":%s", hi.getKey(), tmp.c_str());
+            // values are written directly to the output, so a deeply nested value is not copied at each level
+            if (do_json_value(str, hi.get(), format == -1 ? format : format + 2, depth + 1, sm, xsink)) {
+                return -1;
+            }
             if (!hi.last()) {
                 str->concat(",");
             }

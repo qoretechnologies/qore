@@ -26,6 +26,15 @@
 #include "qore-json-module.h"
 
 #include <jsoncons/json.hpp>
+
+//! Checks the stack and cancellation in the recursive schema compilation and validation of the vendored jsoncons library
+/** Raises \c STACK-LIMIT-EXCEEDED or a cancellation exception in the exception sink of the current schema operation
+    and throws JsonSchemaAbort to end the operation; does nothing outside a schema operation.  See
+    design/json-module-migration.md.
+*/
+DLLLOCAL void qore_json_schema_check_recursion();
+
+#define JSONCONS_JSONSCHEMA_CHECK_RECURSION() qore_json_schema_check_recursion()
 #include <jsoncons_ext/jsonschema/jsonschema.hpp>
 
 #include <memory>
@@ -85,7 +94,13 @@ public:
 
 private:
     //! Convert Qore value to jsoncons JSON
-    DLLLOCAL jsoncons::json qoreToJson(QoreValue val, ExceptionSink* xsink) const;
+    /** @param val the value to convert
+        @param xsink exception sink
+        @param depth the nesting depth of the value
+
+        @throw JSON-SCHEMA-ERROR the value is nested deeper than a JSON document that jsoncons parses
+    */
+    DLLLOCAL jsoncons::json qoreToJson(QoreValue val, ExceptionSink* xsink, int depth = 0) const;
 
     //! Convert jsoncons JSON to Qore value
     DLLLOCAL QoreValue jsonToQore(const jsoncons::json& j, ExceptionSink* xsink) const;
@@ -96,7 +111,7 @@ private:
     //! Check for circular $ref references in the schema
     /** @param schema_json the parsed JSON schema
         @param xsink exception sink
-        @return true if circular refs detected (exception raised), false if OK
+        @return true if an exception was raised (circular refs detected or the check was cancelled), false if OK
     */
     DLLLOCAL static bool checkCircularRefs(const jsoncons::json& schema_json, ExceptionSink* xsink);
 

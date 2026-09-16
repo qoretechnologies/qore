@@ -1,0 +1,308 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires json
+
+%exec-class DeepNestingTest
+
+class DeepNestingTest inherits QUnit::Test {
+    public {
+        #! data nested this deeply exceeds the stack of a test thread
+        const Depth = 100000;
+        #! data nested this deeply is supported in a test thread
+        const Moderate = 100;
+        #! schemas nested this deeply are supported in a test thread; compilation uses several stack frames per level
+        const ModerateSchema = 20;
+        #! the stack size of a test thread
+        const StackSize = 512 * 1024;
+    }
+
+    constructor() : QUnit::Test("json deep nesting", "1.0") {
+        addTestCase("JSON parsing", \jsonParsing());
+        addTestCase("JSON generation", \jsonGeneration());
+        addTestCase("CBOR", \cbor());
+        addTestCase("TOON", \toon());
+        addTestCase("SAX parsing", \saxParsing());
+        addTestCase("stream writing", \streamWriting());
+        addTestCase("JSON Schema data", \schemaData());
+        addTestCase("JSON Schema documents", \schemaDocuments());
+        addTestCase("JSON Schema references", \schemaReferences());
+        set_return_value(main());
+    }
+
+    jsonParsing() {
+        inThread(sub () {
+            assertThrows("STACK-LIMIT-EXCEEDED", \parse_json(), strmul("[", Depth) + strmul("]", Depth));
+            assertThrows("STACK-LIMIT-EXCEEDED", \parse_json(), strmul("{\"a\":", Depth) + "1" + strmul("}", Depth));
+            # an error before the end of the input is reported as well
+            assertThrows("STACK-LIMIT-EXCEEDED", \parse_json(), strmul("[", Depth));
+
+            assertEq(nestedList(Moderate), parse_json(strmul("[", Moderate) + "1" + strmul("]", Moderate)));
+            assertEq(nestedHash(Moderate), parse_json(strmul("{\"a\":", Moderate) + "1" + strmul("}", Moderate)));
+        });
+    }
+
+    jsonGeneration() {
+        list<auto> deepList = nestedList(Depth);
+        hash<auto> deepHash = nestedHash(Depth);
+        inThread(sub () {
+            assertThrows("STACK-LIMIT-EXCEEDED", \make_json(), (deepList,));
+            assertThrows("STACK-LIMIT-EXCEEDED", \make_json(), (deepHash,));
+            assertThrows("STACK-LIMIT-EXCEEDED", \make_json(), (deepHash, JGF_ADD_FORMATTING));
+
+            assertEq(strmul("[", Moderate) + "1" + strmul("]", Moderate), make_json(nestedList(Moderate)));
+            assertEq(strmul("{\"a\":", Moderate) + "1" + strmul("}", Moderate), make_json(nestedHash(Moderate)));
+
+            # formatted output of nested values
+            assertEq("{\n  \"a\": [\n    1,\n    {\n      \"b\": []\n    },\n    {}\n  ],\n  \"c\": \"x\"\n}",
+                make_json({"a": (1, {"b": ()}, {}), "c": "x"}, JGF_ADD_FORMATTING));
+            string formatted = make_json(nestedHash(Moderate), JGF_ADD_FORMATTING);
+            assertEq(nestedHash(Moderate), parse_json(formatted));
+        });
+    }
+
+    cbor() {
+        list<auto> deepList = nestedList(Depth);
+        inThread(sub () {
+            # the stack limit or the encoder's nesting limit ends the serialization
+            try {
+                binary b = make_cbor(deepList);
+                fail("make_cbor() accepted a deeply nested list");
+            } catch (hash<ExceptionInfo> ex) {
+                assertTrue(ex.err == "STACK-LIMIT-EXCEEDED" || ex.err == "CBOR-SERIALIZATION-ERROR", ex.err);
+            }
+            assertEq(nestedList(Moderate), parse_cbor(make_cbor(nestedList(Moderate))));
+        });
+
+        # the encoder limits nesting to 1024 levels; beyond that, it throws a C++ exception
+        assertThrows("CBOR-SERIALIZATION-ERROR", \make_cbor(), (nestedList(2000),));
+        assertEq(nestedList(1000), parse_cbor(make_cbor(nestedList(1000))));
+    }
+
+    toon() {
+        hash<auto> deepHash = nestedHash(Depth);
+        # each level of a nested TOON object is indented one level more
+        string deepToon;
+        for (int i = 0; i < 5000; ++i) {
+            deepToon += strmul(" ", i) + "a:\n";
+        }
+        inThread(sub () {
+            assertThrows("STACK-LIMIT-EXCEEDED", \make_toon(), (deepHash, {"indent": 1}));
+            assertThrows("STACK-LIMIT-EXCEEDED", \parse_toon(), (deepToon, {"indent": 1}));
+            assertEq(nestedHash(Moderate), parse_toon(make_toon(nestedHash(Moderate))));
+        });
+    }
+
+    saxParsing() {
+        inThread(sub () {
+            int events = 0;
+            code count = sub (hash<auto> event) {
+                ++events;
+            };
+            JsonSaxParser parser();
+            assertThrows("STACK-LIMIT-EXCEEDED", \parser.parse(), (strmul("[", Depth) + strmul("]", Depth), count));
+
+            events = 0;
+            parser.parse(strmul("[", Moderate) + strmul("]", Moderate), count);
+            assertEq(2 * Moderate, events);
+        });
+    }
+
+    streamWriting() {
+        list<auto> deepList = nestedList(Depth);
+        inThread(sub () {
+            StringOutputStream out();
+            JsonStreamWriter writer(out);
+            assertThrows("STACK-LIMIT-EXCEEDED", \writer.value(), (deepList,));
+
+            StringOutputStream out2();
+            JsonStreamWriter writer2(out2);
+            writer2.value(nestedList(Moderate));
+            writer2.flush();
+            assertEq(strmul("[", Moderate) + "1" + strmul("]", Moderate), out2.getData());
+        });
+    }
+
+    schemaData() {
+        list<auto> deepList = nestedList(Depth);
+        inThread(sub () {
+            # an array of arrays of any depth
+            JsonSchema schema({"type": "array", "items": {"$ref": "#"}});
+            # jsoncons limits parsed documents to 1024 levels, and converted data is limited in the same way, unless
+            # the conversion exhausts the stack first
+            assertDepthError(sub () { schema.validate(deepList); });
+            assertDepthError(sub () { schema.validateWithErrors(deepList); });
+
+            # validation recurses for each level of the data; the stack limit may end it for 1000 levels
+            list<auto> data = nestedList(1000, ());
+            try {
+                assertTrue(schema.validate(data));
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("STACK-LIMIT-EXCEEDED", ex.err);
+            }
+            assertTrue(schema.validate(nestedList(Moderate, ())));
+            assertFalse(schema.validate(nestedList(Moderate)));
+        });
+    }
+
+    schemaDocuments() {
+        hash<auto> deepSchema = nestedSchema(Depth);
+        string deepJson = make_json(nestedSchema(2000));
+        inThread(sub () {
+            assertDepthError(sub () { JsonSchema schema(deepSchema); });
+            assertDepthError(sub () { JsonSchema schema(deepJson); });
+
+            # compilation recurses for each level of the schema; the stack limit may end it for 1000 levels
+            try {
+                JsonSchema schema(nestedSchema(1000));
+                assertTrue(schema.validate(1));
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("STACK-LIMIT-EXCEEDED", ex.err);
+            }
+            JsonSchema schema(nestedSchema(ModerateSchema));
+            assertTrue(schema.validate(1));
+            assertFalse(schema.validate("1"));
+        });
+    }
+
+    schemaReferences() {
+        # a chain of references: each definition refers to the next one
+        hash<auto> chain = {};
+        for (int i = 0; i < Depth; ++i) {
+            chain{"d" + i} = {"$ref": "#/$defs/d" + (i + 1)};
+        }
+        chain{"d" + Depth} = {"type": "integer"};
+        inThread(sub () {
+            try {
+                JsonSchema schema({"$defs": chain, "$ref": "#/$defs/d0"});
+                assertTrue(schema.validate(1));
+                assertFalse(schema.validate("1"));
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("STACK-LIMIT-EXCEEDED", ex.err);
+            }
+        });
+
+        # a cycle at the end of a long chain
+        hash<auto> cycle = chain + {"d" + Depth: {"$ref": "#/$defs/d0"}};
+        inThread(sub () {
+            assertThrows("JSON-SCHEMA-ERROR", "circular", sub () {
+                JsonSchema schema({"$defs": cycle, "$ref": "#/$defs/d0"});
+            });
+        });
+
+        # each definition refers to the next one twice, which doubles the number of paths for each definition; the
+        # check for circular references follows each definition once
+        JsonSchema schema({"$defs": doubledRefs(40), "$ref": "#/$defs/d0"});
+        hash<auto> doubled = doubledRefs(40) + {"d40": {"$ref": "#/$defs/d20"}};
+        assertThrows("JSON-SCHEMA-ERROR", "circular", sub () {
+            JsonSchema schema({"$defs": doubled, "$ref": "#/$defs/d0"});
+        });
+
+        # validation follows each path
+        JsonSchema small({"$defs": doubledRefs(8), "$ref": "#/$defs/d0"});
+        assertTrue(small.validate(1));
+        assertFalse(small.validate("1"));
+
+        # a validation that would follow 2^40 paths can be cancelled
+        Queue ready();
+        Queue go();
+        Queue results();
+        background sub () {
+            ready.push(gettid());
+            try {
+                go.get();
+            } catch (hash<ExceptionInfo> ex) {
+                results.push(ex.err);
+            }
+            # the thread stays cancelled, so the validation ends at its first cancellation point
+            try {
+                schema.validate(1);
+                results.push("validated");
+            } catch (hash<ExceptionInfo> ex) {
+                results.push(ex.err);
+            }
+            clear_thread_cancel();
+        }();
+        assertTrue(cancel_thread(ready.get(), "JSON Schema cancellation test"));
+        go.push(True);
+        assertEq("THREAD-CANCELLED", results.get());
+        assertEq("THREAD-CANCELLED", results.get());
+    }
+
+    #! Returns definitions where each one refers to the next one twice, and the last one is an integer
+    private static hash<auto> doubledRefs(int n) {
+        hash<auto> defs = {};
+        for (int i = 0; i < n; ++i) {
+            defs{"d" + i} = {"allOf": ({"$ref": "#/$defs/d" + (i + 1)}, {"$ref": "#/$defs/d" + (i + 1)})};
+        }
+        defs{"d" + n} = {"type": "integer"};
+        return defs;
+    }
+
+    #! Asserts that a call raises the error for data nested too deeply
+    private assertDepthError(code c) {
+        try {
+            c();
+            fail("deeply nested data was accepted");
+        } catch (hash<ExceptionInfo> ex) {
+            assertTrue(ex.err == "JSON-SCHEMA-ERROR" || ex.err == "STACK-LIMIT-EXCEEDED", ex.err);
+        }
+    }
+
+    #! Returns a list nested to the given depth around a value
+    private static list<auto> nestedList(int depth, auto value = 1) {
+        # an untyped variable, so that its type is not narrowed to that of the first value
+        auto l = (value,);
+        for (int i = 1; i < depth; ++i) {
+            l = (l,);
+        }
+        return l;
+    }
+
+    #! Returns a hash nested to the given depth around a value
+    private static hash<auto> nestedHash(int depth) {
+        # an untyped variable, so that its type is not narrowed to that of the first value
+        auto h = {"a": 1};
+        for (int i = 1; i < depth; ++i) {
+            h = {"a": h};
+        }
+        return h;
+    }
+
+    #! Returns a schema for an integer nested to the given depth
+    private static hash<auto> nestedSchema(int depth) {
+        # an untyped variable, so that its type is not narrowed to that of the first value
+        auto h = {"type": "integer"};
+        for (int i = 1; i < depth; ++i) {
+            h = {"allOf": (h,)};
+        }
+        return h;
+    }
+
+    private inThread(code test) {
+        if (!HAVE_MANAGE_STACK) {
+            testSkip("stack management is not available");
+        }
+        int defaultSize = get_default_thread_stack_size();
+        set_default_thread_stack_size(StackSize);
+        on_exit set_default_thread_stack_size(defaultSize);
+
+        Counter c(1);
+        *hash<ExceptionInfo> ex;
+        background sub () {
+            on_exit c.dec();
+            try {
+                test();
+            } catch (hash<ExceptionInfo> e) {
+                ex = e;
+            }
+        }();
+        c.waitForZero();
+        if (ex) {
+            throw ex.err, ex.desc, ex.arg;
+        }
+    }
+}

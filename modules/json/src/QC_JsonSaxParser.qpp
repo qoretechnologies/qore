@@ -514,6 +514,11 @@ bool JsonSaxParser::parseObject(ParseState& state) {
         return false;
     }
 
+    // each nested object or array uses stack space, including for the callback
+    if (q_check_stack(state.xsink)) {
+        return false;
+    }
+
     if (!emitEvent(state, JSON_SAX_OBJECT_START, nullptr, QoreValue())) {
         return false;
     }
@@ -600,6 +605,11 @@ bool JsonSaxParser::parseArray(ParseState& state) {
 
     // Check sandbox depth limit
     if (!checkSandboxLimits(state)) {
+        return false;
+    }
+
+    // each nested object or array uses stack space, including for the callback
+    if (q_check_stack(state.xsink)) {
         return false;
     }
 
@@ -923,6 +933,7 @@ JsonSaxParser::constructor() {
     @param callback the callback code to execute for each SAX event; receives a hash with event information
 
     @throw JSON-SAX-PARSE-ERROR if there is a parsing error
+    @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
 */
 nothing JsonSaxParser::parse(string json_str, code callback) {
     ReferenceHolder<ResolvedCallReferenceNode> holder(callback->refRefSelf(), xsink);
@@ -942,6 +953,7 @@ nothing JsonSaxParser::parse(string json_str, code callback) {
     @param encoding optional character encoding (default: UTF-8)
 
     @throw JSON-SAX-PARSE-ERROR if there is a parsing error
+    @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
 */
 nothing JsonSaxParser::parseStream(Qore::InputStream[InputStream] is, code callback, *string encoding) {
     const QoreEncoding* enc = encoding ? QEM.findCreate(encoding) : QCS_UTF8;

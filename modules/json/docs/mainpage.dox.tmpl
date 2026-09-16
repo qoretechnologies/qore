@@ -291,6 +291,20 @@ hash<auto> parsed = parse_toon(toon);
       both are subject to the \c PO_NO_NETWORK and \c PO_NO_FILESYSTEM parse options as documented
     - fixed a crash in @ref Qore::Json::parse_cbor() "parse_cbor()" when a sandbox nesting-depth
       limit aborted the parse
+    - fixed crashes when parsing, generating, streaming or validating deeply nested data; the JSON, CBOR and TOON
+      functions, @ref Qore::Json::JsonSaxParser "JsonSaxParser",
+      @ref Qore::Json::JsonStreamWriter::value() "JsonStreamWriter::value()" and
+      @ref Qore::Json::JsonSchema "JsonSchema" now raise a \c STACK-LIMIT-EXCEEDED exception when data is nested
+      too deeply for the thread's stack, @ref Qore::Json::JsonSchema "JsonSchema" limits data to 1024 levels of
+      nesting, and @ref Qore::Json::make_cbor() "make_cbor()" raises a \c CBOR-SERIALIZATION-ERROR exception
+      instead of terminating the process for data nested more than 1024 levels deep
+    - fixed @ref Qore::Json::JsonSchema "JsonSchema" taking time exponential in the number of \c allOf,
+      \c anyOf and \c oneOf references when checking a schema for circular references
+    - @ref Qore::Json::JsonSchema "JsonSchema" compilation and validation can now be cancelled; validating data
+      against a schema whose references can be followed on a number of paths that is exponential in the size of
+      the schema could not be interrupted
+    - JSON generation no longer copies each nested value into its parent, which took time quadratic in the nesting
+      depth
     - added @ref Qore::Json::jws_sign() "jws_sign()" and @ref Qore::Json::jws_verify() "jws_verify()",
       which sign and verify a caller-supplied JWS Signing Input; unlike
       @ref Qore::Json::jwt_encode() "jwt_encode()" they do not require the payload to be a JWT claims

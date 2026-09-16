@@ -20,6 +20,12 @@
 #include <jsoncons_ext/jsonschema/validation_message.hpp>
 #include <jsoncons_ext/jsonpointer/jsonpointer.hpp>
 
+// Qore: a hook that the application can define to limit the recursion of schema compilation and validation,
+// which recurses for each level of a schema, of a $ref chain and of a validated instance
+#ifndef JSONCONS_JSONSCHEMA_CHECK_RECURSION
+#define JSONCONS_JSONSCHEMA_CHECK_RECURSION()
+#endif
+
 namespace jsoncons {
 namespace jsonschema {
     
@@ -234,6 +240,7 @@ namespace jsonschema {
             error_reporter<Json>& reporter, 
             jsoncons::optional<Json>& patch) const 
         {
+            JSONCONS_JSONSCHEMA_CHECK_RECURSION();
             return do_validate(context, instance, instance_location, results, reporter, patch);
         }
 

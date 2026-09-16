@@ -637,6 +637,7 @@ namespace Qore::Json;
 
     @throw JSON-SERIALIZATION-ERROR cannot serialize value passed (ex: binary, object)
     @throw ENCODING-CONVERSION-ERROR this exception could be thrown if an error occurs converting input strings to the target encoding
+    @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
 
     @note According to <a href="https://tools.ietf.org/html/rfc7159">RFC 7159</a> JSON strings can only be in UTF-8, UTF-16, or UTF-32 encoding, but this function will allow any encoding to be used to generate JSON strings
 
@@ -691,6 +692,7 @@ string makeFormattedJSONString(auto data, *string encoding) [flags=RET_VALUE_ONL
     @return the %Qore data structure corresponding to the input string
 
     @throw JSON-PARSE-ERROR syntax error parsing JSON string
+    @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
 
     @par Example:
     @code auto data = parse_json(json); @endcode
@@ -715,6 +717,7 @@ nothing parseJSON() [flags=RUNTIME_NOOP,DEPRECATED] {
     @return the %Qore data structure corresponding to the input string
 
     @throw JSON-PARSE-ERROR syntax error parsing JSON string
+    @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
 
     @see @ref jsonserialization
 

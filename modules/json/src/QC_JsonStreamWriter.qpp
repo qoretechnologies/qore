@@ -401,6 +401,8 @@ int JsonStreamWriter::value(QoreValue v, ExceptionSink* xsink) {
 
         case NT_LIST: {
             const QoreListNode* l = v.get<const QoreListNode>();
+            // each nested list or hash uses stack space
+            if (q_check_stack(xsink)) return -1;
             if (startArray(xsink)) return -1;
             ConstListIterator li(l);
             while (li.next()) {
@@ -411,6 +413,8 @@ int JsonStreamWriter::value(QoreValue v, ExceptionSink* xsink) {
 
         case NT_HASH: {
             const QoreHashNode* h = v.get<const QoreHashNode>();
+            // each nested list or hash uses stack space
+            if (q_check_stack(xsink)) return -1;
             if (startObject(xsink)) return -1;
             ConstHashIterator hi(h);
             while (hi.next()) {
@@ -631,6 +635,8 @@ nothing JsonStreamWriter::nullValue() {
     @endcode
 
     @param v the value to write
+
+    @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
 */
 nothing JsonStreamWriter::value(auto v) {
     writer->value(v, xsink);

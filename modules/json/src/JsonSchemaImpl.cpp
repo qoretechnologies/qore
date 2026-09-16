@@ -26,9 +26,56 @@
 #include <cassert>
 #include <set>
 #include <functional>
+#include <vector>
 
 const TypedHashDecl* hashdeclJsonSchemaValidationError = nullptr;
 const TypedHashDecl* hashdeclJsonSchemaValidationResult = nullptr;
+
+namespace {
+// the exception sink of the schema operation in progress in this thread
+thread_local ExceptionSink* schema_recursion_xsink = nullptr;
+// the number of recursion checks in this thread
+thread_local unsigned schema_recursion_checks = 0;
+
+//! Ends a schema operation after a stack or cancellation check raised a Qore exception
+class JsonSchemaAbort : public std::exception {
+public:
+    const char* what() const noexcept override {
+        return "the schema operation was ended by a Qore exception";
+    }
+};
+
+//! Sets the exception sink for the stack and cancellation checks of a schema operation
+class SchemaRecursionHelper {
+public:
+    DLLLOCAL explicit SchemaRecursionHelper(ExceptionSink* xsink) : old_xsink(schema_recursion_xsink) {
+        schema_recursion_xsink = xsink;
+    }
+
+    DLLLOCAL ~SchemaRecursionHelper() {
+        schema_recursion_xsink = old_xsink;
+    }
+
+    SchemaRecursionHelper(const SchemaRecursionHelper&) = delete;
+    SchemaRecursionHelper& operator=(const SchemaRecursionHelper&) = delete;
+
+private:
+    ExceptionSink* old_xsink;
+};
+}
+
+void qore_json_schema_check_recursion() {
+    if (!schema_recursion_xsink) {
+        return;
+    }
+    // a validation can follow a number of paths through a schema's references that is exponential in the size of
+    // the schema, so it has a cancellation point
+    if (q_check_stack(schema_recursion_xsink)
+        || (!(++schema_recursion_checks % 100)
+            && qore_check_cancel(schema_recursion_xsink, "processing a JSON Schema"))) {
+        throw JsonSchemaAbort();
+    }
+}
 
 JsonSchemaValidator::JsonSchemaValidator(const QoreStringNode* schema_json, ExceptionSink* xsink)
     : valid(false) {
@@ -47,6 +94,7 @@ JsonSchemaValidator::JsonSchemaValidator(const QoreHashNode* schema_hash, Except
     }
 
     // Convert Qore hash to JSON
+    SchemaRecursionHelper srh(xsink);
     try {
         jsoncons::json json_schema = qoreToJson(schema_hash, xsink);
         if (*xsink) {
@@ -58,9 +106,11 @@ JsonSchemaValidator::JsonSchemaValidator(const QoreHashNode* schema_hash, Except
             return;
         }
 
-        // Compile the schema
-        schema = std::make_shared<JsonSchemaType>(jsoncons::jsonschema::make_json_schema(json_schema));
+        // Compile the schema; the document is moved, as copying it recurses for each level
+        schema = std::make_shared<JsonSchemaType>(jsoncons::jsonschema::make_json_schema(std::move(json_schema)));
         valid = true;
+    } catch (const JsonSchemaAbort&) {
+        // the exception has been raised in xsink
     } catch (const jsoncons::jsonschema::schema_error& e) {
         xsink->raiseException("JSON-SCHEMA-ERROR", "Invalid JSON Schema: %s", e.what());
     } catch (const std::exception& e) {
@@ -72,6 +122,7 @@ JsonSchemaValidator::~JsonSchemaValidator() {
 }
 
 void JsonSchemaValidator::initFromJsonString(const std::string& json_str, ExceptionSink* xsink) {
+    SchemaRecursionHelper srh(xsink);
     try {
         // Parse the JSON string
         jsoncons::json json_schema = jsoncons::json::parse(json_str);
@@ -81,9 +132,11 @@ void JsonSchemaValidator::initFromJsonString(const std::string& json_str, Except
             return;
         }
 
-        // Compile the schema
-        schema = std::make_shared<JsonSchemaType>(jsoncons::jsonschema::make_json_schema(json_schema));
+        // Compile the schema; the document is moved, as copying it recurses for each level
+        schema = std::make_shared<JsonSchemaType>(jsoncons::jsonschema::make_json_schema(std::move(json_schema)));
         valid = true;
+    } catch (const JsonSchemaAbort&) {
+        // the exception has been raised in xsink
     } catch (const jsoncons::ser_error& e) {
         xsink->raiseException("JSON-SCHEMA-ERROR", "Invalid JSON in schema: %s", e.what());
     } catch (const jsoncons::jsonschema::schema_error& e) {
@@ -93,12 +146,26 @@ void JsonSchemaValidator::initFromJsonString(const std::string& json_str, Except
     }
 }
 
-jsoncons::json JsonSchemaValidator::qoreToJson(QoreValue val, ExceptionSink* xsink) const {
+jsoncons::json JsonSchemaValidator::qoreToJson(QoreValue val, ExceptionSink* xsink, int depth) const {
     if (val.isNullOrNothing()) {
         return jsoncons::json::null();
     }
 
-    switch (val.getType()) {
+    qore_type_t type = val.getType();
+    if (type == NT_LIST || type == NT_HASH) {
+        // jsoncons compiles, validates and compares documents recursively, so a converted value is limited to the
+        // nesting depth of a JSON document that jsoncons parses
+        static const int max_depth = jsoncons::json_options().max_nesting_depth();
+        if (depth >= max_depth) {
+            xsink->raiseException("JSON-SCHEMA-ERROR", "the value is nested more than %d levels deep", max_depth);
+            return jsoncons::json::null();
+        }
+        if (q_check_stack(xsink)) {
+            return jsoncons::json::null();
+        }
+    }
+
+    switch (type) {
         case NT_INT:
             return jsoncons::json(val.getAsBigInt());
 
@@ -118,7 +185,7 @@ jsoncons::json JsonSchemaValidator::qoreToJson(QoreValue val, ExceptionSink* xsi
             jsoncons::json arr = jsoncons::json::array();
             ConstListIterator it(list);
             while (it.next()) {
-                arr.push_back(qoreToJson(it.getValue(), xsink));
+                arr.push_back(qoreToJson(it.getValue(), xsink, depth + 1));
                 if (*xsink) {
                     return jsoncons::json::null();
                 }
@@ -131,7 +198,7 @@ jsoncons::json JsonSchemaValidator::qoreToJson(QoreValue val, ExceptionSink* xsi
             jsoncons::json obj = jsoncons::json::object();
             ConstHashIterator it(hash);
             while (it.next()) {
-                obj[it.getKey()] = qoreToJson(it.get(), xsink);
+                obj[it.getKey()] = qoreToJson(it.get(), xsink, depth + 1);
                 if (*xsink) {
                     return jsoncons::json::null();
                 }
@@ -226,6 +293,7 @@ bool JsonSchemaValidator::validate(QoreValue data, ExceptionSink* xsink) const {
         return false;
     }
 
+    SchemaRecursionHelper srh(xsink);
     try {
         jsoncons::json json_data = qoreToJson(data, xsink);
         if (*xsink) {
@@ -246,6 +314,9 @@ bool JsonSchemaValidator::validate(QoreValue data, ExceptionSink* xsink) const {
 
         schema->validate(json_data, reporter);
         return errors.empty();
+    } catch (const JsonSchemaAbort&) {
+        // the exception has been raised in xsink
+        return false;
     } catch (const std::exception& e) {
         xsink->raiseException("JSON-SCHEMA-ERROR", "Validation error: %s", e.what());
         return false;
@@ -263,6 +334,7 @@ QoreHashNode* JsonSchemaValidator::validateWithErrors(QoreValue data, ExceptionS
         return nullptr;
     }
 
+    SchemaRecursionHelper srh(xsink);
     try {
         jsoncons::json json_data = qoreToJson(data, xsink);
         if (*xsink) {
@@ -289,6 +361,9 @@ QoreHashNode* JsonSchemaValidator::validateWithErrors(QoreValue data, ExceptionS
         result->setKeyValue("errors", error_list.release(), xsink);
 
         return result.release();
+    } catch (const JsonSchemaAbort&) {
+        // the exception has been raised in xsink
+        return nullptr;
     } catch (const std::exception& e) {
         xsink->raiseException("JSON-SCHEMA-ERROR", "Validation error: %s", e.what());
         return nullptr;
@@ -361,65 +436,95 @@ static const jsoncons::json* resolveJsonPointer(const jsoncons::json& root, cons
     return current;
 }
 
-// Follow a pure $ref chain to detect unconditional cycles.
+// A schema object whose pure $ref chains are being followed
+struct RefCycleFrame {
+    const jsoncons::json* node;
+    // the $ref target that this frame explores, or nullptr
+    const jsoncons::json* target;
+    // the sub-schemas to follow and their $ref targets, filled when the frame is entered
+    std::vector<std::pair<const jsoncons::json*, const jsoncons::json*>> next;
+    size_t pos = 0;
+    bool entered = false;
+
+    RefCycleFrame(const jsoncons::json* node, const jsoncons::json* target) : node(node), target(target) {
+    }
+};
+
+// Follow pure $ref chains to detect unconditional cycles.
 // A "pure $ref" node is one where the schema object's only meaningful keyword is "$ref"
 // (i.e., it resolves to another schema purely by reference with no other constraints).
 // This detects cycles like: A -> B -> A, or self -> self.
 // It does NOT flag recursive schemas where $ref appears inside "properties", "items", etc.,
 // since those are data-driven and terminate naturally.
-static bool detectPureRefCycle(const jsoncons::json& root, const jsoncons::json& node,
-                               std::set<const jsoncons::json*>& visited) {
-    if (!node.is_object()) {
-        return false;
-    }
-
-    // Check if this node has a $ref
-    auto ref_it = node.find("$ref");
-    if (ref_it == node.object_range().end() || !ref_it->value().is_string()) {
-        // No $ref at this level; recurse into sub-schema keywords to find nested pure-ref chains
-        // Check allOf/anyOf/oneOf arrays
-        static const char* array_keywords[] = {"allOf", "anyOf", "oneOf", nullptr};
-        for (const char** kw = array_keywords; *kw; ++kw) {
-            auto it = node.find(*kw);
-            if (it != node.object_range().end() && it->value().is_array()) {
-                for (const auto& item : it->value().array_range()) {
-                    if (detectPureRefCycle(root, item, visited)) {
-                        return true;
+// The search is a depth-first search with an explicit stack, as a $ref chain can be longer than the call stack
+// allows; a $ref target whose chains have been followed without finding a cycle is not followed again.
+// Returns 1 if a cycle is found, 0 if not, and -1 if an exception has been raised.
+static int detectPureRefCycle(const jsoncons::json& root, ExceptionSink* xsink) {
+    static const char* array_keywords[] = {"allOf", "anyOf", "oneOf"};
+    // the $ref targets on the current path, and the $ref targets whose chains have no cycle
+    std::set<const jsoncons::json*> active = {&root};
+    std::set<const jsoncons::json*> done;
+    std::vector<RefCycleFrame> stack;
+    stack.emplace_back(&root, &root);
+    unsigned iteration = 0;
+    while (!stack.empty()) {
+        if (!(++iteration % 100) && qore_check_cancel(xsink, "checking JSON Schema references")) {
+            return -1;
+        }
+        RefCycleFrame& frame = stack.back();
+        if (!frame.entered) {
+            frame.entered = true;
+            const jsoncons::json& node = *frame.node;
+            if (node.is_object()) {
+                auto ref_it = node.find("$ref");
+                if (ref_it == node.object_range().end() || !ref_it->value().is_string()) {
+                    // No $ref at this level; follow the sub-schema keywords to find nested pure-ref chains
+                    for (const char* kw : array_keywords) {
+                        auto it = node.find(kw);
+                        if (it != node.object_range().end() && it->value().is_array()) {
+                            for (const auto& item : it->value().array_range()) {
+                                frame.next.emplace_back(&item, nullptr);
+                            }
+                        }
+                    }
+                } else {
+                    std::string ref = ref_it->value().as<std::string>();
+                    // Only handle local refs
+                    const jsoncons::json* target = !ref.empty() && ref[0] == '#'
+                        ? resolveJsonPointer(root, ref)
+                        : nullptr;
+                    if (target) {
+                        if (active.count(target)) {
+                            return 1; // cycle detected
+                        }
+                        if (!done.count(target)) {
+                            active.insert(target);
+                            frame.next.emplace_back(target, target);
+                        }
                     }
                 }
             }
         }
-        return false;
+        if (frame.pos < frame.next.size()) {
+            // the frame reference is invalid after the next frame is added
+            std::pair<const jsoncons::json*, const jsoncons::json*> next = frame.next[frame.pos++];
+            stack.emplace_back(next.first, next.second);
+            continue;
+        }
+        if (frame.target) {
+            active.erase(frame.target);
+            done.insert(frame.target);
+        }
+        stack.pop_back();
     }
-
-    std::string ref = ref_it->value().as<std::string>();
-
-    // Only handle local refs
-    if (ref.empty() || ref[0] != '#') {
-        return false;
-    }
-
-    const jsoncons::json* target = resolveJsonPointer(root, ref);
-    if (!target) {
-        return false;
-    }
-
-    if (visited.count(target)) {
-        return true; // cycle detected
-    }
-    visited.insert(target);
-    bool result = detectPureRefCycle(root, *target, visited);
-    visited.erase(target);
-    return result;
+    return 0;
 }
 
 bool JsonSchemaValidator::checkCircularRefs(const jsoncons::json& schema_json, ExceptionSink* xsink) {
-    std::set<const jsoncons::json*> visited;
-    visited.insert(&schema_json);
-    if (detectPureRefCycle(schema_json, schema_json, visited)) {
+    int rc = detectPureRefCycle(schema_json, xsink);
+    if (rc > 0) {
         xsink->raiseException("JSON-SCHEMA-ERROR",
             "Schema contains circular $ref references that would cause infinite recursion during validation");
-        return true;
     }
-    return false;
+    return rc != 0;
 }

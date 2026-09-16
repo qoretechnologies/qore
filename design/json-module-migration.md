@@ -61,6 +61,25 @@ the already-constructed source and shares one initialization path for inline and
 The `qore-json-bigint-test` target checks both storage forms, signs, independent copies, stateful
 allocator ownership, and allocation failure; build and run it in `build-debug/`, including under Valgrind.
 
+JSON Schema compilation and validation recurse for each level of a schema, of a `$ref` chain and of a validated
+document, with no limit of their own. The vendored `jsonschema/common/validator.hpp` defines the
+`JSONCONS_JSONSCHEMA_CHECK_RECURSION()` hook, empty by default, and calls it at the start of
+`validator_base::validate()`, through which every validator reaches the next one, and of each draft's
+`make_schema_validator()`. `modules/json/src/QC_JsonSchema.h` defines it before including jsoncons to call
+`q_check_stack()` with the exception sink of the schema operation in progress, and to throw an exception that ends
+the operation when the thread's stack is exhausted. Every 100th call is also a cancellation point
+(`qore_check_cancel()`), as jsoncons follows each path through a schema's references without memoizing results, and a
+validation can therefore take time exponential in the size of the schema. `JsonSchemaValidator` also limits a
+document converted from Qore data to the nesting depth that jsoncons' parser accepts (1024), and moves documents into
+`make_json_schema()`, which takes them by value, as copying a document recurses for each level. Keep the hook calls
+when updating jsoncons.
+
+The module's own parsers and serializers (JSON, CBOR, TOON, the SAX parser and the stream writer) call
+`q_check_stack()` for each nested container, so the nesting depth that they accept is limited by the thread's stack
+rather than by a fixed limit; the sandbox limit of 256 levels still applies in a sandbox. `make_cbor()` also reports
+the exception that the jsoncons CBOR encoder throws beyond its nesting depth of 1024 as a
+`CBOR-SERIALIZATION-ERROR`.
+
 **Why not FetchContent.** Every FetchContent user in this tree is either optional or backs a
 library distros actually ship (nghttp2, c-ares, tree-sitter). jsoncons is packaged only on
 Debian unstable / Ubuntu (`libjsoncons-dev`); it is absent from Fedora, Alpine, Homebrew and

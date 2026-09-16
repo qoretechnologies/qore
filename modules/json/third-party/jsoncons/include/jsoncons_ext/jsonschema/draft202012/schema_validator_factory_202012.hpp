@@ -201,6 +201,7 @@ namespace draft202012 {
         schema_validator_ptr_type make_schema_validator(const compilation_context<Json>& context, 
             const Json& sch, jsoncons::span<const jsoncons::string_view> keys, anchor_uri_map_type& anchor_dict) override
         {
+            JSONCONS_JSONSCHEMA_CHECK_RECURSION();
             auto new_context = make_compilation_context(context, sch, keys);
             //std::cout << "this->make_cross_draft_schema_validator " << context.get_base_uri().string() << ", " << new_context.get_base_uri().string() << "\n\n";
 

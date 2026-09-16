@@ -786,6 +786,10 @@ static int toon_emit_array(ToonEncCtx& c, const char* key, size_t keylen, bool h
             "maximum nesting depth (%d) exceeded during serialization", TOON_MAX_NESTING_DEPTH);
         return -1;
     }
+    // each nested array or object uses stack space
+    if (q_check_stack(c.xsink)) {
+        return -1;
+    }
     std::vector<std::string> fields;
     ToonArrayForm form = toon_array_form(c, l, fields);
     if (*c.xsink) {
@@ -868,6 +872,10 @@ static int toon_emit_object(ToonEncCtx& c, const QoreHashNode* h, int depth) {
             "maximum nesting depth (%d) exceeded during serialization", TOON_MAX_NESTING_DEPTH);
         return -1;
     }
+    // each nested array or object uses stack space
+    if (q_check_stack(c.xsink)) {
+        return -1;
+    }
     if (c.sort_keys) {
         std::vector<std::string> keys;
         if (toon_hash_keys(c, h, true, keys)) {
@@ -916,6 +924,10 @@ static int toon_emit_list_item(ToonEncCtx& c, const QoreValue& v, int depth) {
     if (c.sm && depth >= TOON_MAX_NESTING_DEPTH) {
         c.xsink->raiseException("TOON-SERIALIZATION-ERROR",
             "maximum nesting depth (%d) exceeded during serialization", TOON_MAX_NESTING_DEPTH);
+        return -1;
+    }
+    // each nested array or object uses stack space
+    if (q_check_stack(c.xsink)) {
         return -1;
     }
     qore_type_t t = v.isNullOrNothing() ? NT_NOTHING : v.getType();
@@ -1672,6 +1684,10 @@ private:
             err(hline.line_no, "maximum nesting depth exceeded");
             return QoreValue();
         }
+        // each nested array or object uses stack space
+        if (q_check_stack(xsink)) {
+            return QoreValue();
+        }
         ReferenceHolder<QoreListNode> l(new QoreListNode(autoTypeInfo), xsink);
 
         // inline values present on the header line?
@@ -1821,6 +1837,10 @@ private:
             err(lines[pos].line_no, "maximum nesting depth exceeded");
             return QoreValue();
         }
+        // each nested array or object uses stack space
+        if (q_check_stack(xsink)) {
+            return QoreValue();
+        }
         const ToonLine& l = lines[pos];
         const std::string& s = l.content;
         // content begins with '-'
@@ -1952,6 +1972,10 @@ private:
     DLLLOCAL void parseObjectInto(QoreHashNode* h, int depth) {
         if (sm && depth >= TOON_MAX_NESTING_DEPTH) {
             err(pos < lines.size() ? lines[pos].line_no : 0, "maximum nesting depth exceeded");
+            return;
+        }
+        // each nested array or object uses stack space
+        if (q_check_stack(xsink)) {
             return;
         }
         while (true) {
@@ -2117,6 +2141,7 @@ string sql_toon = make_toon(rows, {"sort_keys": True});
     object), the value contains a control character that standard TOON cannot
     represent, an invalid option was passed, or the maximum nesting depth was
     exceeded
+    @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
 
     @note Values outside the strict JSON data model are normalized exactly as
     make_json() does, so that \c parse_toon(make_toon(x)) matches
@@ -2219,6 +2244,7 @@ DataFrame::DataFrame df(rows);
 
     @throw TOON-PARSE-ERROR syntax error parsing the TOON string (with line and
     column where available), or the maximum nesting depth was exceeded
+    @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
 
     @note
     - TOON is always UTF-8 (TOON specification §1.2, §18.2); if \a toon_str is

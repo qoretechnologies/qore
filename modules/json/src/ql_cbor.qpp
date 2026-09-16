@@ -61,6 +61,10 @@ static int do_cbor_list(
     int depth,
     QoreSandboxManager* sm,
     ExceptionSink* xsink) {
+    // each nested list or hash uses stack space
+    if (q_check_stack(xsink)) {
+        return -1;
+    }
     size_t len = l->size();
     encoder.begin_array(len);
 
@@ -86,6 +90,10 @@ static int do_cbor_hash(
     int depth,
     QoreSandboxManager* sm,
     ExceptionSink* xsink) {
+    // each nested list or hash uses stack space
+    if (q_check_stack(xsink)) {
+        return -1;
+    }
     size_t len = h->size();
     encoder.begin_object(len);
 
@@ -650,6 +658,7 @@ namespace Qore::Json;
     @return the CBOR binary value corresponding to the arguments passed
 
     @throw CBOR-SERIALIZATION-ERROR cannot serialize value passed (ex: object), or maximum nesting depth exceeded
+    @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
 
     @note
     - Absolute dates are serialized with CBOR tag 0 (ISO 8601 datetime string)
@@ -669,10 +678,19 @@ binary make_cbor(auto data) [flags=RET_VALUE_ONLY,NAMED_ARGS] {
     basic_cbor_encoder<bytes_sink<std::vector<uint8_t>>> encoder(std::move(sink));
 
     QoreSandboxManagerHelper smh;
-    if (do_cbor_value(encoder, data, 0, smh.get(), xsink)) {
+    // the encoder throws an exception for errors such as exceeding its maximum nesting depth
+    try {
+        if (do_cbor_value(encoder, data, 0, smh.get(), xsink)) {
+            return QoreValue();
+        }
+        encoder.flush();
+    } catch (const jsoncons::ser_error& e) {
+        xsink->raiseException("CBOR-SERIALIZATION-ERROR", "CBOR serialization error: %s", e.what());
+        return QoreValue();
+    } catch (const std::exception& e) {
+        xsink->raiseException("CBOR-SERIALIZATION-ERROR", "CBOR serialization error: %s", e.what());
         return QoreValue();
     }
-    encoder.flush();
 
     SimpleRefHolder<BinaryNode> bn(new BinaryNode());
     if (!buf.empty()) {

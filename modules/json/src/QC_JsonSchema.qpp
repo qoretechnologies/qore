@@ -179,6 +179,9 @@ JsonSchema validator(schema);
     @endcode
 
     @throw JSON-SCHEMA-ERROR if the schema is invalid
+    @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
 */
 JsonSchema::constructor(hash<auto> schema) {
     ReferenceHolder<JsonSchemaValidator> holder(new JsonSchemaValidator(schema, xsink), xsink);
@@ -198,6 +201,9 @@ JsonSchema validator(schema);
     @endcode
 
     @throw JSON-SCHEMA-ERROR if the schema is invalid
+    @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
 */
 JsonSchema::constructor(string schema_json) {
     ReferenceHolder<JsonSchemaValidator> holder(new JsonSchemaValidator(schema_json, xsink), xsink);
@@ -227,6 +233,10 @@ bool valid = validator.validate({"name": "Alice"});
     @endcode
 
     @throw JSON-SCHEMA-VALIDATION-ERROR if throw_on_error is True and validation fails
+    @throw JSON-SCHEMA-ERROR the data is nested more than 1024 levels deep
+    @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
 */
 bool JsonSchema::validate(auto data, bool throw_on_error = False) {
     bool result = jschema->validate(data, xsink);
@@ -263,6 +273,11 @@ bool JsonSchema::validate(auto data, bool throw_on_error = False) {
 
     @return a hash with 'valid' (bool) and 'errors' (list of JsonSchemaValidationError hashes)
 
+    @throw JSON-SCHEMA-ERROR the data is nested more than 1024 levels deep
+    @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
+
 @par Example:
 @code{.py}
 JsonSchema validator(schema);
@@ -289,6 +304,9 @@ JsonSchema validator = JsonSchema::load("/path/to/schema.json");
     @endcode
 
     @throw JSON-SCHEMA-ERROR if the schema cannot be loaded or is invalid
+    @throw STACK-LIMIT-EXCEEDED the data is nested too deeply for the thread's stack
+    @throw THREAD-CANCELLED the current thread was cancelled
+    @throw PROGRAM-INTERRUPTED the current program was interrupted
 */
 static JsonSchema JsonSchema::load(string location) [flags=RET_VALUE_ONLY;dom=FILESYSTEM] {
     SimpleRefHolder<QoreStringNode> content;
