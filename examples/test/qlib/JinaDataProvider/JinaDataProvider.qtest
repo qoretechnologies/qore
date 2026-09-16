@@ -274,7 +274,7 @@ public class JinaDataProviderTest inherits QUnit::Test {
         AbstractDataProvider p = provider({"data": (
             {"id": "jina-ai/jina-embeddings-v3", "name": "Jina Embeddings V3"},
             {"id": "jina-ai/jina-reranker-v3.5", "name": "Jina Reranker V3.5"},
-            {"id": "jina-ai/jina-vlm", "name": "Jina VLM"},
+            {"id": "jina-ai/jina-ocr-v1", "name": "Jina OCR v1"},
         )});
         list<hash<AllowedValueInfo>> values = p.getChildProvider("create-embeddings")
             .getReferenceData("embedding-models");
@@ -324,7 +324,7 @@ public class JinaDataProviderTest inherits QUnit::Test {
         assertEq("/v1/segment", last().path);
         assertTrue(last().body.return_chunks);
         p.getChildProvider("chat").doRequest({"messages": ({"role": "user", "content": "Hello"},), "max_tokens": 8});
-        assertEq("jina-vlm", last().body.model);
+        assertEq("jina-ocr-v1", last().body.model);
         assertFalse(last().body.stream);
         p.getChildProvider("chat").doRequest({"messages": ({"role": "user", "content": (
             {"type": "text", "text": "Describe this product"},

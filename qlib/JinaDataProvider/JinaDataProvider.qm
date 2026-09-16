@@ -105,7 +105,7 @@ module JinaDataProvider {
             "action": "chat",
             "path": "/chat",
             "display_name": "Chat with Vision Model",
-            "short_desc": "Answer questions about text and images with Jina VLM",
+            "short_desc": "Answer questions about text and images with Jina OCR",
             "desc": "Generate a completed answer from conversation `messages`, including image content. **Experimental:** Jina does not guarantee production availability of this endpoint.",
             "action_code": DPAT_API,
             "groups": ("Vision",),

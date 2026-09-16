@@ -923,8 +923,8 @@ public class JinaChatRequestDataType inherits HashDataType {
                 "display_name": "Model",
                 "type": AbstractDataProviderTypeMap."*string",
                 "desc": "Vision-language model used to answer the conversation.",
-                "allowed_values": (<AllowedValueInfo>{"value": "jina-vlm", "display_name": "Jina Vlm"},),
-                "default_value": "jina-vlm",
+                "allowed_values": (<AllowedValueInfo>{"value": "jina-ocr-v1", "display_name": "Jina OCR v1"},),
+                "default_value": "jina-ocr-v1",
             },
             "max_tokens": {
                 "display_name": "Maximum Output Tokens",

@@ -3384,8 +3384,8 @@
           "message": "Чат з моделлю Vision"
         },
         "app.SmluYUFp.action.Y2hhdA.short_desc": {
-          "source": "Answer questions about text and images with Jina VLM",
-          "message": "Відповідайте на запитання про текст та зображення за допомогою Jina VLM"
+          "source": "Answer questions about text and images with Jina OCR",
+          "message": "Відповідайте на запитання про текст та зображення за допомогою Jina OCR"
         },
         "app.SmluYUFp.action.Y2hhdA.desc": {
           "source": "Generate a completed answer from conversation `messages`, including image content. **Experimental:** Jina does not guarantee production availability of this endpoint.",
@@ -3503,9 +3503,9 @@
           "source": "Vision-language model used to answer the conversation.",
           "message": "Візуально-мовна модель, яка використовується для відповіді на розмову."
         },
-        "app.SmluYUFp.action.Y2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOmppbmEtdmxt.display_name": {
-          "source": "Jina Vlm",
-          "message": "Jina Vlm"
+        "app.SmluYUFp.action.Y2hhdA.option.bW9kZWw.allowed-value.c3RyaW5nOmppbmEtb2NyLXYx.display_name": {
+          "source": "Jina OCR v1",
+          "message": "Jina OCR v1"
         },
         "app.SmluYUFp.action.Y2hhdA.option.bWF4X3Rva2Vucw.display_name": {
           "source": "Maximum Output Tokens",
