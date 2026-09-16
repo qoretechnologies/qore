@@ -1,0 +1,93 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires astparser
+
+%exec-class DeclarationsTest
+
+class DeclarationsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("astparser declarations", "1.0") {
+        addTestCase("Catch clauses", \catchClauses());
+        addTestCase("Parameter lists", \parameterLists());
+        set_return_value(main());
+    }
+
+    catchClauses() {
+        # the exception parameter is optional, and both bodies may be a statement or a block
+        checkValid((
+            "sub f() { try { g(); } catch () {} }",
+            "sub f() { try { g(); } catch() {} }",
+            "sub f() { try { g(); } catch (ex) { h(ex); } }",
+            "sub f() { try { g(); } catch (my ex) { h(ex); } }",
+            "sub f() { try { g(); } catch (my hash ex) { h(ex); } }",
+            "sub f() { try { g(); } catch (*hash ex) { h(ex); } }",
+            "sub f() { try { g(); } catch (hash<ExceptionInfo> ex) { h(ex); } }",
+            "sub f() { try { g(); } catch (my hash<ExceptionInfo> ex) { h(ex); } }",
+            "sub f() { try { g(); } catch (/* no parameter */) {} }",
+            "sub f() { try g(); catch () h(); }",
+            "sub f() { try g(); catch (hash<ExceptionInfo> ex) h(ex); }",
+            "sub f() { try try g(); catch () h(); catch () {} }",
+            "sub f() { if (True) try g(); catch () {} else h(); }",
+            "sub f() { on_error try { g(); } catch () {} }",
+        ));
+        # variable references with a dollar sign are old-style syntax
+        checkValid((
+            "sub f() { try { g(); } catch ($ex) { printf(\"%y\\n\", $ex); } }",
+            "sub f() { try { g(); } catch (hash $ex) { printf(\"%y\\n\", $ex); } }",
+            "sub f() { try { g(); } catch (my $ex) { printf(\"%y\\n\", $ex); } }",
+        ), 0);
+        checkInvalid((
+            "sub f() { try { g(); } catch (1 {} }",
+            "sub f() { try { g(); } }",
+            "sub f() { try { g(); } catch () {} catch () {} }",
+            "sub f() { try { g(); } catch (ex, ex2) {} }",
+            "sub f() { try { g(); } catch () }",
+        ));
+    }
+
+    parameterLists() {
+        # the runtime reads the parameters as a list, which may end with a comma
+        checkValid((
+            "sub f(int a, string b,) {}",
+            "sub f(\n    int a,\n    string b,\n) {}",
+            "sub f(int a, ...,) {}",
+            "sub f(...,) {}",
+            "sub f(int a,) {}",
+            "class C { constructor(int a,) {} m(string s,) {} }",
+            "sub f() { code c = sub (int a,) {}; }",
+        ));
+        checkInvalid((
+            "sub f(,) {}",
+            "sub f(int a,, ,) {",
+            "sub f(int a string b) {}",
+        ));
+    }
+
+    private checkValid(list<string> sources, int options = PO_NEW_STYLE) {
+        # the functions called by the sources, in the syntax of the parse options
+        string functions = (options & PO_ALLOW_BARE_REFS) ? "sub g() {}\nsub h(auto x) {}\n" : "sub g() {}\n";
+        foreach string source in (sources) {
+            string code = source + "\n" + functions;
+            Program runtime(options | PO_NO_CHILD_PO_RESTRICTIONS);
+            runtime.parse(code, "valid");
+            AstParser parser();
+            parser.parseString(code);
+            assertEq(0, parser.getErrorCount(), source);
+        }
+    }
+
+    private checkInvalid(list<string> sources) {
+        foreach string source in (sources) {
+            string code = source + "\nsub g() {}\nsub h(auto x) {}\n";
+            Program runtime(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+            assertThrows("PARSE-EXCEPTION", \runtime.parse(), (code, "invalid"), source);
+            AstParser parser();
+            parser.parseString(code);
+            assertGt(0, parser.getErrorCount(), source);
+        }
+    }
+}

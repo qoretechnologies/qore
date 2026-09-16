@@ -544,11 +544,15 @@ module.exports = grammar({
 
     method_qualifier: $ => 'const',
 
+    // lib/parser.ypp reads the parameters as a list expression, which may end with a comma
     parameter_list: $ => seq(
       '(',
-      optional(choice(
-        seq(commaSep1($.parameter), optional(seq(',', '...'))),
-        '...',
+      optional(seq(
+        choice(
+          seq(commaSep1($.parameter), optional(seq(',', '...'))),
+          '...',
+        ),
+        optional(','),
       )),
       ')',
     ),
@@ -818,19 +822,24 @@ module.exports = grammar({
       repeat($._statement),
     ),
 
+    // lib/parser.ypp: TOK_TRY statement_or_block TOK_CATCH '(' myexp ')' statement_or_block
     try_statement: $ => seq(
       'try',
-      field('body', $.block),
-      repeat1($.catch_clause),
+      field('body', $._statement),
+      $.catch_clause,
     ),
 
+    // the exception parameter is optional and may be declared with my and a type
     catch_clause: $ => seq(
       'catch',
       '(',
-      optional(field('type', $.type)),
-      field('parameter', $.identifier),
+      optional(seq(
+        optional('my'),
+        optional(field('type', $.type)),
+        field('parameter', choice($.identifier, $.variable_name)),
+      )),
       ')',
-      field('body', $.block),
+      field('body', $._statement),
     ),
 
     return_statement: $ => seq(

@@ -67,6 +67,7 @@ class QoreCodeFormatTest inherits QUnit::Test {
         addTestCase("multi-byte characters", \testMultiByteCharacters());
         addTestCase("hash slices", \testHashSlices());
         addTestCase("catch and foreach declarations", \testCatchAndForeachDeclarations());
+        addTestCase("try statement bodies", \testTryStatementBodies());
 
         set_return_value(main());
     }
@@ -1521,6 +1522,43 @@ string sub run(list<string> l) {
             Program p(PO_NEW_STYLE);
             p.parse(source, "catch and foreach declarations");
             assertEq("abABABCd", p.callFunction("run", ("a", "b")), "formatted declarations keep their meaning");
+        }
+    }
+
+    testTryStatementBodies() {
+        string src = "%modern
+string sub run() {
+    string rv;
+    try throw \"A\"; catch (hash<ExceptionInfo> ex) rv += ex.err;
+    try
+        rv += \"b\";
+    catch ()
+        rv += \"c\";
+    return rv;
+}
+";
+        QoreCodeFormat::CodeFormatter fmt();
+        string result = fmt.format(src);
+        assertEq("%modern
+string sub run() {
+    string rv;
+    try {
+        throw \"A\";
+    } catch (hash<ExceptionInfo> ex) {
+        rv += ex.err;
+    }
+    try {
+        rv += \"b\";
+    } catch () {
+        rv += \"c\";
+    }
+    return rv;
+}
+", result);
+        foreach string source in ((src, result)) {
+            Program p(PO_NEW_STYLE);
+            p.parse(source, "try statement bodies");
+            assertEq("Ab", p.callFunction("run"), "formatted try statements keep their meaning");
         }
     }
 
