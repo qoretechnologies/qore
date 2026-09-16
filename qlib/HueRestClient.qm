@@ -40,7 +40,7 @@
 %requires(reexport) ConnectionProvider >= 1.4
 
 module HueRestClient {
-    version = "1.0";
+    version = "1.0.1";
     desc = "user module for calling Philips Hue REST API services";
     author = "David Nichols <david@qore.org>";
     url = "https://qore.org";
@@ -85,6 +85,10 @@ printf("%Y\n", ans.body);
     @endcode
 
     @section Huerestclientrelnotes Release Notes
+
+    @subsection Huerestclientv1_0_1 HueRestClient v1.0.1
+    - fixed platform-generated connection URLs by declaring
+      @ref HueRestClient::HueRestConnection::DefaultConnectionUrl "HueRestConnection::DefaultConnectionUrl"
 
     @subsection Huerestclientv1_0 HueRestClient v1.0
     - the initial version of the %HueRestClient module
@@ -171,6 +175,9 @@ HueRestClient rest(opts);
 */
 public class HueRestConnection inherits RestClient::RestConnection {
     public {
+        #! The connection URL used when the URL is generated automatically (\c auto_url)
+        const DefaultConnectionUrl = "hue://api.meethue.com/route/api";
+
         #! Connection entry info
         const ConnectionScheme = <ConnectionSchemeInfo>{
             "display_name": "Philips Hue REST Connection",

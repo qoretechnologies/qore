@@ -185,7 +185,17 @@ private static hash<auto> getConfig(hash<auto> config) {
 }
 ```
 
-**`auto_url: True` without source options is a footgun.** When `auto_url: True` is declared but the connection has no domain/region/host option for the framework to build the URL from (and `getConfig()` doesn't override it), the framework silently substitutes `<scheme>://localhost` as the URL. Every connection then attempts to talk to `localhost:443` and fails with `SOCKET-CONNECT-ERROR: Connection refused`.
+**How the platform generates the URL.** For an `auto_url` connection the platform hides the URL field, ignores any URL the user supplies, and creates the connection with the first of:
+
+1. the `DefaultConnectionUrl` string constant of the connection class
+2. the `DefaultUrl` string constant of the connection class, with its scheme mapped through `base_scheme_map` if it is not a registered scheme
+3. `<scheme>://x`
+
+Constants are looked up with `Class::tryGetConstant()`, which searches the connection class and its parent classes, but not an unrelated `*RestClientBase` class.
+
+**`auto_url: True` without source options is a footgun.** When `auto_url: True` is declared but the connection has no domain/region/host option to build the URL from, and `getConfig()` doesn't override it, the connection ends up with the platform's generated URL: a placeholder host, or a `localhost` default the user cannot change.
+
+**Self-hosted servers must not use `auto_url`.** For Ollama, SGLang, Chroma, Milvus, Weaviate, sidecars, and services with per-environment hosts (ex: Mews production vs demo), set `auto_url: False` so the user enters the URL. Give each transport its own scheme (ex: `chroma` → `http`, `chromas` → `https`); mapping both `http` and `https` to one scheme makes the reverse lookup in `getRealUrl()` resolve to whichever entry comes last.
 
 **For fixed-endpoint APIs** (a single global URL like `https://api.service.com/v1` with no per-tenant domain), either:
 
@@ -1717,8 +1727,8 @@ Type classes declared in a `.qc` file **must** be inside the `public namespace M
 ### 16. Scheme literal must match registered scheme (silent InvalidConnection)
 URL constants (`DefaultConnectionUrl`, default values, examples in comments) must use a scheme that's actually registered via `ConnectionSchemeCache::registerScheme()`. A typo'd scheme like `myservices://` (extra `s`) when only `myservice` is registered makes every connection an `(InvalidConnection)` with `type: "invalid"`, `app: nothing`, no provider — and the connection silently disappears from the action picker. Surfaces as `URL-ARG-ERROR: ... references unknown scheme ...` in connection alerts. See [Connection Scheme Registration](#connection-scheme-registration).
 
-### 17. `auto_url: True` with no source options falls back to `<scheme>://localhost`
-When `auto_url: True` is declared but there's no domain/region option to build a URL from, and `getConfig()` doesn't override the URL, the framework substitutes `<scheme>://localhost`. Every connection then gets `SOCKET-CONNECT-ERROR: Connection refused` against localhost. For fixed-endpoint APIs, hard-code the URL in `getConfig()` (and add a `setUpdateOptionsCode()` re-fix). See [Auto-URL Connections](#auto-url-connections).
+### 17. `auto_url: True` with no source options gets a placeholder or unchangeable URL
+When `auto_url: True` is declared but there's no domain/region option to build a URL from, and `getConfig()` doesn't override the URL, the platform creates the connection with `DefaultConnectionUrl`, `DefaultUrl`, or `<scheme>://x`, and hides the URL field. Connections then fail against a placeholder host, or are stuck on a `localhost` default. For fixed-endpoint APIs, declare `DefaultConnectionUrl` on the connection class and hard-code the URL in `getConfig()` (and add a `setUpdateOptionsCode()` re-fix); for self-hosted servers use `auto_url: False`. `examples/test/qlib/ConnectionProvider/AutoUrlConnections.qtest` checks every `auto_url` connection. See [Auto-URL Connections](#auto-url-connections).
 
 ### 18. Action `path` must resolve to the root provider's child tree
 Every `registerAction()` `path` is resolved against the root provider's `ChildMap` to acquire the backing data provider. If the path doesn't resolve, the framework leaves `prov` null and silently disables `ref_data` lookups (empty dropdowns) and action execution (`INVALID-CHILD-PROVIDER`). Choose either flat `ChildMap` with flat paths, or nested `ChildMap` with nested paths — never mix. See [Action Path Resolution](#action-path-resolution-critical).
