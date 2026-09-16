@@ -2170,6 +2170,11 @@ public class CodeFormatter {
     #! Emit index expression
     private string emitIndexExpr(hash<auto> node) {
         string var = emitExpressionStr(node.variable);
+        if (exists node.keys) {
+            # a trailing comma makes a single key a hash slice rather than a lookup
+            return var + "{" + (map emitExpressionStr($1), node.keys).join(", ") + (node.trailingComma ? "," : "")
+                + "}";
+        }
         string idx = emitExpressionStr(node.index);
         # Strip surrounding brackets if source extraction included them
         if (idx =~ /^\[.*\]$/) {

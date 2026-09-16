@@ -2035,7 +2035,20 @@ public class CSTTranslator {
             result.variable = translateExpression(objNode);
         }
         if (exists keyNode) {
-            result.index = translateExpression(keyNode);
+            list<hash<auto>> keyNodes = select node.children, $1.field == "key";
+            result.keys = map translateExpression($1), keyNodes;
+            # {key,} is a hash slice, while {key} is a lookup; only whitespace, comments and the comma can
+            # follow the last key
+            hash<auto> last = keyNodes[-1];
+            string after = extractText({"loc": {
+                "start_line": last.loc.end_line,
+                "start_column": last.loc.end_column,
+                "end_line": node.loc.end_line,
+                "end_column": node.loc.end_column,
+            }});
+            after = regex_subst(after, "/\\*.*?\\*/", "", RE_Global | RE_DotAll);
+            after = regex_subst(after, "#[^\\n]*", "", RE_Global);
+            result.trailingComma = after =~ /,/;
         } else if (exists indexNode) {
             result.index = translateExpression(indexNode);
         }

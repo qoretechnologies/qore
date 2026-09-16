@@ -65,6 +65,7 @@ class QoreCodeFormatTest inherits QUnit::Test {
         addTestCase("global variable declarations", \testGlobalVariables());
         addTestCase("long multi-line list literals", \testLongMultiLineLists());
         addTestCase("multi-byte characters", \testMultiByteCharacters());
+        addTestCase("hash slices", \testHashSlices());
 
         set_return_value(main());
     }
@@ -1462,6 +1463,48 @@ hash<string, string> sub values() {
             p.parse(source, "multi-byte");
             assertEq({"s": "—bar-baz", "x": "—→é—→ one two three", "y": "a-b", "z": "…—"},
                 p.callFunction("values"), "formatted strings keep their values");
+        }
+    }
+
+    testHashSlices() {
+        list<string> lines = (
+            "    hash<auto> both = h{\"a\", \"b\"};",
+            "    hash<auto> one = h{\"a\",};",
+            "    auto value = h{\"a\"};",
+            "    hash<auto> trailing = h{\"a\", \"b\",};",
+            "    hash<auto> computed = h{names()[0], \"b\"};",
+        );
+        string src = "%modern
+list<string> sub names() {
+    return (\"b\",);
+}
+
+hash<auto> sub values(hash<auto> h) {
+" + lines.join("\n") + "
+    auto commented = h{\"a\" # a comma, in a comment
+    };
+    return {\"both\": both, \"one\": one, \"value\": value, \"trailing\": trailing, \"computed\": computed,
+        \"commented\": commented};
+}
+";
+        QoreCodeFormat::CodeFormatter fmt();
+        string result = fmt.format(src);
+        list<string> resultLines = result.split("\n");
+        foreach string line in (lines) {
+            assertTrue(resultLines.contains(line), "slice retained: " + line);
+        }
+        assertTrue(resultLines.contains("    auto commented = h{\"a\"};"),
+            "a comma in a comment does not make a slice");
+        QoreCodeFormat::CodeFormatter fmt2();
+        assertEq(result, fmt2.format(result), "hash slice idempotency");
+
+        hash<auto> h = {"a": 1, "b": 2, "c": 3};
+        foreach string source in ((src, result)) {
+            Program p(PO_NEW_STYLE);
+            p.parse(source, "hash slices");
+            assertEq({"both": {"a": 1, "b": 2}, "one": {"a": 1}, "value": 1, "trailing": {"a": 1, "b": 2},
+                "computed": {"b": 2}, "commented": 1}, p.callFunction("values", h),
+                "formatted slices keep their keys");
         }
     }
 
