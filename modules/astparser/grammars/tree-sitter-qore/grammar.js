@@ -39,6 +39,12 @@ module.exports = grammar({
     $._brace_regex_subst,
     $._brace_regex_trans,
     $._brace_regex_extract,
+    $._keyword_identifier,
+    $._class_keyword,
+    $._module_keyword,
+    // matched by the newline rule; listed so that src/scanner.c knows when a
+    // newline is valid and leaves it to the generated lexer
+    $.newline,
   ],
 
   extras: $ => [
@@ -119,7 +125,8 @@ module.exports = grammar({
     // Module declaration block
     // e.g., module Swagger { version = "1.0"; author = "..."; }
     module_declaration: $ => seq(
-      'module',
+      // lib/scanner.lpp reads module as a keyword only when a name follows
+      alias($._module_keyword, 'module'),
       field('name', $.identifier),
       '{',
       repeat(choice($.module_attribute, $.parse_directive)),
@@ -295,7 +302,8 @@ module.exports = grammar({
     // ==================== Class ====================
     class_declaration: $ => seq(
       optional($.modifiers),
-      'class',
+      // lib/scanner.lpp reads class as a keyword only when a name follows
+      alias($._class_keyword, 'class'),
       field('name', choice($.identifier, $.scoped_identifier)),
       optional(field('type_parameters', $.type_parameter_list)),
       optional($.class_compatibility_attributes),
@@ -981,6 +989,10 @@ module.exports = grammar({
     call_expression: $ => prec(PREC.CALL, seq(
       field('function', choice(
         $.identifier,
+        // A keyword that lib/scanner.lpp returns as a name before '(': select(x)
+        // is a call, while select (x), y is the select operator. See
+        // design/astparser-keyword-identifiers.md.
+        alias($._keyword_identifier, $.identifier),
         $.streaming_keyword_identifier,
         $.generic_scoped_identifier,
         $.scoped_identifier,

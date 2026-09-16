@@ -83,6 +83,8 @@ target_include_directories(tree-sitter-qore-grammar PUBLIC
 # Standalone grammar checks also permit memory testing without the Qore runtime.
 add_executable(astparser-brace-regex-test EXCLUDE_FROM_ALL test/brace-regex.c)
 target_link_libraries(astparser-brace-regex-test PRIVATE tree-sitter-qore-grammar tree-sitter-lib)
+add_executable(astparser-keyword-identifier-test EXCLUDE_FROM_ALL test/keyword-identifier.c)
+target_link_libraries(astparser-keyword-identifier-test PRIVATE tree-sitter-qore-grammar tree-sitter-lib)
 
 # start of hacks to simulate installed QoreConfig.cmake
 # which cannot be available yet - the QORE_LIBRARY is missing

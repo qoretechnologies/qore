@@ -1,0 +1,329 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires astparser
+
+%exec-class KeywordCallTest
+
+class KeywordCallTest inherits QUnit::Test {
+    public {
+        #! Keywords that lib/scanner.lpp returns as a function or method name when "(" follows
+        const Keywords = (
+            "all", "any", "background", "case", "chomp", "class", "count", "default", "delete", "deprecated",
+            "drop", "exists", "final", "find", "first", "foldl", "foldr", "inherits", "iterate", "map",
+            "module", "new", "pop", "private", "public", "push", "returns", "select", "shift", "splice",
+            "static", "take", "takeuntil", "takewhile", "trim", "unshift",
+        );
+
+        #! Keywords that lib/scanner.lpp also accepts with spaces or tabs before the "("
+        const SpacedKeywords = ("default", "deprecated", "module", "public", "returns", "static");
+
+        #! Keywords that lib/scanner.lpp reads as identifiers unless a declaration name follows
+        const UnreservedKeywords = ("class", "module");
+
+        #! Node types of the operators that a keyword call must not produce
+        const OperatorTypes = (
+            "select_expression", "map_expression", "foldl_expression", "foldr_expression", "find_expression",
+            "iterate_expression", "streaming_terminal_expression", "streaming_limited_expression",
+            "streaming_boundary_expression", "push_expression", "unshift_expression", "splice_expression",
+            "extract_expression", "new_expression",
+        );
+
+        #! Calls @KW@ in each call context; run() returns 74
+        /** Builtin functions take precedence over user functions with the same name at the top level, so
+            the top-level call uses arguments that the builtin chomp(), exists(), splice() and trim() accept
+        */
+        const CallSource = "namespace N {
+    int sub @KW@(int a) { return a * 2; }
+}
+int sub @KW@(string a, int b = 0) { return a.size() + b; }
+@KW@(@TOP@);
+class T {
+    int @KW@(int a = 1, int b = 0) { return a + b; }
+    int run() {
+        int r = @KW@(2);
+        @KW@(3);
+        foreach int i in (@KW@(4)) {
+            r += i;
+        }
+        switch (r) {
+            case 6:
+                @KW@(0);
+                r += @KW@(5);
+                break;
+        }
+        r += self.@KW@(b: 6);
+        r += T::@KW@(7,);
+        code c = \\@KW@();
+        r += c(8);
+        r += @KW@((9));
+        r += @KW@(10).toString().toInt();
+        return r + N::@KW@(11);
+    }
+}
+int sub run() {
+    T t();
+    return t.run();
+}
+";
+
+        #! The number of unqualified @KW@ calls in CallSource
+        const UnqualifiedCallCount = 9;
+    }
+
+    constructor() : QUnit::Test("astparser keyword call names", "1.0") {
+        addTestCase("Keyword calls match the runtime parser in every call context", \calls());
+        addTestCase("Spaced keyword calls follow the runtime scanner", \spacedCalls());
+        addTestCase("Unreserved keywords are identifiers without a declaration name", \unreserved());
+        addTestCase("Spaced operators retain their operator nodes", \operators());
+        addTestCase("Keyword call names are complete words", \boundaries());
+        addTestCase("Malformed calls are rejected by both parsers", \invalid());
+        set_return_value(main());
+    }
+
+    private static list<hash<auto>> findNodes(list<auto> nodes, string type) {
+        list<hash<auto>> rv = ();
+        foreach hash<auto> node in (nodes) {
+            if (node.type == type) {
+                rv += node;
+            }
+            if (node.children) {
+                rv += findNodes(node.children, type);
+            }
+        }
+        return rv;
+    }
+
+    private static *hash<auto> getField(hash<auto> node, string field) {
+        foreach hash<auto> child in (node.children) {
+            if (child.field == field) {
+                return child;
+            }
+        }
+    }
+
+    #! Returns the call nodes whose function is the given unqualified name
+    private static list<hash<auto>> findCalls(list<auto> nodes, string name) {
+        list<hash<auto>> rv = ();
+        foreach hash<auto> call in (findNodes(nodes, "call_expression")) {
+            *hash<auto> function = getField(call, "function");
+            if (function.type == "identifier" && function.text == name) {
+                rv += call;
+            }
+        }
+        return rv;
+    }
+
+    #! Parses and runs @p source with the runtime and returns the result of its run() function
+    private static auto run(string source, string label) {
+        Program runtime(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+        runtime.parse(source, label);
+        runtime.run();
+        return runtime.callFunction("run");
+    }
+
+    #! Parses @p source with AstParser, asserts that it has no errors and returns its nodes
+    private list<auto> parse(string source, string label) {
+        AstParser parser();
+        AstTree tree = parser.parseString(source);
+        assertEq(0, parser.getErrorCount(), sprintf("%s: %y", label, parser.getDiagnostics()));
+        return tree.getNodesInfo();
+    }
+
+    calls() {
+        foreach string kw in (Keywords) {
+            string source = replace(replace(CallSource, "@TOP@", kw == "splice" ? "\"x\", 0" : "\"x\""),
+                "@KW@", kw);
+            assertEq(74, run(source, kw), kw);
+            list<auto> nodes = parse(source, kw);
+
+            assertEq(UnqualifiedCallCount, findCalls(nodes, kw).size(), kw + " unqualified calls");
+            foreach string type in (OperatorTypes) {
+                assertEq(0, findNodes(nodes, type).size(), kw + " has no " + type);
+            }
+            # the call reference is the only unary operator
+            list<hash<auto>> unary = findNodes(nodes, "unary_expression");
+            assertEq(1, unary.size(), kw + " unary operators");
+            assertEq(kw, getField(unary[0].children[0].children[0], "function").text, kw + " call reference");
+
+            int scoped;
+            int member;
+            foreach hash<auto> call in (findNodes(nodes, "call_expression")) {
+                hash<auto> function = getField(call, "function");
+                if (function.type == "scoped_identifier" && function.children[-1].text == kw) {
+                    ++scoped;
+                } else if (function.type == "member_expression" && getField(function, "member").text == kw) {
+                    ++member;
+                }
+            }
+            assertEq(2, scoped, kw + " scoped calls");
+            assertEq(1, member, kw + " member call");
+
+            list<string> declarations = map getField($1, "name").text,
+                findNodes(nodes, "function_declaration") + findNodes(nodes, "method_declaration");
+            assertEq(sort((kw, kw, kw, "run", "run")), sort(declarations), kw + " declarations");
+        }
+    }
+
+    spacedCalls() {
+        foreach string kw in (SpacedKeywords) {
+            string source = replace("class T {
+    int @KW@(int a) { return a; }
+    int run() {
+        return @KW@ (1) + @KW@\t(2) + @KW@ \t (3);
+    }
+}
+int sub run() {
+    T t();
+    return t.run();
+}
+", "@KW@", kw);
+            assertEq(6, run(source, kw), kw);
+            assertEq(3, findCalls(parse(source, kw), kw).size(), kw + " spaced calls");
+        }
+    }
+
+    unreserved() {
+        foreach string kw in (UnreservedKeywords) {
+            # any whitespace or comment may separate the name from its arguments, and the name is also a
+            # variable name at the top level, where the keyword starts declarations
+            string source = replace("int sub @KW@(int a) { return a; }
+our int total = @KW@ (1) + @KW@
+(2);
+@KW@ /* comment */ (3);
+string @KW@ = \"a\";
+@KW@ = \"b\";
+@KW@ += \"cd\";
+total += @KW@.size();
+int sub run() { return total; }
+", "@KW@", kw);
+            assertEq(6, run(source, kw), kw);
+            list<auto> nodes = parse(source, kw);
+            assertEq(3, findCalls(nodes, kw).size(), kw + " calls");
+            # the declaration and both assignments, which the grammar represents as untyped declarations
+            assertEq(3, (select findNodes(nodes, "variable_declarator"), getField($1, "name").text == kw).size(),
+                kw + " variables");
+            assertEq(0, findNodes(nodes, "class_declaration").size() + findNodes(nodes, "module_declaration").size(),
+                kw + " declarations");
+        }
+
+        # named arguments, namespace paths, parameters and list assignment targets
+        string source = "namespace module { const X = 1; }
+namespace class { const Y = 2; }
+int sub f(any module, any class) { return module * 10 + class; }
+int sub g(int module = 0, int class = 0) { return module * 10 + class; }
+int sub run() {
+    int module;
+    int class;
+    (module, class) = (module::X, class::Y);
+    return f(module, class) * 100 + g(class: module, module: class);
+}
+";
+        assertEq(1221, run(source, "unreserved names"));
+        list<auto> nodes = parse(source, "unreserved names");
+        assertEq(2, findNodes(nodes, "named_argument").size());
+        assertEq(2, findNodes(nodes, "scoped_identifier").size());
+        assertEq(4, (select findNodes(nodes, "parameter"), getField($1, "name").text =~ /^(class|module)$/).size());
+        assertEq(0, findNodes(nodes, "class_declaration").size());
+
+        # a class name on the same line starts a declaration
+        source = "class\tT {\n    int run() { return 1; }\n}\nint sub run() { return 2; }\n";
+        assertEq(2, run(source, "class declaration"));
+        nodes = parse(source, "class declaration");
+        assertEq(1, findNodes(nodes, "class_declaration").size());
+        assertEq(0, findNodes(nodes, "call_expression").size());
+
+        nodes = parse("module Example {\n    version = \"1.0\";\n}\n", "module declaration");
+        assertEq(1, findNodes(nodes, "module_declaration").size());
+    }
+
+    operators() {
+        list<list<auto>> cases = (
+            ("select (values), $1 > 1", (2, 3), "select_expression"),
+            # only a parenthesis immediately after the keyword makes a call
+            ("select\n(values), $1 > 1", (2, 3), "select_expression"),
+            ("map ($1 * 2), values", (2, 4, 6), "map_expression"),
+            ("foldl ($1 + $2), values", 6, "foldl_expression"),
+            ("foldr ($1 - $2), values", 0, "foldr_expression"),
+            ("first (values)", 1, "streaming_terminal_expression"),
+            ("count (values)", 3, "streaming_terminal_expression"),
+            ("exists (values)", True, "unary_expression"),
+            ("trim (text)", "x", "unary_expression"),
+            ("pop (values)", 3, "unary_expression"),
+            ("shift (values)", 1, "unary_expression"),
+        );
+        foreach list<auto> test in (cases) {
+            string expression = test[0];
+            string source = "auto sub run() { list<int> values = (1, 2, 3); string text = \" x \"; return "
+                + expression + "; }";
+            assertEq(test[1], run(source, expression), expression);
+            list<auto> nodes = parse(source, expression);
+            assertEq(1, findNodes(nodes, test[2]).size(), expression);
+            string name = (expression =~ x/^(\w+)/)[0];
+            assertEq(0, findCalls(nodes, name).size(), expression + " is not a call");
+        }
+    }
+
+    boundaries() {
+        # longer names, including one longer than every keyword, and a different case are ordinary names
+        string source = "class T {
+    int selection(int a) { return a; }
+    int map2(int a) { return a; }
+    int _map(int a) { return a; }
+    int backgrounds(int a) { return a; }
+    int takewhile_(int a) { return a; }
+    int Select(int a) { return a; }
+    int select(int a) { return a * 100; }
+    int run() {
+        int r = selection(1) + map2(2) + _map(3) + backgrounds(4) + takewhile_(5) + Select(6);
+        # comments and line breaks may precede a keyword call name
+        r += /* comment */select(7);
+        r +=
+            select(8);
+        r += (select(9));
+        return r;
+    }
+}
+int sub run() {
+    T t();
+    return t.run();
+}
+";
+        assertEq(2421, run(source, "boundaries"));
+        list<auto> nodes = parse(source, "boundaries");
+        foreach string name in ("selection", "map2", "_map", "backgrounds", "takewhile_", "Select") {
+            assertEq(1, findCalls(nodes, name).size(), name);
+        }
+        assertEq(3, findCalls(nodes, "select").size());
+        assertEq(0, findNodes(nodes, "select_expression").size());
+    }
+
+    invalid() {
+        AstParser parser();
+        foreach string body in ("return select(;", "return select(1;", "return select(,);", "return select (1);",
+                "return select(1) 2;", "return select(1 2);", "return select(a: );", "return map(1;") {
+            string source = "class T { int select(int a) { return a; } int map(int a) { return a; } "
+                "auto run() { " + body + " } }";
+            Program runtime(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+            assertThrows("PARSE-EXCEPTION", \runtime.parse(), (source, "invalid"), body);
+            parser.parseString(source);
+            assertGt(0, parser.getErrorCount(), body);
+        }
+        # lib/scanner.lpp requires the declaration name on the same line as the keyword; no runtime Program
+        # accepts a module declaration, so only the class form is also parsed with the runtime
+        foreach string source in ("class\nT {}\n", "module\nExample {\n    version = \"1.0\";\n}\n") {
+            if (source =~ /^class/) {
+                Program runtime(PO_NEW_STYLE | PO_STRICT_ARGS | PO_REQUIRE_TYPES);
+                assertThrows("PARSE-EXCEPTION", \runtime.parse(), (source, "invalid"), source);
+            }
+            parser.parseString(source);
+            assertGt(0, parser.getErrorCount(), source);
+        }
+        parser.parseString("class T { int select() { return 1; } int run() { return select(); } }");
+        assertEq(0, parser.getErrorCount(), "a failed parse does not affect the next parse");
+    }
+}
