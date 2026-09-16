@@ -40,6 +40,7 @@ module WeaviateRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("weaviate",
             WeaviateRestConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("weaviates", WeaviateRestConnection::ConnectionScheme);
         QoreRagUtils::RagProviderRegistry::registerVectorStoreFactory(
             new WeaviateVectorStoreFactory());
     };
@@ -125,11 +126,16 @@ public class WeaviateRestConnection inherits RestClient::RestConnection {
                 "vector database supporting hybrid search (vector + keyword), "
                 "multi-tenancy, and a wide range of vectorizer modules.\n\n"
                 "Authentication: optional Bearer token (Weaviate Cloud Services / WCD) "
-                "or anonymous (local deployments).",
+                "or anonymous (local deployments).\n\n"
+                "The connection uses the `weaviate://` URL scheme for plain HTTP and "
+                "`weaviates://` for servers behind TLS.",
             "cls": Class::forName("WeaviateRestConnection"),
-            "auto_url": True,
-            "schemes": {"weaviate": True},
-            "base_scheme_map": {"http": "weaviate", "https": "weaviate"},
+            # Weaviate is self-hosted: the server URL must be supplied by the user; with auto_url the URL is
+            # generated from options, and as there is no host option, it fell back to "weaviate://localhost"
+            "auto_url": False,
+            "schemes": {"weaviate": True, "weaviates": True},
+            # a single scheme for both transports would make the reverse lookup in getRealUrl() ambiguous
+            "base_scheme_map": {"http": "weaviate", "https": "weaviates"},
             "options": RestConnection::ConnectionScheme.options + {
                 "apikey": <ConnectionOptionInfo>{
                     "display_name": "API Key",
@@ -138,6 +144,7 @@ public class WeaviateRestConnection inherits RestClient::RestConnection {
                     "desc": "Optional Bearer token.  Local Weaviate servers don't require "
                         "authentication.",
                     "sensitive": True,
+                    "preselected": True,
                 },
             },
         };

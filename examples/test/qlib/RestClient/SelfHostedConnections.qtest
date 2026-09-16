@@ -1,0 +1,192 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires ConnectionProvider
+%requires RestClient
+%requires RestClientIo
+%requires BgeM3RestClient
+%requires ChromaRestClient
+%requires MilvusRestClient
+%requires OllamaRestClient
+%requires SGLangRestClient
+%requires WeaviateRestClient
+
+%exec-class SelfHostedConnectionsTest
+
+#! connection classes for self-hosted servers must take the server URL from the user
+public class SelfHostedConnectionsTest inherits QUnit::Test {
+    public {
+        #! scheme -> test info; "tls" is the scheme for servers behind TLS, if any
+        const Connections = {
+            "bge-m3": {
+                "module": "BgeM3RestClient",
+                "cls": "BgeM3RestConnection",
+                "default_url": BgeM3RestConnection::DefaultUrl,
+            },
+            "chroma": {
+                "module": "ChromaRestClient",
+                "cls": "ChromaRestConnection",
+                "tls": "chromas",
+                "default_url": ChromaRestConnection::DefaultUrl,
+            },
+            "milvus": {
+                "module": "MilvusRestClient",
+                "cls": "MilvusRestConnection",
+                "tls": "milvuss",
+                "default_url": MilvusRestConnection::DefaultUrl,
+            },
+            "ollama": {
+                "module": "OllamaRestClient",
+                "cls": "OllamaRestConnection",
+                "tls": "ollamas",
+                "default_url": OllamaRestConnection::DefaultUrl,
+            },
+            "sglang": {
+                "module": "SGLangRestClient",
+                "cls": "SGLangRestConnection",
+                "tls": "sglangs",
+                "default_url": SGLangRestConnection::DefaultUrl,
+                "opts": {"model": "qwen3-30b-a3b"},
+            },
+            "weaviate": {
+                "module": "WeaviateRestClient",
+                "cls": "WeaviateRestConnection",
+                "tls": "weaviates",
+                "default_url": WeaviateRestConnection::DefaultUrl,
+            },
+        };
+
+        const RemoteHostPort = "ai-host.example.com:31234";
+    }
+
+    constructor() : Test("SelfHostedConnections Test", "1.0") {
+        addTestCase("URL is not generated automatically", \autoUrlTest());
+        addTestCase("apikey is preselected, sensitive, and optional", \apiKeyTest());
+        addTestCase("scheme names map to their modules", \schemeMapTest());
+        addTestCase("each transport has its own scheme", \realUrlTest());
+        addTestCase("plain-HTTP remote URL reaches the clients", \remotePlainUrlTest());
+        addTestCase("TLS remote URL reaches the clients", \remoteTlsUrlTest());
+        addTestCase("remote URL from a config hash reaches the clients", \remoteConfigUrlTest());
+        addTestCase("config hash without a URL uses the default", \defaultConfigUrlTest());
+        addTestCase("unknown scheme is not resolved", \negativeSchemeTest());
+        set_return_value(main());
+    }
+
+    autoUrlTest() {
+        foreach hash<auto> i in (Connections.pairIterator()) {
+            hash<ConnectionSchemeInfo> info = ConnectionSchemeCache::getScheme(i.key);
+            assertFalse(info.auto_url, i.key);
+            assertTrue(info.schemes{i.key}, i.key);
+            if (i.value.tls) {
+                assertTrue(info.schemes{i.value.tls}, i.key);
+                # the TLS scheme resolves to the same connection definition
+                assertEq(info.cls.getName(), ConnectionSchemeCache::getScheme(i.value.tls).cls.getName(), i.key);
+            }
+        }
+    }
+
+    apiKeyTest() {
+        foreach hash<auto> i in (Connections.pairIterator()) {
+            hash<ConnectionSchemeInfo> info = ConnectionSchemeCache::getScheme(i.key);
+            assertTrue(info.options.apikey.preselected, i.key);
+            assertTrue(info.options.apikey.sensitive, i.key);
+            assertTrue(info.sensitive_options.apikey, i.key);
+            assertEq(-1, (info.required_options ?? "").find("apikey"), i.key);
+        }
+    }
+
+    schemeMapTest() {
+        foreach hash<auto> i in (Connections.pairIterator()) {
+            assertEq(i.value.module, ConnectionSchemeCache::SchemeMap{i.key}, i.key);
+            if (i.value.tls) {
+                assertEq(i.value.module, ConnectionSchemeCache::SchemeMap{i.value.tls}, i.key);
+            }
+        }
+    }
+
+    realUrlTest() {
+        foreach hash<auto> i in (Connections.pairIterator()) {
+            hash<ConnectionSchemeInfo> info = ConnectionSchemeCache::getScheme(i.key);
+            assertEq("http://" + RemoteHostPort,
+                AbstractConnection::getRealUrl(i.key + "://" + RemoteHostPort, info, i.key), i.key);
+            if (i.value.tls) {
+                assertEq("https://" + RemoteHostPort,
+                    AbstractConnection::getRealUrl(i.value.tls + "://" + RemoteHostPort, info, i.key), i.key);
+            }
+        }
+    }
+
+    remotePlainUrlTest() {
+        foreach hash<auto> i in (Connections.pairIterator()) {
+            string url = i.key + "://" + RemoteHostPort;
+            AbstractConnection conn = create_object(i.value.cls, "test-" + i.key, "test", url,
+                {"monitor": False}, i.value.opts ?? {});
+            checkConnection(i.key, conn, url, "http");
+        }
+    }
+
+    remoteTlsUrlTest() {
+        foreach hash<auto> i in (Connections.pairIterator()) {
+            if (!i.value.tls) {
+                continue;
+            }
+            string url = i.value.tls + "://" + RemoteHostPort;
+            AbstractConnection conn = create_object(i.value.cls, "test-" + i.key, "test", url,
+                {"monitor": False}, i.value.opts ?? {});
+            checkConnection(i.key, conn, url, "https");
+        }
+    }
+
+    remoteConfigUrlTest() {
+        foreach hash<auto> i in (Connections.pairIterator()) {
+            string url = i.key + "://" + RemoteHostPort;
+            AbstractConnection conn = create_object(i.value.cls, {
+                "name": "test-" + i.key,
+                "desc": "test",
+                "url": url,
+                "opts": i.value.opts ?? {},
+            }, {"monitor": False});
+            checkConnection(i.key, conn, url, "http");
+        }
+    }
+
+    defaultConfigUrlTest() {
+        foreach hash<auto> i in (Connections.pairIterator()) {
+            AbstractConnection conn = create_object(i.value.cls, {
+                "name": "test-" + i.key,
+                "desc": "test",
+                "opts": i.value.opts ?? {},
+            }, {"monitor": False});
+            assertEq(i.value.default_url, conn.getUrl(), i.key);
+            hash<UrlInfo> real = parse_url(conn.getConnectionOptions().url);
+            assertEq("http", real.protocol, i.key);
+            assertEq("localhost", real.host, i.key);
+        }
+    }
+
+    negativeSchemeTest() {
+        # the TLS scheme names are distinct; a typo must not be silently mapped to a module
+        assertEq(NOTHING, ConnectionSchemeCache::SchemeMap."chromass");
+        assertEq(NOTHING, ConnectionSchemeCache::SchemeMap."bge-m3s");
+        assertThrows("SCHEME-ERROR", \ConnectionSchemeCache::getSchemeEx(), "sglangss-invalid");
+    }
+
+    private checkConnection(string scheme, AbstractConnection conn, string url, string protocol) {
+        assertEq(url, conn.getUrl(), scheme);
+        checkUrl(scheme, conn.getConnectionOptions().url, protocol);
+        checkUrl(scheme, call_object_method(conn.get(False), "getUrl"), protocol);
+        checkUrl(scheme, call_object_method(conn.getAsync(False), "getUrl"), protocol);
+    }
+
+    private checkUrl(string scheme, string url, string protocol) {
+        hash<UrlInfo> info = parse_url(url);
+        assertEq(protocol, info.protocol, scheme + ": " + url);
+        assertEq("ai-host.example.com", info.host, scheme + ": " + url);
+        assertEq(31234, info.port, scheme + ": " + url);
+    }
+}

@@ -44,6 +44,7 @@ module SGLangRestClient {
     license = "MIT";
     init = sub () {
         ConnectionSchemeCache::registerScheme("sglang", SGLangRestConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("sglangs", SGLangRestConnection::ConnectionScheme);
         QoreLlmUtils::LlmProviderRegistry::registerFactory(new SGLangLlmProviderFactory());
         QoreRagUtils::RagProviderRegistry::registerEmbedderFactory(
             new QoreRagUtils::SGLangEmbedderFactory());
@@ -260,23 +261,26 @@ public class SGLangRestConnection inherits RestClient::RestConnection {
                 "`/flush_cache`).\n\n"
                 "The target instance serves exactly one model; the `model` option is "
                 "required.  If the deployment requires authentication, set `apikey`.\n\n"
-                "The connection uses the `sglang://` URL scheme.",
+                "The connection uses the `sglang://` URL scheme for plain HTTP and "
+                "`sglangs://` for servers behind TLS.",
             "cls": Class::forName("SGLangRestConnection"),
             # SGLang is self-hosted: the server URL must be supplied by the user; with auto_url the URL is
             # generated from options, and as there is no host option, it fell back to "sglang://localhost"
             "auto_url": False,
             "schemes": {
                 "sglang": True,
+                "sglangs": True,
             },
             # AbstractConnection::getRealUrl() reverses this map (value -> key) to resolve
             # the "sglang://" URL to a real transport; mapping BOTH "http" and "https" to
             # the single "sglang" scheme made that reverse lookup ambiguous, and hash
             # last-wins resolved "sglang" -> "https", so the connection ping did an
             # SSL_connect() against the plain-HTTP SGLang server ("packet length too long")
-            # and reported the connection down.  SGLang serves plain HTTP (and the embedder
-            # normalizes sglang:// -> http://), so map the single scheme to http only.
+            # and reported the connection down.  Each transport therefore has its own scheme:
+            # "sglang://" for plain HTTP and "sglangs://" for servers behind TLS.
             "base_scheme_map": {
                 "http": "sglang",
+                "https": "sglangs",
             },
             "options": RestConnection::ConnectionScheme.options + {
                 "model": <ConnectionOptionInfo>{

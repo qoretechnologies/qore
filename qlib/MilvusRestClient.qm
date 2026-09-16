@@ -40,6 +40,7 @@ module MilvusRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("milvus",
             MilvusRestConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("milvuss", MilvusRestConnection::ConnectionScheme);
         QoreRagUtils::RagProviderRegistry::registerVectorStoreFactory(
             new MilvusVectorStoreFactory());
     };
@@ -117,11 +118,16 @@ public class MilvusRestConnection inherits RestClient::RestConnection {
             "desc": "A connection to a [Milvus](https://milvus.io) or "
                 "[Zilliz Cloud](https://zilliz.com) (managed Milvus) vector database via "
                 "the REST v2 API.\n\n"
-                "Authentication: Bearer token (Milvus / Zilliz token).",
+                "Authentication: Bearer token (Milvus / Zilliz token).\n\n"
+                "The connection uses the `milvus://` URL scheme for plain HTTP and "
+                "`milvuss://` for servers behind TLS.",
             "cls": Class::forName("MilvusRestConnection"),
-            "auto_url": True,
-            "schemes": {"milvus": True},
-            "base_scheme_map": {"http": "milvus", "https": "milvus"},
+            # Milvus is self-hosted: the server URL must be supplied by the user; with auto_url the URL is
+            # generated from options, and as there is no host option, it fell back to "milvus://localhost"
+            "auto_url": False,
+            "schemes": {"milvus": True, "milvuss": True},
+            # a single scheme for both transports would make the reverse lookup in getRealUrl() ambiguous
+            "base_scheme_map": {"http": "milvus", "https": "milvuss"},
             "options": RestConnection::ConnectionScheme.options + {
                 "apikey": <ConnectionOptionInfo>{
                     "display_name": "API Key",
@@ -130,6 +136,7 @@ public class MilvusRestConnection inherits RestClient::RestConnection {
                     "desc": "Bearer token.  For local Milvus this is the `<user>:<password>` "
                         "auth combo; for Zilliz Cloud it's the cluster API key.",
                     "sensitive": True,
+                    "preselected": True,
                 },
             },
         };

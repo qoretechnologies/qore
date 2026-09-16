@@ -40,6 +40,7 @@ module ChromaRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("chroma",
             ChromaRestConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("chromas", ChromaRestConnection::ConnectionScheme);
         QoreRagUtils::RagProviderRegistry::registerVectorStoreFactory(
             new ChromaVectorStoreFactory());
     };
@@ -119,11 +120,16 @@ public class ChromaRestConnection inherits RestClient::RestConnection {
                 "Chroma is a lightweight, local-first vector database that pairs naturally "
                 "with local Ollama embeddings for self-hosted RAG.\n\n"
                 "Local deployments don't require authentication; supply an `apikey` for "
-                "Chroma Cloud or reverse-proxied deployments.",
+                "Chroma Cloud or reverse-proxied deployments.\n\n"
+                "The connection uses the `chroma://` URL scheme for plain HTTP and "
+                "`chromas://` for servers behind TLS.",
             "cls": Class::forName("ChromaRestConnection"),
-            "auto_url": True,
-            "schemes": {"chroma": True},
-            "base_scheme_map": {"http": "chroma", "https": "chroma"},
+            # Chroma is self-hosted: the server URL must be supplied by the user; with auto_url the URL is
+            # generated from options, and as there is no host option, it fell back to "chroma://localhost"
+            "auto_url": False,
+            "schemes": {"chroma": True, "chromas": True},
+            # a single scheme for both transports would make the reverse lookup in getRealUrl() ambiguous
+            "base_scheme_map": {"http": "chroma", "https": "chromas"},
             "options": RestConnection::ConnectionScheme.options + {
                 "apikey": <ConnectionOptionInfo>{
                     "display_name": "API Key",
@@ -133,6 +139,7 @@ public class ChromaRestConnection inherits RestClient::RestConnection {
                         "authentication; supply only for hosted Chroma Cloud or "
                         "reverse-proxied deployments.",
                     "sensitive": True,
+                    "preselected": True,
                 },
                 "tenant": <ConnectionOptionInfo>{
                     "display_name": "Tenant",

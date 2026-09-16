@@ -284,7 +284,9 @@ public class BgeM3RestConnection inherits RestClient::RestConnection {
                 "The connection uses the `bge-m3://` URL scheme; "
                 "`bge-m3-fastapi://` is accepted as an alias.",
             "cls": Class::forName("BgeM3RestConnection"),
-            "auto_url": True,
+            # The BGE-M3 sidecar is self-hosted: the server URL must be supplied by the user; with auto_url the URL is
+            # generated from options, and as there is no host option, it fell back to "bge-m3://localhost"
+            "auto_url": False,
             "schemes": {
                 "bge-m3": True,
                 "bge-m3-fastapi": True,
@@ -322,6 +324,7 @@ public class BgeM3RestConnection inherits RestClient::RestConnection {
                         "authentication, a wrong or missing key surfaces on the first `/embed` "
                         "call instead.",
                     "sensitive": True,
+                    "preselected": True,
                 },
                 "ping_headers": RestConnection::ConnectionScheme.options.ping_headers + <ConnectionOptionInfo>{
                     "default_value": BgeM3RestClientBase::DefaultPingHeaders,

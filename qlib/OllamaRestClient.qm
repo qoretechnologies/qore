@@ -42,6 +42,7 @@ module OllamaRestClient {
     init = sub () {
         ConnectionSchemeCache::registerScheme("ollama",
             OllamaRestConnection::ConnectionScheme);
+        ConnectionSchemeCache::registerScheme("ollamas", OllamaRestConnection::ConnectionScheme);
         QoreLlmUtils::LlmProviderRegistry::registerFactory(
             new OllamaLlmProviderFactory());
         QoreRagUtils::RagProviderRegistry::registerEmbedderFactory(
@@ -145,11 +146,16 @@ public class OllamaRestConnection inherits RestClient::RestConnection {
                 "open-weight LLMs from the local machine.\n\n"
                 "Ollama runs locally by default at `http://localhost:11434`.  No "
                 "authentication is required for local deployments; pass an `apikey` only "
-                "for hosted Ollama Cloud or reverse-proxied deployments.",
+                "for hosted Ollama Cloud or reverse-proxied deployments.\n\n"
+                "The connection uses the `ollama://` URL scheme for plain HTTP and "
+                "`ollamas://` for servers behind TLS.",
             "cls": Class::forName("OllamaRestConnection"),
-            "auto_url": True,
-            "schemes": {"ollama": True},
-            "base_scheme_map": {"http": "ollama", "https": "ollama"},
+            # Ollama is self-hosted: the server URL must be supplied by the user; with auto_url the URL is
+            # generated from options, and as there is no host option, it fell back to "ollama://localhost"
+            "auto_url": False,
+            "schemes": {"ollama": True, "ollamas": True},
+            # a single scheme for both transports would make the reverse lookup in getRealUrl() ambiguous
+            "base_scheme_map": {"http": "ollama", "https": "ollamas"},
             "options": RestConnection::ConnectionScheme.options + {
                 "apikey": <ConnectionOptionInfo>{
                     "display_name": "API Key",
@@ -159,6 +165,7 @@ public class OllamaRestConnection inherits RestClient::RestConnection {
                         "authentication; supply only for hosted Ollama Cloud or "
                         "reverse-proxied deployments.",
                     "sensitive": True,
+                    "preselected": True,
                 },
                 "chat-model": <ConnectionOptionInfo>{
                     "display_name": "Chat Model",

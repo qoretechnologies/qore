@@ -107,6 +107,7 @@ public class ConnectionSchemeCache {
             "circlerest": "CircleRestClient",
 
             "chroma": "ChromaRestClient",
+            "chromas": "ChromaRestClient",
 
             "cohere": "CohereRestClient",
 
@@ -225,6 +226,7 @@ public class ConnectionSchemeCache {
             "memcached": "MemcachedDataProvider",
             "memcacheds": "MemcachedDataProvider",
             "milvus": "MilvusRestClient",
+            "milvuss": "MilvusRestClient",
             "mistral": "MistralRestClient",
             "mllp": "MllpUtil",
             "mllps": "MllpUtil",
@@ -243,6 +245,7 @@ public class ConnectionSchemeCache {
             "netsuite": "NetSuiteRestClient",
 
             "ollama": "OllamaRestClient",
+            "ollamas": "OllamaRestClient",
 
             "openai": "OpenAiRestClient",
 
@@ -313,6 +316,9 @@ public class ConnectionSchemeCache {
 
             "lemlist": "LemlistRestClient",
 
+            "sglang": "SGLangRestClient",
+            "sglangs": "SGLangRestClient",
+
             "shippo": "ShippoRestClient",
 
             "shipstation": "ShipStationRestClient",
@@ -377,6 +383,7 @@ public class ConnectionSchemeCache {
 
             "wave": "WaveRestClient",
             "weaviate": "WeaviateRestClient",
+            "weaviates": "WeaviateRestClient",
             "woocommerce": "WooCommerceRestClient",
             "woocommerces": "WooCommerceRestClient",
 
