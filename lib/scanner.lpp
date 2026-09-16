@@ -1133,7 +1133,7 @@ DIGIT           [0-9]
 WORD            [a-zA-Z_][a-zA-Z0-9_]*
 WS              [ \t\r]
 WSNL            [ \t\r\n]
-SOFT_IDENTIFIER_FOLLOW \+|-|{WSNL}*(\+\+|--|\+=|-=|\+{WSNL}+|-{WSNL}+|\*=|\/=|%=|&=|\|=|\^=|>>=|<<=|==|!=|<>|<=|>=|<=>|&&|\|\||{WSNL}+(instanceof|in)|[=;,\)\]\}\{\*\/%&\|\^<>?:\.\[\~])
+SOFT_IDENTIFIER_FOLLOW \+|-|{WSNL}*(\+\+|--|\+=|-=|\+{WSNL}+|-{WSNL}+|\*=|\/=|%=|&=|\|=|\^=|>>=|<<=|==|!=|<>|<=|>=|<=>|&&|\|\||{WSNL}+(instanceof|in)[^a-zA-Z0-9_]|[=;,\)\]\}\{\*\/%&\|\^<>?:\.\[\~])
 TYPE_ARG_START  [a-zA-Z_*:?]
 TYPE_ARG_TEXT   [a-zA-Z\*<:_0-9 \t,!().=?]*
 TYPE_ARG_NESTED [a-zA-Z\*<>:_0-9 \t,!().?]*
@@ -2796,6 +2796,7 @@ any/{WS}+!                             {
                                             return IDENTIFIER;
                                         }
 any/{WS}+sub{WSNL}                     { yylval->string = strdup("any"); return IDENTIFIER; }
+any/{WS}+in{WSNL}*\(                    { yylval->string = strdup("any"); return IDENTIFIER; }
 any/{WS}+sub{WSNL}*\(                  return TOK_ANY;
 any/{WS}+{WORD}{WSNL}*\(               {
                                             if (scanner_streaming_any_enabled()) {

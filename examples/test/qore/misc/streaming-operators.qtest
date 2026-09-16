@@ -320,6 +320,20 @@ class StreamingOperatorsTest inherits QUnit::Test {
 
         count += 2;
         assertEq(count + take, 14, "streaming operator word local can be used in binary expressions");
+
+        # "in" and "instanceof" make a name only as complete words
+        list<int> inputs = (1, 2, 3);
+        list<int> instances = (4, 5);
+        int index = 2;
+        assertEq(3, (count inputs), "count before a word starting with \"in\"");
+        assertEq(4, (first instances), "first before a word starting with \"instance\"");
+        assertEq((1, 2), (take index, inputs), "take before a word starting with \"in\"");
+        assertEq((3,), (drop index, inputs), "drop before a word starting with \"in\"");
+        Program p();
+        p.parse("%modern\nint sub total(list<int> l) { int sum; foreach int any in (l) { sum += any; } return sum; }\n"
+            "bool sub t(object all) { return all instanceof Qore::Thread::Mutex; }", "names");
+        assertEq(6, p.callFunction("total", inputs), "a name before \"in\" and a parenthesis");
+        assertTrue(p.callFunction("t", new Mutex()), "a name before \"instanceof\"");
     }
 
     testContextualKeywordCompatibility() {
