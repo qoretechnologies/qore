@@ -113,14 +113,21 @@ public:
 
     DLLLOCAL void rSectionUnlock() {
         AutoLocker al(l);
-        assert(write_tid == -1);
+        // the rsection can be held on top of this thread's own write lock; see
+        // tryRSectionLockNotifyWaitRead()
+        assert(write_tid == -1 || write_tid == q_gettid());
         assert(rs_tid == q_gettid());
         assert(readers);
 
         // unlock rsection
         rs_tid = -1;
 
-        qore_rsection_priv::notifyIntern();
+        // Threads that registered a notification while this thread also held the write lock cannot
+        // acquire the rsection until that lock is released, and qore_var_rwlock_priv::unlock() notifies
+        // them then; waking them here would only make them restart their scans and register again.
+        if (write_tid == -1) {
+            qore_rsection_priv::notifyIntern();
+        }
 
         if (rsection_waiting)
             rsection_cond.signal();

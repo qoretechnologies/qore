@@ -12873,71 +12873,87 @@ load_local_done:
                         // For multi-step paths, navigate to the PARENT container, then
                         // remove/delete the key/element. LValueHelper::remove() only clears
                         // the value without removing the hash key; we need container-level removal.
-                        LValueHelper lvh(xsink);
-                        // Navigate to parent (for_remove=true: don't vivify intermediates)
-                        if (!lvh.navigatePath(path_copy.data(), path_copy.size() - 1, true)) {
-                            // Now remove/delete the final key/element from the container
-                            const LVPathStep& last_step = path_copy.back();
-                            QoreValue container = lvh.getValue();
-                            qore_type_t ct = container.getType();
-                            bool last_is_hash = (last_step.kind == LVPathStepKind::HashKeyConst
-                                    || last_step.kind == LVPathStepKind::HashKey);
-                            bool last_is_hash_list = last_is_hash && last_step.slice_values.size() == 1
-                                    && last_step.slice_values[0].getType() == NT_LIST;
-                            if ((last_step.kind == LVPathStepKind::HashKeySlice || last_is_hash_list)
-                                    && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
-                                res = executeLVHashKeySliceRemove(lvh, ct, last_step,
-                                        path_inst->unary_op, xsink);
-                            } else if ((last_step.kind == LVPathStepKind::HashKeyConst
-                                    || last_step.kind == LVPathStepKind::HashKey) && ct == NT_HASH) {
-                                lvh.ensureUnique();
-                                QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
-                                res = h->takeKeyValue(last_step.name.c_str());
-                                finish_delete_result(res);
-                            } else if ((last_step.kind == LVPathStepKind::HashKeyConst
-                                    || last_step.kind == LVPathStepKind::HashKey)
-                                    && (ct == NT_OBJECT || ct == NT_WEAKREF)) {
-                                QoreObject* o = ct == NT_OBJECT
-                                    ? lvh.getValue().get<QoreObject>()
-                                    : lvh.getValue().get<const WeakReferenceNode>()->get();
-                                if (o) {
-                                    res = qore_object_private::takeMember(*o, lvh, last_step.name.c_str());
-                                    finish_delete_result(res);
-                                }
-                            } else if (last_step.kind == LVPathStepKind::ListIndex && ct == NT_LIST) {
-                                lvh.ensureUnique();
-                                QoreListNode* l = lvh.getValue().get<QoreListNode>();
-                                int64_t idx = last_step.index;
-                                if (runtime_check_parse_option(PO_NEGATIVE_OFFSETS) && idx < 0) {
-                                    idx += static_cast<int64_t>(l->size());
-                                }
-                                if (idx >= 0 && static_cast<size_t>(idx) < l->size()) {
-                                    if (path_inst->unary_op == LVUnaryOp::Remove) {
-                                        res = l->retrieveEntry(static_cast<size_t>(idx)).refSelf();
+                        // "delete" runs the target object's destructor, which is Qore code; it must not run while
+                        // the LValueHelper below still holds the container's locks (see below)
+                        bool pending_delete_finish = false;
+                        {
+                            LValueHelper lvh(xsink);
+                            // Navigate to parent (for_remove=true: don't vivify intermediates)
+                            if (!lvh.navigatePath(path_copy.data(), path_copy.size() - 1, true)) {
+                                // Now remove/delete the final key/element from the container
+                                const LVPathStep& last_step = path_copy.back();
+                                QoreValue container = lvh.getValue();
+                                qore_type_t ct = container.getType();
+                                bool last_is_hash = (last_step.kind == LVPathStepKind::HashKeyConst
+                                        || last_step.kind == LVPathStepKind::HashKey);
+                                bool last_is_hash_list = last_is_hash && last_step.slice_values.size() == 1
+                                        && last_step.slice_values[0].getType() == NT_LIST;
+                                if ((last_step.kind == LVPathStepKind::HashKeySlice || last_is_hash_list)
+                                        && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
+                                    res = executeLVHashKeySliceRemove(lvh, ct, last_step,
+                                            path_inst->unary_op, xsink);
+                                } else if ((last_step.kind == LVPathStepKind::HashKeyConst
+                                        || last_step.kind == LVPathStepKind::HashKey) && ct == NT_HASH) {
+                                    lvh.ensureUnique();
+                                    QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
+                                    res = h->takeKeyValue(last_step.name.c_str());
+                                    pending_delete_finish = true;
+                                } else if ((last_step.kind == LVPathStepKind::HashKeyConst
+                                        || last_step.kind == LVPathStepKind::HashKey)
+                                        && (ct == NT_OBJECT || ct == NT_WEAKREF)) {
+                                    QoreObject* o = ct == NT_OBJECT
+                                        ? lvh.getValue().get<QoreObject>()
+                                        : lvh.getValue().get<const WeakReferenceNode>()->get();
+                                    if (o) {
+                                        res = qore_object_private::takeMember(*o, lvh, last_step.name.c_str());
+                                        pending_delete_finish = true;
                                     }
-                                    l->setEntry(static_cast<size_t>(idx), QoreValue(), xsink);
+                                } else if (last_step.kind == LVPathStepKind::ListIndex && ct == NT_LIST) {
+                                    lvh.ensureUnique();
+                                    QoreListNode* l = lvh.getValue().get<QoreListNode>();
+                                    int64_t idx = last_step.index;
+                                    if (runtime_check_parse_option(PO_NEGATIVE_OFFSETS) && idx < 0) {
+                                        idx += static_cast<int64_t>(l->size());
+                                    }
+                                    if (idx >= 0 && static_cast<size_t>(idx) < l->size()) {
+                                        if (path_inst->unary_op == LVUnaryOp::Remove) {
+                                            res = l->retrieveEntry(static_cast<size_t>(idx)).refSelf();
+                                        }
+                                        // dereference the old entry once the lvalue locks are released
+                                        lvh.saveTemp(l->retrieveEntry(static_cast<size_t>(idx)).refSelf());
+                                        l->setEntry(static_cast<size_t>(idx), QoreValue(), xsink);
+                                    }
+                                } else if (last_step.kind == LVPathStepKind::HashKeySlice
+                                        && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
+                                    res = executeLVHashKeySliceRemove(lvh, ct, last_step,
+                                            path_inst->unary_op, xsink);
+                                } else if (last_step.kind == LVPathStepKind::ListIndexSlice
+                                        && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
+                                    res = executeLVListIndexSliceRemove(lvh, ct, last_step,
+                                            path_inst->unary_op, xsink);
+                                } else if (last_step.kind == LVPathStepKind::ListRangeSlice
+                                        && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
+                                    res = executeLVListRangeSliceRemove(lvh, ct, last_step,
+                                            path_inst->unary_op, xsink);
                                 }
-                            } else if (last_step.kind == LVPathStepKind::HashKeySlice
-                                    && (ct == NT_HASH || ct == NT_OBJECT || ct == NT_WEAKREF)) {
-                                res = executeLVHashKeySliceRemove(lvh, ct, last_step,
-                                        path_inst->unary_op, xsink);
-                            } else if (last_step.kind == LVPathStepKind::ListIndexSlice
-                                    && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
-                                res = executeLVListIndexSliceRemove(lvh, ct, last_step,
-                                        path_inst->unary_op, xsink);
-                            } else if (last_step.kind == LVPathStepKind::ListRangeSlice
-                                    && (ct == NT_LIST || ct == NT_STRING || ct == NT_BINARY)) {
-                                res = executeLVListRangeSliceRemove(lvh, ct, last_step,
-                                        path_inst->unary_op, xsink);
-                            }
-                            // NT_NOTHING or other parent types: nothing to remove, fall through
-                            if (xsink && *xsink) {
+                                // NT_NOTHING or other parent types: nothing to remove, fall through
+                                if (xsink && *xsink) {
+                                    return -1;
+                                }
+                            } else if (xsink && *xsink) {
                                 return -1;
                             }
-                        } else if (xsink && *xsink) {
-                            return -1;
+                            // navigatePath failed without exception: parent doesn't exist, skip
                         }
-                        // navigatePath failed without exception: parent doesn't exist, skip
+                        // The LValueHelper above has been destroyed here, so the lvalue locks are released.  A
+                        // "delete" runs the object's destructor, which is Qore code that can dereference objects in
+                        // the container's recursive set and re-enter the cycle scan for the container itself; with
+                        // the container's write lock still held, that scan would wait for a lock owned by this very
+                        // thread.  ~LValueHelper() releases its locks before discarding its own temporaries for the
+                        // same reason.
+                        if (pending_delete_finish) {
+                            finish_delete_result(res);
+                        }
                     } else if (is_remove) {
                         // Single-step path: navigate to the variable itself and clear.
                         //

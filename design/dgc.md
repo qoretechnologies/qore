@@ -205,7 +205,31 @@ restarts stop converging: every thread sits in `RNotifier::wait()`, no scan fini
 threads were doing never resumes. Native stacks then show many threads parked in `RSetHelper::RSetHelper()`
 with nothing running, which reads like a deadlock but is the restart loop failing to converge.
 
-Regression coverage: `examples/test/qore/misc/concurrent-cycle-scans.qtest`, and `ut_dgc_scan_generation()` in
+### A scan may be re-entered under a write lock the calling thread already holds
+
+The rollback-and-wait protocol is deadlock-free only while every lock a scan waits on belongs to *another*
+thread. One case breaks that: code holding an object's `rml` **write lock** that then runs Qore code which
+dereferences an object in the same recursive set. An lvalue operation deleting an object member does exactly
+this — the deleted object's destructor releases a reference back into the container's cycle — so the scan
+reaches the container, finds its write lock taken and would register a notification against a lock that only
+the waiting thread itself can release.
+
+The write lock is strictly stronger than the r-section: it excludes every reader, every writer and every other
+r-section holder, so a thread holding it already has the exclusive access the r-section grants.
+`tryRSectionLockNotifyWaitRead()` therefore treats `write_tid == q_gettid()` exactly as it treats
+`rs_tid == q_gettid()` and grants the r-section directly — the equivalence `checkRSectionExclusive()` already
+states. `rSectionUnlock()` suppresses its notification while that write lock is still held, since waiters
+cannot acquire the r-section until `qore_var_rwlock_priv::unlock()` releases the write lock and notifies them
+itself.
+
+Callers must still not run Qore code under an lvalue lock. `~LValueHelper()` releases its locks *before*
+discarding its own temporaries, and `LValueHelper::saveTemp()` exists so that a removed value's dereference —
+and any destructor that dereference runs — happens after the locks are gone. Every lvalue path that deletes a
+value defers the delete the same way: running a destructor under the lock also deadlocks a plain `rdlock()`
+taken by that destructor, which no r-section rule can rescue.
+
+Regression coverage: `examples/test/qore/misc/concurrent-cycle-scans.qtest`,
+`examples/test/qore/misc/lvalue-delete-cycle-scan.qtest`, and `ut_dgc_scan_generation()` in
 `lib/ql_debug.cpp` for the generation invariant itself.
 
 ## Rules for C++ module authors

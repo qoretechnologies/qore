@@ -12857,7 +12857,10 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
             lvh.setDelta(-1);
         }
         if (is_delete) {
-            return QoreValue();  // ReferenceHolder frees rvh
+            // dereference the removed values once the lvalue locks are released: a destructor is
+            // Qore code that can re-enter the runtime for the container this lvalue came from
+            lvh.saveTemp(rvh.release());
+            return QoreValue();
         }
         return rvh.release();
     }
@@ -12884,12 +12887,14 @@ QoreValue executeLVHashKeySliceRemove(LValueHelper& lvh, qore_type_t ct,
         QoreLValueGeneric rv;
         qore_object_private::takeMembers(*o, rv, lvh, *key_list);
         if (*xsink) {
-            rv.removeValue(true).discard(xsink);
+            lvh.saveTemp(rv.removeValue(true));
             return QoreValue();
         }
         QoreValue result = rv.removeValue(true);
         if (is_delete) {
-            result.discard(xsink);
+            // dereference the removed values once the lvalue locks are released: a destructor is
+            // Qore code that can re-enter the runtime for the container this lvalue came from
+            lvh.saveTemp(result);
             return QoreValue();
         }
         return result;
@@ -13002,7 +13007,13 @@ QoreValue executeLVListIndexSliceRemove(LValueHelper& lvh, qore_type_t ct,
                 lvh.setDelta(-1);
             }
         }
+            // dereference the removed values once the lvalue locks are released: a destructor is
+            // Qore code that can re-enter the runtime for the container this lvalue came from
+        if (holder) {
+            lvh.saveTemp(holder.release());
+        }
         if (is_delete) {
+            lvh.saveTemp(v.release());
             return QoreValue();
         }
         return v.release();
@@ -13174,6 +13185,9 @@ QoreValue executeLVListRangeSliceRemove(LValueHelper& lvh, qore_type_t ct,
             nl = nl->reverse();
         }
         if (is_delete) {
+            // dereference the removed values once the lvalue locks are released: a destructor is
+            // Qore code that can re-enter the runtime for the container this lvalue came from
+            lvh.saveTemp(nl.release());
             return QoreValue();
         }
         return nl.release();
@@ -13284,6 +13298,9 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
     // Object members and any non-container parent state fall through to the
     // legacy single-step navigate + lvh.remove() route below.
     bool handled_multistep_remove = false;
+    // "delete" runs the target object's destructor, which is Qore code; it must not run while the
+    // LValueHelper below still holds the container's locks (see the comment at the end of this block)
+    bool pending_delete_finish = false;
     if (is_remove && path_copy.size() >= 2) {
         const LVPathStep& last_step = path_copy.back();
         bool last_is_hash = (last_step.kind == LVPathStepKind::HashKeyConst
@@ -13315,7 +13332,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 lvh.ensureUnique();
                 QoreHashNode* h = lvh.getValue().get<QoreHashNode>();
                 res = h->takeKeyValue(last_step.name.c_str());
-                finish_delete_result(res);
+                pending_delete_finish = true;
                 handled_multistep_remove = true;
             } else if (last_is_hash && (ct == NT_OBJECT || ct == NT_WEAKREF)) {
                 QoreObject* o = ct == NT_OBJECT
@@ -13323,7 +13340,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     : lvh.getValue().get<const WeakReferenceNode>()->get();
                 if (o) {
                     res = qore_object_private::takeMember(*o, lvh, last_step.name.c_str());
-                    finish_delete_result(res);
+                    pending_delete_finish = true;
                 }
                 handled_multistep_remove = true;
             } else if (last_is_list && ct == NT_LIST) {
@@ -13337,6 +13354,8 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                     if (inst->unary_op == LVUnaryOp::Remove) {
                         res = l->retrieveEntry(static_cast<size_t>(idx)).refSelf();
                     }
+                    // dereference the old entry once the lvalue locks are released
+                    lvh.saveTemp(l->retrieveEntry(static_cast<size_t>(idx)).refSelf());
                     l->setEntry(static_cast<size_t>(idx), QoreValue(), xsink);
                 }
                 handled_multistep_remove = true;
@@ -13360,6 +13379,14 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
             }
             // Fall through for NT_OBJECT / NT_WEAKREF / other parent types:
             // the legacy navigate + lvh.remove() path handles them.
+        }
+        // The LValueHelper above has been destroyed here, so the lvalue locks are released.  A "delete"
+        // runs the object's destructor, which is Qore code that can dereference objects in the
+        // container's recursive set and re-enter the cycle scan for the container itself; with the
+        // container's write lock still held, that scan would wait for a lock owned by this very thread.
+        // ~LValueHelper() releases its locks before discarding its own temporaries for the same reason.
+        if (pending_delete_finish) {
+            finish_delete_result(res);
         }
     }
 

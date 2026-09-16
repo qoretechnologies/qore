@@ -1,0 +1,153 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires QUnit
+
+%exec-class LValueDeleteCycleScanTest
+
+#! Counts destructor calls so each case can prove the whole graph was really collected
+class Counted {
+    public {
+        static int dc = 0;
+    }
+
+    destructor() {
+        ++Counted::dc;
+    }
+}
+
+#! Points back at its owner, so releasing it dereferences an object in the owner's recursive set
+class Member inherits Counted {
+    public {
+        *Owner owner;
+        *Member peer;
+    }
+}
+
+#! Holds the members and points back at the holder, putting the holder in the same recursive set
+class Owner inherits Counted {
+    public {
+        *Holder holder;
+        *Member a;
+        *Member b;
+        hash<auto> members;
+        list<auto> nodes = ();
+    }
+}
+
+#! The outermost object; an lvalue path through it takes its write lock
+class Holder inherits Counted {
+    public {
+        *Owner owner;
+    }
+}
+
+public class LValueDeleteCycleScanTest inherits QUnit::Test {
+    constructor() : QUnit::Test("LValueDeleteCycleScanTest", "1.0") {
+        addTestCase("object member delete", \objectMemberDelete());
+        addTestCase("hash member delete", \hashMemberDelete());
+        addTestCase("list element delete", \listElementDelete());
+        addTestCase("object member slice delete", \memberSliceDelete());
+        set_return_value(main());
+    }
+
+    #! builds a reference cycle spanning holder, owner and both members
+    private *Holder makeCycle() {
+        Holder h();
+        h.owner = new Owner();
+        h.owner.holder = h;
+        h.owner.a = new Member();
+        h.owner.b = new Member();
+        h.owner.a.owner = h.owner;
+        h.owner.b.owner = h.owner;
+        h.owner.a.peer = h.owner.b;
+        h.owner.b.peer = h.owner.a;
+        return h;
+    }
+
+    #! deleting an object member runs its destructor while the lvalue holds the holder's write lock
+    /** The destructor releases the member's reference to the owner, which dereferences an object in
+        the holder's own recursive set and starts a cycle scan that reaches the holder.  The scan needs
+        the holder's r-section, and the write lock covering it belongs to this very thread: before the
+        fix the scan registered a notification against that lock and waited for itself forever.
+    */
+    objectMemberDelete() {
+        Counted::dc = 0;
+        {
+            *Holder h = makeCycle();
+
+            delete h.owner.a;
+
+            assertNothing(h.owner.a, "member slot cleared");
+            assertEq(1, Counted::dc, "deleted member's destructor ran");
+        }
+        assertEq(4, Counted::dc, "holder, owner and remaining member collected");
+    }
+
+    #! the same re-entry with a hash between the owner and the member
+    hashMemberDelete() {
+        Counted::dc = 0;
+        {
+            Holder h();
+            h.owner = new Owner();
+            h.owner.holder = h;
+            Member m();
+            m.owner = h.owner;
+            h.owner.members.inner = m;
+
+            delete h.owner.members.inner;
+
+            assertFalse(h.owner.members.hasKey("inner"), "hash key removed");
+            assertEq(1, Counted::dc, "deleted member's destructor ran");
+        }
+        assertEq(3, Counted::dc, "holder and owner collected");
+    }
+
+    #! the same re-entry through a list element of the owner
+    listElementDelete() {
+        Counted::dc = 0;
+        {
+            Holder h();
+            h.owner = new Owner();
+            h.owner.holder = h;
+            {
+                # the list holds the only reference once this block exits, so clearing the slot below
+                # releases the member and runs its destructor under the lvalue lock
+                Member m();
+                m.owner = h.owner;
+                h.owner.nodes = (m,);
+            }
+
+            delete h.owner.nodes[0];
+
+            assertNothing(h.owner.nodes[0], "list slot cleared");
+            assertEq(1, Counted::dc, "released member's destructor ran");
+        }
+        assertEq(3, Counted::dc, "holder and owner collected");
+    }
+
+    #! a member slice delete drops both values while the lvalue holds the holder's write lock
+    memberSliceDelete() {
+        Counted::dc = 0;
+        {
+            Holder h();
+            h.owner = new Owner();
+            h.owner.holder = h;
+            h.owner.a = new Member();
+            h.owner.b = new Member();
+            h.owner.a.owner = h.owner;
+            h.owner.b.owner = h.owner;
+
+            delete h.owner.("a", "b");
+
+            assertNothing(h.owner.a, "first member slot cleared");
+            assertNothing(h.owner.b, "second member slot cleared");
+            assertEq(2, Counted::dc, "both member destructors ran");
+        }
+        assertEq(4, Counted::dc, "holder and owner collected");
+    }
+}

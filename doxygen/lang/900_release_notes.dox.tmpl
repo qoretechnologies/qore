@@ -3090,6 +3090,15 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       object waited indefinitely: an HTTP server in this state kept its listeners bound and its connections
       open but answered no request. A thread that waited for another thread's scan of the same object now uses
       that scan's result, as it already did when waiting for a conflicting scan to finish.
+    - Fixed a deadlock between a reference cycle scan and an lvalue operation that deletes an object member.
+      Deleting a member runs the deleted object's destructor, which is %Qore code that can release a reference
+      back into the container's own reference cycle and so start a scan of the container. The lvalue operation
+      was still holding the container's write lock while it ran that destructor, and the scan queued itself
+      behind that lock - a lock held by the very thread that was waiting, so nothing could ever release it.
+      Every other thread that then dereferenced any object in the same cycle queued up behind it: a server in
+      this state kept its listeners bound and its connections open but answered no request. Deleting a value
+      from an lvalue now runs the destructor after the lvalue locks are released, and a scan recognizes a
+      write lock already held by the scanning thread as the exclusive access it needs.
     - Fixed reference cycles never being collected after the references that blocked them went away. The
       reference counts computed for a cycle are a snapshot taken when it was detected, and they were trusted
       indefinitely; a container in the cycle losing its last holder outside it, or an object in another cycle
