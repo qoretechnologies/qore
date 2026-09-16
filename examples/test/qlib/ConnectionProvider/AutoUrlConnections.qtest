@@ -1,0 +1,198 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires ConnectionProvider
+
+%exec-class AutoUrlConnectionsTest
+
+#! connections with auto_url must resolve to a real server when a platform generates their URL
+/** A platform creating an \c auto_url connection hides the URL from the user and generates it: it uses the
+    connection class's \c DefaultConnectionUrl constant, then its \c DefaultUrl constant (with the scheme normalized
+    through \c base_scheme_map), and otherwise \c "<scheme>://x".  The connection can still correct the URL through
+    its update-options callback; the platform then stores the new URL and recreates the connection.
+*/
+public class AutoUrlConnectionsTest inherits QUnit::Test {
+    public {
+        #! placeholder host used by the platform when the connection class provides no URL
+        const PlaceholderHost = "x";
+
+        #! schemes whose URL is legitimately set later, with the reason
+        const Exceptions = {
+            # the instance URL is returned by the login at login.salesforce.com and then stored
+            "sfrests": True,
+        };
+    }
+
+    private {
+        #! modules declaring auto_url connections
+        list<string> modules = ();
+
+        #! modules that could not be loaded; name -> error
+        hash<string, string> load_errors = {};
+    }
+
+    constructor() : Test("AutoUrlConnections Test", "1.0") {
+        addTestCase("auto_url modules are found", \moduleListTest());
+        addTestCase("generated URLs resolve to a real server", \generatedUrlTest());
+        addTestCase("self-hosted servers are not auto_url", \selfHostedTest());
+        addTestCase("placeholder detection", \placeholderTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        string dir = get_script_dir() + "../../../../qlib";
+        Dir d();
+        if (!d.chdir(dir)) {
+            throw "TEST-ERROR", sprintf("cannot open module directory %y", dir);
+        }
+        foreach string file in (sort(d.listFiles("\\.qm$"))) {
+            if (ReadOnlyFile::readTextFile(dir + "/" + file) =~ /"auto_url": True/) {
+                push modules, file.substr(0, -3);
+            }
+        }
+        foreach string mod in (modules) {
+            try {
+                load_module(mod);
+            } catch (hash<ExceptionInfo> ex) {
+                load_errors{mod} = sprintf("%s: %s", ex.err, ex.desc);
+            }
+        }
+    }
+
+    moduleListTest() {
+        assertGt(50, modules.size());
+        assertTrue(inlist("GoogleRestClient", modules));
+        # modules in the repo must load, so that none of them escapes the check below
+        assertEq({}, load_errors);
+    }
+
+    generatedUrlTest() {
+        int checked = 0;
+        foreach string scheme in (ConnectionSchemeCache::listSchemes()) {
+            *hash<ConnectionSchemeInfo> info = ConnectionSchemeCache::getScheme(scheme);
+            # db:// URLs are built by the platform from the datasource options
+            if (!info.auto_url || info.schemes.db || Exceptions{scheme}) {
+                continue;
+            }
+            string url = getAutoConnectionUrl(scheme, info);
+            string real_url = getRealUrl(scheme, info, url);
+            if (isPlaceholder(real_url)) {
+                *string new_url = getUpdatedUrl(scheme, info, url);
+                if (new_url) {
+                    real_url = getRealUrl(scheme, info, new_url);
+                }
+            }
+            assertFalse(isPlaceholder(real_url), sprintf("%s (%s): generated %y -> %y", scheme, info.cls.getName(),
+                url, real_url));
+            ++checked;
+        }
+        assertGt(50, checked);
+    }
+
+    selfHostedTest() {
+        # the URL of a self-hosted server or of a per-environment service cannot be generated
+        foreach string scheme in ("bge-m3", "chroma", "milvus", "mewsrest", "ollama", "sglang", "weaviate") {
+            assertFalse(ConnectionSchemeCache::getSchemeEx(scheme).auto_url, scheme);
+        }
+    }
+
+    placeholderTest() {
+        assertTrue(isPlaceholder("https://x"));
+        assertTrue(isPlaceholder("https://localhost:8000"));
+        assertTrue(isPlaceholder(""));
+        assertFalse(isPlaceholder("https://www.googleapis.com"));
+    }
+
+    #! mimics the platform's URL generation for auto_url connections
+    private static string getAutoConnectionUrl(string scheme, hash<ConnectionSchemeInfo> info) {
+        *string url = getStringConstant(info, "DefaultConnectionUrl");
+        if (url) {
+            return url;
+        }
+        url = getStringConstant(info, "DefaultUrl");
+        if (url) {
+            string url_scheme = (url =~ x/^([^:]+)/)[0];
+            if (info.schemes{url_scheme}) {
+                return url;
+            }
+            return regex_subst(url, "^" + url_scheme, info.base_scheme_map{url_scheme} ?? scheme);
+        }
+        return scheme + "://" + PlaceholderHost;
+    }
+
+    private static *string getStringConstant(hash<ConnectionSchemeInfo> info, string name) {
+        *ClassConstant con = info.cls.tryGetConstant(name);
+        auto val = con ? con.getValue() : NOTHING;
+        if (val.typeCode() == NT_STRING && val.val()) {
+            return val;
+        }
+    }
+
+    #! returns the real URL of a connection created with the given URL
+    private string getRealUrl(string scheme, hash<ConnectionSchemeInfo> info, string url) {
+        try {
+            object conn = createConnection(info, url);
+            return conn.getConnectionOptions().url ?? AbstractConnection::getRealUrl(conn.getUrl(), info, scheme);
+        } catch (hash<ExceptionInfo> ex) {
+            fail(sprintf("%s: cannot create connection with URL %y: %s: %s", scheme, url, ex.err, ex.desc));
+        }
+        return "";
+    }
+
+    #! returns the URL set by the connection's update-options callback, if any
+    private *string getUpdatedUrl(string scheme, hash<ConnectionSchemeInfo> info, string url) {
+        object conn = createConnection(info, url);
+        if (!(conn instanceof UpdateOptionsInterface)) {
+            return;
+        }
+        hash<auto> update;
+        cast<UpdateOptionsInterface>(conn).setUpdateOptionsCode(sub (hash<auto> new_opts) {
+            update += new_opts;
+        });
+        return update.url;
+    }
+
+    private static object createConnection(hash<ConnectionSchemeInfo> info, string url) {
+        return info.cls.newObject({
+            "name": "auto-url-test",
+            "desc": "test",
+            "url": url,
+            "opts": getRequiredOptions(info),
+        }, {"monitor": False});
+    }
+
+    #! returns valid placeholder values for the required options
+    private static hash<auto> getRequiredOptions(hash<ConnectionSchemeInfo> info) {
+        hash<auto> opts = {};
+        foreach string opt in ((info.required_options ?? "").split(",")) {
+            opt = opt.split("|")[0];
+            *hash<ConnectionOptionInfo> oi = info.options{opt};
+            if (oi.allowed_values) {
+                opts{opt} = oi.allowed_values[0].value;
+            } else if (exists oi.default_value) {
+                opts{opt} = oi.default_value;
+            } else if (oi.type == "int") {
+                opts{opt} = 1;
+            } else if (oi.type == "bool") {
+                opts{opt} = True;
+            } else {
+                opts{opt} = "placeholder";
+            }
+        }
+        return opts;
+    }
+
+    private static bool isPlaceholder(string url) {
+        *hash<auto> h;
+        try {
+            h = parse_url(url);
+        } catch () {
+        }
+        return !h.host.val() || h.host == PlaceholderHost || h.host == "localhost";
+    }
+}

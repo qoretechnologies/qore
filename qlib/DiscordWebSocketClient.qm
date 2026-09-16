@@ -75,6 +75,11 @@ module DiscordWebSocketClient {
     @section discordwebsocketclientrelnotes Release Notes
 
     @subsection discordwebsocketclientv1_2 DiscordWebSocketClient v1.2
+    - fixed platform-generated connection URLs by declaring
+      @ref DiscordWebSocketClient::DiscordWebSocketConnection::DefaultConnectionUrl
+      "DiscordWebSocketConnection::DefaultConnectionUrl"
+    - fixed a bug where a @ref DiscordWebSocketClient::DiscordWebSocketConnection "DiscordWebSocketConnection" created
+      without a URL did not use the discovered gateway URL
     - the HELLO and RESUME watchdog timers are now armed with a stable per-instance owner tag, and the
       destructor drains them via @ref AsyncSocketIo::AsyncSocketIoController::flushCallbacksByOwner()
       "flushCallbacksByOwner()" after cancelling, closing the teardown race where a watchdog timer fires
@@ -1112,6 +1117,9 @@ hash<auto> h = ws.getInfo();
 */
 public class DiscordWebSocketConnection inherits WebSocketClient::WebSocketConnectionObject {
     public {
+        #! The connection URL used when the URL is generated automatically (\c auto_url)
+        const DefaultConnectionUrl = "discordwss://gateway.discord.gg/";
+
         #! Connection entry info
         const ConnectionScheme = <ConnectionSchemeInfo>{
             "display_name": "Discord WebSocket Connection",
@@ -1205,7 +1213,7 @@ public class DiscordWebSocketConnection inherits WebSocketClient::WebSocketConne
     */
     private setRealUrl(*string url) {
         if (!url) {
-            url = discoverUrl();
+            real_url = discoverUrl();
         } else {
             string scheme = (url =~ x/^([^:]+)/)[0];
             real_url = regex_subst(url, "^" + scheme, "wss");

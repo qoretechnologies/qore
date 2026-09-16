@@ -40,7 +40,7 @@
 %requires(reexport) ConnectionProvider >= 1.4
 
 module GoogleRestClient {
-    version = "1.0";
+    version = "1.0.1";
     desc = "user module for calling Google REST API services";
     author = "David Nichols <david@qore.org>";
     url = "https://qore.org";
@@ -88,6 +88,10 @@ printf("%Y\n", ans.body);
     @endcode
 
     @section Googlerestclientrelnotes Release Notes
+
+    @subsection Googlerestclientv1_0_1 GoogleRestClient v1.0.1
+    - fixed platform-generated connection URLs by declaring
+      @ref GoogleRestClient::GoogleRestConnection::DefaultConnectionUrl "GoogleRestConnection::DefaultConnectionUrl"
 
     @subsection Googlerestclientv1_0 GoogleRestClient v1.0
     - the initial version of the %GoogleRestClient module
@@ -280,6 +284,9 @@ GoogleRestClient rest(opts);
 */
 public class GoogleRestConnection inherits RestClient::RestConnection {
     public {
+        #! The connection URL used when the URL is generated automatically (\c auto_url)
+        const DefaultConnectionUrl = "grests://www.googleapis.com";
+
         #! Connection entry info
         const ConnectionScheme = <ConnectionSchemeInfo>{
             "display_name": "Google REST Connection",

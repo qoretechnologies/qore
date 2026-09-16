@@ -41,7 +41,7 @@
 %requires Swagger
 
 module MewsRestClient {
-    version = "1.0";
+    version = "1.0.1";
     desc = "User module for calling Mews REST API services";
     author = "David Nichols <david@qore.org>";
     url = "https://qore.org";
@@ -86,6 +86,10 @@ printf("%Y\n", ans.body);
     @endcode
 
     @section Mewsrestclientrelnotes Release Notes
+
+    @subsection Mewsrestclientv1_0_1 MewsRestClient v1.0.1
+    - the connection URL is no longer generated automatically; it depends on the Mews environment
+      (ex: \c https://api.mews.com or \c https://api.mews-demo.com) and must be supplied by the user
 
     @subsection Mewsrestclientv1_0 MewsRestClient v1.0
     - the initial version of the %MewsRestClient module
@@ -299,7 +303,9 @@ public class MewsRestConnection inherits RestClient::RestConnection {
             "short_desc": "A connection to the Mews REST API",
             "desc": "A connection to the Mews REST API",
             "cls": Class::forName("MewsRestConnection"),
-            "auto_url": True,
+            # the URL depends on the Mews environment (ex: https://api.mews.com or https://api.mews-demo.com) and
+            # cannot be generated from the connection options, so it must be supplied by the user
+            "auto_url": False,
             "schemes": {
                 "mewsrest": True,
             },

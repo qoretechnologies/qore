@@ -1548,6 +1548,8 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - @ref RestClient::RestConnection "RestClient::RestConnection" inherits the \c http_version option from @ref ConnectionProvider::HttpConnection "ConnectionProvider::HttpConnection"
       - added \c amqp and \c amqps connection scheme registrations for the
         <a href="https://github.com/qoretechnologies/module-amqp">amqp</a> module
+      - added the \c sglang scheme and the \c chromas, \c milvuss, \c ollamas, \c sglangs, and \c weaviates TLS
+        schemes to @ref ConnectionProvider::ConnectionSchemeCache::SchemeMap "ConnectionSchemeCache::SchemeMap"
 
     - @ref dataproviderintro "DataProvider" module
       - fixed optional @ref DataProvider::SoftListDataType "soft list" types whose elements accept @ref nothing
@@ -1611,6 +1613,11 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
         authentication and failed with HTTP 401
         (<a href="https://github.com/qoretechnologies/qorus/issues/523">qorus#523</a>)
 
+    - @ref discordwebsocketclientintro "DiscordWebSocketClient" module
+      - fixed platform-generated connection URLs by declaring the Discord gateway as the connection's
+        \c DefaultConnectionUrl
+      - fixed a bug where a connection created without a URL did not use the discovered gateway URL
+
     - @ref elasticsearchdataproviderintro "ElasticSearchDataProvider" module
       - added Bulk API support with NDJSON format and partial failure handling
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
@@ -1663,6 +1670,10 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - date values in query arguments are serialized as <a href="https://datatracker.ietf.org/doc/html/rfc3339">RFC 3339</a> timestamps, as Google APIs require
         (ex: \c timeMin / \c timeMax in Calendar \c events.list), instead of an unparseable digit string
 
+    - @ref googlerestclientintro "GoogleRestClient" module
+      - fixed platform-generated connection URLs for the generic Google REST connection by declaring
+        \c DefaultConnectionUrl
+
     - @ref grokrestclientintro "GrokRestClient" module
       - registers @ref QoreLlmUtils::LlmProviderRegistry "LlmProviderRegistry" mode
         \c grok via @ref GrokRestClient::GrokLlmProvider "GrokLlmProvider" — thin
@@ -1691,10 +1702,17 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - new @ref HttpServer::StreamResponseProducer "StreamResponseProducer" worker-thread response-body streamer for non-I/O-thread-safe
         @ref Qore::InputStream "InputStream" bodies on HTTP/2 and HTTP/3
 
+    - @ref huerestclientintro "HueRestClient" module
+      - fixed platform-generated connection URLs by declaring \c DefaultConnectionUrl
+
     - @ref loggerintro "Logger" module
       - added memory-based backpressure to @ref Qore::Logger::LoggerAppenderQueue "LoggerAppenderQueue" to prevent unbounded memory growth when
         producers outpace consumers — configurable memory limit, push timeout/drop control, and monitoring
       - added a \c max_bytes parameter to @ref Logger::LoggerAppenderQueueThreadPool "LoggerAppenderQueueThreadPool" for memory-limited pool logging
+
+    - @ref mewsrestclientintro "MewsRestClient" module
+      - the connection URL is no longer generated automatically; it depends on the Mews environment and must be
+        supplied by the user
 
     - @ref openaidataproviderintro "OpenAiDataProvider" module
       - added the \c transcribe-audio action (the \c /v1/audio/transcriptions API), which uploads an audio
