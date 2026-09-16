@@ -3027,6 +3027,8 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed a crash after the parse error for a \c my, \c our or \c thread_local list declaration whose first
+      element is not a variable, such as <tt>my (1, b);</tt>
     - Fixed @ref Qore::Reflection::Type::getOrNothingType() "Type::getOrNothingType()" returning a mandatory type
       for a soft list whose element type accepts @ref nothing, such as \c softlist<*string> or \c softlist<auto>,
       and @ref Qore::Reflection::Type::getMandatoryType() "Type::getMandatoryType()" converting an optional soft

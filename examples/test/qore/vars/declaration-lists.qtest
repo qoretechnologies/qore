@@ -1,0 +1,50 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class DeclarationListsTest
+
+class DeclarationListsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("declaration lists", "1.0") {
+        addTestCase("Declaration lists declare their variables", \validLists());
+        addTestCase("A list element that is not a variable is a parse error", \invalidElements());
+        set_return_value(main());
+    }
+
+    validLists() {
+        Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        p.parse("our (int a, string b) = (1, \"x\");
+our (c, d);
+thread_local (e, f);
+list<auto> sub run() {
+    my (int g, h) = (2, 3);
+    my (i, j);
+    (int k, string l) = (4, \"y\");
+    return (a, b, c, d, e, f, g, h, i, j, k, l);
+}
+", "valid");
+        # the top-level assignment runs with the program
+        p.run();
+        assertEq((1, "x", NOTHING, NOTHING, NOTHING, NOTHING, 2, 3, NOTHING, NOTHING, 4, "y"), p.callFunction("run"));
+    }
+
+    invalidElements() {
+        # each element is checked, whatever its position and type
+        foreach string list in ("(1, b)", "(b, 1)", "(1.5, b)", "(True, b)", "(\"a\", b)", "(1n, b)", "(f(), b)",
+                "(x.y, b)") {
+            foreach string scope in ("my", "our", "thread_local") {
+                foreach string source in (scope + " " + list + ";\n",
+                        "sub run() { " + scope + " " + list + "; }\n",
+                        "sub run() { " + scope + " " + list + " = (1, 2); }\n") {
+                    Program p(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+                    assertThrows("PARSE-EXCEPTION", "is not a variable reference", \p.parse(),
+                        (source + "sub f() {}\nhash<auto> x;\n", "invalid"), source);
+                }
+            }
+        }
+    }
+}

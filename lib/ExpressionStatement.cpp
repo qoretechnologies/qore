@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -46,7 +46,9 @@ ExpressionStatement::ExpressionStatement(const QoreProgramLocation* loc, QoreVal
     QoreParseListNode *l = exp.getType() == NT_PARSE_LIST ? exp.get<QoreParseListNode>() : nullptr;
     if (l && l->isVariableList()) {
         is_declaration = true;
-        is_parse_declaration = l->get(0).get<VarRefNode>()->getType() == VT_GLOBAL ? true : false;
+        // an element that is not a variable reference has already raised a parse error
+        QoreValue first = l->get(0);
+        is_parse_declaration = first.getType() == NT_VARREF && first.get<VarRefNode>()->getType() == VT_GLOBAL;
         return;
     }
 
