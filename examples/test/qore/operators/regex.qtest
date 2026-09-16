@@ -1302,18 +1302,11 @@ class RegexTest inherits QUnit::Test {
         assertEq(("pw",), utf8.regexExtract(UriUserinfoPattern), "UTF-8 subject past the cliff");
 
         # Callback substitution must validate UTF-8 once, then advance through global matches in
-        # linear time. Revalidating the complete subject for every callback made this quadratic.
-        string callback_subject = strmul("éx ", 65536);
-        int callback_count = 0;
-        int t0 = clock_getmicros_monotonic();
-        string callback_result = regex_subst(callback_subject, "x", string sub (hash<RegexMatchInfo> match) {
-            ++callback_count;
-            return "y";
-        }, RE_Global);
-        assertEq(65536, callback_count, "callback runs once per global UTF-8 match");
-        assertEq(strmul("éy ", 65536), callback_result, "callback substitution preserves UTF-8 offsets");
-        assertLt(LargeSubjectMaxUs, clock_getmicros_monotonic() - t0,
-            "global callback substitution with many matches is bounded");
+        # linear time. Revalidating the complete subject for every callback made this quadratic, so four times as
+        # many matches took about sixteen times as long; the ratio does not depend on the speed of the machine
+        float small = callbackSubstitutionTime(16384);
+        float large = callbackSubstitutionTime(65536);
+        assertLt(8.0, large / small, "global callback substitution takes linear time");
 
         # case-insensitive matching past the cliff
         assertTrue(makeSubject(ReqCuCliffSize + 100000, "NEEDLE").regex("needle", RE_Caseless),
@@ -1379,6 +1372,18 @@ class RegexTest inherits QUnit::Test {
             # delivered the regular expression loop is the only cancellation point left
             string subject = strmul("a", 5000000);
             ready.push(gettid());
+            # The match can finish before the cancel request is made, so the thread waits for the request in a
+            # queue that nothing is added to; the request stays pending after the wait raises it, so the match
+            # loop has to raise it again
+            try {
+                Queue never();
+                never.get();
+            } catch (hash<ExceptionInfo> ex) {
+                if (ex.err != "THREAD-CANCELLED") {
+                    result.push(ex);
+                    return;
+                }
+            }
             try {
                 result.push(subject.regexCount("a"));
             } catch (hash<ExceptionInfo> ex) {
@@ -1392,5 +1397,21 @@ class RegexTest inherits QUnit::Test {
         auto rv = result.get();
         assertEq("hash", rv.type(), "the match did not run to completion");
         assertEq("THREAD-CANCELLED", rv.err, "the match loop honors thread cancellation");
+        assertRegex("^regular expression", rv.desc, "the match loop raised the cancellation");
+    }
+
+    #! Returns the time of a global callback substitution with the given number of matches in microseconds
+    private int callbackSubstitutionTime(int matches) {
+        string callback_subject = strmul("éx ", matches);
+        int callback_count = 0;
+        int t0 = clock_getmicros_monotonic();
+        string callback_result = regex_subst(callback_subject, "x", string sub (hash<RegexMatchInfo> match) {
+            ++callback_count;
+            return "y";
+        }, RE_Global);
+        int elapsed = clock_getmicros_monotonic() - t0;
+        assertEq(matches, callback_count, "callback runs once per global UTF-8 match");
+        assertEq(strmul("éy ", matches), callback_result, "callback substitution preserves UTF-8 offsets");
+        return elapsed;
     }
 }
