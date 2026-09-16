@@ -1,0 +1,120 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Util
+%requires QUnit
+%requires ConnectionProvider
+%requires RestClient
+%requires RestClientIo
+%requires SGLangRestClient
+
+%exec-class SGLangRestClientTest
+
+public class SGLangRestClientTest inherits QUnit::Test {
+    public {
+        const RemoteUrl = "sglang://sglang.example.com:31000";
+        const RemoteRealUrl = "http://sglang.example.com:31000";
+    }
+
+    constructor() : Test("SGLangRestClient Test", "1.0") {
+        addTestCase("connection scheme requires a user-supplied URL", \schemeTest());
+        addTestCase("connection options preselect model and apikey", \preselectedTest());
+        addTestCase("connection uses the configured remote URL", \remoteUrlTest());
+        addTestCase("connection from config uses the configured remote URL", \remoteUrlConfigTest());
+        addTestCase("connection from config without a URL uses the default", \defaultUrlConfigTest());
+        addTestCase("apikey is sent as a bearer token", \apiKeyTest());
+        addTestCase("no apikey means no Authorization header", \noApiKeyTest());
+        addTestCase("missing model is rejected", \missingModelTest());
+        set_return_value(main());
+    }
+
+    private schemeTest() {
+        hash<ConnectionSchemeInfo> info = ConnectionSchemeCache::getScheme("sglang");
+        assertEq("SGLang REST Connection", info.display_name);
+        assertTrue(info.schemes.sglang);
+        # the URL of a self-hosted server cannot be derived from connection options
+        assertFalse(info.auto_url);
+        assertEq("model", info.required_options);
+        assertEq("http", AbstractConnection::getRealUrl(RemoteUrl, info, "sglang") =~ x/^([^:]+)/[0]);
+    }
+
+    private preselectedTest() {
+        hash<ConnectionSchemeInfo> info = SGLangRestConnection::ConnectionScheme;
+        assertTrue(info.options.model.preselected);
+        assertTrue(info.options.apikey.preselected);
+        assertTrue(info.options.apikey.sensitive);
+        # apikey remains optional
+        assertEq(-1, info.required_options.find("apikey"));
+    }
+
+    private remoteUrlTest() {
+        SGLangRestConnection conn("sglang-test", "test", RemoteUrl, {"monitor": False},
+            {"model": "qwen3-30b-a3b"});
+        checkConnection(conn);
+    }
+
+    private remoteUrlConfigTest() {
+        SGLangRestConnection conn({
+            "name": "sglang-test",
+            "desc": "test",
+            "url": RemoteUrl,
+            "opts": {"model": "qwen3-30b-a3b"},
+        }, {"monitor": False});
+        checkConnection(conn);
+    }
+
+    private defaultUrlConfigTest() {
+        SGLangRestConnection conn({
+            "name": "sglang-test",
+            "desc": "test",
+            "opts": {"model": "qwen3-30b-a3b"},
+        }, {"monitor": False});
+        assertEq(SGLangRestConnection::DefaultUrl, conn.getUrl());
+        SGLangRestClient rest = conn.get(False);
+        assertEq("http://localhost:30000/v1", rest.getUrl());
+    }
+
+    private apiKeyTest() {
+        SGLangRestConnection conn("sglang-test", "test", RemoteUrl, {"monitor": False},
+            {"model": "qwen3-30b-a3b", "apikey": "secret-key"});
+        SGLangRestClient rest = conn.get(False);
+        assertEq("Bearer secret-key", rest.getDefaultHeaders().Authorization);
+        SGLangRestClientIo rest_io = conn.getAsync(False);
+        assertEq("Bearer secret-key", rest_io.getDefaultHeaders().Authorization);
+        # the apikey option must not be leaked as a raw REST client option
+        assertEq(NOTHING, SGLangRestClientBase::getOptions({"model": "m", "apikey": "k"}).apikey);
+    }
+
+    private noApiKeyTest() {
+        SGLangRestConnection conn("sglang-test", "test", RemoteUrl, {"monitor": False},
+            {"model": "qwen3-30b-a3b"});
+        SGLangRestClient rest = conn.get(False);
+        assertEq(NOTHING, rest.getDefaultHeaders().Authorization);
+    }
+
+    private missingModelTest() {
+        assertThrows("SGLANG-OPTION-ERROR", sub () {
+            SGLangRestClient rest({"url": RemoteRealUrl});
+        });
+        assertThrows("SGLANG-OPTION-ERROR", sub () {
+            SGLangRestClientIo rest({"url": RemoteRealUrl});
+        });
+    }
+
+    private checkConnection(SGLangRestConnection conn) {
+        assertEq(RemoteUrl, conn.getUrl());
+        assertEq(RemoteRealUrl, conn.getConnectionOptions().url);
+
+        SGLangRestClient rest = conn.get(False);
+        # the sync client appends the OpenAI-compatible API path to the URL
+        assertEq(RemoteRealUrl + "/v1", rest.getUrl());
+        assertEq("qwen3-30b-a3b", rest.getModel());
+
+        SGLangRestClientIo rest_io = conn.getAsync(False);
+        assertEq(RemoteRealUrl, rest_io.getUrl());
+        assertEq("qwen3-30b-a3b", rest_io.getModel());
+    }
+}

@@ -262,7 +262,9 @@ public class SGLangRestConnection inherits RestClient::RestConnection {
                 "required.  If the deployment requires authentication, set `apikey`.\n\n"
                 "The connection uses the `sglang://` URL scheme.",
             "cls": Class::forName("SGLangRestConnection"),
-            "auto_url": True,
+            # SGLang is self-hosted: the server URL must be supplied by the user; with auto_url the URL is
+            # generated from options, and as there is no host option, it fell back to "sglang://localhost"
+            "auto_url": False,
             "schemes": {
                 "sglang": True,
             },
@@ -295,6 +297,7 @@ public class SGLangRestConnection inherits RestClient::RestConnection {
                         "authentication; sent as the `Authorization: Bearer` header.  "
                         "Local inference deployments typically do not require a key.",
                     "sensitive": True,
+                    "preselected": True,
                 },
                 "api": <ConnectionOptionInfo>{
                     "display_name": "OpenAI-Compatible API Version",
