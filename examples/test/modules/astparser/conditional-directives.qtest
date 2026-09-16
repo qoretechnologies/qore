@@ -1,0 +1,66 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires astparser
+
+%exec-class ConditionalDirectivesTest
+
+class ConditionalDirectivesTest inherits QUnit::Test {
+    constructor() : QUnit::Test("astparser conditional directives", "1.0") {
+        addTestCase("Defines with values select the runtime branches", \definesWithValues());
+        set_return_value(main());
+    }
+
+    private static list<hash<auto>> findNodes(list<auto> nodes, string type) {
+        list<hash<auto>> rv = ();
+        foreach hash<auto> node in (nodes) {
+            if (node.type == type) {
+                rv += node;
+            }
+            if (node.children) {
+                rv += findNodes(node.children, type);
+            }
+        }
+        return rv;
+    }
+
+    definesWithValues() {
+        # each definition names VALUE; the branch functions return the number of the selected branch
+        foreach string define in ("%define VALUE", "%define VALUE 42", "%define VALUE \"a b\"",
+                "%define\tVALUE 1", "%define VALUE 1\r", "%define VALUE\t", "%define VALUE \t", "%define VALUE\v",
+                "%define VALUE\t\r", "%define VALUE 1\t\r", "%define \t VALUE  \"a b\" ") {
+            string source = define + "
+%ifdef VALUE
+int sub first() { return 1; }
+%else
+int sub first() { return 2; }
+%endif
+%ifndef VALUE
+int sub second() { return 1; }
+%else
+int sub second() { return 2; }
+%endif
+%if defined(VALUE) && !defined(OTHER)
+int sub third() { return 1; }
+%else
+int sub third() { return 2; }
+%endif
+";
+            Program runtime(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+            runtime.parse(source, define);
+            list<int> expected = (1, 2, 1);
+            assertEq(expected, map runtime.callFunction($1), ("first", "second", "third"), define);
+
+            AstParser parser();
+            AstTree tree = parser.parseString(source);
+            assertEq(0, parser.getErrorCount(), define);
+            list<hash<auto>> functions = findNodes(tree.getNodesInfo(), "function_declaration");
+            assertEq(3, functions.size(), define);
+            assertEq(expected, map findNodes($1.children, "integer")[0].text.toInt(), functions, define);
+        }
+    }
+}

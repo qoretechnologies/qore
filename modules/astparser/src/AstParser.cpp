@@ -378,12 +378,17 @@ std::string AstParser::preprocessConditionals(const std::string& source) const {
         } else if (trimmed.compare(0, 7, "%define") == 0 && trimmed.size() > 7 && (trimmed[7] == ' ' || trimmed[7] == '\t')) {
             isDirective = true;
             if (isActive()) {
-                std::string name = trimmed.substr(8);
-                size_t ns = name.find_first_not_of(" \t");
-                size_t ne = name.find_last_not_of(" \t\r");
-                if (ns != std::string::npos) {
-                    name = name.substr(ns, ne - ns + 1);
-                    localDefines.insert(name);
+                // as in lib/scanner.lpp, the definition ends before a carriage return, surrounding whitespace is
+                // ignored, and the name ends at the first space, before any value
+                size_t start = trimmed.find_first_not_of(" \t\r", 8);
+                if (start != std::string::npos) {
+                    size_t end = trimmed.find('\r', start);
+                    std::string text = trimmed.substr(start, end == std::string::npos ? std::string::npos : end - start);
+                    size_t ns = text.find_first_not_of(" \t\v");
+                    if (ns != std::string::npos) {
+                        size_t ne = std::min(text.find(' ', ns), text.find_last_not_of(" \t\v") + 1);
+                        localDefines.insert(text.substr(ns, ne - ns));
+                    }
                 }
             }
         }

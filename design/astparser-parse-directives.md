@@ -38,7 +38,11 @@ it to the generated lexer.
 
 `AstParser` evaluates `%define`, `%ifdef`, `%ifndef`, `%if`, `%elif`, `%else` and
 `%endif` lines before parsing and replaces them with spaces, so only other
-tree-sitter consumers see `%define` nodes.
+tree-sitter consumers see `%define` nodes. As in the runtime, the text of a
+`%define` ends before a carriage return, surrounding spaces, tabs and vertical
+tabs are ignored, and the name ends at the first space, so `%define NAME value`
+defines `NAME`. `examples/test/modules/astparser/conditional-directives.qtest`
+checks that the runtime and AstParser select the same conditional branches.
 
 `examples/test/modules/astparser/parse-directives.qtest` compares the runtime
 and AstParser for the parse options, module paths, include files, directive
