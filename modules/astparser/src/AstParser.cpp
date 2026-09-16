@@ -415,18 +415,23 @@ std::string AstParser::preprocessConditionals(const std::string& source) const {
     return result;
 }
 
+// tree-sitter uses 0-indexed lines/columns; ASTParseLocation uses 1-indexed
+static ASTParseLocation getNodeLocation(TSNode node) {
+    TSPoint startPt = ts_node_start_point(node);
+    TSPoint endPt = ts_node_end_point(node);
+    return ASTParseLocation(static_cast<ast_loc_t>(startPt.row + 1), static_cast<ast_loc_t>(startPt.column + 1),
+        static_cast<ast_loc_t>(endPt.row + 1), static_cast<ast_loc_t>(endPt.column + 1));
+}
+
 void AstParser::collectErrors(TSNode node, const std::string& source) {
+    // an error, a missing node and each of their ancestors report an error
+    if (!ts_node_has_error(node)) {
+        return;
+    }
+
     // Check if this node is an error
     if (ts_node_is_error(node) || ts_node_is_missing(node)) {
-        TSPoint startPt = ts_node_start_point(node);
-        TSPoint endPt = ts_node_end_point(node);
-
-        // tree-sitter uses 0-indexed lines/columns; ASTParseLocation uses 1-indexed
-        ASTParseLocation loc;
-        loc.firstLine = static_cast<int>(startPt.row + 1);
-        loc.firstCol = static_cast<int>(startPt.column + 1);
-        loc.lastLine = static_cast<int>(endPt.row + 1);
-        loc.lastCol = static_cast<int>(endPt.column + 1);
+        ASTParseLocation loc = getNodeLocation(node);
 
         if (ts_node_is_missing(node)) {
             std::string msg = "Missing ";
@@ -461,8 +466,22 @@ void AstParser::collectErrors(TSNode node, const std::string& source) {
     }
 
     // Recurse into children
+    bool childError = false;
     uint32_t childCount = ts_node_child_count(node);
     for (uint32_t i = 0; i < childCount; i++) {
-        collectErrors(ts_node_child(node, i), source);
+        TSNode child = ts_node_child(node, i);
+        if (ts_node_has_error(child)) {
+            childError = true;
+            collectErrors(child, source);
+        }
+    }
+
+    // The node API does not return hidden nodes, such as the name token of a variable_name or the empty token
+    // that requires a directive argument on the same line; a missing hidden token is therefore only visible as an
+    // error in its nearest visible ancestor
+    if (!childError && !ts_node_is_error(node) && !ts_node_is_missing(node)) {
+        std::string msg = "Missing token in ";
+        msg += ts_node_type(node);
+        reportError(getNodeLocation(node), msg.c_str());
     }
 }

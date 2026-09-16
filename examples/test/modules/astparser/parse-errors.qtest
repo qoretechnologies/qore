@@ -1,0 +1,58 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%no-child-restrictions
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires astparser
+
+%exec-class ParseErrorsTest
+
+class ParseErrorsTest inherits QUnit::Test {
+    constructor() : QUnit::Test("astparser parse errors", "1.0") {
+        addTestCase("Missing hidden tokens are reported", \missingHiddenTokens());
+        addTestCase("Missing and unexpected tokens are reported", \missingAndUnexpectedTokens());
+        addTestCase("A valid parse after errors has no errors", \validAfterErrors());
+        set_return_value(main());
+    }
+
+    missingHiddenTokens() {
+        # the grammar represents each missing token here without a node of its own
+        checkErrors("%try-module (ex)\njson\n%endtry\nint sub run() { return 1; }\n", 1,
+            "Missing token in parse_directive");
+        checkErrors("%try-reexport-module (ex)\njson\n%endtry\n", 1, "Missing token in parse_directive");
+        checkErrors("int sub run() {\n    int x = $;\n    return x;\n}\n", 2, "Missing token in variable_name");
+    }
+
+    missingAndUnexpectedTokens() {
+        # a missing token follows the previous token
+        checkErrors("int sub run() {\n    return 1\n}\n", 2, "Missing ;");
+        checkErrors("%try-module ()\nint sub run() { return 1; }\n", 1, "Syntax error near: %try-module ()");
+        checkErrors("int sub run() {\n    int x = $ y;\n    return x;\n}\n", 2, "Syntax error near: $");
+    }
+
+    validAfterErrors() {
+        AstParser parser();
+        parser.parseString("int sub run() { int x = $; return x; }\n");
+        assertEq(1, parser.getErrorCount());
+        parser.parseString("our int x;\nint sub run() { return x; }\n");
+        assertEq(0, parser.getErrorCount());
+        assertNothing(parser.getDiagnostics());
+    }
+
+    private checkErrors(string source, int line, string message) {
+        # the runtime rejects each source
+        Program runtime(PO_NEW_STYLE | PO_NO_CHILD_PO_RESTRICTIONS);
+        assertThrows("PARSE-EXCEPTION", \runtime.parse(), (source, "parse-errors"), source);
+
+        AstParser parser();
+        parser.parseString(source);
+        assertEq(1, parser.getErrorCount(), source);
+        *list<hash<auto>> diagnostics = parser.getDiagnostics();
+        assertEq(1, diagnostics.size(), source);
+        assertEq(message, diagnostics[0].message, source);
+        # diagnostic lines are 0-based
+        assertEq(line - 1, diagnostics[0].range.start.line, source);
+    }
+}

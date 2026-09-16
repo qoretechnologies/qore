@@ -9501,6 +9501,10 @@
       ]
     },
     "identifier": {
+      "type": "SYMBOL",
+      "name": "_identifier_token"
+    },
+    "_identifier_token": {
       "type": "PATTERN",
       "value": "[a-zA-Z_][a-zA-Z0-9_]*"
     },
@@ -9512,8 +9516,11 @@
           "value": "$"
         },
         {
-          "type": "PATTERN",
-          "value": "[a-zA-Z_][a-zA-Z0-9_]*"
+          "type": "IMMEDIATE_TOKEN",
+          "content": {
+            "type": "PATTERN",
+            "value": "[a-zA-Z_][a-zA-Z0-9_]*"
+          }
         }
       ]
     },

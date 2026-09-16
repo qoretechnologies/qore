@@ -1729,9 +1729,14 @@ module.exports = grammar({
     ),
 
     // ==================== Identifiers ====================
-    identifier: $ => /[a-zA-Z_][a-zA-Z0-9_]*/,
+    // identifier is a rule rather than a token so that error recovery can insert a missing name: tree-sitter
+    // inserts a missing token only if the next token then reduces a rule
+    identifier: $ => $._identifier_token,
 
-    variable_name: $ => seq('$', /[a-zA-Z_][a-zA-Z0-9_]*/),
+    _identifier_token: $ => /[a-zA-Z_][a-zA-Z0-9_]*/,
+
+    // lib/scanner.lpp matches a variable reference as one VAR_REF token: \${WORD}
+    variable_name: $ => seq('$', token.immediate(/[a-zA-Z_][a-zA-Z0-9_]*/)),
 
     // lib/scanner.lpp matches a scoped name as one SCOPED_REF token:
     // ({WORD}::)+{WORD} or (::{WORD})+. A separator after a name is therefore
