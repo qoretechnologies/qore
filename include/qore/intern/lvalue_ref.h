@@ -44,6 +44,8 @@ public:
     QoreProgram* pgm;
     const void* lvalue_id;
     const qore_class_private* cls;
+    //! weak references to the reference node, which keep it allocated after its last reference is released
+    QoreReferenceCounter weak_refs;
 
     DLLLOCAL lvalue_ref(QoreValue lvexp, const QoreTypeInfo* typeInfo, QoreObject* self, const void* lvid, const qore_class_private* cls);
 
@@ -76,6 +78,18 @@ public:
 
     DLLLOCAL static lvalue_ref* get(const ReferenceNode* r) {
         return r->priv;
+    }
+
+    //! Increments the weak reference count of a reference node
+    DLLLOCAL static void weakRef(ReferenceNode* r) {
+        r->priv->weak_refs.ROreference();
+    }
+
+    //! Decrements the weak reference count of a reference node and deletes it when no references remain
+    DLLLOCAL static void weakDeref(ReferenceNode* r) {
+        if (r->priv->weak_refs.ROdereference()) {
+            delete r;
+        }
     }
 
     DLLLOCAL static bool scanNode(RSetHelper& rsh, QoreValue vexp);

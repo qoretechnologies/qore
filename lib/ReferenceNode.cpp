@@ -528,7 +528,8 @@ const char* ReferenceNode::getTypeName() const {
 
 bool ReferenceNode::derefImpl(ExceptionSink* xsink) {
     priv->del(xsink);
-    return true;
+    // a recursive set can keep the node allocated with a weak reference
+    return priv->weak_refs.ROdereference();
 }
 
 QoreValue ReferenceNode::doEval(ExceptionSink* xsink) const {

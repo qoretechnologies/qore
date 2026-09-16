@@ -31,6 +31,12 @@
 
 #include <qore/Qore.h>
 #include "qore/intern/QoreObjectIntern.h"
+#include "qore/intern/QoreClosureNode.h"
+#include "qore/intern/lvalue_ref.h"
+#include "qore/intern/qore_list_private.h"
+#include "qore/intern/QoreHashNodeIntern.h"
+
+#include <mutex>
 
 RObject::~RObject() {
    assert(!rset);
@@ -46,10 +52,7 @@ RSetDerefHelper::~RSetDerefHelper() {
 }
 
 bool RObject::scanCheck(RSetHelper& rsh, AbstractQoreNode* n) {
-#ifdef _QORE_CYCLE_CHECK
-    rsh.setScanContext(this);
-#endif
-    return rsh.checkIntern(n, rsh.newReference());
+    return rsh.checkNode(n);
 }
 
 void RObject::setRSet(RSet* rs, int rcnt) {
@@ -77,9 +80,6 @@ void RObject::setRSet(RSet* rs, int rcnt) {
         // valid
         tRef();
     }
-#ifdef _QORE_CYCLE_CHECK
-    refmap.clear();
-#endif
     // increment transaction count
     ++rcycle;
 }
@@ -198,6 +198,179 @@ void RObject::removeInvalidateRSetIntern() {
     }
 }
 
+namespace {
+//! A list, hash, closure or reference whose outside references prevent the collection of its recursive set
+struct NodeWatch {
+    // the set, which removes the watch when it is invalidated
+    const RSet* rset;
+    // a member of the set, whose dereference rechecks the set, with a weak reference
+    RObject* rep;
+    // the number of references to the node held by the members of the set
+    int internal;
+};
+
+// the watches are found by the address of the node, which the set keeps allocated with a weak reference; a counter
+// per bucket of addresses avoids taking the lock for a node that cannot be watched
+constexpr size_t NodeWatchBuckets = 4096;
+std::atomic<unsigned> node_watch_buckets[NodeWatchBuckets];
+std::mutex node_watch_lock;
+std::unordered_map<const AbstractQoreNode*, NodeWatch> node_watches;
+
+size_t node_watch_bucket(const AbstractQoreNode* n) {
+    uint64_t v = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(n));
+    v ^= v >> 33;
+    v *= 0xff51afd7ed558ccdULL;
+    v ^= v >> 33;
+    return static_cast<size_t>(v & (NodeWatchBuckets - 1));
+}
+
+// called with node_watch_lock held; returns the member with its weak reference, which the caller releases
+RObject* erase_node_watch(std::unordered_map<const AbstractQoreNode*, NodeWatch>::iterator i) {
+    RObject* rep = i->second.rep;
+    --node_watch_buckets[node_watch_bucket(i->first)];
+    --qore_dgc_node_watch_count;
+    node_watches.erase(i);
+    return rep;
+}
+
+//! Watches a node of a recursive set that has references from outside the set
+/** Called with the set's read lock held.
+*/
+void qore_dgc_watch_node(AbstractQoreNode* n, const RSet* rs, RObject* rep, int internal) {
+    RObject* old_rep = nullptr;
+    {
+        std::lock_guard<std::mutex> al(node_watch_lock);
+        auto i = node_watches.find(n);
+        if (i != node_watches.end()) {
+            if (i->second.rset == rs) {
+                return;
+            }
+            // the node's previous set has been replaced without being invalidated
+            old_rep = erase_node_watch(i);
+        }
+        rep->tRef();
+        node_watches.emplace(n, NodeWatch{rs, rep, internal});
+        ++node_watch_buckets[node_watch_bucket(n)];
+        ++qore_dgc_node_watch_count;
+    }
+    if (old_rep) {
+        old_rep->tDeref();
+    }
+}
+
+//! Removes the watch of a node of a set that is being invalidated
+void qore_dgc_unwatch_node(const AbstractQoreNode* n, const RSet* rs) {
+    if (!node_watch_buckets[node_watch_bucket(n)].load(std::memory_order_relaxed)) {
+        return;
+    }
+    RObject* rep;
+    {
+        std::lock_guard<std::mutex> al(node_watch_lock);
+        auto i = node_watches.find(n);
+        if (i == node_watches.end() || i->second.rset != rs) {
+            return;
+        }
+        rep = erase_node_watch(i);
+    }
+    rep->tDeref();
+}
+
+void qore_dgc_node_weak_ref(AbstractQoreNode* n) {
+    switch (n->getType()) {
+        case NT_LIST:
+            static_cast<QoreListNode*>(n)->weakRef();
+            break;
+        case NT_HASH:
+            static_cast<QoreHashNode*>(n)->weakRef();
+            break;
+        case NT_RUNTIME_CLOSURE:
+            static_cast<QoreClosureBase*>(n)->weakRef();
+            break;
+        case NT_REFERENCE:
+            lvalue_ref::weakRef(static_cast<ReferenceNode*>(n));
+            break;
+        default:
+            assert(false);
+    }
+}
+
+void qore_dgc_node_weak_deref(AbstractQoreNode* n) {
+    switch (n->getType()) {
+        case NT_LIST:
+            static_cast<QoreListNode*>(n)->weakDeref();
+            break;
+        case NT_HASH:
+            static_cast<QoreHashNode*>(n)->weakDeref();
+            break;
+        case NT_RUNTIME_CLOSURE:
+            static_cast<QoreClosureBase*>(n)->weakDeref();
+            break;
+        case NT_REFERENCE:
+            lvalue_ref::weakDeref(static_cast<ReferenceNode*>(n));
+            break;
+        default:
+            assert(false);
+    }
+}
+}
+
+std::atomic<unsigned> qore_dgc_node_watch_count{0};
+
+void qore_dgc_node_dereferenced(AbstractQoreNode* n, ExceptionSink* xsink) {
+    // the node is only accessed if it is watched, as the caller no longer holds a reference to it
+    if (!node_watch_buckets[node_watch_bucket(n)].load(std::memory_order_relaxed)) {
+        return;
+    }
+    RObject* rep;
+    {
+        std::lock_guard<std::mutex> al(node_watch_lock);
+        auto i = node_watches.find(n);
+        if (i == node_watches.end()) {
+            return;
+        }
+        // the set keeps the node allocated while it is watched
+        if (n->reference_count() > i->second.internal) {
+            return;
+        }
+        rep = erase_node_watch(i);
+    }
+
+    // a temporary reference to the member is released like any other reference, which rechecks its set
+    bool valid;
+    {
+        AutoLocker al(rep->rlck);
+        valid = rep->references > 0;
+        if (valid) {
+            ++rep->references;
+        }
+    }
+    if (valid) {
+        ExceptionSink tmp;
+        rep->releaseCycleReference(xsink ? xsink : &tmp);
+    }
+    rep->tDeref();
+}
+
+RSet::~RSet() {
+    //printd(5, "RSet::~RSet() this: %p (acnt: %d)\n", this, acnt);
+    assert(!acnt);
+    releaseNodes();
+}
+
+void RSet::addNode(AbstractQoreNode* n, int internal) {
+    assert(!acnt);
+    qore_dgc_node_weak_ref(n);
+    nodes.push_back(SetNode{n, internal});
+}
+
+void RSet::releaseNodes() {
+    for (const SetNode& n : nodes) {
+        qore_dgc_unwatch_node(n.node, this);
+        qore_dgc_node_weak_deref(n.node);
+    }
+    nodes.clear();
+}
+
 #ifdef DEBUG
 void RSet::dbg() {
     QoreAutoRWReadLocker al(rwl);
@@ -283,6 +456,29 @@ int RSet::canDelete(int ref_copy, int rcount, int scan_refs, RObject& initiator,
                 printd(QRO_LVL, "RSet::canDelete() this: %p can delete graph obj %p '%s' rcount: %d refs: %d\n",
                     this, *i, (*i)->getName(), (*i)->rcount, r);
             }
+            // a list, hash, closure or reference in the set can also be held from outside the set
+            if (!need_rescan) {
+                for (const SetNode& n : nodes) {
+                    int r = n.node->reference_count();
+                    if (r > n.internal) {
+                        // releasing the outside reference does not dereference any member, so a release that
+                        // leaves only the set's references rechecks the set
+                        qore_dgc_watch_node(n.node, this, *begin(), n.internal);
+                        // a reference released before the watch was registered did not recheck the set
+                        r = n.node->reference_count();
+                        if (r > n.internal) {
+                            printd(QRO_LVL, "RSet::canDelete() this: %p cannot delete graph node %p (%s) internal: "
+                                "%d refs: %d\n", this, n.node, get_type_name(n.node), n.internal, r);
+                            return 0;
+                        }
+                    }
+                    if (r < n.internal) {
+                        // a reference counted by the scan has been released
+                        need_rescan = true;
+                        break;
+                    }
+                }
+            }
         }
     }
 
@@ -302,7 +498,7 @@ int RSet::canDelete(int ref_copy, int rcount, int scan_refs, RObject& initiator,
 
     // Retain members before dropping the set's weak references. The initiating object is already protected
     // by its dereference helper. Cleanup runs outside the r-section and rset locks, after its destructor.
-    if (needs_member_release) {
+    if (!nodes.empty()) {
         cleanup.reserve(set.size());
         for (RObject* member : set) {
             if (member != &initiator) {
@@ -333,182 +529,282 @@ robject_dereference_helper::~robject_dereference_helper() {
     }
 }
 
-class RSectionScanHelper {
-protected:
-    RSetHelper* orsh;
-    RObject* ro;
-    unsigned size;
-
-public:
-    DLLLOCAL RSectionScanHelper(RSetHelper* n_orsh, RObject* n_ro) : orsh(0), ro(n_ro) {
-        int tid = q_gettid();
-
-        // if we already have the rsection lock, then ignore; already processed (either in fomap or tr_out)
-        if (n_ro->rml.hasRSectionLock(tid))
-            return;
-
-        // try to lock
-        if (ro->rml.tryRSectionLockNotifyWaitRead(&n_orsh->notifier)) {
-            ro = 0;
-            return;
-        }
-
-        orsh = n_orsh;
-        size = n_orsh->size();
-        orsh->inccnt();
-    }
-
-    DLLLOCAL ~RSectionScanHelper() {
-        if (!orsh)
-            return;
-
-        // if no objects were added to the set, then unlock the lock
-        if (orsh->size() == size) {
-            ro->rml.rSectionUnlock();
-            orsh->deccnt();
-            return;
-        }
-
-        // otherwise try to add the lock to the list to be released at the end of the scan
-        orsh->add(ro);
-    }
-
-    DLLLOCAL bool lockError() const {
-        return !ro;
-    }
-};
-
-bool RSetHelper::checkIntern(AbstractQoreNode* n, size_t ref) {
+bool RSetHelper::checkNode(AbstractQoreNode* n) {
     if (!needs_scan(n)) {
         return false;
     }
 
-    printd(5, "RSetHelper::checkIntern() checking %p %s\n", n, get_type_name(n));
-
-#ifdef _QORE_CYCLE_CHECK
-    RSetContextHelper rsc(*this);
-#endif
-
-    switch (get_node_type(n)) {
-        case NT_OBJECT: {
-            QoreObject* obj = reinterpret_cast<QoreObject*>(n);
-            return checkIntern(*qore_object_private::get(*obj), ref);
-        }
-
-        case NT_LIST: {
-            QoreListNode* l = reinterpret_cast<QoreListNode*>(n);
-            // check if this edge into the list has already been scanned
-            lset_t::value_type edge(ovec.empty() ? nullptr : ovec.back()->first, l);
-            lset_t::iterator lmi = lset.lower_bound(edge);
-            if (lmi != lset.end() && *lmi == edge) {
-                return false;
-            }
-            lset.insert(lmi, edge);
-
-            auto container = container_refs.try_emplace(l);
-            has_shared_containers |= !container.second;
-            refvec_t& refs = container.first->second;
-            size_t index = 0;
-
-            ListIterator li(l);
-            while (li.next()) {
-                size_t slot_ref = containerReference(refs, index++);
-                if (li.getValue().hasNode() && checkIntern(li.getValue().getInternalNode(), slot_ref)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        case NT_HASH: {
-            QoreHashNode* h = reinterpret_cast<QoreHashNode*>(n);
-            // check if this edge into the hash has already been scanned
-            hset_t::value_type edge(ovec.empty() ? nullptr : ovec.back()->first, h);
-            hset_t::iterator hmi = hset.lower_bound(edge);
-            if (hmi != hset.end() && *hmi == edge) {
-                return false;
-            }
-            hset.insert(hmi, edge);
-
-            auto container = container_refs.try_emplace(h);
-            has_shared_containers |= !container.second;
-            refvec_t& refs = container.first->second;
-            size_t index = 0;
-
-            HashIterator hi(h);
-            while (hi.next()) {
-                assert(hi.get().getInternalNode() != h);
-                size_t slot_ref = containerReference(refs, index++);
-                if (hi.get().hasNode() && checkIntern(hi.get().getInternalNode(), slot_ref)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        case NT_RUNTIME_CLOSURE: {
-            QoreClosureBase* c = reinterpret_cast<QoreClosureBase*>(n);
-            // do not lock or scan if the closure cannot contain any closure-bound local vars with objects or closures
-            // (also not through a container)
-            if (!c->needsScan()) {
-                printd(QRO_LVL, "RSetHelper::checkIntern() closure %p: no scan\n", c);
-                return false;
-            }
-            closure_set_t::iterator ci = closure_set.lower_bound(c);
-            // return false if already scanned
-            if (ci != closure_set.end() && *ci == c) {
-                printd(QRO_LVL, "RSetHelper::checkIntern() found dup closure %p\n", c);
-                return false;
-            }
-            // insert into scanned closure set
-            closure_set.insert(ci, c);
-
-            // do not scan any closure object since weak references are used
-            // iterate captured lvars
-            const cvar_map_t& cmap = c->getMap();
-
-            for (cvar_map_t::const_iterator i = cmap.begin(), e = cmap.end(); i != e; ++i) {
-                // do not grab the lock if the lvalue cannot contain an object or closure (also not through a
-                // container)
-                if (!i->second->needsScan(true)) {
-                    printd(QRO_LVL, "RSetHelper::checkIntern() closure %p: var %s: no scan\n", c,
-                        i->first->getName());
-                    continue;
-                }
-                RSectionScanHelper rssh(this, i->second);
-                if (rssh.lockError()) {
-                    return true;
-                }
-#ifdef DEBUG
-                unsigned csize = size();
-#endif
-
-                if (checkIntern(*i->second, newReference())) {
-                    return true;
-                }
-
-#ifdef DEBUG
-                if (csize != size()) {
-                    printd(QRO_LVL, "RSetHelper::checkIntern() closure var '%s' found rref (type: %s)\n",
-                        i->first->getName(), i->second->val.getTypeName());
-                } else {
-                    printd(QRO_LVL, "RSetHelper::checkIntern() closure var '%s' no rref; size: %d (type: %s)\n",
-                        i->first->getName(), csize, i->second->val.getTypeName());
-                }
-#endif
-            }
-
-            return false;
-        }
-
+    NodeKind kind;
+    switch (n->getType()) {
+        case NT_OBJECT:
+            return checkNode(*qore_object_private::get(*static_cast<QoreObject*>(n)));
+        case NT_LIST:
+            kind = NodeKind::List;
+            break;
+        case NT_HASH:
+            kind = NodeKind::Hash;
+            break;
+        case NT_RUNTIME_CLOSURE:
+            kind = NodeKind::Closure;
+            break;
         case NT_REFERENCE:
-            return lvalue_ref::get(static_cast<ReferenceNode*>(n))->scanReference(*this);
+            kind = NodeKind::Reference;
+            break;
+        default:
+            return false;
     }
 
+    assert(current >= 0);
+    // a value held already cannot have been freed and replaced by another at the same address
+    if (hold_edges && held.insert(n).second) {
+        n->ref();
+        held_nodes.push_back(n);
+    }
+    edges.push_back(ScanEdge{current, -1, n, kind});
+    return false;
+}
+
+bool RSetHelper::checkNode(RObject& robj) {
+    assert(current >= 0);
+    if (hold_edges && held.insert(&robj).second) {
+        robj.tRef();
+        held_objects.push_back(&robj);
+    }
+    edges.push_back(ScanEdge{current, -1, &robj, NodeKind::Object});
+    return false;
+}
+
+int RSetHelper::getNode(void* ptr, NodeKind kind, bool& lock_error) {
+    auto i = node_map.find(ptr);
+    if (i != node_map.end()) {
+        return i->second;
+    }
+
+    if (kind != NodeKind::Object) {
+        int id = static_cast<int>(nodes.size());
+        nodes.emplace_back(ptr, kind);
+        node_map.emplace(ptr, id);
+        return id;
+    }
+
+    RObject& obj = *static_cast<RObject*>(ptr);
+    // an rsection held by this thread before the scan is not released by the scan
+    bool had_lock = obj.rml.hasRSectionLock();
+    if (obj.rml.tryRSectionLockNotifyWaitRead(&notifier)) {
+        printd(QRO_LVL, "RSetHelper::getNode() obj %p '%s' cannot enter rsection: rsection tid: %d\n", &obj,
+            obj.getName(), obj.rml.rSectionTid());
+        lock_error = true;
+        return -1;
+    }
+    if (!had_lock) {
+        inccnt();
+    }
+
+    // do not scan invalid objects or objects being deleted
+    if (!obj.isValid()) {
+        if (!had_lock) {
+            obj.rml.rSectionUnlock();
+            deccnt();
+        }
+        node_map.emplace(ptr, -1);
+        return -1;
+    }
+
+    int id = static_cast<int>(nodes.size());
+    nodes.emplace_back(ptr, kind);
+    ScanNode& n = nodes.back();
+    n.unlock = !had_lock;
+    // an object that cannot reference other objects is not part of any cycle
+    n.leaf = !obj.needsScan(true);
+    node_map.emplace(ptr, id);
+    printd(QRO_LVL, "RSetHelper::getNode() + adding obj %p '%s' (leaf: %d)\n", &obj, obj.getName(), n.leaf);
+    return id;
+}
+
+void RSetHelper::startNode(int id) {
+    {
+        ScanNode& n = nodes[id];
+        n.index = n.lowlink = next_index++;
+        n.on_stack = true;
+    }
+    stack.push_back(id);
+
+    size_t begin = edges.size();
+    current = id;
+    const ScanNode& n = nodes[id];
+    switch (n.kind) {
+        case NodeKind::Object:
+            if (!n.leaf) {
+                static_cast<RObject*>(n.ptr)->scanMembers(*this);
+            }
+            break;
+
+        case NodeKind::List: {
+            // the list cannot be changed: it is shared, or its only holder is locked or cannot be changed itself
+            ListIterator li(static_cast<QoreListNode*>(n.ptr));
+            while (li.next()) {
+                QoreValue v = li.getValue();
+                if (v.hasNode()) {
+                    checkNode(v.getInternalNode());
+                }
+            }
+            break;
+        }
+
+        case NodeKind::Hash: {
+            HashIterator hi(static_cast<QoreHashNode*>(n.ptr));
+            while (hi.next()) {
+                QoreValue v = hi.get();
+                if (v.hasNode()) {
+                    checkNode(v.getInternalNode());
+                }
+            }
+            break;
+        }
+
+        case NodeKind::Closure: {
+            // the closure's object is referenced weakly
+            const cvar_map_t& cmap = static_cast<QoreClosureBase*>(n.ptr)->getMap();
+            for (cvar_map_t::const_iterator i = cmap.begin(), e = cmap.end(); i != e; ++i) {
+                // a variable that cannot contain an object or closure, also not through a container, is not scanned
+                if (i->second->needsScan(true)) {
+                    checkNode(*i->second);
+                }
+            }
+            break;
+        }
+
+        case NodeKind::Reference:
+            lvalue_ref::get(static_cast<ReferenceNode*>(n.ptr))->scanReference(*this);
+            break;
+    }
+    current = -1;
+
+    frames.push_back(ScanFrame{id, begin, edges.size()});
+}
+
+bool RSetHelper::scan(RObject& root) {
+    bool lock_error = false;
+    int root_id = getNode(&root, NodeKind::Object, lock_error);
+    if (lock_error) {
+        return true;
+    }
+    if (root_id < 0) {
+        return false;
+    }
+
+    // Tarjan's strongly connected components algorithm with an explicit stack, as the graph can be deeper than the
+    // thread's stack allows
+    startNode(root_id);
+    while (!frames.empty()) {
+        ScanFrame& frame = frames.back();
+        if (frame.next < frame.end) {
+            size_t ei = frame.next++;
+            int from = frame.node;
+            // the frame and edge references are invalid after a node is started
+            int to = getNode(edges[ei].target, edges[ei].kind, lock_error);
+            if (lock_error) {
+                return true;
+            }
+            edges[ei].to = to;
+            if (to < 0) {
+                continue;
+            }
+            if (nodes[to].index < 0) {
+                startNode(to);
+            } else if (nodes[to].on_stack && nodes[to].index < nodes[from].lowlink) {
+                nodes[from].lowlink = nodes[to].index;
+            }
+            continue;
+        }
+
+        int id = frame.node;
+        frames.pop_back();
+        if (nodes[id].lowlink == nodes[id].index) {
+            // the node is the root of a component
+            int component = static_cast<int>(component_size.size());
+            unsigned size = 0;
+            while (true) {
+                int w = stack.back();
+                stack.pop_back();
+                nodes[w].on_stack = false;
+                nodes[w].component = component;
+                ++size;
+                if (w == id) {
+                    break;
+                }
+            }
+            component_size.push_back(size);
+            component_cyclic.push_back(size > 1);
+        }
+        if (!frames.empty()) {
+            int parent = frames.back().node;
+            if (nodes[id].lowlink < nodes[parent].lowlink) {
+                nodes[parent].lowlink = nodes[id].lowlink;
+            }
+        }
+    }
+    assert(stack.empty());
+
+    countInternalReferences();
+    return prepareCommit();
+}
+
+void RSetHelper::countInternalReferences() {
+    // a reference is internal if its holder is in the same component; a node that references itself forms a cycle
+    for (const ScanEdge& e : edges) {
+        if (e.to < 0 || nodes[e.from].component != nodes[e.to].component) {
+            continue;
+        }
+        if (e.from == e.to) {
+            component_cyclic[nodes[e.to].component] = true;
+        }
+    }
+    for (const ScanEdge& e : edges) {
+        if (e.to >= 0 && nodes[e.from].component == nodes[e.to].component
+            && component_cyclic[nodes[e.to].component]) {
+            ++nodes[e.to].internal;
+        }
+    }
+
+    // Every internal reference is a reference held by a node of the component, so a component with more internal
+    // references to a node than the node has in total was scanned inconsistently; it is not made a recursive set,
+    // which would allow its collection
+    for (const ScanNode& n : nodes) {
+        if (n.component < 0 || !component_cyclic[n.component]) {
+            continue;
+        }
+        int refs = n.kind == NodeKind::Object
+            ? static_cast<RObject*>(n.ptr)->refs()
+            : static_cast<AbstractQoreNode*>(n.ptr)->reference_count();
+        if (n.internal > refs) {
+            printd(0, "RSetHelper::countInternalReferences() node %p kind %d has %d internal references and %d "
+                "references; not making a recursive set\n", n.ptr, static_cast<int>(n.kind), n.internal, refs);
+            component_cyclic[n.component] = false;
+        }
+    }
+}
+
+bool RSetHelper::prepareCommit() {
+    int tid = q_gettid();
+    for (const ScanNode& n : nodes) {
+        if (n.kind != NodeKind::Object || !component_cyclic[n.component]) {
+            continue;
+        }
+        RObject* obj = static_cast<RObject*>(n.ptr);
+        // the members of the object's current set that were not scanned are locked until the set is replaced
+        if (obj->rset && removeInvalidate(obj->rset, tid)) {
+            return true;
+        }
+    }
     return false;
 }
 
 bool RSetHelper::removeInvalidate(RSet* ors, int tid) {
+    if (tr_invalidate.find(ors) != tr_invalidate.end()) {
+        return false;
+    }
+
     // get a list of objects to be invalidated
     rvec_t rovec;
 
@@ -520,7 +816,7 @@ bool RSetHelper::removeInvalidate(RSet* ors, int tid) {
 
         // first grab all rsection locks
         for (rset_t::iterator ri = ors->begin(), re = ors->end(); ri != re; ++ri) {
-            // if we already have the rsection lock, then ignore; already processed (either in fomap or tr_out)
+            // if we already have the rsection lock, then ignore; already processed (either scanned or in tr_out)
             if ((*ri)->rml.hasRSectionLock(tid))
                 continue;
 
@@ -535,10 +831,7 @@ bool RSetHelper::removeInvalidate(RSet* ors, int tid) {
                 }
                 return true;
             }
-#ifdef DEBUG
-            // we always have the rsection lock here
             inccnt();
-#endif
 
             // check object status; do not scan invalid objects or objects being deleted
             if (!(*ri)->isValid()) {
@@ -554,373 +847,11 @@ bool RSetHelper::removeInvalidate(RSet* ors, int tid) {
     // invalidate old rset when transaction is committed
     tr_invalidate.insert(ors);
 
-    // now process old rset
     for (unsigned i = 0; i < rovec.size(); ++i) {
         assert(rovec[i]->rml.hasRSectionLock());
         assert(rovec[i]->rset == ors);
-
-        if (rovec[i]->isValid()) {
-            tr_out.insert(rovec[i]);
-        }
+        tr_out.insert(rovec[i]);
     }
-
-    return false;
-}
-
-bool RSetHelper::addToRSet(omap_t::iterator oi, RSet* rset, int tid, size_t ref) {
-    // ensure that the current object is not in the rset
-    assert(rset->find(oi->first) == rset->end());
-
-    // queue mark object as finalized
-    oi->second.finalize(rset);
-    assert(oi->second.rset);
-
-    // insert into new rset
-    rset->insert(oi->first);
-
-    // queue any nodes not scanned for rset invalidation
-    if (oi->first->rset) {
-        assert(rset != oi->first->rset);
-        if (removeInvalidate(oi->first->rset, tid)) {
-            return true;
-        }
-    }
-
-    printd(QRO_LVL, " + %p '%s': finalized with rset: %p (rcount: %d)\n", oi->first, oi->first->getName(), rset,
-        oi->second.rcount);
-
-    assert(!oi->second.in_cycle);
-    oi->second.in_cycle = true;
-    assert(oi->second.rset);
-    // increment rcount
-#ifdef _QORE_CYCLE_CHECK
-    printd(QRO_LVL, " + %p '%s': second.rset: %p final: %d ok: %d rcount: %d -> %d (<- %p)\n", oi->first,
-        oi->first->getName(), oi->second.rset, oi->second.in_cycle, oi->second.ok, oi->second.rcount,
-        oi->second.rcount + 1, scan_context);
-#endif
-    countRef(oi, ref);
-    return false;
-}
-
-void RSetHelper::mergeRSet(int i, RSet*& rset) {
-    omap_t::iterator oi = ovec[i];
-    assert(oi->second.rset);
-    assert(rset);
-    assert(oi->second.rset != rset);
-
-    printd(QRO_LVL, " + %p '%s': already finalized with rset: %p (size: %d, rcount: %d) current rset: %p "
-            "(size: %d)\n", oi->first, oi->first->getName(), oi->second.rset, (int)oi->second.rset->size(),
-            oi->second.rcount, rset ? rset : 0, rset ? (int)rset->size() : 0);
-
-    if (rset->size() > oi->second.rset->size()) {
-        printd(QRO_LVL, " + %p '%s': rset: %p (%d) assimilating %p (%d)\n", oi->first, oi->first->getName(), rset,
-            (int)rset->size(), oi->second.rset, (int)oi->second.rset->size());
-        // merge oi->second.rset into rset and retag objects
-        RSet* old_rset = oi->second.rset;
-        mergeRSetIntern(rset, old_rset);
-    } else {
-        printd(QRO_LVL, " + %p '%s': oi->second.rset: %p (%d) assimilating %p (%d)\n", oi->first,
-            oi->first->getName(), oi->second.rset, (int)oi->second.rset->size(), rset, (int)rset->size());
-        // merge rset into oi->second.rset and retag objects
-        RSet* old_rset = rset;
-        rset = oi->second.rset;
-        mergeRSetIntern(rset, old_rset);
-    }
-}
-
-void RSetHelper::mergeRSetIntern(RSet*& rset, RSet* old_rset) {
-    for (rset_t::iterator i = old_rset->begin(), e = old_rset->end(); i != e; ++i) {
-        rset->insert(*i);
-        omap_t::iterator noi = fomap.find(*i);
-        assert(noi != fomap.end());
-        noi->second.rset = rset;
-    }
-    delete old_rset;
-}
-
-bool RSetHelper::makeChain(int i, omap_t::iterator fi, int tid, size_t ref) {
-    for (++i; i < (int)ovec.size(); ++i) {
-#ifdef _QORE_CYCLE_CHECK
-        RSetScanContextHelper rsc(*this, i == 0 ? scan_context : ovec[i - 1]->first);
-#endif
-        if (!ovec[i]->second.rset) {
-            printd(QRO_LVL, " + %p '%s': adding parent to rset\n", ovec[i]->first, ovec[i]->first->getName());
-            // add the object to the rset and increment rcount
-            if (addToRSet(ovec[i], fi->second.rset, tid, orefs[i])) {
-                return true;
-            }
-        } else if (!fi->second.rset) {
-            if (addToRSet(fi, ovec[i]->second.rset, tid, ref)) {
-                return true;
-            }
-        } else if (ovec[i]->second.rset != fi->second.rset) {
-            assert(fi->second.rset);
-            // NOTE: do not increment rcount when merging rsets
-            mergeRSet(i, fi->second.rset);
-        }
-    }
-
-    // Count the forward-edge from the last object in the chain to the target object (fi)
-    // This edge wasn't counted because fi was already finalized when first encountered
-    if (!ovec.empty() && ovec.back()->second.rset == fi->second.rset) {
-#ifdef _QORE_CYCLE_CHECK
-        // Set scan_context to the source of the forward-edge (ovec.back()) before recording
-        RSetScanContextHelper rsc(*this, ovec.back()->first);
-#endif
-        printd(QRO_LVL, " + %p '%s': counting forward-edge to %p '%s' (rcount: %d -> %d)\n",
-            ovec.back()->first, ovec.back()->first->getName(),
-            fi->first, fi->first->getName(),
-            fi->second.rcount, fi->second.rcount + 1);
-        countRef(fi, ref);
-    }
-
-    return false;
-}
-
-#ifdef _QORE_CYCLE_CHECK
-void RSetHelper::setObjectScanContext(RObject& obj, int rcount) {
-    assert(scan_context);
-    assert(obj.refmap.find(scan_context) == obj.refmap.end());
-    obj.refmap.insert(scan_context);
-    assert(obj.refmap.size() == (unsigned)rcount);
-}
-#endif
-
-// XXX RSectionScanHelper
-bool RSetHelper::checkIntern(RObject& obj, size_t ref) {
-#ifdef DEBUG
-    bool hl = obj.rml.hasRSectionLock();
-#endif
-    if (obj.rml.tryRSectionLockNotifyWaitRead(&notifier)) {
-        printd(QRO_LVL, "RSetHelper::checkIntern() + obj %p '%s' cannot enter rsection: rsection tid: %d\n", &obj,
-            obj.getName(), obj.rml.rSectionTid());
-        return true;
-    }
-#ifdef DEBUG
-    if (!hl) {
-        inccnt();
-    }
-#endif
-
-    // check object status; do not scan invalid objects or objects being deleted
-    if (!obj.isValid()) {
-        obj.rml.rSectionUnlock();
-        deccnt();
-        return false;
-    }
-
-    int tid = q_gettid();
-
-    // see if the object has been scanned
-    omap_t::iterator fi = fomap.lower_bound(&obj);
-    if (fi != fomap.end() && fi->first == &obj) {
-        printd(QRO_LVL, "RSetHelper::checkIntern() + found obj %p '%s' rcount: %d in_cycle: %d ok: %d\n", &obj,
-            obj.getName(), fi->second.rcount, fi->second.in_cycle, fi->second.ok);
-
-        // The object's position in the current scan chain, if any
-        const int fi_idx = currentSetIndex(fi);
-
-        if (fi->second.ok) {
-            assert(!fi->second.in_cycle);
-            printd(QRO_LVL, " + %p '%s' already scanned and ok\n", &obj, obj.getName());
-            return false;
-        }
-
-        if (fi->second.in_cycle) {
-            assert(fi->second.rset);
-            // check if this object is part of the current cycle already - if
-            // 1) it's already in the current scan vector, or
-            // 2) the parent object of the current object is already a part of the recursive set
-            if (fi_idx >= 0) {
-#ifdef _QORE_CYCLE_CHECK
-                printd(QRO_LVL, " + recursive obj %p '%s' already finalized and in current cycle "
-                    "(rcount: %d -> %d) <- %p\n", &obj, obj.getName(), fi->second.rcount, fi->second.rcount + 1,
-                    scan_context);
-#endif
-                countRef(fi, ref);
-                // rcount can never be more than real references for the target object
-                assert(fi->first->references >= fi->second.rcount);
-            } else if (!ovec.empty()) {
-                // FIXME: use this optimization in the loop below
-                if (ovec.back()->second.rset == fi->second.rset) {
-#ifdef _QORE_CYCLE_CHECK
-                    printd(QRO_LVL, " + %p '%s': parent object %p '%s' in same cycle (rcount: %d -> %d) <- %p\n", &obj,
-                        obj.getName(), ovec.back()->first, ovec.back()->first->getName(), fi->second.rcount,
-                        fi->second.rcount + 1, scan_context);
-#endif
-                    countRef(fi, ref);
-                    // rcount can never be more than real references for the target object
-                    assert(fi->first->references >= fi->second.rcount);
-                    return false;
-                }
-
-                // see if any parent of the current object is already in the same recursive cycle, if so, we have a
-                // new chain (quick comparison first)
-                for (int i = ovec.size() - 1; i >= 0; --i) {
-                    if (fi->second.rset == ovec[i]->second.rset) {
-                        printd(QRO_LVL, " + recursive obj %p '%s' already finalized, cyclic ancestor %p '%s' in "
-                            "current cycle\n", &obj, obj.getName(), ovec[i]->first, ovec[i]->first->getName());
-                        return makeChain(i, fi, tid, ref);
-                    }
-                }
-
-                // see if any parent of the current object is already in a recursive cycle to be joined, if so, we
-                // have a new chain (slower comparison second)
-                for (int i = ovec.size() - 1; i >= 0; --i) {
-                    if (fi->second.rset->find((ovec[i])->first) != fi->second.rset->end()) {
-                        printd(QRO_LVL, " + recursive obj %p '%s' already finalized, cyclic ancestor %p '%s' in "
-                            "current cycle\n", &obj, obj.getName(), ovec[i]->first, ovec[i]->first->getName());
-                        return makeChain(i, fi, tid, ref);
-                    }
-                }
-
-                printd(QRO_LVL, " + recursive obj %p '%s' already finalized but not in current cycle\n", &obj,
-                    obj.getName());
-                return false;
-            }
-        } else {
-            if (fi_idx < 0) {
-                printd(QRO_LVL, " + recursive obj %p '%s' not in current cycle\n", &obj, obj.getName());
-                return false;
-            }
-        }
-
-        // finalize current objects immediately
-        RSet* rset = fi->second.rset;
-#ifdef DEBUG
-        if (rset)
-            printd(QRO_LVL, " + %p '%s': reusing RSet: %p\n", &obj, obj.getName(), rset);
-#endif
-
-        // issue #xxxx: save in_cycle state and rset before walk-back to detect forward-edges
-        // that need to be counted when:
-        // 1. An object joins an existing cycle (was not in_cycle, successor was)
-        // 2. Two separate cycles are merged (both were in_cycle but different rsets)
-        std::vector<bool> was_in_cycle;
-        std::vector<RSet*> was_rset;
-        was_in_cycle.reserve(ovec.size());
-        was_rset.reserve(ovec.size());
-        for (auto& it : ovec) {
-            was_in_cycle.push_back(it->second.in_cycle);
-            was_rset.push_back(it->second.rset);
-        }
-
-        int i = (int)ovec.size() - 1;
-        while (i >= 0) {
-#ifdef _QORE_CYCLE_CHECK
-            RSetScanContextHelper rsc(*this, i == 0 ? scan_context : ovec[i - 1]->first);
-#endif
-            assert(i >= 0);
-
-            // get iterator to object record
-            omap_t::iterator oi = ovec[i];
-
-            // add object to rset or merge rsets
-            if (!oi->second.rset) {
-                if (!rset) {
-                    rset = new RSet;
-                    printd(QRO_LVL, " + %p '%s': rcycle: %d second.rset: %p new RSet: %p\n", oi->first,
-                        oi->first->getName(), obj.rcycle.load(), oi->second.rset, rset);
-                }
-
-                if (addToRSet(oi, rset, tid, oi == fi ? ref : orefs[i])) {
-                    return true;
-                }
-            } else if (!rset) {
-                rset = oi->second.rset;
-                if (addToRSet(fi, rset, tid, ref)) {
-                    return true;
-                }
-            } else if (oi->second.rset != rset) {
-                assert(rset);
-                // NOTE: do not increment rcount when merging rsets
-                mergeRSet(i, rset);
-            }
-
-            if (oi->first == &obj) {
-                break;
-            }
-
-            --i;
-        }
-
-        // issue #xxxx: count forward-edges that were not counted during the walk-back
-        // The edge from ovec[j] to ovec[j+1] needs to be counted in ovec[j+1]'s rcount if:
-        // 1. ovec[j] was not in a cycle before, and ovec[j+1] was already in a cycle
-        //    (the edge wasn't counted because ovec[j+1] was already finalized when first encountered)
-        // 2. Both were in cycles but DIFFERENT rsets before, and are now in the same rset
-        //    (the edge wasn't counted because they were in separate cycles)
-        for (size_t j = 0; j + 1 < ovec.size(); ++j) {
-            omap_t::iterator curr_oi = ovec[j];
-            omap_t::iterator next_oi = ovec[j + 1];
-
-            // Skip if they're not in the same rset now
-            if (!curr_oi->second.rset || next_oi->second.rset != curr_oi->second.rset) {
-                continue;
-            }
-
-            bool should_count = false;
-
-            if (!was_in_cycle[j] && was_in_cycle[j + 1]) {
-                // Case 1: ovec[j] just joined the cycle, ovec[j+1] was already in a cycle
-                should_count = true;
-            } else if (was_in_cycle[j] && was_in_cycle[j + 1] && was_rset[j] != was_rset[j + 1]) {
-                // Case 2: Both were in cycles but different rsets - now merged
-                should_count = true;
-            }
-
-            if (should_count) {
-#ifdef _QORE_CYCLE_CHECK
-                // Set scan_context to the source of the forward-edge before recording
-                RSetScanContextHelper rsc(*this, curr_oi->first);
-#endif
-                printd(QRO_LVL, " + %p '%s': counting forward-edge to %p '%s' (rcount: %d -> %d)\n",
-                    curr_oi->first, curr_oi->first->getName(),
-                    next_oi->first, next_oi->first->getName(),
-                    next_oi->second.rcount, next_oi->second.rcount + 1);
-                countRef(next_oi, orefs[j + 1]);
-            }
-        }
-
-        return false;
-    } else {
-        printd(QRO_LVL, "RSetHelper::checkIntern() + adding new obj %p '%s' setting rcount = 0 (current: %d "
-            "rset: %p)\n", &obj, obj.getName(), obj.rcount, obj.rset);
-
-        // insert into total scanned object set
-        fi = fomap.insert(fi, omap_t::value_type(&obj, RSetStat()));
-
-        // check if the object should be iterated
-        if (!obj.needsScan(true)) {
-            // remove from invalidation set if present
-            tr_out.erase(&obj);
-
-            printd(QRO_LVL, "RSetHelper::checkIntern() obj %p '%s' will not be iterated since object count is 0\n",
-                &obj, obj.getName());
-            fi->second.ok = true;
-            assert(!fi->second.rset);
-            return false;
-        }
-    }
-
-    // push on current vector chain
-    ovec.push_back(fi);
-    orefs.push_back(ref);
-
-    // remove from invalidation set if present
-    tr_out.erase(&obj);
-
-    // recursively check data members
-#ifdef _QORE_CYCLE_CHECK
-    RSetScanContextHelper sch(*this, &obj);
-#endif
-    if (obj.scanMembers(*this)) {
-        return true;
-    }
-
-    // remove from current vector chain
-    ovec.pop_back();
-    orefs.pop_back();
 
     return false;
 }
@@ -959,10 +890,7 @@ public:
     }
 };
 
-RSetHelper::RSetHelper(RObject& obj) {
-#ifdef DEBUG
-    lcnt = 0;
-#endif
+RSetHelper::RSetHelper(RObject& obj, ExceptionSink* xsink) : xsink(xsink) {
     if (q_disable_gc) {
         return;
     }
@@ -991,7 +919,7 @@ RSetHelper::RSetHelper(RObject& obj) {
     }
 
     while (true) {
-        if (checkIntern(obj, 0)) {
+        if (scan(obj)) {
             rollback();
             // wait for foreign transaction to finish if necessary
             notifier.wait();
@@ -1009,30 +937,36 @@ RSetHelper::RSetHelper(RObject& obj) {
         break;
     }
 
-    if (obj.isValid()) {
-        commit(obj);
-    }
+    commit();
 
     printd(QRO_LVL, "RSetHelper::RSetHelper() this: %p (%p) EXIT\n", this, &obj);
 }
 
-void RSetHelper::commit(RObject& obj) {
-#ifdef DEBUG
-    bool has_obj = false;
-#endif
+RSetHelper::~RSetHelper() {
+    assert(!lcnt);
+    releaseHeld();
+}
 
-    assert(obj.rml.checkRSectionExclusive());
-
-    // Unshared containers release all their slots when an owning object is destroyed, so the usual
-    // cascading dereference is sufficient. Shared containers may leave a subcycle without such a trigger.
-    if (has_shared_containers) {
-        for (const auto& entry : fomap) {
-            if (entry.second.rset) {
-                entry.second.rset->enableCycleCleanup();
-            }
-        }
+void RSetHelper::releaseHeld() {
+    if (held_nodes.empty() && held_objects.empty()) {
+        return;
     }
+    // the references are released after the scan's locks, as releasing them can run destructors
+    held.clear();
+    std::vector<AbstractQoreNode*> nvec;
+    nvec.swap(held_nodes);
+    std::vector<RObject*> ovec;
+    ovec.swap(held_objects);
+    ExceptionSink tmp;
+    for (AbstractQoreNode* n : nvec) {
+        n->deref(xsink ? xsink : &tmp);
+    }
+    for (RObject* o : ovec) {
+        o->tDeref();
+    }
+}
 
+void RSetHelper::commit() {
     // invalidate rsets
     for (rs_set_t::iterator i = tr_invalidate.begin(), e = tr_invalidate.end(); i != e; ++i) {
         (*i)->invalidate();
@@ -1040,102 +974,96 @@ void RSetHelper::commit(RObject& obj) {
 
     // unlock rsection
     for (rset_t::iterator i = tr_out.begin(), e = tr_out.end(); i != e; ++i) {
-        assert(fomap.find(*i) == fomap.end());
-#ifdef _QORE_CYCLE_CHECK
-        (*i)->refmap.clear();
-#endif
+        assert(node_map.find(*i) == node_map.end() || node_map.find(*i)->second < 0);
         (*i)->rml.rSectionUnlock();
         deccnt();
     }
 
-    // finalize graph - exit rsection
-#ifdef DEBUG
-    // DEBUG
-    for (omap_t::iterator i = fomap.begin(), e = fomap.end(); i != e; ++i) {
-        RObject* tobj = i->first;
-
-        assert(qore_var_rwlock_priv::get(tobj->rml)->write_tid >= -1);
-
-        RSet* rs = i->second.rset;
-        int rcount = i->second.rcount;
-        assert(tr_out.find(tobj) == tr_out.end());
-        tobj->setRSet(rs, rcount);
-
-        if (tobj == &obj)
-            has_obj = true;
+    // create a recursive set for each component with a cycle
+    std::vector<RSet*> rsets(component_size.size(), nullptr);
+    for (const ScanNode& n : nodes) {
+        if (n.kind != NodeKind::Object || !component_cyclic[n.component]) {
+            continue;
+        }
+        RSet*& rs = rsets[n.component];
+        if (!rs) {
+            rs = new RSet;
+        }
+        rs->insert(static_cast<RObject*>(n.ptr));
+    }
+    for (const ScanNode& n : nodes) {
+        if (n.kind == NodeKind::Object || !component_cyclic[n.component]) {
+            continue;
+        }
+        // every component with a cycle has an object or closure-bound variable
+        assert(rsets[n.component]);
+        rsets[n.component]->addNode(static_cast<AbstractQoreNode*>(n.ptr), n.internal);
     }
 
-    for (omap_t::iterator i = fomap.begin(), e = fomap.end(); i != e; ++i) {
-        RSet* rs = i->second.rset;
-        assert(!rs || (rs->size() == rs->getCount()));
+    // finalize graph - exit rsection
+    for (const ScanNode& n : nodes) {
+        if (n.kind != NodeKind::Object) {
+            continue;
+        }
+        RObject* obj = static_cast<RObject*>(n.ptr);
+        assert(qore_var_rwlock_priv::get(obj->rml)->write_tid >= -1);
+        RSet* rs = rsets[n.component];
+        printd(QRO_LVL, "RSetHelper::commit() obj %p '%s' rset: %p rcount: %d\n", obj, obj->getName(), rs,
+            n.internal);
+        obj->setRSet(rs, rs ? n.internal : 0);
+    }
 
+#ifdef DEBUG
+    for (RSet* rs : rsets) {
         if (!rs) {
             continue;
         }
+        assert(rs->size() == rs->getCount());
         for (rset_t::iterator ri = rs->begin(), re = rs->end(); ri != re; ++ri) {
-            RObject* o = (*ri);
-            assert(o->rset == rs);
+            assert((*ri)->rset == rs);
         }
-    }
-
-    for (omap_t::iterator i = fomap.begin(), e = fomap.end(); i != e; ++i) {
-        i->first->rml.rSectionUnlock();
-        deccnt();
-    }
-#else
-    for (omap_t::iterator i = fomap.begin(), e = fomap.end(); i != e; ++i) {
-        i->first->setRSet(i->second.rset, i->second.rcount);
-    }
-    for (omap_t::iterator i = fomap.begin(), e = fomap.end(); i != e; ++i) {
-        i->first->rml.rSectionUnlock();
     }
 #endif
 
-    assert(fomap.empty() || has_obj);
+    for (const ScanNode& n : nodes) {
+        if (n.kind == NodeKind::Object && n.unlock) {
+            static_cast<RObject*>(n.ptr)->rml.rSectionUnlock();
+            deccnt();
+        }
+    }
+
     assert(!lcnt);
 }
 
 void RSetHelper::rollback() {
-    for (omap_t::iterator i = fomap.begin(), e = fomap.end(); i != e; ++i) {
-        if (i->second.rset) {
-            RSet* r = i->second.rset;
-            if (r->pop())
-                delete r;
+    for (const ScanNode& n : nodes) {
+        if (n.kind == NodeKind::Object && n.unlock) {
+            static_cast<RObject*>(n.ptr)->rml.rSectionUnlock();
+            deccnt();
         }
-#ifdef _QORE_CYCLE_CHECK
-        i->first->refmap.clear();
-#endif
-        i->first->rml.rSectionUnlock();
-        deccnt();
-   }
+    }
 
     // exit rsection of objects in tr_out
     for (rset_t::iterator i = tr_out.begin(), e = tr_out.end(); i != e; ++i) {
-        assert(fomap.find(*i) == fomap.end());
-#ifdef _QORE_CYCLE_CHECK
-        (*i)->refmap.clear();
-#endif
         (*i)->rml.rSectionUnlock();
         deccnt();
     }
 
-    fomap.clear();
-    ovec.clear();
-    orefs.clear();
-    // the scan starts over from scratch, so the container, closure and reference-counting memos must be reset
-    // as well; leaving them populated makes the retry skip every container and closure the aborted attempt
-    // already walked, which drops those edges from the graph exactly as a per-node container memo would
-    hset.clear();
-    lset.clear();
-    closure_set.clear();
-    container_refs.clear();
-    counted_refs.clear();
-    next_ref = 0;
-    has_shared_containers = false;
+    assert(!lcnt);
+
+    // the scan starts over from scratch
+    nodes.clear();
+    node_map.clear();
+    edges.clear();
+    frames.clear();
+    stack.clear();
+    component_size.clear();
+    component_cyclic.clear();
+    next_index = 0;
+    current = -1;
     tr_out.clear();
     tr_invalidate.clear();
-
-    assert(!lcnt);
+    // the held values are released by the destructor, after the scan lock of the object that the scan started at
 
 #ifdef _POSIX_PRIORITY_SCHEDULING
     sched_yield();

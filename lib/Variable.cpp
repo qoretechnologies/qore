@@ -710,7 +710,7 @@ LValueHelper::~LValueHelper() {
     if (robj) {
         // recalculate recursive references for objects if necessary
         if (obj_chg && !no_object_scan) {
-            RSetHelper rsh(*robj);
+            RSetHelper rsh(*robj, vl.xsink);
         }
         if (obj_ref) {
             robj->tDeref();
@@ -3346,7 +3346,7 @@ void ClosureVarValue::deref(ExceptionSink* xsink) {
                 return;
                 }
                 // need to recalculate references
-                RSetHelper rsh(*this);
+                RSetHelper rsh(*this, xsink);
             }
             if (do_del)
                 qodh.willDelete();

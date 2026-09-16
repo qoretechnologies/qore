@@ -37,8 +37,10 @@
 #include "qore/vector_set"
 #include "qore/vector_map"
 
-#include <set>
 #include <atomic>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 class RSet;
 class RSetHelper;
@@ -77,11 +79,6 @@ public:
 
     // set of objects in a cyclic directed graph
     RSet* rset = nullptr;
-
-#ifdef _QORE_CYCLE_CHECK
-    // set of objects pointing at this object
-    std::set<RObject*> refmap;
-#endif
 
     // reference count
     std::atomic_int& references;
@@ -141,6 +138,7 @@ public:
     DLLLOCAL void removeInvalidateRSet();
     DLLLOCAL void removeInvalidateRSetIntern();
 
+    //! Reports a value referenced by this object to the scan in progress; always returns false
     DLLLOCAL bool scanCheck(RSetHelper& rsh, AbstractQoreNode* n);
 
     // very fast check if the object might have recursive references
@@ -159,7 +157,9 @@ public:
         return true;
     }
 
-    // returns true if a lock error has occurred and the transaction should be aborted or restarted; the rsection lock is held when this function is called
+    //! Reports each value referenced by this object to the scan with RSetHelper::checkNode(); the rsection lock is held
+    /** @return false; a return value of true is ignored
+    */
     DLLLOCAL virtual bool scanMembers(RSetHelper& rsh) = 0;
 
     // returns true if the object needs to be scanned for recursive references (ie could contain an object or closure or a container containing one of those)
@@ -199,6 +199,12 @@ public:
         ++obj->references;
     }
 
+    //! Moves the retained members to a vector that is empty; the caller releases them
+    DLLLOCAL void take(std::vector<RObject*>& vec) {
+        assert(vec.empty());
+        vec.swap(objects);
+    }
+
 private:
     ExceptionSink* xsink;
     std::vector<RObject*> objects;
@@ -207,13 +213,15 @@ private:
     RSetDerefHelper& operator=(const RSetDerefHelper&) = delete;
 };
 
-/* Qore recursive reference handling works as follows: objects are sorted into sets making up
-   directed cyclic graphs.
+/* Qore recursive reference handling works as follows: a scan divides the graph of objects, closure-bound variables,
+   lists, hashes, closures and references that are reachable from an object into strongly connected components.
+   The objects and closure-bound variables of each component with a cycle make up a recursive set.
 
-   The objects go out of scope when all nodes have references = the number of recursive references.
+   The members of a set go out of scope when every reference to each object, closure-bound variable, list, hash,
+   closure and reference in the component is held by another node of the component.
 
-   If any one member still has valid references (meaning a reference count > # of recursive refs), then *none*
-   of the members of the graph can be dereferenced.
+   If any member still has other references, *none* of the members of the graph can be dereferenced.
+   See design/dgc.md.
  */
 
 // set of objects in a recursive directed graph
@@ -224,33 +232,7 @@ public:
     DLLLOCAL RSet() : acnt(0), valid(true) {
     }
 
-    DLLLOCAL RSet(RObject* o) : acnt(0), valid(true) {
-        set.insert(o);
-    }
-
-    DLLLOCAL RSet(bool n_valid) : acnt(1), valid(n_valid) {
-    }
-
-    DLLLOCAL ~RSet() {
-        //printd(5, "RSet::~RSet() this: %p (acnt: %d)\n", this, acnt);
-        assert(!acnt);
-    }
-
-    DLLLOCAL void deref() {
-        bool del = false;
-        {
-            QoreAutoRWWriteLocker al(rwl);
-            if (valid) {
-                valid = false;
-            }
-            //printd(5, "RSet::deref() this: %p %d -> %d\n", this, acnt, acnt - 1);
-            assert(acnt > 0);
-            del = !--acnt;
-        }
-        if (del) {
-            delete this;
-        }
-    }
+    DLLLOCAL ~RSet();
 
     DLLLOCAL void invalidate() {
         QoreAutoRWWriteLocker al(rwl);
@@ -300,10 +282,6 @@ public:
     }
 #endif
 
-    DLLLOCAL void enableCycleCleanup() {
-        needs_member_release = true;
-    }
-
     DLLLOCAL bool assigned() const {
         return (bool)acnt;
     }
@@ -312,6 +290,15 @@ public:
         assert(set.find(o) == set.end());
         set.insert(o);
     }
+
+    //! Adds a list, hash, closure or reference in the recursive set before the set is assigned
+    /** @param n the node, which the set keeps a weak reference to
+        @param internal the number of references to the node held by the members of the recursive set
+
+        Collecting the set also releases the node's remaining references, so the members are released together
+        by the dereferences of the retained members; see RSetDerefHelper.
+    */
+    DLLLOCAL void addNode(AbstractQoreNode* n, int internal);
 
     DLLLOCAL void clear() {
         set.clear();
@@ -333,13 +320,6 @@ public:
         return set.size();
     }
 
-    // called when rolling back an rset transaction
-    DLLLOCAL bool pop() {
-        assert(!set.empty());
-        set.erase(set.begin());
-        return set.empty();
-    }
-
 #ifdef DEBUG
     DLLLOCAL unsigned getCount() const {
         return acnt;
@@ -347,10 +327,17 @@ public:
 #endif
 
 protected:
+    //! A list, hash, closure or reference in the recursive set
+    struct SetNode {
+        AbstractQoreNode* node;
+        // the number of references to the node held by the members of the recursive set
+        int internal;
+    };
+
     rset_t set;
+    std::vector<SetNode> nodes;
     unsigned acnt;
     bool valid;
-    bool needs_member_release = false;
 
     // called with the write lock held
     DLLLOCAL void invalidateIntern() {
@@ -361,130 +348,138 @@ protected:
             (*i)->tDeref();
         }
         clear();
+        releaseNodes();
         //printd(6, "RSet::invalidateIntern() this: %p\n", this);
     }
+
+    //! Removes the watches of the nodes and their weak references
+    DLLLOCAL void releaseNodes();
 };
 
 typedef std::vector<RObject*> rvec_t;
-class RSetHelper;
-//typedef std::set<RSet*> rs_set_t;
 typedef vector_set_t<RSet*> rs_set_t;
 
-struct RSetStat {
-    RSet* rset = nullptr;
-    int rcount = 0;
-    bool in_cycle : 1,
-        ok : 1;
+//! The number of watched lists, hashes, closures and references
+/** A watched node is part of a recursive set that cannot be collected because the node has references from outside
+    the set; releasing a reference to it can make the set collectable.
+*/
+DLLLOCAL extern std::atomic<unsigned> qore_dgc_node_watch_count;
 
-    DLLLOCAL RSetStat() : in_cycle(false), ok(false) {
-    }
+//! Returns true if nodes of the given type can be watched
+DLLLOCAL inline bool qore_dgc_watchable_type(qore_type_t t) {
+    return t == NT_LIST || t == NT_HASH || t == NT_RUNTIME_CLOSURE || t == NT_REFERENCE;
+}
 
-    DLLLOCAL RSetStat(const RSetStat& old) : rset(old.rset), rcount(old.rcount), in_cycle(old.in_cycle), ok(old.ok) {
-    }
+//! Called after a reference to a list, hash, closure or reference was released while nodes are watched
+/** Rechecks the recursive set of a watched node once its references are held by the set alone; the node must not be
+    accessed unless it is watched, as the caller no longer holds a reference to it.
+*/
+DLLLOCAL void qore_dgc_node_dereferenced(AbstractQoreNode* n, ExceptionSink* xsink);
 
-    DLLLOCAL void finalize(RSet* rs = nullptr) {
-        assert(!ok);
-        assert(!rset);
-        rset = rs;
-    }
-};
-
-class QoreClosureBase;
-
+//! Finds the strongly connected components of the graph reachable from an object and assigns its recursive sets
+/** The scan is a depth-first search with an explicit stack. Each object and closure-bound variable reached is locked
+    in its rsection until the scan is committed; a lock that another thread holds ends the attempt, which is retried
+    after that thread releases it. See design/dgc.md.
+*/
 class RSetHelper {
-    friend class RSectionScanHelper;
-    friend class RObject;
-#ifdef _QORE_CYCLE_CHECK
-    friend class RSetContextHelper;
-    friend class RSetScanContextHelper;
-#endif
+    friend class RSetHeldEdgeHelper;
 public:
-    DLLLOCAL RSetHelper(RObject& obj);
+    //! Scans the graph reachable from an object
+    /** @param obj the object
+        @param xsink for exceptions raised when releasing the temporary references that the scan holds
+    */
+    DLLLOCAL RSetHelper(RObject& obj, ExceptionSink* xsink = nullptr);
 
-    DLLLOCAL ~RSetHelper() {
-        assert(ovec.empty());
-        assert(orefs.empty());
-        assert(!lcnt);
-    }
+    DLLLOCAL ~RSetHelper();
 
-    DLLLOCAL unsigned size() const {
-        return fomap.size();
-    }
+    //! Reports a value referenced by the node being scanned; always returns false
+    DLLLOCAL bool checkNode(AbstractQoreNode* n);
 
-    DLLLOCAL void add(RObject* ro) {
-        if (fomap.find(ro) != fomap.end())
-            return;
-        rset_t::iterator i = tr_out.lower_bound(ro);
-        if (i == tr_out.end() || *i != ro)
-            tr_out.insert(i, ro);
-    }
+    //! Reports an object or closure-bound variable referenced by the node being scanned; always returns false
+    DLLLOCAL bool checkNode(RObject& robj);
 
-    // returns true if a lock error has occurred, false if otherwise
-    DLLLOCAL bool checkNode(AbstractQoreNode* n) {
-        return checkIntern(n, newReference());
-    }
+private:
+    enum class NodeKind : unsigned char {
+        Object,
+        List,
+        Hash,
+        Closure,
+        Reference,
+    };
 
-    // returns true if a lock error has occurred, false if otherwise
-    DLLLOCAL bool checkNode(RObject& robj) {
-        return checkIntern(robj, newReference());
-    }
+    //! A node of the scanned graph
+    struct ScanNode {
+        // the RObject or AbstractQoreNode
+        void* ptr;
+        NodeKind kind;
+        // true while the node is on the component stack
+        bool on_stack = false;
+        // true if the scan acquired the object's rsection
+        bool unlock = false;
+        // true for an object whose members are not scanned
+        bool leaf = false;
+        int index = -1;
+        int lowlink = -1;
+        int component = -1;
+        // the number of references from nodes in the same component, if the component has a cycle
+        int internal = 0;
 
-#ifdef _QORE_CYCLE_CHECK
-    DLLLOCAL void setScanContext(RObject* scan_context) {
-        this->scan_context = scan_context;
-    }
-#endif
+        DLLLOCAL ScanNode(void* ptr, NodeKind kind) : ptr(ptr), kind(kind) {
+        }
+    };
 
-protected:
-    // these must be a map and a set for performance reasons
-    typedef std::map<RObject*, RSetStat> omap_t;
-    typedef std::set<QoreClosureBase*> closure_set_t;
-    // map of all objects scanned to rset (rset = finalized, 0 = not finalized, in current list)
-    omap_t fomap;
+    //! A reference from one node to another
+    struct ScanEdge {
+        int from;
+        // the target node, or -1 if the target is not scanned or not yet reached
+        int to;
+        void* target;
+        NodeKind kind;
+    };
 
-    // Visit each container once per owning RObject, preserving the owner through nested containers.
-    // Using the immediately enclosing container as the key would skip a shared inner container when a
-    // second object reaches it through the same outer container, losing that object's cycle membership.
-    typedef std::set<std::pair<RObject*, QoreHashNode*>> hset_t;
-    hset_t hset;
+    //! A node whose edges are being followed
+    struct ScanFrame {
+        int node;
+        size_t next;
+        size_t end;
+    };
 
-    typedef std::set<std::pair<RObject*, QoreListNode*>> lset_t;
-    lset_t lset;
+    std::vector<ScanNode> nodes;
+    // maps objects and nodes to their index in nodes, or to -1 for objects that are not scanned
+    std::unordered_map<const void*, int> node_map;
+    std::vector<ScanEdge> edges;
+    std::vector<ScanFrame> frames;
+    // the Tarjan component stack
+    std::vector<int> stack;
+    // the size of each component and whether it has a cycle
+    std::vector<unsigned> component_size;
+    std::vector<char> component_cyclic;
+    int next_index = 0;
+    // the node whose edges are being reported
+    int current = -1;
 
-    // Reference identities distinguish physical slots from the paths used to reach them. A shared
-    // container's slot retains the same identity on every walk, while two slots pointing at one object
-    // have different identities. Direct object/closure references get a fresh identity when scanned.
-    typedef std::vector<size_t> refvec_t;
-    std::map<const void*, refvec_t> container_refs;
-    std::set<size_t> counted_refs;
-    size_t next_ref = 0;
-    bool has_shared_containers = false;
-
-    typedef std::vector<omap_t::iterator> ovec_t;
-    // current objects being scanned, used to establish a cycle
-    ovec_t ovec;
-
-    // Physical reference which reached each chain entry; zero for the scan root, which has no incoming edge
-    refvec_t orefs;
+    // true while the edges being reported are held by a private data container with its own lock, which may be
+    // changed after the lock is released
+    bool hold_edges = false;
+    // the values held for such edges until the scan ends, also over restarts, as releasing them can run destructors
+    // that scan the object that this scan started at
+    std::unordered_set<const void*> held;
+    std::vector<AbstractQoreNode*> held_nodes;
+    std::vector<RObject*> held_objects;
 
     // list of RSet objects to be invalidated when the transaction is committed
     rs_set_t tr_invalidate;
 
-    // set of RObjects not participating in any recursive set
+    // objects of invalidated recursive sets that are not scanned
     rset_t tr_out;
 
     // RSectionLock notification helper when waiting on locks
     RNotifier notifier;
 
-    // set of scanned closures
-    closure_set_t closure_set;
-
-#ifdef _QORE_CYCLE_CHECK
-    RObject* scan_context = nullptr;
-#endif
+    ExceptionSink* xsink;
 
 #ifdef DEBUG
-    int lcnt;
+    int lcnt = 0;
     DLLLOCAL void inccnt() { ++lcnt; }
     DLLLOCAL void deccnt() { --lcnt; }
 #else
@@ -492,108 +487,57 @@ protected:
     DLLLOCAL void deccnt() {}
 #endif
 
+    //! Scans the graph; returns true on a lock error
+    DLLLOCAL bool scan(RObject& root);
+
+    //! Returns the index of the node for an object or other node, locking an object when it is first reached
+    /** @return the index, or -1 if the object is not scanned or on a lock error, in which case lock_error is set
+    */
+    DLLLOCAL int getNode(void* ptr, NodeKind kind, bool& lock_error);
+
+    //! Assigns the node its index, pushes it on the component stack and records its edges
+    DLLLOCAL void startNode(int id);
+
+    //! Counts the references within each component with a cycle
+    DLLLOCAL void countInternalReferences();
+
+    //! Locks the unscanned members of the recursive sets to be replaced; returns true on a lock error
+    DLLLOCAL bool prepareCommit();
+
+    // queues nodes not scanned to tr_invalidate and tr_out; returns true on a lock error
+    DLLLOCAL bool removeInvalidate(RSet* ors, int tid);
+
+    // commit transaction
+    DLLLOCAL void commit();
+
     // rollback transaction due to lock error
     DLLLOCAL void rollback();
 
-    // commit transaction
-    DLLLOCAL void commit(RObject& obj);
+    //! Releases the temporary references held for the edges of private data containers
+    DLLLOCAL void releaseHeld();
 
-    // Returns true on a lock error; ref identifies the physical reference to this object (zero at the root).
-    DLLLOCAL bool checkIntern(RObject& obj, size_t ref);
-    // ref identifies the containing slot; the current ovec entry owns paths through nested containers.
-    DLLLOCAL bool checkIntern(AbstractQoreNode* n, size_t ref);
-
-    DLLLOCAL size_t newReference() {
-        return ++next_ref;
-    }
-
-    //! Returns the stable identity of a container slot, including during a recursive walk of that container
-    DLLLOCAL size_t containerReference(refvec_t& refs, size_t index) {
-        if (refs.size() <= index) {
-            refs.resize(index + 1, 0);
-        }
-        if (!refs[index]) {
-            refs[index] = newReference();
-        }
-        return refs[index];
-    }
-
-    //! Counts each physical reference once, independently of when its referring objects join a cycle
-    DLLLOCAL void countRef(omap_t::iterator oi, size_t ref) {
-        if (!ref || !counted_refs.insert(ref).second) {
-            return;
-        }
-        ++oi->second.rcount;
-#ifdef _QORE_CYCLE_CHECK
-        setObjectScanContext(*oi->first, oi->second.rcount);
-#endif
-    }
-
-    // queues nodes not scanned to tr_invalidate and tr_out
-    DLLLOCAL bool removeInvalidate(RSet* ors, int tid = q_gettid());
-
-    //! Returns the object's position in the current scan chain, or -1 if it is not in it
-    DLLLOCAL int currentSetIndex(omap_t::iterator fi) {
-        for (size_t i = 0, e = ovec.size(); i < e; ++i) {
-            if (ovec[i] == fi) {
-                return static_cast<int>(i);
-            }
-        }
-        return -1;
-    }
-
-    // returns true if there is a lock failure
-    DLLLOCAL bool addToRSet(omap_t::iterator oi, RSet* rset, int tid, size_t ref);
-
-    DLLLOCAL void mergeRSet(int i, RSet*& rset);
-
-    DLLLOCAL void mergeRSetIntern(RSet*& rset, RSet* old_rset);
-
-    DLLLOCAL bool makeChain(int i, omap_t::iterator fi, int tid, size_t ref);
-
-#ifdef _QORE_CYCLE_CHECK
-    DLLLOCAL void setObjectScanContext(RObject& obj, int rcount);
-#endif
-
-private:
-    DLLLOCAL RSetHelper(const RSetHelper&);
+    DLLLOCAL RSetHelper(const RSetHelper&) = delete;
+    DLLLOCAL RSetHelper& operator=(const RSetHelper&) = delete;
 };
 
-#ifdef _QORE_CYCLE_CHECK
-class RSetContextHelper {
+//! Reports the values of a private data container, which may be changed after its lock is released
+/** The scan keeps the values alive until it ends: each object with a weak reference, as the scan checks objects when
+    it reaches them, and each other node with a strong reference, which also prevents changes to a list or hash.
+*/
+class RSetHeldEdgeHelper {
 public:
-    DLLLOCAL RSetContextHelper(RSetHelper& rsh) : rsh(rsh), scan_context_save(rsh.scan_context) {
+    DLLLOCAL explicit RSetHeldEdgeHelper(RSetHelper& rsh) : rsh(rsh), old(rsh.hold_edges) {
+        rsh.hold_edges = true;
     }
 
-    DLLLOCAL ~RSetContextHelper() {
-        if (rsh.scan_context != scan_context_save) {
-            rsh.scan_context = scan_context_save;
-        }
+    DLLLOCAL ~RSetHeldEdgeHelper() {
+        rsh.hold_edges = old;
     }
 
 private:
     RSetHelper& rsh;
-    RObject* scan_context_save;
+    bool old;
 };
-
-class RSetScanContextHelper {
-public:
-    DLLLOCAL RSetScanContextHelper(RSetHelper& rsh, RObject* new_context) : rsh(rsh),
-            scan_context_save(rsh.scan_context) {
-        rsh.scan_context = new_context;
-    }
-
-    DLLLOCAL ~RSetScanContextHelper() {
-        if (rsh.scan_context != scan_context_save) {
-            rsh.scan_context = scan_context_save;
-        }
-    }
-
-private:
-    RSetHelper& rsh;
-    RObject* scan_context_save;
-};
-#endif
 
 class qore_object_private;
 

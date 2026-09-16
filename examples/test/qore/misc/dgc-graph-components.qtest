@@ -1,0 +1,303 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class DgcGraphComponentsTest
+
+#! Records the names of destroyed objects
+class DestructorLog {
+    public {
+        list<string> names = ();
+    }
+}
+
+#! A node of a test graph
+class GraphNode {
+    public {
+        auto x;
+        auto y;
+        string name;
+        DestructorLog log;
+    }
+
+    constructor(DestructorLog log, string name) {
+        self.log = log;
+        self.name = name;
+    }
+
+    destructor() {
+        push log.names, name;
+    }
+
+    string getName() {
+        return name;
+    }
+}
+
+#! A node of a long chain
+class ChainNode {
+    public {
+        *ChainNode next;
+        int id;
+        static int destroyed = 0;
+        static list<int> order = ();
+        static bool record = False;
+    }
+
+    constructor(int id) {
+        self.id = id;
+    }
+
+    destructor() {
+        ++ChainNode::destroyed;
+        if (ChainNode::record) {
+            push ChainNode::order, id;
+        }
+    }
+}
+
+#! A node that refers to its owner and to the list of all nodes
+class DenseNode {
+    public {
+        auto owner;
+        auto neighbors;
+    }
+
+    constructor(auto owner) {
+        self.owner = owner;
+    }
+}
+
+#! Owns the nodes of a dense graph
+class DenseRoot {
+    public {
+        list<DenseNode> nodes = ();
+    }
+}
+
+#! Holds a value that is not part of any graph
+class ValueHolder {
+    public {
+        auto value;
+    }
+}
+
+class DgcGraphComponentsTest inherits QUnit::Test {
+    public {
+        #! the length of a long chain of objects
+        const ChainLength = 20000;
+        #! the stack size of a test thread
+        const StackSize = 512 * 1024;
+    }
+
+    constructor() : QUnit::Test("recursive sets as graph components", "1.0") {
+        addTestCase("A cycle reachable through a list held outside is retained", \externalList());
+        addTestCase("A cycle reachable through an object outside is retained", \externalObject());
+        addTestCase("A cycle reachable through a closure held outside is retained", \externalClosure());
+        addTestCase("A cycle in a queue is retained while the queue is held outside", \externalQueue());
+        addTestCase("Long cycles are scanned and collected", \longCycle());
+        addTestCase("Long chains are destroyed in order", \longChain());
+        addTestCase("Scans of shared containers take linear time", \sharedContainerScans());
+        set_return_value(main());
+    }
+
+    externalList() {
+        DestructorLog log();
+        list<auto> l = makeListCycle(log);
+        # the objects in the cycle are still reachable through the list
+        assertEq("v", l[0].getName());
+        assertEq("a", l[0].x.getName());
+        assertEq((), log.names);
+
+        # releasing the list leaves only the cycle's references
+        remove l;
+        assertEq(("a", "v"), sort(log.names));
+    }
+
+    externalObject() {
+        DestructorLog log();
+        hash<string, GraphNode> h = {"s": makeObjectCycle(log)};
+        # an assignment to a member of the outside object scans the graph from it
+        h.s.y = new GraphNode(log, "temp");
+        remove h.s.y;
+        assertEq(("temp",), log.names);
+        assertEq("t", h.s.x.x[0].getName());
+        assertEq("a", h.s.x.x[0].x.getName());
+        assertEq(("temp",), log.names);
+
+        remove h;
+        assertEq(("a", "s", "t", "temp", "x"), sort(log.names));
+    }
+
+    externalClosure() {
+        DestructorLog log();
+        list<code> registry = ();
+        makeClosureCycle(log, \registry);
+        # the closure keeps the object that it captures
+        assertEq("h", registry[0]());
+        assertEq((), log.names);
+
+        registry = ();
+        assertEq(("h",), log.names);
+    }
+
+    externalQueue() {
+        DestructorLog log();
+        hash<string, Queue> h = {"q": makeQueueCycle(log)};
+        assertEq((), log.names);
+        GraphNode n = h.q.get();
+        assertEq("q", n.getName());
+        h.q.push(n);
+        remove n;
+        assertEq((), log.names);
+
+        remove h;
+        assertEq(("q",), log.names);
+    }
+
+    longCycle() {
+        inThread(sub () {
+            ChainNode::destroyed = 0;
+            ChainNode head(0);
+            ChainNode cur = head;
+            for (int i = 1; i <= ChainLength; ++i) {
+                ChainNode next(i);
+                cur.next = next;
+                cur = next;
+            }
+            # closing the cycle scans the whole chain
+            cur.next = head;
+            remove cur;
+            assertEq(0, ChainNode::destroyed);
+            remove head;
+            assertEq(ChainLength + 1, ChainNode::destroyed);
+        });
+    }
+
+    longChain() {
+        inThread(sub () {
+            ChainNode::destroyed = 0;
+            ChainNode::order = ();
+            ChainNode::record = True;
+            on_exit ChainNode::record = False;
+            hash<string, ChainNode> h = {"head": new ChainNode(0)};
+            ChainNode cur = h.head;
+            for (int i = 1; i <= ChainLength; ++i) {
+                ChainNode next(i);
+                cur.next = next;
+                cur = next;
+            }
+            remove cur;
+            remove h;
+            assertEq(ChainLength + 1, ChainNode::destroyed);
+            # each object is destroyed before the objects it references
+            assertEq(range(0, ChainLength + 1), ChainNode::order);
+        });
+    }
+
+    sharedContainerScans() {
+        float small = scanTime(32);
+        float large = scanTime(256);
+        float ratio = large / small;
+        if (m_options.verbose) {
+            printf("scan time: 32 nodes: %.1f us; 256 nodes: %.1f us; ratio %.2f\n", small, large, ratio);
+        }
+        # scans take linear time, so the ratio is about 8; it was over 60 when each node walked the shared list
+        assertLt(32.0, ratio);
+    }
+
+    #! Returns the average time of a scan of a dense graph in microseconds
+    private static float scanTime(int nodes) {
+        DenseRoot root();
+        for (int i = 0; i < nodes; ++i) {
+            root.nodes += new DenseNode(root);
+        }
+        foreach DenseNode node in (root.nodes) {
+            node.neighbors = root.nodes;
+        }
+        # an object held by a local variable defers the scans that start at it, so the holder is in a hash
+        hash<string, ValueHolder> c = {"h": new ValueHolder()};
+        int scans = 0;
+        date start = now_us();
+        do {
+            # each assignment of an object scans the graph reachable from the holder
+            c.h.value = root;
+            ++scans;
+        } while ((now_us() - start).durationMicroseconds() < 200000);
+        float rv = (now_us() - start).durationMicroseconds().toFloat() / scans;
+        # the graph is collected when the root is released
+        foreach DenseNode node in (root.nodes) {
+            node.owner = NOTHING;
+            node.neighbors = NOTHING;
+        }
+        return rv;
+    }
+
+    #! Returns a list that refers to a cycle of two objects, one of which refers to the list
+    private static list<auto> makeListCycle(DestructorLog log) {
+        GraphNode a(log, "a");
+        GraphNode v(log, "v");
+        v.x = a;
+        list<auto> l = (v,);
+        a.x = l;
+        return l;
+    }
+
+    #! Returns an object outside a cycle of two objects that refers to the cycle through the cycle's list
+    private static GraphNode makeObjectCycle(DestructorLog log) {
+        GraphNode s(log, "s");
+        GraphNode x(log, "x");
+        GraphNode t(log, "t");
+        GraphNode a(log, "a");
+        list<auto> l = (t,);
+        t.x = a;
+        a.x = l;
+        x.x = l;
+        s.x = x;
+        return s;
+    }
+
+    #! Adds a closure that forms a cycle with the object it captures to a list
+    private static makeClosureCycle(DestructorLog log, reference<list<code>> registry) {
+        GraphNode h(log, "h");
+        code cb = string sub () { return h.getName(); };
+        h.x = cb;
+        registry += cb;
+    }
+
+    #! Returns a queue that contains an object that refers to the queue
+    private static Queue makeQueueCycle(DestructorLog log) {
+        GraphNode n(log, "q");
+        Queue q();
+        n.x = q;
+        q.push(n);
+        return q;
+    }
+
+    private inThread(code test) {
+        if (!HAVE_MANAGE_STACK) {
+            testSkip("stack management is not available");
+        }
+        int defaultSize = get_default_thread_stack_size();
+        set_default_thread_stack_size(StackSize);
+        on_exit set_default_thread_stack_size(defaultSize);
+
+        Counter c(1);
+        *hash<ExceptionInfo> ex;
+        background sub () {
+            on_exit c.dec();
+            try {
+                test();
+            } catch (hash<ExceptionInfo> e) {
+                ex = e;
+            }
+        }();
+        c.waitForZero();
+        if (ex) {
+            throw ex.err, ex.desc, ex.arg;
+        }
+    }
+}

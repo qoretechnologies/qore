@@ -24,26 +24,46 @@ Every `QoreObject` (via `RObject` in `include/qore/intern/RSet.h`) carries these
 | `rset` | Pointer to the `RSet` the object belongs to (a group of objects in one detected cycle). |
 | `rml` | Read/write lock with a special "r-section" mode used during scans. |
 
-The cycle detector (`RSetHelper`, `lib/RSet.cpp`) traverses the graph from a candidate object, assigns every object it visits to an `RSet`, and computes each member's `rcount`. Detection runs opportunistically during `customDeref` (`lib/QoreObject.cpp`) when the normal path cannot prove the object is alive.
+The cycle detector (`RSetHelper`, `lib/RSet.cpp`) traverses the graph reachable from a candidate object, divides it into strongly connected components, assigns the objects of each component with a cycle to an `RSet`, and computes each member's `rcount`. Detection runs opportunistically during `customDeref` (`lib/QoreObject.cpp`) when the normal path cannot prove the object is alive.
+
+### The graph
+
+The nodes of the graph are objects and closure-bound variables (both `RObject`s), lists, hashes, closures and
+references. Each value held by a node is an edge: an object's members, a container's entries, a closure's captured
+variables, a reference's variable and the values of Pattern B private data. The scan is Tarjan's strongly connected
+components algorithm with an explicit stack, so a chain of objects or containers of any length is scanned without
+recursion. Each node is visited once, and each of its edges is followed once, so a scan takes time linear in the size
+of the reachable graph.
+
+A strongly connected component with a cycle — more than one node, or a node that references itself — is a recursive
+set. A reference is internal if the node holding it is in the same component as its target: an object's `rcount` is
+the number of internal references to it, and the set records the number of internal references to each of its lists,
+hashes, closures and references.
 
 ## The decision rule (`RSet::canDelete`)
 
-See `lib/RSet.cpp:199-266`. When an object's `customDeref` has dropped its ref, we decide whether the whole rset can be torn down:
+See `RSet::canDelete()` in `lib/RSet.cpp`. When an object's `customDeref` has dropped its ref, we decide whether the whole rset can be torn down:
 
 ```
-for each member in rset:
-    if member.rcount > member.references:  stale — rescan
-    if member.rcount != member.references: external ref exists → keep
+for each object in rset:
+    if object.rcount > object.references:  stale — rescan
+    if object.rcount != object.references: external ref exists → keep
+for each list, hash, closure and reference in rset:
+    if node.references < node.internal:    stale — rescan
+    if node.references > node.internal:    external ref exists → watch the node, keep
 all equal → invalidate rset, collect everything
 ```
 
-The invariant that drives the entire design is this: **for an rset to be collectable, every member must satisfy `rcount == references`**. If any member has `rcount < references`, *something outside the rset* still points at it, and we must not free the cycle.
+The invariant that drives the entire design is this: **for an rset to be collectable, every node of its component must
+have only internal references**. If any node has more references, *something outside the rset* still points at it,
+and we must not free the cycle. A list, hash or closure shared with a holder outside the cycle — a local variable, an
+object outside the cycle or an event registry — keeps every object reachable through it alive.
 
 That means any ref held by code the scanner cannot see counts as "external" and blocks collection.
 
 ## What the scanner can and cannot see
 
-`qore_object_private::scanMembersIntern` (`lib/QoreObject.cpp:358`) walks the object's data hashes. It iterates:
+`qore_object_private::scanMembersIntern()` in `lib/QoreObject.cpp` walks the object's data hashes. It iterates:
 
 1. `data` — the object's public member hash.
 2. `cdmap` — one sub-hash per parent class, containing that parent's `private:internal` members.
@@ -61,50 +81,24 @@ container from a recursive set: the container's one physical reference to an obj
 entirely internal, and the smaller set would be collected prematurely. Including the owner completes the
 cycle, and its real references keep `references > rcount`, preventing collection.
 
-### Shared containers: the scan follows edges, not nodes
+### Watched nodes
 
-A `QoreHashNode` or `QoreListNode` can be referenced by more than one object. Each of those references is a
-distinct edge in the object graph, and the scanner must follow **every** one of them: the traversal chain
-(`ovec`) built along an edge is what establishes cycle membership for the objects behind the container, and each
-edge is what contributes to their `rcount`.
+Releasing an outside reference to a list, hash, closure or reference in a recursive set does not dereference any
+member of the set, so nothing would recheck the set. When `RSet::canDelete()` finds such a node with outside
+references, it registers a watch for the node with a member of the set. `AbstractQoreNode::deref()` checks for
+watches when a reference to a list, hash, closure or reference is released without freeing it; a global count and a
+per-bucket count of watched addresses keep this check to two atomic reads when the node is not watched. When a
+watched node has no more references than the set holds, the watch is removed and the member is referenced and
+dereferenced, which rechecks the set like any other dereference.
 
-`RSetHelper::checkIntern()` memoizes `(owning RObject, container)` in `hset` / `lset`. The owning object is
-preserved through every nested container. Each owner therefore reaches a shared container's objects even
-when two owners share the same outer container. Memoizing the immediately enclosing container would lose
-the second owner's path through that shared outer container. A container is walked at most once per owner.
+The set keeps a weak reference to each of its non-object nodes, so that `canDelete()` can read their reference counts
+and a watched node's address is not reused while the watch exists. Invalidating the set removes its watches and weak
+references. The watch registration rereads the reference count after registering, so a reference released in between
+is not missed.
 
-Memoizing on the container node alone is a cycle leak (fixed 2026-09-12). It drops every edge into a container
-but the first one the DFS happens to reach, and the outcome then depends on traversal order:
-
-- If the surviving edge comes from outside the candidate cycle, the objects behind the container never enter the
-  rset, and anything they reference is left with `rcount < references`. `RSet::canDelete()` reads that as a live
-  external reference, returns 0, and — because the rset stays valid — caches that verdict forever. Nothing
-  re-evaluates it afterwards, because what later makes the graph collectable is a *container's* reference count
-  dropping, which is invisible to the rset validity model. The cycle is stranded permanently.
-- If the surviving edge comes from inside the cycle, the objects behind the container are placed in the rset with
-  `rcount == references` even while an object outside the rset still reaches them through the same container.
-
-The symptom of the first case, from `qore -d1` on a debug build:
-
-```
-scanMembersIntern() search <outside obj> key 'declared' 0x390a5600 (hash)   <- walked
-scanMembersIntern() search <in-cycle obj> key 'attrs'   0x390a5600 (hash)   <- same node, nothing follows
-setRSet() <obj behind the container>  rs: (nil)      rcnt: 0
-RSet::canDelete() cannot delete graph obj <its target> rcount: 1 refs: 2
-```
-
-Regression coverage: `examples/test/qore/misc/shared-container-cycles.qtest`.
-
-Traversal and reference counting use separate identities. Each physical container slot gets a stable scan-local
-reference ID, including when a recursive walk reaches a later slot before the original iterator does. Direct
-object members and closure captures get their own IDs. `orefs` records the incoming reference ID for each DFS
-chain entry; the scan root has no incoming reference. A cycle-closing edge counts its own reference, and a
-later merge counts a forward edge only if that reference has not already been counted.
-
-This avoids both double-counting a shared slot when its original owner joins a cycle later, and counting an
-external holder's reference as though it belonged to a different slot that closed the cycle. Separate slots
-pointing at the same object retain their multiplicity. `shared-container-forward-edges.qtest` covers these
-cases, nested shared containers, and both traversal orders.
+Because each list and hash is a node of its own, a container shared by N objects is walked once per scan rather than
+once for each object that references it, and its references from outside the cycle are never counted as internal.
+`examples/test/qore/misc/dgc-graph-components.qtest` covers both.
 
 ### Completing collection through shared containers
 
@@ -113,8 +107,8 @@ shared container, another cycle member can keep the container and all its slots 
 the rset and deleting the initiating object would then strand the remaining cycle without a dereference
 that could trigger another scan.
 
-For scans which encountered shared containers, `RSet::canDelete()` retains temporary strong references to the other
-members in `RSetDerefHelper` before invalidating a collectable set. The initiating object is torn down normally. The helper then releases every
+For recursive sets with lists, hashes, closures or references, `RSet::canDelete()` retains temporary strong references
+to the other members in `RSetDerefHelper` before invalidating a collectable set. The initiating object is torn down normally. The helper then releases every
 retained reference outside the r-section and rset locks, giving remaining cycles their own collection
 opportunity. Ordinary reference-count checks preserve members retained by a user destructor. Cleanup also
 runs when a destructor raises a Qore exception. Graphs with unshared containers retain the ordinary cascading
@@ -158,7 +152,7 @@ objects triggers a scan even when nothing is assigned — the conservative choic
 removed.
 
 Cost is proportional to the size of the object graph reachable from the lvalue, so a scan on a hot path is
-expensive: `RSetHelper::checkIntern` walks every reachable hash, list, object, closure, and reference.
+expensive: `RSetHelper::scan()` walks every reachable hash, list, object, closure, and reference.
 
 `LValueHelper::suppressObjectScan()` skips that scan. It is only correct when the set of objects reachable from
 the lvalue is provably unchanged. The one caller today is complex-reference argument binding in
@@ -297,7 +291,15 @@ bool qore_queue_private::scanMembers(RObject& obj, RSetHelper& rsh) {
 
 `TreeMapData::scanMembers` (in `lib/QC_TreeMap.qpp`) follows the same shape.
 
-The dispatcher in `qore_object_private::scanMembers` (`lib/QoreObject.cpp:399-442`) enumerates every known container class and calls its scanner:
+A scanner only reports the values; the scan follows them after the scanner has released its lock, when the container
+can have changed. `qore_object_private::scanMembers()` therefore reports private data values with
+`RSetHeldEdgeHelper` in effect: the scan keeps each reported object with a weak reference, as it checks objects when
+it reaches them, and each other node with a strong reference, which also keeps a list or hash from being changed in
+place. Each value is held once, also when the scan restarts after a lock conflict, and the references are released
+when `RSetHelper` is destroyed: after the scan's locks and after the scan lock of the object that the scan started
+at, as releasing the last reference to a container can run destructors that scan that object again.
+
+The dispatcher in `qore_object_private::scanMembers()` in `lib/QoreObject.cpp` enumerates every known container class and calls its scanner:
 
 ```cpp
 if (scan_private_data) {
@@ -324,6 +326,14 @@ Holding a raw `QoreObject*` or `AbstractPrivateData*` without a ref is safe when
 
 If you rely on Pattern A's invariant, verify that the internal-member slot is actually populated by the QPP constructor. A raw pointer *without* a corresponding `setValueIntern` call is the shape of a cycle leak.
 
+## Deleting long chains
+
+Deleting an object releases the objects it references, and deleting those would recurse for each object in a chain.
+`qore_object_private::deleteOrDefer()` deletes objects recursively up to a nesting depth of 16 in a thread and defers
+deeper deletions to a loop with an explicit stack. The loop deletes the objects deferred while deleting an object
+before the remaining objects deferred earlier, so destructors run in the same depth-first order as with recursion, and
+the members retained by a collected recursive set are released after the deferred object's deletion.
+
 ## `rrefs` / `realRef()`: when to use it
 
 `realRef()`/`realDeref()` bump `rrefs` and declare that a ref is provably not part of any cycle. Use it when a ref is held by runtime machinery that cannot be part of a Qore object graph:
@@ -349,7 +359,7 @@ Do not use `realRef()` for references stored in C++ state that outlives a single
   per-container counting memos.
 - `include/qore/intern/RSection.h` — r-section lock semantics.
 - `lib/RSet.cpp` — `canDelete`, `deref`, `checkDeferScan`, invalidation, and the scanner proper
-  (`RSetHelper::checkIntern`: cycle traversal + `rcount` assignment).
+  (`RSetHelper::scan()`: the component search, and `countInternalReferences()`: `rcount` assignment).
 - `lib/QoreObject.cpp` — `scanMembers`, `scanMembersIntern`, `customDeref`, the dispatcher that calls private-data scanners.
 - `lib/QoreQueue.cpp` — `qore_queue_private::scanMembers` (Pattern B reference implementation).
 - `lib/QC_TreeMap.qpp` — TreeMap custom scanner (Pattern B).
@@ -363,3 +373,6 @@ Do not use `realRef()` for references stored in C++ state that outlives a single
   reference argument binding.
 - `examples/test/qore/misc/shared-container-cycles.qtest` — cycles reached through a container
   shared with an object outside the recursive set.
+- `examples/test/qore/misc/dgc-graph-components.qtest` — cycles held through lists, objects, closures and queues
+  from outside, long cycles and chains in a thread with a small stack, and the scan time of shared containers.
+- `examples/test/qore/misc/shared-container-dense-cycles.qtest` — dense graphs sharing one container.

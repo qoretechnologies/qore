@@ -3056,6 +3056,13 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       \c PARSE-EXCEPTION (see @ref qore_3_0_0_compatibility)
     - Fixed a crash when freeing deeply nested lists and hashes, such as the data parsed from a deeply nested
       document; the entries of deeply nested containers are now freed without recursion, in the same order
+    - Fixed @ref garbage_collection "deterministic garbage collection" destroying objects in a recursive graph that
+      were still reachable through a list, hash, closure or reference held outside the graph, and failing to collect
+      a closure and an object that it captures once they only referenced each other
+    - Fixed slow recursive reference scans when many objects share a list or hash; a scan now takes time linear in
+      the size of the graph, where each object that referenced a shared container walked the container again
+    - Fixed crashes when scanning or destroying long chains or cycles of objects; objects in long chains are still
+      destroyed before the objects that they reference
     - Fixed a crash when copying or deleting a long chain of exceptions, such as the chain of parse errors from a
       source with many thousands of errors
     - Fixed a crash after the parse error for a \c my, \c our or \c thread_local list declaration whose first

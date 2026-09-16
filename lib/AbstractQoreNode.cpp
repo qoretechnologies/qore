@@ -216,9 +216,18 @@ void AbstractQoreNode::deref(ExceptionSink* xsink) {
 
     if (custom_reference_handlers) {
         customDeref(xsink);
-    } else if (ROdereference()) {
-        if (type < NUM_SIMPLE_TYPES || derefImpl(xsink))
+        return;
+    }
+
+    // the type is read before the reference is released, after which another thread can free the node
+    qore_type_t t = type;
+    if (ROdereference()) {
+        if (t < NUM_SIMPLE_TYPES || derefImpl(xsink)) {
             delete this;
+        }
+    } else if (qore_dgc_node_watch_count.load(std::memory_order_relaxed) && qore_dgc_watchable_type(t)) {
+        // releasing a reference to a node of a recursive set can make the set collectable
+        qore_dgc_node_dereferenced(this, xsink);
     }
 }
 

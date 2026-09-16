@@ -1,0 +1,266 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class SharedContainerDenseCyclesTest
+
+#! A node that refers to its owner before the container shared by all nodes
+class OwnerFirstNode {
+    public {
+        auto owner;
+        auto neighbors;
+        static int destroyed = 0;
+    }
+
+    constructor(auto owner) {
+        self.owner = owner;
+    }
+
+    destructor() {
+        ++OwnerFirstNode::destroyed;
+    }
+}
+
+#! A node that refers to the container shared by all nodes before its owner
+class NeighborsFirstNode {
+    public {
+        auto neighbors;
+        auto owner;
+        static int destroyed = 0;
+    }
+
+    constructor(auto owner) {
+        self.owner = owner;
+    }
+
+    destructor() {
+        ++NeighborsFirstNode::destroyed;
+    }
+}
+
+#! Owns the nodes of a dense graph
+class DenseOwner {
+    public {
+        auto nodes;
+        auto peer;
+        auto extra;
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++DenseOwner::destroyed;
+    }
+}
+
+#! Holds a reference that is not part of any graph
+class ChurnHolder {
+    public {
+        auto value;
+    }
+}
+
+class SharedContainerDenseCyclesTest inherits QUnit::Test {
+    public {
+        #! the number of nodes in a dense graph
+        const Nodes = 64;
+
+        #! the shapes of the container shared by the nodes
+        const Shapes = ("list", "hash", "nested");
+    }
+
+    constructor() : QUnit::Test("dense cycles through shared containers", "1.0") {
+        addTestCase("dense graphs are retained while held and collected after release", \denseGraphs());
+        addTestCase("a reference to one node retains a dense graph", \nodeReference());
+        addTestCase("dense graphs joined into one cycle are collected together", \joinedGraphs());
+        addTestCase("a dense graph referring to another is collected before it", \linkedGraphs());
+        addTestCase("dense graphs survive concurrent reference churn", \concurrentChurn());
+        set_return_value(main());
+    }
+
+    denseGraphs() {
+        foreach bool ownerFirst in ((True, False)) {
+            foreach string shape in (Shapes) {
+                string label = sprintf("%s, %s first", shape, ownerFirst ? "owner" : "neighbors");
+                resetCounts();
+                {
+                    hash<string, DenseOwner> holder = {"owner": build(ownerFirst, shape)};
+                    # replacing a member of the owner makes a scan of the complete graph
+                    holder.owner.extra = new ChurnHolder();
+                    holder.owner.extra = NOTHING;
+                    assertEq(0, destroyedNodes(), label + ": no node is collected while the owner is held");
+                    assertEq(0, DenseOwner::destroyed, label + ": the owner is not collected while held");
+                    checkGraph(holder.owner, shape, label);
+                }
+                assertEq(Nodes, destroyedNodes(), label + ": every node is collected");
+                assertEq(1, DenseOwner::destroyed, label + ": the owner is collected");
+            }
+        }
+    }
+
+    nodeReference() {
+        foreach string shape in (Shapes) {
+            resetCounts();
+            {
+                auto node;
+                {
+                    DenseOwner owner = build(True, shape);
+                    node = getNodes(owner, shape)[Nodes / 2];
+                }
+                assertEq(0, destroyedNodes(), shape + ": the node retains its graph");
+                assertEq(0, DenseOwner::destroyed, shape + ": the node retains its owner");
+                checkGraph(node.owner, shape, shape);
+            }
+            assertEq(Nodes, destroyedNodes(), shape + ": every node is collected");
+            assertEq(1, DenseOwner::destroyed, shape + ": the owner is collected");
+        }
+    }
+
+    joinedGraphs() {
+        foreach string shape in (Shapes) {
+            resetCounts();
+            {
+                hash<string, DenseOwner> holder = {
+                    "a": build(True, shape),
+                    "b": build(False, shape),
+                };
+                # each owner refers to the other, so the two recursive sets become one
+                holder.a.peer = holder.b;
+                holder.b.peer = holder.a;
+                remove holder.a;
+                assertEq(0, destroyedNodes(), shape + ": the second owner retains both graphs");
+                assertEq(0, DenseOwner::destroyed, shape + ": no owner is collected");
+                checkGraph(holder.b.peer, shape, shape);
+            }
+            assertEq(2 * Nodes, destroyedNodes(), shape + ": both graphs are collected");
+            assertEq(2, DenseOwner::destroyed, shape + ": both owners are collected");
+        }
+    }
+
+    linkedGraphs() {
+        foreach string shape in (Shapes) {
+            resetCounts();
+            {
+                hash<string, DenseOwner> holder = {
+                    "a": build(True, shape),
+                    "b": build(False, shape),
+                };
+                # only the first graph refers to the second
+                holder.a.peer = holder.b;
+                remove holder.b;
+                assertEq(0, destroyedNodes(), shape + ": the first graph retains the second");
+                remove holder.a;
+                assertEq(2 * Nodes, destroyedNodes(), shape + ": both graphs are collected");
+                assertEq(2, DenseOwner::destroyed, shape + ": both owners are collected");
+            }
+        }
+    }
+
+    concurrentChurn() {
+        const int Threads = 4;
+        const int Iterations = 200;
+        foreach string shape in (Shapes) {
+            resetCounts();
+            {
+                hash<string, DenseOwner> holder = {"owner": build(True, shape)};
+                # the graph is passed through a queue, and each thread releases its references before it
+                # decrements the counter, so no thread still refers to the graph when it is released below
+                Queue work();
+                Queue errors();
+                Counter c(Threads);
+                for (int t = 0; t < Threads; ++t) {
+                    work.push({"t": t, "nodes": getNodes(holder.owner, shape), "owner": holder.owner});
+                    background sub (Queue work, Queue errors, Counter c) {
+                        *hash<auto> job = work.get();
+                        try {
+                            # the holder is held in a container, so replacing its value makes a scan
+                            hash<string, ChurnHolder> local = {"h": new ChurnHolder()};
+                            for (int i = 0; i < Iterations; ++i) {
+                                local.h.value = job.nodes[(job.t * 7 + i) % Nodes];
+                                local.h.value = (local.h.value, job.owner);
+                                local.h.value = NOTHING;
+                            }
+                        } catch (hash<ExceptionInfo> ex) {
+                            errors.push(ex);
+                        }
+                        remove job;
+                        c.dec();
+                    }(work, errors, c);
+                }
+                c.waitForZero();
+                assertEq(0, errors.size(), shape + ": no thread failed");
+                assertEq(0, destroyedNodes(), shape + ": no node is collected while the owner is held");
+                assertEq(0, DenseOwner::destroyed, shape + ": the owner is not collected while held");
+                checkGraph(holder.owner, shape, shape);
+            }
+            assertEq(Nodes, destroyedNodes(), shape + ": every node is collected");
+            assertEq(1, DenseOwner::destroyed, shape + ": the owner is collected");
+        }
+    }
+
+    #! Builds a dense graph: every node refers to the owner and to one container that holds every node
+    private static DenseOwner build(bool ownerFirst, string shape) {
+        DenseOwner owner();
+        list<auto> nodes = ();
+        for (int i = 0; i < Nodes; ++i) {
+            nodes += ownerFirst ? new OwnerFirstNode(owner) : new NeighborsFirstNode(owner);
+        }
+        switch (shape) {
+            case "list":
+                owner.nodes = nodes;
+                break;
+            case "hash": {
+                hash<auto> h = {};
+                for (int i = 0; i < Nodes; ++i) {
+                    h{"n" + i} = nodes[i];
+                }
+                owner.nodes = h;
+                break;
+            }
+            case "nested":
+                owner.nodes = {"inner": {"all": nodes}, "first": nodes[0]};
+                break;
+        }
+        # every node shares the owner's container
+        foreach auto node in (nodes) {
+            node.neighbors = owner.nodes;
+        }
+        return owner;
+    }
+
+    #! Returns the nodes of a graph in order
+    private static list<auto> getNodes(DenseOwner owner, string shape) {
+        switch (shape) {
+            case "list":
+                return owner.nodes;
+            case "hash":
+                return owner.nodes.values();
+        }
+        return owner.nodes.inner.all;
+    }
+
+    #! Checks that a graph is intact
+    private checkGraph(DenseOwner owner, string shape, string label) {
+        list<auto> nodes = getNodes(owner, shape);
+        assertEq(Nodes, nodes.size(), label + ": node count");
+        int intact = 0;
+        foreach auto node in (nodes) {
+            if (node.owner == owner && getNodes(owner, shape)[$#] == node) {
+                ++intact;
+            }
+        }
+        assertEq(Nodes, intact, label + ": every node refers to its owner");
+    }
+
+    private static int destroyedNodes() {
+        return OwnerFirstNode::destroyed + NeighborsFirstNode::destroyed;
+    }
+
+    private static resetCounts() {
+        OwnerFirstNode::destroyed = 0;
+        NeighborsFirstNode::destroyed = 0;
+        DenseOwner::destroyed = 0;
+    }
+}

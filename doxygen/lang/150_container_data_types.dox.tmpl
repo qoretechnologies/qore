@@ -860,6 +860,10 @@ sub test() {
     recursive graph are only due to references related to recursive references.  In this case, the affected objects are collected immediately by having their destructors
     run.
 
+    Lists, hashes, closures and references that are part of a recursive graph are treated the same way: as long as
+    any of them is also referenced from outside the graph, for example a list of the graph's objects that is also
+    assigned to a local variable, none of the objects in the graph are collected.
+
     The consequence of this is that destructors are run immediately when the objects are no longer valid, and therefore the
     <a href="http://en.wikipedia.org/wiki/Resource_Acquisition_Is_Initialization">RAII idiom</a> for resource management is supported in %Qore even when objects
     participate in recursive directed graphs.
