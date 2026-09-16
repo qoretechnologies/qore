@@ -25,6 +25,33 @@
 #! Main QoreCodeFormat namespace
 public namespace QoreCodeFormat {
 
+#! Returns the text of a source line between two tree-sitter columns
+/** tree-sitter columns are byte offsets, while string offsets count characters, so a line with a multi-byte
+    character is sliced as binary data
+
+    @param line the source line
+    @param start the byte offset of the first byte to return
+    @param end the byte offset after the last byte to return, or the end of the line if not given or beyond it
+
+    @return the text between the offsets, or an empty string if @p start is not before @p end
+*/
+string sub source_substr(string line, int start, *int end) {
+    int size = line.size();
+    if (!exists end || end > size) {
+        end = size;
+    }
+    if (start < 0) {
+        start = 0;
+    }
+    if (start >= end) {
+        return "";
+    }
+    if (size == line.length()) {
+        return line.substr(start, end - start);
+    }
+    return binary_to_string(binary(line).substr(start, end - start), line.encoding());
+}
+
 #! Translates tree-sitter CST nodes to the old AST format expected by CodeFormatter
 public class CSTTranslator {
     private {
@@ -307,7 +334,7 @@ public class CSTTranslator {
             if (lc > line.size()) {
                 lc = line.size();
             }
-            return line.substr(fc, lc - fc);
+            return source_substr(line, fc, lc);
         }
 
         string result = "";
@@ -318,13 +345,13 @@ public class CSTTranslator {
             string line = sourceLines[i];
             if (i == fl) {
                 if (fc < line.size()) {
-                    result += line.substr(fc);
+                    result += source_substr(line, fc);
                 }
             } else if (i == ll) {
                 if (lc > line.size()) {
                     lc = line.size();
                 }
-                result += "\n" + line.substr(0, lc);
+                result += "\n" + source_substr(line, 0, lc);
             } else {
                 result += "\n" + line;
             }
@@ -356,7 +383,7 @@ public class CSTTranslator {
             if (lc > line.size()) {
                 lc = line.size();
             }
-            return line.substr(fc, lc - fc);
+            return source_substr(line, fc, lc);
         }
 
         string result = "";
@@ -367,13 +394,13 @@ public class CSTTranslator {
             string line = sourceLines[i];
             if (i == fl) {
                 if (fc < line.size()) {
-                    result += line.substr(fc);
+                    result += source_substr(line, fc);
                 }
             } else if (i == ll) {
                 if (lc > line.size()) {
                     lc = line.size();
                 }
-                result += "\n" + line.substr(0, lc);
+                result += "\n" + source_substr(line, 0, lc);
             } else {
                 result += "\n" + line;
             }
@@ -403,13 +430,13 @@ public class CSTTranslator {
         if (opLine == endLine && opLine < sourceLines.size()) {
             string line = sourceLines[opLine];
             if (opCol < line.size() && endCol <= line.size()) {
-                between = trim(line.substr(opCol, endCol - opCol));
+                between = trim(source_substr(line, opCol, endCol));
             }
         } else if (opLine < sourceLines.size()) {
             # Multi-line: first check left line after left end
             string line = sourceLines[opLine];
             if (opCol < line.size()) {
-                between = trim(line.substr(opCol));
+                between = trim(source_substr(line, opCol));
                 # Strip inline comment (# ...) that may follow the operator
                 *list<string> m = (between =~ x/^([^#]+)/);
                 if (exists m) {
@@ -421,7 +448,7 @@ public class CSTTranslator {
             if (between == "" && endLine < sourceLines.size()) {
                 string rightLine = sourceLines[endLine];
                 if (endCol <= rightLine.size()) {
-                    between = trim(rightLine.substr(0, endCol));
+                    between = trim(source_substr(rightLine, 0, endCol));
                 }
             }
         }
@@ -1758,7 +1785,7 @@ public class CSTTranslator {
             if (opLine == endLine && opLine < sourceLines.size()) {
                 string line = sourceLines[opLine];
                 if (opCol < line.size() && endCol <= line.size()) {
-                    op = trim(line.substr(opCol, endCol - opCol));
+                    op = trim(source_substr(line, opCol, endCol));
                 }
             }
         }
@@ -1793,7 +1820,7 @@ public class CSTTranslator {
             if (opLine == endLine && opLine < sourceLines.size()) {
                 string line = sourceLines[opLine];
                 if (opCol < line.size() && endCol <= line.size()) {
-                    op = trim(line.substr(opCol, endCol - opCol));
+                    op = trim(source_substr(line, opCol, endCol));
                 }
             }
         }
@@ -2225,8 +2252,8 @@ public class CSTTranslator {
         string text = extractText(node);
         # Strip quotes to get value
         string value = text;
-        if (value.size() >= 2) {
-            value = value.substr(1, value.size() - 2);
+        if (value.length() >= 2) {
+            value = value.substr(1, value.length() - 2);
         }
         return {
             "nodetype": ANT_Expression,
@@ -2841,7 +2868,7 @@ public class CSTTranslator {
                 if (opLine == endLine && opLine < sourceLines.size()) {
                     string line = sourceLines[opLine];
                     if (opCol < line.size() && endCol <= line.size()) {
-                        op = trim(line.substr(opCol, endCol - opCol));
+                        op = trim(source_substr(line, opCol, endCol));
                     }
                 }
             }
@@ -2925,7 +2952,7 @@ public class CSTTranslator {
                     if (opLine == endLine && opLine < sourceLines.size()) {
                         string line = sourceLines[opLine];
                         if (opCol < line.size() && endCol <= line.size()) {
-                            op = trim(line.substr(opCol, endCol - opCol));
+                            op = trim(source_substr(line, opCol, endCol));
                         }
                     }
                 }

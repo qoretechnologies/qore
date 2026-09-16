@@ -2173,10 +2173,10 @@ public class CodeFormatter {
         string idx = emitExpressionStr(node.index);
         # Strip surrounding brackets if source extraction included them
         if (idx =~ /^\[.*\]$/) {
-            idx = idx.substr(1, idx.size() - 2);
+            idx = idx.substr(1, idx.length() - 2);
         }
         if (idx =~ /^\{.*\}$/) {
-            idx = idx.substr(1, idx.size() - 2);
+            idx = idx.substr(1, idx.length() - 2);
         }
         # indexKind: 0 = square brackets (list/array), 1 = curly brackets (hash)
         if (node.indexKind == 1) {
@@ -2477,7 +2477,7 @@ public class CodeFormatter {
             if (fc >= line.size()) {
                 return "";
             }
-            return line.substr(fc, lc - fc);
+            return source_substr(line, fc, lc);
         }
 
         # Multi-line extraction
@@ -2492,13 +2492,13 @@ public class CodeFormatter {
                     fc = 0;
                 }
                 if (fc < line.size()) {
-                    result += line.substr(fc);
+                    result += source_substr(line, fc);
                 }
             } else if (i == ll) {
                 if (lc > line.size()) {
                     lc = line.size();
                 }
-                result += "\n" + line.substr(0, lc);
+                result += "\n" + source_substr(line, 0, lc);
             } else {
                 result += "\n" + line;
             }

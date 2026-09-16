@@ -64,6 +64,7 @@ class QoreCodeFormatTest inherits QUnit::Test {
         addTestCase("find modifiers", \testFindModifiers());
         addTestCase("global variable declarations", \testGlobalVariables());
         addTestCase("long multi-line list literals", \testLongMultiLineLists());
+        addTestCase("multi-byte characters", \testMultiByteCharacters());
 
         set_return_value(main());
     }
@@ -1428,6 +1429,39 @@ list<string> sub values() {
             Program p(PO_NEW_STYLE);
             p.parse(source, "long lists");
             assertEq(expected, p.callFunction("values"), "formatted lists keep their elements");
+        }
+    }
+
+    testMultiByteCharacters() {
+        # each line has multi-byte characters before text that the formatter extracts from the source
+        list<string> lines = (
+            "    hash<string, string> h = {\"é\": \"—\", \"desc\": \"é—→ one \" \"two \" \"three\"};",
+            "    string s = \"—\" + sprintf(\"%s-%s\", \"bar\", \"baz\");",
+            "    string x = h.\"é\" + \"→\" + h.desc;",
+            "    string k = h{\"é\"};",
+            "    string y = \"a—b\";",
+            "    y =~ s/—/-/g;",
+            "    string z = \"é\" =~ /é/ ? \"…\" : \"—\";",
+        );
+        string src = "%modern
+hash<string, string> sub values() {
+" + lines.join("\n") + "
+    return {\"s\": s, \"x\": x, \"y\": y, \"z\": z + k};
+}
+";
+        QoreCodeFormat::CodeFormatter fmt();
+        string result = fmt.format(src);
+        foreach string line in (lines) {
+            assertTrue(result.split("\n").contains(line), "line retained: " + line);
+        }
+        QoreCodeFormat::CodeFormatter fmt2();
+        assertEq(result, fmt2.format(result), "multi-byte character idempotency");
+
+        foreach string source in ((src, result)) {
+            Program p(PO_NEW_STYLE);
+            p.parse(source, "multi-byte");
+            assertEq({"s": "—bar-baz", "x": "—→é—→ one two three", "y": "a-b", "z": "…—"},
+                p.callFunction("values"), "formatted strings keep their values");
         }
     }
 
