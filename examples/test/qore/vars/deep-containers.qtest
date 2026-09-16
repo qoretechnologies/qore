@@ -39,6 +39,7 @@ class DeepContainersTest inherits QUnit::Test {
     constructor() : QUnit::Test("deep containers", "1.0") {
         addTestCase("Freeing deeply nested lists and hashes", \freeDeepContainers());
         addTestCase("Destructors run in depth-first order", \destructorOrder());
+        addTestCase("Types of deeply nested containers", \containerTypes());
         set_return_value(main());
     }
 
@@ -79,6 +80,31 @@ class DeepContainersTest inherits QUnit::Test {
                 remove value;
             });
             assertEq(expected, log.names, sprintf("depth %d", depth));
+        }
+    }
+
+    containerTypes() {
+        # the type of a list or hash is derived from the types of its values; the derived types are nested up to a
+        # limit, so that each level does not create a type whose name is as long as its nesting
+        string src = "hash<string, string> sub run(int depth) {
+    auto l = 1;
+    auto h = 1;
+    for (int i = 0; i < depth; ++i) {
+        l = (l,);
+        h = {\"a\": h};
+    }
+    return {\"list\": l.fullType(), \"hash\": h.fullType(), \"inner\": ((1,),).fullType()};
+}";
+        foreach ExecMode mode in (EM_AST, EM_IR) {
+            Program p(PO_NEW_STYLE | PO_REQUIRE_TYPES);
+            p.setExecMode(mode);
+            p.parse(src, "container types");
+            hash<string, string> types = p.callFunction("run", 10000);
+            assertEq("list<list<int>>", types.inner, sprintf("mode %y", mode));
+            assertRegex("^list<list<", types.list, sprintf("mode %y", mode));
+            assertRegex("^hash<string, hash<string, ", types.hash, sprintf("mode %y", mode));
+            assertLt(1000, types.list.size(), sprintf("mode %y", mode));
+            assertLt(2000, types.hash.size(), sprintf("mode %y", mode));
         }
     }
 

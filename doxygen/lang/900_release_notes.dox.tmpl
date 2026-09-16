@@ -256,6 +256,13 @@
     string literals are not nested and are not limited.
     @endparblock
 
+    @par Complex Type Nesting Limit
+    @parblock
+    Complex list, softlist, hash and reference types can be nested up to 64 levels deep; a type that would be nested
+    more deeply has \c auto as its value type (see @ref list_complex_type).  Previously a type was created for each
+    level of deeply nested data, with a name as long as its nesting, which used memory quadratic in the nesting depth.
+    @endparblock
+
     @par Parse-Time Type Narrowing
     @parblock
     %Qore now performs parse-time type narrowing for element/value types in variables declared with

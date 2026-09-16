@@ -437,6 +437,11 @@ list<auto> l1 = (2, 3);
 printf("%y\n", l1.fullType());
     @endcode
 
+    @note Complex list, @ref softlist_complex_type "softlist", @ref hash_complex_type "hash" and
+    @ref reference_complex_type "reference" types can be nested up to 64 levels deep.  A type that would be nested
+    more deeply, whether declared or derived from the values of deeply nested data, has \c auto as its value type
+    instead; for example, a list nested 65 levels deep has the type <tt>list&lt;auto&gt;</tt>.
+
     @see
     - @ref new
     - @ref cast

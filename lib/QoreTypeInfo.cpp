@@ -874,8 +874,25 @@ const QoreTypeInfo* get_or_nothing_type(const QoreTypeInfo* typeInfo) {
     return autoTypeInfo;
 }
 
+// Container types are also derived from the types of the values in containers, so that building deeply nested data
+// would create a type for each level, each with a name as long as its nesting; a type nested more deeply than this
+// accepts values of any type instead
+static constexpr unsigned QORE_MAX_CONTAINER_TYPE_NESTING = 64;
+
+static bool qore_container_type_too_deep(const QoreTypeInfo* vti) {
+    return QoreTypeInfo::getContainerNesting(vti) >= QORE_MAX_CONTAINER_TYPE_NESTING;
+}
+
+// returns a new container type for the given value type, with the nesting of the value type plus one
+template <typename T>
+static T* qore_new_container_type(const QoreTypeInfo* vti) {
+    T* ti = new T(vti);
+    ti->setContainerNesting(QoreTypeInfo::getContainerNesting(vti) + 1);
+    return ti;
+}
+
 const QoreTypeInfo* qore_get_complex_hash_type(const QoreTypeInfo* vti) {
-    if (vti == autoTypeInfo) {
+    if (vti == autoTypeInfo || qore_container_type_too_deep(vti)) {
         return autoHashTypeInfo;
     }
     if (vti == anyTypeInfo || !vti) {
@@ -888,13 +905,13 @@ const QoreTypeInfo* qore_get_complex_hash_type(const QoreTypeInfo* vti) {
     if (i != ch_map.end() && i->first == vti)
         return i->second;
 
-    QoreComplexHashTypeInfo* ti = new QoreComplexHashTypeInfo(vti);
+    QoreComplexHashTypeInfo* ti = qore_new_container_type<QoreComplexHashTypeInfo>(vti);
     ch_map.insert(i, tmap_t::value_type(vti, ti));
     return ti;
 }
 
 const QoreTypeInfo* qore_get_complex_hash_or_nothing_type(const QoreTypeInfo* vti) {
-    if (vti == autoTypeInfo) {
+    if (vti == autoTypeInfo || qore_container_type_too_deep(vti)) {
         return autoHashOrNothingTypeInfo;
     }
     if (vti == anyTypeInfo || !vti) {
@@ -907,13 +924,13 @@ const QoreTypeInfo* qore_get_complex_hash_or_nothing_type(const QoreTypeInfo* vt
     if (i != chon_map.end() && i->first == vti)
         return i->second;
 
-    QoreComplexHashOrNothingTypeInfo* ti = new QoreComplexHashOrNothingTypeInfo(vti);
+    QoreComplexHashOrNothingTypeInfo* ti = qore_new_container_type<QoreComplexHashOrNothingTypeInfo>(vti);
     chon_map.insert(i, tmap_t::value_type(vti, ti));
     return ti;
 }
 
 const QoreTypeInfo* qore_get_complex_list_type(const QoreTypeInfo* vti) {
-    if (vti == autoTypeInfo) {
+    if (vti == autoTypeInfo || qore_container_type_too_deep(vti)) {
         return autoListTypeInfo;
     }
     if (vti == anyTypeInfo || !vti) {
@@ -926,13 +943,13 @@ const QoreTypeInfo* qore_get_complex_list_type(const QoreTypeInfo* vti) {
     if (i != cl_map.end() && i->first == vti)
         return i->second;
 
-    QoreComplexListTypeInfo* ti = new QoreComplexListTypeInfo(vti);
+    QoreComplexListTypeInfo* ti = qore_new_container_type<QoreComplexListTypeInfo>(vti);
     cl_map.insert(i, tmap_t::value_type(vti, ti));
     return ti;
 }
 
 const QoreTypeInfo* qore_get_complex_list_or_nothing_type(const QoreTypeInfo* vti) {
-    if (vti == autoTypeInfo) {
+    if (vti == autoTypeInfo || qore_container_type_too_deep(vti)) {
         return autoListOrNothingTypeInfo;
     }
     if (vti == anyTypeInfo || !vti) {
@@ -945,7 +962,7 @@ const QoreTypeInfo* qore_get_complex_list_or_nothing_type(const QoreTypeInfo* vt
     if (i != clon_map.end() && i->first == vti)
         return i->second;
 
-    QoreComplexListOrNothingTypeInfo* ti = new QoreComplexListOrNothingTypeInfo(vti);
+    QoreComplexListOrNothingTypeInfo* ti = qore_new_container_type<QoreComplexListOrNothingTypeInfo>(vti);
     clon_map.insert(i, tmap_t::value_type(vti, ti));
     return ti;
 }
@@ -1002,7 +1019,7 @@ const QoreTypeInfo* qore_get_complex_buffer_or_nothing_type(QoreBufferElementTyp
 }
 
 const QoreTypeInfo* qore_get_complex_softlist_type(const QoreTypeInfo* vti) {
-    if (vti == autoTypeInfo) {
+    if (vti == autoTypeInfo || qore_container_type_too_deep(vti)) {
         return softAutoListTypeInfo;
     }
     if (vti == anyTypeInfo || !vti) {
@@ -1015,13 +1032,13 @@ const QoreTypeInfo* qore_get_complex_softlist_type(const QoreTypeInfo* vti) {
     if (i != csl_map.end() && i->first == vti)
         return i->second;
 
-    QoreComplexSoftListTypeInfo* ti = new QoreComplexSoftListTypeInfo(vti);
+    QoreComplexSoftListTypeInfo* ti = qore_new_container_type<QoreComplexSoftListTypeInfo>(vti);
     csl_map.insert(i, tmap_t::value_type(vti, ti));
     return ti;
 }
 
 const QoreTypeInfo* qore_get_complex_softlist_or_nothing_type(const QoreTypeInfo* vti) {
-    if (vti == autoTypeInfo) {
+    if (vti == autoTypeInfo || qore_container_type_too_deep(vti)) {
         return softAutoListOrNothingTypeInfo;
     }
     if (vti == anyTypeInfo || !vti) {
@@ -1034,43 +1051,55 @@ const QoreTypeInfo* qore_get_complex_softlist_or_nothing_type(const QoreTypeInfo
     if (i != cslon_map.end() && i->first == vti)
         return i->second;
 
-    QoreComplexSoftListOrNothingTypeInfo* ti = new QoreComplexSoftListOrNothingTypeInfo(vti);
+    QoreComplexSoftListOrNothingTypeInfo* ti = qore_new_container_type<QoreComplexSoftListOrNothingTypeInfo>(vti);
     cslon_map.insert(i, tmap_t::value_type(vti, ti));
     return ti;
 }
 
 const QoreTypeInfo* qore_get_complex_hard_reference_type(const QoreTypeInfo* vti) {
+    if (qore_container_type_too_deep(vti)) {
+        vti = autoTypeInfo;
+    }
+
     AutoLocker al(ctl);
 
     tmap_t::iterator i = chr_map.lower_bound(vti);
     if (i != chr_map.end() && i->first == vti)
         return i->second;
 
-    QoreComplexHardReferenceTypeInfo* ti = new QoreComplexHardReferenceTypeInfo(vti);
+    QoreComplexHardReferenceTypeInfo* ti = qore_new_container_type<QoreComplexHardReferenceTypeInfo>(vti);
     chr_map.insert(i, tmap_t::value_type(vti, ti));
     return ti;
 }
 
 const QoreTypeInfo* qore_get_complex_reference_type(const QoreTypeInfo* vti) {
+    if (qore_container_type_too_deep(vti)) {
+        vti = autoTypeInfo;
+    }
+
     AutoLocker al(ctl);
 
     tmap_t::iterator i = cr_map.lower_bound(vti);
     if (i != cr_map.end() && i->first == vti)
         return i->second;
 
-    QoreComplexReferenceTypeInfo* ti = new QoreComplexReferenceTypeInfo(vti);
+    QoreComplexReferenceTypeInfo* ti = qore_new_container_type<QoreComplexReferenceTypeInfo>(vti);
     cr_map.insert(i, tmap_t::value_type(vti, ti));
     return ti;
 }
 
 const QoreTypeInfo* qore_get_complex_reference_or_nothing_type(const QoreTypeInfo* vti) {
+    if (qore_container_type_too_deep(vti)) {
+        vti = autoTypeInfo;
+    }
+
     AutoLocker al(ctl);
 
     tmap_t::iterator i = cron_map.lower_bound(vti);
     if (i != cron_map.end() && i->first == vti)
         return i->second;
 
-    QoreComplexReferenceOrNothingTypeInfo* ti = new QoreComplexReferenceOrNothingTypeInfo(vti);
+    QoreComplexReferenceOrNothingTypeInfo* ti = qore_new_container_type<QoreComplexReferenceOrNothingTypeInfo>(vti);
     cron_map.insert(i, tmap_t::value_type(vti, ti));
     return ti;
 }

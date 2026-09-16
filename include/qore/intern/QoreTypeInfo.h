@@ -879,9 +879,20 @@ public:
         return sname.empty() ? tname.c_str() : sname.c_str();
     }
 
+    //! Returns the number of nested list, hash and reference types in a type, including the type itself
+    DLLLOCAL static unsigned getContainerNesting(const QoreTypeInfo* ti) {
+        return ti ? ti->container_nesting : 0;
+    }
+
+    //! Sets the number of nested list, hash and reference types before the type is published
+    DLLLOCAL void setContainerNesting(unsigned n) {
+        container_nesting = n;
+    }
+
 protected:
     QoreString tname;
     QoreString sname;
+    unsigned container_nesting = 0;
 
     DLLLOCAL QoreTypeInfo(const q_accept_vec_t&& a_vec, const q_return_vec_t&& r_vec, const QoreString& tname)
             : accept_vec(a_vec), return_vec(r_vec), tname(tname) {
