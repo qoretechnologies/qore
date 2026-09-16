@@ -1,0 +1,92 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class ExceptionChainsTest
+
+class ExceptionChainsTest inherits QUnit::Test {
+    public {
+        #! the number of chained exceptions
+        const Count = 20000;
+        #! the stack size of a test thread
+        const StackSize = 512 * 1024;
+    }
+
+    constructor() : QUnit::Test("exception chains", "1.0") {
+        addTestCase("A long chain of parse errors is released", \parseErrors());
+        addTestCase("A long chain of parse errors is rethrown", \rethrownParseErrors());
+        set_return_value(main());
+    }
+
+    parseErrors() {
+        inThread(sub () {
+            # each statement is a parse error, and the errors are chained
+            Program p(PO_NEW_STYLE | PO_NO_TOP_LEVEL_STATEMENTS);
+            try {
+                p.parse(strmul("x = 1; ", Count), "errors");
+                fail("the statements were accepted");
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("PARSE-EXCEPTION", ex.err);
+                assertEq(1, ex.line);
+                # the exception hash contains a limited number of chained exceptions
+                int size = 1;
+                *hash<ExceptionInfo> e = ex;
+                while ((e = e.next)) {
+                    assertEq("PARSE-EXCEPTION", e.err);
+                    ++size;
+                }
+                assertGt(1, size);
+                assertLt(Count, size);
+            }
+            # the parse errors do not affect the next parse
+            p.parse("int sub f() { return 1; }", "valid");
+            assertEq(1, p.callFunction("f"));
+        });
+    }
+
+    rethrownParseErrors() {
+        inThread(sub () {
+            Program p(PO_NEW_STYLE | PO_NO_TOP_LEVEL_STATEMENTS);
+            try {
+                try {
+                    p.parse(strmul("x = 1; ", Count), "errors");
+                    fail("the statements were accepted");
+                } catch (hash<ExceptionInfo> ex) {
+                    # a rethrown exception is copied with its chained exceptions
+                    rethrow;
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("PARSE-EXCEPTION", ex.err);
+                assertEq("PARSE-EXCEPTION", ex.next.err);
+                assertEq(ex.desc, ex.next.desc);
+            }
+        });
+    }
+
+    private inThread(code test) {
+        if (!HAVE_MANAGE_STACK) {
+            testSkip("stack management is not available");
+        }
+        int defaultSize = get_default_thread_stack_size();
+        set_default_thread_stack_size(StackSize);
+        on_exit set_default_thread_stack_size(defaultSize);
+
+        Counter c(1);
+        *hash<ExceptionInfo> ex;
+        background sub () {
+            on_exit c.dec();
+            try {
+                test();
+            } catch (hash<ExceptionInfo> e) {
+                ex = e;
+            }
+        }();
+        c.waitForZero();
+        if (ex) {
+            throw ex.err, ex.desc, ex.arg;
+        }
+    }
+}

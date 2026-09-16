@@ -134,6 +134,13 @@ class QoreException : public QoreExceptionBase, public QoreExceptionLocation {
     friend class ExceptionSink;
     friend struct qore_es_private;
 
+    //! Selects the constructor that copies an exception without the exceptions chained to it
+    enum CopyOneTag { CopyOne };
+
+    DLLLOCAL QoreException(const QoreException& old, CopyOneTag) : QoreExceptionBase(old),
+            QoreExceptionLocation(old) {
+    }
+
 public:
     QoreException* next = nullptr;
 
@@ -152,8 +159,31 @@ public:
           QoreExceptionLocation(get_runtime_location_safe()) {
     }
 
-    DLLLOCAL QoreException(const QoreException& old) : QoreExceptionBase(old),
-        QoreExceptionLocation(old), next(old.next ? new QoreException(*old.next) : nullptr) {
+    //! Copies an exception and the exceptions chained to it
+    /** The chain is copied without recursion, as it can be long, for example after many parse errors.
+    */
+    DLLLOCAL QoreException(const QoreException& old) : QoreExceptionBase(old), QoreExceptionLocation(old) {
+        QoreException* tail = this;
+        try {
+            for (const QoreException* w = old.next; w; w = w->next) {
+                tail->next = new QoreException(*w, CopyOne);
+                tail = tail->next;
+            }
+        } catch (...) {
+            // releases the copied chain and this exception's own values, as no destructor releases them
+            if (next) {
+                next->del(nullptr);
+                next = nullptr;
+            }
+            if (callStack) {
+                callStack->deref(nullptr);
+                callStack = nullptr;
+            }
+            err.discard(nullptr);
+            desc.discard(nullptr);
+            arg.discard(nullptr);
+            throw;
+        }
     }
 
     // called for user exceptions

@@ -101,21 +101,23 @@ QoreExceptionBase::QoreExceptionBase(QoreValue n_err, QoreValue n_desc, QoreValu
 }
 
 void QoreException::del(ExceptionSink* xsink) {
-    if (callStack) {
-        //printd(5, "QoreException::del() this: %p callStack: %p (r: %d)\n", this, callStack, callStack->reference_count());
-        callStack->deref(xsink);
+    // the chained exceptions are deleted in a loop, as a chain can be long, for example after many parse errors
+    QoreException* e = this;
+    while (e) {
+        QoreException* n = e->next;
+        if (e->callStack) {
+            //printd(5, "QoreException::del() this: %p callStack: %p (r: %d)\n", e, e->callStack, e->callStack->reference_count());
+            e->callStack->deref(xsink);
 #ifdef DEBUG
-        callStack = nullptr;
+            e->callStack = nullptr;
 #endif
+        }
+        e->err.discard(xsink);
+        e->desc.discard(xsink);
+        e->arg.discard(xsink);
+        delete e;
+        e = n;
     }
-    err.discard(xsink);
-    desc.discard(xsink);
-    arg.discard(xsink);
-    if (next) {
-        next->del(xsink);
-    }
-
-    delete this;
 }
 
 class QoreExceptionHolder {

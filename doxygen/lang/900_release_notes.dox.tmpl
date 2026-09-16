@@ -3047,6 +3047,8 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
     - Fixed crashes when parsing, running or freeing deeply nested code, such as an expression with thousands of
       operators; the parser now rejects code that is nested more deeply than it supports with a
       \c PARSE-EXCEPTION (see @ref qore_3_0_0_compatibility)
+    - Fixed a crash when copying or deleting a long chain of exceptions, such as the chain of parse errors from a
+      source with many thousands of errors
     - Fixed a crash after the parse error for a \c my, \c our or \c thread_local list declaration whose first
       element is not a variable, such as <tt>my (1, b);</tt>
     - Fixed @ref Qore::Reflection::Type::getOrNothingType() "Type::getOrNothingType()" returning a mandatory type
