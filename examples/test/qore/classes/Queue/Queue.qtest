@@ -8,12 +8,24 @@
 
 %exec-class Test
 
+#! Counts its destructions
+class EventArg {
+    public {
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++EventArg::destroyed;
+    }
+}
+
 class Test inherits QUnit::Test {
     constructor() : QUnit::Test("Queue", "1.0") {
         addTestCase("simple tests", \simpleTests());
         addTestCase("timeout", \timeoutTests());
         addTestCase("tryGet and tryPop tests", \tryGetTryPopTests());
         addTestCase("leak test", \leakTest());
+        addTestCase("events for a deleted queue are released", \deletedEventQueueTest());
         set_return_value(main());
     }
 
@@ -23,6 +35,20 @@ class Test inherits QUnit::Test {
         f.setEventQueue(q);
         # this creates a memory leak visible in valgrind for example
         assertEq(Type::Object, q.copy().type());
+    }
+
+    deletedEventQueueTest() {
+        EventArg::destroyed = 0;
+        {
+            Socket s();
+            Queue q();
+            s.setEventQueue(q, new EventArg(), False);
+            # the queue is deleted before the socket posts its last event
+            delete q;
+            # the socket's event holds a reference to the argument, which is released with the event
+            delete s;
+        }
+        assertEq(1, EventArg::destroyed);
     }
 
     simpleTests() {

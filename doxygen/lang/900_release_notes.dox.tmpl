@@ -3065,6 +3065,9 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       destroyed before the objects that they reference
     - Fixed a crash when copying or deleting a long chain of exceptions, such as the chain of parse errors from a
       source with many thousands of errors
+    - Fixed a memory leak of the events that a @ref Qore::Socket "Socket", @ref Qore::File "File" or
+      @ref Qore::HTTPClient "HTTPClient" object posts to an @ref event_handling "event queue" that has already
+      been deleted, including the event argument
     - Fixed a crash after the parse error for a \c my, \c our or \c thread_local list declaration whose first
       element is not a variable, such as <tt>my (1, b);</tt>
     - Fixed @ref Qore::Reflection::Type::getOrNothingType() "Type::getOrNothingType()" returning a mandatory type

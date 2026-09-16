@@ -142,7 +142,8 @@ public:
         assert(!desc);
     }
 
-    // push at the end of the queue and take the reference - can only be used when len == -1
+    // push at the end of the queue and take the reference - can only be used when len == -1; the reference is
+    // released if the queue is deleted or in an error state
     DLLLOCAL void pushAndTakeRef(QoreValue n);
 
     // push at the end of the queue

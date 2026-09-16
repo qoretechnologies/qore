@@ -230,16 +230,22 @@ int qore_queue_private::checkWriteIntern(ExceptionSink* xsink, bool always_error
 }
 
 void qore_queue_private::pushAndTakeRef(QoreValue n) {
-    AutoLocker al(&l);
-    if (len == Queue_Deleted || !err.empty()) {
-        return;
+    {
+        AutoLocker al(&l);
+        if (len != Queue_Deleted && err.empty()) {
+            assert(max == -1);
+
+            printd(5, "qore_queue_private::pushAndTakeRef('%s') this: %p\n", n.getTypeName(), this);
+            // the queue takes the reference
+            pushIntern(n);
+            return;
+        }
     }
 
-    assert(max == -1);
-
-    printd(5, "qore_queue_private::pushAndTakeRef('%s') this: %p\n", n.getTypeName(), this);
-    // reference value for being stored in queue
-    pushIntern(n);
+    // a deleted queue or a queue in an error state does not take the value, so the reference is released here,
+    // outside the lock; this API has no exception sink, so any exception is reported by the temporary one
+    ExceptionSink xsink;
+    n.discard(&xsink);
 }
 
 void qore_queue_private::push(ExceptionSink* xsink, QoreObject* self, QoreValue n, int timeout_ms, bool& to) {

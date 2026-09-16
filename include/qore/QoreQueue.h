@@ -59,6 +59,8 @@ public:
     DLLEXPORT ~QoreQueue();
 
     //! push at the end of the queue and take the reference; can only be used when len == -1
+    /** The reference is released if the queue has been deleted or is in an error state.
+    */
     DLLEXPORT void pushAndTakeRef(QoreValue n);
 
     //! push at the end of the queue
