@@ -33,6 +33,7 @@
 #include "qore/intern/qore_string_private.h"
 #include "qore/intern/QoreFormatBounds.h"
 #include "qore/intern/qore_list_private.h"
+#include "qore/intern/QoreHashNodeIntern.h"
 #include "qore/intern/QoreParseListNode.h"
 #include "qore/intern/qore_program_private.h"
 #include "qore/intern/QoreListNodeEvalOptionalRefHolder.h"
@@ -914,16 +915,103 @@ QoreListNode* QoreListNode::sortStable(const ResolvedCallReferenceNode* fr, Exce
     return rv.release();
 }
 
+namespace {
+// the nesting depth of the lists and hashes whose entries this thread is freeing recursively
+thread_local unsigned container_free_depth = 0;
+
+// a list or hash whose entries are freed by free_nested_containers()
+struct ContainerFreeFrame {
+    AbstractQoreNode* container;
+    // the index of the next entry of a list
+    size_t next;
+};
+
+// the stack of the innermost free_nested_containers() call in this thread, if any
+thread_local std::vector<ContainerFreeFrame>* container_free_stack = nullptr;
+// the list or hash entry that the innermost free_nested_containers() call is freeing, if any
+thread_local const AbstractQoreNode* container_free_entry = nullptr;
+
+// frees the entries of a list or hash and of its nested lists and hashes in depth-first order without recursion
+void free_nested_containers(AbstractQoreNode* container, ExceptionSink* xsink) {
+    std::vector<ContainerFreeFrame> stack;
+    stack.push_back({container, 0});
+
+    // an object destructor can free containers with another loop
+    struct StackHelper {
+        std::vector<ContainerFreeFrame>* previous;
+        explicit StackHelper(std::vector<ContainerFreeFrame>* current) : previous(container_free_stack) {
+            container_free_stack = current;
+        }
+        ~StackHelper() {
+            container_free_stack = previous;
+        }
+    } stackHelper(&stack);
+
+    while (!stack.empty()) {
+        // freeing an entry can push its list or hash on the stack, so the frame is not used after that
+        ContainerFreeFrame& frame = stack.back();
+        AbstractQoreNode* c = frame.container;
+        if (c->getType() == NT_LIST) {
+            QoreListNode* l = static_cast<QoreListNode*>(c);
+            if (!qore_list_private::freeNextEntry(*l, frame.next, xsink)) {
+                stack.pop_back();
+                qore_list_private::finishFree(*l);
+            }
+        } else {
+            assert(c->getType() == NT_HASH);
+            QoreHashNode* h = static_cast<QoreHashNode*>(c);
+            if (!qore_hash_private::freeNextMember(*h, xsink)) {
+                stack.pop_back();
+                qore_hash_private::finishFree(*h);
+            }
+        }
+    }
+}
+}
+
+qore_container_free_helper::qore_container_free_helper(AbstractQoreNode* container, ExceptionSink* xsink) {
+    assert(container->getType() == NT_LIST || container->getType() == NT_HASH);
+    if (container_free_entry == container) {
+        // the entry is freed by the loop that is freeing its container
+        container_free_entry = nullptr;
+        container_free_stack->push_back({container, 0});
+        recursive = false;
+    } else if (container_free_depth >= QORE_CONTAINER_FREE_RECURSION_DEPTH) {
+        free_nested_containers(container, xsink);
+        recursive = false;
+    } else {
+        ++container_free_depth;
+        recursive = true;
+    }
+}
+
+qore_container_free_helper::~qore_container_free_helper() {
+    if (recursive) {
+        assert(container_free_depth);
+        --container_free_depth;
+    }
+}
+
+void qore_container_free_helper::freeEntry(QoreValue& entry, ExceptionSink* xsink) {
+    qore_type_t t = entry.getType();
+    if (t == NT_LIST || t == NT_HASH) {
+        container_free_entry = entry.getInternalNode();
+        entry.discard(xsink);
+        container_free_entry = nullptr;
+    } else {
+        entry.discard(xsink);
+    }
+}
+
 // does a deep dereference
 bool QoreListNode::derefImpl(ExceptionSink* xsink) {
-    for (size_t i = 0; i < priv->length; ++i) {
-        priv->entry[i].discard(xsink);
+    qore_container_free_helper cfh(this, xsink);
+    if (cfh.freeEntries()) {
+        for (size_t i = 0; i < priv->length; ++i) {
+            priv->entry[i].discard(xsink);
+        }
+        qore_list_private::finishFree(*this);
     }
-#ifdef DEBUG
-    priv->length = 0;
-#endif
-    priv->valid = false;
-    weakDeref();
     return false;
 }
 

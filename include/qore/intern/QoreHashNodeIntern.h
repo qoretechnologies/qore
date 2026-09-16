@@ -54,6 +54,7 @@ typedef std::list<HashMember*> qhlist_t;
 //#warning compiling with hash_map
 #include <qore/hash_map_include.h>
 #include "qore/intern/xxhash.h"
+#include "qore/intern/qore_container_free.h"
 
 typedef HASH_MAP<const char*, qhlist_t::iterator, qore_hash_str, eqstr> hm_hm_t;
 #else
@@ -585,6 +586,33 @@ public:
         obj_count = 0;
         valid = false;
         return true;
+    }
+
+    //! Frees the next member of a hash whose reference count has reached zero
+    /** The member is removed from the member list before its value is freed.
+
+        @return false if all members have been freed
+    */
+    DLLLOCAL static bool freeNextMember(QoreHashNode& h, ExceptionSink* xsink) {
+        qore_hash_private* p = h.priv;
+        if (p->member_list.empty()) {
+            return false;
+        }
+        HashMember* member = p->member_list.front();
+        p->member_list.pop_front();
+        qore_container_free_helper::freeEntry(member->val, xsink);
+        delete member;
+        return true;
+    }
+
+    //! Finishes freeing a hash after its members have been freed
+    DLLLOCAL static void finishFree(QoreHashNode& h) {
+        qore_hash_private* p = h.priv;
+        assert(p->member_list.empty());
+        p->hm.clear();
+        p->obj_count = 0;
+        p->valid = false;
+        h.weakDeref();
     }
 
     DLLLOCAL QoreValue swapKeyValueIfExists(const char* key, QoreValue val, qore_object_private* o, bool& exists) {

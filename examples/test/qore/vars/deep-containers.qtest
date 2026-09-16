@@ -1,0 +1,134 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class DeepContainersTest
+
+class DestructorLog {
+    public {
+        list<string> names = ();
+    }
+}
+
+class Logged {
+    private {
+        DestructorLog log;
+        string name;
+    }
+
+    constructor(DestructorLog log, string name) {
+        self.log = log;
+        self.name = name;
+    }
+
+    destructor() {
+        push log.names, name;
+    }
+}
+
+class DeepContainersTest inherits QUnit::Test {
+    public {
+        const Depth = 200000;
+        # freeing runs in a thread with a small stack
+        const StackSize = 512 * 1024;
+    }
+
+    constructor() : QUnit::Test("deep containers", "1.0") {
+        addTestCase("Freeing deeply nested lists and hashes", \freeDeepContainers());
+        addTestCase("Destructors run in depth-first order", \destructorOrder());
+        set_return_value(main());
+    }
+
+    freeDeepContainers() {
+        inThread(sub () {
+            list<auto> l = ();
+            for (int i = 0; i < Depth; ++i) {
+                l = (l, i);
+            }
+            assertEq(Depth - 1, l[1]);
+            remove l;
+
+            hash<auto> h = {};
+            for (int i = 0; i < Depth; ++i) {
+                h = {"child": h, "list": (h, i)};
+            }
+            assertEq(2, h.list.size());
+            remove h;
+
+            # a nested container that is still referenced elsewhere is not freed
+            list<auto> shared = (1, 2);
+            l = shared;
+            for (int i = 0; i < Depth; ++i) {
+                l = (l, shared);
+            }
+            remove l;
+            assertEq((1, 2), shared);
+        });
+    }
+
+    destructorOrder() {
+        foreach int depth in ((4, 40, 400)) {
+            # the expected order of the destructors, depth-first as the containers are declared
+            list<string> expected = ();
+            DestructorLog log();
+            inThread(sub () {
+                auto value = makeTree(log, depth, "", \expected);
+                remove value;
+            });
+            assertEq(expected, log.names, sprintf("depth %d", depth));
+        }
+    }
+
+    private static auto makeTree(DestructorLog log, int depth, string path, reference<list<string>> expected) {
+        # iterative construction from the innermost container outward; the order of the destructors is the order of
+        # the entries from the outermost container inward
+        auto inner = new Logged(log, path + "/leaf");
+        list<list<string>> names = ();
+        for (int i = depth - 1; i >= 0; --i) {
+            string first = sprintf("%s/%d/first", path, i);
+            string last = sprintf("%s/%d/last", path, i);
+            if (i % 2) {
+                inner = (new Logged(log, first), inner, new Logged(log, last));
+            } else {
+                inner = {"a": new Logged(log, first), "b": inner, "c": new Logged(log, last)};
+            }
+            unshift names, (first, last);
+        }
+        # first objects from the outside in, then the leaf, then the last objects from the inside out
+        foreach list<string> n in (names) {
+            push expected, n[0];
+        }
+        push expected, path + "/leaf";
+        foreach list<string> n in (reverse(names)) {
+            push expected, n[1];
+        }
+        return inner;
+    }
+
+    private inThread(code test) {
+        if (!HAVE_MANAGE_STACK) {
+            testSkip("stack management is not available");
+        }
+        int defaultSize = get_default_thread_stack_size();
+        set_default_thread_stack_size(StackSize);
+        on_exit set_default_thread_stack_size(defaultSize);
+
+        Counter c(1);
+        *hash<ExceptionInfo> ex;
+        background sub () {
+            on_exit c.dec();
+            try {
+                test();
+            } catch (hash<ExceptionInfo> e) {
+                ex = e;
+            }
+        }();
+        c.waitForZero();
+        if (ex) {
+            throw ex.err, ex.desc, ex.arg;
+        }
+    }
+}

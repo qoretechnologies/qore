@@ -37,6 +37,8 @@
 #include <utility>
 #include <vector>
 
+#include "qore/intern/qore_container_free.h"
+
 typedef ReferenceHolder<QoreListNode> safe_qorelist_t;
 
 #define LIST_PAD   15
@@ -639,6 +641,32 @@ struct qore_list_private {
             return true;
         }
         return false;
+    }
+
+    //! Frees the next entry of a list whose reference count has reached zero
+    /** @param l the list
+        @param next the index of the next entry, which is incremented before the entry is freed
+        @param xsink for exceptions raised while freeing the entry
+
+        @return false if all entries have been freed
+    */
+    DLLLOCAL static bool freeNextEntry(QoreListNode& l, size_t& next, ExceptionSink* xsink) {
+        qore_list_private* p = l.priv;
+        if (next == p->length) {
+            return false;
+        }
+        QoreValue& entry = p->entry[next++];
+        qore_container_free_helper::freeEntry(entry, xsink);
+        return true;
+    }
+
+    //! Finishes freeing a list after its entries have been freed
+    DLLLOCAL static void finishFree(QoreListNode& l) {
+#ifdef DEBUG
+        l.priv->length = 0;
+#endif
+        l.priv->valid = false;
+        l.weakDeref();
     }
 
     DLLLOCAL static void setNeedsEval(QoreListNode& l) {

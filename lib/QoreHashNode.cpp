@@ -719,8 +719,11 @@ bool QoreHashNode::compareHard(const QoreHashNode* h, ExceptionSink* xsink) cons
 }
 
 bool QoreHashNode::derefImpl(ExceptionSink* xsink) {
-    priv->derefImpl(xsink);
-    weakDeref();
+    qore_container_free_helper cfh(this, xsink);
+    if (cfh.freeEntries()) {
+        priv->derefImpl(xsink);
+        weakDeref();
+    }
     return false;
 }
 
