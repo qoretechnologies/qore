@@ -1397,25 +1397,9 @@ public class CSTTranslator {
         }
 
         # Build the value expression (type + var or just var)
-        # AEK_Decl loc must cover "type var" (e.g. "int v"), not just the variable
-        hash<auto> valueLoc;
-        if (exists typeNode && exists varNode) {
-            valueLoc = {
-                "start_line": typeNode.loc.start_line,
-                "start_column": typeNode.loc.start_column,
-                "end_line": varNode.loc.end_line,
-                "end_column": varNode.loc.end_column,
-            };
-        } else if (exists varNode) {
-            valueLoc = varNode.loc;
-        } else {
-            valueLoc = node.loc;
-        }
-        hash<auto> valueExpr = {
-            "nodetype": ANT_Expression,
-            "kind": AEK_Decl,
-            "loc": valueLoc,
-        };
+        hash<auto> valueExpr = exists varNode
+            ? makeDeclExpr(node, typeNode, varNode)
+            : {"nodetype": ANT_Expression, "kind": AEK_Decl, "loc": node.loc};
 
         hash<auto> result = {
             "nodetype": ANT_Statement,
@@ -1428,6 +1412,35 @@ public class CSTTranslator {
         }
         if (exists bodyNode) {
             result.statement = translateNode(bodyNode);
+        }
+        return result;
+    }
+
+    #! Returns a declaration expression for the variable of a foreach statement or a catch clause
+    /** @param parent the foreach_statement or catch_clause node
+        @param typeNode the type of the variable, if declared
+        @param varNode the variable
+
+        @return an AEK_Decl expression whose location covers the type and the variable; a \c my keyword before the
+        declaration is an anonymous token, which is returned as the \c scope key
+    */
+    private hash<auto> makeDeclExpr(hash<auto> parent, *hash<auto> typeNode, hash<auto> varNode) {
+        hash<auto> first = typeNode ?? varNode;
+        hash<auto> result = {
+            "nodetype": ANT_Expression,
+            "kind": AEK_Decl,
+            "loc": {
+                "start_line": first.loc.start_line,
+                "start_column": first.loc.start_column,
+                "end_line": varNode.loc.end_line,
+                "end_column": varNode.loc.end_column,
+            },
+        };
+        string before = extractTextBeforeChild(parent, first);
+        before = regex_subst(before, "/\\*.*?\\*/", " ", RE_Global | RE_DotAll);
+        before = regex_subst(before, "#[^\\n]*", " ", RE_Global);
+        if (before =~ /(?:^|[\s(])my\s*$/) {
+            result.scope = "my";
         }
         return result;
     }
@@ -1528,19 +1541,9 @@ public class CSTTranslator {
     }
 
     private hash<auto> translateTryStmt(hash<auto> node) {
-        # try has a block child and catch_clause children
-        *hash<auto> tryBody;
-        *hash<auto> catchClause;
-
-        if (exists node.children) {
-            foreach hash<auto> child in (node.children) {
-                if (child.type == "block" && !exists tryBody) {
-                    tryBody = child;
-                } else if (child.type == "catch_clause") {
-                    catchClause = child;
-                }
-            }
-        }
+        # the try body is a statement or a block, followed by a catch_clause
+        *hash<auto> tryBody = findField(node, "body");
+        *hash<auto> catchClause = findType(node, "catch_clause");
 
         hash<auto> result = {
             "nodetype": ANT_Statement,
@@ -1551,28 +1554,12 @@ public class CSTTranslator {
             result.tryStmt = translateNode(tryBody);
         }
         if (exists catchClause) {
-            *hash<auto> catchType = findField(catchClause, "type");
+            # the exception parameter is optional
             *hash<auto> catchParam = findField(catchClause, "parameter");
-            *hash<auto> catchBody = findField(catchClause, "body");
-
-            # Build catch variable as decl expression "type name"
-            string catchVarStr = "";
-            if (exists catchType) {
-                catchVarStr = extractText(catchType);
-            }
             if (exists catchParam) {
-                if (catchVarStr != "") {
-                    catchVarStr += " ";
-                }
-                catchVarStr += getIdentName(catchParam);
+                result.catchVar = makeDeclExpr(catchClause, findField(catchClause, "type"), catchParam);
             }
-
-            result.catchVar = {
-                "nodetype": ANT_Expression,
-                "kind": AEK_Decl,
-                "loc": exists catchParam ? catchParam.loc : catchClause.loc,
-            };
-
+            *hash<auto> catchBody = findField(catchClause, "body");
             if (exists catchBody) {
                 result.catchStmt = translateNode(catchBody);
             }

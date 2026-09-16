@@ -2320,7 +2320,8 @@ public class CodeFormatter {
 
     #! Emit decl expression (variable declaration in expression context)
     private string emitDeclExpr(hash<auto> node) {
-        return stripTrailingSemicolon(extractNormalizedSourceText(node.loc));
+        string decl = stripTrailingSemicolon(extractNormalizedSourceText(node.loc));
+        return exists node.scope ? node.scope + " " + decl : decl;
     }
 
     #! Emit range expression

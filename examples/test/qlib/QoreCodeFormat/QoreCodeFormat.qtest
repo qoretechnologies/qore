@@ -66,6 +66,7 @@ class QoreCodeFormatTest inherits QUnit::Test {
         addTestCase("long multi-line list literals", \testLongMultiLineLists());
         addTestCase("multi-byte characters", \testMultiByteCharacters());
         addTestCase("hash slices", \testHashSlices());
+        addTestCase("catch and foreach declarations", \testCatchAndForeachDeclarations());
 
         set_return_value(main());
     }
@@ -1463,6 +1464,63 @@ hash<string, string> sub values() {
             p.parse(source, "multi-byte");
             assertEq({"s": "—bar-baz", "x": "—→é—→ one two three", "y": "a-b", "z": "…—"},
                 p.callFunction("values"), "formatted strings keep their values");
+        }
+    }
+
+    testCatchAndForeachDeclarations() {
+        list<string> lines = (
+            "    foreach my string s in (l) {",
+            "    foreach string s in (l) {",
+            "    } catch (my hash<ExceptionInfo> ex) {",
+            "    } catch (hash<ExceptionInfo> ex) {",
+            "    } catch (*hash<ExceptionInfo> ex) {",
+            "    } catch () {",
+        );
+        string src = "%modern
+string sub run(list<string> l) {
+    string rv;
+    foreach my string s in (l) {
+        rv += s;
+    }
+    foreach string s in (l) {
+        rv += s.upr();
+    }
+    try {
+        throw \"A\";
+    } catch (my hash<ExceptionInfo> ex) {
+        rv += ex.err;
+    }
+    try {
+        throw \"B\";
+    } catch (hash<ExceptionInfo> ex) {
+        rv += ex.err;
+    }
+    try {
+        throw \"C\";
+    } catch (*hash<ExceptionInfo> ex) {
+        rv += ex.err;
+    }
+    try {
+        throw \"D\";
+    } catch () {
+        rv += \"d\";
+    }
+    return rv;
+}
+";
+        QoreCodeFormat::CodeFormatter fmt();
+        string result = fmt.format(src);
+        list<string> resultLines = result.split("\n");
+        foreach string line in (lines) {
+            assertTrue(resultLines.contains(line), "declaration retained: " + line);
+        }
+        QoreCodeFormat::CodeFormatter fmt2();
+        assertEq(result, fmt2.format(result), "catch and foreach idempotency");
+
+        foreach string source in ((src, result)) {
+            Program p(PO_NEW_STYLE);
+            p.parse(source, "catch and foreach declarations");
+            assertEq("abABABCd", p.callFunction("run", ("a", "b")), "formatted declarations keep their meaning");
         }
     }
 
