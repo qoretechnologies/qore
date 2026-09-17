@@ -754,8 +754,8 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             case "tool_use":         return "tool_use";
             case "max_tokens":       return "max_tokens";
             case "stop_sequence":    return "stop_sequence";
-            case "content_filtered": return "stop_sequence";
-            case "guardrail_intervened": return "stop_sequence";
+            case "content_filtered": return "content_filter";
+            case "guardrail_intervened": return "content_filter";
             default:
                 return tool_calls ? "tool_use" : (reason ?? "end_turn");
         }

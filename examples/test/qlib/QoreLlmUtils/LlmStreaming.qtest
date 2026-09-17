@@ -203,6 +203,7 @@ public class LlmStreamingTest inherits QUnit::Test {
         addTestCase("OpenAI: text in the final chunk is kept", \openAiFinalChunkContentTest());
         addTestCase("OpenAI: a stalled stream times out", \openAiStallTest());
         addTestCase("OpenAI: split tool calls are collected", \openAiSplitToolCallTest());
+        addTestCase("OpenAI: usage sent after the finish chunk is collected", \openAiUsageChunkTest());
         addTestCase("Azure OpenAI: streaming uses the Azure credentials", \azureOpenAiStreamAuthTest());
         addTestCase("Anthropic: text and tool use are streamed", \anthropicToolStreamTest());
         addTestCase("Anthropic: reasoning blocks are collected", \anthropicThinkingStreamTest());
@@ -381,12 +382,12 @@ public class LlmStreamingTest inherits QUnit::Test {
         assertEq("SAFETY", resp.provider_diagnostics.prompt_feedback.blockReason);
 
         hash<ChatResponse> r = llm.chatStreamCollect(userMessage("hi"));
-        assertEq("stop_sequence", r.stop_reason, "a blocked prompt is a filtered response");
+        assertEq("content_filter", r.stop_reason, "a blocked prompt is a filtered response");
         assertNothing(r.content);
 
         # the non-streaming response agrees
         r = llm.chat(userMessage("hi"));
-        assertEq("stop_sequence", r.stop_reason);
+        assertEq("content_filter", r.stop_reason);
     }
 
     geminiStallTest() {
@@ -523,6 +524,37 @@ public class LlmStreamingTest inherits QUnit::Test {
         r = llm.chatStreamCollect(userMessage("look up a"), NOTHING, lookupTools());
         assertEq("tool_use", r.stop_reason);
         assertEq({"_raw": "{not json"}, r.tool_calls[0].arguments, "invalid arguments remain visible");
+    }
+
+    openAiUsageChunkTest() {
+        # OpenAI-compatible servers report the usage of a streamed response in a chunk of its own after the
+        # chunk with the finish reason
+        list<hash<auto>> chunks = (
+            {"id": "u1", "choices": ({"index": 0, "delta": {"content": "hi"}},)},
+            {"id": "u1", "choices": ({"index": 0, "delta": {}, "finish_reason": "stop"},)},
+            {"id": "u1", "choices": (), "usage": {"prompt_tokens": 11, "completion_tokens": 5,
+                "total_tokens": 16}},
+        );
+        server.script((openAiReply(chunks), openAiReply(chunks), openAiReply(chunks)));
+        LlmBackend llm = openAiBackend();
+        hash<ChatResponse> r = llm.chatStreamCollect(userMessage("hi"));
+        assertEq("hi", r.content);
+        assertEq("end_turn", r.stop_reason);
+        assertEq(16, r.usage.total_tokens, "the usage of the response is collected");
+        assertTrue(server.requests[0].body.stream_options.include_usage,
+            "the usage of a streamed response is requested");
+
+        hash<auto> resp = llm.chatCompletionsStream({"messages": ({"role": "user", "content": "hi"},)},
+            sub (hash<auto> chunk) {});
+        assertEq(16, resp.usage.total_tokens);
+        assertEq("stop", resp.choices[0].finish_reason);
+
+        # a caller that sets the option keeps its own value
+        llm.chatStreamCollect(userMessage("hi"), NOTHING, NOTHING, <LlmRequestOptions>{
+            "body_options": {"stream_options": {"include_usage": False}},
+        });
+        assertEq(False, server.requests[2].body.stream_options.include_usage,
+            "the option of the caller is sent");
     }
 
     azureOpenAiStreamAuthTest() {

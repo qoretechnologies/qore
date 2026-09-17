@@ -1006,8 +1006,9 @@ llm.chatStream(
         - \c content: the complete text
         - \c tool_calls: the complete tool calls; arguments that are not a JSON
           object are returned in the \c _raw key of the arguments hash
-        - \c stop_reason: \c "end_turn", \c "tool_use", \c "max_tokens", or
-          \c "stop_sequence" when the response or prompt was filtered
+        - \c stop_reason: \c "end_turn", \c "tool_use", \c "max_tokens",
+          \c "stop_sequence", or \c "content_filter" when the prompt or the
+          response was filtered
         - \c usage, \c id, \c model, \c provider_diagnostics, and
           \c reasoning_blocks when the provider reports them
         - \c raw: the last provider-native event
@@ -1967,8 +1968,9 @@ if (resp.stop_reason == "tool_use") {
                 return "tool_calls";
             case "max_tokens":
                 return "length";
-            case "stop_sequence":
+            case "content_filter":
                 return "content_filter";
+            case "stop_sequence":
             case "end_turn":
                 return "stop";
             default:
@@ -1998,9 +2000,10 @@ if (resp.stop_reason == "tool_use") {
         }
         list<hash<auto>> streamed = provider.getOpenAiToolCallDeltas(\state,
             event.raw);
-        # a native event can carry its tool calls and finish reason together, so the finish reason seen before
-        # the calls were harvested does not reflect them
-        if (streamed && event.done) {
+        # the finish reason of a response that requests tool calls is "tool_calls", whether the provider
+        # reported the calls with the finish reason or in earlier events, and whatever it called the reason
+        if (event.done && state.tool_calls
+                && (!state.finish_reason.val() || state.finish_reason == "stop")) {
             state.finish_reason = "tool_calls";
         }
         return streamed;
@@ -2100,7 +2103,7 @@ if (resp.stop_reason == "tool_use") {
                 stop_reason = "max_tokens";
                 break;
             case "content_filter":
-                stop_reason = "stop_sequence";
+                stop_reason = "content_filter";
                 break;
             default:
                 stop_reason = state.finish_reason ?? "end_turn";

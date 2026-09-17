@@ -836,7 +836,7 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         return <QoreLlmUtils::ChatResponse>{
             "id": resp.body.id,
             "model": resp.body.model,
-            "stop_reason": resp.body.stop_reason ?? "end_turn",
+            "stop_reason": AnthropicLlmProvider::mapStopReason(resp.body.stop_reason),
             "content": text_content,
             "tool_calls": parsed_tool_calls,
             "reasoning_blocks": reasoning_blocks,
@@ -1133,6 +1133,18 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             "completion_tokens": completion_tokens,
             "total_tokens": prompt_tokens + completion_tokens,
         };
+    }
+
+    #! Maps a Messages API stop reason to the shared stop-reason vocabulary
+    private static string mapStopReason(*string stop_reason) {
+        switch (stop_reason) {
+            case "refusal":
+                return "content_filter";
+            case NOTHING:
+                return "end_turn";
+            default:
+                return stop_reason;
+        }
     }
 
     #! Maps a Messages API stop reason to an OpenAI finish reason

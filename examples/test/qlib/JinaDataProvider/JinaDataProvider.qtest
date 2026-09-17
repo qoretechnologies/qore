@@ -419,6 +419,11 @@ public class JinaDataProviderTest inherits QUnit::Test {
         }
     }
 
+    public {
+        #! A small PNG image of the text "QORE" for the OCR chat model
+        const OcrImageBase64 = "iVBORw0KGgoAAAANSUhEUgAAAMgAAABICAAAAACWg+WaAAAAl0lEQVR42u3aSQrAMAgAQP//6fRekGroImW8JZjEOYmQWD+JAAEBAQEZAYkk0guK+XER3fzzORAQEBCQbyHVgqfkpw0RBAQEBAQEBAQEBAQkyX9sEAMBAQEBGQXprrvw7vnthggCAgIC8glkd79b+O79ICAgICCzINlAU32wOijdNYi1fz6AgICAgLwCWX5ig4CAgIDU4wCfgds7hQte2AAAAABJRU5ErkJggg==";
+    }
+
     private AbstractDataProvider liveProvider() {
         if (conn_name) {
             return get_connection(conn_name).getDataProvider();
@@ -460,8 +465,11 @@ public class JinaDataProviderTest inherits QUnit::Test {
         hash<auto> chunks = p.getChildProvider("segment-text").doRequest({"content": "First paragraph.\n\nSecond paragraph.", "max_chunk_length": 30, "return_tokens": True});
         assertTrue(chunks.num_tokens > 0);
         assertTrue(chunks.chunks.lsize() > 0);
-        hash<auto> chat = p.getChildProvider("chat").doRequest({"messages": ({"role": "user", "content": "Say hello."},), "max_tokens": 16});
-        assertTrue(chat.choices[0].message.content.val());
+        # the chat action uses the OCR model, which reads exactly one image per request
+        hash<auto> chat = p.getChildProvider("chat").doRequest({"messages": ({"role": "user", "content": (
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64," + OcrImageBase64}},
+        )},), "max_tokens": 64});
+        assertTrue(chat.choices[0].message.content.val(), "the OCR model returns the text of the image");
         assertEq(NT_DATE, chat.created.typeCode());
     }
 

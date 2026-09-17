@@ -460,7 +460,9 @@ public class VertexAiTest inherits QUnit::Test {
         hash<QoreLlmUtils::ChatResponse> r = backend.chatStreamCollect((
             <QoreLlmUtils::ChatMessage>{
                 "role": "user",
-                "content": "Write the numbers from 1 to 300 in words, separated by commas.",
+                # a prompt whose answer is the model's own prose; reciting a known sequence or text can be
+                # stopped by the recitation filter, which would end the response with "content_filter"
+                "content": "Explain in about 200 words why the sky appears blue.",
             },
         ), sub (hash<QoreLlmUtils::ChatStreamEvent> e) {
             push events, e;
@@ -470,7 +472,7 @@ public class VertexAiTest inherits QUnit::Test {
         int text_events = (select events, $1.delta.val()).size();
         assertGt(1, text_events, "several events carry text");
         assertEq("end_turn", r.stop_reason);
-        assertRegex("(?i)three hundred", r.content);
+        assertRegex("(?i)scatter|blue", r.content);
         assertGt(0, r.usage.total_tokens, "usage is reported");
 
         # a tool call is streamed and replayed with its reasoning signature

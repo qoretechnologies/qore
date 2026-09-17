@@ -350,8 +350,12 @@ public hashdecl ChatResponse {
     *string id;
     #! Model used by the provider when available
     *string model;
-    #! Why the LLM stopped: "end_turn" (normal), "tool_use" (wants tool calls),
-    #! "max_tokens" (hit limit), or "stop_sequence"
+    #! Why the LLM stopped
+    /** One of \c "end_turn" (normal), \c "tool_use" (wants tool calls),
+        \c "max_tokens" (hit the limit), \c "stop_sequence" (a stop sequence
+        was generated), or \c "content_filter" (the prompt or the response was
+        filtered by the provider)
+    */
     string stop_reason;
     #! Text content (if any)
     *string content;

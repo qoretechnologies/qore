@@ -852,6 +852,11 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
 
         hash<auto> body = buildOpenAiChatBody(messages, tools, opts);
         body.stream = True;
+        # a streamed response reports its usage only when it is requested; a caller that set the option in
+        # QoreLlmUtils::LlmRequestOptions::body_options keeps its own value
+        if (streamIncludesUsage() && !body.hasKey("stream_options")) {
+            body.stream_options = {"include_usage": True};
+        }
 
         # subclasses such as the Azure OpenAI provider supply their own
         # credential headers
@@ -907,19 +912,16 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             bool has_tool_call_delta =
                 parsed.choices[0].delta.tool_calls.typeCode() == NT_LIST
                 && parsed.choices[0].delta.tool_calls.size() > 0;
-            if (parsed.choices[0].finish_reason.val()) {
-                callback(<QoreLlmUtils::ChatStreamEvent>{
-                    "done": True,
-                    "delta": delta,
-                    "raw": parsed,
-                });
-                break;
-            }
             # OpenAI-compatible providers normally emit function calls in
             # tool-call-only deltas. Dropping a chunk merely because it has no
             # text loses the function name/argument stream and makes the final
             # response look like a clean no-call completion to every caller.
-            if (delta.val() || has_tool_call_delta) {
+            # The usage of the response arrives in a chunk of its own after the
+            # chunk with the finish reason, so the stream ends with "[DONE]" or
+            # with the end of the response, not with the finish reason.
+            if (delta.val() || has_tool_call_delta
+                    || parsed.choices[0].finish_reason.val()
+                    || parsed.usage.typeCode() == NT_HASH) {
                 callback(<QoreLlmUtils::ChatStreamEvent>{
                     "event": evt.event,
                     "delta": delta,
@@ -927,6 +929,19 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 });
             }
         }
+    }
+
+    #! Returns True if a streaming request asks the server for the usage of the response
+    /** OpenAI-compatible servers report the token usage of a streamed response only
+        when \c stream_options.include_usage is requested, so token accounting and
+        telemetry are empty without it.  A server that rejects the option is handled
+        by overriding this method, or by setting \c stream_options in
+        @ref QoreLlmUtils::LlmRequestOptions::body_options.
+
+        @return @ref True unless a subclass disables the option
+    */
+    bool streamIncludesUsage() {
+        return True;
     }
 
     #! Returns an exception description with the error message of the provider's error response

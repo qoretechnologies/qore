@@ -781,11 +781,11 @@ public hash<QoreLlmUtils::ChatResponse> sub parseChatResponse(hash<auto> body) {
     return <QoreLlmUtils::ChatResponse>{
         "id": body.responseId ?? body.id,
         "model": body.model,
-        # a blocked prompt has no candidates; "stop_sequence" is the content-filter stop reason
+        # a blocked prompt has no candidates
         "stop_reason": tool_calls
             ? "tool_use"
             : (!cand.finishReason.val() && body.promptFeedback.blockReason.val())
-                ? "stop_sequence"
+                ? "content_filter"
                 : GeminiBodyShape::mapFinishReason(cand.finishReason),
         "content": text_parts ? text_parts.join("") : NOTHING,
         "tool_calls": tool_calls,
@@ -897,7 +897,7 @@ public string sub mapFinishReason(*string reason) {
             return "max_tokens";
         case "SAFETY":
         case "RECITATION":
-            return "stop_sequence";
+            return "content_filter";
         default:
             return reason ?? "end_turn";
     }

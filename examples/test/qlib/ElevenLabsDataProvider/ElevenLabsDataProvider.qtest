@@ -98,6 +98,7 @@ class ElevenLabsDataProviderTest inherits QUnit::Test {
     }
 
     constructor() : Test("ElevenLabsDataProvider", "1.0") {
+        addTestCase("client options with string values only", \testStringOnlyOptions());
         addTestCase("test provider structure", \testProviderStructure());
         addTestCase("test data types", \testDataTypes());
         addTestCase("test text-to-speech", \testTextToSpeech());
@@ -134,6 +135,15 @@ class ElevenLabsDataProviderTest inherits QUnit::Test {
     setUp() {
         fake = new FakeElevenLabsRestClient();
         dp = new ElevenLabsDataProvider::ElevenLabsDataProvider(fake);
+    }
+
+    #! Regression: a caller that passes only string options gets a hash that must still take the API key header
+    testStringOnlyOptions() {
+        hash<string, string> opts = {"apikey": "test-key", "region": "eu"};
+        hash<auto> rv = ElevenLabsRestClient::ElevenLabsRestClientBase::getOptions(opts);
+        assertEq("test-key", rv.headers."xi-api-key", "the API key is sent as a header");
+        assertNothing(rv.apikey, "the API key option is consumed");
+        assertEq(ElevenLabsRestClient::ElevenLabsRestClientBase::EuUrl, rv.url, "the region selects the URL");
     }
 
     testProviderStructure() {

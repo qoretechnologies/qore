@@ -120,7 +120,10 @@ public class ElevenLabsRestClientBase {
     /** Maps the \c apikey option to the \c xi-api-key header and builds the URL from the \c region option
     */
     static hash<auto> getOptions(hash<auto> opts) {
-        hash<auto> rv = DefaultOptions + opts;
+        # the options can be a hash with only string values, which could not take the headers hash
+        hash<auto!> rv;
+        rv += DefaultOptions;
+        rv += opts;
         # Map apikey to xi-api-key header
         if (rv.apikey) {
             hash<auto> hdr = rv.headers ?? {};

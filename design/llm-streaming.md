@@ -15,6 +15,7 @@ A provider calls the stream callback with `ChatStreamEvent` hashes:
 | Text | `delta` holds the text of the native event. Events without text (tool calls, usage, reasoning) are delivered without `delta`. |
 | Final event | Exactly one event has `done` set. It can carry the last text and the last native event; a stream that ends without a native final event gets a final event without `raw`. |
 | Failures | A rejected request, a response that is not an event stream, an error event in the stream, an event that cannot be parsed, and a read timeout raise `LLM-ERROR`. A failure is never reported as a completed response. |
+| Stop reason | A response filtered by the provider has the stop reason `content_filter`; `stop_sequence` means a stop sequence was generated. |
 
 `SseStreamReader::readEvent()` returns nothing both at the end of the stream and when the wait for an event times
 out; providers tell them apart with `isDone()`.
@@ -54,9 +55,9 @@ assistant turn.
 
 | Mode | Streaming |
 | --- | --- |
-| `gemini`, `vertex-ai` | `AbstractGeminiModelProvider::chatStream()` streams `:streamGenerateContent?alt=sse`; the path is derived from the provider's `:generateContent` path. A chunk with a `finishReason`, or with a `promptFeedback.blockReason` for a blocked prompt, is final. A blocked prompt has the OpenAI finish reason `content_filter` and the stop reason `stop_sequence`. |
+| `gemini`, `vertex-ai` | `AbstractGeminiModelProvider::chatStream()` streams `:streamGenerateContent?alt=sse`; the path is derived from the provider's `:generateContent` path. A chunk with a `finishReason`, or with a `promptFeedback.blockReason` for a blocked prompt, is final. A blocked prompt has the stop reason `content_filter`, in streamed and non-streamed responses alike. |
 | `anthropic` | Every Messages API event except `ping` is delivered; `message_stop` is final, and an `error` event raises. The hooks assemble `tool_use` blocks from `input_json_delta` events (a tool call without input gets `{}`) and `thinking` / `redacted_thinking` blocks from their deltas. |
-| `http` and the OpenAI-compatible modes | Chunks with text or tool-call deltas are delivered; the chunk with a `finish_reason` is final. Subclasses supply their credentials through `buildAuthHeader()` (Azure OpenAI sends `api-key` or an Entra bearer token). |
+| `http` and the OpenAI-compatible modes | Chunks with text, tool-call deltas, a finish reason, or usage are delivered. The request asks for the usage of the response with `stream_options.include_usage`, which arrives in a chunk after the one with the finish reason, so the stream ends at `[DONE]` or at the end of the response; `OpenAiLlmProvider::streamIncludesUsage()` disables the request for a server that rejects it. Subclasses supply their credentials through `buildAuthHeader()` (Azure OpenAI sends `api-key` or an Entra bearer token). |
 | `bedrock` | One Converse request; the complete response is delivered as one final event, and the hooks read its `toolUse` blocks, stop reason, and usage. |
 | `callback` | With `api_stream_callback`, the gateway's OpenAI chunks are forwarded; otherwise one `chat()` call is delivered as a text event and a final OpenAI chunk that includes the tool calls. |
 | `cohere` | Streaming is not supported. |
