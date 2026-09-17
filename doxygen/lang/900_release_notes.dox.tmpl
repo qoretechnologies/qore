@@ -2838,6 +2838,8 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - @ref qorellmutilsintro "QoreLlmUtils" module
       - new module providing a pluggable LLM backend abstraction for chat completions
+      - OpenAI-compatible responses and stream chunks preserve the provider-reported service tier
+        so applications can account for priority requests downgraded to standard processing
 
     - @ref qoremediautilsintro "QoreMediaUtils" module
       - new module providing a provider-neutral abstraction layer for generative media (image + video)

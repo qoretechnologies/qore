@@ -1,0 +1,54 @@
+#!/usr/bin/env qore
+# LlmBillingMetadata.qtest Copyright 2026 Qore Technologies, s.r.o.
+# MIT License
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QoreLlmUtils
+%requires ../../../../qlib/QUnit.qm
+%exec-class BillingMetadataTest
+
+class BillingMetadataTest inherits QUnit::Test {
+    constructor() : Test("LLM billing metadata", "1.0", \ARGV) {
+        addTestCase("served tier survives synchronous and streaming facades", \metadata());
+        set_return_value(main());
+    }
+
+    metadata() {
+        foreach auto tier in (("default", "priority", "flex", NOTHING, 123)) {
+            hash<auto> reply = {
+                "model": "billing-test", "service_tier": tier,
+                "choices": ({"message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"},),
+                "usage": {"prompt_tokens": 10, "completion_tokens": 2,
+                    "service_tier": "standard", "inference_geo": "us",
+                    "cache_creation_input_tokens": 3,
+                    "cache_creation": {"ephemeral_1h_input_tokens": 2, "ephemeral_5m_input_tokens": 1}},
+                "private_provider_field": "must not leak",
+            };
+            QoreLlmUtils::LlmBackend backend(<QoreLlmUtils::LlmBackendConfig>{
+                "mode": "callback",
+                "api_callback": hash<auto> sub (string method, string path, hash<auto> body) {
+                    return reply;
+                },
+                "api_stream_callback": sub (string method, string path, hash<auto> body,
+                        code<nothing(hash<auto>)> cb) {
+                    cb({"model": reply.model, "service_tier": reply.service_tier,
+                        "choices": ({"delta": {"content": "ok"}, "finish_reason": NOTHING},)});
+                    # Final usage may omit the tier: preserve the last reported tier.
+                    cb({"choices": ({"delta": {}, "finish_reason": "stop"},), "usage": reply.usage});
+                },
+            });
+            hash<auto> request = {"model": "billing-test", "service_tier": "priority",
+                "messages": ({"role": "user", "content": "hi"},)};
+            hash<auto> response = backend.chatCompletions(request);
+            assertEq(tier.typeCode() == NT_STRING ? tier : NOTHING, response.service_tier);
+            assertEq(reply.usage, response.usage);
+            assertFalse(exists response.private_provider_field);
+            list<hash<auto>> chunks;
+            response = backend.chatCompletionsStream(request, sub (hash<auto> chunk) { chunks += chunk; });
+            assertEq(tier.typeCode() == NT_STRING ? tier : NOTHING, response.service_tier);
+            assertEq(reply.usage, response.usage);
+            assertEq("ok", response.choices[0].message.content);
+            assertEq(tier.typeCode() == NT_STRING ? tier : NOTHING, chunks[-1].service_tier);
+        }
+    }
+}

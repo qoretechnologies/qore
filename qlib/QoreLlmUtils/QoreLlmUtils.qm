@@ -97,6 +97,12 @@ module QoreLlmUtils {
     @ref QoreLlmUtils::LlmBackend::cleanChatCompletionResponse() to clean
     assistant text while preserving tool calls and provider metadata.
 
+    The OpenAI-compatible chat facade preserves the provider-reported \c service_tier
+    in synchronous responses, stream chunks, and the final stream response. Applications
+    calculating costs should use this served tier instead of the requested tier, since
+    providers may downgrade priority traffic. Usage metadata (including cache-write
+    counts and Anthropic \c inference_geo) is preserved without reinterpretation.
+
     Reasoning models may consume their output budget before producing visible
     text. Size @c max_output_tokens (or @c max_tokens) for both reasoning and
     the answer, not just the requested answer length. Use supported reasoning
