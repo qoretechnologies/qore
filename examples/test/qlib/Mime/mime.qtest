@@ -189,6 +189,9 @@ aωb\r
     urlEncodingTest() {
         assertEq(UrlEncodingTarget, mime_get_urlencoded_string(UrlEncodingSource));
         assertEq("a=b&a%20x=c", mime_get_form_urlencoded_string({"a": "b", "a x": "c"}));
+        assertEq("", mime_get_form_urlencoded_string({}));
+        assertEq("empty=", mime_get_form_urlencoded_string({"empty": ""}));
+        assertEq("=value", mime_get_form_urlencoded_string({"": "value"}));
         assertEq(UrlEncodingSource, mime_decode_urlencoded_string(UrlEncodingTarget));
         assertEq("a=b&a%20x=hi%20-%20hell%C3%B6", mime_get_form_urlencoded_string({"a": "b", "a x": "hi - hellö"}));
         assertThrows("INVALID-VALUE", \mime_get_urlencoded_string(), <abcd>);
