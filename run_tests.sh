@@ -500,7 +500,13 @@ for test in $TESTS; do
                 fi
                 echo "*** No core dump found; re-running under lldb to try to capture backtrace ***"
                 BT_FILE="$CORE_DIR/backtrace-${TEST_BASENAME}.txt"
-                lldb --batch -o run -k "thread backtrace all" -k quit \
+                LLDB=lldb
+                # a non-interactive session cannot get permission to debug a process, which root does not
+                # need; only on disposable CI machines, as the test is then run as root
+                if [ -n "$CI" ] && sudo -n true 2>/dev/null; then
+                    LLDB="sudo -n -E lldb"
+                fi
+                $LLDB --batch -o run -k "thread backtrace all" -k quit \
                     -- $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT > "$BT_FILE" 2>&1
                 head -500 "$BT_FILE"
             else
