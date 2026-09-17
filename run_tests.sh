@@ -486,8 +486,25 @@ for test in $TESTS; do
                     | grep -v '^\[New Thread\|^\[Thread.*exited\]\|^\[New LWP\|^\[LWP.*exited\]\|^\[Detaching' \
                     > "$BT_FILE"
                 head -500 "$BT_FILE"
+            elif command -v lldb > /dev/null 2>&1; then
+                # macOS: no gdb and no core files by default; the crash report names the reason for a
+                # SIGABRT raised without a message (e.g. a libpthread or malloc integrity check)
+                if [ -d "$HOME/Library/Logs/DiagnosticReports" ]; then
+                    REPORT=$(ls -t "$HOME"/Library/Logs/DiagnosticReports/qore*.ips 2>/dev/null | head -1)
+                    # BSD stat: GNU coreutils may be first in PATH; only a report written just now belongs to this test
+                    if [ -n "$REPORT" ] && [ $(( $(date +%s) - $(/usr/bin/stat -f %m "$REPORT") )) -lt 120 ]; then
+                        echo "*** Crash report: $REPORT ***"
+                        head -200 "$REPORT"
+                        cp "$REPORT" "$CORE_DIR/" 2>/dev/null || true
+                    fi
+                fi
+                echo "*** No core dump found; re-running under lldb to try to capture backtrace ***"
+                BT_FILE="$CORE_DIR/backtrace-${TEST_BASENAME}.txt"
+                lldb --batch -o run -k "thread backtrace all" -k quit \
+                    -- $QORE $QORE_TEST_OPTS $test $TEST_OUTPUT_FORMAT > "$BT_FILE" 2>&1
+                head -500 "$BT_FILE"
             else
-                echo "*** No core dump found and gdb not available ***"
+                echo "*** No core dump found and neither gdb nor lldb is available ***"
             fi
         fi
     fi
