@@ -46,6 +46,7 @@ class JsonTest inherits QUnit::Test {
     constructor() : Test("JsonTest", "1.0", \ARGV) {
         addTestCase("formatting test", \formattingTest());
         addTestCase("float rounding test", \floatRoundingTest());
+        addTestCase("nested float rounding test", \nestedFloatRoundingTest());
         addTestCase("scientific notation test", \scientificNotationTest());
         addTestCase("issue 3135", \issue3135());
         addTestCase("JsonTestCase", \jsonTestCase());
@@ -120,6 +121,34 @@ class JsonTest inherits QUnit::Test {
         assertEq("1.2", trim(make_json(1.2)));
         assertEq("1.3", trim(make_json(1.3)));
         assertEq("250.1912", trim(make_json(250.1912)));
+    }
+
+    nestedFloatRoundingTest() {
+        # floats nested in containers are rounded like top-level floats; preceding text containing '.', 'e',
+        # '0' or '9' must neither be modified nor influence the rounding
+        list<float> floats = (0.1 + 0.2, 7.0000000001, 123456.789, 1e-20, 1.000000000001, 0.72, 100.0);
+        list<string> prefixes = ("x.y", "e", "1.0000000x", "v9.99999999", "2026-09-17", "0.000000001");
+        foreach float f in (floats) {
+            string expected = trim(make_json(f));
+            foreach string prefix in (prefixes) {
+                assertEq(sprintf("[%s,%s]", make_json(prefix), expected), make_json((prefix, f)),
+                    sprintf("list: %y then %y", prefix, f));
+                assertEq(sprintf("{%s:%s,\"f\":%s}", make_json(prefix), make_json(prefix), expected),
+                    make_json({prefix: prefix, "f": f}), sprintf("hash: %y then %y", prefix, f));
+            }
+            # the value serialized before the float is itself a float
+            assertEq(sprintf("[%s,%s]", trim(make_json(7.0000000001)), expected), make_json((7.0000000001, f)),
+                sprintf("list: 7.0000000001 then %y", f));
+            # every nested float round-trips
+            hash<auto> h = {"e": "x.y", "list": ("2026-09-17", f, {"1.0": f}), "f": f};
+            assertEq(make_json(h), make_json(parse_json(make_json(h))), sprintf("round trip: %y", f));
+        }
+
+        # regression: nested floats corrupted the serialized document ("extra text after JSON data")
+        list<auto> l = ("2026-09-17", 1e-20, {"0.0000000010": "v9.99999999", "e1": 1.0});
+        assertEq(sprintf("[\"2026-09-17\",%s,{\"0.0000000010\":\"v9.99999999\",\"e1\":1}]", trim(make_json(1e-20))),
+            make_json(l));
+        assertEq(make_json(l), make_json(parse_json(make_json(l))));
     }
 
     scientificNotationTest() {

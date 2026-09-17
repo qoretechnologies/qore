@@ -653,9 +653,14 @@ static int do_json_value(QoreString* str, QoreValue v, int format, int depth,
         if (std::isnan(f) || std::isinf(f)) {
             str->concat("null");
         } else {
-            str->sprintf("%.25g", f);
+            // the rounding heuristic operates on its entire string argument (it looks for the first '.' and
+            // 'e'), and nested values are written directly into the output, so the number is formatted in its
+            // own buffer (with the output encoding) before being appended
+            QoreString tmp(str->getEncoding());
+            tmp.sprintf("%.25g", f);
             // apply noise reduction algorithm
-            qore_apply_rounding_heuristic(*str, 6, 8);
+            qore_apply_rounding_heuristic(tmp, 6, 8);
+            str->concat(tmp.c_str(), tmp.size());
         }
         return 0;
     }
