@@ -90,6 +90,8 @@ public class ConnectionSchemeCache {
 
             "baselinkerrest": "BaseLinkerRestClient",
 
+            "bedrock": "BedrockRestClient",
+
             "bge-m3": "BgeM3RestClient",
             "bge-m3-fastapi": "BgeM3RestClient",
 

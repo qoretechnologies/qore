@@ -16,6 +16,7 @@
 %requires QoreLlmUtils
 %requires AwsRestClient
 %requires BedrockRestClient
+%requires BedrockDataProvider
 
 %requires json
 
@@ -68,7 +69,43 @@ class FakeBedrockHandler inherits AbstractHttpRequestHandler {
             return makeResponse({"Content-Type": MimeTypeJson}, 200,
                 make_json(embed_response));
         }
+        if (last_path == "/foundation-models") {
+            if (last_authorization !~ /Credential=AKIA-TEST\//) {
+                return makeResponse({"Content-Type": MimeTypeJson}, 403,
+                    make_json({"message": "invalid fixture credential"}));
+            }
+            return makeResponse({"Content-Type": MimeTypeJson}, 200,
+                make_json({"modelSummaries": ()}));
+        }
         return makeResponse(404, "unknown bedrock path: " + last_path);
+    }
+}
+
+class TestBedrockRestConnection inherits BedrockRestClient::BedrockRestConnection {
+    private {
+        int port;
+        string access_key;
+    }
+
+    constructor(int port, string access_key = "AKIA-TEST")
+            : BedrockRestConnection("bedrock-test", "Bedrock test connection", NOTHING, {}, {
+                "aws_region": "us-east-1",
+                "aws_keyid": access_key,
+                "aws_secret": "test-secret",
+            }) {
+        self.port = port;
+        self.access_key = access_key;
+    }
+
+    private object getAsyncImpl(bool connect = True, *hash<auto> rtopts) {
+        return new AwsRestClient::AwsRestClientIo({
+            "url": "http://localhost:" + port,
+            "aws_region": "us-east-1",
+            "aws_service": "bedrock",
+            "aws_keyid": access_key,
+            "aws_secret": "test-secret",
+            "aws_imds_disabled": True,
+        });
     }
 }
 
@@ -88,7 +125,13 @@ public class BedrockTest inherits QUnit::Test {
         addTestCase("SigV4 authorization header is signed", \sigV4Test());
         addTestCase("missing region throws at construction", \missingRegionTest());
         addTestCase("Titan embedder round-trip",          \titanEmbedderTest());
-        addTestCase("BedrockRestConnection accepts options", \connectionTest());
+        addTestCase("Bedrock connection metadata and provider", \connectionTest());
+        addTestCase("Bedrock connection authenticated ping", \connectionPingTest());
+
+        if (ENV.BEDROCK_LIVE) {
+            addTestCase("live: valid and invalid connection authentication",
+                \liveConnectionPingTest());
+        }
 
         try {
             setupFakeServer();
@@ -289,16 +332,73 @@ public class BedrockTest inherits QUnit::Test {
 
     private connectionTest() {
         BedrockTest::checkJson(self);
-        # only AWS connection-options registered in the schema are accepted
-        # by the ConnectionProvider layer; credential-chain extension keys
-        # like aws_imds_disabled are runtime-only for this v1
         BedrockRestClient::BedrockRestConnection conn("bedrock-test",
             "test", "", NOTHING, {
-                "aws_region": "us-east-1",
+                "aws_region": "eu-west-1",
                 "aws_keyid": "k",
                 "aws_secret": "s",
             });
         assertEq("bedrock", conn.getType());
+        assertEq("AWSBedrock", conn.getAppName());
+        assertTrue(conn.hasDataProvider());
+        assertEq("bedrock://bedrock-runtime.eu-west-1.amazonaws.com",
+            conn.getInfo().url);
+        assertEq("https://bedrock.eu-west-1.amazonaws.com",
+            BedrockRestClient::BedrockRestConnection::getControlPlaneUrl(
+                "https://bedrock-runtime.eu-west-1.amazonaws.com"));
+
+        hash<ConnectionSchemeInfo> scheme =
+            BedrockRestClient::BedrockRestConnection::ConnectionScheme;
+        assertTrue(scheme.auto_url);
+        assertEq("bedrock", scheme.base_scheme_map.https);
+        assertEq("aws_region", scheme.required_options);
+        assertTrue(scheme.options.aws_keyid.sensitive);
+        assertTrue(scheme.options.aws_secret.sensitive);
+        assertTrue(scheme.options.aws_token.sensitive);
+        assertTrue(scheme.options.aws_external_id.sensitive);
+        assertEq("us-east-1", scheme.options.aws_region.default_value);
+        assertEq("BedrockRestClient",
+            ConnectionSchemeCache::SchemeMap.bedrock);
+
+        TestBedrockRestConnection test_conn(bedrock_port);
+        AbstractDataProvider provider = test_conn.getDataProvider();
+        assertEq("bedrock", provider.getName());
+        assertTrue(inlist("converse", provider.getChildProviderNames()));
+    }
+
+    private connectionPingTest() {
+        BedrockTest::checkJson(self);
+        if (!bedrock_http) {
+            testSkip("no fake server");
+        }
+        TestBedrockRestConnection valid(bedrock_port);
+        hash<PingInfo> ping = valid.ping(True);
+        assertTrue(ping.ok);
+        assertEq("/foundation-models", handler.last_path);
+        assertTrue(handler.last_authorization =~ /Credential=AKIA-TEST\//);
+
+        TestBedrockRestConnection invalid(bedrock_port, "AKIA-INVALID");
+        assertThrows("REST-RESPONSE-ERROR", sub () { invalid.ping(True); });
+        hash<PingInfo> failed = invalid.ping(False);
+        assertFalse(failed.ok);
+    }
+
+    private liveConnectionPingTest() {
+        string region = getenv("AWS_REGION") ?? getenv("AWS_DEFAULT_REGION")
+            ?? "us-east-1";
+        BedrockRestClient::BedrockRestConnection valid("bedrock-live",
+            "Bedrock live connection", NOTHING, {}, {"aws_region": region});
+        hash<PingInfo> ping = valid.ping(True);
+        assertTrue(ping.ok, ping.info);
+
+        BedrockRestClient::BedrockRestConnection invalid("bedrock-invalid",
+            "Bedrock invalid connection", NOTHING, {}, {
+                "aws_region": region,
+                "aws_keyid": "AKIAINVALID0000000000",
+                "aws_secret": "invalid-secret",
+            });
+        hash<PingInfo> failed = invalid.ping(False);
+        assertFalse(failed.ok, "invalid AWS credentials must fail the ping");
     }
 
     private BedrockRestClient::BedrockLlmProvider newProvider() {

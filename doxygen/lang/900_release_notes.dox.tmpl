@@ -2205,6 +2205,8 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     - @ref bedrockrestclientintro "BedrockRestClient" module
       - new module providing a REST client and \c LlmProvider for <a href="https://aws.amazon.com/bedrock/">AWS Bedrock</a>
+      - Bedrock connections now use region-derived persistent endpoints, identify the data provider app,
+        return the Bedrock provider, and verify credentials with an inference-free control-plane request
 
     - @ref bfldataproviderintro "BflDataProvider" module
       - new module providing a data provider API for <a href="https://bfl.ai">Black Forest Labs</a> FLUX image and video generation

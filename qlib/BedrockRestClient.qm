@@ -36,7 +36,7 @@
 %requires json
 
 module BedrockRestClient {
-    version = "1.0";
+    version = "1.1";
     desc = "REST client and LLM provider for AWS Bedrock — speaks the unified "
         "Converse / ConverseStream API across Anthropic, Llama, Mistral, "
         "Cohere, AI21, Titan, and DeepSeek-on-Bedrock model families";
@@ -81,7 +81,7 @@ module BedrockRestClient {
     - \c aws_keyid / \c aws_secret / \c aws_token: see @ref awsrestclientintro
       — all four credential paths (static, env, ECS/IMDS, STS) are honored
 
-    @par LlmBackendConfig consumed by @ref BedrockLlmProvider
+    @par LlmBackendConfig consumed by BedrockLlmProvider
 
     - \c url (optional): same as above
     - \c model (required): the Bedrock model ID, e.g.
@@ -114,6 +114,11 @@ hash<ChatResponse> r = p.chat((
 
     @section bedrockrestclientrelnotes Release Notes
 
+    @subsection bedrockrestclient_v1_1 BedrockRestClient v1.1
+    - associates Bedrock connections with the AWS Bedrock data provider app
+    - derives persistent runtime endpoints from the configured AWS region
+    - verifies credentials without inference by listing foundation models
+
     @subsection bedrockrestclient_v1_0 BedrockRestClient v1.0
     - initial release: BedrockRestConnection + BedrockRestClient(Io),
       BedrockLlmProvider (Converse), BedrockEmbedder (Titan + Cohere)
@@ -130,57 +135,231 @@ public const BedrockRuntimeHostPattern = "bedrock-runtime.%s.amazonaws.com";
 #! Bedrock REST connection (registered under the \c "bedrock" scheme)
 public class BedrockRestConnection inherits AwsRestClient::AwsRestConnection {
     public {
+        #! Default AWS region
+        const DefaultRegion = "us-east-1";
+
+        #! Default persistent connection URL
+        /** The connection scheme is preserved so a saved connection reloads as
+            a Bedrock connection instead of a generic HTTPS connection.
+        */
+        const DefaultUrl = "bedrock://bedrock-runtime.us-east-1.amazonaws.com";
+
         const ConnectionScheme = <ConnectionSchemeInfo>{
             "display_name": "AWS Bedrock Connection",
             "short_desc": "A connection to the AWS Bedrock runtime",
-            "desc": "A connection to AWS Bedrock for chat completions "
-                "(Converse API) and embeddings via SigV4-signed REST calls. "
-                "Inherits all AWS credential modes from AwsRestConnection "
-                "(static keys, env vars, ECS task-role, IMDSv2, "
-                "STS AssumeRole).",
+            "desc": "A connection to [AWS Bedrock](https://aws.amazon.com/bedrock/) "
+                "for chat, embeddings, and model-management actions through "
+                "SigV4-signed REST calls.\n\n"
+                "The runtime endpoint is derived from `aws_region`. Authentication "
+                "uses explicit access keys when supplied, otherwise the standard "
+                "AWS environment, ECS task-role, or IMDSv2 credential chain. An "
+                "optional role ARN applies STS AssumeRole after resolving the base "
+                "credential. The connection ping makes an authenticated, "
+                "inference-free `ListFoundationModels` request.",
             "cls": Class::forName("BedrockRestConnection"),
+            "auto_url": True,
             "schemes": {"bedrock": True},
-            "options": AwsRestClient::AwsRestConnection::ConnectionScheme.options,
+            "base_scheme_map": {"https": "bedrock"},
+            "options": AwsRestClient::AwsRestConnection::ConnectionScheme.options
+                - ("data", "aws_service", "aws_s3", "ping_body", "ping_headers",
+                    "ping_method", "ping_path") + {
+                "aws_region": AwsRestClient::AwsRestConnection::ConnectionScheme.options.aws_region
+                    + <ConnectionOptionInfo>{
+                        "display_name": "AWS Region",
+                        "short_desc": "AWS region hosting the Bedrock resources",
+                        "desc": "AWS region used for Bedrock runtime and control-plane "
+                            "requests. The connection derives both service endpoints "
+                            "from this value.",
+                        "default_value": DefaultRegion,
+                        "allowed_values": AwsRestClient::AwsS3RestConnection::AwsRegions,
+                        "allowed_values_creatable": True,
+                        "preselected": True,
+                    },
+                "aws_keyid": AwsRestClient::AwsRestConnection::ConnectionScheme.options.aws_keyid
+                    + <ConnectionOptionInfo>{
+                        "display_name": "AWS Access Key ID",
+                        "short_desc": "Optional access key ID for SigV4 authentication",
+                        "desc": "AWS access key ID for explicit credentials. Leave this "
+                            "and `aws_secret` empty to use the AWS environment, ECS "
+                            "task-role, or IMDSv2 credential chain.",
+                        "sensitive": True,
+                    },
+                "aws_secret": AwsRestClient::AwsRestConnection::ConnectionScheme.options.aws_secret
+                    + <ConnectionOptionInfo>{
+                        "display_name": "AWS Secret Access Key",
+                        "short_desc": "Optional secret key for SigV4 authentication",
+                        "desc": "AWS secret access key paired with `aws_keyid`. Leave "
+                            "both fields empty to use the standard AWS credential chain.",
+                        "sensitive": True,
+                    },
+                "aws_token": AwsRestClient::AwsRestConnection::ConnectionScheme.options.aws_token
+                    + <ConnectionOptionInfo>{
+                        "display_name": "AWS Session Token",
+                        "short_desc": "Optional token for temporary AWS credentials",
+                        "desc": "AWS session token supplied with temporary access-key "
+                            "credentials.",
+                        "sensitive": True,
+                    },
+                "aws_role_arn": <ConnectionOptionInfo>{
+                    "display_name": "STS Role ARN",
+                    "short_desc": "Optional AWS role to assume",
+                    "type": "string",
+                    "desc": "AWS role ARN to assume after resolving the base credential. "
+                        "The resulting temporary credential signs Bedrock requests.",
+                },
+                "aws_role_session_name": <ConnectionOptionInfo>{
+                    "display_name": "STS Role Session Name",
+                    "short_desc": "Optional name for the assumed-role session",
+                    "type": "string",
+                    "desc": "Session name sent to AWS STS when `aws_role_arn` is set.",
+                    "default_value": "qore-sdk-session",
+                },
+                "aws_external_id": <ConnectionOptionInfo>{
+                    "display_name": "STS External ID",
+                    "short_desc": "Optional external ID required by the role",
+                    "type": "string",
+                    "desc": "External ID sent to AWS STS when the target role requires one.",
+                    "sensitive": True,
+                },
+            },
+            "required_options": "aws_region",
         };
     }
 
-    constructor(string name, string description, string url,
+    #! Creates a Bedrock connection
+    /** @param name connection name
+        @param description connection description
+        @param url ignored; the endpoint is derived from <tt>options.aws_region</tt>
+        @param attributes connection attributes
+        @param options connection options
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option
+    */
+    constructor(string name, string description, string url = DefaultUrl,
             hash<auto> attributes = {}, hash<auto> options = {})
             : AwsRestClient::AwsRestConnection(name, description,
-                BedrockRestClient::ensureBedrockUrl(url, options), attributes,
-                BedrockRestClient::ensureBedrockService(options)) {
+                BedrockRestConnection::getRuntimeUrl(options.aws_region), attributes,
+                options) {
     }
 
+    #! Creates a Bedrock connection from a saved configuration
+    /** @param config saved connection configuration
+        @param attr optional connection attributes
+
+        @throw CONNECTION-OPTION-ERROR missing or invalid connection option or attribute
+    */
     constructor(hash<auto> config, *hash<auto> attr)
-            : AwsRestClient::AwsRestConnection(config, attr) {
+            : AwsRestClient::AwsRestConnection(BedrockRestConnection::getConfig(config), attr) {
     }
 
+    #! Returns the associated data provider application
+    /** @return <tt>AWSBedrock</tt> */
+    *string getAppName() {
+        return "AWSBedrock";
+    }
+
+    #! Returns the connection type
+    /** @return <tt>bedrock</tt> */
     string getType() {
         return "bedrock";
+    }
+
+    #! Reports that this connection provides the Bedrock data provider
+    /** @return @ref True */
+    bool hasDataProvider() {
+        return True;
+    }
+
+    #! Returns the Bedrock data provider backed by this connection
+    /** @param constructor_options additional Bedrock data provider constructor options
+        @return a Bedrock root data provider
+
+        @throw LOAD-MODULE-ERROR if the BedrockDataProvider module cannot be loaded
+    */
+    DataProvider::AbstractDataProvider getDataProvider(*hash<auto> constructor_options) {
+        load_module("BedrockDataProvider");
+        return create_object("BedrockDataProvider",
+            (constructor_options ?? {}) + {"restclient": getAsync()});
+    }
+
+    #! Returns client options with the Bedrock SigV4 service pinned
+    /** @param rtopts optional runtime options
+        @return normalized AWS REST client options
+    */
+    *hash<auto> getConnectionOptions(*hash<auto> rtopts) {
+        return AwsRestClient::AwsRestConnection::getConnectionOptions(rtopts) + {
+            "aws_service": BedrockService,
+        };
+    }
+
+    #! Returns the persistent runtime URL for the given region
+    /** @param region AWS region; defaults to @ref DefaultRegion
+        @return a persistent <tt>bedrock</tt> connection URL
+    */
+    static string getRuntimeUrl(*string region) {
+        return sprintf("bedrock://" + BedrockRuntimeHostPattern,
+            region.val() ? region : DefaultRegion);
+    }
+
+    #! Returns the control-plane URL corresponding to a runtime client URL
+    /** @param runtime_url Bedrock runtime endpoint URL
+        @return the matching Bedrock control-plane URL
+    */
+    static string getControlPlaneUrl(string runtime_url) {
+        return regex_subst(runtime_url, "bedrock-runtime\\.", "bedrock.");
+    }
+
+    #! Normalizes a saved connection configuration
+    private static hash<auto> getConfig(hash<auto> config) {
+        hash<auto> opts = config.opts ?? {};
+        return config + {
+            "url": BedrockRestConnection::getRuntimeUrl(opts.aws_region),
+            "opts": opts,
+        };
+    }
+
+    #! Marks Bedrock child providers as API-capable
+    private setChildCapabilities() {
+        children_can_support_apis = True;
+    }
+
+    #! Verifies credentials with an inference-free control-plane request
+    private pingImpl() {
+        AbstractRestClient runtime = cast<AbstractRestClient>(getAsync());
+        AbstractRestClient control = new AwsRestClient::AwsRestClientIo(
+            getConnectionOptions() + {
+                "url": BedrockRestConnection::getControlPlaneUrl(runtime.getUrl()),
+            });
+        try {
+            hash<RestClient::RestResponseInfo> response = control.restGet("/foundation-models");
+            if ((response.status_code / 100) != 2 || !exists response.body.modelSummaries) {
+                authFailure();
+                throw "REST-PING-ERROR", sprintf(
+                    "invalid response to Bedrock ListFoundationModels ping: HTTP %d",
+                    response.status_code);
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            authFailure();
+            rethrow;
+        }
+        authSuccess();
+    }
+
+    #! Keeps the derived endpoint synchronized with connection option updates
+    /** @param update_options callback used to persist corrected options */
+    setUpdateOptionsCode(*code update_options) {
+        UpdateOptionsInterface::setUpdateOptionsCode(update_options);
+        if (update_options) {
+            string runtime_url = BedrockRestConnection::getRuntimeUrl(opts.aws_region);
+            if (url != runtime_url) {
+                doUpdateOptions(self, {"url": runtime_url});
+            }
+        }
     }
 
     private hash<ConnectionSchemeInfo> getConnectionSchemeInfoImpl() {
         return ConnectionScheme;
     }
-}
-
-#! Namespace-local helper: returns a default Bedrock runtime URL when none was supplied
-string sub ensureBedrockUrl(string url, *hash<auto> options) {
-    if (url.val()) {
-        return url;
-    }
-    *string region = options.aws_region;
-    if (!region.val()) {
-        throw "BEDROCK-CONFIG-ERROR",
-            "BedrockRestConnection requires either a url or aws_region";
-    }
-    return "https://" + sprintf(BedrockRuntimeHostPattern, region);
-}
-
-#! Namespace-local helper: sets aws_service=bedrock and returns the options hash
-hash<auto> sub ensureBedrockService(hash<auto> options) {
-    options.aws_service = BedrockService;
-    return options;
 }
 
 #! Bedrock LLM provider — speaks the unified Converse API
