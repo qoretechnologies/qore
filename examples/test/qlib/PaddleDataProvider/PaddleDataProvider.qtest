@@ -272,6 +272,7 @@ public class PaddleDataProviderTest inherits QUnit::Test {
         actions = aset.getActionInfoList(PaddleDataProvider::AppName);
 
         addTestCase("schema provenance", \provenanceTest());
+        addTestCase("supported country codes", \countryCodeTest());
         addTestCase("exported operations", \exportedOperationsTest());
         addTestCase("action presentation", \actionPresentationTest());
         addTestCase("action paths resolve", \actionPathTest());
@@ -306,6 +307,47 @@ public class PaddleDataProviderTest inherits QUnit::Test {
         TestReporter::usageIntern(OptionColumn);
         printOption("-c,--connection=ARG", "set connection name for live tests", OptionColumn);
         printOption("-W,--write-tests", "enable live tests that create and archive objects", OptionColumn);
+    }
+
+    countryCodeTest() {
+        # qorus#596: Portugal is a supported country; the vendored schema once listed "P0D" instead of "PT",
+        # because the importer read the plain scalar as a zero duration, and every price override for Portugal
+        # was rejected by the provider's own request validation
+        OpenApi3Schema schema = PaddleSchema::getSchema();
+        hash<auto> price = {
+            "description": "Starter",
+            "product_id": "pro_01gsz4t5hdjse780zja8vvr7jg",
+            "unit_price": {"amount": "1000", "currency_code": "USD"},
+        };
+        code override = hash<auto> sub (list<string> countries) {
+            return {"unit_price_overrides": ({
+                "country_codes": countries,
+                "unit_price": {"amount": "1000", "currency_code": "EUR"},
+            },)};
+        };
+        foreach list<string> countries in (("PT",), ("NO",), ("DE", "FR", "PT", "NO", "IE")) {
+            string label = countries.join(",");
+            schema.processRequest("POST", "/prices", price + override(countries), {"Content-Type": "application/json"});
+            schema.processRequest("PATCH", "/prices/pri_01gsz8x8sawmvhz1pv30nge1ke", override(countries),
+                {"Content-Type": "application/json"});
+            assertTrue(True, label + " validates");
+        }
+        # a country code must be one Paddle supports, in upper case
+        foreach string country in (("pt", "XX", "P0D", "", "PRT")) {
+            assertThrows("SCHEMA-VALIDATION-ERROR", "country_codes", \schema.processRequest(),
+                ("POST", "/prices", price + override((country,)), {"Content-Type": "application/json"}), country);
+        }
+
+        # every supported country is a two-letter code; a converted scalar would show up here as another type
+        list<auto> supported = parse_yaml(ReadOnlyFile::readTextFile(get_script_dir() + DirSep + ".." + DirSep
+            + ".." + DirSep + ".." + DirSep + ".." + DirSep + "qlib" + DirSep + "PaddleDataProvider" + DirSep
+            + PaddleSchema::SchemaFileName)).components.schemas.CountryCodeSupported."enum";
+        foreach auto country in (supported) {
+            assertRegex("^[A-Z]{2}$", country);
+        }
+        assertTrue(inlist("PT", supported));
+        assertTrue(inlist("NO", supported));
+        assertEq(supported.size(), (map {$1: True}, supported).size(), "no duplicates");
     }
 
     provenanceTest() {

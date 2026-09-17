@@ -1922,9 +1922,9 @@ paths:
                 resent:
                   summary: "Resend succeeded"
                   value:
-                    created_at: 2026-05-14 22:14:00 +02:00
+                    created_at: "2026-05-14T20:14:00Z"
                     email: "newhire@acme.com"
-                    expires_at: 2026-05-28 22:14:00 +02:00
+                    expires_at: "2026-05-28T20:14:00Z"
                     id: "9c8e3528-b9c0-4358-84ce-84c28e91b566"
                     processed_at: null
                     status: "pending"
@@ -2658,7 +2658,7 @@ paths:
                   summary: "Org-scoped bindings"
                   value:
                     data:
-                    - created_at: 2026-04-10 17:23:00 +02:00
+                    - created_at: "2026-04-10T15:23:00Z"
                       id: "5a86ed21-daf1-448d-a9ca-f92a0fd839d3"
                       principal_id: "e2e92523-85dc-4142-b8c2-e681be8b78df"
                       principal_type: "user"
@@ -3342,9 +3342,9 @@ components:
       - "error"
     Invite:
       example:
-        created_at: 2026-04-14 22:00:00 +02:00
+        created_at: "2026-04-14T20:00:00Z"
         email: "newhire@acme.com"
-        expires_at: 2026-05-21 05:00:00 +02:00
+        expires_at: "2026-05-21T03:00:00Z"
         id: "9c8e3528-b9c0-4358-84ce-84c28e91b566"
         processed_at: null
         status: "pending"
@@ -3389,9 +3389,9 @@ components:
     InviteList:
       example:
         data:
-        - created_at: 2026-04-14 22:00:00 +02:00
+        - created_at: "2026-04-14T20:00:00Z"
           email: "newhire@acme.com"
-          expires_at: 2026-05-21 05:00:00 +02:00
+          expires_at: "2026-05-21T03:00:00Z"
           id: "9c8e3528-b9c0-4358-84ce-84c28e91b566"
           processed_at: null
           status: "pending"
@@ -3532,7 +3532,7 @@ components:
       - "data"
     RoleBinding:
       example:
-        created_at: 2026-04-10 17:23:00 +02:00
+        created_at: "2026-04-10T15:23:00Z"
         id: "9a8e3528-b9c0-4358-84ce-84c28e91b566"
         principal_id: "f8a3b2c1-4d5e-6f7a-8b9c-0d1e2f3a4b5c"
         principal_type: "service_account"
@@ -3637,7 +3637,7 @@ components:
     RoleBindingList:
       example:
         data:
-        - created_at: 2026-04-10 17:23:00 +02:00
+        - created_at: "2026-04-10T15:23:00Z"
           id: "9a8e3528-b9c0-4358-84ce-84c28e91b566"
           principal_id: "f8a3b2c1-4d5e-6f7a-8b9c-0d1e2f3a4b5c"
           principal_type: "service_account"
@@ -3674,10 +3674,10 @@ components:
     ServiceAccount:
       example:
         client_id: "l3Ow0CmFyc4jOONcwiKUCRqQKN0tiCAn"
-        created_at: 2026-04-10 17:23:00 +02:00
+        created_at: "2026-04-10T15:23:00Z"
         id: "f8a3b2c1-4d5e-6f7a-8b9c-0d1e2f3a4b5c"
         name: "My Service Account"
-        updated_at: 2026-04-12 11:11:00 +02:00
+        updated_at: "2026-04-12T09:11:00Z"
       description: "A service account. The OAuth `client_secret` is not included."
       type: "object"
       properties:
@@ -3711,10 +3711,10 @@ components:
       example:
         data:
         - client_id: "l3Ow0CmFyc4jOONcwiKUCRqQKN0tiCAn"
-          created_at: 2026-04-10 17:23:00 +02:00
+          created_at: "2026-04-10T15:23:00Z"
           id: "f8a3b2c1-4d5e-6f7a-8b9c-0d1e2f3a4b5c"
           name: "My Service Account"
-          updated_at: 2026-04-12 11:11:00 +02:00
+          updated_at: "2026-04-12T09:11:00Z"
         pagination:
           next: "eyJsYXN0X2lkIjoiZDI0MTc3YTAifQ=="
       description: "A paginated list of service accounts in the organization."
@@ -3747,10 +3747,10 @@ components:
         client_secret: "8p-kkC23XOWvkCosKq-BOn3G74qp__rBcDMxc82iB4gfzRvuhSCRBKM7C5Q7TAzj"
         service_account:
           client_id: "l3Ow0CmFyc4jOONcwiKUCRqQKN0tiCAn"
-          created_at: 2026-04-10 17:23:00 +02:00
+          created_at: "2026-04-10T15:23:00Z"
           id: "f8a3b2c1-4d5e-6f7a-8b9c-0d1e2f3a4b5c"
           name: "My Service Account"
-          updated_at: 2026-04-10 17:23:00 +02:00
+          updated_at: "2026-04-10T15:23:00Z"
       description: "A service account with a newly issued OAuth `client_secret`. The secret is returned only once and cannot be retrieved later."
       type: "object"
       properties:

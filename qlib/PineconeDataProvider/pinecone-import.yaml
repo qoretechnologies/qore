@@ -12,6 +12,9 @@
 # control plane and inference are served from api.pinecone.io, while the data plane is served from a
 # per-index host that the control plane resolves at run time.
 #
+# The sources are pinned to the pinecone-api commit that the committed schemas were imported from, so a
+# re-import reproduces them; move all four to a newer commit to take an upstream update.
+#
 # All of Pinecone's APIs carry the same dated version, so the four move together: re-import all four
 # when the version changes, and update
 # PineconeRestClient::PineconeRestClientBase::ApiVersion in the same commit -- the client sends that
@@ -25,28 +28,28 @@
 #   oauth        - token issuance handled by PineconeAdminRestClient; not an application action
 documents:
   - name: Pinecone Database Control Plane
-    source: https://raw.githubusercontent.com/pinecone-io/pinecone-api/main/2026-07/db_control_2026-07.oas.yaml
+    source: https://raw.githubusercontent.com/pinecone-io/pinecone-api/70a7509d34958cde7154efa3b76372bd5dacce8e/2026-07/db_control_2026-07.oas.yaml
     output: pinecone-db-control.yaml
     manifest: PineconeDataProvider:PineconeManifest::ControlManifest
     provenance: PineconeSchema.qc
     const: ControlProvenance
 
   - name: Pinecone Database Data Plane
-    source: https://raw.githubusercontent.com/pinecone-io/pinecone-api/main/2026-07/db_data_2026-07.oas.yaml
+    source: https://raw.githubusercontent.com/pinecone-io/pinecone-api/70a7509d34958cde7154efa3b76372bd5dacce8e/2026-07/db_data_2026-07.oas.yaml
     output: pinecone-db-data.yaml
     manifest: PineconeDataProvider:PineconeManifest::DataManifest
     provenance: PineconeSchema.qc
     const: DataProvenance
 
   - name: Pinecone Inference
-    source: https://raw.githubusercontent.com/pinecone-io/pinecone-api/main/2026-07/inference_2026-07.oas.yaml
+    source: https://raw.githubusercontent.com/pinecone-io/pinecone-api/70a7509d34958cde7154efa3b76372bd5dacce8e/2026-07/inference_2026-07.oas.yaml
     output: pinecone-inference.yaml
     manifest: PineconeDataProvider:PineconeManifest::InferenceManifest
     provenance: PineconeSchema.qc
     const: InferenceProvenance
 
   - name: Pinecone Admin
-    source: https://raw.githubusercontent.com/pinecone-io/pinecone-api/main/2026-07/admin_2026-07.oas.yaml
+    source: https://raw.githubusercontent.com/pinecone-io/pinecone-api/70a7509d34958cde7154efa3b76372bd5dacce8e/2026-07/admin_2026-07.oas.yaml
     output: pinecone-admin.yaml
     manifest: PineconeDataProvider:PineconeAdminManifest::Manifest
     provenance: PineconeSchema.qc

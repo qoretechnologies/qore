@@ -140,7 +140,7 @@ Note how little pruning removes from the component schemas in both cases - aroun
 a real API reference each other heavily, so do not expect the closure to be small; the win comes from
 dropping the operations the application does not export and everything reachable only from them.
 
-Three properties of the pinned schema are load-bearing:
+These properties of the pinned schema are load-bearing:
 
 - **Provenance describes the unmodified upstream document, not the committed artifact.** The
   `<App>SchemaProvenanceInfo` hashdecl records the source URL, the SHA-256 and byte size of the file as
@@ -148,6 +148,20 @@ Three properties of the pinned schema are load-bearing:
   be useless: the next import has to be diffed against the same baseline the last one started from.
   Stripe additionally records the `api_version` its schema describes, because `StripeRestClient` sends
   that version with every request and the two must move together.
+
+- **Vendor YAML is read with the YAML 1.2 core schema.** A vendor document is JSON-compatible YAML, so the
+  importer parses it with the yaml module's `YAML::ParseCoreSchema` option: only null, booleans, integers and
+  floats are typed, and every other plain scalar keeps its text. With the module's default resolution, Qore's
+  extended types turned Paddle's country code `PT` into a zero duration (written back as `P0D`, which then
+  rejected Portugal in every country field) and example timestamps into dates in the local time zone. With a
+  yaml module that lacks the option, a document that would be changed is rejected, and the importer never
+  writes a string enum with a value of another type (`RestSchemaImporter::checkStringEnums()`).
+
+- **An import spec names a fixed upstream revision where the host has one.** The source URL points at a
+  commit (or another immutable version), not at a branch, so a re-import - after an importer fix, say - reproduces the committed artifact
+  and changes only what the fix changes. Taking an upstream update is a deliberate step: move the source to a
+  newer revision, re-import with `--drift`, review the diff and the drift report, and run the application's
+  tests. Do this periodically, so the application stays aligned with the vendor's API.
 
 - **A vendored schema is never edited by hand, and house style does not apply to it.** It is generated
   output: the next import rewrites the file, so an edit is silently temporary and shows up as drift in

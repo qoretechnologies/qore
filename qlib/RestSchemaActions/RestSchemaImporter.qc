@@ -320,6 +320,12 @@ public class RestSchemaImporter {
         */
         const NormalizationMarker = "x-qore-normalized";
 
+        #! The value of the yaml module's \c YAML::ParseCoreSchema parse option
+        /** Used by value so that this module loads with a yaml module that does not provide the option;
+            @ref yamlCoreSchemaSupported() verifies its meaning before it is used
+        */
+        const YamlParseCoreSchema = 1;
+
         #! The provenance fields this class can supply
         /** Used by @ref updateProvenanceSource() to decide which members of an application's provenance
             record it owns.  Anything else in that record - Stripe's \c api_version, say - is left alone.
@@ -347,7 +353,8 @@ public class RestSchemaImporter {
         @return what was imported and what was kept
 
         @throw REST-SCHEMA-IMPORT-ERROR a requested operation does not resolve against the document, or
-        resolves ambiguously
+        resolves ambiguously, or a string schema in the pruned document has an enum value that is not a string
+        (see @ref checkStringEnums())
         @throw REST-SCHEMA-PRUNE-ERROR pruning failed or produced an invalid document
     */
     static hash<RestSchemaImportResultInfo> import(hash<RestSchemaImportInfo> doc, *hash<auto> opts) {
@@ -381,6 +388,7 @@ public class RestSchemaImporter {
         # because the pruner keeps only what the selected operations reach, and a record of what was
         # repaired is reachable from nothing
         hash<auto> out_schema = pruned.schema;
+        RestSchemaImporter::checkStringEnums(out_schema);
         if (doc.normalize) {
             list<auto> applied = ();
             foreach hash<RestSchemaNormalizationInfo> n in (doc.normalize) {
@@ -436,6 +444,48 @@ public class RestSchemaImporter {
         };
     }
 
+    #! Raises an exception if a string schema declares an enum value that is not a string
+    /** A document can only contain such a value if its parser converted the text of a plain YAML scalar to
+        another type: Paddle's country code \c PT was once read as a zero duration and written to the pruned
+        schema as \c P0D, which then rejected Portugal in every country field.  Checking the pruned document
+        before it is written keeps such a conversion from reaching an application.
+
+        @param node the schema, or any part of it
+        @param path the JSON pointer of \a node, for the error message
+
+        @throw REST-SCHEMA-IMPORT-ERROR a string schema has an enum value that is not a string
+
+        @since RestSchemaActions 1.0
+    */
+    static checkStringEnums(auto node, string path = "#") {
+        switch (node.typeCode()) {
+            case NT_HASH: {
+                auto type = node.type;
+                bool string_type = type == "string"
+                    || (type.typeCode() == NT_LIST && (map $1, type, $1 != "null") == ("string",));
+                if (string_type && node."enum".typeCode() == NT_LIST) {
+                    foreach auto value in (node."enum") {
+                        if (exists value && value.typeCode() != NT_STRING) {
+                            throw "REST-SCHEMA-IMPORT-ERROR", sprintf("%s/enum: value %y of a string schema is "
+                                "not a string; the document parser converted it from its text", path, value);
+                        }
+                    }
+                }
+                foreach hash<auto> i in (node.pairIterator()) {
+                    RestSchemaImporter::checkStringEnums(i.value, path + "/" + i.key);
+                }
+                break;
+            }
+            case NT_LIST: {
+                int index = 0;
+                foreach auto value in (node) {
+                    RestSchemaImporter::checkStringEnums(value, path + "/" + index++);
+                }
+                break;
+            }
+        }
+    }
+
     #! Imports every document of a multi-document application
     /** @param docs the documents to import
         @param opts import options; see @ref import()
@@ -458,6 +508,85 @@ public class RestSchemaImporter {
 
         @throw REST-SCHEMA-IMPORT-ERROR the document is not a hash, or declares no paths
     */
+    #! Parses a vendor YAML document
+    /** A vendor document is JSON-compatible YAML.  Parsed with the yaml module's default resolution, a plain
+        scalar that looks like a Qore date or duration becomes one, so an example timestamp would be written back
+        in the local time zone and Paddle's country code \c PT as \c P0D.  The document is therefore parsed with
+        the YAML 1.2 core schema; a yaml module that cannot do that parses it with its default resolution, and the
+        document is rejected if that produced any value that a JSON-compatible document cannot contain.
+
+        @param text the YAML document
+
+        @return the parsed document
+
+        @throw REST-SCHEMA-IMPORT-ERROR the yaml module cannot parse with the YAML 1.2 core schema (see
+        @ref yamlCoreSchemaSupported()), and its default resolution converted a scalar of the document
+
+        @since RestSchemaActions 1.0
+    */
+    static auto parseYamlDocument(string text) {
+        if (RestSchemaImporter::yamlCoreSchemaSupported()) {
+            return call_function("parse_yaml", text, YamlParseCoreSchema);
+        }
+        auto parsed = parse_yaml(text);
+        *string converted = RestSchemaImporter::findConvertedScalar(parsed);
+        if (converted) {
+            throw "REST-SCHEMA-IMPORT-ERROR", sprintf("%s; the yaml module converted this plain scalar and cannot "
+                "parse the document with the YAML 1.2 core schema (YAML::ParseCoreSchema, yaml 1.3 or later), "
+                "so the document would be written back changed", converted);
+        }
+        return parsed;
+    }
+
+    #! Returns the location and value of the first value a JSON-compatible document cannot contain, if any
+    /** Dates, durations, binary values and SQL null only come from the yaml module's extended implicit types
+
+        @param node the parsed document, or any part of it
+        @param path the JSON pointer of \a node
+
+        @return the JSON pointer and the value, or @ref nothing if every value is JSON-compatible
+    */
+    static *string findConvertedScalar(auto node, string path = "#") {
+        switch (node.typeCode()) {
+            case NT_HASH:
+                foreach hash<auto> i in (node.pairIterator()) {
+                    *string rv = RestSchemaImporter::findConvertedScalar(i.value, path + "/" + i.key);
+                    if (rv) {
+                        return rv;
+                    }
+                }
+                break;
+            case NT_LIST: {
+                int index = 0;
+                foreach auto value in (node) {
+                    *string rv = RestSchemaImporter::findConvertedScalar(value, path + "/" + index++);
+                    if (rv) {
+                        return rv;
+                    }
+                }
+                break;
+            }
+            case NT_DATE:
+            case NT_BINARY:
+            case NT_NULL:
+                return sprintf("%s: %y", path, node);
+        }
+    }
+
+    #! Returns @ref True if the yaml module can parse a document with the YAML 1.2 core schema
+    /** The option is used by value rather than by name, so that this module loads with a yaml module that does
+        not provide it; this method verifies that the option has its meaning: a plain timestamp stays a string
+    */
+    static bool yamlCoreSchemaSupported() {
+        try {
+            return call_function("parse_yaml", "v: 2025-03-05T14:59:25Z", YamlParseCoreSchema).v
+                === "2025-03-05T14:59:25Z";
+        } catch (hash<ExceptionInfo> ex) {
+            # no parse_yaml(string, int) variant, or the option has another meaning
+            return False;
+        }
+    }
+
     static hash<RestSchemaSourceInfo> fetch(string source) {
         binary raw = FileLocationHandler::getBinaryFileFromLocation(source);
         # the checksum and size describe the bytes as downloaded, so they are taken before any decoding
@@ -474,7 +603,7 @@ public class RestSchemaImporter {
         {
             on_error rethrow $1.err, sprintf("%s (while parsing %y as %s)", $1.desc, source,
                 json ? "JSON" : "YAML");
-            parsed = json ? parse_json(text) : parse_yaml(text);
+            parsed = json ? parse_json(text) : RestSchemaImporter::parseYamlDocument(text);
         }
         if (parsed.typeCode() != NT_HASH) {
             throw "REST-SCHEMA-IMPORT-ERROR", sprintf("%y parsed as %s, not as a schema document", source,

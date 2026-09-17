@@ -1,0 +1,28 @@
+# Import spec for the vendored Paddle schema.
+#
+#   QORE_MODULE_DIR=qlib tools/rest-schema-import.qr \
+#       --spec qlib/PaddleDataProvider/paddle-import.yaml \
+#       '--drift=PaddleDataProvider:PaddleSchema::getActionSet()'
+#
+# The source is pinned to the paddle-openapi commit that the committed schema was imported from, so a re-import
+# reproduces it; move it to a newer commit to take an upstream update.
+#
+# Paths are resolved against this file.  The operations come from the manifest itself, so the selection
+# and what the application exports cannot drift apart.
+#
+# Paddle's document lists country codes as plain YAML scalars.  The importer needs a yaml module that reads
+# "PT" (Portugal) as a string: older versions read it as a zero duration, and the pruned schema then rejected
+# Portugal in every country field.  The importer refuses to write a string enum with a value of another type.
+documents:
+  - name: Paddle
+    source: https://raw.githubusercontent.com/PaddleHQ/paddle-openapi/540ea17369325ff866b65ecf6c5105592f16fb5d/v1/openapi.yaml
+    output: paddle-openapi.yaml
+    manifest: PaddleDataProvider:PaddleManifest::Manifest
+    provenance: PaddleSchema.qc
+
+    # The webhook event providers create and delete their notification destinations with these operations.
+    # They have no manifest entry, so the pruner would drop them; naming them here keeps the committed schema a
+    # description of every request the module makes.
+    op:
+      - POST /notification-settings
+      - DELETE /notification-settings/{notification_setting_id}

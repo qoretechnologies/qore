@@ -84,7 +84,7 @@ public class CohereSchema {
             "source_url": "https://raw.githubusercontent.com/cohere-ai/cohere-developer-experience/f19a6485639746f919d2b7fc2b63b476e2f39490/cohere-openapi.yaml",
             "source_sha256": "6f64ec87c66df5857f14283d43c816da5d6a729ca98edd25f23807cd4989a599",
             "source_size": 1134611,
-            "imported": 2026-09-07,
+            "imported": 2026-09-17,
             "source_paths": 32,
             "source_operations": 42,
             "source_schemas": 189,

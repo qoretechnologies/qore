@@ -75,11 +75,11 @@ public class PaddleSchema {
     public {
         #! Where the vendored schema came from
         const Provenance = <PaddleSchemaProvenanceInfo>{
-            "source_url": "https://raw.githubusercontent.com/PaddleHQ/paddle-openapi/main/v1/openapi.yaml",
+            "source_url": "https://raw.githubusercontent.com/PaddleHQ/paddle-openapi/540ea17369325ff866b65ecf6c5105592f16fb5d/v1/openapi.yaml",
             "source_sha256": "e1ac347eb3c5ff208fdbd6af9c4b3f7e9e4e9212be881468ee4f97792058734b",
             "source_size": 7403758,
             "source_updated": 2026-07-09,
-            "imported": 2026-08-09,
+            "imported": 2026-09-17,
             "source_paths": 70,
             "source_operations": 99,
             "source_schemas": 519,

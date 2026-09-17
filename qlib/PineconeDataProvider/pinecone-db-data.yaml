@@ -2493,7 +2493,7 @@ components:
         result:
           hits:
           - _id: "example-record-1"
-            _score: 0.928113460540771484375
+            _score: 0.9281134605407715
             fields:
               data: "your example text"
         usage:
@@ -2520,7 +2520,7 @@ components:
     Hit:
       example:
         _id: "example-record-1"
-        _score: 0.928113460540771484375
+        _score: 0.9281134605407715
         fields:
           data: "your example text"
           more_data:
@@ -3080,7 +3080,7 @@ components:
     DocumentSearchMatch:
       example:
         _id: "doc-1"
-        _score: 0.928113460540771484375
+        _score: 0.9281134605407715
         content: "Machine learning is a subset of artificial intelligence."
         title: "Introduction to Machine Learning"
       description: "A document match returned from a search operation, including the document ID, similarity score, and selected fields."
@@ -3103,7 +3103,7 @@ components:
       example:
         matches:
         - _id: "doc-1"
-          _score: 0.928113460540771484375
+          _score: 0.9281134605407715
           title: "Introduction to Machine Learning"
         namespace: "my-namespace"
         usage:

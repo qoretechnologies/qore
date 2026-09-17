@@ -164,7 +164,7 @@ paths:
                     ContactGroups: []
                     ContactPersons: []
                     HasValidationErrors: false
-                  DateString: 2016-10-13 02:00:00 +02:00
+                  DateString: "2016-10-13T00:00:00"
                   Date: "/Date(1476316800000+0000)/"
                   Status: "AUTHORISED"
                   LineAmountTypes: "Exclusive"
@@ -191,7 +191,7 @@ paths:
                     ContactGroups: []
                     ContactPersons: []
                     HasValidationErrors: false
-                  DateString: 2016-10-13 02:00:00 +02:00
+                  DateString: "2016-10-13T00:00:00"
                   Date: "/Date(1476316800000+0000)/"
                   Status: "AUTHORISED"
                   LineAmountTypes: "NoTax"
@@ -218,7 +218,7 @@ paths:
                     ContactGroups: []
                     ContactPersons: []
                     HasValidationErrors: false
-                  DateString: 2016-10-13 02:00:00 +02:00
+                  DateString: "2016-10-13T00:00:00"
                   Date: "/Date(1476316800000+0000)/"
                   Status: "AUTHORISED"
                   LineAmountTypes: "NoTax"
@@ -440,7 +440,7 @@ paths:
                     ContactGroups: []
                     ContactPersons: []
                     HasValidationErrors: false
-                  DateString: 2019-02-26 01:00:00 +01:00
+                  DateString: "2019-02-26T00:00:00"
                   Date: "/Date(1551139200000+0000)/"
                   Status: "AUTHORISED"
                   LineAmountTypes: "Inclusive"
@@ -970,7 +970,7 @@ paths:
                     ContactGroups: []
                     ContactPersons: []
                     HasValidationErrors: false
-                  DateString: 2019-03-05 01:00:00 +01:00
+                  DateString: "2019-03-05T00:00:00"
                   Date: "/Date(1551744000000+0000)/"
                   Status: "AUTHORISED"
                   LineAmountTypes: "Exclusive"
@@ -979,7 +979,7 @@ paths:
                   TotalTax: 4.5
                   Total: 34.5
                   UpdatedDateUTC: "/Date(1551812346157+0000)/"
-                  UpdatedDateUTCString: 2019-03-05 19:59:06 +01:00
+                  UpdatedDateUTCString: "2019-03-05T18:59:06Z"
                   CurrencyCode: "NZD"
                 - CreditNoteID: "f8021bd2-9a6a-4c19-8477-163da0b9290f"
                   CreditNoteNumber: ""
@@ -999,7 +999,7 @@ paths:
                     ContactGroups: []
                     ContactPersons: []
                     HasValidationErrors: false
-                  DateString: 2019-01-05 01:00:00 +01:00
+                  DateString: "2019-01-05T00:00:00"
                   Date: "/Date(1546646400000+0000)/"
                   Status: "DRAFT"
                   LineAmountTypes: "Exclusive"
@@ -1008,7 +1008,7 @@ paths:
                   TotalTax: 6.0
                   Total: 46.0
                   UpdatedDateUTC: "/Date(1551812506153+0000)/"
-                  UpdatedDateUTCString: 2019-03-05 20:01:46 +01:00
+                  UpdatedDateUTCString: "2019-03-05T19:01:46Z"
                   CurrencyCode: "NZD"
   /CreditNotes/{CreditNoteID}/Allocations:
     parameters:
@@ -1294,9 +1294,9 @@ paths:
                     ContactGroups: []
                     ContactPersons: []
                     HasValidationErrors: false
-                  DateString: 2018-10-20 02:00:00 +02:00
+                  DateString: "2018-10-20T00:00:00"
                   Date: "/Date(1539993600000+0000)/"
-                  DueDateString: 2018-12-30 01:00:00 +01:00
+                  DueDateString: "2018-12-30T00:00:00"
                   DueDate: "/Date(1546128000000+0000)/"
                   Status: "VOIDED"
                   LineAmountTypes: "Exclusive"
@@ -1305,7 +1305,7 @@ paths:
                   TotalTax: 0.0
                   Total: 40.0
                   UpdatedDateUTC: "/Date(1541176290160+0000)/"
-                  UpdatedDateUTCString: 2018-11-02 17:31:30 +01:00
+                  UpdatedDateUTCString: "2018-11-02T16:31:30Z"
                   CurrencyCode: "NZD"
                 - Type: "ACCREC"
                   InvoiceID: "046d8a6d-1ae1-4b4d-9340-5601bdf41b87"
@@ -1337,9 +1337,9 @@ paths:
                     ContactGroups: []
                     ContactPersons: []
                     HasValidationErrors: false
-                  DateString: 2018-10-20 02:00:00 +02:00
+                  DateString: "2018-10-20T00:00:00"
                   Date: "/Date(1539993600000+0000)/"
-                  DueDateString: 2018-12-30 01:00:00 +01:00
+                  DueDateString: "2018-12-30T00:00:00"
                   DueDate: "/Date(1546128000000+0000)/"
                   Status: "PAID"
                   LineAmountTypes: "Exclusive"
@@ -1348,7 +1348,7 @@ paths:
                   TotalTax: 6.0
                   Total: 46.0
                   UpdatedDateUTC: "/Date(1541176592690+0000)/"
-                  UpdatedDateUTCString: 2018-11-02 17:36:32 +01:00
+                  UpdatedDateUTCString: "2018-11-02T16:36:32Z"
                   CurrencyCode: "NZD"
                   FullyPaidOnDate: "/Date(1543449600000+0000)/"
                 - Type: "ACCREC"
@@ -1374,9 +1374,9 @@ paths:
                     ContactGroups: []
                     ContactPersons: []
                     HasValidationErrors: false
-                  DateString: 2018-11-02 01:00:00 +01:00
+                  DateString: "2018-11-02T00:00:00"
                   Date: "/Date(1541116800000+0000)/"
-                  DueDateString: 2018-11-07 01:00:00 +01:00
+                  DueDateString: "2018-11-07T00:00:00"
                   DueDate: "/Date(1541548800000+0000)/"
                   Status: "AUTHORISED"
                   LineAmountTypes: "Exclusive"
@@ -1385,7 +1385,7 @@ paths:
                   TotalTax: 15.0
                   Total: 115.0
                   UpdatedDateUTC: "/Date(1541176648927+0000)/"
-                  UpdatedDateUTCString: 2018-11-02 17:37:28 +01:00
+                  UpdatedDateUTCString: "2018-11-02T16:37:28Z"
                   CurrencyCode: "NZD"
     post:
       security:
@@ -1652,9 +1652,9 @@ paths:
                       EmailAddress: "debbie@rockstar.com"
                       IncludeInEmails: false
                     HasValidationErrors: false
-                  DateString: 2019-03-11 01:00:00 +01:00
+                  DateString: "2019-03-11T00:00:00"
                   Date: "/Date(1552262400000+0000)/"
-                  DueDateString: 2018-12-10 01:00:00 +01:00
+                  DueDateString: "2018-12-10T00:00:00"
                   DueDate: "/Date(1544400000000+0000)/"
                   Status: "AUTHORISED"
                   LineAmountTypes: "Exclusive"
@@ -1673,7 +1673,7 @@ paths:
                   TotalTax: 0.0
                   Total: 40.0
                   UpdatedDateUTC: "/Date(1552327126117+0000)/"
-                  UpdatedDateUTCString: 2019-03-11 18:58:46 +01:00
+                  UpdatedDateUTCString: "2019-03-11T17:58:46Z"
                   CurrencyCode: "NZD"
                   StatusAttributeString: "OK"
         400:
@@ -2041,7 +2041,7 @@ paths:
                   PaymentType: "ACCRECPAYMENT"
                   Status: "AUTHORISED"
                   UpdatedDateUTC: "/Date(1541176592690+0000)/"
-                  UpdatedDateUTCString: 2018-11-02 17:36:32 +01:00
+                  UpdatedDateUTCString: "2018-11-02T16:36:32Z"
                   HasAccount: true
                   IsReconciled: false
                   Account:
@@ -2078,7 +2078,7 @@ paths:
                   PaymentType: "ARCREDITPAYMENT"
                   Status: "AUTHORISED"
                   UpdatedDateUTC: "/Date(1551812346173+0000)/"
-                  UpdatedDateUTCString: 2019-03-05 19:59:06 +01:00
+                  UpdatedDateUTCString: "2019-03-05T18:59:06Z"
                   HasAccount: true
                   IsReconciled: false
                   Account:
@@ -2223,7 +2223,7 @@ paths:
                   PaymentType: "ACCRECPAYMENT"
                   Status: "AUTHORISED"
                   UpdatedDateUTC: "/Date(1552432238623+0000)/"
-                  UpdatedDateUTCString: 2019-03-13 00:10:38 +01:00
+                  UpdatedDateUTCString: "2019-03-12T23:10:38Z"
                   HasAccount: true
                   IsReconciled: false
                   Account:
@@ -2248,9 +2248,9 @@ paths:
                       Name: "Barney Rubble-83203"
                       ContactPersons: []
                       HasValidationErrors: false
-                    DateString: 2018-10-10 02:00:00 +02:00
+                    DateString: "2018-10-10T00:00:00"
                     Date: "/Date(1539129600000+0000)/"
-                    DueDateString: 2018-10-18 02:00:00 +02:00
+                    DueDateString: "2018-10-18T00:00:00"
                     DueDate: "/Date(1539820800000+0000)/"
                     Status: "AUTHORISED"
                     LineAmountTypes: "Exclusive"
@@ -2269,7 +2269,7 @@ paths:
                     TotalTax: 30.0
                     Total: 230.0
                     UpdatedDateUTC: "/Date(1552432238623+0000)/"
-                    UpdatedDateUTCString: 2019-03-13 00:10:38 +01:00
+                    UpdatedDateUTCString: "2019-03-12T23:10:38Z"
                     CurrencyCode: "NZD"
                   HasValidationErrors: true
                   ValidationErrors:
@@ -2366,7 +2366,7 @@ paths:
                 PurchaseOrders:
                 - PurchaseOrderID: "f9627f0d-b715-4039-bb6a-96dc3eae5ec5"
                   PurchaseOrderNumber: "PO-0001"
-                  DateString: 2019-03-12 01:00:00 +01:00
+                  DateString: "2019-03-12T00:00:00"
                   Date: "/Date(1552348800000+0000)/"
                   AttentionTo: "Jimmy"
                   HasErrors: false
@@ -2421,7 +2421,7 @@ paths:
                   HasAttachments: false
                 - PurchaseOrderID: "6afa2e02-c514-4964-ab89-b5c0179b8c50"
                   PurchaseOrderNumber: "PO-0002"
-                  DateString: 2019-03-12 01:00:00 +01:00
+                  DateString: "2019-03-12T00:00:00"
                   Date: "/Date(1552348800000+0000)/"
                   AttentionTo: "Jimmy"
                   HasErrors: false
@@ -2640,7 +2640,7 @@ paths:
                     TaxAmount: 0.0
                     Tracking: []
                   Date: "/Date(1580515200000)/"
-                  DateString: 2020-02-01 01:00:00 +01:00
+                  DateString: "2020-02-01T00:00:00"
                   Status: "DRAFT"
                   CurrencyRate: 1.0
                   CurrencyCode: "USD"
@@ -3054,7 +3054,7 @@ components:
             ProviderName: "Xero API Partner"
             DateTimeUTC: "/Date(1550899400362)/"
             HistoryRecords:
-            - DateUTCString: 2019-02-23 06:23:20 +01:00
+            - DateUTCString: "2019-02-23T05:23:20"
               DateUTC: "/Date(1550899400362)/"
               Details: "Hello World"
               ValidationErrors: []
@@ -3071,12 +3071,12 @@ components:
             DateTimeUTC: "/Date(1551311321819)/"
             HistoryRecords:
             - Changes: "Attached a file"
-              DateUTCString: 2018-11-08 16:01:21 +01:00
+              DateUTCString: "2018-11-08T15:01:21"
               DateUTC: "/Date(1541689281470+0000)/"
               User: "System Generated"
               Details: "Attached the file sample2.jpg through the Xero API using Xero API Partner"
             - Changes: "Credit Applied"
-              DateUTCString: 2016-10-17 22:46:01 +02:00
+              DateUTCString: "2016-10-17T20:46:01"
               DateUTC: "/Date(1476737161173+0000)/"
               User: "System Generated"
               Details: "Bank transfer from Business Wells Fargo to My Savings on November 12, 2016 for 20.00."
@@ -4094,7 +4094,7 @@ components:
         UpdatedDateUTCString:
           description: "UTC ISO-8601 formatted timestamp of last update to the credit note"
           type: "string"
-          example: 2019-11-14 19:10:38 +01:00
+          example: "2019-11-14T18:10:38Z"
           readOnly: true
         CurrencyCode:
           description: "The specified currency code"
@@ -4793,7 +4793,7 @@ components:
         UpdatedDateUTCString:
           description: "UTC ISO-8601 formatted timestamp of last update to the invoice"
           type: "string"
-          example: 2019-11-14 19:10:38 +01:00
+          example: "2019-11-14T18:10:38Z"
           readOnly: true
         CreditNotes:
           description: "Details of credit notes that have been applied to an invoice"
@@ -5016,7 +5016,7 @@ components:
         UpdatedDateUTCString:
           description: "UTC ISO-8601 formatted timestamp of last update to the overpayment"
           type: "string"
-          example: 2019-11-14 19:10:38 +01:00
+          example: "2019-11-14T18:10:38Z"
           readOnly: true
         CurrencyCode:
           $ref: "#/components/schemas/CurrencyCode"
@@ -5159,7 +5159,7 @@ components:
         UpdatedDateUTCString:
           description: "UTC ISO-8601 formatted timestamp of last update to the payment"
           type: "string"
-          example: 2019-11-14 19:10:38 +01:00
+          example: "2019-11-14T18:10:38Z"
           readOnly: true
         PaymentID:
           description: "The Xero identifier for an Payment e.g. 297c2dc5-cc47-4afd-8ec8-74990b8761e9"
@@ -5269,7 +5269,7 @@ components:
         UpdatedDateUTCString:
           description: "UTC ISO-8601 formatted timestamp of last update to the prepayment"
           type: "string"
-          example: 2019-11-14 19:10:38 +01:00
+          example: "2019-11-14T18:10:38Z"
           readOnly: true
         CurrencyCode:
           $ref: "#/components/schemas/CurrencyCode"

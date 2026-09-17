@@ -131,6 +131,9 @@ public class TestSchema {
         addTestCase("operationsFromManifest", \operationsFromManifestTest());
         addTestCase("resolveOperations", \resolveOperationsTest());
         addTestCase("fetch", \fetchTest());
+        addTestCase("fetch keeps YAML scalars", \fetchScalarTest());
+        addTestCase("string enum check", \stringEnumTest());
+        addTestCase("vendored schemas keep their scalars", \vendoredSchemaTest());
         addTestCase("serialize", \serializeTest());
         addTestCase("import", \importTest());
         addTestCase("checked required-property repairs", \requiredRepairTest());
@@ -473,6 +476,87 @@ public class TestSchema {
         FileLocationHandler::writeFileToLocation(scalar, "[1, 2]");
         assertThrows("REST-SCHEMA-IMPORT-ERROR", "not as a schema document",
             \RestSchemaImporter::fetch(), scalar);
+    }
+
+    private fetchScalarTest() {
+        # a vendor document is JSON-compatible YAML: plain scalars that look like Qore dates, durations or SQL null
+        # are strings; Paddle's "PT" was once imported as a zero duration, and example timestamps in local time
+        TmpDir tmp("rest-schema-importer-");
+        string path = tmp.path + DirSep + "plain.yaml";
+        FileLocationHandler::writeFileToLocation(path, "openapi: 3.0.0\n"
+            "paths:\n  /x:\n    get:\n      responses:\n        '200':\n          description: ok\n"
+            "components:\n  schemas:\n    Country:\n      type: string\n      enum:\n        - NL\n"
+            "        - NO\n        - PT\n    Event:\n      type: object\n      example:\n"
+            "        created_at: 2025-03-05T14:59:25.438936Z\n        day: 2025-03-05\n        marker: sqlnull\n"
+            "        count: 2\n        ratio: 0.5\n        active: true\n        none: null\n");
+        if (RestSchemaImporter::yamlCoreSchemaSupported()) {
+            hash<RestSchemaSourceInfo> src = RestSchemaImporter::fetch(path);
+            hash<auto> schemas = src.schema.components.schemas;
+            assertEq(("NL", "NO", "PT"), schemas.Country."enum");
+            assertEq({
+                "created_at": "2025-03-05T14:59:25.438936Z",
+                "day": "2025-03-05",
+                "marker": "sqlnull",
+                "count": 2,
+                "ratio": 0.5,
+                "active": True,
+                "none": NOTHING,
+            }, schemas.Event.example);
+            assertNothing(RestSchemaImporter::findConvertedScalar(src.schema));
+        } else {
+            # without core schema parsing, the conversion is detected and the document is rejected
+            assertThrows("REST-SCHEMA-IMPORT-ERROR", "converted this plain scalar", \RestSchemaImporter::fetch(),
+                path);
+        }
+
+        # the scan behind the fallback finds every kind of converted value
+        assertEq("#/a/1: <time: 0 seconds>", RestSchemaImporter::findConvertedScalar({"a": ("x", 0s)}));
+        assertRegex("^#/b: 2025-03-05", RestSchemaImporter::findConvertedScalar({"b": 2025-03-05}));
+        assertRegex("^#/c: ", RestSchemaImporter::findConvertedScalar({"c": <01>}));
+        assertEq("#/d/0/e: <NULL>", RestSchemaImporter::findConvertedScalar({"d": ({"e": NULL},)}));
+        assertNothing(RestSchemaImporter::findConvertedScalar({"f": ("s", 1, 1.5, True, NOTHING, 2n, {})}));
+    }
+
+    private vendoredSchemaTest() {
+        # every schema an application ships is read at run time with the yaml module's default resolution, so
+        # a scalar that was converted during an import (a country code or an example timestamp) would be a
+        # value the vendor never published
+        string qlib = normalize_dir(get_script_dir() + DirSep + ".." + DirSep + ".." + DirSep + ".." + DirSep
+            + ".." + DirSep + "qlib");
+        int checked = 0;
+        Dir d();
+        d.chdir(qlib);
+        foreach string module_dir in (d.listDirs() ?? ()) {
+            Dir md();
+            md.chdir(qlib + DirSep + module_dir);
+            foreach string spec in (md.listFiles("-import\\.yaml$") ?? ()) {
+                hash<auto> import_spec = parse_yaml(ReadOnlyFile::readTextFile(md.path() + DirSep + spec));
+                foreach hash<auto> doc in (import_spec.documents) {
+                    string path = md.path() + DirSep + doc.output;
+                    string text = ReadOnlyFile::readTextFile(path);
+                    auto schema = path =~ /\.json$/ ? parse_json(text) : parse_yaml(text);
+                    assertNothing(RestSchemaImporter::findConvertedScalar(schema), path);
+                    RestSchemaImporter::checkStringEnums(schema);
+                    ++checked;
+                }
+            }
+        }
+        assertGt(0, checked, "vendored schemas were found");
+    }
+
+    private stringEnumTest() {
+        # a string schema whose enum has a value of another type is rejected with its location
+        RestSchemaImporter::checkStringEnums({"type": "string", "enum": ("a", "b")});
+        RestSchemaImporter::checkStringEnums({"type": ("string", "null"), "enum": ("a", NOTHING)});
+        # enums of other types are not string enums
+        RestSchemaImporter::checkStringEnums({"type": "integer", "enum": (1, 2)});
+        RestSchemaImporter::checkStringEnums({"enum": (1, "a")});
+        RestSchemaImporter::checkStringEnums({"type": ("string", "integer"), "enum": ("a", 1)});
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "^#/components/schemas/Country/enum: value <time: 0 seconds> of a "
+            "string schema is not a string", \RestSchemaImporter::checkStringEnums(),
+            {"components": {"schemas": {"Country": {"type": "string", "enum": ("NL", 0s)}}}});
+        assertThrows("REST-SCHEMA-IMPORT-ERROR", "^#/items/0/enum: value 1 of a string schema",
+            \RestSchemaImporter::checkStringEnums(), {"items": ({"type": ("null", "string"), "enum": (1,)},)});
     }
 
     private serializeTest() {

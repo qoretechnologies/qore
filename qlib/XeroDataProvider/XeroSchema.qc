@@ -104,10 +104,10 @@ public class XeroSchema {
     public {
         #! Where the vendored accounting schema came from
         const AccountingProvenance = <XeroSchemaProvenanceInfo>{
-            "source_url": "https://raw.githubusercontent.com/XeroAPI/Xero-OpenAPI/master/xero_accounting.yaml",
+            "source_url": "https://raw.githubusercontent.com/XeroAPI/Xero-OpenAPI/ee65f8bddb16f37cde3e32741d465eeed6507a74/xero_accounting.yaml",
             "source_sha256": "5cf7f780d3c8f619424c3ed72426e9fa3de2ad3a94f9d9ab0800fae0457fc4d9",
             "source_size": 929720,
-            "imported": 2026-08-10,
+            "imported": 2026-09-17,
             "source_paths": 138,
             "source_operations": 235,
             "source_schemas": 140,
@@ -116,10 +116,10 @@ public class XeroSchema {
 
         #! Where the vendored projects schema came from
         const ProjectsProvenance = <XeroSchemaProvenanceInfo>{
-            "source_url": "https://raw.githubusercontent.com/XeroAPI/Xero-OpenAPI/master/xero-projects.yaml",
+            "source_url": "https://raw.githubusercontent.com/XeroAPI/Xero-OpenAPI/ee65f8bddb16f37cde3e32741d465eeed6507a74/xero-projects.yaml",
             "source_sha256": "3870863245e208360fd169f9799c75ac6b22d6ebd0227d05dcf03648e101b7eb",
             "source_size": 50878,
-            "imported": 2026-08-10,
+            "imported": 2026-09-17,
             "source_paths": 7,
             "source_operations": 16,
             "source_schemas": 18,

@@ -102,10 +102,10 @@ public class PineconeSchema {
     public {
         #! Where the vendored control-plane description came from
         const ControlProvenance = <PineconeSchemaProvenanceInfo>{
-            "source_url": "https://raw.githubusercontent.com/pinecone-io/pinecone-api/main/2026-07/db_control_2026-07.oas.yaml",
+            "source_url": "https://raw.githubusercontent.com/pinecone-io/pinecone-api/70a7509d34958cde7154efa3b76372bd5dacce8e/2026-07/db_control_2026-07.oas.yaml",
             "source_sha256": "19dd02de757e651d881bb69962b0bf83fe995b842de7a49c3629cc3c20b19107",
             "source_size": 193462,
-            "imported": 2026-09-07,
+            "imported": 2026-09-17,
             "source_paths": 14,
             "source_operations": 24,
             "source_schemas": 64,
@@ -114,10 +114,10 @@ public class PineconeSchema {
 
         #! Where the vendored data-plane description came from
         const DataProvenance = <PineconeSchemaProvenanceInfo>{
-            "source_url": "https://raw.githubusercontent.com/pinecone-io/pinecone-api/main/2026-07/db_data_2026-07.oas.yaml",
+            "source_url": "https://raw.githubusercontent.com/pinecone-io/pinecone-api/70a7509d34958cde7154efa3b76372bd5dacce8e/2026-07/db_data_2026-07.oas.yaml",
             "source_sha256": "de555d09663b998350701196302f86d80119ba37e39de3eda889ee406d01dcc1",
             "source_size": 132787,
-            "imported": 2026-09-07,
+            "imported": 2026-09-17,
             "source_paths": 20,
             "source_operations": 24,
             "source_schemas": 68,
@@ -126,10 +126,10 @@ public class PineconeSchema {
 
         #! Where the vendored inference description came from
         const InferenceProvenance = <PineconeSchemaProvenanceInfo>{
-            "source_url": "https://raw.githubusercontent.com/pinecone-io/pinecone-api/main/2026-07/inference_2026-07.oas.yaml",
+            "source_url": "https://raw.githubusercontent.com/pinecone-io/pinecone-api/70a7509d34958cde7154efa3b76372bd5dacce8e/2026-07/inference_2026-07.oas.yaml",
             "source_sha256": "1e6958c4f554e521d1551bac01029e5902b02533d4663ebe09a279d04a0e3e59",
             "source_size": 31145,
-            "imported": 2026-09-07,
+            "imported": 2026-09-17,
             "source_paths": 4,
             "source_operations": 4,
             "source_schemas": 16,
@@ -138,10 +138,10 @@ public class PineconeSchema {
 
         #! Provenance of the separate OAuth2 Admin API
         const AdminProvenance = <PineconeSchemaProvenanceInfo>{
-            "source_url": "https://raw.githubusercontent.com/pinecone-io/pinecone-api/main/2026-07/admin_2026-07.oas.yaml",
+            "source_url": "https://raw.githubusercontent.com/pinecone-io/pinecone-api/70a7509d34958cde7154efa3b76372bd5dacce8e/2026-07/admin_2026-07.oas.yaml",
             "source_sha256": "4b0860571ffb538ae58205ec97f28d76ae8d020af0cce8ac018469e1bc3291a2",
             "source_size": 140279,
-            "imported": 2026-09-07,
+            "imported": 2026-09-17,
             "source_paths": 16,
             "source_operations": 32,
             "source_schemas": 27,

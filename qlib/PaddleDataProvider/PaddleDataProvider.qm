@@ -137,10 +137,10 @@ module PaddleDataProvider {
     cannot alter the contract of an action that existing workflows already call:
 
     |!Property|!Value
-    |Source|https://github.com/PaddleHQ/paddle-openapi \c v1/openapi.yaml
+    |Source|https://github.com/PaddleHQ/paddle-openapi \c v1/openapi.yaml at commit \c 540ea17369325ff866b65ecf6c5105592f16fb5d
     |SHA-256|\c e1ac347eb3c5ff208fdbd6af9c4b3f7e9e4e9212be881468ee4f97792058734b
     |Upstream updated|2026-07-09
-    |Imported|2026-08-09
+    |Imported|2026-09-17
 
     The committed copy is pruned to the exported operations, the two \c /notification-settings
     operations the webhook event providers call, and everything they reference - 17 of 70 paths and
