@@ -84,7 +84,8 @@ public:
         @param flags the flags to use when opening the file
         @param mode the mode mask to use when opening the file
         @param cs the encoding to use for the file
-        @return 0 for success, non-zero for error
+        @return 0 for success, non-zero for error; if the sandbox filesystem policy denies access, -1 is returned and
+        \c errno is set to \c EACCES
         @note for a version that raises a Qore-language exception when an error occurs opening the file, see QoreFile::open2()
         @see QoreFile::open2()
     */
@@ -623,6 +624,12 @@ public:
 
     //! gets terminal attributes
     DLLLOCAL int getTerminalAttributes(QoreTermIOS *ios, ExceptionSink* xsink) const;
+
+    //! opens the file like open() if the sandbox filesystem policy allows it (not part of the library's public API)
+    /** @return 0 for success, -1 for error; if the sandbox policy denies access, an exception is raised, otherwise
+        \c errno is set as for open()
+    */
+    DLLLOCAL int openCheckAccess(ExceptionSink* xsink, const char* fn, int flags, int mode, const QoreEncoding* cs);
 
     // NOTE: QoreFile::makeSpecial() can only be called right after the constructor (private API)
     DLLLOCAL void makeSpecial(int sfd);

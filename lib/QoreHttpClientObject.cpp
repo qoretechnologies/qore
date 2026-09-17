@@ -70,6 +70,8 @@
 #include "qore/intern/QuicCommon.h"
 #include "qore/intern/QoreLibIntern.h"
 #include "qore/intern/QoreAsyncIoLogger.h"
+#include "qore/intern/QoreUriReference.h"
+#include "qore/intern/AsyncIoControllerPriv.h"
 
 #include <atomic>
 #include <cassert>
@@ -82,6 +84,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include <fcntl.h>
 #include <sys/socket.h>
@@ -423,6 +426,197 @@ static QoreValue process_binary_body(const BinaryNode* bin, const QoreEncoding* 
 }
 
 // ============================================================================
+// REDIRECT CHAIN HELPERS
+// ----------------------------------------------------------------------------
+// Shared by the blocking send path (send_internal_conn_mgr) and the
+// non-blocking poll operation (HttpClientConnMgrPollOp), so that both APIs
+// follow the same redirects to the same targets with the same request
+// changes and report the same metadata.
+// ============================================================================
+
+// RFC 9110 section 15.4: the redirect status codes that are followed automatically; 300 (no single target), 304
+// (not a redirect), 305 (deprecated for security reasons), and 306 (unused) are returned to the caller
+static bool is_followed_redirect_status(int code) {
+    return code == 301 || code == 302 || code == 303 || code == 307 || code == 308;
+}
+
+// returns true if both connections address the same origin (RFC 6454: scheme, host, and port)
+static bool is_same_origin(const con_info& a, const con_info& b) {
+    if (a.ssl != b.ssl || a.is_unix != b.is_unix || a.port != b.port) {
+        return false;
+    }
+    // a UNIX domain socket is identified by its filesystem path, which is case-sensitive
+    return a.is_unix ? a.host == b.host : !strcasecmp(a.host.c_str(), b.host.c_str());
+}
+
+// returns the origin of a connection as an absolute URL prefix with no user information and no path
+static std::string get_origin_url(const con_info& c) {
+    std::string rv = c.ssl ? "https://" : "http://";
+    if (c.is_unix) {
+        rv += "socket=";
+        rv += c.unix_urlencoded_path;
+        return rv;
+    }
+    // an IPv6 address literal must be enclosed in brackets (RFC 3986 section 3.2.2)
+    bool ipv6 = c.host.find(':') != std::string::npos;
+    if (ipv6) {
+        rv += '[';
+    }
+    rv += c.host;
+    if (ipv6) {
+        rv += ']';
+    }
+    if (c.port && c.port != (c.ssl ? 443 : 80)) {
+        rv += ':';
+        rv += std::to_string(c.port);
+    }
+    return rv;
+}
+
+// returns the absolute URL of a request target on a connection, with no user information
+static std::string get_request_url(const con_info& c, const std::string& target) {
+    std::string rv = get_origin_url(c);
+    if (target.empty() || target[0] != '/') {
+        rv += '/';
+    }
+    rv += target;
+    return rv;
+}
+
+// the request headers that name or authenticate the origin of the original request; they are sent only to that
+// origin, so a redirect can never forward credentials or a Host override to another server
+static bool is_origin_bound_header(const char* name) {
+    return !strcasecmp(name, "authorization") || !strcasecmp(name, "cookie") || !strcasecmp(name, "host");
+}
+
+// the request headers that describe request content; removed when a redirect turns the request into one without
+// a body (RFC 9110 section 15.4)
+static bool is_content_header(const char* name) {
+    return !strncasecmp(name, "content-", 8) || !strcasecmp(name, "transfer-encoding");
+}
+
+// removes all headers matching the given predicate from a request header hash
+static void remove_request_headers(QoreHashNode& h, bool (*match)(const char*), ExceptionSink* xsink) {
+    std::vector<std::string> keys;
+    ConstHashIterator hi(&h);
+    while (hi.next()) {
+        if (match(hi.getKey())) {
+            keys.push_back(hi.getKey());
+        }
+    }
+    for (const std::string& key : keys) {
+        h.removeKey(key.c_str(), xsink);
+    }
+}
+
+// returns a new reference to the headers of a canonical conn_mgr response with lower-case names, if any
+static QoreHashNode* get_response_headers_ref(const QoreHashNode* src) {
+    QoreValue v = src->getKeyValue("headers");
+    return v.getType() == NT_HASH ? v.get<const QoreHashNode>()->hashRefSelf() : nullptr;
+}
+
+// returns the headers of a canonical conn_mgr response with their names as received; HTTP/2 and HTTP/3 carry
+// lower-case names on the wire, so their lower-case headers are returned when no separate raw headers are present
+static QoreValue get_response_headers_raw(const QoreHashNode* src) {
+    QoreValue v = src->getKeyValue("headers_raw");
+    return v.getType() == NT_HASH ? v : src->getKeyValue("headers");
+}
+
+// returns true if a request header hash has the given header, compared case-insensitively
+static bool has_header(const QoreHashNode& h, const char* name) {
+    ConstHashIterator hi(&h);
+    while (hi.next()) {
+        if (!strcasecmp(hi.getKey(), name)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+//! State of a request chain that follows HTTP redirects
+/** The chain owns the metadata reported for the redirects followed and the origin-bound headers of the original
+    request, which are sent only while a request targets the original origin.
+*/
+struct HttpRedirectChain {
+    //! The connection of the original request; its origin is the only one that receives origin-bound headers
+    con_info origin;
+    //! The number of redirects followed
+    int count = 0;
+    //! The redirects followed, as a list of HttpRedirectInfo hashes
+    QoreListNode* hops = nullptr;
+    //! The origin-bound headers of the original request
+    QoreHashNode* origin_headers = nullptr;
+
+    DLLLOCAL HttpRedirectChain(const con_info& origin) : origin(origin) {
+    }
+
+    DLLLOCAL HttpRedirectChain(const HttpRedirectChain&) = delete;
+    DLLLOCAL HttpRedirectChain& operator=(const HttpRedirectChain&) = delete;
+
+    DLLLOCAL ~HttpRedirectChain() {
+        // the values held are strings, lists, and hashes of strings, so releasing them cannot raise an exception
+        ExceptionSink xsink;
+        if (hops) {
+            hops->deref(&xsink);
+        }
+        if (origin_headers) {
+            origin_headers->deref(&xsink);
+        }
+    }
+
+    //! Saves the origin-bound headers of the original request
+    DLLLOCAL void init(const QoreHashNode& request_headers, ExceptionSink* xsink) {
+        ConstHashIterator hi(&request_headers);
+        while (hi.next()) {
+            if (!is_origin_bound_header(hi.getKey())) {
+                continue;
+            }
+            if (!origin_headers) {
+                origin_headers = new QoreHashNode(autoTypeInfo);
+            }
+            origin_headers->setKeyValue(hi.getKey(), hi.get().refSelf(), xsink);
+        }
+    }
+
+    //! Sets the origin-bound headers of a request in the chain according to its target
+    DLLLOCAL void applyOriginPolicy(const con_info& target, QoreHashNode& request_headers,
+            ExceptionSink* xsink) const {
+        remove_request_headers(request_headers, is_origin_bound_header, xsink);
+        if (!origin_headers || !is_same_origin(origin, target)) {
+            return;
+        }
+        ConstHashIterator hi(origin_headers);
+        while (hi.next()) {
+            request_headers.setKeyValue(hi.getKey(), hi.get().refSelf(), xsink);
+        }
+    }
+
+    //! Returns true if a server authentication challenge from the given target may be answered
+    /** The client's credentials belong to the origin of the original request
+    */
+    DLLLOCAL bool canAuthenticate(const con_info& target) const {
+        return is_same_origin(origin, target);
+    }
+
+    //! Returns a copy of the redirects followed, if any
+    DLLLOCAL QoreListNode* copyHops() const {
+        return hops ? hops->copy() : nullptr;
+    }
+};
+
+//! The next request in a redirect chain
+struct HttpRedirectTarget {
+    //! The connection for the next request
+    con_info conn;
+    //! The request target (path and query) of the next request
+    std::string target;
+    //! The method of the next request
+    const char* method = nullptr;
+    //! True if the next request carries no body
+    bool drop_body = false;
+};
+
+// ============================================================================
 // LEGACY RESPONSE SHAPE ADAPTERS
 // ----------------------------------------------------------------------------
 // The C++ connection manager produces ONE canonical response hash shape for
@@ -521,14 +715,15 @@ static QoreHashNode* transformConnMgrResponse(QoreHashNode* src, ExceptionSink* 
 // @c getOutput sets @c rv->response-body from @c recv_data_holder.  Existing
 // poll-API consumers read either location, so we populate both.
 //
-// Also handles Content-Encoding decompression on the body, preserving
-// the contract that poll-API callers don't see the compressed bytes.
+// The body is passed in with any Content-Encoding already decoded by the
+// operation (with the rules of the blocking API), preserving the contract
+// that poll-API callers don't see the compressed bytes.
 //
 // Only called from @c HttpClientConnMgrPollOp::getOutput.
 //
 // See LEGACY RESPONSE SHAPE ADAPTERS block above for the rationale and
 // the full list of callers — do not reuse this function for anything else.
-static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src,
+static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src, const BinaryNode* decoded_body,
         ExceptionSink* xsink) {
     ReferenceHolder<QoreHashNode> result(new QoreHashNode(autoTypeInfo), xsink);
     QoreValue sc = src->getKeyValue("status_code");
@@ -536,59 +731,17 @@ static QoreHashNode* toLegacyPollApiOutputShape(const QoreHashNode* src,
         result->setKeyValue("code", sc.getAsBigInt(), xsink);
     }
 
-    // Decode the body once (decompressing if needed) and reuse the same
-    // ref at both the top-level and the info sub-hash positions.
+    // The body with any content encoding decoded by the operation with the rules of the blocking API; see
+    // HttpClientConnMgrPollOp::decodeResponseBody().  The same reference is used at the top-level and the info
+    // sub-hash positions.
     ReferenceHolder<AbstractQoreNode> body_ref(nullptr);
-    QoreValue body = src->getKeyValue("body");
     QoreValue hdrs_v = src->getKeyValue("headers");
-    if (!body.isNullOrNothing()) {
-        if (body.getType() == NT_BINARY) {
-            const BinaryNode* bin = body.get<const BinaryNode>();
-            std::string content_encoding_storage;
-            const char* content_encoding = nullptr;
-            if (hdrs_v.getType() == NT_HASH) {
-                QoreValue cev = hdrs_v.get<const QoreHashNode>()->getKeyValue(
-                    "content-encoding");
-                if (cev.getType() == NT_STRING) {
-                    QoreStringValueHelper ce_str(cev);
-                    const char* ce = ce_str->c_str();
-                    if (ce && *ce && strcasecmp(ce, "identity")) {
-                        content_encoding_storage = ce;
-                        content_encoding = content_encoding_storage.c_str();
-                    }
-                }
-            }
-            if (content_encoding && bin && bin->size()) {
-                bool ignore_encoding = false;
-                qore_uncompress_to_string_t dec =
-                    get_decoder_for_content_encoding(content_encoding,
-                        ignore_encoding);
-                if (dec && !ignore_encoding) {
-                    QoreStringNode* decoded = dec(bin, QCS_UTF8, xsink);
-                    if (!*xsink && decoded) {
-                        // Convert decompressed string back to binary for
-                        // the poll API's response-body format
-                        SimpleRefHolder<BinaryNode> decompressed(
-                            new BinaryNode());
-                        decompressed->append(decoded->c_str(), decoded->size());
-                        decoded->deref(xsink);
-                        body_ref = decompressed.release();
-                    } else {
-                        if (*xsink) {
-                            xsink->clear();
-                        }
-                        if (decoded) {
-                            decoded->deref(xsink);
-                        }
-                    }
-                }
-            }
-        }
-        // If no decompression happened (not binary, no encoding, or
-        // decoder missing), pass the source body through.
-        if (!body_ref) {
-            body_ref = body.getInternalNode()
-                ? body.getInternalNode()->refSelf() : nullptr;
+    if (decoded_body) {
+        body_ref = decoded_body->refSelf();
+    } else {
+        QoreValue body = src->getKeyValue("body");
+        if (body.hasNode()) {
+            body_ref = body.getInternalNode()->refSelf();
         }
     }
 
@@ -1551,7 +1704,7 @@ struct qore_httpclient_priv {
         // sends can fail with PERSISTENCE-ERROR instead of silently
         // creating a replacement connection.
         std::shared_ptr<HttpClientConnectionManagerBase> mgr = getConnMgrIfPresent();
-        if ((!mgr || !mgr->getConnectionCount(connection.host.c_str(), connection.port))
+        if ((!mgr || !mgr->getConnectionCount(connection.host.c_str(), connection.port, connection.ssl))
                 && connectViaConnMgr(xsink)) {
             return;
         }
@@ -1564,7 +1717,7 @@ struct qore_httpclient_priv {
 
     DLLLOCAL bool checkPersistentConnMgrConnection(const con_info& c, ExceptionSink* xsink) const {
         std::shared_ptr<HttpClientConnectionManagerBase> mgr = getConnMgrIfPresent();
-        if (persistent && (!mgr || !mgr->getConnectionCount(c.host.c_str(), c.port))) {
+        if (persistent && (!mgr || !mgr->getConnectionCount(c.host.c_str(), c.port, c.ssl))) {
             xsink->raiseException("PERSISTENCE-ERROR", "the current connection has been temporarily marked as "
                 "persistent, but has been disconnected");
             return false;
@@ -1585,19 +1738,14 @@ struct qore_httpclient_priv {
     }
 
     // issue #3474: process redirect messages correctly
-    // NOTE: callers pass a local copy of `connection` (e.g., `this_connection` in send_internal),
-    // so redirects only affect the current request chain, not the client's base URL
-    DLLLOCAL int redirectUrlUnlocked(const char* str, con_info& connection, ExceptionSink* xsink) {
+    // sets the origin (scheme, host, and port) of a redirect target from an absolute URL with no path
+    // NOTE: callers pass a copy of the request chain's connection, so redirects only affect the current request
+    // chain, not the client's base URL
+    DLLLOCAL int setRedirectOriginUnlocked(const char* str, con_info& connection, ExceptionSink* xsink) {
         QoreURL url(str);
-        if (!url.isValid()) {
-            xsink->raiseException("HTTP-CLIENT-URL-ERROR", "redirect location '%s' cannot be parsed", str);
+        if (!url.isValid() || !url.getHost()) {
+            xsink->raiseException("HTTP-CLIENT-URL-ERROR", "redirect location origin '%s' cannot be parsed", str);
             return -1;
-        }
-
-        // check if the location is only a path, in which case we need to keep the rest of the connection info the same
-        if (!url.getPort() && !url.getHost() && url.getPath()) {
-            connection.path = url.getPath()->c_str();
-            return 0;
         }
 
         bool port_set = false;
@@ -1629,6 +1777,159 @@ struct qore_httpclient_priv {
         }
 
         return 0;
+    }
+
+    //! Processes a redirect response that is followed and determines the next request of the chain
+    /** Resolves the \c Location value against the URL of the request that received the response according to
+        RFC 3986 section 5.2, applies the method rules of RFC 9110 section 15.4, and records the redirect in the chain
+
+        @param xsink exception sink
+        @param chain the redirect chain
+        @param code the status code of the redirect response
+        @param status_message the status message of the redirect response, if any
+        @param resp_headers the headers of the redirect response with lower-case names, if any
+        @param location the \c Location value of the redirect response
+        @param conn the connection of the request that received the redirect response
+        @param target the request target of the request that received the redirect response
+        @param method the method of the request that received the redirect response
+        @param has_body true if the request that received the redirect response carries a body
+        @param body_replayable false if the request body was streamed and cannot be sent again
+        @param next output: the next request
+
+        @return 0 if the redirect can be followed, -1 if an exception was raised
+    */
+    DLLLOCAL int prepareRedirect(ExceptionSink* xsink, HttpRedirectChain& chain, int code,
+            const QoreStringNode* status_message, const QoreHashNode* resp_headers, const QoreStringNode& location,
+            const con_info& conn, const std::string& target, const char* method, bool has_body,
+            bool body_replayable, HttpRedirectTarget& next) {
+        TempEncodingHelper loc(location, QCS_UTF8, xsink);
+        if (*xsink) {
+            return -1;
+        }
+
+        std::string request_url = get_request_url(conn, target);
+
+        // the base URI is the URI of the request that received the response (RFC 9110 section 10.2.2); its
+        // authority is not needed here, because a reference without a scheme or authority keeps the connection
+        QoreUriReference base;
+        base.scheme = conn.ssl ? "https" : "http";
+        base.has_scheme = true;
+        base.has_authority = true;
+        size_t qpos = target.find('?');
+        if (qpos == std::string::npos) {
+            base.path = target;
+        } else {
+            base.path = target.substr(0, qpos);
+            base.query = target.substr(qpos + 1);
+            base.has_query = true;
+        }
+        if (base.path.empty() || base.path[0] != '/') {
+            base.path.insert(0, "/");
+        }
+        QoreUriReference ref;
+        ref.parse(loc->c_str(), loc->size());
+        QoreUriReference resolved = base.resolve(ref);
+
+        next.conn = conn;
+        if (ref.has_scheme || ref.has_authority) {
+            // user information in a redirect location is never used as credentials
+            std::string authority = resolved.authority;
+            size_t at = authority.rfind('@');
+            if (at != std::string::npos) {
+                authority.erase(0, at + 1);
+            }
+            if (authority.empty()) {
+                xsink->raiseException("HTTP-CLIENT-REDIRECT-ERROR", "redirect location '%s' from '%s' (code %d) "
+                    "has no host", loc->c_str(), request_url.c_str(), code);
+                return -1;
+            }
+            // the host is sent in the Host header and, through a proxy, in the request line
+            if (!QoreUriReference::isValidAuthority(authority)) {
+                xsink->raiseException("HTTP-CLIENT-REDIRECT-ERROR", "redirect location '%s' from '%s' (code %d) "
+                    "has an invalid host", loc->c_str(), request_url.c_str(), code);
+                return -1;
+            }
+            std::string origin = resolved.scheme + "://" + authority + "/";
+            if (setRedirectOriginUnlocked(origin.c_str(), next.conn, xsink)) {
+                xsink->appendLastDescription(": while processing redirect location '%s' from '%s' (code %d)",
+                    loc->c_str(), request_url.c_str(), code);
+                return -1;
+            }
+            for (unsigned char c : next.conn.host) {
+                if (c <= 0x20 || c == 0x7f) {
+                    xsink->raiseException("HTTP-CLIENT-REDIRECT-ERROR", "redirect location '%s' from '%s' (code "
+                        "%d) has an invalid host", loc->c_str(), request_url.c_str(), code);
+                    return -1;
+                }
+            }
+            // the server chooses the location, so it must never be able to send the request (and a repeated body)
+            // to a local UNIX domain socket; a request on a socket can only be redirected to the same socket
+            if (next.conn.is_unix && (!conn.is_unix || next.conn.host != conn.host)) {
+                xsink->raiseException("HTTP-CLIENT-REDIRECT-ERROR", "redirect location '%s' from '%s' (code %d) "
+                    "names a UNIX domain socket; only a request on the same socket can be redirected to one",
+                    loc->c_str(), request_url.c_str(), code);
+                return -1;
+            }
+        }
+        // octets that cannot appear in a request target are percent-encoded; everything else is sent as received
+        next.target.clear();
+        QoreUriReference::appendEncoded(next.target, resolved.getRequestTarget());
+        std::string target_url = get_request_url(next.conn, next.target);
+
+        // RFC 9110 sections 15.4.2 - 15.4.4: 303 is retrieved with GET, and a POST redirected with 301 or 302 is
+        // changed to GET as all common user agents do; 307 and 308 repeat the request unchanged
+        next.method = method;
+        next.drop_body = !has_body;
+        if (code == 303) {
+            if (strcasecmp(method, "HEAD")) {
+                next.method = "GET";
+            }
+            next.drop_body = true;
+        } else if ((code == 301 || code == 302) && !strcasecmp(method, "POST")) {
+            next.method = "GET";
+            next.drop_body = true;
+        }
+        if (!next.drop_body && !body_replayable) {
+            xsink->raiseException("HTTP-CLIENT-REDIRECT-ERROR", "cannot follow redirect code %d from '%s' to '%s': "
+                "the %s request body was streamed and cannot be sent again", code, request_url.c_str(),
+                target_url.c_str(), method);
+            return -1;
+        }
+
+        ReferenceHolder<QoreHashNode> hop(new QoreHashNode(hashdeclHttpRedirectInfo, xsink), xsink);
+        hop->setKeyValue("request_url", new QoreStringNode(request_url), xsink);
+        hop->setKeyValue("status_code", code, xsink);
+        if (status_message && !status_message->empty()) {
+            hop->setKeyValue("status_message", status_message->stringRefSelf(), xsink);
+        }
+        hop->setKeyValue("location", location.stringRefSelf(), xsink);
+        hop->setKeyValue("target_url", new QoreStringNode(target_url), xsink);
+        hop->setKeyValue("headers", resp_headers
+            ? resp_headers->hashRefSelf()
+            : new QoreHashNode(autoTypeInfo), xsink);
+        if (*xsink) {
+            return -1;
+        }
+        if (!chain.hops) {
+            chain.hops = new QoreListNode(hashdeclHttpRedirectInfo->getTypeInfo());
+        }
+        chain.hops->push(hop.release(), xsink);
+        ++chain.count;
+        return *xsink ? -1 : 0;
+    }
+
+    //! Raises a redirect event on the client's event queue, if any
+    DLLLOCAL void doRedirectEvent(const QoreStringNode* location, const QoreStringNode* message) {
+        msock->socket->priv->do_redirect_event(location, message, QORE_SOURCE_HTTPCLIENT);
+    }
+
+    //! Updates the request headers for the next request of a redirect chain
+    DLLLOCAL void applyRedirectHeaders(const HttpRedirectChain& chain, const HttpRedirectTarget& next,
+            QoreHashNode& request_headers, ExceptionSink* xsink) const {
+        chain.applyOriginPolicy(next.conn, request_headers, xsink);
+        if (next.drop_body) {
+            remove_request_headers(request_headers, is_content_header, xsink);
+        }
     }
 
     DLLLOCAL int setUrlUnlocked(const char* str, ExceptionSink* xsink) {
@@ -1749,6 +2050,11 @@ struct qore_httpclient_priv {
         bool rv = redirect_passthru;
         redirect_passthru = set;
         return rv;
+    }
+
+    //! Returns true if a response with the given status code is a redirect that this client follows
+    DLLLOCAL bool followsRedirect(int code) const {
+        return !redirect_passthru && is_followed_redirect_status(code);
     }
 
     DLLLOCAL bool getRedirectPassthru() const {
@@ -4468,11 +4774,22 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     bool path_already_encoded = false;
 
     // Redirect + auth retry loop
-    int redirect_count = 0;
+    HttpRedirectChain chain(this_connection);
+    chain.init(**nh, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    // a streamed request body cannot be sent again for a redirect that repeats the request
+    bool stream_body = send_callback || is;
+    bool has_body = stream_body || body_len;
+    // the request target of a redirect; already percent-encoded
+    std::string redirect_target;
     bool auth_retried = false;
     std::string location_storage;
     const char* location = nullptr;
     ReferenceHolder<QoreHashNode> ans(xsink);
+    // the headers of the last response with lower-case names, as received
+    ReferenceHolder<QoreHashNode> resp_headers(xsink);
     int code = 0;
 
     while (true) {
@@ -4480,6 +4797,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         if (*xsink) {
             return nullptr;
         }
+        const std::string cur_target = msgpath && msgpath[0] ? msgpath : "/";
 
         // Determine scheme
         const char* scheme = this_connection.ssl ? "https" : "http";
@@ -4501,6 +4819,12 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     getHostHeaderValueUnlocked(this_connection), xsink);
             }
             info->setKeyValue("headers", info_headers.release(), xsink);
+            if (*xsink) {
+                return nullptr;
+            }
+            // the URL of the request being sent: the URL that produced the response once the chain completes
+            info->setKeyValue("effective-url", new QoreStringNode(get_request_url(this_connection, cur_target)),
+                xsink);
             if (*xsink) {
                 return nullptr;
             }
@@ -4540,7 +4864,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             return nullptr;
         }
 
-        if (send_callback || is) {
+        if (stream_body) {
             // Streaming send path: use chunked TE with incremental body push
             // streaming_recv also set when streaming=true (sendAndStream) to
             // use Channel-based delivery for the response
@@ -4796,6 +5120,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     if (!sc_val.isNullOrNothing() && !got_headers) {
                         got_headers = true;
                         ans = transformConnMgrResponse(h, xsink);
+                        resp_headers = get_response_headers_ref(h);
                         if (*xsink) {
                             channel->close();
                             return nullptr;
@@ -4810,7 +5135,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                         if (info) {
                             set_body_content_type_info(xsink, **ans, *info);
                             info->setKeyValue("response-headers", ans->refSelf(), xsink);
-                            QoreValue raw_hdrs = h->getKeyValue("headers_raw");
+                            QoreValue raw_hdrs = get_response_headers_raw(h);
                             if (raw_hdrs.getType() == NT_HASH) {
                                 info->setKeyValue("response-headers-raw",
                                     raw_hdrs.refSelf(), xsink);
@@ -4845,7 +5170,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
 
                         // Handle 401/407 auth challenges in streaming path
                         if (!auth_retried && !error_passthru
-                                && (code == 401 || code == 407)) {
+                                && (code == 407 || (code == 401 && chain.canAuthenticate(this_connection)))) {
                             if (tryAuthChallenge(code, **ans, meth, msgpath,
                                     *nh, xsink)) {
                                 if (*xsink) {
@@ -4859,8 +5184,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                             }
                         }
 
-                        if (!redirect_passthru && code >= 300 && code < 400
-                                && code != 304) {
+                        if (followsRedirect(code)) {
                             channel->close();
                             channel_done = true;
                             break;
@@ -4961,8 +5285,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     channel->close();
                 }
 
-                if (channel_done && !redirect_passthru && code >= 300
-                        && code < 400 && code != 304) {
+                if (channel_done && followsRedirect(code)) {
                     // redirect — falls through to redirect block below
                 } else {
                     if (!ans) {
@@ -5013,6 +5336,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 ReferenceHolder<QoreHashNode> raw_resp(
                     result.get<QoreHashNode>(), xsink);
                 ans = transformConnMgrResponse(*raw_resp, xsink);
+                resp_headers = get_response_headers_ref(*raw_resp);
                 if (*xsink) {
                     return nullptr;
                 }
@@ -5025,7 +5349,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     if (*xsink) {
                         return nullptr;
                     }
-                    QoreValue raw_hdrs = raw_resp->getKeyValue("headers_raw");
+                    QoreValue raw_hdrs = get_response_headers_raw(*raw_resp);
                     if (raw_hdrs.getType() == NT_HASH) {
                         info->setKeyValue("response-headers-raw",
                             raw_hdrs.refSelf(), xsink);
@@ -5113,6 +5437,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     got_headers = true;
                     // Transform to flat format for redirect/error processing
                     ans = transformConnMgrResponse(h, xsink);
+                    resp_headers = get_response_headers_ref(h);
                     if (*xsink) {
                         channel->close();
                         return nullptr;
@@ -5128,7 +5453,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     if (info) {
                         set_body_content_type_info(xsink, **ans, *info);
                         info->setKeyValue("response-headers", ans->refSelf(), xsink);
-                        QoreValue raw_hdrs = h->getKeyValue("headers_raw");
+                        QoreValue raw_hdrs = get_response_headers_raw(h);
                         if (raw_hdrs.getType() == NT_HASH) {
                             info->setKeyValue("response-headers-raw", raw_hdrs.refSelf(), xsink);
                         }
@@ -5209,7 +5534,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
 
                     // Handle 401/407 auth challenges
                     if (!auth_retried && !error_passthru
-                            && (code == 401 || code == 407)) {
+                            && (code == 407 || (code == 401 && chain.canAuthenticate(this_connection)))) {
                         if (tryAuthChallenge(code, **ans, meth, msgpath,
                                 *nh, xsink)) {
                             if (*xsink) {
@@ -5224,7 +5549,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     }
 
                     // Check for redirect
-                    if (!redirect_passthru && code >= 300 && code < 400 && code != 304) {
+                    if (followsRedirect(code)) {
                         // Drain and close channel, then reloop
                         channel->close();
                         channel_done = true;
@@ -5399,7 +5724,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             channel->close();
 
             // If we broke out for a redirect, handle it
-            if (channel_done && !redirect_passthru && code >= 300 && code < 400 && code != 304) {
+            if (channel_done && followsRedirect(code)) {
                 // redirect handling falls through to the redirect block below
             } else {
                 // Non-redirect: streaming is complete, return the headers
@@ -5473,6 +5798,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 QoreValue sc_val = h->getKeyValue("status_code");
                 if (!sc_val.isNullOrNothing()) {
                     ans = transformConnMgrResponse(h, xsink);
+                    resp_headers = get_response_headers_ref(h);
                     if (*xsink) {
                         channel->close();
                         return nullptr;
@@ -5487,7 +5813,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     if (info) {
                         set_body_content_type_info(xsink, **ans, *info);
                         info->setKeyValue("response-headers", ans->refSelf(), xsink);
-                        QoreValue raw_hdrs = h->getKeyValue("headers_raw");
+                        QoreValue raw_hdrs = get_response_headers_raw(h);
                         if (raw_hdrs.getType() == NT_HASH) {
                             info->setKeyValue("response-headers-raw",
                                 raw_hdrs.refSelf(), xsink);
@@ -5496,8 +5822,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     }
 
                     // Check for redirect
-                    if (!redirect_passthru && code >= 300 && code < 400
-                            && code != 304) {
+                    if (followsRedirect(code)) {
                         channel->close();
                         channel_done = true;
                     } else {
@@ -5512,8 +5837,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 }
             }
 
-            if (channel_done && !redirect_passthru && code >= 300
-                    && code < 400 && code != 304) {
+            if (channel_done && followsRedirect(code)) {
                 // redirect — falls through to redirect block below
             } else {
                 if (!ans) {
@@ -5605,6 +5929,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
 
             // Transform to legacy flat format
             ans = transformConnMgrResponse(*raw_resp, xsink);
+            resp_headers = get_response_headers_ref(*raw_resp);
             if (*xsink) {
                 return nullptr;
             }
@@ -5618,7 +5943,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                     return nullptr;
                 }
                 // Populate response-headers-raw with original-case keys
-                QoreValue raw_hdrs = raw_resp->getKeyValue("headers_raw");
+                QoreValue raw_hdrs = get_response_headers_raw(*raw_resp);
                 if (raw_hdrs.getType() == NT_HASH) {
                     info->setKeyValue("response-headers-raw", raw_hdrs.refSelf(), xsink);
                     if (*xsink) {
@@ -5648,7 +5973,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
         }
 
         // Handle 401/407 auth challenges — retry once with computed credentials
-        if (!auth_retried && !error_passthru && (code == 401 || code == 407)) {
+        if (!auth_retried && !error_passthru
+                && (code == 407 || (code == 401 && chain.canAuthenticate(this_connection)))) {
             if (tryAuthChallenge(code, **ans, meth, msgpath, *nh, xsink)) {
                 if (*xsink) {
                     return nullptr;
@@ -5658,9 +5984,8 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
             }
         }
 
-        // Handle 3xx redirects (304 Not Modified passes through)
-        if (!redirect_passthru && code >= 300 && code < 400 && code != 304) {
-            host_override = false;
+        // Handle redirects (RFC 9110 section 15.4); see is_followed_redirect_status()
+        if (followsRedirect(code)) {
             QoreValue mess_val = ans->getKeyValue("status_message");
             QoreStringNodeValueHelper mess(mess_val);
             const QoreStringNode* mess_node = mess_val.getType() == NT_STRING ? *mess : nullptr;
@@ -5683,39 +6008,64 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
                 return nullptr;
             }
 
-            if (++redirect_count > max_redirects) {
+            if (chain.count >= max_redirects) {
                 break;
             }
 
             // Fire redirect event on the HTTPClient's event queue
-            msock->socket->priv->do_redirect_event(*loc, mess_node, QORE_SOURCE_HTTPCLIENT);
+            doRedirectEvent(*loc, mess_node);
 
-            if (redirectUrlUnlocked(location, this_connection, xsink)) {
-                const char* msg = mess_node ? mess_node->c_str() : "<no message>";
-                xsink->appendLastDescription(": while setting URL for redirect location '%s' (code %d: "
-                    "message: '%s')", location, code, msg);
+            HttpRedirectTarget next;
+            if (prepareRedirect(xsink, chain, code, mess_node, *resp_headers, **loc, this_connection, cur_target,
+                meth, has_body, !stream_body, next)) {
                 return nullptr;
             }
-            if (!path_already_encoded) {
-                path_already_encoded = true;
+            this_connection = next.conn;
+            redirect_target = next.target;
+            meth = next.method;
+            if (next.drop_body) {
+                body_ptr = nullptr;
+                body_len = 0;
+                stream_body = false;
+                has_body = false;
             }
+            {
+                // the previous request may still reference its header hash, so the next request gets a copy
+                ReferenceHolder<QoreHashNode> next_headers(nh->copy(), xsink);
+                applyRedirectHeaders(chain, next, **next_headers, xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                nh = next_headers.release();
+            }
+            host_override = has_header(**nh, "host");
+            path_already_encoded = true;
+            // the next target may issue its own authentication challenge
+            auth_retried = false;
 
             // Set redirect info in info hash if present
             if (info) {
                 QoreString tmp;
-                tmp.sprintf("redirect-%d", redirect_count);
+                tmp.sprintf("redirect-%d", chain.count);
                 info->setKeyValue(tmp.c_str(), loc->refSelf(), xsink);
                 if (*xsink) {
                     return nullptr;
                 }
 
                 tmp.clear();
-                tmp.sprintf("redirect-message-%d", redirect_count);
+                tmp.sprintf("redirect-message-%d", chain.count);
                 info->setKeyValue(tmp.c_str(), mess_node ? mess_node->refSelf() : QoreValue(), xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
+                info->setKeyValue("redirects", chain.copyHops(), xsink);
+                if (*xsink) {
+                    return nullptr;
+                }
             }
 
-            // Use updated connection path for the next iteration
-            mpath = nullptr;
+            // send the next request to the resolved target
+            mpath = redirect_target.c_str();
             continue;
         }
 
@@ -5723,7 +6073,7 @@ QoreHashNode* qore_httpclient_priv::send_internal_conn_mgr(ExceptionSink* xsink,
     }
 
     // Check for max redirects exceeded
-    if (!redirect_passthru && code >= 300 && code < 400 && code != 304) {
+    if (followsRedirect(code)) {
         std::optional<std::string> mess = get_string_header_value(xsink, **ans, "status_message");
         const char* msg = mess ? mess->c_str() : "<no message>";
         if (!location) {
@@ -6157,6 +6507,39 @@ QoreHashNode* QoreHttpClientObject::send(const char* meth, const char* new_path,
 
 extern QoreClass* QC_EVENTNOTIFIER;
 
+class HttpClientConnMgrPollOp;
+
+//! Acquires the connection for a redirect followed by an HttpClientConnMgrPollOp off the async I/O path
+/** Acquiring a connection to a new target may block, for example while an ALPN negotiation through a proxy
+    completes, so an operation driven by the async I/O controller hands this step to a callback worker; see
+    HttpClientConnMgrPollOp::processRedirect()
+*/
+class HttpClientRedirectTask : public AsyncIoNativeTask {
+public:
+    //! Creates the task
+    /** @param op the operation; the task takes over one reference to it
+        @param pgm the program of the client
+    */
+    DLLLOCAL HttpClientRedirectTask(HttpClientConnMgrPollOp* op, QoreProgram* pgm) : op(op), pgm(pgm) {
+    }
+
+    DLLLOCAL ~HttpClientRedirectTask() override;
+
+    DLLLOCAL void run(ExceptionSink* xsink) override;
+
+    DLLLOCAL void discard(ExceptionSink* xsink) override;
+
+    DLLLOCAL QoreProgram* getProgram() const override {
+        return pgm;
+    }
+
+private:
+    //! The operation (referenced)
+    HttpClientConnMgrPollOp* op;
+    //! The program of the client (not referenced)
+    QoreProgram* pgm;
+};
+
 //! Poll operation that delegates to the conn_mgr for startPollSendRecv/Connect
 class HttpClientConnMgrPollOp : public SocketPollOperationBase {
 public:
@@ -6168,7 +6551,85 @@ public:
         (@ref connect_mode) does not use this enum — it uses the legacy
         done/notifier path.
     */
-    enum class Phase { WAITING_CONNECT, WAITING_RESPONSE, DONE };
+    enum class Phase { WAITING_CONNECT, WAITING_RESPONSE, WAITING_REDIRECT, DONE };
+
+    //! The state of a send/receive request, including any redirects followed
+    /** Set once by initRequest() before the operation is returned to the caller; afterwards only accessed with
+        @ref op_lock held
+    */
+    struct RequestState {
+        //! The connection manager of the client
+        std::shared_ptr<HttpClientConnectionManagerBase> mgr;
+        //! The redirects followed and the origin-bound headers of the original request
+        HttpRedirectChain chain;
+        //! The connection of the current request
+        con_info conn;
+        //! The request target of the current request; percent-encoded
+        std::string target;
+        //! The method of the current request
+        std::string method;
+        //! The HTTP version claimed in the request line
+        std::string http_version;
+        //! The headers of the current request (referenced)
+        QoreHashNode* headers = nullptr;
+        //! The request body, kept to repeat the request for a redirect (referenced, or nullptr)
+        BinaryNode* body = nullptr;
+        //! The redirect-N and redirect-message-N keys of the request information hash (referenced, or nullptr)
+        QoreHashNode* redirect_info = nullptr;
+        //! The program of the client; not referenced
+        QoreProgram* pgm = nullptr;
+        //! The maximum number of redirects to follow
+        int max_redirects = 0;
+        //! True if redirect responses are followed
+        bool follow = false;
+        //! True if the operation completes after the response headers
+        bool streaming_response = false;
+        //! True if the content encoding of the response body is not decoded
+        bool encoding_passthru = false;
+
+        //! The response body with its content encoding decoded, if it had one; see decodeResponseBody()
+        SimpleRefHolder<BinaryNode> decoded_body;
+        //! The decoding state of the response body: 0 = not decoded yet, 1 = done, -1 = failed
+        int decode_state = 0;
+
+        //! True when the acquisition of a redirect connection has finished; valid in Phase::WAITING_REDIRECT
+        bool task_done = false;
+        //! The connection acquired for the next request of a redirect chain (referenced), or nullptr
+        /** It is installed by continuePollLocked() on the thread that drives the operation: submitting a request can
+            wait for the async I/O thread, which must never happen on a callback worker with op_lock held, because
+            the I/O thread can call abort() on the operation
+        */
+        HttpClientConnectionBase* task_conn = nullptr;
+        //! The exception raised while acquiring the redirect connection, if any
+        ExceptionSink task_xsink;
+        //! The sandbox of the thread that started the request; redirect connections can be acquired on another
+        //! thread, whose own Program context does not include a sandboxed caller
+        QoreSandboxContext sandbox_context;
+
+        //! Created by initRequest() on the thread that starts the request
+        DLLLOCAL RequestState(const con_info& origin) : chain(origin), conn(origin) {
+        }
+
+        DLLLOCAL ~RequestState() {
+            // the values held are strings, binaries, and hashes of strings, so releasing them cannot raise an
+            // exception
+            ExceptionSink xsink;
+            if (headers) {
+                headers->deref(&xsink);
+            }
+            if (body) {
+                body->deref();
+            }
+            if (redirect_info) {
+                redirect_info->deref(&xsink);
+            }
+            if (task_conn) {
+                mgr->releaseConnection(task_conn);
+                task_conn->deref(&xsink);
+            }
+            task_xsink.clear();
+        }
+    };
 
     //! Constructor for sendRecv mode — fast path (connection already READY)
     HttpClientConnMgrPollOp(QoreFuture* future, QoreEventNotifier* notifier,
@@ -6387,15 +6848,126 @@ public:
             pending_promise->deref(xsink);
             pending_promise = nullptr;
         }
+        releaseTaskConnUnlocked(xsink, true);
+    }
+
+    //! Releases a redirect connection that has not been installed; must be called with op_lock held
+    /** @param xsink exception sink
+        @param release_to_mgr true to return the connection to the connection manager
+    */
+    void releaseTaskConnUnlocked(ExceptionSink* xsink, bool release_to_mgr) {
+        if (request && request->task_conn) {
+            if (release_to_mgr) {
+                request->mgr->releaseConnection(request->task_conn);
+            }
+            request->task_conn->deref(xsink);
+            request->task_conn = nullptr;
+        }
     }
 
     void setConnectMode() { connect_mode = true; }
 
     bool goalReached() const override {
-        return done || (future && future->isDone());
+        AutoLocker al(op_lock);
+        if (done) {
+            return true;
+        }
+        if (phase != Phase::WAITING_RESPONSE || !future || !future->isDone()) {
+            return false;
+        }
+        // a redirect response that will be followed is not the goal
+        if (isFollowedRedirectResponse()) {
+            return false;
+        }
+        // a body that cannot be decoded is not the goal either; continuePoll() raises the error
+        if (request) {
+            ExceptionSink decode_xsink;
+            if (decodeResponseBody(&decode_xsink)) {
+                decode_xsink.clear();
+                return false;
+            }
+        }
+        return true;
+    }
+
+    //! Sets the request state of a send/receive operation
+    /** Must be called before the operation is returned to the caller
+
+        @param mgr the connection manager of the client
+        @param origin the connection of the request
+        @param target the request target; percent-encoded
+        @param method the request method
+        @param http_version the HTTP version claimed in the request line
+        @param headers the request headers; the reference is consumed
+        @param body the request body, or nullptr; the reference is consumed
+        @param follow true if redirect responses are followed
+        @param max_redirects the maximum number of redirects to follow
+        @param streaming_response true if the operation completes after the response headers
+        @param encoding_passthru true if the content encoding of the response body is not decoded
+        @param pgm the program of the client
+        @param xsink exception sink
+    */
+    DLLLOCAL void initRequest(std::shared_ptr<HttpClientConnectionManagerBase> mgr, const con_info& origin,
+            const char* target, const char* method, const char* http_version, QoreHashNode* headers,
+            BinaryNode* body, bool follow, int max_redirects, bool streaming_response,
+            bool encoding_passthru, QoreProgram* pgm, ExceptionSink* xsink) {
+        assert(!request);
+        request.reset(new RequestState(origin));
+        request->headers = headers;
+        request->mgr = std::move(mgr);
+        request->target = target && target[0] ? target : "/";
+        request->method = method;
+        request->http_version = http_version;
+        request->pgm = pgm;
+        request->max_redirects = max_redirects;
+        request->follow = follow && client_obj;
+        request->streaming_response = streaming_response;
+        request->encoding_passthru = encoding_passthru;
+        if (request->follow) {
+            request->chain.init(*headers, xsink);
+            // a redirect that repeats the request sends the body again
+            request->body = body;
+        } else if (body) {
+            body->deref();
+        }
     }
 
     QoreHashNode* continuePoll(ExceptionSink* xsink) override {
+        while (true) {
+            bool acquire = false;
+            ReferenceHolder<QoreHashNode> rv(continuePollLocked(xsink, acquire), xsink);
+            if (!acquire) {
+                return rv.release();
+            }
+            // The connection for the next request of a redirect chain is acquired without op_lock: acquiring it can
+            // block, which must not block abort() and the other methods of the operation, and a task dispatched to
+            // a callback worker takes the dispatcher's lock, which must never be taken with op_lock held (the
+            // dispatcher discards tasks with its lock held when it stops).  Acquiring can also block on an async
+            // I/O execution path, where a callback worker acquires the connection instead.
+            if (SocketSyncPoll::onIoExecutionPath()) {
+                if (dispatchRedirectTask(xsink)) {
+                    AutoLocker al(op_lock);
+                    done = true;
+                    phase = Phase::DONE;
+                    clearPendingUnlocked(xsink);
+                    return nullptr;
+                }
+                return rv.release();
+            }
+            runRedirectTask(xsink);
+            // the result of the acquisition is processed with op_lock held
+        }
+    }
+
+    //! Continues the operation with op_lock held
+    /** @param xsink exception sink
+        @param acquire output: set to true if the connection for the next request of a redirect chain must be
+        acquired after op_lock has been released; the operation is then in Phase::WAITING_REDIRECT and the value
+        returned is the poll information for the notifier
+
+        @return the poll information, or nullptr if the operation is done
+    */
+    QoreHashNode* continuePollLocked(ExceptionSink* xsink, bool& acquire) {
         // Serialize against concurrent abort().  The I/O controller's
         // Phase 2 uses a raw @c spop_base pointer captured during Phase 1,
         // so @c this stays alive until Phase 3 — but another thread can
@@ -6423,6 +6995,7 @@ public:
                 pending_conn = nullptr;
             }
             pending_mgr = nullptr;
+            releaseTaskConnUnlocked(xsink, false);
             clearPendingUnlocked(xsink);
             return nullptr;
         }
@@ -6437,6 +7010,48 @@ public:
         }
         if (done) {
             return nullptr;
+        }
+
+        // A redirect task is acquiring the connection for the next request of a redirect chain
+        if (phase == Phase::WAITING_REDIRECT) {
+            // acknowledge before checking the task state, so that a completion signal cannot be lost
+            notifier->acknowledge(xsink);
+            if (*xsink) {
+                done = true;
+                phase = Phase::DONE;
+                clearPendingUnlocked(xsink);
+                return nullptr;
+            }
+            if (!request->task_done) {
+                return getSocketPollInfoHash(xsink, SOCK_POLLIN);
+            }
+            request->task_done = false;
+            if (request->task_xsink) {
+                xsink->assimilate(request->task_xsink);
+                done = true;
+                phase = Phase::DONE;
+                clearPendingUnlocked(xsink);
+                closeSubmittedConnection();
+                return nullptr;
+            }
+            // the connection is installed here, on the thread that drives the operation
+            HttpClientConnectionBase* conn = request->task_conn;
+            request->task_conn = nullptr;
+            assert(conn);
+            Phase next_phase = Phase::DONE;
+            if (installRedirectConnection(conn, next_phase, xsink)) {
+                if (!*xsink) {
+                    xsink->raiseException("HTTP-CLIENT-REDIRECT-ERROR", "cannot send the redirected request to "
+                        "'%s'", get_request_url(request->conn, request->target).c_str());
+                }
+                done = true;
+                phase = Phase::DONE;
+                clearPendingUnlocked(xsink);
+                closeSubmittedConnection();
+                return nullptr;
+            }
+            phase = next_phase;
+            // WAITING_RESPONSE falls through to the response check below
         }
 
         // Phase 1: WAITING_CONNECT — wait for pending_conn to transition
@@ -6463,6 +7078,31 @@ public:
         }
 
         if (future && future->isDone()) {
+            // follow a redirect response; a redirect that is followed starts the next request
+            int rc = processRedirect(xsink);
+            if (rc > 0) {
+                // the connection for the next request is acquired by continuePoll() without op_lock
+                assert(phase == Phase::WAITING_REDIRECT);
+                ReferenceHolder<QoreHashNode> poll_info(getSocketPollInfoHash(xsink, SOCK_POLLIN), xsink);
+                if (*xsink) {
+                    done = true;
+                    phase = Phase::DONE;
+                    clearPendingUnlocked(xsink);
+                    return nullptr;
+                }
+                acquire = true;
+                return poll_info.release();
+            }
+            if (!rc && request && decodeResponseBody(xsink)) {
+                rc = -1;
+            }
+            if (rc < 0) {
+                done = true;
+                phase = Phase::DONE;
+                clearPendingUnlocked(xsink);
+                closeSubmittedConnection();
+                return nullptr;
+            }
             done = true;
             phase = Phase::DONE;
             if (notifier) {
@@ -6543,28 +7183,19 @@ public:
 
     //! Handles connect-only mode while the conn_mgr connection is still CONNECTING.
     DLLLOCAL QoreHashNode* continueConnectMode(ExceptionSink* xsink) {
-        bool decided = pending_conn->isClosed() || pending_conn->isReady() || pending_conn->wasReady();
-        if (!decided) {
-            if (connect_mode_wait_armed) {
-                notifier->acknowledge(xsink);
-                if (*xsink) {
-                    done = true;
-                    phase = Phase::DONE;
-                    clearPendingUnlocked(xsink);
-                    return nullptr;
-                }
-            } else {
-                connect_mode_wait_armed = true;
-            }
-            return getSocketPollInfoHash(xsink, SOCK_POLLIN);
-        }
-
+        // acknowledge before checking the connection state: a readiness signal raised between the check and the
+        // acknowledgement would otherwise be lost, leaving the operation waiting for a signal that never comes
         notifier->acknowledge(xsink);
         if (*xsink) {
             done = true;
             phase = Phase::DONE;
             clearPendingUnlocked(xsink);
             return nullptr;
+        }
+        bool decided = pending_conn->isClosed() || pending_conn->isReady() || pending_conn->wasReady();
+        if (!decided) {
+            connect_mode_wait_armed = true;
+            return getSocketPollInfoHash(xsink, SOCK_POLLIN);
         }
         connect_mode_wait_armed = false;
 
@@ -6653,27 +7284,19 @@ public:
         // before the notifier is readable; in that case keep returning the
         // same poll info instead of treating the early call as an internal
         // connection-state error.
-        bool decided = pending_conn->isClosed() || pending_conn->isReady();
-        if (!decided) {
-            if (waiting_connect_armed) {
-                notifier->acknowledge(xsink);
-                if (*xsink) {
-                    done = true;
-                    phase = Phase::DONE;
-                    clearPendingUnlocked(xsink);
-                    return nullptr;
-                }
-            } else {
-                waiting_connect_armed = true;
-            }
-            return getSocketPollInfoHash(xsink, SOCK_POLLIN);
-        }
+        // acknowledge before checking the connection state: a readiness signal raised between the check and the
+        // acknowledgement would otherwise be lost, leaving the operation waiting for a signal that never comes
         notifier->acknowledge(xsink);
         if (*xsink) {
             done = true;
             phase = Phase::DONE;
             clearPendingUnlocked(xsink);
             return nullptr;
+        }
+        bool decided = pending_conn->isClosed() || pending_conn->isReady();
+        if (!decided) {
+            waiting_connect_armed = true;
+            return getSocketPollInfoHash(xsink, SOCK_POLLIN);
         }
         waiting_connect_armed = false;
 
@@ -6809,6 +7432,445 @@ public:
         return getSocketPollInfoHash(xsink, SOCK_POLLIN);
     }
 
+    //! Decodes the content encoding of the final response body with the rules of the blocking API
+    /** Called with op_lock held once the final response is available; the result is cached.  Unknown content
+        encodings are ignored, and \c encoding_passthru leaves the body encoded, as for the blocking API
+        (issue #2953).  A body that cannot be decoded raises the decoder's exception, as the blocking API does,
+        rather than being returned in its encoded form.
+
+        @return 0 if the body was decoded or needs no decoding, -1 if an exception was raised
+    */
+    DLLLOCAL int decodeResponseBody(ExceptionSink* xsink) const {
+        if (request->decode_state > 0) {
+            return 0;
+        }
+        ExceptionSink peek_xsink;
+        ValueHolder rv(future->get(0, &peek_xsink), &peek_xsink);
+        if (peek_xsink || rv->getType() != NT_HASH) {
+            // an error response is reported by continuePoll()
+            peek_xsink.clear();
+            request->decode_state = 1;
+            return 0;
+        }
+        const QoreHashNode* resp = rv->get<const QoreHashNode>();
+        QoreValue body = resp->getKeyValue("body");
+        QoreValue hv = resp->getKeyValue("headers");
+        if (request->encoding_passthru || body.getType() != NT_BINARY || hv.getType() != NT_HASH
+            || !body.get<const BinaryNode>()->size()) {
+            request->decode_state = 1;
+            return 0;
+        }
+        const BinaryNode* bin = body.get<const BinaryNode>();
+        SimpleRefHolder<QoreStringNode> ce(get_string_header_node_ref(xsink, *hv.get<const QoreHashNode>(),
+            "content-encoding"));
+        if (*xsink) {
+            request->decode_state = -1;
+            return -1;
+        }
+        std::string token;
+        if (ce) {
+            const char* start = ce->c_str();
+            while (*start == ' ' || *start == '\t') {
+                ++start;
+            }
+            const char* end = start;
+            while (*end && *end != ',' && *end != ';' && *end != ' ') {
+                ++end;
+            }
+            token.assign(start, end - start);
+        }
+        bool ignore_encoding = false;
+        // a character encoding misused as a content encoding and unknown content encodings are ignored
+        if (token.empty() || !strncasecmp(token.c_str(), "iso", 3) || !strncasecmp(token.c_str(), "utf-", 4)
+            || !get_decoder_for_content_encoding(token.c_str(), ignore_encoding) || ignore_encoding) {
+            request->decode_state = 1;
+            return 0;
+        }
+        qore_uncompress_to_binary_t dec = get_binary_decoder_for_content_encoding(token.c_str(), xsink);
+        assert(dec);
+        SimpleRefHolder<BinaryNode> decoded(dec ? dec(bin, xsink) : nullptr);
+        if (*xsink) {
+            xsink->appendLastDescription(": while decompressing '%s' Content-Encoding with size %lld",
+                token.c_str(), (long long)bin->size());
+            request->decode_state = -1;
+            return -1;
+        }
+        request->decoded_body = decoded.release();
+        request->decode_state = 1;
+        return 0;
+    }
+
+    //! Returns true if the completed response is a redirect that will be followed; called with op_lock held
+    DLLLOCAL bool isFollowedRedirectResponse() const {
+        if (!request || !request->follow || future->isError()) {
+            return false;
+        }
+        ExceptionSink peek_xsink;
+        ValueHolder rv(future->get(0, &peek_xsink), &peek_xsink);
+        if (peek_xsink || rv->getType() != NT_HASH) {
+            peek_xsink.clear();
+            return false;
+        }
+        return is_followed_redirect_status(
+            (int)rv->get<const QoreHashNode>()->getKeyValue("status_code").getAsBigInt());
+    }
+
+    //! Processes a completed response that may be a redirect to follow
+    /** Called with op_lock held when the response future is done.  A redirect is followed with the same request
+        changes as the blocking API; see qore_httpclient_priv::prepareRedirect().  The connection for the next
+        request is acquired on this thread, or by a callback worker when called on an async I/O execution path,
+        where acquiring a connection may not block.
+
+        @return 1 if a redirect is being followed, 0 if the response is final, -1 if an exception was raised
+    */
+    DLLLOCAL int processRedirect(ExceptionSink* xsink) {
+        if (!request || !request->follow || future->isError()) {
+            return 0;
+        }
+        ExceptionSink peek_xsink;
+        ValueHolder rv(future->get(0, &peek_xsink), &peek_xsink);
+        if (peek_xsink || rv->getType() != NT_HASH) {
+            // the final response check reports the error
+            peek_xsink.clear();
+            return 0;
+        }
+        const QoreHashNode* resp = rv->get<const QoreHashNode>();
+        int code = (int)resp->getKeyValue("status_code").getAsBigInt();
+        if (!is_followed_redirect_status(code)) {
+            return 0;
+        }
+
+        // the redirect response is consumed here
+        notifier->acknowledge(xsink);
+        if (*xsink) {
+            return -1;
+        }
+        closeSubmittedConnection();
+
+        QoreValue hv = resp->getKeyValue("headers");
+        const QoreHashNode* resp_headers = hv.getType() == NT_HASH ? hv.get<const QoreHashNode>() : nullptr;
+        // HTTP/2 and HTTP/3 carry no reason phrase; the blocking request derives the standard one from the status
+        // code (see HttpClientConnectionManagerBase::request()), so the same message is reported here
+        QoreValue smv = resp->getKeyValue("status_message");
+        SimpleRefHolder<QoreStringNode> derived_message(smv.getType() == NT_STRING
+            ? nullptr
+            : new QoreStringNode(QoreHttpClientObject::getHttpStatusMessage(code)));
+        const QoreStringNode* status_message = smv.getType() == NT_STRING
+            ? smv.get<const QoreStringNode>()
+            : *derived_message;
+        const char* msg = status_message && !status_message->empty() ? status_message->c_str() : "<no message>";
+
+        SimpleRefHolder<QoreStringNode> loc(resp_headers
+            ? get_string_header_node_ref(xsink, *resp_headers, "location")
+            : nullptr);
+        if (*xsink) {
+            return -1;
+        }
+        if (!loc || loc->empty()) {
+            xsink->raiseException("HTTP-CLIENT-REDIRECT-ERROR",
+                "no redirect location given for status code %d: message: '%s'", code, msg);
+            return -1;
+        }
+        if (request->chain.count >= request->max_redirects) {
+            xsink->raiseException("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED",
+                "maximum redirections (%d) exceeded; redirect code %d to '%s' ignored (message: '%s')",
+                request->max_redirects, code, loc->c_str(), msg);
+            return -1;
+        }
+
+        // the client provides the redirect policy and the event queue; hold its private data while they are used
+        PrivateDataRefHolder<QoreHttpClientObject> client(client_obj, CID_HTTPCLIENT, xsink);
+        if (!client) {
+            if (!*xsink) {
+                xsink->raiseException("OBJECT-ALREADY-DELETED",
+                    "HTTPClient has been deleted; poll operation aborted");
+            }
+            return -1;
+        }
+        qore_httpclient_priv* priv = qore_httpclient_priv::get(**client);
+        priv->doRedirectEvent(*loc, status_message);
+
+        HttpRedirectTarget next;
+        bool has_body = request->body && request->body->size();
+        if (priv->prepareRedirect(xsink, request->chain, code, status_message, resp_headers, **loc, request->conn,
+            request->target, request->method.c_str(), has_body, true, next)) {
+            return -1;
+        }
+
+        // the previous request may still reference its header hash, so the next request gets a copy
+        ReferenceHolder<QoreHashNode> headers(request->headers->copy(), xsink);
+        priv->applyRedirectHeaders(request->chain, next, **headers, xsink);
+        if (*xsink) {
+            return -1;
+        }
+        request->headers->deref(xsink);
+        request->headers = headers.release();
+        request->conn = next.conn;
+        request->target = next.target;
+        request->method = next.method;
+        if (next.drop_body && request->body) {
+            request->body->deref();
+            request->body = nullptr;
+        }
+
+        if (!request->redirect_info) {
+            request->redirect_info = new QoreHashNode(autoTypeInfo);
+        }
+        QoreStringMaker key("redirect-%d", request->chain.count);
+        request->redirect_info->setKeyValue(key.c_str(), loc->refSelf(), xsink);
+        QoreStringMaker mkey("redirect-message-%d", request->chain.count);
+        request->redirect_info->setKeyValue(mkey.c_str(), status_message
+            ? status_message->stringRefSelf()
+            : nullptr, xsink);
+        if (*xsink) {
+            return -1;
+        }
+
+        // the redirect response has been consumed
+        future->deref(xsink);
+        future = nullptr;
+
+        // the connection for the next request is acquired by continuePoll() once op_lock has been released
+        phase = Phase::WAITING_REDIRECT;
+        request->task_done = false;
+        return 1;
+    }
+
+    //! Acquires a connection for the given target; the connection returned is referenced
+    /** May block, so it must not be called on an async I/O execution path or with op_lock held
+
+        @param mgr the connection manager
+        @param target the target of the connection
+        @param sandbox_context the sandbox of the thread that started the request, which governs the connection
+        @param xsink exception sink
+    */
+    DLLLOCAL static HttpClientConnectionBase* acquireRedirectConnection(
+            const std::shared_ptr<HttpClientConnectionManagerBase>& mgr, const con_info& target,
+            const QoreSandboxContext& sandbox_context, ExceptionSink* xsink) {
+        QoreSandboxContextHelper sch(sandbox_context);
+        HttpClientConnectionBase* conn = mgr->acquireConnectionAsync(target.ssl ? "https" : "http",
+            target.host.c_str(), target.port, xsink);
+        if (!conn || *xsink) {
+            return nullptr;
+        }
+        conn->ref();
+        return conn;
+    }
+
+    //! Raises the error of a connection that closed before it could be used
+    DLLLOCAL static void raiseConnectionError(HttpClientConnectionBase* conn, ExceptionSink* xsink) {
+        ReferenceHolder<QoreHashNode> err_info(conn->getReferencedErrorInfo(), xsink);
+        // note: these values can be held in inline short string storage, which has no QoreStringNode; the
+        // helpers must stay in scope while the char pointers are used
+        QoreStringDataHelper ev(err_info ? err_info->getKeyValue("err") : QoreValue());
+        QoreStringDataHelper dv(err_info ? err_info->getKeyValue("desc") : QoreValue());
+        xsink->raiseException(ev ? ev.c_str() : "HTTP-CLIENT-CONNECT-ERROR", "%s",
+            dv ? dv.c_str() : "connection closed before the redirected request could be sent");
+    }
+
+    //! Starts the next request of a redirect chain on an acquired connection
+    /** Called with op_lock held by continuePollLocked(), on the thread that drives the operation.  Mirrors
+        startPollSendRecvConnMgr(): a ready connection receives the request immediately; otherwise the request is
+        sent by continueWaitingConnect() once the connection is ready.
+
+        @param conn the connection; the reference is consumed
+        @param next_phase output: the phase for the request
+        @param xsink exception sink
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int installRedirectConnection(HttpClientConnectionBase* conn, Phase& next_phase,
+            ExceptionSink* xsink) {
+        ReferenceHolder<HttpClientConnectionBase> conn_holder(conn, xsink);
+        HttpClientConnectionManagerBase& mgr = *request->mgr;
+
+        ReferenceHolder<QorePromise> promise(new QorePromise(), xsink);
+        ReferenceHolder<QoreFuture> new_future(promise->getFuture(xsink), xsink);
+        if (*xsink) {
+            mgr.releaseConnection(conn);
+            return -1;
+        }
+
+        while (true) {
+            if (conn->isClosed()) {
+                raiseConnectionError(conn, xsink);
+                mgr.closeAndEvict(conn, xsink);
+                return -1;
+            }
+
+            if (conn->isReady()) {
+                // an ALPN-negotiating connection must be morphed into its concrete form before it can carry a
+                // request
+                HttpClientConnectionBase* concrete = mgr.finalizeAsyncConnection(conn, true, xsink);
+                if (!concrete || *xsink) {
+                    return -1;
+                }
+                if (concrete != conn) {
+                    conn_holder = concrete;
+                    conn = concrete;
+                } else {
+                    concrete->deref(xsink);
+                }
+            }
+
+            if (conn->isReady()) {
+                AbstractAsyncAction* action = request->streaming_response
+                    ? static_cast<AbstractAsyncAction*>(
+                        new StreamingHeadersPromiseNotifierAction(*promise, notifier))
+                    : static_cast<AbstractAsyncAction*>(new PromiseNotifierAction(*promise, notifier));
+                int64_t stream_id = conn->submitRequestWithAction(request->method.c_str(),
+                    request->target.c_str(), request->headers,
+                    request->body ? request->body->getPtr() : nullptr,
+                    request->body ? request->body->size() : 0, action, xsink);
+                if (*xsink || stream_id < 0) {
+                    mgr.releaseConnection(conn);
+                    return -1;
+                }
+                if (request->streaming_response) {
+                    submitted_conn = conn_holder.release();
+                    submitted_stream_id = stream_id;
+                    close_submitted_on_done = true;
+                }
+                future = new_future.release();
+                next_phase = Phase::WAITING_RESPONSE;
+                return 0;
+            }
+
+            // the connection is still connecting: send the request once it is ready
+            QoreObject* notifier_obj = getReferencedSocketObject(xsink);
+            if (!notifier_obj) {
+                mgr.releaseConnection(conn);
+                return -1;
+            }
+            // registerReadyNotifier() consumes both references whatever it returns
+            notifier->ref();
+            if (conn->registerReadyNotifier(notifier, notifier_obj)) {
+                break;
+            }
+            // decided between the check and the registration; check again
+        }
+
+        pending_conn = conn_holder.release();
+        pending_mgr = request->mgr;
+        pending_method = request->method;
+        pending_path = request->target;
+        pending_headers = request->headers->hashRefSelf();
+        pending_body = request->body ? static_cast<BinaryNode*>(request->body->refSelf()) : nullptr;
+        pending_promise = promise.release();
+        pending_streaming_response = request->streaming_response;
+        future = new_future.release();
+        waiting_connect_armed = false;
+        next_phase = Phase::WAITING_CONNECT;
+        return 0;
+    }
+
+    //! Hands the acquisition of the next connection of a redirect chain to a callback worker
+    /** Called without op_lock on an async I/O execution path while the operation is in Phase::WAITING_REDIRECT;
+        a task that cannot be queued is discarded on this thread
+
+        @return 0 for OK, -1 if an exception was raised
+    */
+    DLLLOCAL int dispatchRedirectTask(ExceptionSink* xsink) {
+        ReferenceHolder<QoreObject> ctl_obj(qore_get_async_io_controller_obj(xsink), xsink);
+        if (!ctl_obj) {
+            return -1;
+        }
+        ReferenceHolder<AsyncIoControllerPriv> ctl(static_cast<AsyncIoControllerPriv*>(
+            ctl_obj->getReferencedPrivateData(CID_ASYNCIOCONTROLLER, xsink)), xsink);
+        if (!ctl) {
+            return -1;
+        }
+        // set before the operation was returned to the caller and never changed afterwards
+        QoreProgram* pgm = request->pgm;
+        // the task holds a reference to the operation until it has run or been discarded
+        ref();
+        ctl->dispatchNativeTask(new HttpClientRedirectTask(this, pgm));
+        return 0;
+    }
+
+    //! Runs the redirect task on a callback worker
+    DLLLOCAL void runRedirectTask(ExceptionSink* xsink) {
+        std::shared_ptr<HttpClientConnectionManagerBase> mgr;
+        con_info target;
+        {
+            AutoLocker al(op_lock);
+            if (done || phase != Phase::WAITING_REDIRECT) {
+                return;
+            }
+            mgr = request->mgr;
+            target = request->conn;
+        }
+
+        // the connection is acquired without op_lock, so that the operation can be aborted meanwhile; the request
+        // state and its immutable sandbox context remain valid while the operation exists
+        ExceptionSink task_xsink;
+        HttpClientConnectionBase* conn = acquireRedirectConnection(mgr, target, request->sandbox_context,
+            &task_xsink);
+
+        AutoLocker al(op_lock);
+        if (done || phase != Phase::WAITING_REDIRECT) {
+            // aborted while the connection was acquired
+            if (conn) {
+                mgr->releaseConnection(conn);
+                conn->deref(xsink);
+            }
+            task_xsink.clear();
+            return;
+        }
+        // the connection is installed by continuePollLocked(); see RequestState::task_conn
+        assert(!request->task_conn);
+        request->task_conn = conn;
+        request->task_xsink.assimilate(task_xsink);
+        if (!conn && !request->task_xsink) {
+            request->task_xsink.raiseException("HTTP-CLIENT-REDIRECT-ERROR", "cannot acquire a connection for the "
+                "redirect to '%s'", get_request_url(request->conn, request->target).c_str());
+        }
+        request->task_done = true;
+        notifier->notify();
+    }
+
+    //! Reports that the redirect task could not be run
+    DLLLOCAL void discardRedirectTask(ExceptionSink* xsink) {
+        // tasks are never dispatched or discarded with op_lock held
+        AutoLocker al(op_lock);
+        if (done || phase != Phase::WAITING_REDIRECT) {
+            return;
+        }
+        request->task_xsink.raiseException("HTTP-CLIENT-REDIRECT-ERROR", "cannot follow the redirect to '%s': the "
+            "async I/O dispatcher cannot run the task that acquires the connection",
+            get_request_url(request->conn, request->target).c_str());
+        request->task_done = true;
+        notifier->notify();
+    }
+
+    //! Adds the request information of a send/receive operation to the legacy output hash
+    DLLLOCAL void addRequestInfo(QoreHashNode& out, ExceptionSink* xsink) const {
+        QoreValue iv = out.getKeyValue("info");
+        QoreHashNode* info;
+        if (iv.getType() == NT_HASH) {
+            info = iv.get<QoreHashNode>();
+        } else {
+            info = new QoreHashNode(autoTypeInfo);
+            out.setKeyValue("info", info, xsink);
+            if (*xsink) {
+                return;
+            }
+        }
+        info->setKeyValue("request-uri", new QoreStringNodeMaker("%s %s HTTP/%s", request->method.c_str(),
+            request->target.c_str(), request->http_version.c_str()), xsink);
+        info->setKeyValue("effective-url", new QoreStringNode(get_request_url(request->conn, request->target)),
+            xsink);
+        if (request->redirect_info) {
+            ConstHashIterator hi(request->redirect_info);
+            while (hi.next()) {
+                info->setKeyValue(hi.getKey(), hi.get().refSelf(), xsink);
+            }
+        }
+        if (request->chain.hops) {
+            info->setKeyValue("redirects", request->chain.copyHops(), xsink);
+        }
+    }
+
     void abort(ExceptionSink* xsink) override {
         AutoLocker al(op_lock);
         done = true;
@@ -6819,7 +7881,8 @@ public:
     }
 
     QoreValue getOutput() const override {
-        if (!future || !future->isDone()) {
+        AutoLocker al(op_lock);
+        if (!future || !future->isDone() || (!done && isFollowedRedirectResponse())) {
             return QoreValue();
         }
         // Get the result from the future (non-blocking since isDone())
@@ -6837,8 +7900,17 @@ public:
         // toLegacyPollApiOutputShape — see the LEGACY RESPONSE SHAPE
         // ADAPTERS block at the top of this file for the rationale.
         if (rv.getType() == NT_HASH) {
+            if (request && decodeResponseBody(&xsink)) {
+                xsink.clear();
+                rv.discard(&xsink);
+                return QoreValue();
+            }
             QoreHashNode* src = rv.get<QoreHashNode>();
-            QoreHashNode* out = toLegacyPollApiOutputShape(src, &xsink);
+            QoreHashNode* out = toLegacyPollApiOutputShape(src, request ? *request->decoded_body : nullptr,
+                &xsink);
+            if (out && request && !xsink) {
+                addRequestInfo(*out, &xsink);
+            }
             rv.discard(&xsink);
             if (xsink) {
                 xsink.clear();
@@ -6865,6 +7937,7 @@ public:
         switch (phase) {
             case Phase::WAITING_CONNECT:  return "connecting";
             case Phase::WAITING_RESPONSE: return "sending";
+            case Phase::WAITING_REDIRECT: return "redirecting";
             case Phase::DONE:             return "received";
         }
         return "sending";
@@ -6933,6 +8006,9 @@ private:
     int64_t submitted_stream_id = -1;
     bool close_submitted_on_done = false;
 
+    //! The state of a send/receive request; nullptr for connect and deferred error operations
+    std::unique_ptr<RequestState> request;
+
     //! Serializes continuePoll() vs abort()/clearPendingUnlocked() so a
     //! concurrent cancel can't null pending_* fields mid-continuePoll.  The
     //! public abort() method is reachable on any thread via
@@ -6942,6 +8018,19 @@ private:
     //! cross-thread cancels against in-flight polls on the same op.
     mutable QoreThreadLock op_lock;
 };
+
+HttpClientRedirectTask::~HttpClientRedirectTask() {
+    ExceptionSink xsink;
+    op->deref(&xsink);
+}
+
+void HttpClientRedirectTask::run(ExceptionSink* xsink) {
+    op->runRedirectTask(xsink);
+}
+
+void HttpClientRedirectTask::discard(ExceptionSink* xsink) {
+    op->discardRedirectTask(xsink);
+}
 
 QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink, QoreObject* self,
         QoreHttpClientObject* client, const char* method, const char* path,
@@ -6960,6 +8049,23 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
     if (*xsink) {
         return nullptr;
     }
+
+    // the request state of the operation holds its own reference to the request headers
+    ReferenceHolder<QoreHashNode> request_headers(nh->hashRefSelf(), xsink);
+
+    // the request body is copied at most once: a request sent when its connection is ready and a redirect that
+    // repeats the request share the copy
+    SimpleRefHolder<BinaryNode> body_node;
+    auto body_node_ref = [&]() -> BinaryNode* {
+        if (!data || !size) {
+            return nullptr;
+        }
+        if (!body_node) {
+            body_node = new BinaryNode;
+            body_node->append(data, size);
+        }
+        return static_cast<BinaryNode*>(body_node->refSelf());
+    };
 
     // Determine scheme and path
     const char* scheme = this_connection.ssl ? "https" : "http";
@@ -7204,19 +8310,24 @@ QoreObject* qore_httpclient_priv::startPollSendRecvConnMgr(ExceptionSink* xsink,
             // Queued: build a WAITING_CONNECT poll op that will submit
             // the request once the notifier fires.  All pending_* refs
             // are CONSUMED by the constructor.
-            SimpleRefHolder<BinaryNode> body_holder;
-            if (data && size) {
-                body_holder = new BinaryNode();
-                body_holder->append(data, size);
-            }
             QoreHashNode* headers_raw = nh.release();  // ref consumed
-            BinaryNode* body_raw = body_holder.release();  // nullable, ref consumed
+            BinaryNode* body_raw = body_node_ref();  // nullable, ref consumed
             QorePromise* promise_raw_consumed = promise_holder.release();
             poller = new HttpClientConnMgrPollOp(conn, mgr_holder,
                 std::string(method), std::string(msgpath),
                 headers_raw, body_raw, promise_raw_consumed,
                 future_raw, notifier_for_op, this, self, streaming_response);
         }
+    }
+
+    // the request state lets the operation report the request and follow redirects; a redirect that repeats the
+    // request sends the body again
+    poller->initRequest(mgr_holder, this_connection, msgpath, method, http11 ? "1.1" : "1.0",
+        request_headers.release(), redirect_passthru ? nullptr : body_node_ref(), !redirect_passthru, max_redirects,
+        streaming_response, encoding_passthru, getProgram(), xsink);
+    if (*xsink) {
+        release_local_conn_ref();
+        return nullptr;
     }
 
     // Release our local ref on the connection now that ownership has

@@ -720,6 +720,7 @@ class ReflectionTest inherits QUnit::Test {
         assertNamedCallableVariantCount("encode_url", ("url", "encode_all"));
         assertNamedCallableVariantCount("decode_uri_request", ("uri",));
         assertNamedCallableVariantCount("encode_uri_request", ("url",));
+        assertNamedCallableVariantCount("resolve_url", ("base", "reference", "options"));
         assertNamedCallableVariantCount("parse_url", ("url", "keep_brackets"));
         assertNamedCallableVariantCount("parse_url", ("url", "options"));
         assertNamedCallableVariantCount("parseURL", ("url", "keep_brackets"));

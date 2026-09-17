@@ -269,7 +269,7 @@ QoreHashNode* Http2ClientPollOperationPriv::continuePoll(ExceptionSink* xsink) {
         // The connect-phase budget is enforced here, on the I/O thread, so the
         // operation itself generates a diagnosable error before any caller-side
         // wait can expire; see setConnectTimeout().
-        if (isConnectPhase(state) && checkConnectDeadline(xsink)) {
+        if (inConnectPhase(state) && checkConnectDeadline(xsink)) {
             return nullptr;
         }
         switch (state) {
@@ -286,7 +286,8 @@ QoreHashNode* Http2ClientPollOperationPriv::continuePoll(ExceptionSink* xsink) {
                 return clampConnectDeadline(handleProxyConnectRecv(xsink), xsink);
 
             case H2State::READING:
-                return handleReading(xsink);
+                // an h2c connection is not ready until the peer has answered the preface
+                return clampConnectDeadline(handleReading(xsink), xsink);
 
             case H2State::WAIT_READ:
                 h2_state.store(H2State::READING, std::memory_order_release);
@@ -553,8 +554,8 @@ QoreHashNode* Http2ClientPollOperationPriv::handleSslUpgrade(ExceptionSink* xsin
 
 void Http2ClientPollOperationPriv::startMultiplex(ExceptionSink* xsink) {
     printd(5, "Http2ClientPollOperationPriv::startMultiplex()\n");
-    // the connect phase is over; the request budget governs from here on
-    connect_deadline_us = 0;
+    // the connect phase lasts until the peer has answered the preface (see inConnectPhase()), so the connect
+    // deadline is kept; it is cleared when the connection is confirmed
     sock_obj->ref();
     SocketPollOperationBase* op = new SocketHttp2ClientMultiplexPollOperation(xsink, sock_obj);
     if (*xsink) {
@@ -599,16 +600,18 @@ QoreHashNode* Http2ClientPollOperationPriv::handleReading(ExceptionSink* xsink) 
         return nullptr;
     }
 
-    // h2c confirmation: after the initial preface send (cycle 0), if we get
-    // a successful poll cycle with valid poll_info, the server has responded
-    // with valid H2 data (SETTINGS frame)
-    if (!h2_confirmed.load(std::memory_order_acquire) && poll_info) {
-        ++reading_cycle_count;
-        if (reading_cycle_count > 1) {
-            h2_confirmed.store(true, std::memory_order_release);
-            printd(5, "Http2ClientPollOperationPriv::handleReading() h2c confirmed\n");
-            fireReadyCallback(xsink);
-        }
+    // the connection is ready once the peer's SETTINGS frame, which starts its connection preface, has been
+    // processed (RFC 9113 section 3.4); a read cycle alone proves nothing, because TLS session tickets or a timer
+    // can wake the operation before the peer has sent anything; the multiplex operation is the only operation
+    // installed in the reading states (see startMultiplex())
+    assert(dynamic_cast<SocketHttp2ClientMultiplexPollOperation*>(op));
+    if (!h2_confirmed.load(std::memory_order_acquire)
+            && static_cast<SocketHttp2ClientMultiplexPollOperation*>(op)->isRemoteSettingsReceived()) {
+        h2_confirmed.store(true, std::memory_order_release);
+        // the connect phase is over; the request budget governs from here on
+        connect_deadline_us = 0;
+        printd(5, "Http2ClientPollOperationPriv::handleReading() h2 confirmed\n");
+        fireReadyCallback(xsink);
     }
 
     // Drain registered CONNECT stream queues after every read poll cycle.
@@ -812,7 +815,7 @@ int Http2ClientPollOperationPriv::checkConnectDeadline(ExceptionSink* xsink) {
 QoreHashNode* Http2ClientPollOperationPriv::clampConnectDeadline(QoreHashNode* poll_info,
         ExceptionSink* xsink) {
     if (!poll_info || connect_deadline_us <= 0
-        || !isConnectPhase(h2_state.load(std::memory_order_acquire))) {
+        || !inConnectPhase(h2_state.load(std::memory_order_acquire))) {
         return poll_info;
     }
     int64_t now_us = q_get_monotonic_us();

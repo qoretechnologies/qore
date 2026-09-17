@@ -201,6 +201,11 @@ QoreHashNode* FileReadPollOperationBase::continuePoll(ExceptionSink* xsink) {
 
 FileReadPollOperation::FileReadPollOperation(ExceptionSink* xsink, File* file, const char* path, ssize_t size,
         bool to_string) : FileReadPollOperationBase(file, to_string), path(path), size(size) {
+    // the file is opened directly below, so the sandbox policy must be checked here as for QoreFile::open2()
+    if (qore_qf_private::checkOpenAccess(path, O_RDONLY, xsink)) {
+        return;
+    }
+
     AutoLocker al(file->priv->m);
     if (file->priv->setNonBlock(xsink, false)) {
         return;
@@ -566,7 +571,43 @@ void QoreFile::makeSpecial(int sfd) {
     priv->fd = sfd;
 }
 
+int qore_qf_private::checkOpenAccess(const char* fn, int flags, ExceptionSink* xsink) {
+    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
+    if (!smh) {
+        return 0;
+    }
+    // Determine access mode based on flags
+    int access_mode = 0;
+    if ((flags & O_ACCMODE) == O_RDONLY) {
+        access_mode = QSEC_READ;
+    } else if ((flags & O_ACCMODE) == O_WRONLY) {
+        access_mode = QSEC_WRITE;
+    } else if ((flags & O_ACCMODE) == O_RDWR) {
+        access_mode = QSEC_READ | QSEC_WRITE;
+    }
+    if (flags & O_CREAT) {
+        access_mode |= QSEC_CREATE;
+    }
+    return smh->checkFilesystemAccess(fn, access_mode, xsink) ? 0 : -1;
+}
+
 int QoreFile::open(const char *fn, int flags, int mode, const QoreEncoding *cs) {
+    if (fn) {
+        // this API cannot raise an exception; a denied open fails like one denied by the operating system
+        ExceptionSink xsink;
+        if (qore_qf_private::checkOpenAccess(fn, flags, &xsink)) {
+            xsink.clear();
+            errno = EACCES;
+            return -1;
+        }
+    }
+    return priv->open(fn, flags, mode, cs);
+}
+
+int QoreFile::openCheckAccess(ExceptionSink* xsink, const char* fn, int flags, int mode, const QoreEncoding* cs) {
+    if (fn && qore_qf_private::checkOpenAccess(fn, flags, xsink)) {
+        return -1;
+    }
     return priv->open(fn, flags, mode, cs);
 }
 
@@ -582,24 +623,8 @@ int QoreFile::open2(ExceptionSink* xsink, const char *fn, int flags, int mode, c
     }
 
     // Check sandbox security restrictions
-    QoreSandboxManagerHelper smh(QoreSandboxManagerHelper::Policy);
-    if (smh) {
-        // Determine access mode based on flags
-        int access_mode = 0;
-        if ((flags & O_ACCMODE) == O_RDONLY) {
-            access_mode = QSEC_READ;
-        } else if ((flags & O_ACCMODE) == O_WRONLY) {
-            access_mode = QSEC_WRITE;
-        } else if ((flags & O_ACCMODE) == O_RDWR) {
-            access_mode = QSEC_READ | QSEC_WRITE;
-        }
-        if (flags & O_CREAT) {
-            access_mode |= QSEC_CREATE;
-        }
-
-        if (!smh->checkFilesystemAccess(fn, access_mode, xsink)) {
-            return -1;
-        }
+    if (qore_qf_private::checkOpenAccess(fn, flags, xsink)) {
+        return -1;
     }
 
     int rc;

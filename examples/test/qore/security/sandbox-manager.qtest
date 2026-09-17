@@ -31,6 +31,7 @@ class SandboxManagerTest inherits QUnit::Test {
         addTestCase("Filesystem default policy test", \testFilesystemDefaultPolicy());
         addTestCase("Program sandbox integration test", \testProgramSandboxIntegration());
         addTestCase("Dir sandbox integration test", \testDirSandboxIntegration());
+        addTestCase("File open sandbox integration test", \testFileOpenSandboxIntegration());
         addTestCase("Runtime interrupt test", \testRuntimeInterrupt());
         addTestCase("Interrupt from thread test", \testInterruptFromThread());
         addTestCase("Sleep interrupt test", \testSleepInterrupt());
@@ -380,6 +381,81 @@ string sub tryReadOutside() {
             assertEq("FILESYSTEM-ACCESS-DENIED", ex.err, "Correct exception type");
         }
         assertEq(True, caught, "Reading outside sandbox throws exception");
+    }
+
+    # every API that opens a file applies the sandbox filesystem policy, including the non-blocking ones
+    testFileOpenSandboxIntegration() {
+        TmpDir inside_dir();
+        TmpDir outside_dir();
+        string inside = join_paths(inside_dir.path, "inside.txt");
+        string outside = join_paths(outside_dir.path, "outside.txt");
+        foreach list<string> file in ((inside, "inside"), (outside, "outside")) {
+            File f();
+            f.open2(file[0], O_CREAT | O_WRONLY | O_TRUNC);
+            f.write(file[1]);
+        }
+
+        SandboxManager sm();
+        sm.setFilesystemSandboxRoot(inside_dir.path);
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.parse("
+%modern
+string sub pollRead(AbstractPollOperation op) {
+    while (!op.goalReached()) {
+        *hash<SocketPollInfo> pi = op.continuePoll();
+        if (pi) {
+            Socket::poll((pi,), 5000);
+        }
+    }
+    return op.getOutput();
+}
+
+string sub fileOpen(string path, string allowed) {
+    File f();
+    if (f.open(path)) {
+        return sprintf(\"errno %d\", errno());
+    }
+    return f.read(-1);
+}
+
+string sub fileOpen2(string path, string allowed) {
+    File f();
+    f.open2(path);
+    return f.read(-1);
+}
+
+string sub readOnlyFileConstructor(string path, string allowed) {
+    ReadOnlyFile f(path);
+    return f.read(-1);
+}
+
+string sub readOnlyFileOpen(string path, string allowed) {
+    ReadOnlyFile f(allowed);
+    f.open(path);
+    return f.read(-1);
+}
+
+string sub readTextFile(string path, string allowed) {
+    return ReadOnlyFile::readTextFile(path);
+}
+
+string sub startPollRead(string path, string allowed) {
+    ReadOnlyFile f(allowed);
+    return pollRead(f.startPollRead(path));
+}
+
+string sub filePollOperation(string path, string allowed) {
+    File f();
+    return pollRead(new FilePollOperation(f, path, True));
+}
+", "sandbox_file_open_test");
+
+        foreach string func in (("fileOpen", "fileOpen2", "readOnlyFileConstructor", "readOnlyFileOpen",
+                "readTextFile", "startPollRead", "filePollOperation")) {
+            assertEq("inside", p.callFunction(func, inside, inside), func);
+            assertThrows("FILESYSTEM-ACCESS-DENIED", \p.callFunction(), (func, outside, inside), func);
+        }
     }
 
     testDirSandboxIntegration() {

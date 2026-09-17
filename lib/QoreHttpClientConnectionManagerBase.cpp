@@ -143,15 +143,16 @@ HttpClientConnectionManagerBase::~HttpClientConnectionManagerBase() {
 // Pool key + helpers
 // ============================================================
 
-std::string HttpClientConnectionManagerBase::poolKey(const char* host, int port) const {
+std::string HttpClientConnectionManagerBase::poolKey(const char* host, int port, bool ssl) const {
+    const char* scheme = ssl ? "https" : "http";
     char buf[512];
     if (proxy_info_) {
         // Proxied: include the proxy in the key so the same target
         // reached through different proxies gets distinct entries.
-        snprintf(buf, sizeof(buf), "%s:%d|%s:%d",
-            proxy_info_->host.c_str(), proxy_info_->port, host, port);
+        snprintf(buf, sizeof(buf), "%s:%d|%s://%s:%d",
+            proxy_info_->host.c_str(), proxy_info_->port, scheme, host, port);
     } else {
-        snprintf(buf, sizeof(buf), "%s:%d", host, port);
+        snprintf(buf, sizeof(buf), "%s://%s:%d", scheme, host, port);
     }
     return std::string(buf);
 }
@@ -333,7 +334,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::acquireConnectionImpl
 
     bool ssl_required = (strcmp(scheme, "https") == 0);
 
-    std::string key = poolKey(host, port);
+    std::string key = poolKey(host, port, ssl_required);
 
     while (true) {
         // 1. Read-lock pool scan for a reusable connection.
@@ -593,6 +594,12 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
             ssl_cfg.key = opts_.client_key;
 
             if (proxy_info_) {
+                // the connect phase of the tunneled connection starts now; an HTTP/2 connection adopting its
+                // socket completes it and keeps its deadline
+                int64_t connect_timeout_us = (int64_t)opts_.connect_timeout_ms * 1000;
+                int64_t connect_deadline_us = connect_timeout_us > 0
+                    ? q_get_monotonic_us() + connect_timeout_us
+                    : 0;
                 // Enable ALPN on the H1 socket so the SSL handshake
                 // inside the CONNECT tunnel advertises h2+http/1.1.
                 ssl_cfg.negotiate_alpn = true;
@@ -616,8 +623,9 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                     return nullptr;
                 }
 
-                bool ready = h1->waitForReadyOrError(
-                    opts_.connect_timeout_ms, xsink);
+                // the connection enforces connect_timeout itself and reports its own error, so this wait is only a
+                // backstop
+                bool ready = h1->waitForReadyOrError(getConnectWaitTimeoutMs(), xsink);
                 if (!ready || *xsink) {
                     if (!*xsink) {
                         qore_async_io_log(QORE_LOG_LEVEL_WARN,
@@ -648,7 +656,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
                     }
                     conn = new Http2ClientConnection(adopted_obj,
                         adopted_priv, host, port,
-                        opts_.max_streams_per_connection, xsink, this);
+                        opts_.max_streams_per_connection, xsink, this, connect_timeout_us, connect_deadline_us);
                     // Fall through: any xsink raised here is handled by
                     // the post-switch error block, and the holder will
                     // deref `conn` safely on early return.
@@ -661,7 +669,7 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
 
             // Direct path (no proxy): use NegotiatingHttpClientConnection.
             ReferenceHolder<NegotiatingHttpClientConnection> neg(
-                new NegotiatingHttpClientConnection(host, port, ssl_cfg, xsink),
+                new NegotiatingHttpClientConnection(host, port, ssl_cfg, opts_.connect_timeout_ms, xsink),
                 xsink);
             if (*xsink) {
                 return nullptr;
@@ -687,7 +695,9 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
 
             // Synchronous acquisition: block until ALPN is decided, then morph
             // here so the caller gets a ready concrete connection as before.
-            bool ready = neg->waitForReadyOrError(opts_.connect_timeout_ms, xsink);
+            // The connection enforces connect_timeout itself and reports its
+            // own error, so this wait is only a backstop.
+            bool ready = neg->waitForReadyOrError(getConnectWaitTimeoutMs(), xsink);
             if (!ready || *xsink) {
                 if (!*xsink) {
                     // Diagnostic: surface the inner negotiate poll op's
@@ -760,7 +770,8 @@ HttpClientConnectionBase* HttpClientConnectionManagerBase::createConnection(
     // caller will wait asynchronously (typically via
     // AbstractHttpPollConnectionPriv::registerReadyNotifier).
     if (wait_for_ready) {
-        bool ready = conn->waitForReadyOrError(opts_.connect_timeout_ms, xsink);
+        // the connection enforces connect_timeout itself and reports its own error, so this wait is only a backstop
+        bool ready = conn->waitForReadyOrError(getConnectWaitTimeoutMs(), xsink);
         if (!ready || *xsink) {
             if (!*xsink) {
                 xsink->raiseException("HTTPCLIENT-CONNECT-ERROR",
@@ -1023,7 +1034,11 @@ int HttpClientConnectionManagerBase::getOpenPoolSize() const {
 }
 
 int HttpClientConnectionManagerBase::getConnectionCount(const char* host, int port) const {
-    std::string key = poolKey(host, port);
+    return getConnectionCount(host, port, false) + getConnectionCount(host, port, true);
+}
+
+int HttpClientConnectionManagerBase::getConnectionCount(const char* host, int port, bool ssl) const {
+    std::string key = poolKey(host, port, ssl);
     std::shared_lock<std::shared_mutex> rl(pool_lock_);
     auto it = pool_.find(key);
     return (it == pool_.end()) ? 0 : (int)it->second.size();

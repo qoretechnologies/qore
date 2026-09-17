@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -51,6 +51,9 @@ qclass FilePollOperation [arg=SocketPollOperationBase* op; vparent=SocketPollOpe
     @param as_string if the output should be a string or not; if so, the string's encoding will be the same as the
     %File's encoding
     @param num_bytes the number of bytes to read; < 0 means read the entire file
+
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "sandbox" filesystem policy does not allow the file to
+    be read
 */
 FilePollOperation::constructor(ReadOnlyFile[File] file, string path, bool as_string, int num_bytes = -1)
         [flags=NAMED_ARGS] {

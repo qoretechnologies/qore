@@ -285,6 +285,7 @@ const TypedHashDecl* hashdeclStatInfo,
     * hashdeclNetworkSecurityConfigInfo,
     * hashdeclSandboxConfigInfo,
     * hashdeclSocketPollOperationInfo,
+    * hashdeclHttpRedirectInfo,
     * hashdeclSocketPollResultInfo,
     * hashdeclEventPollInfo,
     * hashdeclTimerEventInfo,
@@ -1562,6 +1563,7 @@ StaticSystemNamespace::StaticSystemNamespace() : RootQoreNamespace(new qore_root
     qns.addSystemClass(initFtpClientClass(qns));
 
     // add HTTPClient namespace
+    hashdeclHttpRedirectInfo = init_hashdecl_HttpRedirectInfo(qns);
     qns.addSystemClass(initHTTPClientClass(qns));
 
     qns.addSystemClass(initAbstractIteratorClass(qns));

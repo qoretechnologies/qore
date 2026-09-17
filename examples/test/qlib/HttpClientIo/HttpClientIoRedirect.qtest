@@ -28,15 +28,15 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
-%requires QUnit
-%requires Mime
-%requires Logger
-%requires HttpUtil
-%requires HttpServerUtil
-%requires HttpServer
-%requires HttpClientIo
-%requires AsyncSocketIo
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpUtil.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/HttpClientIo
+%requires ../../../../qlib/AsyncSocketIo
 
 %exec-class HttpClientIoRedirectTest
 
@@ -102,11 +102,84 @@ class RedirectHandler inherits AbstractHttpRequestHandler {
     }
 }
 
+#! A request received by a route peer
+hashdecl RoutePeerRequest {
+    string method;
+    string target;
+    *string authorization;
+    *string cookie;
+    *string host;
+    *string custom;
+    *string content_type;
+    auto body;
+}
+
+#! Handler with configurable routes that records every request
+class RoutePeer inherits AbstractHttpRequestHandler {
+    private {
+        hash<string, hash<auto>> routes;
+        list<hash<RoutePeerRequest>> requests;
+        Mutex m();
+    }
+
+    setRoute(string target, int code, *hash<auto> headers) {
+        AutoLock al(m);
+        routes{target} = {"code": code, "headers": headers};
+    }
+
+    clear() {
+        AutoLock al(m);
+        requests = ();
+    }
+
+    list<hash<RoutePeerRequest>> getRequests() {
+        AutoLock al(m);
+        return requests;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        *hash<auto> route;
+        {
+            AutoLock al(m);
+            requests += <RoutePeerRequest>{
+                "method": hdr.method,
+                "target": cx.raw_path,
+                "authorization": hdr.authorization,
+                "cookie": hdr.cookie,
+                "host": hdr.host,
+                "custom": hdr."x-custom",
+                "content_type": hdr."content-type",
+                "body": body,
+            };
+            route = routes{cx.raw_path};
+        }
+        if (route) {
+            return makeResponse(route.headers ?? {}, route.code, binary());
+        }
+        # a binary body is never used as a format string
+        return makeResponse({"Content-Type": "text/plain"}, 200, binary(sprintf("%s %s", hdr.method,
+            cx.raw_path)));
+    }
+}
+
 public class HttpClientIoRedirectTest inherits QUnit::Test {
     private {
         HttpServer mServer;
         int port;
         Logger logger;
+
+        #! Two servers with route peers for resolution and origin tests
+        HttpServer server_a;
+        HttpServer server_b;
+        RoutePeer peer_a();
+        RoutePeer peer_b();
+        string url_a;
+        string url_b;
+
+        #! A server listening on all addresses, so that it can be reached with the host name \c localhost
+        HttpServer server_c;
+        RoutePeer peer_c();
+        int port_c;
     }
 
     constructor() : Test("HttpClientIoRedirectTest", "1.0") {
@@ -117,6 +190,14 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
         addTestCase("cookie in redirect response", \testCookieRedirect());
         addTestCase("303 See Other changes method to GET", \test303SeeOther());
         addTestCase("redirect_passthru option", \testRedirectPassthru());
+        addTestCase("Location reference forms", \testLocationForms());
+        addTestCase("followed status codes", \testStatusCodes());
+        addTestCase("method and body rules", \testMethodRules());
+        addTestCase("redirect limit boundaries", \testLimits());
+        addTestCase("invalid Location values", \testLocationErrors());
+        addTestCase("origin-bound headers", \testOriginBoundHeaders());
+        addTestCase("effective URL and redirect metadata", \testEffectiveUrl());
+        addTestCase("redirects and UNIX domain sockets", \testUnixSocket());
 
         logger = new Logger("test", LoggerLevel::getLevelInfo());
         if (m_options.verbose > 2) {
@@ -133,9 +214,24 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
         mServer.setHandler("redirect-handler", "", NOTHING, handler);
         mServer.setDefaultHandler("redirect-handler", handler);
 
+        server_a = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        server_b = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        server_a.setDefaultHandler("a", peer_a);
+        server_b.setDefaultHandler("b", peer_b);
+        url_a = sprintf("http://127.0.0.1:%d", server_a.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1", "service": 0}).port);
+        url_b = sprintf("http://127.0.0.1:%d", server_b.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1", "service": 0}).port);
+        server_c = new HttpServer(<HttpServerOptionInfo>{"logger": logger});
+        server_c.setDefaultHandler("c", peer_c);
+        port_c = server_c.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+
         on_exit {
             mServer.stop();
             delete mServer;
+            server_a.stop();
+            server_b.stop();
+            server_c.stop();
         }
         set_return_value(main());
     }
@@ -231,6 +327,323 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
         assertEq("method=GET", resp.body, "303 should change POST to GET");
 
         mgr.closeAll();
+    }
+
+    testLocationForms() {
+        string base = "/a/b/c?x=1";
+        list<list<string>> cases = (
+            ("d", "a", "/a/b/d"),
+            ("../e?y", "a", "/a/e?y"),
+            ("?q", "a", "/a/b/c?q"),
+            ("?", "a", "/a/b/c?"),
+            ("./", "a", "/a/b/"),
+            ("g#frag", "a", "/a/b/g"),
+            ("../../../../root", "a", "/root"),
+            ("/enc%2Fp%3Fx;y?q=%23a%26b%2F", "a", "/enc%2Fp%3Fx;y?q=%23a%26b%2F"),
+            ("/sp ace/ü?k=v w", "a", "/sp%20ace/%C3%BC?k=v%20w"),
+            (url_a + "/../dots/./x", "a", "/dots/x"),
+            (url_a + "?only", "a", "/?only"),
+            (url_b.substr(5) + "/net?2#f", "b", "/net?2"),
+            ("HTTP" + url_b.substr(4) + "/upper", "b", "/upper"),
+        );
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+        });
+        on_exit mgr.closeAll();
+        foreach list<string> c in (cases) {
+            peer_a.setRoute(base, 302, {"Location": c[0]});
+            peer_a.clear();
+            peer_b.clear();
+            hash<auto> resp = mgr.request(url_a, "GET", base);
+            string msg = sprintf("location %y", c[0]);
+            RoutePeer peer = c[1] == "a" ? peer_a : peer_b;
+            string origin = c[1] == "a" ? url_a : url_b;
+            assertEq(200, resp.status_code, msg);
+            assertEq("GET " + c[2], resp.body, msg);
+            assertEq(c[2], peer.getRequests().last().target, msg);
+            assertEq(origin + c[2], resp.effective_url, msg);
+            assertEq(1, resp.redirects.size(), msg);
+            assertEq(url_a + base, resp.redirects[0].request_url, msg);
+            assertEq(c[0], resp.redirects[0].location, msg);
+            assertEq(origin + c[2], resp.redirects[0].target_url, msg);
+        }
+        # a same-URL fragment redirect counts against the limit
+        peer_a.setRoute("/loop", 302, {"Location": "#x"});
+        peer_a.clear();
+        HttpClientIo::HttpClientConnectionManager mgr2(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "max_redirects": 2,
+        });
+        on_exit mgr2.closeAll();
+        assertThrows("HTTP-REDIRECT-ERROR", "maximum redirects \\(2\\) exceeded", \mgr2.request(),
+            (url_a, "GET", "/loop"));
+        assertEq(3, peer_a.getRequests().size());
+    }
+
+    testStatusCodes() {
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+        });
+        on_exit mgr.closeAll();
+        foreach int code in ((301, 302, 303, 307, 308)) {
+            peer_a.setRoute("/status", code, {"Location": "/landed"});
+            hash<auto> resp = mgr.request(url_a, "GET", "/status");
+            assertEq(200, resp.status_code, sprintf("%d", code));
+            assertEq(code, resp.redirects[0].status_code);
+        }
+        # other 3xx responses are returned
+        foreach int code in ((300, 305)) {
+            peer_a.setRoute("/status", code, {"Location": "/landed"});
+            peer_a.clear();
+            hash<auto> resp = mgr.request(url_a, "GET", "/status");
+            assertEq(code, resp.status_code);
+            assertEq(1, peer_a.getRequests().size());
+            assertEq(url_a + "/status", resp.effective_url);
+            assertNothing(resp.redirects);
+        }
+        # a followed redirect status without a location cannot be followed, as with the native client
+        peer_a.setRoute("/status", 302);
+        assertThrows("HTTP-REDIRECT-ERROR", "no redirect location given for status code 302", \mgr.request(),
+            (url_a, "GET", "/status"));
+        peer_a.setRoute("/status", 307, {"Location": ""});
+        peer_a.clear();
+        assertThrows("HTTP-REDIRECT-ERROR", "no redirect location given for status code 307", \mgr.request(),
+            (url_a, "POST", "/status", NOTHING, "body"));
+        # the request is not repeated
+        assertEq(1, peer_a.getRequests().size());
+        assertTrue(HttpClientIo::HttpClientConnectionManager::isFollowedRedirectStatus(308));
+        assertFalse(HttpClientIo::HttpClientConnectionManager::isFollowedRedirectStatus(306));
+        assertFalse(HttpClientIo::HttpClientConnectionManager::isFollowedRedirectStatus(304));
+    }
+
+    testMethodRules() {
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+        });
+        on_exit mgr.closeAll();
+        list<list<auto>> cases = (
+            ("POST", 303, "GET", False),
+            ("PUT", 303, "GET", False),
+            ("HEAD", 303, "HEAD", False),
+            ("POST", 301, "GET", False),
+            ("POST", 302, "GET", False),
+            ("PUT", 301, "PUT", True),
+            ("POST", 307, "POST", True),
+            ("POST", 308, "POST", True),
+        );
+        foreach list<auto> c in (cases) {
+            peer_a.setRoute("/method", c[1], {"Location": "/method-target"});
+            peer_a.clear();
+            string msg = sprintf("%s %d", c[0], c[1]);
+            hash<auto> resp = mgr.request(url_a, c[0], "/method", {"Content-Type": "text/plain",
+                "X-Custom": "kept"}, "payload");
+            assertEq(200, resp.status_code, msg);
+            list<hash<RoutePeerRequest>> reqs = peer_a.getRequests();
+            assertEq(2, reqs.size(), msg);
+            assertEq(c[2], reqs[1].method, msg);
+            assertEq("kept", reqs[1].custom, msg);
+            if (c[3]) {
+                assertEq("payload", reqs[1].body, msg);
+                assertRegex("^text/plain", reqs[1].content_type, msg);
+            } else {
+                assertNothing(reqs[1].body, msg);
+                assertNothing(reqs[1].content_type, msg);
+            }
+        }
+    }
+
+    testLimits() {
+        string url = "http://localhost:" + port;
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "max_redirects": 3,
+        });
+        on_exit mgr.closeAll();
+        hash<auto> resp = mgr.request(url, "GET", "/redirect/3");
+        assertEq(200, resp.status_code);
+        assertEq(3, resp.redirects.size());
+        assertThrows("HTTP-REDIRECT-ERROR", "maximum redirects \\(3\\) exceeded; redirect 302 from .* to "
+            "\"/redirect/0\"", \mgr.request(), (url, "GET", "/redirect/4"));
+
+        HttpClientIo::HttpClientConnectionManager mgr0(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "max_redirects": 0,
+        });
+        on_exit mgr0.closeAll();
+        assertThrows("HTTP-REDIRECT-ERROR", "maximum redirects \\(0\\) exceeded", \mgr0.request(),
+            (url, "GET", "/redirect/1"));
+        assertEq(200, mgr0.request(url, "GET", "/redirect/0").status_code);
+    }
+
+    testLocationErrors() {
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+        });
+        on_exit mgr.closeAll();
+        peer_a.setRoute("/multiloc", 302, {"Location": ("/one", "/two")});
+        peer_a.setRoute("/badscheme", 302, {"Location": "ftp://127.0.0.1/x"});
+        peer_a.setRoute("/nohost", 302, {"Location": "http:///x"});
+        peer_a.setRoute("/nohost2", 302, {"Location": "http:x"});
+        peer_a.setRoute("/userinfo-only", 302, {"Location": "http://user@/x"});
+        peer_a.setRoute("/unix", 302, {"Location": "http://socket=%2Ftmp%2Fqore-redirect-test.sock/x"});
+        peer_a.setRoute("/badhost-space", 302, {"Location": "http://a b/x"});
+        peer_a.setRoute("/badhost-pct", 302, {"Location": "http://a%zzb/x"});
+        peer_a.setRoute("/badhost-char", 302, {"Location": "http://a<b>/x"});
+        assertThrows("HTTP-REDIRECT-ERROR", "2 Location headers", \mgr.request(), (url_a, "GET", "/multiloc"));
+        assertThrows("HTTP-REDIRECT-ERROR", "unsupported scheme \"ftp\"", \mgr.request(),
+            (url_a, "GET", "/badscheme"));
+        assertThrows("HTTP-REDIRECT-ERROR", "has no host", \mgr.request(), (url_a, "GET", "/nohost"));
+        assertThrows("HTTP-REDIRECT-ERROR", "has no host", \mgr.request(), (url_a, "GET", "/nohost2"));
+        assertThrows("HTTP-REDIRECT-ERROR", "has no host", \mgr.request(), (url_a, "GET", "/userinfo-only"));
+        # a server can never send a request to a local UNIX domain socket
+        assertThrows("HTTP-REDIRECT-ERROR", "names a UNIX domain socket", \mgr.request(), (url_a, "GET", "/unix"));
+        # a host that could inject data into a request
+        foreach string path in (("/badhost-space", "/badhost-pct", "/badhost-char")) {
+            assertThrows("HTTP-REDIRECT-ERROR", "has an invalid host", \mgr.request(), (url_a, "GET", path), path);
+        }
+        # the manager remains usable
+        assertEq("GET /ok", mgr.request(url_a, "GET", "/ok").body);
+    }
+
+    testOriginBoundHeaders() {
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+            "enable_cookies": False,
+        });
+        on_exit mgr.closeAll();
+        # A -> B -> A
+        peer_a.setRoute("/xo", 302, {"Location": url_b + "/xo-b"});
+        peer_b.setRoute("/xo-b", 307, {"Location": url_a + "/xo-final"});
+        peer_a.clear();
+        peer_b.clear();
+        hash<auto> resp = mgr.request(url_a, "GET", "/xo", {"Authorization": "Bearer tok", "Cookie": "c=1",
+            "X-Custom": "v", "Host": "vhost.example"});
+        assertEq(200, resp.status_code);
+        list<hash<RoutePeerRequest>> a = peer_a.getRequests();
+        list<hash<RoutePeerRequest>> b = peer_b.getRequests();
+        assertEq(("/xo", "/xo-final"), (map $1.target, a));
+        foreach hash<RoutePeerRequest> req in (a) {
+            assertEq("Bearer tok", req.authorization);
+            assertEq("c=1", req.cookie);
+            assertEq("vhost.example", req.host);
+            assertEq("v", req.custom);
+        }
+        assertEq(1, b.size());
+        assertNothing(b[0].authorization);
+        assertNothing(b[0].cookie);
+        assertEq(url_b.substr(7), b[0].host);
+        assertEq("v", b[0].custom);
+
+        # user information in a redirect location is never used
+        peer_a.setRoute("/xo-cred", 302, {"Location": "http://evil:pw@" + url_b.substr(7) + "/plain"});
+        peer_b.clear();
+        resp = mgr.request(url_a, "GET", "/xo-cred");
+        assertEq(200, resp.status_code);
+        assertNothing(peer_b.getRequests()[0].authorization);
+        assertEq(url_b + "/plain", resp.effective_url);
+        assertEq(url_b + "/plain", resp.redirects[0].target_url);
+
+        # host names are compared case-insensitively
+        peer_c.setRoute("/case", 302, {"Location": sprintf("http://LOCALHOST:%d/case-final", port_c)});
+        peer_c.clear();
+        resp = mgr.request(sprintf("http://localhost:%d", port_c), "GET", "/case",
+            {"Authorization": "Bearer tok"});
+        assertEq(200, resp.status_code);
+        assertEq(("Bearer tok", "Bearer tok"), (map $1.authorization, peer_c.getRequests()));
+    }
+
+    testUnixSocket() {
+%ifdef Windows
+        testSkip("skipping because UNIX socket URLs are not available on Windows");
+%endif
+        string path = sprintf("%s%sqore-io-redirect-%d-%s.sock", tmp_location(), DirSep, getpid(),
+            get_random_string(12));
+        string encoded = encode_url(path, True);
+        on_exit unlink(path);
+        Socket server();
+        server.bindUNIX(path);
+        server.listen();
+        on_exit server.close();
+
+        # serves requests with one connection per request until the "/stop" request is received
+        Queue requests();
+        Counter running(1);
+        background sub () {
+            on_exit running.dec();
+            try {
+                while (True) {
+                    Socket peer = server.accept(30s);
+                    hash<auto> hdr = peer.readHTTPHeader(30s);
+                    requests.push(hdr.path);
+                    string response;
+                    switch (hdr.path) {
+                        case "/first":
+                            response = sprintf("HTTP/1.1 302 Found\r\nLocation: http://socket=%s/second\r\n", encoded);
+                            break;
+                        case "/other":
+                            response = "HTTP/1.1 302 Found\r\nLocation: http://socket=%2Ftmp%2Fqore-other.sock/x\r\n";
+                            break;
+                        default:
+                            response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n";
+                            break;
+                    }
+                    string body = hdr.path == "/second" ? "second" : "";
+                    peer.send(response + sprintf("Content-Length: %d\r\nConnection: close\r\n\r\n%s", body.size(),
+                        body));
+                    peer.close();
+                    if (hdr.path == "/stop") {
+                        break;
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                requests.push(ex);
+            }
+        }();
+
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+        });
+        on_exit {
+            try {
+                mgr.request("http://socket=" + encoded, "GET", "/stop");
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            mgr.closeAll();
+            running.waitForZero();
+        }
+        # a request on a UNIX domain socket can be redirected to the same socket
+        hash<auto> resp = mgr.request("http://socket=" + encoded, "GET", "/first");
+        assertEq(200, resp.status_code);
+        assertEq("second", (resp.body.typeCode() == NT_BINARY ? resp.body : binary(resp.body)).toString());
+        assertEq("/first", requests.get(5s));
+        assertEq("/second", requests.get(5s));
+        # but not to another socket
+        assertThrows("HTTP-REDIRECT-ERROR", "names a UNIX domain socket", \mgr.request(),
+            ("http://socket=" + encoded, "GET", "/other"));
+        assertEq("/other", requests.get(5s));
+    }
+
+    testEffectiveUrl() {
+        # the effective URL never has user information and is built from the origin and the request path
+        HttpClientIo::HttpClientConnectionManager mgr(<HttpClientIo::HttpClientConnectionManagerOptions>{
+            "protocol": "h1",
+        });
+        on_exit mgr.closeAll();
+        string url = "http://user:pass@localhost:" + port + "/base/path";
+        hash<auto> resp = mgr.request(url, "GET", "/redirect/1");
+        assertEq(200, resp.status_code);
+        assertEq("http://localhost:" + port + "/redirect/0", resp.effective_url);
+        assertEq(1, resp.redirects.size());
+        hash<HttpRedirectInfo> hop = resp.redirects[0];
+        assertEq("http://localhost:" + port + "/redirect/1", hop.request_url);
+        assertEq(302, hop.status_code);
+        assertEq("/redirect/0", hop.location);
+        assertEq("/redirect/0", hop.headers.location);
+        assertEq("http://localhost:" + port + "/redirect/0", hop.target_url);
+        # a response without redirects has no redirect information
+        resp = mgr.request(url, "GET", "/redirect/0");
+        assertEq("http://localhost:" + port + "/redirect/0", resp.effective_url);
+        assertNothing(resp.redirects);
     }
 
     testRedirectPassthru() {

@@ -179,6 +179,11 @@ log("started listener on %s", lh.desc);
     @section http_relnotes HttpServer Module Release Notes
 
     @subsection http1_7 HttpServer 1.7
+    - fixed sending two conflicting response header fields when a handler or the server configuration used a
+      name in another case than the server, as with \c "content-type": the server added its own
+      \c Content-Type, \c Date, \c Server, or \c Connection field, and a configured header was not replaced by
+      the handler's; header names are now matched case-insensitively (see
+      @ref HttpServer::http_canonicalize_reply_header_names() "http_canonicalize_reply_header_names()")
     - ending an HTTP/1 persistent session preserves a replacement session on the same connection, even
       when cleanup of the earlier session finishes after the replacement has registered its request queue
     - buffered HTTP/1 request text retains its declared charset, matching direct socket reads;
@@ -801,6 +806,10 @@ public class HttpServer inherits HttpServer::AbstractLogger {
 
         # other misc response headers
         hash<auto> hdr;
+
+        # the lower-case names of the configured response headers that are not managed by the server, each between
+        # newlines; see getMergedResponseHeaders()
+        list<string> hdr_merge_names();
 
         #! override message body encoding if none is received from the sender
         /** @note http://tools.ietf.org/html/rfc2616#section-3.7.1 states that it must be iso-8850-1
@@ -2218,6 +2227,9 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             return;
         }
 
+        # the names of the fields managed by the server are canonical from here on
+        extra_hdrs = http_canonicalize_reply_header_names(extra_hdrs);
+
         bool is_http2 = cx."header-info".http2 ?? False;
         bool is_multiplexed = is_http2 || (cx."header-info".http3 ?? False);
         data response_msg;
@@ -2274,33 +2286,21 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             hdr.Connection = cx.close ? "close" : "Keep-Alive";
         }
 
-        if (extra_hdrs) {
-            hdr += extra_hdrs;
-        }
+        hdr = mergeResponseHeaders(hdr, extra_hdrs);
 
         # Merge any response headers stashed by a handler's preprocessRequest() —
         # e.g. CORS headers — so that framework-level errors still return headers
         # the browser needs to read the body
         if (cx."error-response-headers".typeCode() == NT_HASH) {
-            hdr += cx."error-response-headers";
+            hdr = mergeResponseHeaders(hdr, cx."error-response-headers");
         }
+        hdr = http_canonicalize_reply_header_names(hdr);
 
         hdr.Date = getDateHeader();
         if (is_multiplexed) {
             # HTTP/2 and HTTP/3 prohibit connection-specific headers (RFC 9113 Section 8.2.2,
             # RFC 9114 Section 4.2)
-            remove hdr.Connection;
-            remove hdr.connection;
-            remove hdr."Keep-Alive";
-            remove hdr."keep-alive";
-            remove hdr."Proxy-Connection";
-            remove hdr."proxy-connection";
-            remove hdr."Transfer-Encoding";
-            remove hdr."transfer-encoding";
-            remove hdr.Upgrade;
-            remove hdr.upgrade;
-            remove hdr.TE;
-            remove hdr.te;
+            remove hdr{"Connection", "Keep-Alive", "Proxy-Connection", "Transfer-Encoding", "Upgrade", "TE"};
         }
 
         # log exceptions if not "SOCKET-SEND-ERROR" (probably broken pipe)
@@ -2557,8 +2557,13 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         http_server_string = opts.name.val() ? opts.name : HttpServer::HttpServerString;
         debug = opts.debug;
         hdr = opts.hdr.val()
-            ? opts.hdr
+            ? http_canonicalize_reply_header_names(opts.hdr)
             : {"X-Powered-By": "Qore/" + Qore::VersionString};
+        {
+            # see getMergedResponseHeaders()
+            hash<string, bool> managed = map {$1.lwr(): True}, HttpServerManagedHeaderNames;
+            hdr_merge_names = map "\n" + $1.lwr() + "\n", keys hdr, !managed{$1.lwr()};
+        }
         protect_last_listener = opts.protect_last_listener ?? False;
         logger = opts.logger ?? new Logger(http_server_string, LoggerLevel::getLevelInfo());
         date effective_ttl = opts.ttl ? opts.ttl : HttpServer::DefaultTtl;
@@ -2622,6 +2627,43 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
             rv."Alt-Svc" = alt_svc;
         }
         return rv;
+    }
+
+    #! Returns the configured response headers of the listener merged with a handler's response headers
+    /** @param listener_id the listener ID
+        @param hdr the response headers of the handler; the names of the fields managed by the server must be
+        canonical (see @ref HttpServer::http_canonicalize_reply_header_names())
+
+        @return the merged headers; a field in \a hdr replaces the configured fields with the same name in any case
+    */
+    private hash<auto> getMergedResponseHeaders(int listener_id, *hash<auto> hdr) {
+        hash<auto> base = getResponseHeaders(listener_id);
+        if (!hdr) {
+            return base;
+        }
+        # this is called for every response: the managed fields have canonical names in both hashes, so they are
+        # replaced by the plain hash addition, and only the other configured fields can be named in another case
+        if (hdr_merge_names) {
+            string names = "\n" + (keys hdr).join("\n").lwr() + "\n";
+            foreach string name in (hdr_merge_names) {
+                if (names.find(name) >= 0) {
+                    return mergeResponseHeaders(base, hdr);
+                }
+            }
+        }
+        return base + hdr;
+    }
+
+    #! Returns \a hdr merged into \a base; a field in \a hdr replaces the fields of \a base with the same name in any case
+    private static hash<auto> mergeResponseHeaders(hash<auto> base, *hash<auto> hdr) {
+        if (!hdr) {
+            return base;
+        }
+        if (!base) {
+            return hdr;
+        }
+        hash<string, bool> names = map {$1.lwr(): True}, keys hdr;
+        return (map {$1.key: $1.value}, base.pairIterator(), !names{$1.key.lwr()}) + hdr;
     }
 
     #! returns the listener ID from the bind name or throws an exception if not valid
@@ -3762,7 +3804,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         # e.g. CORS headers — so that framework-level exceptions during response
         # serialization still return headers the browser needs to read the body
         if (cx."error-response-headers".typeCode() == NT_HASH) {
-            err_hdr += cx."error-response-headers";
+            err_hdr = http_canonicalize_reply_header_names(mergeResponseHeaders(err_hdr,
+                cx."error-response-headers"));
         }
         return <HttpAsyncResponseInfo>{
             "code": status_code,
@@ -3825,7 +3868,8 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         # MUST NOT include a message-body. All other responses do include a
         # message-body, although it MAY be of zero length.
 
-        rv.hdr = getResponseHeaders(cx."listener-id") + rv.hdr;
+        # the names of the fields managed by the server are canonical from here on
+        rv.hdr = getMergedResponseHeaders(cx."listener-id", http_canonicalize_reply_header_names(rv.hdr));
 
         if ((exists rv.body || (bool chunked_body = rv.hasKeyValue("chunked_body")))
             && (head
@@ -3847,15 +3891,14 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         }
 
         bool is_h1 = !(cx."header-info".http2 ?? False) && !(cx."header-info".http3 ?? False);
-        bool has_content_length = rv.hdr."Content-Length" || rv.hdr."content-length";
-        bool has_transfer_encoding = rv.hdr."Transfer-Encoding" || rv.hdr."transfer-encoding";
+        bool has_content_length = boolean(rv.hdr."Content-Length");
+        bool has_transfer_encoding = boolean(rv.hdr."Transfer-Encoding");
         if (is_h1 && rv.send_callback && !has_content_length && !has_transfer_encoding) {
             rv.hdr."Transfer-Encoding" = "chunked";
             has_transfer_encoding = True;
         }
         if (is_h1 && is_sse && !rv.body && !rv.hasKey("chunked_body") && !rv.send_callback
                 && !has_content_length && !has_transfer_encoding) {
-            remove rv.hdr{"Connection", "connection"};
             rv.hdr.Connection = "close";
         }
 
@@ -4371,7 +4414,6 @@ http.setListenerLogOptionsID(0, LLO_RECV_HEADERS|LLO_SEND_HEADERS);
         # to a BinaryInputStream (which would trigger the streaming response path)
         if (cx."header-info".http2 || cx."header-info".http3) {
             remove rv.hdr."Transfer-Encoding";
-            remove rv.hdr."transfer-encoding";
         }
 
         bool chunked = rv.chunked_body || (rv.body && (rv.hdr."Transfer-Encoding"

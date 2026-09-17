@@ -4,8 +4,8 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires QUnit
-%requires HttpServerUtil
+%requires ../../../../qlib/QUnit.qm
+%requires json
 
 %exec-class Http2IntegrationTest
 
@@ -76,197 +76,126 @@ H4sqXPgfKSW/wUHTeS9BN4s=
         set_return_value(main());
     }
 
-    #! Test basic GET request over HTTP/2
-    testBasicGet() {
-        # Use external HTTP/2 server for reliable testing
+    #! Makes a request to the external test server; a failure of the server skips the test case
+    /** The external server is a dependency of these tests, so its failures are not failures of the client;
+        assertions are always made outside of this method, so a failed assertion is never reported as a skip
+
+        @param client the client
+        @param body the request body, if any
+        @param method the request method
+        @param path the request path
+        @param hdr the request headers, if any
+        @param error_status True if the request asks the server for an error status
+    */
+    private hash<auto> sendExternal(HTTPClient client, *data body, string method, string path, *hash<auto> hdr,
+            bool error_status = False) {
+        hash<auto> resp;
+        try {
+            resp = client.send(body, method, path, hdr, True);
+        } catch (hash<ExceptionInfo> ex) {
+            testSkip(sprintf("External server unavailable: %s: %s", ex.err, ex.desc));
+        }
+        if (!error_status && resp.status_code >= 500) {
+            testSkip(sprintf("External server unavailable: %s %s returned status %d", method, path,
+                resp.status_code));
+        }
+        return resp;
+    }
+
+    #! Returns a client for the external test server
+    private HTTPClient getExternalClient(*hash<auto> opts) {
         HTTPClient client({
             "url": "https://httpbin.org",
             "http_version": "auto",
             "timeout": 30s,
-        });
+        } + opts);
         client.acceptAllCertificates(True);
+        return client;
+    }
 
-        try {
-            hash<auto> resp = client.send("", "GET", "/get", NOTHING, True);
-            assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
-            assertEq(200, resp.status_code, "Status should be 200");
-            assertTrue(resp.body.typeCode() == NT_STRING, "Body should be string");
-        } catch (hash<ExceptionInfo> ex) {
-            testSkip(sprintf("External server unavailable: %s", ex.desc));
-        }
+    #! Test basic GET request over HTTP/2
+    testBasicGet() {
+        HTTPClient client = getExternalClient();
+        hash<auto> resp = sendExternal(client, NOTHING, "GET", "/get");
+        assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
+        assertEq(200, resp.status_code, "Status should be 200");
+        assertEq(Type::String, resp.body.type(), "Body should be string");
     }
 
     #! Test POST request with JSON body
     testPostWithBody() {
-        HTTPClient client({
-            "url": "https://httpbin.org",
-            "http_version": "auto",
-            "timeout": 30s,
-        });
-        client.acceptAllCertificates(True);
-
-        try {
-            string json_body = '{"test": "data", "number": 42}';
-            hash<auto> resp = client.send(json_body, "POST", "/post", {
-                "Content-Type": "application/json",
-            }, True);
-
-            assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
-            assertEq(200, resp.status_code, "Status should be 200");
-
-            # Verify body was returned
-            assertTrue(resp.body.typeCode() == NT_STRING, "Body should be string");
-        } catch (hash<ExceptionInfo> ex) {
-            testSkip(sprintf("External server unavailable: %s", ex.desc));
-        }
+        HTTPClient client = getExternalClient();
+        string json_body = '{"test": "data", "number": 42}';
+        hash<auto> resp = sendExternal(client, json_body, "POST", "/post", {"Content-Type": "application/json"});
+        assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
+        assertEq(200, resp.status_code, "Status should be 200");
+        assertEq(Type::String, resp.body.type(), "Body should be string");
+        # httpbin echoes the request body
+        assertEq({"test": "data", "number": 42}, parse_json(resp.body).json);
     }
 
     #! Test multiple sequential requests on same connection
     testSequentialRequests() {
-        HTTPClient client({
-            "url": "https://httpbin.org",
-            "http_version": "auto",
-            "timeout": 30s,
-        });
-        client.acceptAllCertificates(True);
-
-        try {
-            # First request
-            hash<auto> resp1 = client.send("", "GET", "/get", NOTHING, True);
-            assertTrue(client.isHttp2Active(), "HTTP/2 should be active after first request");
-
-            # Second request - should reuse connection
-            hash<auto> resp2 = client.send("", "GET", "/headers", NOTHING, True);
-            assertTrue(client.isHttp2Active(), "HTTP/2 should remain active");
-
-            # Third request
-            hash<auto> resp3 = client.send("", "GET", "/ip", NOTHING, True);
-            assertTrue(client.isHttp2Active(), "HTTP/2 should remain active");
-
-            # All requests should succeed
-            assertEq(200, resp1.status_code);
-            assertEq(200, resp2.status_code);
-            assertEq(200, resp3.status_code);
-        } catch (hash<ExceptionInfo> ex) {
-            testSkip(sprintf("External server unavailable: %s", ex.desc));
-        }
+        HTTPClient client = getExternalClient();
+        hash<auto> resp1 = sendExternal(client, NOTHING, "GET", "/get");
+        assertTrue(client.isHttp2Active(), "HTTP/2 should be active after first request");
+        # the next requests reuse the connection
+        hash<auto> resp2 = sendExternal(client, NOTHING, "GET", "/headers");
+        assertTrue(client.isHttp2Active(), "HTTP/2 should remain active");
+        hash<auto> resp3 = sendExternal(client, NOTHING, "GET", "/ip");
+        assertTrue(client.isHttp2Active(), "HTTP/2 should remain active");
+        assertEq(200, resp1.status_code);
+        assertEq(200, resp2.status_code);
+        assertEq(200, resp3.status_code);
     }
 
     #! Test large body transfer
     testLargeBody() {
-        HTTPClient client({
-            "url": "https://httpbin.org",
-            "http_version": "auto",
-            "timeout": 60s,
-        });
-        client.acceptAllCertificates(True);
-
-        try {
-            # Request 10KB of random bytes
-            hash<auto> resp = client.send("", "GET", "/bytes/10240", NOTHING, True);
-
-            assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
-            assertEq(200, resp.status_code, "Status should be 200");
-            # Body might be binary or string depending on content-type
-            int body_size;
-            if (resp.body.typeCode() == NT_BINARY) {
-                body_size = resp.body.size();
-            } else if (resp.body.typeCode() == NT_STRING) {
-                body_size = resp.body.length();
-            } else {
-                body_size = 0;
-            }
-            assertEq(10240, body_size, "Body should be 10KB");
-        } catch (hash<ExceptionInfo> ex) {
-            testSkip(sprintf("External server unavailable: %s", ex.desc));
-        }
+        HTTPClient client = getExternalClient({"timeout": 60s});
+        # 10KB of random bytes; HTTPClient::send() returns the body as a string, whose size is its byte count
+        # (random bytes are not valid text, so the character count is meaningless)
+        hash<auto> resp = sendExternal(client, NOTHING, "GET", "/bytes/10240");
+        assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
+        assertEq(200, resp.status_code, "Status should be 200");
+        assertEq(10240, resp.body.size(), "Body should be 10KB");
     }
 
     #! Test custom headers are preserved through HTTP/2
     testHeadersPreservation() {
-        HTTPClient client({
-            "url": "https://httpbin.org",
-            "http_version": "auto",
-            "timeout": 30s,
+        HTTPClient client = getExternalClient();
+        hash<auto> resp = sendExternal(client, NOTHING, "GET", "/headers", {
+            "X-Custom-Header": "test-value-123",
+            "X-Another-Header": "another-value",
         });
-        client.acceptAllCertificates(True);
-
-        try {
-            hash<auto> resp = client.send("", "GET", "/headers", {
-                "X-Custom-Header": "test-value-123",
-                "X-Another-Header": "another-value",
-            }, True);
-
-            assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
-            assertEq(200, resp.status_code, "Status should be 200");
-
-            # httpbin echoes headers back in JSON response
-            assertTrue(resp.body.typeCode() == NT_STRING, "Body should be string");
-        } catch (hash<ExceptionInfo> ex) {
-            testSkip(sprintf("External server unavailable: %s", ex.desc));
-        }
+        assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
+        assertEq(200, resp.status_code, "Status should be 200");
+        # httpbin echoes the request headers
+        hash<auto> echoed = parse_json(resp.body).headers;
+        assertEq("test-value-123", echoed."X-Custom-Header");
+        assertEq("another-value", echoed."X-Another-Header");
     }
 
     #! Test error status codes are properly returned
     testErrorStatusCodes() {
-        HTTPClient client({
-            "url": "https://httpbin.org",
-            "http_version": "auto",
-            "timeout": 30s,
-            "error_passthru": True,
-        });
-        client.acceptAllCertificates(True);
-
-        try {
-            # Request a 404 status
-            hash<auto> resp = client.send("", "GET", "/status/404", NOTHING, True);
-            assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
-            assertEq(404, resp.status_code, "Status should be 404");
-
-            # Request a 500 status
-            resp = client.send("", "GET", "/status/500", NOTHING, True);
-            assertTrue(client.isHttp2Active(), "HTTP/2 should remain active");
-            assertEq(500, resp.status_code, "Status should be 500");
-        } catch (hash<ExceptionInfo> ex) {
-            testSkip(sprintf("External server unavailable: %s", ex.desc));
-        }
+        HTTPClient client = getExternalClient({"error_passthru": True});
+        hash<auto> resp = sendExternal(client, NOTHING, "GET", "/status/404");
+        assertTrue(client.isHttp2Active(), "HTTP/2 should be active");
+        assertEq(404, resp.status_code, "Status should be 404");
+        resp = sendExternal(client, NOTHING, "GET", "/status/500", NOTHING, True);
+        assertTrue(client.isHttp2Active(), "HTTP/2 should remain active");
+        assertEq(500, resp.status_code, "Status should be 500");
     }
 
     #! Test HTTP/2 connection persistence with multiple request types
     testConnectionPersistenceExternal() {
-        HTTPClient client({
-            "url": "https://httpbin.org",
-            "http_version": "auto",
-            "timeout": 30s,
-            "error_passthru": True,
-        });
-        client.acceptAllCertificates(True);
-
-        try {
-            # Mix of different request types
-            hash<auto> resp;
-
-            resp = client.send("", "GET", "/get", NOTHING, True);
-            assertTrue(client.isHttp2Active(), "HTTP/2 active after GET");
-            assertEq(200, resp.status_code);
-
-            resp = client.send("test data", "POST", "/post", NOTHING, True);
-            assertTrue(client.isHttp2Active(), "HTTP/2 active after POST");
-            assertEq(200, resp.status_code);
-
-            resp = client.send("", "PUT", "/put", NOTHING, True);
-            assertTrue(client.isHttp2Active(), "HTTP/2 active after PUT");
-            assertEq(200, resp.status_code);
-
-            resp = client.send("", "DELETE", "/delete", NOTHING, True);
-            assertTrue(client.isHttp2Active(), "HTTP/2 active after DELETE");
-            assertEq(200, resp.status_code);
-
-            # Verify connection is still using HTTP/2
-            resp = client.send("", "GET", "/get", NOTHING, True);
-            assertTrue(client.isHttp2Active(), "HTTP/2 still active at end");
-        } catch (hash<ExceptionInfo> ex) {
-            testSkip(sprintf("External server unavailable: %s", ex.desc));
+        HTTPClient client = getExternalClient({"error_passthru": True});
+        foreach list<string> req in (("GET", "/get"), ("POST", "/post"), ("PUT", "/put"), ("DELETE", "/delete")) {
+            hash<auto> resp = sendExternal(client, req[0] == "POST" ? "test data" : NOTHING, req[0], req[1]);
+            assertTrue(client.isHttp2Active(), "HTTP/2 active after " + req[0]);
+            assertEq(200, resp.status_code, req[0]);
         }
+        # the connection still uses HTTP/2
+        sendExternal(client, NOTHING, "GET", "/get");
+        assertTrue(client.isHttp2Active(), "HTTP/2 still active at end");
     }
 }

@@ -316,6 +316,47 @@ DLLLOCAL QoreSandboxManager* qore_find_thread_sandbox_policy_manager_ref();
 //! Pushes a sandbox policy barrier on the current thread; returns 0 for OK, -1 for no thread data
 DLLLOCAL int qore_push_sandbox_policy_barrier();
 
+//! The sandbox managers that govern the current thread, captured to continue an operation on another thread
+/** An operation started by sandboxed code (possibly through module code running in an unsandboxed Program) and
+    continued on a callback worker must be governed by the sandbox of the thread that started it: the worker's own
+    Program context does not include the sandboxed caller.  Apply the context with QoreSandboxContextHelper.
+
+    The object is immutable after construction.
+*/
+class QoreSandboxContext {
+public:
+    //! Captures the sandbox managers that govern the current thread
+    DLLLOCAL QoreSandboxContext();
+
+    DLLLOCAL ~QoreSandboxContext();
+
+    DLLLOCAL QoreSandboxContext(const QoreSandboxContext&) = delete;
+    DLLLOCAL QoreSandboxContext& operator=(const QoreSandboxContext&) = delete;
+
+    //! The manager for all purposes except policy checks (referenced), or nullptr
+    QoreSandboxManager* manager = nullptr;
+    //! The manager for policy checks (referenced), or nullptr; see qore_find_thread_sandbox_policy_manager_ref()
+    QoreSandboxManager* policy_manager = nullptr;
+    //! The ID of the Program that @ref manager was found on, or 0
+    unsigned pgm_id = 0;
+};
+
+//! Makes the sandbox manager lookups of the current thread return a captured context while the object exists
+class QoreSandboxContextHelper {
+public:
+    //! Applies the context; the context must remain valid while the helper exists
+    DLLLOCAL QoreSandboxContextHelper(const QoreSandboxContext& ctx);
+
+    DLLLOCAL ~QoreSandboxContextHelper();
+
+    DLLLOCAL QoreSandboxContextHelper(const QoreSandboxContextHelper&) = delete;
+    DLLLOCAL QoreSandboxContextHelper& operator=(const QoreSandboxContextHelper&) = delete;
+
+private:
+    const QoreSandboxContext* old_ctx = nullptr;
+    bool active = false;
+};
+
 //! Pops a sandbox policy barrier pushed with @ref qore_push_sandbox_policy_barrier()
 DLLLOCAL void qore_pop_sandbox_policy_barrier();
 

@@ -127,13 +127,19 @@ public:
         @param max_concurrent_streams advisory cap on concurrent streams
         @param xsink exception sink — set on construction failure
         @param mgr optional owning manager
+        @param connect_timeout_us the connect timeout of the connection whose connect phase this connection
+            continues, in microseconds; <= 0 means none
+        @param connect_deadline_us the monotonic deadline of that connect phase (see q_get_monotonic_us()); the
+            connection is not ready until the peer has answered the client preface, and that exchange is bounded by
+            this deadline
 
         @since %Qore 3.0
     */
     DLLLOCAL Http2ClientConnection(QoreObject* adopted_sock_obj,
         QoreSocketObject* adopted_sock_priv,
         std::string target_host, int target_port, int max_concurrent_streams,
-        ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr = nullptr);
+        ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr = nullptr, int64_t connect_timeout_us = 0,
+        int64_t connect_deadline_us = 0);
 
     DLLLOCAL virtual ~Http2ClientConnection();
 
@@ -278,7 +284,8 @@ private:
         @return 0 on success, -1 on failure
     */
     DLLLOCAL int buildAndSubmitAdopted(QoreObject* adopted_sock_obj,
-        QoreSocketObject* adopted_sock_priv, ExceptionSink* xsink);
+        QoreSocketObject* adopted_sock_priv, int64_t connect_timeout_us, int64_t connect_deadline_us,
+        ExceptionSink* xsink);
 
     //! Submission tail shared between @ref buildAndSubmit and
     //! @ref buildAndSubmitAdopted.

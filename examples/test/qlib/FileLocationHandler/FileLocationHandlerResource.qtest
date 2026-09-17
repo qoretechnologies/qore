@@ -1,0 +1,1005 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    FileLocationHandler resource retrieval tests: every retrieval is made with the blocking and the non-blocking
+    API, which must return the same result and raise the same errors.
+*/
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/FsUtil.qm
+%requires ../../../../qlib/Mime.qm
+%requires ../../../../qlib/Logger.qm
+%requires ../../../../qlib/HttpServerUtil.qm
+%requires ../../../../qlib/HttpServer.qm
+%requires ../../../../qlib/FileLocationHandler
+%requires ../../../../qlib/RestClient.qm
+%requires ../../../../qlib/RestClientIo.qm
+%requires ../../../../qlib/AsyncSocketIo
+
+%exec-class FileLocationHandlerResourceTest
+
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIFNjCCBB6gAwIBAgISA1ELHYM0GFfi2BdvZfzLGJMLMA0GCSqGSIb3DQEBCwUA
+MDIxCzAJBgNVBAYTAlVTMRYwFAYDVQQKEw1MZXQncyBFbmNyeXB0MQswCQYDVQQD
+EwJSMzAeFw0yMjA4MDcwOTAwMDdaFw0yMjExMDUwOTAwMDZaMCIxIDAeBgNVBAMT
+F2hxLnFvcmV0ZWNobm9sb2dpZXMuY29tMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
+MIIBCgKCAQEAlw84m+9dCjeD4s8YYVZ3gbv8YkYQGyyaojgdJuarTyJPYnGzhMf7
+PF+Y2398k+8ydAnOTwJXRcaU36f0hHDvTagP1f0EFg3kWlplzsrtrDI/HZBRH0W2
++54YE6FhPEtEkkO1aKy+VXb8QMQKSmsUZS+IxSe+69tWFI60tW92eq53tFAwEWN+
+0oBeJBCASRQa7bq1J/BgZhlBSyUQ6Zf+wqUSfmVEf7tsFujyNZ2dfxHtPtLxRspA
+7yhgnQQaXHemyEWeZWjIbToazG8SvutmcwIFK/TtE0anWdTR+Hn92mxH9mxnnyns
+Ag+RlqxnEpBDIb1ufwCFUhMXBwRiiZIM1QIDAQABo4ICVDCCAlAwDgYDVR0PAQH/
+BAQDAgWgMB0GA1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjAMBgNVHRMBAf8E
+AjAAMB0GA1UdDgQWBBSj2nUL9X+zXI7p0fFhg03WZAS0xDAfBgNVHSMEGDAWgBQU
+LrMXt1hWy65QCUDmH6+dixTCxjBVBggrBgEFBQcBAQRJMEcwIQYIKwYBBQUHMAGG
+FWh0dHA6Ly9yMy5vLmxlbmNyLm9yZzAiBggrBgEFBQcwAoYWaHR0cDovL3IzLmku
+bGVuY3Iub3JnLzAiBgNVHREEGzAZghdocS5xb3JldGVjaG5vbG9naWVzLmNvbTBM
+BgNVHSAERTBDMAgGBmeBDAECATA3BgsrBgEEAYLfEwEBATAoMCYGCCsGAQUFBwIB
+FhpodHRwOi8vY3BzLmxldHNlbmNyeXB0Lm9yZzCCAQYGCisGAQQB1nkCBAIEgfcE
+gfQA8gB3AN+lXqtogk8fbK3uuF9OPlrqzaISpGpejjsSwCBEXCpzAAABgne/YgYA
+AAQDAEgwRgIhAP/ERcskhKhF7M8VIejtrwEtDXJoX1IXec//r64jkOlUAiEAhheZ
+VMT5cZ2uoPGoD6+SuQY/CYBuHdXNR/pUC3SGOQEAdwApeb7wnjk5IfBWc59jpXfl
+vld9nGAK+PlNXSZcJV3HhAAAAYJ3v2H5AAAEAwBIMEYCIQCmiChg/6dLhE3TfGum
+JR7k8s7ibmqw2KVJI3oUR/ogBAIhAIXIIhyqb3W/34ATNT9dIPCGFKpghQw82G8w
+ANnChDgYMA0GCSqGSIb3DQEBCwUAA4IBAQAovvC8AiF7+uNLJCEXMe3VeI4Ne+l1
+mqCRRujz7ijlr6VgNxZt+i/kx1HJKrSKnQZRQ48xWAipMVYfXxH3u20p4RkkW2nj
+jjIVQvQvlFhDjLaJR74PYopp0lPuBW9RKg+C+l3vvjxjkin/MOBX2apGOvC4LJwb
+2s6f8cArBRvdhA7nwEmlP3+aqxxkp9STZYpxuKR4F9fRGtg0Y39Db+3XkYp7Y/hV
+DBVpHegoty2VFErehkJUmgdNoLdTuC8gHgA3p5bCbApyVGjBuO+QpSWG/3WiBDfm
+1IpGT8P2OhFruQHryHEKmY6f5huZV2Y0gFmqBwRiR1ToF5gFveTUJM3d
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCXDzib710KN4Pi
+zxhhVneBu/xiRhAbLJqiOB0m5qtPIk9icbOEx/s8X5jbf3yT7zJ0Cc5PAldFxpTf
+p/SEcO9NqA/V/QQWDeRaWmXOyu2sMj8dkFEfRbb7nhgToWE8S0SSQ7VorL5VdvxA
+xApKaxRlL4jFJ77r21YUjrS1b3Z6rne0UDARY37SgF4kEIBJFBrturUn8GBmGUFL
+JRDpl/7CpRJ+ZUR/u2wW6PI1nZ1/Ee0+0vFGykDvKGCdBBpcd6bIRZ5laMhtOhrM
+bxK+62ZzAgUr9O0TRqdZ1NH4ef3abEf2bGefKewCD5GWrGcSkEMhvW5/AIVSExcH
+BGKJkgzVAgMBAAECggEAPhvyCJtYQ9UjkuPXgF4O8PacBMQN5z5lrgEoa1A4a2cO
+AMoDJ7sZ327m6Ij4bdLRichmXTH3NCc8GuFxterBWcqaCD/pqC+6DjRQ27+wDTbz
+oHIwCI2feME94QRfeGzyGrlgI1OzRmyPtwljuclhL2Fl+Loo08zxDa7HOjpEGphz
+wkD2gQy5S7Mi5ekBZMhy8EklpzdKlOFdvhjo7vQu8vY8xJZ6jN65RV+RBscbmZQl
+llK1uW/8UyRIAUK9sM6Ozxbiz7QQELHpSvY3JIiZC5A6rBk2DGqOu8ouzDrQuHsB
+LHWjzceu6UcJY0tCeOUkVDnoxbj2UcINEAIABIPN2QKBgQDHHbrwdW8qRecLw8y2
+FJDO/6+8VmRKtj8B7CeOYuEZet2UvnPssisCovu0jnMa2ysF/L4YQAWa5XY0bB+E
+R/NRzeh4i0jIsW70h2qePTK+XRAGhCCKiCcb7nkED72TTplQ5wgRA/oWPLOrys34
+f+YqCI7BVrbWzgDyrhEdRAXSbwKBgQDCNuMlLcGTTi04OIQFDZmzjdvx9KvHvksz
+zff9Y0Rb1eUsXF2oG3S55umgeUcG9Nk2KigJzO6WAmTT6rcbn4tsRsnkLdqcEPmg
+P1wbBikW3Bz935k7yPcx05bVshLrJsK0Gxa8YYE6hh/PbdiQFtHf2r4uYu1kxC01
+518U8oPm+wKBgDfyJIpXlKp+BZMKqsQmNyHSOaBjbb6IQl/Z6KtbIQA1w3h9orjI
+vsj43lw3AiRznD0MbKUHqAuDmZjVIG3cgYNkpYLpL8QkBpbyTYS0kUNnho8uJK6H
+3uU8NghsG8n99ZoDsAKH6YbB+4Gzc/f0h8kbqnCsWqc0LpQBUJG2gSRFAoGBAI3P
+4kBNjuFu3hoFOnEuIyM23HlqPNyXGPZ02TXOfCXKo5Kmx0Ru9+aes80XgUOVGd4x
+Hhc56qTijpkm9BlZgEbJ0bWpvczjoELgwPKCpxIoG4tM7+j1r3pUk/jqFGJcZSN5
+/DoFwITpVuTxwoZEA2+/m8rnNYy0qoaHsafsBWBtAoGAAPYkINDjhAslu2gQlsZi
+7eA4coUg5eNUI+YYy4xonJAU488AsrcAWr5nGEids4ZM5PqKkJezG+6gctaYnjjZ
+IQrghzR1AC0Y3XDSuJYGRcZeUF2XZmOjcXNm0oMxeMEeEuuNLOTZ2pp7aUcYIOfV
+OKKqgBjNAlYDdPhOy8O8Agk=
+-----END PRIVATE KEY-----";
+
+#! A request received by the test server
+hashdecl ResourceRequest {
+    string method;
+    string target;
+    *string authorization;
+    *string cookie;
+    *string custom;
+}
+
+#! Test server handler with configurable routes that records every request
+class ResourcePeer inherits AbstractHttpRequestHandler {
+    public {
+        #! Blocks requests with a target starting with "/block" until released
+        Counter block();
+        #! Signaled when a request to a "/block" target arrives
+        Queue blocked();
+    }
+
+    private {
+        hash<string, hash<auto>> routes;
+        list<hash<ResourceRequest>> requests;
+        Mutex m();
+    }
+
+    setRoute(string target, int code, *hash<auto> headers, *data body) {
+        AutoLock al(m);
+        routes{target} = {"code": code, "headers": headers, "body": body};
+    }
+
+    clear() {
+        AutoLock al(m);
+        requests = ();
+    }
+
+    list<hash<ResourceRequest>> getRequests() {
+        AutoLock al(m);
+        return requests;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        *hash<auto> route;
+        {
+            AutoLock al(m);
+            requests += <ResourceRequest>{
+                "method": hdr.method,
+                "target": cx.raw_path,
+                "authorization": hdr.authorization,
+                "cookie": hdr.cookie,
+                "custom": hdr."x-custom",
+            };
+            route = routes{cx.raw_path};
+        }
+        if (cx.raw_path =~ /^\/block/) {
+            blocked.push(cx.raw_path);
+            block.waitForZero();
+        }
+        # /path/<name>: returns its own target, for concurrent reads
+        if (!route) {
+            return makeResponse({"Content-Type": "text/plain"}, 200, binary(cx.raw_path));
+        }
+        # a binary body is never used as a format string
+        hash<HttpResponseInfo> rv = makeResponse(route.headers ?? {}, route.code,
+            route.body.typeCode() == NT_BINARY ? route.body : binary(route.body ?? ""));
+        if (route.headers."Content-Encoding") {
+            rv.no_content_encoding = True;
+        }
+        return rv;
+    }
+}
+
+#! A custom handler that only implements the data-only methods
+class DataOnlyHandler inherits AbstractFileLocationHandler {
+    private string getTextFileImpl(string scheme, string location, *hash<auto> opts) {
+        return "text:" + location;
+    }
+
+    private binary getBinaryFileImpl(string scheme, string location, *hash<auto> opts) {
+        return binary("data:" + location);
+    }
+
+    private Qore::AbstractPollOperation getIoPollerForLocationImpl(string scheme, string location,
+            *hash<auto> opts) {
+        if (location == "no-poll") {
+            throw "UNIMPLEMENTED", "this handler does not support non-blocking reads";
+        }
+        if (location == "bad-output") {
+            return new ImmediateDataPollOperation({"not": "data"});
+        }
+        if (location == "string-output") {
+            return new ImmediateDataPollOperation("string:" + location);
+        }
+        if (location == "no-output") {
+            return new ImmediateDataPollOperation();
+        }
+        return new ImmediateDataPollOperation(binary("data:" + location));
+    }
+
+    private Qore::StreamReader getStreamReaderImpl(string scheme, string location, *hash<auto> opts) {
+        throw "UNIMPLEMENTED", "not supported";
+    }
+
+    private Qore::InputStream getBinaryStreamImpl(string scheme, string location, *hash<auto> opts) {
+        throw "UNIMPLEMENTED", "not supported";
+    }
+
+    private writeFileImpl(string scheme, string location, data contents, *hash<auto> opts) {
+        throw "UNIMPLEMENTED", "not supported";
+    }
+
+    private OutputStreamWrapper getOutputStreamImpl(string scheme, string location, *hash<auto> opts) {
+        throw "UNIMPLEMENTED", "not supported";
+    }
+
+    private hash<string, hash<FileHandlerOptionInfo>> getReadOptionsImpl() {
+        return {
+            "flag": <FileHandlerOptionInfo>{
+                "type": "bool",
+                "desc": "a test option",
+            },
+        };
+    }
+
+    private hash<string, hash<FileHandlerOptionInfo>> getWriteOptionsImpl() {
+        return {};
+    }
+}
+
+public class FileLocationHandlerResourceTest inherits QUnit::Test {
+    public {
+        #! Binary data with NUL bytes and invalid UTF-8
+        const BinaryData = <000102ff80fe00c3>;
+    }
+
+    private {
+        HttpServer server_a;
+        HttpServer server_b;
+        ResourcePeer peer_a();
+        ResourcePeer peer_b();
+        int port_a;
+        int port_b;
+        string url_a;
+        string url_b;
+        TmpDir tmp("flh-resource-");
+        AsyncSocketIoController controller();
+    }
+
+    constructor() : Test("FileLocationHandler resource test", "1.0") {
+        addTestCase("HTTP redirects and metadata", \httpRedirectTest());
+        addTestCase("HTTP headers and content types", \httpHeaderTest());
+        addTestCase("HTTP data", \httpDataTest());
+        addTestCase("HTTP errors", \httpErrorTest());
+        addTestCase("HTTP options", \httpOptionTest());
+        addTestCase("HTTPS over HTTP/2", \httpsTest());
+        addTestCase("bound HTTP client", \boundHttpTest());
+        addTestCase("REST locations", \restTest());
+        addTestCase("bound REST client", \boundRestTest());
+        addTestCase("file locations", \fileTest());
+        addTestCase("file URI conversion", \fileUriTest());
+        addTestCase("data locations", \dataTest());
+        addTestCase("custom handlers", \customHandlerTest());
+        addTestCase("legacy data-only APIs", \legacyApiTest());
+        addTestCase("concurrent reads", \concurrencyTest());
+        addTestCase("async I/O controller", \controllerTest());
+        addTestCase("abort", \abortTest());
+
+        server_a = new HttpServer(<HttpServerOptionInfo>{});
+        server_b = new HttpServer(<HttpServerOptionInfo>{});
+        on_exit {
+            server_a.stop();
+            server_b.stop();
+        }
+        server_a.setDefaultHandler("a", peer_a);
+        server_b.setDefaultHandler("b", peer_b);
+        port_a = server_a.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        port_b = server_b.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        url_a = sprintf("http://127.0.0.1:%d", port_a);
+        url_b = sprintf("http://127.0.0.1:%d", port_b);
+
+        FileLocationHandler::registerHandler("flhresource", new DataOnlyHandler());
+
+        set_return_value(main());
+    }
+
+    httpRedirectTest() {
+        peer_a.setRoute("/old/root.wsdl", 302, {"Location": "../new/root.wsdl?rev=2#section"});
+        peer_a.setRoute("/new/root.wsdl?rev=2", 301, {"Location": url_b + "/final/root.wsdl?x="});
+        peer_b.setRoute("/final/root.wsdl?x=", 200, {"Content-Type": "text/xml"}, "<definitions/>");
+        string location = sprintf("http://user:pass@127.0.0.1:%d/old/root.wsdl", port_a);
+        foreach hash<FileResourceResult> r in (getBoth(location, NOTHING, \peer_b.clear())) {
+            assertEq(binary("<definitions/>"), r.data);
+            assertEq(url_a + "/old/root.wsdl", r.info.requested_location, "credentials are removed");
+            assertEq(url_b + "/final/root.wsdl?x=", r.info.effective_location, "the empty query is kept");
+            assertEq("text/xml", r.info.media_type);
+            assertEq(200, r.info.http.status_code);
+            assertEq(2, r.info.http.redirects.size());
+            hash<HttpFileRedirectInfo> hop = r.info.http.redirects[0];
+            assertEq(url_a + "/old/root.wsdl", hop.request_url);
+            assertEq(302, hop.status_code);
+            assertEq("../new/root.wsdl?rev=2#section", hop.location);
+            assertEq(url_a + "/new/root.wsdl?rev=2", hop.target_url);
+            assertEq(("../new/root.wsdl?rev=2#section",), hop.headers.location);
+            hop = r.info.http.redirects[1];
+            assertEq(url_a + "/new/root.wsdl?rev=2", hop.request_url);
+            assertEq(301, hop.status_code);
+            assertEq(url_b + "/final/root.wsdl?x=", hop.target_url);
+            assertNothing(r.info.extra);
+            # the credentials are sent to the original origin only
+            assertNothing(peer_b.getRequests()[0].authorization);
+        }
+        # a response without redirects
+        foreach hash<FileResourceResult> r in (getBoth(url_a + "/plain")) {
+            assertEq(url_a + "/plain", r.info.effective_location);
+            assertEq((), r.info.http.redirects);
+        }
+    }
+
+    httpHeaderTest() {
+        peer_a.setRoute("/headers", 200, {
+            "Content-Type": "Text/XML; Charset=\"UTF-16\"; x=1",
+            "Set-Cookie": ("a=1; Path=/", "b=2, c=3"),
+            "X-Single": "one",
+            "Content-Language": "en",
+        }, "x");
+        foreach hash<FileResourceResult> r in (getBoth(url_a + "/headers")) {
+            assertEq("text/xml", r.info.media_type);
+            assertEq("UTF-16", r.info.charset);
+            hash<string, list<string>> h = r.info.http.headers;
+            # repeated headers keep each value, even with commas
+            assertEq(("a=1; Path=/", "b=2, c=3"), h."set-cookie");
+            assertEq(("one",), h."x-single");
+            assertEq(("Text/XML; Charset=\"UTF-16\"; x=1",), h."content-type");
+            # every name is lower case
+            assertEq((), (select keys h, $1 != $1.lwr()));
+        }
+        # charset forms
+        list<list<*string>> cases = (
+            ("text/plain;charset=iso-8859-1", "text/plain", "iso-8859-1"),
+            ("text/plain ; charset = utf-8 ; format=flowed", "text/plain", "utf-8"),
+            ("application/xml; charset=\"a\\\"b\"", "application/xml", "a\"b"),
+            ("application/octet-stream", "application/octet-stream", NOTHING),
+            ("text/plain; charset=", "text/plain", NOTHING),
+            ("text/plain; format=fixed", "text/plain", NOTHING),
+        );
+        foreach list<*string> c in (cases) {
+            peer_a.setRoute("/ct", 200, {"Content-Type": c[0]}, "x");
+            foreach hash<FileResourceResult> r in (getBoth(url_a + "/ct")) {
+                assertEq(c[1], r.info.media_type, c[0]);
+                assertEq(c[2], r.info.charset, c[0]);
+            }
+        }
+        # no content type
+        peer_a.setRoute("/noct", 200, {}, BinaryData);
+        foreach hash<FileResourceResult> r in (getBoth(url_a + "/noct")) {
+            assertEq(BinaryData, r.data);
+        }
+    }
+
+    httpDataTest() {
+        binary gz = gzip(BinaryData);
+        peer_a.setRoute("/gzip", 200, {"Content-Type": "application/octet-stream", "Content-Encoding": "gzip"}, gz);
+        peer_a.setRoute("/binary", 200, {"Content-Type": "application/octet-stream"}, BinaryData);
+        peer_a.setRoute("/latin1", 200, {"Content-Type": "text/plain; charset=ISO-8859-1"}, <e4f6fc>);
+        peer_a.setRoute("/empty", 200, {"Content-Type": "text/plain"}, binary());
+        foreach hash<FileResourceResult> r in (getBoth(url_a + "/gzip")) {
+            # the data is decoded, while the headers describe the transferred representation
+            assertEq(BinaryData, r.data);
+            assertEq(("gzip",), r.info.http.headers."content-encoding");
+            assertEq((string(gz.size()),), r.info.http.headers."content-length");
+        }
+        foreach hash<FileResourceResult> r in (getBoth(url_a + "/binary")) {
+            assertEq(BinaryData, r.data);
+        }
+        foreach hash<FileResourceResult> r in (getBoth(url_a + "/latin1")) {
+            # the data is never converted
+            assertEq(<e4f6fc>, r.data);
+            assertEq("ISO-8859-1", r.info.charset);
+        }
+        foreach hash<FileResourceResult> r in (getBoth(url_a + "/empty")) {
+            assertEq(binary(), r.data);
+            assertEq("binary", r.data.type());
+            assertEq(204, r.info.http.status_code);
+        }
+        # HEAD requests have no data
+        foreach hash<FileResourceResult> r in (getBoth(url_a + "/binary{method=head}")) {
+            assertEq(binary(), r.data);
+            assertEq(200, r.info.http.status_code);
+        }
+        # encoding_passthru returns the encoded data
+        foreach hash<FileResourceResult> r in (getBoth(url_a + "/gzip{encoding_passthru=true}")) {
+            assertEq(gz, r.data);
+        }
+    }
+
+    httpErrorTest() {
+        peer_a.setRoute("/missing", 404, {"Content-Type": "text/plain"}, "not here");
+        peer_a.setRoute("/to-missing", 302, {"Location": "/missing"});
+        peer_a.setRoute("/noloc", 302);
+        peer_a.setRoute("/badscheme", 302, {"Location": "ftp://127.0.0.1/x"});
+        foreach string path in (("/missing", "/to-missing")) {
+            list<hash<ExceptionInfo>> errs = getBothErrors(url_a + path);
+            foreach hash<ExceptionInfo> ex in (errs) {
+                assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err, path);
+                assertEq("HTTP status code 404 received: message: Not Found", ex.desc, path);
+                assertEq(404, ex.arg.status_code, path);
+                assertEq("not here", ex.arg.body.typeCode() == NT_BINARY ? ex.arg.body.toString() : ex.arg.body,
+                    path);
+            }
+        }
+        foreach hash<ExceptionInfo> ex in (getBothErrors(url_a + "/noloc")) {
+            assertEq("HTTP-CLIENT-REDIRECT-ERROR", ex.err);
+        }
+        foreach hash<ExceptionInfo> ex in (getBothErrors(url_a + "/badscheme")) {
+            assertEq("HTTP-CLIENT-UNKNOWN-PROTOCOL", ex.err);
+        }
+        # a refused connection
+        Socket s();
+        s.bind("127.0.0.1:0");
+        string closed_url = sprintf("http://127.0.0.1:%d/x", s.getSocketInfo().port);
+        s.close();
+        list<hash<ExceptionInfo>> errs = getBothErrors(closed_url);
+        assertEq(errs[0].err, errs[1].err);
+
+        # error_passthru returns the error response as the resource
+        foreach hash<FileResourceResult> r in (getBoth(url_a + "/to-missing{error_passthru=true}")) {
+            assertEq(binary("not here"), r.data);
+            assertEq(404, r.info.http.status_code);
+            assertEq(url_a + "/missing", r.info.effective_location);
+            assertEq(1, r.info.http.redirects.size());
+        }
+    }
+
+    httpOptionTest() {
+        peer_a.setRoute("/to-landed", 302, {"Location": "/landed"});
+        peer_a.setRoute("/landed", 200, {"Content-Type": "text/plain"}, "landed");
+        # redirect_passthru returns the redirect response when error_passthru is also set
+        foreach hash<FileResourceResult> r in (getBoth(url_a + "/to-landed{redirect_passthru=true,"
+                "error_passthru=true}")) {
+            assertEq(302, r.info.http.status_code);
+            assertEq(url_a + "/to-landed", r.info.effective_location);
+            assertEq(("/landed",), r.info.http.headers.location);
+            assertEq((), r.info.http.redirects);
+        }
+        # ... and is an error otherwise
+        foreach hash<ExceptionInfo> ex in (getBothErrors(url_a + "/to-landed{redirect_passthru=true}")) {
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+            assertEq(302, ex.arg.status_code);
+        }
+        # read options given as an argument are validated and take precedence over the location string
+        foreach hash<FileResourceResult> r in (getBoth(url_a + "/to-landed{redirect_passthru=true}",
+                {"redirect_passthru": False})) {
+            assertEq(binary("landed"), r.data);
+        }
+        foreach hash<FileResourceResult> r in (getBoth(url_a + "/to-landed", {"error_passthru": True,
+                "redirect_passthru": True})) {
+            assertEq(302, r.info.http.status_code);
+        }
+        assertThrows("LOCATION-ERROR", "unsupported read option.*no_such_option",
+            \FileLocationHandler::getResourceFromLocation(), (url_a + "/landed", {"no_such_option": True}));
+        assertThrows("LOCATION-ERROR", "unsupported read option.*no_such_option",
+            \FileLocationHandler::getResourcePollerForLocation(), (url_a + "/landed{no_such_option=1}"));
+        assertThrows("LOCATION-ERROR", "invalid empty location",
+            \FileLocationHandler::getResourceFromLocation(), "");
+        assertThrows("LOCATION-ERROR", "unknown location scheme",
+            \FileLocationHandler::getResourcePollerForLocation(), "nosuchscheme://x");
+        # request headers are an option of bound handlers only; see boundHttpTest()
+        assertThrows("LOCATION-ERROR", "unsupported read option.*headers",
+            \FileLocationHandler::getResourceFromLocation(), (url_a + "/landed", {"headers": {"X-Custom": "x"}}));
+    }
+
+    httpsTest() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        ResourcePeer peer();
+        server.setDefaultHandler("h2", peer);
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "2.0",
+        }).port;
+        server.waitForAsyncIo();
+        string url = sprintf("https://127.0.0.1:%d", port);
+        peer.setRoute("/old/x", 307, {"Location": "../new/y?z#f"});
+        peer.setRoute("/new/y?z", 200, {"Content-Type": "text/plain; charset=utf-8", "X-One": "1"}, "secure");
+        foreach hash<FileResourceResult> r in (getBoth(url + "/old/x{ssl_verify_cert=false}")) {
+            assertEq(binary("secure"), r.data);
+            assertEq(url + "/old/x", r.info.requested_location);
+            assertEq(url + "/new/y?z", r.info.effective_location);
+            assertEq("utf-8", r.info.charset);
+            assertEq(("1",), r.info.http.headers."x-one");
+            assertEq(307, r.info.http.redirects[0].status_code);
+        }
+    }
+
+    boundHttpTest() {
+        peer_a.setRoute("/bound/old", 302, {"Location": "new?q=1"});
+        peer_a.setRoute("/bound/cross", 302, {"Location": url_b + "/bound/b"});
+        HTTPClient hc({"url": sprintf("http://user:pass@127.0.0.1:%d/ignored", port_a), "max_redirects": 1});
+        AbstractFileLocationHandler handler = FileLocationHandler::getHttpHandlerForClient(hc);
+        foreach hash<FileResourceResult> r in (getBothFromHandler(handler, "http", "bound/old", NOTHING,
+                \peer_a.clear())) {
+            assertEq(binary("/bound/new?q=1"), r.data);
+            assertEq(url_a + "/bound/old", r.info.requested_location);
+            assertEq(url_a + "/bound/new?q=1", r.info.effective_location);
+            assertEq("Basic dXNlcjpwYXNz", peer_a.getRequests().last().authorization);
+        }
+        foreach hash<FileResourceResult> r in (getBothFromHandler(handler, "http", "/bound/cross", NOTHING,
+                \peer_b.clear())) {
+            assertEq(url_b + "/bound/b", r.info.effective_location);
+            assertNothing(peer_b.getRequests()[0].authorization);
+        }
+        # the client's own settings apply
+        peer_a.setRoute("/bound/two", 302, {"Location": "/bound/old"});
+        foreach hash<ExceptionInfo> ex in (getBothErrorsFromHandler(handler, "http", "/bound/two")) {
+            assertEq("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", ex.err);
+        }
+        # per-request headers are sent without changing the client's defaults
+        foreach hash<FileResourceResult> r in (getBothFromHandler(handler, "http", "/bound/new",
+                {"headers": {"X-Custom": "per-request"}}, \peer_a.clear())) {
+            assertEq("per-request", peer_a.getRequests().last().custom);
+        }
+        assertNothing(hc.getDefaultHeaders()."X-Custom");
+        # the client is not changed or closed
+        assertEq(sprintf("http://user:pass@127.0.0.1:%d/ignored", port_a), hc.getURL());
+        assertEq("/plain", hc.get("/plain"));
+    }
+
+    restTest() {
+        peer_a.setRoute("/rest/old", 302, {"Location": "new"});
+        peer_a.setRoute("/rest/new", 200, {"Content-Type": "text/plain"}, "rest text");
+        peer_a.setRoute("/rest/missing", 404, {"Content-Type": "text/plain"}, "gone");
+        string location = sprintf("rest://127.0.0.1:%d/rest/old", port_a);
+        foreach hash<FileResourceResult> r in (getBoth(location)) {
+            assertEq(binary("rest text"), r.data);
+            assertEq(location, r.info.requested_location);
+            assertEq(url_a + "/rest/new", r.info.effective_location);
+            assertEq("text/plain", r.info.media_type);
+            assertEq(1, r.info.http.redirects.size());
+        }
+        foreach hash<ExceptionInfo> ex in (getBothErrors(sprintf("rest://127.0.0.1:%d/rest/missing", port_a))) {
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+            # the blocking REST client adds the REST URL to the description
+            assertRegex("^HTTP status code 404 received: message: Not Found", ex.desc);
+            assertEq(404, ex.arg.status_code);
+        }
+    }
+
+    boundRestTest() {
+        peer_a.setRoute("/rest/json", 200, {"Content-Type": "application/json"}, "{\"a\": 1}");
+        peer_a.setRoute("/rest/bin", 200, {"Content-Type": "application/octet-stream"}, BinaryData);
+        peer_a.setRoute("/rest/missing", 404, {"Content-Type": "text/plain"}, "gone");
+        RestClient rest({"url": sprintf("http://user:pass@127.0.0.1:%d", port_a)}, True);
+        AbstractFileLocationHandler handler = FileLocationHandler::getRestHandlerForClient(rest);
+        foreach hash<FileResourceResult> r in (getBothFromHandler(handler, "rest", "rest/json", NOTHING,
+                \peer_a.clear())) {
+            # the data is the body before deserialization
+            assertEq(binary("{\"a\": 1}"), r.data);
+            assertEq("application/json", r.info.media_type);
+            assertEq(url_a + "/rest/json", r.info.requested_location);
+            assertEq(url_a + "/rest/json", r.info.effective_location);
+            assertEq("Basic dXNlcjpwYXNz", peer_a.getRequests().last().authorization);
+        }
+        foreach hash<FileResourceResult> r in (getBothFromHandler(handler, "rest", "rest/bin")) {
+            assertEq(BinaryData, r.data);
+        }
+        foreach hash<ExceptionInfo> ex in (getBothErrorsFromHandler(handler, "rest", "rest/missing")) {
+            assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err);
+            assertEq(404, ex.arg.status_code);
+        }
+
+        # the client prepares the path with its own URL path; the requested location is the URL of the first
+        # request made, and the effective location is the URL of the last one
+        peer_a.setRoute("/api/rest/json", 200, {"Content-Type": "application/json"}, "{\"b\": 2}");
+        peer_a.setRoute("/api/rest/moved", 302, {"Location": "json"});
+        RestClient api_rest({"url": sprintf("http://user:pass@127.0.0.1:%d/api", port_a)}, True);
+        handler = FileLocationHandler::getRestHandlerForClient(api_rest);
+        foreach hash<FileResourceResult> r in (getBothFromHandler(handler, "rest", "rest/json")) {
+            assertEq(binary("{\"b\": 2}"), r.data);
+            assertEq(url_a + "/api/rest/json", r.info.requested_location);
+            assertEq(url_a + "/api/rest/json", r.info.effective_location);
+        }
+        foreach hash<FileResourceResult> r in (getBothFromHandler(handler, "rest", "rest/moved")) {
+            assertEq(binary("{\"b\": 2}"), r.data);
+            assertEq(url_a + "/api/rest/moved", r.info.requested_location);
+            assertEq(url_a + "/api/rest/json", r.info.effective_location);
+            assertEq(1, r.info.http.redirects.size());
+        }
+
+        # a REST client without the request methods of RestClient cannot be used, with either API
+        RestClientIo::RestClientIo rest_io({"url": sprintf("http://127.0.0.1:%d", port_a)});
+        handler = FileLocationHandler::getRestHandlerForClient(rest_io);
+        foreach hash<ExceptionInfo> ex in (getBothErrorsFromHandler(handler, "rest", "rest/json")) {
+            assertEq("UNIMPLEMENTED", ex.err);
+            assertRegex("RestClientIo.*does not provide the (doRequest|startPollSendRecv)\\(\\) method", ex.desc);
+        }
+        assertThrows("UNIMPLEMENTED", \handler.getBinaryFile(), ("rest", "rest/json"));
+    }
+
+    fileTest() {
+        string dir = tmp.path + DirSep + "sub dir";
+        mkdir(dir);
+        string path = dir + DirSep + "my file#1?.xml";
+        {
+            File f();
+            f.open2(path, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write(BinaryData);
+        }
+        string uri = "file://" + (map encode_url($1, True), (tmp.path + "/sub dir/my file#1?.xml").split("/"))
+            .join("/");
+        foreach hash<FileResourceResult> r in (getBoth(path)) {
+            assertEq(BinaryData, r.data);
+            assertEq(path, r.info.requested_location, "a location without a scheme is reported as given");
+            assertEq(uri, r.info.effective_location);
+            assertRegex("^file:///.*/sub%20dir/my%20file%231%3F\\.xml$", r.info.effective_location);
+            assertNothing(r.info.http);
+            assertNothing(r.info.media_type);
+            assertNothing(r.info.charset);
+        }
+        foreach hash<FileResourceResult> r in (getBoth("file://" + path)) {
+            assertEq("file://" + path, r.info.requested_location);
+            assertEq(uri, r.info.effective_location);
+        }
+        # dot segments are removed; the effective location resolves relative references like the path
+        string dotted = tmp.path + "/sub dir/../sub dir/./my file#1?.xml";
+        foreach hash<FileResourceResult> r in (getBoth(dotted)) {
+            assertEq(uri, r.info.effective_location);
+            # relative references resolve like the path
+            string dir_uri = uri;
+            dir_uri =~ s/my%20file%231%3F\.xml$//;
+            assertEq(dir_uri + "other.xml", resolve_url(r.info.effective_location, "other.xml"));
+            string parent_uri = dir_uri;
+            parent_uri =~ s/sub%20dir\/$//;
+            assertEq(parent_uri + "types/t.xsd", resolve_url(r.info.effective_location, "../types/t.xsd"));
+        }
+        # a relative path is resolved against the current directory
+        string cwd = getcwd();
+        on_exit chdir(cwd);
+        chdir(tmp.path);
+        foreach hash<FileResourceResult> r in (getBoth("sub dir/my file#1?.xml")) {
+            assertEq("sub dir/my file#1?.xml", r.info.requested_location);
+            assertEq(uri, r.info.effective_location);
+        }
+        # the file URI helper
+        assertEq("file:///a/b%20c/d%23e", AbstractFileLocationHandler::getFileUri("/a/b c/./x/../d#e"));
+        assertEq("file:///", AbstractFileLocationHandler::getFileUri("/"));
+        # the data can be limited
+        foreach hash<FileResourceResult> r in (getBoth(path + "{max_file_len=3}")) {
+            assertEq(BinaryData.substr(0, 3), r.data);
+            assertEq(path, r.info.requested_location);
+        }
+        # errors are the same
+        list<hash<ExceptionInfo>> errs = getBothErrors(tmp.path + DirSep + "missing-file");
+        assertEq("FILE-OPEN2-ERROR", errs[0].err);
+        assertEq(errs[0].desc, errs[1].desc);
+        assertEq(errs[0].arg, errs[1].arg);
+        # an empty file
+        string empty = tmp.path + DirSep + "empty";
+        {
+            File f();
+            f.open2(empty, O_CREAT | O_TRUNC | O_WRONLY);
+        }
+        foreach hash<FileResourceResult> r in (getBoth(empty)) {
+            assertEq(binary(), r.data);
+        }
+    }
+
+    fileUriTest() {
+        # the forms of an absolute file URI
+        foreach string uri in (("file:/srv/a%20b%23.wsdl", "file:///srv/a%20b%23.wsdl",
+                "file://localhost/srv/a%20b%23.wsdl", "FILE://LOCALHOST/srv/a%20b%23.wsdl#x",
+                "file:///srv/a%20b%23.wsdl#")) {
+            assertEq("/srv/a b#.wsdl", AbstractFileLocationHandler::getPathFromFileUri(uri), uri);
+        }
+        # escapes are decoded once, "+" is not a space, and an encoded slash is a separator
+        assertEq("/a/b/c~+%23.wsdl", AbstractFileLocationHandler::getPathFromFileUri("file:///a/b%2Fc%7e+%2523.wsdl"));
+        assertEq("/é/x", AbstractFileLocationHandler::getPathFromFileUri("file:///%C3%A9/x"));
+        assertEq("/", AbstractFileLocationHandler::getPathFromFileUri("file:///"));
+        # invalid forms
+        list<list<string>> invalid = (
+            ("http://h/x", "is not a file URI"),
+            ("/local/path", "is not a file URI"),
+            ("file://otherhost/x", "names host"),
+            ("file://localhost:80/x", "names host"),
+            ("file:///a?", "has a query"),
+            ("file:///a?b=1", "has a query"),
+            ("file:relative/x", "does not have an absolute path"),
+            ("file://", "does not have an absolute path"),
+            ("file:///a%2G", "malformed percent-encoded octet"),
+            ("file:///a%", "malformed percent-encoded octet"),
+            ("file:///a%00b", "encoded NUL"),
+        );
+        foreach list<string> c in (invalid) {
+            assertThrows("LOCATION-ERROR", c[1], \AbstractFileLocationHandler::getPathFromFileUri(), c[0], c[0]);
+        }
+        # getFileUri() and getPathFromFileUri() are inverses
+        foreach string path in (("/a/b c/d#e?.xml", "/x/%41/y", "/é ü/中文.xsd", "/")) {
+            assertEq(path, AbstractFileLocationHandler::getPathFromFileUri(AbstractFileLocationHandler::getFileUri(
+                path)), path);
+        }
+
+        # a relative import in a local document is read through the effective location
+        string dir = tmp.path + DirSep + "import dir";
+        mkdir(dir);
+        mkdir(dir + DirSep + "types #1");
+        string root = dir + DirSep + "root %41.wsdl";
+        string child = dir + DirSep + "types #1" + DirSep + "common?.xsd";
+        {
+            File f();
+            f.open2(root, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write("<definitions/>");
+            f.open2(child, O_CREAT | O_TRUNC | O_WRONLY);
+            f.write("<schema/>");
+        }
+        foreach hash<FileResourceResult> r in (getBoth(root)) {
+            string import_uri = resolve_url(r.info.effective_location, "types%20%231/common%3F.xsd",
+                RESOLVE_URL_STRICT | RESOLVE_URL_NO_FRAGMENT);
+            string import_path = AbstractFileLocationHandler::getPathFromFileUri(import_uri);
+            assertEq(child, import_path);
+            foreach hash<FileResourceResult> ir in (getBoth(import_path)) {
+                assertEq(binary("<schema/>"), ir.data);
+                assertEq(import_uri, ir.info.effective_location);
+            }
+        }
+    }
+
+    dataTest() {
+        foreach hash<FileResourceResult> r in (getBoth("data://user@host/some data")) {
+            assertEq(binary("user@host/some data"), r.data);
+            # immediate data is reported as given
+            assertEq("data://user@host/some data", r.info.requested_location);
+            assertNothing(r.info.effective_location);
+            assertEq("UTF-8", r.info.charset);
+            assertNothing(r.info.http);
+        }
+        foreach hash<FileResourceResult> r in (getBoth("data://")) {
+            assertEq(binary(), r.data);
+        }
+    }
+
+    customHandlerTest() {
+        # a handler implementing only the data-only methods is supported through the default implementation,
+        # which reports only what is known
+        foreach hash<FileResourceResult> r in (getBoth("flhresource://user:pw@host/path")) {
+            assertEq(binary("data:user:pw@host/path"), r.data);
+            assertEq("flhresource://host/path", r.info.requested_location);
+            assertNothing(r.info.effective_location);
+            assertNothing(r.info.media_type);
+            assertNothing(r.info.http);
+        }
+        foreach hash<FileResourceResult> r in (getBoth("flhresource://path{flag=true}")) {
+            assertEq("flhresource://path", r.info.requested_location, "options are removed");
+        }
+        # poller output conversion
+        hash<FileResourceResult> r = runPoller(FileLocationHandler::getResourcePollerForLocation(
+            "flhresource://string-output"));
+        assertEq(binary("string:string-output"), r.data);
+        r = runPoller(FileLocationHandler::getResourcePollerForLocation("flhresource://no-output"));
+        assertEq(binary(), r.data);
+        assertThrows("FILE-RESOURCE-ERROR", "expecting \"binary\"", \runPoller(),
+            FileLocationHandler::getResourcePollerForLocation("flhresource://bad-output"));
+        # a handler without non-blocking support reports it when the poller is requested
+        assertThrows("UNIMPLEMENTED", "does not support non-blocking",
+            \FileLocationHandler::getResourcePollerForLocation(), "flhresource://no-poll");
+        # the blocking read still works
+        assertEq(binary("data:no-poll"), FileLocationHandler::getResourceFromLocation("flhresource://no-poll").data);
+        # option validation applies to custom handlers
+        assertThrows("LOCATION-ERROR", "unsupported read option", \FileLocationHandler::getResourceFromLocation(),
+            "flhresource://x{nope=1}");
+        # the handler methods can be called directly
+        AbstractFileLocationHandler handler = FileLocationHandler::getHandler("flhresource");
+        r = handler.getResource("flhresource", "direct");
+        assertEq("flhresource://direct", r.info.requested_location);
+        r = runPoller(handler.getResourcePoller("flhresource", "direct"));
+        assertEq(binary("data:direct"), r.data);
+    }
+
+    legacyApiTest() {
+        # the data-only APIs keep their return types and follow redirects
+        peer_a.setRoute("/legacy/old", 302, {"Location": "new"});
+        peer_a.setRoute("/legacy/new", 200, {"Content-Type": "text/plain"}, "legacy");
+        peer_a.setRoute("/legacy/missing", 404, {"Content-Type": "text/plain"}, "gone");
+        string location = url_a + "/legacy/old";
+        assertEq("legacy", FileLocationHandler::getTextFileFromLocation(location));
+        assertEq(binary("legacy"), FileLocationHandler::getBinaryFileFromLocation(location));
+        assertEq("legacy", FileLocationHandler::getFileFromLocation(True, location));
+        AbstractPollOperation op = FileLocationHandler::getIoPollerForLocation(location);
+        auto output = runPoller(op);
+        assertEq("legacy", output.typeCode() == NT_BINARY ? output.toString() : output);
+        # the REST poller as well
+        op = FileLocationHandler::getIoPollerForLocation(sprintf("rest://127.0.0.1:%d/legacy/old", port_a));
+        output = runPoller(op);
+        assertEq("legacy", output.typeCode() == NT_BINARY ? output.toString() : output);
+        # the legacy poller returns the body of an error response, as it always has
+        op = FileLocationHandler::getIoPollerForLocation(url_a + "/legacy/missing");
+        output = runPoller(op);
+        assertEq("gone", output.typeCode() == NT_BINARY ? output.toString() : output);
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", \FileLocationHandler::getTextFileFromLocation(),
+            url_a + "/legacy/missing");
+    }
+
+    concurrencyTest() {
+        # every result is independent of other requests on the same handler
+        foreach int i in (xrange(8)) {
+            peer_a.setRoute(sprintf("/c/%d", i), 302, {"Location": sprintf("/c/%d/final?n=%d", i, i),
+                "X-Index": string(i)});
+        }
+        Queue results();
+        foreach int i in (xrange(8)) {
+            # the index is passed as an argument, as the loop variable is shared by the closures
+            background sub (int index) {
+                try {
+                    string location = sprintf("%s/c/%d", url_a, index);
+                    list<hash<FileResourceResult>> rv = getBoth(location);
+                    results.push({"index": index, "results": rv});
+                } catch (hash<ExceptionInfo> ex) {
+                    results.push({"index": index, "error": ex});
+                }
+            }(i);
+        }
+        list<hash<auto>> received = ();
+        foreach int i in (xrange(8)) {
+            received += results.get(60000);
+        }
+        foreach hash<auto> h in (received) {
+            assertNothing(h.error, sprintf("request %d", h.index));
+            string target = sprintf("/c/%d/final?n=%d", h.index, h.index);
+            foreach hash<FileResourceResult> r in (h.results) {
+                assertEq(binary(target), r.data);
+                assertEq(url_a + target, r.info.effective_location);
+                assertEq((string(h.index),), r.info.http.redirects[0].headers."x-index");
+            }
+        }
+        # retained results are not changed by later requests
+        hash<FileResourceResult> first = FileLocationHandler::getResourceFromLocation(url_a + "/c/0");
+        FileLocationHandler::getResourceFromLocation(url_a + "/c/1");
+        assertEq(url_a + "/c/0/final?n=0", first.info.effective_location);
+    }
+
+    controllerTest() {
+        peer_a.setRoute("/ctl/old", 307, {"Location": url_b + "/ctl/b"});
+        peer_b.setRoute("/ctl/b", 302, {"Location": url_a + "/ctl/final"});
+        foreach string location in ((url_a + "/ctl/old", sprintf("rest://127.0.0.1:%d/ctl/old", port_a))) {
+            AbstractPollOperation op = FileLocationHandler::getResourcePollerForLocation(location);
+            Counter done(1);
+            hash<SocketPollResultInfo> result;
+            DelegatingPollOperation dop(op, sub (hash<SocketPollResultInfo> res) {
+                result = res;
+                done.dec();
+            });
+            controller.submit(<SocketPollOperationInfo>{
+                "sock": new EventNotifier(),
+                "spop": dop,
+                "to": 30s,
+                "owner": "flh-resource-test",
+            });
+            done.waitForZero();
+            assertNothing(result.ex, location);
+            assertTrue(op.goalReached(), location);
+            hash<FileResourceResult> r = op.getOutput();
+            assertEq(binary("/ctl/final"), r.data, location);
+            assertEq(url_a + "/ctl/final", r.info.effective_location, location);
+            assertEq(2, r.info.http.redirects.size(), location);
+        }
+        # errors are reported by the controller
+        AbstractPollOperation op = FileLocationHandler::getResourcePollerForLocation(url_a + "/legacy/missing");
+        Counter done(1);
+        hash<SocketPollResultInfo> result;
+        controller.submit(<SocketPollOperationInfo>{
+            "sock": new EventNotifier(),
+            "spop": new DelegatingPollOperation(op, sub (hash<SocketPollResultInfo> res) {
+                result = res;
+                done.dec();
+            }),
+            "to": 30s,
+            "owner": "flh-resource-test",
+        });
+        done.waitForZero();
+        assertEq("HTTP-CLIENT-RECEIVE-ERROR", result.ex.err);
+        assertFalse(op.goalReached());
+    }
+
+    abortTest() {
+        peer_a.setRoute("/to-block", 302, {"Location": url_b + "/block"});
+        peer_b.block.inc();
+        on_exit {
+            if (peer_b.block.getCount()) {
+                peer_b.block.dec();
+            }
+        }
+        AbstractPollOperation op = FileLocationHandler::getResourcePollerForLocation(url_a + "/to-block");
+        while (!peer_b.blocked.size()) {
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            assertTrue(exists pi);
+            Socket::poll((pi,), 20000);
+        }
+        assertEq("/block", peer_b.blocked.get());
+        op.abort();
+        assertFalse(op.goalReached());
+        assertNothing(op.getOutput());
+        peer_b.block.dec();
+        # later requests work
+        assertEq(binary("/plain"), FileLocationHandler::getResourceFromLocation(url_a + "/plain").data);
+    }
+
+    #! Retrieves a resource with both APIs and returns both results, after checking that they are the same
+    private list<hash<FileResourceResult>> getBoth(string location, *hash<auto> read_options,
+            *code<nothing()> reset) {
+        if (reset) {
+            reset();
+        }
+        hash<FileResourceResult> sync = FileLocationHandler::getResourceFromLocation(location, read_options);
+        if (reset) {
+            reset();
+        }
+        hash<FileResourceResult> async = runPoller(FileLocationHandler::getResourcePollerForLocation(location,
+            read_options));
+        assertEq(normalize(sync), normalize(async), "blocking and non-blocking results for " + location);
+        return (sync, async);
+    }
+
+    #! Retrieves a resource with both APIs from a handler and returns both results
+    private list<hash<FileResourceResult>> getBothFromHandler(AbstractFileLocationHandler handler, string scheme,
+            string location, *hash<auto> opts, *code<nothing()> reset) {
+        if (reset) {
+            reset();
+        }
+        hash<FileResourceResult> sync = handler.getResource(scheme, location, opts);
+        if (reset) {
+            reset();
+        }
+        hash<FileResourceResult> async = runPoller(handler.getResourcePoller(scheme, location, opts));
+        assertEq(normalize(sync), normalize(async), "blocking and non-blocking results for " + location);
+        return (sync, async);
+    }
+
+    #! Returns the errors raised by both APIs, after checking that they are the same
+    private list<hash<ExceptionInfo>> getBothErrors(string location) {
+        list<hash<ExceptionInfo>> rv = ();
+        try {
+            FileLocationHandler::getResourceFromLocation(location);
+            fail("expected an exception from the blocking API for " + location);
+        } catch (hash<ExceptionInfo> ex) {
+            rv += ex;
+        }
+        try {
+            runPoller(FileLocationHandler::getResourcePollerForLocation(location));
+            fail("expected an exception from the non-blocking API for " + location);
+        } catch (hash<ExceptionInfo> ex) {
+            rv += ex;
+        }
+        assertEq(rv[0].err, rv[1].err, "error codes for " + location);
+        return rv;
+    }
+
+    #! Returns the errors raised by both APIs of a handler
+    private list<hash<ExceptionInfo>> getBothErrorsFromHandler(AbstractFileLocationHandler handler, string scheme,
+            string location) {
+        list<hash<ExceptionInfo>> rv = ();
+        try {
+            handler.getResource(scheme, location);
+            fail("expected an exception from the blocking API for " + location);
+        } catch (hash<ExceptionInfo> ex) {
+            rv += ex;
+        }
+        try {
+            runPoller(handler.getResourcePoller(scheme, location));
+            fail("expected an exception from the non-blocking API for " + location);
+        } catch (hash<ExceptionInfo> ex) {
+            rv += ex;
+        }
+        assertEq(rv[0].err, rv[1].err, "error codes for " + location);
+        return rv;
+    }
+
+    #! Removes the values that differ between two retrievals of the same resource
+    private static hash<auto> normalize(hash<FileResourceResult> r) {
+        hash<auto> rv = r;
+        remove rv.info.http.headers.date;
+        foreach int i in (xrange(rv.info.http.redirects.size())) {
+            remove rv.info.http.redirects[i].headers.date;
+        }
+        return rv;
+    }
+
+    #! Drives a poll operation on this thread until it completes and returns its output
+    static auto runPoller(AbstractPollOperation op) {
+        date deadline = now_us() + 30s;
+        while (!op.goalReached()) {
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            int remaining = (deadline - now_us()).durationMilliseconds();
+            if (remaining <= 0) {
+                op.abort();
+                throw "TEST-TIMEOUT", sprintf("poll operation %y did not complete", op.getGoal());
+            }
+            if (pi) {
+                Socket::poll((pi,), remaining);
+            }
+        }
+        return op.getOutput();
+    }
+}

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -204,6 +204,8 @@ ReadOnlyFile f("/tmp/my-file.txt", "iso-8859-1");
 
     @throw READONLYFILE-OPEN-ERROR the given file cannot be opened for reading (\c arg will be assigned to the errno
     value)
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "sandbox" filesystem policy does not allow the file to
+    be read
     @throw ILLEGAL-EXPRESSION ReadOnlyFile::constructor() cannot be called with a TTY target when
     @ref no-terminal-io "%no-terminal-io" is set
 
@@ -219,8 +221,10 @@ ReadOnlyFile::constructor(string path, *string encoding) [flags=NAMED_ARGS] {
         return;
     }
 
-    if (f->open(path->c_str(), O_RDONLY, 0, qe)) {
-        xsink->raiseErrnoException("READONLYFILE-OPEN-ERROR", errno, "cannot open '%s'", path->c_str());
+    if (f->openCheckAccess(xsink, path->c_str(), O_RDONLY, 0, qe)) {
+        if (!*xsink) {
+            xsink->raiseErrnoException("READONLYFILE-OPEN-ERROR", errno, "cannot open '%s'", path->c_str());
+        }
         return;
     }
 
@@ -275,6 +279,8 @@ try {
     given in the @ref File::constructor() "constructor"
 
     @throw READONLYFILE-OPEN-ERROR an error occurred opening the file
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "sandbox" filesystem policy does not allow the file to
+    be read
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin,
     @ref stdout, @ref stderr) when @ref no-terminal-io is set
 */
@@ -283,8 +289,9 @@ nothing ReadOnlyFile::open(string path, *string encoding) [flags=NAMED_ARGS] {
         return QoreValue();
 
     const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : f->getEncoding();
-    if (f->open(path->c_str(), O_RDONLY, 0, qe))
+    if (f->openCheckAccess(xsink, path->c_str(), O_RDONLY, 0, qe) && !*xsink) {
         xsink->raiseErrnoException("READONLYFILE-OPEN-ERROR", errno, "cannot open '%s'", path->c_str());
+    }
 }
 
 //! Closes the %ReadOnlyFile object
@@ -1056,12 +1063,14 @@ bool ReadOnlyFile::isTty() [flags=CONSTANT] {
     @param max_bytes maximum number of bytes to read, negative values mean read until end of file
 
     @return an @ref Qore::AbstractPollOperation "AbstractPollOperation" object to read a file from the filesystem; the
-    @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" method returns
-    a hash with the following keys after a successful read operation:
-    - \c data: the file's data as a string or binary data according to the \c as_string parameter
+    @ref Qore::AbstractPollOperation::getOutput() "AbstractPollOperation::getOutput()" method returns the file's
+    data after a successful read operation, as a string or binary data according to the \c as_string parameter
 
     @throw ENCODING-CONVERSION-ERROR the path could not be converted to the
     @ref default_encoding "default character encoding"
+    @throw FILE-OPEN-ERROR the file could not be opened; the exception argument is the \c errno value
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "sandbox" filesystem policy does not allow the file to
+    be read
 
     @since %Qore 1.19
 */

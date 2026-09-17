@@ -1513,6 +1513,25 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
     exposed by a failing custom hook report \c OBJECT-ALREADY-DELETED; the original error and
     successful shared-reference behavior are preserved, including after cancellation.
 
+    @par RFC 3986 Reference Resolution and HTTP Redirect Metadata
+    @parblock
+    The new @ref Qore::resolve_url() "resolve_url()" function resolves a URI reference against a base URI
+    according to <a href="https://www.rfc-editor.org/rfc/rfc3986#section-5.2">RFC 3986 section 5.2</a>,
+    preserving percent-encoded octets and empty queries; @ref resolve_url_options add strict validation, fragment
+    removal, relative bases (as for XML Base), and IRI to URI encoding, and the same resolver is available to
+    binary modules as \c qore_resolve_url().  @ref Qore::HTTPClient "HTTPClient" uses the same
+    implementation to resolve \c Location headers, and its request information hash now reports the URL that
+    produced a response after any redirects (\c effective-url) and each redirect followed as a
+    @ref Qore::HttpRedirectInfo "HttpRedirectInfo" hash (\c redirects); see @ref httpclient_redirects.
+
+    The @ref filelocationhandlerintro "FileLocationHandler" module can now return a resource together with this
+    metadata, with blocking and non-blocking APIs that return the same result:
+    @code{.py}
+hash<FileResourceResult> res = FileLocationHandler::getResourceFromLocation("https://example.com/svc/root.wsdl");
+string import_location = resolve_url(res.info.effective_location, "../types/common.xsd");
+    @endcode
+    @endparblock
+
     @subsection qore_3_0_0_deprecated Deprecated Features
     - <b>Deprecated command-line options</b>: The following command-line options have been deprecated and now
       produce a warning when used, as the underlying parse options were never enforced:
@@ -1654,6 +1673,17 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - enabled bulk operations on ElasticSearchIndexTableDataProvider
         (<a href="https://github.com/qoretechnologies/qore/issues/5016">issue 5016</a>)
 
+    - @ref filelocationhandlerintro "FileLocationHandler" module
+      - added @ref FileLocationHandler::FileLocationHandler::getResourceFromLocation() "getResourceFromLocation()"
+        and @ref FileLocationHandler::FileLocationHandler::getResourcePollerForLocation()
+        "getResourcePollerForLocation()", returning a resource's data with its effective location, media type,
+        character encoding, and for HTTP locations the final response headers and the redirects followed; see
+        @ref filelocationhandler_resources
+      - \c file:// locations report an absolute \c file:// URI as the effective location; see
+        @ref FileLocationHandler::AbstractFileLocationHandler::getFileUri() "AbstractFileLocationHandler::getFileUri()"
+        and @ref FileLocationHandler::AbstractFileLocationHandler::getPathFromFileUri()
+        "AbstractFileLocationHandler::getPathFromFileUri()"
+
     - @ref ftppollerintro "FtpPoller" module
       - FTP errors during polling are logged with the new \c "log_error" callback (falling back to \c "log_info" if
         not set) instead of being reported only as informational messages
@@ -1721,9 +1751,14 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       - @ref Qore::InputStream "InputStream" streaming response bodies with true incremental streaming (no
         full buffering) and backpressure across HTTP/1.x, HTTP/2, and HTTP/3
       - new \c removeHandler() method for dynamic handler registration
+      - fixed sending two conflicting response header fields, such as a handler's \c "content-type" and the
+        server's default \c Content-Type, when a handler or the server configuration named a header in another
+        case than the server; header names are now matched case-insensitively
 
     - @ref httpserverutilintro "HttpServerUtil" module
       - cookie-setting support and a refactored, more extensible authentication design
+      - new @ref HttpServer::http_canonicalize_reply_header_names() "http_canonicalize_reply_header_names()"
+        function for the response header fields that the server manages
       - new \c http_version option in @ref HttpServer::HttpListenerOptionInfo "HttpListenerOptionInfo" for HTTP/2 and HTTP/3 mode control
       - new @ref HttpServer::StreamResponseProducer "StreamResponseProducer" worker-thread response-body streamer for non-I/O-thread-safe
         @ref Qore::InputStream "InputStream" bodies on HTTP/2 and HTTP/3
@@ -1910,6 +1945,8 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
 
     - @ref utilintro "Util" module
       - added the @ref Util::TerminalColor "TerminalColor" class for ANSI terminal color output with automatic terminal detection
+      - fixed @ref Util::normalize_dir() "normalize_dir()" removing the root for a \c ".." segment directly below
+        it: \c "/../etc" was returned as the relative path \c "etc"
 
     - @ref voyagerestclientintro "VoyageRestClient" module
       - @ref QoreRagUtils::VoyageReranker::rerank() "VoyageReranker::rerank()" updated
@@ -3053,6 +3090,22 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed @ref Qore::HTTPClient "HTTPClient" sending a relative \c Location value, including any fragment,
+      literally as the next request target instead of resolving it against the URL of the request that received it
+      (RFC 3986 section 5.2); see @ref httpclient_redirects
+    - Fixed @ref Qore::HTTPClient "HTTPClient" sending the \c Authorization, \c Cookie, and \c Host headers of a
+      request, including credentials from the client URL, to another origin named by a redirect, and answering an
+      authentication challenge from such an origin with the client's credentials
+    - Fixed @ref Qore::HTTPClient "HTTPClient" following 300, 305, and 306 responses as redirects, repeating a
+      \c POST request for a 303 response instead of following it with \c GET, and sending an empty body for a
+      redirect that repeats a request whose body was streamed; 301 and 302 responses to a \c POST request are now
+      followed with \c GET, and a streamed body that would have to be sent again raises
+      \c HTTP-CLIENT-REDIRECT-ERROR
+    - Fixed @ref Qore::HTTPClient "HTTPClient" following a redirect to a local UNIX domain socket
+      (\c http://socket=...) from a request that was not using that socket, which let a server send a request,
+      including a repeated request body, to a local service, and following a redirect whose host contains
+      characters that cannot appear in a URI, which were then sent in the \c Host header and through a proxy in
+      the request line; both now raise \c HTTP-CLIENT-REDIRECT-ERROR
     - Fixed crashes when parsing, running or freeing deeply nested code, such as an expression with thousands of
       operators; the parser now rejects code that is nested more deeply than it supports with a
       \c PARSE-EXCEPTION (see @ref qore_3_0_0_compatibility)

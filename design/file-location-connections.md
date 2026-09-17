@@ -130,3 +130,12 @@ frequently derived from user or partner data. That is a real widening of what a 
 `FileLocationHandler::setConnectionFilter()` and the `QORE_FILE_LOCATION_CONNECTIONS` environment
 variable restrict which connections are reachable. A deployment that accepts externally-influenced
 location strings should set one of them.
+
+## Resource metadata
+
+`getResourceFromLocation()` and `getResourcePollerForLocation()` resolve `conn://` locations through the
+same tiers and return the resolved target's data and metadata, with the connection location as the
+requested location: the resolved target location can carry credentials, so it is never reported. The
+effective location is whatever the target observed (for example an absolute `file://` URI for a tier 1a
+filesystem redirect); tier 1b handlers without resource support and tier 2 report none. See
+`http-redirects-and-resource-metadata.md`.

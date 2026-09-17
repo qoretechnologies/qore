@@ -4,12 +4,12 @@
 %modern
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
-%requires Util
-%requires Mime
-%requires QUnit
-%requires Logger
-%requires HttpServerUtil
-%requires HttpServer
+%requires ../../../../../qlib/Util.qm
+%requires ../../../../../qlib/Mime.qm
+%requires ../../../../../qlib/QUnit.qm
+%requires ../../../../../qlib/Logger.qm
+%requires ../../../../../qlib/HttpServerUtil.qm
+%requires ../../../../../qlib/HttpServer.qm
 
 %exec-class Main
 
@@ -379,6 +379,7 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         }
         addTestCase("serialization", \serializationTest());
         addTestCase("timeouts", \timeoutTest());
+        addTestCase("stalled connect phase", \stalledConnectTest());
         addTestCase("pre-encoded-urls", \preEncodedUrlsTest());
         addTestCase("Unicode request paths", \unicodeRequestPathTest());
         addTestCase("connect primes connection manager", \connectPrimesConnectionManagerTest());
@@ -434,6 +435,101 @@ I45SPdad6fpziP1EtT5rfrC0ZH7cMU8edg==
         hc2 = Serializable::deserialize(hc.serialize());
         assertEq(hc.getURL(), hc2.getURL());
         assertEq(hc.getHttpConfig(), hc2.getHttpConfig());
+    }
+
+    stalledConnectTest() {
+        # a peer that accepts connections and never answers, so a TLS handshake or an h2c preface never completes;
+        # the connection enforces connect_timeout itself, for the blocking API and for a poll operation, and reports
+        # its own error instead of hanging or a generic timeout
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        on_exit listener.close();
+        int port = listener.getSocketInfo().port;
+
+        # a peer that completes the TLS handshake, selecting HTTP/2 with ALPN, and never answers the HTTP/2 preface
+        Socket tls_listener();
+        tls_listener.bind("127.0.0.1:0");
+        tls_listener.listen();
+        on_exit tls_listener.close();
+        int tls_port = tls_listener.getSocketInfo().port;
+        SSLCertificate cert(TestCert);
+        SSLPrivateKey key(TestCert);
+
+        # the accepted connections are kept open until the test ends
+        Queue accepted();
+        Counter running(2);
+        Counter stop();
+        code accept_loop = sub (Socket l, bool tls) {
+            on_exit running.dec();
+            while (True) {
+                *Socket s = l.accept(60s);
+                if (stop.getCount()) {
+                    break;
+                }
+                if (!s) {
+                    # no connection within the accept timeout
+                    continue;
+                }
+                if (tls) {
+                    s.setCertificate(cert);
+                    s.setPrivateKey(key);
+                    s.setAlpnProtocols(("h2",));
+                    try {
+                        s.upgradeServerToSSL(30s);
+                    } catch (hash<ExceptionInfo> ex) {
+                        # the client gave up first
+                    }
+                }
+                accepted.push(s);
+            }
+        };
+        background accept_loop(listener, False);
+        background accept_loop(tls_listener, True);
+        on_exit {
+            stop.inc();
+            foreach int p in ((port, tls_port)) {
+                Socket wake();
+                wake.connect(sprintf("127.0.0.1:%d", p));
+                wake.close();
+            }
+            running.waitForZero();
+        }
+
+        list<hash<auto>> cases = (
+            {"opts": {"url": sprintf("https://127.0.0.1:%d", port)}, "err": "HTTPCLIENT-NEGOTIATE-TIMEOUT"},
+            {"opts": {"url": sprintf("https://127.0.0.1:%d", port), "http_version": "1.1"},
+                "err": "HTTP1-CONNECT-TIMEOUT"},
+            {"opts": {"url": sprintf("http://127.0.0.1:%d", port), "http_version": "2.0"},
+                "err": "HTTP2-CONNECT-TIMEOUT"},
+            # HTTP/2 negotiated with ALPN: the connection that adopts the socket keeps the connect deadline
+            {"opts": {"url": sprintf("https://127.0.0.1:%d", tls_port), "ssl_verify_cert": False},
+                "err": "HTTP2-CONNECT-TIMEOUT", "label": "negotiated h2"},
+            {"opts": {"url": sprintf("https://127.0.0.1:%d", tls_port), "ssl_verify_cert": False,
+                "http_version": "2.0"}, "err": "HTTP2-CONNECT-TIMEOUT", "label": "h2 over TLS"},
+        );
+        foreach hash<auto> c in (cases) {
+            foreach string api in (("sync", "async")) {
+                string msg = sprintf("%s %s", c.label ?? c.opts.http_version ?? "negotiate", api);
+                HTTPClient hc(c.opts + {"connect_timeout": 1s, "timeout": 60s});
+                date start = now_us();
+                try {
+                    if (api == "sync") {
+                        hc.get("/");
+                    } else {
+                        SocketPollOperation op = hc.startPollSendRecv("GET", "/");
+                        on_error op.abort();
+                        pollSocketOperation(op, 20s);
+                        op.getOutput();
+                    }
+                    fail(msg + ": the request did not fail");
+                } catch (hash<ExceptionInfo> ex) {
+                    assertEq(c.err, ex.err, msg + ": " + ex.desc);
+                }
+                # the transport deadline fails the request, not the caller's backstop wait
+                assertLt(20s, now_us() - start, msg);
+            }
+        }
     }
 
     timeoutTest() {

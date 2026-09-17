@@ -117,6 +117,31 @@ struct AsyncIoDeferredRelease {
     DLLLOCAL void release(ExceptionSink* xsink);
 };
 
+//! A native task run on a callback worker, off the async I/O execution path
+/** Native poll operations use this for a step that may block, and so must run neither on the async I/O thread nor
+    in a continuePoll() dispatch; for example, acquiring a connection to another server to follow an HTTP redirect.
+
+    Exactly one of run() and discard() is called, and the dispatcher then deletes the task.  A task holds its own
+    references to whatever it needs; neither method may throw a C++ exception.
+
+    @since %Qore 3.0
+*/
+class AsyncIoNativeTask {
+public:
+    DLLLOCAL virtual ~AsyncIoNativeTask() = default;
+
+    //! Runs the task on a callback worker
+    DLLLOCAL virtual void run(ExceptionSink* xsink) = 0;
+
+    //! Called instead of run() when the task cannot be run, for example because the dispatcher is stopping
+    /** May be called on any thread, including the async I/O thread, so it must not block
+    */
+    DLLLOCAL virtual void discard(ExceptionSink* xsink) = 0;
+
+    //! Returns the program the task runs in, if any; not referenced
+    DLLLOCAL virtual QoreProgram* getProgram() const = 0;
+};
+
 #ifdef DEBUG
 //! Overrides the async I/O thread flag for focused unit tests
 /** @return the previous async I/O thread flag value
@@ -135,6 +160,7 @@ public:
         DT_STREAM_DATA_NOTIFY, //!< Call onStreamData(stream_id) on spop_obj (stream queue drain notification)
         DT_POLL_COMPLETE_NOTIFY, //!< Call onPollComplete() on spop_obj (WebSocket frame arrival notification)
         DT_RELEASE,         //!< Release the references in release only, off the async I/O thread
+        DT_NATIVE_TASK,     //!< Run the native task in native_task, off the async I/O execution path
     };
 
     //! Async work item for fire-and-forget dispatch
@@ -150,6 +176,7 @@ public:
         QoreProgram* pgm = nullptr;          //!< Program reference to prevent premature deletion
         std::string owner;                   //!< Owner identifier for per-owner flush (empty if untracked)
         AsyncIoDeferredRelease* release = nullptr; //!< For DT_RELEASE: owned references to release (or nullptr)
+        AsyncIoNativeTask* native_task = nullptr; //!< For DT_NATIVE_TASK: owned task (or nullptr)
     };
 
     //! Creates the dispatcher
@@ -216,6 +243,13 @@ public:
     */
     DLLLOCAL void dispatchPollCompleteAsync(QoreObject* spop_obj,
         const std::string& owner = std::string());
+
+    //! Runs a native task on a callback worker (fire-and-forget)
+    /** The item is not owner-tracked.  When it cannot be queued, the task is discarded instead of run.
+
+        @param task the task to run (ownership transferred)
+    */
+    DLLLOCAL void dispatchNativeTaskAsync(AsyncIoNativeTask* task);
 
     //! Releases references on a callback worker (fire-and-forget)
     /** Used by the async I/O thread for references whose release can run Qore destructors.  The item is not
@@ -637,6 +671,13 @@ public:
 
     //! Custom deref with ExceptionSink
     DLLLOCAL virtual void deref(ExceptionSink* xsink);
+
+    //! Runs a native task on a callback worker, off the async I/O execution path
+    /** @param task the task (ownership transferred); discarded instead of run if it cannot be dispatched
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void dispatchNativeTask(AsyncIoNativeTask* task);
 
 private:
     //! I/O thread commands

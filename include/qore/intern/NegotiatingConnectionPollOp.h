@@ -160,6 +160,26 @@ public:
         return submit_time_us;
     }
 
+    //! Sets the timeout of the connect phase (TCP connect and TLS handshake); call before the operation is submitted
+    /** The deadline is enforced on the I/O thread, so a stalled handshake fails with
+        \c HTTPCLIENT-NEGOTIATE-TIMEOUT even when no caller waits for the connection
+
+        @param timeout_us the timeout in microseconds; <= 0 means no timeout
+    */
+    DLLLOCAL void setConnectTimeout(int64_t timeout_us) {
+        connect_timeout_us = timeout_us;
+    }
+
+    //! Returns the connect timeout in microseconds; <= 0 means none
+    DLLLOCAL int64_t getConnectTimeoutUs() const {
+        return connect_timeout_us;
+    }
+
+    //! Returns the monotonic connect deadline, or 0 if it has not been armed; safe to call from any thread
+    DLLLOCAL int64_t getConnectDeadlineUs() const {
+        return connect_deadline_us.load(std::memory_order_acquire);
+    }
+
     //! Called by the destructor of the owning connection to break the
     //! raw back-pointer before the owner is freed.  Synchronizes with
     //! in-flight I/O-thread owner notifications so the caller can safely
@@ -208,7 +228,26 @@ private:
     //! stalled when an @c HTTPCLIENT-NEGOTIATE-TIMEOUT fires.
     int64_t submit_time_us = 0;
 
+    //! The connect timeout in microseconds; <= 0 means none; see setConnectTimeout()
+    int64_t connect_timeout_us = 0;
+
+    //! The monotonic deadline of the connect phase; armed by the first handleConnecting() call, 0 if not armed
+    /** Written on the I/O thread; read by the owning connection when it hands the socket over
+    */
+    std::atomic<int64_t> connect_deadline_us{0};
+
     DLLLOCAL QoreHashNode* handleConnecting(ExceptionSink* xsink);
+
+    //! Arms the connect deadline on first use and fails the operation once it has expired
+    /** @return 0 to continue, -1 if the deadline has expired; setError() has then recorded the error
+    */
+    DLLLOCAL int checkConnectDeadline(ExceptionSink* xsink);
+
+    //! Lowers the \c poll_timeout_ms of \a poll_info so that the I/O thread runs continuePoll() at the deadline
+    /** Never raises it: the connect operation's own timers (the Happy Eyeballs stagger, the resolver) must keep
+        firing on time
+    */
+    DLLLOCAL QoreHashNode* clampConnectDeadline(QoreHashNode* poll_info, ExceptionSink* xsink);
     DLLLOCAL void setError(const char* err, const char* desc, ExceptionSink* xsink);
     DLLLOCAL void notifyOwnerReady(std::string&& alpn);
     DLLLOCAL void notifyOwnerClosed();
@@ -249,10 +288,12 @@ public:
         @param target_port target port
         @param ssl_config SSL verification and client-cert config applied
             to the socket before the handshake starts
+        @param connect_timeout_ms the timeout of the TCP connect and the TLS handshake in milliseconds; <= 0 means
+            no timeout
         @param xsink exception sink — set on construction failure
     */
     DLLLOCAL NegotiatingHttpClientConnection(const char* target_host,
-        int target_port, const Http1SslConfig& ssl_config,
+        int target_port, const Http1SslConfig& ssl_config, int connect_timeout_ms,
         ExceptionSink* xsink);
 
     DLLLOCAL virtual ~NegotiatingHttpClientConnection();
@@ -336,7 +377,7 @@ private:
     //! the necessary memory ordering.
     std::string alpn_result;
 
-    DLLLOCAL int buildAndSubmit(const Http1SslConfig& ssl_config, ExceptionSink* xsink);
+    DLLLOCAL int buildAndSubmit(const Http1SslConfig& ssl_config, int connect_timeout_ms, ExceptionSink* xsink);
 };
 
 #endif // _QORE_INTERN_NEGOTIATINGCONNECTIONPOLLOP_H

@@ -1744,7 +1744,7 @@ QuicTimerWriteResult QuicSession::processTimerAndWrite(QuicPacketBatch& packets,
 // ===== HTTP/3 Request/Response =====
 
 int64_t QuicSession::submitRequest(const char* method, const char* path,
-                                   const strcase_str_map_t& headers,
+                                   const qore_http_header_pairs_t& headers,
                                    const void* body, size_t body_len, ExceptionSink* xsink) {
     // Build header name-value pairs OUTSIDE the lock (reserve to avoid
     // reallocations: 4 pseudo-headers + user headers).
@@ -1795,9 +1795,8 @@ int64_t QuicSession::submitRequest(const char* method, const char* path,
 
     // Authority from headers or fallback to stored host:port
     std::string authority;
-    auto auth_it = headers.find("host");
-    if (auth_it != headers.end()) {
-        authority = auth_it->second;
+    if (const std::string* auth_val = qore_find_http_header(headers, "host")) {
+        authority = *auth_val;
     } else if (!host_.empty()) {
         authority = host_;
         if (port_ != 0 && port_ != 443) {
@@ -1902,7 +1901,7 @@ int64_t QuicSession::submitRequest(const char* method, const char* path,
 }
 
 int64_t QuicSession::submitRequestStreaming(const char* method, const char* path,
-                                            const strcase_str_map_t& headers,
+                                            const qore_http_header_pairs_t& headers,
                                             ExceptionSink* xsink) {
     // Build header name-value pairs OUTSIDE the lock (same pattern as submitRequest)
     std::vector<nghttp3_nv> nva;
@@ -1939,9 +1938,8 @@ int64_t QuicSession::submitRequestStreaming(const char* method, const char* path
 
     // Authority from headers or fallback to stored host:port
     std::string authority;
-    auto auth_it = headers.find("host");
-    if (auth_it != headers.end()) {
-        authority = auth_it->second;
+    if (const std::string* auth_val = qore_find_http_header(headers, "host")) {
+        authority = *auth_val;
     } else if (!host_.empty()) {
         authority = host_;
         if (port_ != 0 && port_ != 443) {
@@ -1954,9 +1952,9 @@ int64_t QuicSession::submitRequestStreaming(const char* method, const char* path
 
     // RFC 9220: if :protocol is in headers, include it as a pseudo-header
     // (extended CONNECT for WebSocket, A2A, etc.)
-    auto proto_it = headers.find(":protocol");
-    if (proto_it != headers.end() && !proto_it->second.empty()) {
-        add_nv(":protocol", 9, proto_it->second.c_str(), proto_it->second.size());
+    const std::string* proto_val = qore_find_http_header(headers, ":protocol");
+    if (proto_val && !proto_val->empty()) {
+        add_nv(":protocol", 9, proto_val->c_str(), proto_val->size());
     }
 
     // Regular headers (same filtering as submitRequest)
@@ -2020,10 +2018,10 @@ int64_t QuicSession::submitRequestStreaming(const char* method, const char* path
     stream->state = QuicStreamState::Open;
 
     // RFC 9220: mark extended CONNECT streams as connect tunnels
-    if (proto_it != headers.end() && !proto_it->second.empty()
+    if (proto_val && !proto_val->empty()
             && strcmp(method, "CONNECT") == 0) {
         stream->is_connect = true;
-        stream->connect_protocol = proto_it->second;
+        stream->connect_protocol = *proto_val;
         stream->connect_tunnel_active = true;
     }
 
@@ -2033,7 +2031,7 @@ int64_t QuicSession::submitRequestStreaming(const char* method, const char* path
     return stream_id;
 }
 
-int64_t QuicSession::submitConnectRequest(const char* path, const strcase_str_map_t& headers,
+int64_t QuicSession::submitConnectRequest(const char* path, const qore_http_header_pairs_t& headers,
                                            const char* protocol, ExceptionSink* xsink) {
     // Build header name-value pairs OUTSIDE the lock
     // Reserve: 5 pseudo-headers (:method, :path, :scheme, :authority, :protocol) + user headers
@@ -2072,9 +2070,8 @@ int64_t QuicSession::submitConnectRequest(const char* path, const strcase_str_ma
 
     // Authority from headers or fallback to stored host:port
     std::string authority;
-    auto auth_it = headers.find("host");
-    if (auth_it != headers.end()) {
-        authority = auth_it->second;
+    if (const std::string* auth_val = qore_find_http_header(headers, "host")) {
+        authority = *auth_val;
     } else if (!host_.empty()) {
         authority = host_;
         if (port_ != 0 && port_ != 443) {
@@ -2157,7 +2154,7 @@ int64_t QuicSession::submitConnectRequest(const char* path, const strcase_str_ma
     return stream_id;
 }
 
-int QuicSession::submitTrailers(int64_t stream_id, const strcase_str_map_t& trailers,
+int QuicSession::submitTrailers(int64_t stream_id, const qore_http_header_pairs_t& trailers,
                                 ExceptionSink* xsink) {
     // Build trailer name-value pairs OUTSIDE the lock
     std::vector<nghttp3_nv> nva;
@@ -2210,7 +2207,7 @@ int QuicSession::submitTrailers(int64_t stream_id, const strcase_str_map_t& trai
 }
 
 int QuicSession::submitResponse(int64_t stream_id, int status_code,
-                                const strcase_str_map_t& headers,
+                                const qore_http_header_pairs_t& headers,
                                 const void* body, size_t body_len, ExceptionSink* xsink) {
     // Build header name-value pairs OUTSIDE the lock (reserve to avoid
     // reallocations: 1 status pseudo-header + user headers).
@@ -2300,7 +2297,7 @@ int QuicSession::submitResponse(int64_t stream_id, int status_code,
 }
 
 int QuicSession::submitResponseStreaming(int64_t stream_id, int status_code,
-                                          const strcase_str_map_t& headers,
+                                          const qore_http_header_pairs_t& headers,
                                           ExceptionSink* xsink) {
     // Build header name-value pairs OUTSIDE the lock (same pattern as submitResponse)
     std::vector<nghttp3_nv> nva;
@@ -2583,7 +2580,7 @@ void QuicSession::wakeDatagramWaiters() {
 // ===== Extended CONNECT (RFC 9220) =====
 
 int QuicSession::submitConnectResponse(int64_t stream_id, int status_code,
-        const strcase_str_map_t& headers, ExceptionSink* xsink) {
+        const qore_http_header_pairs_t& headers, ExceptionSink* xsink) {
     // Build header name-value pairs OUTSIDE the lock
     std::vector<nghttp3_nv> nva;
     nva.reserve(headers.size() + 1);

@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file FileLocationHandler.qc module for returning file data from a URL-like location string
 
-/*  FileLocationHandler Copyright 2021 - 2025 Qore Technologies, s.r.o.
+/*  FileLocationHandler Copyright 2021 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -49,6 +49,101 @@ public hashdecl FileHandlerInfo {
     *hash<string, hash<FileHandlerOptionInfo>> write_options;
 }
 
+#! Information about an HTTP redirect followed while retrieving a resource
+/** @see @ref filelocationhandler_resources
+
+    @since FileLocationHandler 3.0
+*/
+public hashdecl HttpFileRedirectInfo {
+    #! The absolute URL of the request that received the redirect response
+    string request_url;
+
+    #! The HTTP status code of the redirect response
+    int status_code;
+
+    #! The \c Location header value exactly as received
+    string location;
+
+    #! The absolute URL that \c location was resolved to and that was requested next; it never has a fragment
+    string target_url;
+
+    #! The headers of the redirect response with lower-case names, each with the list of values received
+    hash<string, list<string>> headers = {};
+}
+
+#! HTTP information about a retrieved resource
+/** @see @ref filelocationhandler_resources
+
+    @since FileLocationHandler 3.0
+*/
+public hashdecl HttpFileResourceInfo {
+    #! The HTTP status code of the final response
+    int status_code;
+
+    #! The headers of the final response with lower-case names, each with the list of values received
+    /** Repeated headers such as \c Set-Cookie keep each value separately.  The headers describe the response
+        as sent: \c Content-Length and \c Content-Encoding describe the transferred representation, not
+        @ref FileResourceResult::data "data", which has any content encoding decoded
+    */
+    hash<string, list<string>> headers = {};
+
+    #! The redirects followed, from the first response to the last redirect followed
+    list<hash<HttpFileRedirectInfo>> redirects = ();
+}
+
+#! Information about a retrieved resource
+/** @see @ref filelocationhandler_resources
+
+    @since FileLocationHandler 3.0
+*/
+public hashdecl FileResourceInfo {
+    #! The location as requested, without any location options and without user information
+    /** This is a location string as accepted by this module, not necessarily an absolute URI; for example, a
+        local file can be requested with a relative path
+    */
+    string requested_location;
+
+    #! The absolute URI that produced the returned data, without a fragment, or @ref nothing if not known
+    /** For HTTP locations this is the URL of the final response after any redirects; for local files it is an
+        absolute \c file:// URI.  Resolve relative references in the returned data against this URI (RFC 3986
+        section 5.1.3).  Handlers that cannot observe where the data came from, such as custom handlers that
+        only provide data, leave it unset rather than report the requested location
+    */
+    *string effective_location;
+
+    #! The media type of the data declared by the transport, in lower case and without parameters, if any
+    *string media_type;
+
+    #! The character encoding of the data declared by the transport, if any
+    /** For HTTP locations this is the \c charset parameter of the \c Content-Type header; the data is never
+        converted, so consumers decide how to interpret it
+    */
+    *string charset;
+
+    #! HTTP information about the retrieval; set only for HTTP-based locations
+    *hash<HttpFileResourceInfo> http;
+
+    #! Handler-specific information, if any
+    /** Each handler documents the keys it sets; keys are namespaced by handler to avoid collisions
+    */
+    *hash<auto> extra;
+}
+
+#! A retrieved resource with its metadata
+/** @see @ref filelocationhandler_resources
+
+    @since FileLocationHandler 3.0
+*/
+public hashdecl FileResourceResult {
+    #! The data retrieved, after any transfer or content decoding and before any character decoding
+    /** Empty data is an empty binary value
+    */
+    binary data = binary();
+
+    #! Information about the resource
+    hash<FileResourceInfo> info;
+}
+
 #! The abstract file location handler class
 public class AbstractFileLocationHandler {
     #! Retrieves a text file from the given location
@@ -82,6 +177,34 @@ public class AbstractFileLocationHandler {
     */
     Qore::AbstractPollOperation getIoPollerForLocation(string scheme, string location, *hash<auto> opts) {
         return getIoPollerForLocationImpl(scheme, location, opts);
+    }
+
+    #! Retrieves a resource and its metadata from the given location
+    /** @param scheme the scheme being used
+        @param location the location string without the scheme or options
+        @param opts read options
+
+        @return the resource's data and metadata; see @ref filelocationhandler_resources
+
+        @since FileLocationHandler 3.0
+    */
+    hash<FileResourceResult> getResource(string scheme, string location, *hash<auto> opts) {
+        return getResourceImpl(scheme, location, opts);
+    }
+
+    #! Returns an I/O poller to retrieve a resource and its metadata from the given location
+    /** @param scheme the scheme being used
+        @param location the location string without the scheme or options
+        @param opts read options
+
+        @return an I/O poller whose output is the resource's data and metadata; see
+        @ref filelocationhandler_resources
+
+        @since FileLocationHandler 3.0
+    */
+    Qore::AbstractPollOperation<hash<FileResourceResult>> getResourcePoller(string scheme, string location,
+            *hash<auto> opts) {
+        return getResourcePollerImpl(scheme, location, opts);
     }
 
     #! Returns a string stream for the file's data at the given location
@@ -205,6 +328,243 @@ public class AbstractFileLocationHandler {
     */
     private static string getUriPath(string location) {
         return location =~ /^\// ? location : "/" + location;
+    }
+
+    #! Retrieves a resource and its metadata from the given location
+    /** The default implementation reads the data with @ref getBinaryFileImpl() and reports only the requested
+        location; handlers that can observe more override this method
+
+        @param scheme the scheme being used
+        @param location the location string without the scheme or options
+        @param opts read options
+
+        @return the resource's data and metadata
+
+        @since FileLocationHandler 3.0
+    */
+    private hash<FileResourceResult> getResourceImpl(string scheme, string location, *hash<auto> opts) {
+        return <FileResourceResult>{
+            "data": getBinaryFileImpl(scheme, location, opts),
+            "info": <FileResourceInfo>{
+                "requested_location": AbstractFileLocationHandler::getRequestedLocation(scheme, location),
+            },
+        };
+    }
+
+    #! Returns an I/O poller to retrieve a resource and its metadata from the given location
+    /** The default implementation wraps the poller returned by @ref getIoPollerForLocationImpl() and reports
+        only the requested location; handlers that can observe more override this method
+
+        @param scheme the scheme being used
+        @param location the location string without the scheme or options
+        @param opts read options
+
+        @return an I/O poller whose output is the resource's data and metadata
+
+        @since FileLocationHandler 3.0
+    */
+    private Qore::AbstractPollOperation<hash<FileResourceResult>> getResourcePollerImpl(string scheme,
+            string location, *hash<auto> opts) {
+        hash<FileResourceInfo> info = <FileResourceInfo>{
+            "requested_location": AbstractFileLocationHandler::getRequestedLocation(scheme, location),
+        };
+        return new FileResourcePollOperation(getIoPollerForLocationImpl(scheme, location, opts),
+            hash<FileResourceResult> sub (auto output) {
+                return <FileResourceResult>{
+                    "data": FileResourcePollOperation::getBinaryOutput(output),
+                    "info": info,
+                };
+            });
+    }
+
+    #! Returns the requested location for a location string without its scheme
+    /** @param scheme the scheme being used
+        @param location the location string without the scheme or options
+
+        @return the location with its scheme and without any user information
+
+        @since FileLocationHandler 3.0
+    */
+    static string getRequestedLocation(string scheme, string location) {
+        return AbstractFileLocationHandler::removeUserInfo(scheme + "://" + location);
+    }
+
+    #! Removes any user information (a user name and password) from a URL-like location string
+    /** The user information is found as @ref Qore::parse_url() "parse_url()" and the HTTP client find it, so a
+        password can contain unencoded \c "/", \c "?", \c "#", \c ":", and \c "@" characters.  If the location
+        cannot be parsed, everything up to the last \c "@" is removed.
+
+        @param location a location string
+
+        @return the location string without user information
+
+        @since FileLocationHandler 3.0
+    */
+    static string removeUserInfo(string location) {
+        *list<*string> parts = (location =~ x/^([A-Za-z][A-Za-z0-9+.-]*:\/\/)(.*)$/s);
+        if (!parts || parts[1] !~ /@/) {
+            return location;
+        }
+        string rest = parts[1];
+        *hash<UrlInfo> url;
+        try {
+            url = parse_url(location);
+        } catch (hash<ExceptionInfo> ex) {
+            # the location cannot be used; never report anything that could be user information
+        }
+        if (url) {
+            if (!exists url.username && !exists url.password) {
+                return location;
+            }
+            string user_info = (url.username ?? "") + (exists url.password ? ":" + url.password : "") + "@";
+            if (rest.startsWith(user_info)) {
+                return parts[0] + rest.substr(user_info.length());
+            }
+        }
+        rest =~ s/^.*@//s;
+        return parts[0] + rest;
+    }
+
+    #! Returns an absolute \c file:// URI for a local path
+    /** Relative paths are resolved against the current working directory, and \c "." and \c ".." segments are
+        removed; symbolic links are not resolved, so relative references resolved against the URI behave as
+        they would for the path as given.  Each path segment is percent-encoded.
+
+        @par Example:
+        @code{.py}
+string uri = AbstractFileLocationHandler::getFileUri("/var/data/my file#1.xml");
+# uri: "file:///var/data/my%20file%231.xml"
+        @endcode
+
+        @param path the local path
+
+        @return an absolute \c file:// URI for the path
+
+        @since FileLocationHandler 3.0
+    */
+    static string getFileUri(string path) {
+        string abs = normalize_dir(path);
+        if (PlatformOS == "Windows") {
+            abs =~ s/\\/\//g;
+        }
+        list<string> segments = ();
+        foreach string segment in (abs.split("/")) {
+            # keep a Windows drive letter as is
+            segments += (!$# && segment =~ /^[A-Za-z]:$/) ? segment : encode_url(segment, True);
+        }
+        string rv = segments.join("/");
+        return "file://" + (rv =~ /^\// ? "" : "/") + rv;
+    }
+
+    #! Returns the local path named by an absolute \c file:// URI
+    /** This is the inverse of @ref getFileUri(): use it to read a resource whose URI was obtained by resolving a
+        reference against a \c file:// @ref FileLocationHandler::FileResourceInfo::effective_location
+        "effective location", as the \c file:// scheme of this module takes a literal path rather than a
+        percent-encoded URI.
+
+        The URI must have one of the forms \c file:/path, \c file:///path, or \c file://localhost/path (RFC 8089);
+        the scheme and \c localhost are compared case-insensitively.  Any fragment is removed, and the path is then
+        percent-decoded once (\c "+" is not a space).  On Windows, the slash before a drive letter is removed.
+
+        @par Example:
+        @code{.py}
+string path = AbstractFileLocationHandler::getPathFromFileUri("file:///var/data/my%20file%231.xml#part");
+# path: "/var/data/my file#1.xml"
+        @endcode
+
+        @param uri the absolute \c file:// URI
+
+        @return the local path named by the URI
+
+        @throw LOCATION-ERROR the URI is not an absolute \c file URI of a supported form: it has another scheme, an
+        authority other than \c localhost, a query (even an empty one), a relative path, a malformed
+        percent-encoded octet, or an encoded NUL character
+
+        @since FileLocationHandler 3.0
+    */
+    static string getPathFromFileUri(string uri) {
+        *list<*string> parts = (uri =~ x/^[Ff][Ii][Ll][Ee]:(\/\/([^\/?#]*))?([^?#]*)(\?[^#]*)?(#.*)?$/s);
+        if (!parts) {
+            throw "LOCATION-ERROR", sprintf("%y is not a file URI", uri);
+        }
+        if (exists parts[0] && parts[1].val() && parts[1].lwr() != "localhost") {
+            throw "LOCATION-ERROR", sprintf("file URI %y names host %y; only local files can be read", uri,
+                parts[1]);
+        }
+        if (exists parts[3]) {
+            throw "LOCATION-ERROR", sprintf("file URI %y has a query, which cannot name a local file", uri);
+        }
+        string path = parts[2] ?? "";
+        if (path !~ /^\//) {
+            throw "LOCATION-ERROR", sprintf("file URI %y does not have an absolute path", uri);
+        }
+        if (path =~ /%(?![0-9A-Fa-f]{2})/) {
+            throw "LOCATION-ERROR", sprintf("file URI %y has a malformed percent-encoded octet", uri);
+        }
+        if (path =~ /%00/) {
+            throw "LOCATION-ERROR", sprintf("file URI %y has an encoded NUL character", uri);
+        }
+        path = decode_url(path);
+        if (PlatformOS == "Windows" && path =~ /^\/[A-Za-z]:/) {
+            path = path.substr(1);
+        }
+        return path;
+    }
+
+    #! Returns HTTP headers with lower-case names, each with the list of values received
+    /** @param headers headers as returned by the HTTP client, with string values or lists of string values
+
+        @return the headers with lower-case names; headers whose names differ only in case are merged in order
+
+        @since FileLocationHandler 3.0
+    */
+    static hash<string, list<string>> getHeaderValues(*hash<auto> headers) {
+        hash<string, list<string>> rv = {};
+        foreach hash<auto> i in (headers.pairIterator()) {
+            string name = i.key.lwr();
+            list<string> values = i.value.typeCode() == NT_LIST
+                ? (map $1.toString(), i.value)
+                : (i.value.toString(),);
+            if (rv{name}) {
+                rv{name} += values;
+            } else {
+                rv{name} = values;
+            }
+        }
+        return rv;
+    }
+
+    #! Sets the media type and character encoding of a resource from a \c Content-Type value
+    /** @param info the resource information to update
+        @param content_type the \c Content-Type value, if any
+
+        @since FileLocationHandler 3.0
+    */
+    static setContentType(reference<hash<FileResourceInfo>> info, *string content_type) {
+        if (!content_type.val()) {
+            return;
+        }
+        list<string> params = content_type.split(";");
+        string media_type = trim(params[0]).lwr();
+        if (media_type.val()) {
+            info.media_type = media_type;
+        }
+        for (int i = 1; i < params.size(); ++i) {
+            *list<*string> kv = (params[i] =~ x/^\s*([^=\s]+)\s*=\s*(.*?)\s*$/s);
+            if (!kv || kv[0].lwr() != "charset") {
+                continue;
+            }
+            string charset = kv[1] ?? "";
+            # a quoted-string value (RFC 9110 section 5.6.4)
+            if (charset =~ /^".*"$/s) {
+                charset = charset.substr(1, -1);
+                charset =~ s/\\(.)/$1/g;
+            }
+            if (charset.val()) {
+                info.charset = charset;
+            }
+            break;
+        }
     }
 
     #! Retrieves a text file from the given location
@@ -458,6 +818,84 @@ public class FileLocationHandler {
     static Qore::AbstractPollOperation getIoPollerForLocation(string location) {
         hash<InternalLocationInfo> info = FileLocationHandler::getInfo(location, True);
         return info.handler.getIoPollerForLocation(info.scheme, info.location, info.opts);
+    }
+
+    #! Returns a resource and its metadata from the given location
+    /** @par Example:
+        @code{.py}
+hash<FileResourceResult> res = FileLocationHandler::getResourceFromLocation("https://example.com/svc?wsdl");
+# resolve relative references in the document against the URI the data actually came from
+string base = res.info.effective_location ?? res.info.requested_location;
+        @endcode
+
+        @param location the location of the resource; options can be given in the location string as for the other
+        methods in this class
+        @param read_options read options for the location's handler; these are validated like options given in the
+        location string and take precedence over them
+
+        @return the resource's data and metadata; see @ref filelocationhandler_resources
+
+        @throw LOCATION-ERROR the location string cannot be parsed; unknown location scheme; invalid location option
+
+        @note This method can throw any exception raised by the location's handler when retrieving the data
+
+        @since FileLocationHandler 3.0
+    */
+    static hash<FileResourceResult> getResourceFromLocation(string location, *hash<auto> read_options) {
+        hash<InternalLocationInfo> info = FileLocationHandler::getInfo(location, True, read_options);
+        hash<FileResourceResult> rv = info.handler.getResource(info.scheme, info.location, info.opts);
+        # a location given without a scheme is reported as given
+        if (!info.scheme_given) {
+            rv.info.requested_location = info.location;
+        }
+        return rv;
+    }
+
+    #! Returns a non-blocking I/O poller to retrieve a resource and its metadata from the given location
+    /** No I/O is performed until the poller is driven; see @ref filelocationhandler_nonblocking.  The poller's
+        output is the same as the return value of @ref getResourceFromLocation(), and it raises the same errors.
+
+        @par Example:
+        @code{.py}
+AbstractPollOperation<hash<FileResourceResult>> op =
+    FileLocationHandler::getResourcePollerForLocation("https://example.com/svc?wsdl");
+while (!op.goalReached()) {
+    *hash<SocketPollInfo> info = op.continuePoll();
+    if (!info) {
+        break;
+    }
+    Socket::poll((info,), 30s);
+}
+hash<FileResourceResult> res = op.getOutput();
+        @endcode
+
+        @param location the location of the resource; options can be given in the location string as for the other
+        methods in this class
+        @param read_options read options for the location's handler; these are validated like options given in the
+        location string and take precedence over them
+
+        @return an I/O poller whose output is the resource's data and metadata
+
+        @throw LOCATION-ERROR the location string cannot be parsed; unknown location scheme; invalid location option
+        @throw UNIMPLEMENTED the location's handler does not support non-blocking reads
+
+        @since FileLocationHandler 3.0
+    */
+    static Qore::AbstractPollOperation<hash<FileResourceResult>> getResourcePollerForLocation(string location,
+            *hash<auto> read_options) {
+        hash<InternalLocationInfo> info = FileLocationHandler::getInfo(location, True, read_options);
+        AbstractPollOperation<hash<FileResourceResult>> op = info.handler.getResourcePoller(info.scheme,
+            info.location, info.opts);
+        if (info.scheme_given) {
+            return op;
+        }
+        # a location given without a scheme is reported as given
+        string requested_location = info.location;
+        return new FileResourcePollOperation(op, hash<FileResourceResult> sub (auto output) {
+            hash<FileResourceResult> rv = output;
+            rv.info.requested_location = requested_location;
+            return rv;
+        });
     }
 
     #! Returns a string stream for the file's data at the given location
@@ -735,10 +1173,12 @@ getHandlerNames
     #! Returns info about the requested location
     /** @param location the location string
         @param read if the location is meant for reading
+        @param extra_opts options that are merged with any options in the location string and take precedence
+        over them
 
         @throw LOCATION-ERROR unsupported or invalid location
     */
-    private static hash<InternalLocationInfo> getInfo(string location, bool read) {
+    private static hash<InternalLocationInfo> getInfo(string location, bool read, *hash<auto> extra_opts) {
         if (!location.val()) {
             throw "LOCATION-ERROR", "invalid empty location string";
         }
@@ -759,6 +1199,11 @@ getHandlerNames
         # message, so this cannot be folded into the checkOptions() call below; argument evaluation order would
         # capture the unstripped location
         info.opts = FileLocationHandler::getOptions(\location);
+        # options given by the caller take precedence over options in the location string
+        if (extra_opts) {
+            info.opts += extra_opts;
+        }
+        info.scheme_given = exists scheme;
         # NOTE: handlers that report selfValidatesOptions() perform the unknown-option check themselves after
         # resolving the location; they cannot know the effective option set until then.  Default value and required
         # option processing is always performed
@@ -823,6 +1268,116 @@ getHandlerNames
         }
     }
 }
+
+#! An I/O poller that returns a retrieved resource with its metadata
+/** Wraps the I/O poller that performs the retrieval and converts its output into a
+    @ref FileLocationHandler::FileResourceResult "FileResourceResult" once the retrieval is complete.
+
+    The conversion is performed in @ref continuePoll(), so an error found in the output, such as an HTTP error
+    response, is raised there, exactly as the blocking retrieval raises it; @ref goalReached() returns @ref True
+    only once the result is available.  No blocking I/O is performed: the wrapped poller drives all I/O.
+
+    @see @ref filelocationhandler_resources
+
+    @since FileLocationHandler 3.0
+*/
+public class FileResourcePollOperation inherits Qore::AbstractPollOperation<hash<FileResourceResult>> {
+    private {
+        #! The poller performing the retrieval
+        Qore::AbstractPollOperation op;
+
+        #! Converts the output of the wrapped poller into the result
+        code<hash<FileResourceResult>(auto)> convert;
+
+        #! The result, once available
+        *hash<FileResourceResult> result;
+
+        #! Serializes access from the caller and from an async I/O controller worker
+        Mutex m();
+    }
+
+    #! Creates the poller
+    /** @param op the poller performing the retrieval
+        @param convert converts the output of \a op into the result once \a op has reached its goal; any exception
+        it raises is raised by @ref continuePoll()
+    */
+    constructor(Qore::AbstractPollOperation op, code<hash<FileResourceResult>(auto)> convert) {
+        self.op = op;
+        self.convert = convert;
+    }
+
+    #! Returns the goal of the wrapped poller
+    string getGoal() {
+        return op.getGoal();
+    }
+
+    #! Returns the state of the wrapped poller
+    string getState() {
+        return op.getState();
+    }
+
+    #! Returns @ref True once the result is available
+    bool goalReached() {
+        AutoLock al(m);
+        return exists result;
+    }
+
+    #! Continues the retrieval
+    /** @return a poll hash while the retrieval needs more I/O, @ref nothing once the result is available
+
+        @throw FILE-RESOURCE-ERROR the wrapped poller returned an unsupported value
+
+        @note Any exception raised by the retrieval or by the conversion of its output is raised here
+    */
+    *hash<SocketPollInfo> continuePoll() {
+        AutoLock al(m);
+        if (exists result) {
+            return;
+        }
+        *hash<SocketPollInfo> rv = op.continuePoll();
+        if (rv || !op.goalReached()) {
+            return rv;
+        }
+        result = convert(op.getOutput());
+    }
+
+    #! Returns the result, or @ref nothing if the retrieval is not complete
+    *hash<FileResourceResult> getOutput() {
+        AutoLock al(m);
+        return result;
+    }
+
+    #! Aborts the retrieval
+    abort() {
+        op.abort();
+    }
+
+    #! Forwards completion to the wrapped poller
+    onComplete(hash<SocketPollResultInfo> result) {
+        op.onComplete(result);
+    }
+
+    #! Returns the binary data from the output of a poller that returns file data
+    /** @param output the output of a poller returned by
+        @ref FileLocationHandler::AbstractFileLocationHandler::getIoPollerForLocation() "getIoPollerForLocation()"
+
+        @return the data as a binary value; @ref nothing is returned as an empty binary value
+
+        @throw FILE-RESOURCE-ERROR \a output is not a binary value, a string, or @ref nothing
+    */
+    static binary getBinaryOutput(auto output) {
+        switch (output.typeCode()) {
+            case NT_NOTHING:
+                return binary();
+            case NT_BINARY:
+                return output;
+            case NT_STRING:
+                return output.toBinary();
+        }
+        throw "FILE-RESOURCE-ERROR", sprintf("the I/O poller returned a value of type %y; expecting \"binary\", "
+            "\"string\", or nothing", output.fullType());
+    }
+}
 }
 
 namespace Priv {
@@ -831,5 +1386,7 @@ hashdecl InternalLocationInfo {
     string location;
     *hash<auto> opts;
     AbstractFileLocationHandler handler;
+    #! True if the location was given with a scheme
+    bool scheme_given;
 }
 }

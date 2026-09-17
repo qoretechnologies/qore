@@ -34,6 +34,7 @@
 
 #include "qore/common.h"
 #include "qore/intern/QuicCommon.h"
+#include "qore/intern/QoreHttpHeaderPairs.h"
 #include <qore/InputStream.h>
 #include <qore/QoreQueue.h>  // includes Queue class (AbstractPrivateData + QoreQueue)
 
@@ -356,7 +357,7 @@ public:
     //! Submit an HTTP/3 request (client side)
     /** @return stream ID on success, -1 on error */
     DLLLOCAL int64_t submitRequest(const char* method, const char* path,
-                          const strcase_str_map_t& headers,
+                          const qore_http_header_pairs_t& headers,
                           const void* body, size_t body_len, ExceptionSink* xsink);
 
     //! Submit an HTTP/3 streaming request (client side, headers only)
@@ -370,7 +371,7 @@ public:
         @return stream ID on success, -1 on error
     */
     DLLLOCAL int64_t submitRequestStreaming(const char* method, const char* path,
-                          const strcase_str_map_t& headers, ExceptionSink* xsink);
+                          const qore_http_header_pairs_t& headers, ExceptionSink* xsink);
 
     //! Submit trailers on a streaming HTTP/3 request or response
     /** Must be called after the last sendStreamData() call (with end_stream=false).
@@ -381,12 +382,12 @@ public:
         @param xsink exception sink
         @return 0 on success, -1 on error
     */
-    DLLLOCAL int submitTrailers(int64_t stream_id, const strcase_str_map_t& trailers,
+    DLLLOCAL int submitTrailers(int64_t stream_id, const qore_http_header_pairs_t& trailers,
                        ExceptionSink* xsink);
 
     //! Submit an HTTP/3 response (server side)
     DLLLOCAL int submitResponse(int64_t stream_id, int status_code,
-                       const strcase_str_map_t& headers,
+                       const qore_http_header_pairs_t& headers,
                        const void* body, size_t body_len, ExceptionSink* xsink);
 
     //! Submit an HTTP/3 streaming response (server side, headers only)
@@ -400,7 +401,7 @@ public:
         @return 0 on success, -1 on error
     */
     DLLLOCAL int submitResponseStreaming(int64_t stream_id, int status_code,
-                       const strcase_str_map_t& headers, ExceptionSink* xsink);
+                       const qore_http_header_pairs_t& headers, ExceptionSink* xsink);
 
     //! Send body data on a streaming HTTP/3 response
     /** Appends data to the stream's buffer and resumes the nghttp3 deferred data
@@ -772,7 +773,7 @@ public:
         @return 0 on success, -1 on error
     */
     DLLLOCAL int submitConnectResponse(int64_t stream_id, int status_code,
-        const strcase_str_map_t& headers, ExceptionSink* xsink);
+        const qore_http_header_pairs_t& headers, ExceptionSink* xsink);
 
     //! Read buffered data from an extended CONNECT stream (RFC 9220)
     /** Returns data received on the bidirectional tunnel.
@@ -850,7 +851,7 @@ public:
         @param xsink exception sink
         @return the stream ID on success, or -1 on error
     */
-    DLLLOCAL int64_t submitConnectRequest(const char* path, const strcase_str_map_t& headers,
+    DLLLOCAL int64_t submitConnectRequest(const char* path, const qore_http_header_pairs_t& headers,
         const char* protocol, ExceptionSink* xsink);
 
     //! Cancel a QUIC stream (send RESET_STREAM + STOP_SENDING)

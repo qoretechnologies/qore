@@ -1403,6 +1403,11 @@ public:
 
     DLLLOCAL virtual QoreHashNode* continuePoll(ExceptionSink* xsink) override;
 
+    //! Returns true once the peer's SETTINGS frame has been processed; call on the thread that runs continuePoll()
+    DLLLOCAL bool isRemoteSettingsReceived() const {
+        return h2_session && h2_session->isRemoteSettingsReceived();
+    }
+
     //! Returns the next completed response, or NOTHING if none available
     DLLLOCAL virtual QoreValue getOutput() const override {
         AutoLocker al(response_lock);
@@ -2078,7 +2083,7 @@ private:
     QCS qcs_state = QCS::NONE;
     int64_t stream_id_ = -1;  //!< HTTP/3 stream ID (for ACK tracking in FLUSHING state)
     int status_code_ = 0;
-    strcase_str_map_t header_map_;
+    qore_http_header_pairs_t header_map_;
     SimpleRefHolder<BinaryNode> body_;
 
     //! Migration generation snapshot from when SENDING state began.
@@ -2225,7 +2230,7 @@ private:
     int64_t session_id = -1;
     int64_t stream_id = -1;
     int status_code = 0;
-    strcase_str_map_t header_map;
+    qore_http_header_pairs_t header_map;
     QCS_SS ss_state = QCS_SS::SUBMIT_HEADERS;
 
     //! InputStream fields

@@ -577,7 +577,8 @@ public:
         @param size the byte length of the data to send (if this is 0 then no data is sent)
         @param getbody if true then a body will be read even if there is no "Content-Length:" header
         @param info if not 0 then additional information about the HTTP communication will be added to the hash
-        (key-value pairs), keys "headers", and optionally "redirect-#", "redirect-message-#" (where # is substituted
+        (key-value pairs), keys "headers", "effective-url" (the URL of the last request sent), and optionally
+        "redirects" (a list of HttpRedirectInfo hashes), "redirect-#", "redirect-message-#" (where # is substituted
         with the redirect sequence number), and "chunked" (boolean, present only if the response was chunked)
         @param xsink if an error occurs, the Qore-language exception information will be added here
 
@@ -740,7 +741,8 @@ public:
         @param path the path string to send in the header
         @param headers a hash of headers to add to the message
         @param info if not 0 then additional information about the HTTP communication will be added to the hash
-        (key-value pairs), keys "headers", and optionally "redirect-#", "redirect-message-#" (where # is substituted
+        (key-value pairs), keys "headers", "effective-url" (the URL of the last request sent), and optionally
+        "redirects" (a list of HttpRedirectInfo hashes), "redirect-#", "redirect-message-#" (where # is substituted
         with the redirect sequence number), and "chunked" (boolean, present only if the response was chunked)
         @param xsink if an error occurs, the Qore-language exception information will be added here
 
@@ -754,7 +756,8 @@ public:
     /** @param path the path string to send in the header
         @param headers a hash of headers to add to the message
         @param info if not 0 then additional information about the HTTP communication will be added to the hash
-        (key-value pairs), keys "headers", and optionally "redirect-#", "redirect-message-#" (where # is substituted
+        (key-value pairs), keys "headers", "effective-url" (the URL of the last request sent), and optionally
+        "redirects" (a list of HttpRedirectInfo hashes), "redirect-#", "redirect-message-#" (where # is substituted
         with the redirect sequence number), and "chunked" (boolean, present only if the response was chunked)
         @param xsink if an error occurs, the Qore-language exception information will be added here
 
@@ -770,7 +773,8 @@ public:
         @param data optional data to send (should not be 0 for a POST)
         @param size the byte length of the data to send (if this is 0 then no data is sent)
         @param info if not 0 then additional information about the HTTP communication will be added to the hash
-        (key-value pairs), keys "headers", and optionally "redirect-#", "redirect-message-#" (where # is substituted
+        (key-value pairs), keys "headers", "effective-url" (the URL of the last request sent), and optionally
+        "redirects" (a list of HttpRedirectInfo hashes), "redirect-#", "redirect-message-#" (where # is substituted
         with the redirect sequence number), and "chunked" (boolean, present only if the response was chunked)
         @param xsink if an error occurs, the Qore-language exception information will be added here
 
@@ -786,7 +790,8 @@ public:
         @param headers a hash of headers to add to the message
         @param body optional message body to send (should not be 0 for a POST)
         @param info if not 0 then additional information about the HTTP communication will be added to the hash
-        (key-value pairs), keys "headers", and optionally "redirect-#", "redirect-message-#" (where # is substituted
+        (key-value pairs), keys "headers", "effective-url" (the URL of the last request sent), and optionally
+        "redirects" (a list of HttpRedirectInfo hashes), "redirect-#", "redirect-message-#" (where # is substituted
         with the redirect sequence number), and "chunked" (boolean, present only if the response was chunked)
         @param xsink if an error occurs, the Qore-language exception information will be added here
 

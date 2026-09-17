@@ -129,6 +129,11 @@ module HttpServerUtil {
     @section httpserverutil_relnotes HttpServerUtil Module Release Notes
 
     @subsection httputil1_6 HttpServerUtil 1.6
+    - added @ref HttpServer::http_canonicalize_reply_header_names() "http_canonicalize_reply_header_names()" and
+      @ref HttpServer::HttpServerManagedHeaderNames "HttpServerManagedHeaderNames";
+      @ref HttpServer::http_set_reply_headers() "http_set_reply_headers()" now recognizes the header fields that it
+      checks, sets, and removes in any case, so it no longer adds a second \c Connection, \c Date, or \c Server
+      field for a response with a field such as \c "date"
     - fixed listener lifecycle accounting for dedicated socket handlers so normally managed connections release their
       listener reference when \c startImpl() returns; previously only exceptions and externally managed completion
       callbacks released the reference, so normal WebSocket connection closures leaked the count and could leave the
@@ -375,6 +380,29 @@ public const hash<string, string> HttpCodes = {
     #           before granting full Internet access via a Wi-Fi hotspot)
     "511": "Network Authentication Required",
 };
+
+#! names of the response header fields that the HTTP server checks, sets, or removes, in their canonical case
+/** @see http_canonicalize_reply_header_names()
+
+    @since HttpServerUtil 1.6
+*/
+public const list<string> HttpServerManagedHeaderNames = (
+    "Alt-Svc",
+    "Connection",
+    "Content-Encoding",
+    "Content-Length",
+    "Content-Type",
+    "Date",
+    "Keep-Alive",
+    "Proxy-Connection",
+    "Server",
+    "TE",
+    "Transfer-Encoding",
+    "Upgrade",
+);
+
+# the canonical names of the fields managed by the HTTP server by lower-case name
+const hash<string, string> HttpServerManagedHeaderNameMap = map {$1.lwr(): $1}, HttpServerManagedHeaderNames;
 
 /** @defgroup HttpServerLoggingOptions HttpServer Logging Options
 */
@@ -908,8 +936,49 @@ public string sub mask_sensitive_url_query_values(string path) {
     return rv.join("");
 }
 
+#! Returns response headers where the names of the fields managed by the HTTP server have their canonical case
+/** Header field names are case-insensitive, but hash keys are not.  The HTTP server checks, sets, and removes the
+    header fields in @ref HttpServerManagedHeaderNames by name; without this conversion a handler that returns one
+    of them with another case (for example \c "content-type") is not recognized, and the server sends a second,
+    conflicting field of its own.
+
+    The names of the fields in @ref HttpServerManagedHeaderNames are converted to the case given there; all other
+    names are left unchanged.  If the hash has more than one key for one of these fields, the value of the last key
+    is used.
+
+    @par Example:
+    @code
+    # returns {"Content-Type": "application/json", "x-request-id": "1"}
+    *hash<auto> hdr = http_canonicalize_reply_header_names({"content-type": "application/json", "x-request-id": "1"});
+    @endcode
+
+    @param hdr the response headers; may be @ref nothing
+
+    @return the response headers with canonical names for the fields managed by the HTTP server; @ref nothing if
+    \a hdr is @ref nothing
+
+    @since HttpServerUtil 1.6
+*/
+public *hash<auto> sub http_canonicalize_reply_header_names(*hash<auto> hdr) {
+    # this is called for every response, and almost every response has canonical names: one match over all names
+    # finds a name of a managed field that is not canonical; the names must be the same as in
+    # HttpServerManagedHeaderNames
+    if (!hdr || (keys hdr).join("\n") !~ /(?m)^(?!(?:Alt-Svc|Connection|Content-Encoding|Content-Length|Content-Type|Date|Keep-Alive|Proxy-Connection|Server|TE|Transfer-Encoding|Upgrade)$)(?i:alt-svc|connection|content-encoding|content-length|content-type|date|keep-alive|proxy-connection|server|te|transfer-encoding|upgrade)$/) {
+        return hdr;
+    }
+    hash<auto> rv = {};
+    foreach hash<auto> i in (hdr.pairIterator()) {
+        rv{HttpServerManagedHeaderNameMap{i.key.lwr()} ?? i.key} = i.value;
+    }
+    return rv;
+}
+
 #! helper function for setting HTTP response headers
+/** The names of the response header fields in @ref HttpServerManagedHeaderNames are converted to their canonical
+    case with http_canonicalize_reply_header_names() before they are checked
+*/
 public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<auto> rv, *string server_string) {
+    rv.hdr = http_canonicalize_reply_header_names(rv.hdr);
     bool is_http2 = cx."header-info".http2 ?? False;
     if (!is_http2) {
         if (!rv.hdr.Connection) {
@@ -920,28 +989,20 @@ public nothing sub http_set_reply_headers(Socket s, hash<auto> cx, reference<aut
             }
         }
     } else {
-        # HTTP/2 forbids hop-by-hop headers
-        # Note: header removal here is case-sensitive; mixed-case variants may slip through
-        # until a case-insensitive hash for headers is implemented.
+        # HTTP/2 forbids hop-by-hop headers; the names are canonical here
         remove rv.hdr{
             "Connection",
-            "connection",
             "Keep-Alive",
-            "keep-alive",
             "Proxy-Connection",
-            "proxy-connection",
             "Transfer-Encoding",
-            "transfer-encoding",
             "Upgrade",
-            "upgrade",
             "TE",
-            "te",
         };
     }
 
     # HTTP/3 responses should not include Alt-Svc — the client is already on h3
     if (cx."header-info".http3) {
-        remove rv.hdr{"Alt-Svc", "alt-svc"};
+        remove rv.hdr."Alt-Svc";
     }
 
     if (!rv.hdr.Date) {
@@ -2040,6 +2101,9 @@ public class AbstractStreamRequest {
     */
     private hash<HttpHandlerResponseInfo> sendResponse() {
         hash<HttpHandlerResponseInfo> rv = getResponseHeaderMessage();
+        # the header names must be canonical before the check; http_set_reply_headers() removes Transfer-Encoding
+        # for HTTP/2
+        rv.hdr = http_canonicalize_reply_header_names(rv.hdr);
         bool chunked = rv.hdr."Transfer-Encoding" == "chunked";
         http_set_reply_headers(s, cx, \rv);
 

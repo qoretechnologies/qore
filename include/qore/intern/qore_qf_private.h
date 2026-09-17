@@ -269,6 +269,11 @@ struct qore_qf_private {
         return 0;
     }
 
+    //! checks the sandbox filesystem policy for opening a file with the given open() flags
+    /** @return 0 if access is allowed, -1 if it is denied, in which case an exception has been raised
+    */
+    DLLLOCAL static int checkOpenAccess(const char* fn, int flags, ExceptionSink* xsink);
+
     DLLLOCAL int open(const char* fn, int flags, int mode, const QoreEncoding* cs) {
         if (!fn || special_file)
             return -1;

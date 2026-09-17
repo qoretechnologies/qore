@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file FileLocationHandlerHttp.qc module for returning file data from a URL-like location string
 
-/*  FileLocationHandlerHttp Copyright 2021 - 2024 Qore Technologies, s.r.o.
+/*  FileLocationHandlerHttp Copyright 2021 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -195,6 +195,144 @@ class FileLocationHandlerHttp inherits AbstractFileLocationHandler {
         object client = getHttpClient(scheme, location, opts, \path, False);
         return new HttpPollWrapper(client.startPollSendRecv(opts.method ? opts.method.upr() : "GET", path, NOTHING,
             opts.headers));
+    }
+
+    #! Retrieves a resource and its metadata from the given location
+    /** The data is the response body after any content decoding; the information includes the effective URL,
+        the final response headers, and the redirects followed.  An HTTP error status raises the same
+        \c HTTP-CLIENT-RECEIVE-ERROR exception as the other read methods, unless the \c error_passthru option (or
+        the bound client's setting) is enabled.
+
+        @param scheme the scheme being used
+        @param location the location string without the scheme
+        @param opts read options
+
+        @return the resource's data and metadata
+
+        @note This method can throw any exception related to making an HTTP call
+
+        @since FileLocationHandler 3.0
+    */
+    private hash<FileResourceResult> getResourceImpl(string scheme, string location, *hash<auto> opts) {
+        string path;
+        HTTPClient hc = getHttpClient(scheme, location, opts, \path);
+        hash<auto> info;
+        hash<auto> resp = hc.send(NOTHING, getReadMethod(opts), path, opts.headers, False, \info);
+        return FileLocationHandlerHttp::getResourceResult(getResourceRequestedLocation(scheme, location), resp.body,
+            info);
+    }
+
+    #! Retrieves an I/O poller to retrieve a resource and its metadata from the given location
+    /** The poller follows redirects and reports the same result and errors as @ref getResourceImpl() without
+        blocking; see @ref filelocationhandler_resources
+
+        @param scheme the scheme being used
+        @param location the location string without the scheme
+        @param opts read options
+
+        @return an I/O poller whose output is the resource's data and metadata
+
+        @since FileLocationHandler 3.0
+    */
+    private Qore::AbstractPollOperation<hash<FileResourceResult>> getResourcePollerImpl(string scheme,
+            string location, *hash<auto> opts) {
+        string path;
+        HTTPClient hc = getHttpClient(scheme, location, opts, \path, False);
+        *string requested_location = getResourceRequestedLocation(scheme, location);
+        bool error_passthru = hc.getErrorPassthru();
+        return new FileResourcePollOperation(hc.startPollSendRecv(getReadMethod(opts), path, NOTHING,
+                opts.headers),
+            hash<FileResourceResult> sub (auto output) {
+                return FileLocationHandlerHttp::getPollResourceResult(requested_location, output, error_passthru);
+            });
+    }
+
+    #! Returns a resource result from the request information of a blocking HTTP request
+    /** @param requested_location the requested location, or @ref nothing to report the URL of the first request
+        made, as for a handler bound to a client, whose locations are paths that the client resolves
+        @param body the response body, if any
+        @param info the request information hash of the request; see @ref Qore::HTTPClient::send() "HTTPClient::send()"
+
+        @return the resource result
+
+        @since FileLocationHandler 3.0
+    */
+    static hash<FileResourceResult> getResourceResult(*string requested_location, auto body, hash<auto> info) {
+        hash<FileResourceInfo> rinfo = <FileResourceInfo>{
+            # the request URLs reported by the client never have user information
+            "requested_location": requested_location ?? info.redirects[0].request_url ?? info."effective-url",
+            "effective_location": info."effective-url",
+            "http": <HttpFileResourceInfo>{
+                "status_code": info."response-headers".status_code,
+                "headers": AbstractFileLocationHandler::getHeaderValues(info."response-headers-raw"),
+                "redirects": FileLocationHandlerHttp::getRedirects(info.redirects),
+            },
+        };
+        AbstractFileLocationHandler::setContentType(\rinfo, rinfo.http.headers."content-type"[0]);
+        return <FileResourceResult>{
+            "data": FileResourcePollOperation::getBinaryOutput(body),
+            "info": rinfo,
+        };
+    }
+
+    #! Returns a resource result from the output of an HTTP poller
+    /** @param requested_location the requested location, or @ref nothing to report the URL of the first request
+        made; see @ref getResourceResult()
+        @param output the output of the poller; see
+        @ref Qore::HTTPClient::startPollSendRecv() "HTTPClient::startPollSendRecv()"
+        @param error_passthru if @ref False, an error status raises the same exception as a blocking request
+
+        @return the resource result
+
+        @throw HTTP-CLIENT-RECEIVE-ERROR the response has an error status and \a error_passthru is @ref False
+
+        @since FileLocationHandler 3.0
+    */
+    static hash<FileResourceResult> getPollResourceResult(*string requested_location, hash<auto> output,
+            bool error_passthru) {
+        int code = output.code;
+        if (!error_passthru && (code < 100 || code >= 300)) {
+            # raise the error exactly as a blocking request does
+            *hash<auto> hdr = output.info."response-headers";
+            throw "HTTP-CLIENT-RECEIVE-ERROR", sprintf("HTTP status code %d received: message: %s", code,
+                hdr.status_message ?? "<no message>"), hdr + {"body": output."response-body"};
+        }
+        return FileLocationHandlerHttp::getResourceResult(requested_location, output."response-body",
+            output.info + {"response-headers": {"status_code": code} + output.info."response-headers"});
+    }
+
+    #! Returns the redirects followed from the redirect information of an HTTP request
+    /** @param redirects the \c redirects key of the request information hash of an HTTP request
+
+        @return the redirects followed with normalized headers
+
+        @since FileLocationHandler 3.0
+    */
+    static list<hash<HttpFileRedirectInfo>> getRedirects(*list<auto> redirects) {
+        list<hash<HttpFileRedirectInfo>> rv = ();
+        foreach hash<auto> redirect in (redirects) {
+            rv += <HttpFileRedirectInfo>{
+                "request_url": redirect.request_url,
+                "status_code": redirect.status_code,
+                "location": redirect.location,
+                "target_url": redirect.target_url,
+                "headers": AbstractFileLocationHandler::getHeaderValues(redirect.headers),
+            };
+        }
+        return rv;
+    }
+
+    #! Returns the requested location of a resource, or @ref nothing for a bound handler
+    /** For a bound handler the location is a path that the client resolves against its own URL, so the requested
+        location is the URL of the first request made; see @ref getResourceResult()
+    */
+    private *string getResourceRequestedLocation(string scheme, string location) {
+        return bound_client ? NOTHING : AbstractFileLocationHandler::getRequestedLocation(scheme, location);
+    }
+
+    #! Returns the read method
+    private static string getReadMethod(*hash<auto> opts) {
+        return opts.method ? opts.method.upr() : "GET";
     }
 
     #! Returns a stream reader for the file's data at the given location

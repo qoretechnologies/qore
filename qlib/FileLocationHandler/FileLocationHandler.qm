@@ -1,6 +1,6 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file FileLocationHandler.qm module for returning file data from a URL-like location string
-/*  FileLocationHandler.qm Copyright 2021 - 2024 Qore Technologies, s.r.o.
+/*  FileLocationHandler.qm Copyright 2021 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -60,6 +60,14 @@ module FileLocationHandler {
     - @ref FileLocationHandler::FileLocationHandler::getBinaryStreamFromLocation() "FileLocationHandler::getBinaryStreamFromLocation()"
     - @ref FileLocationHandler::FileLocationHandler::getIoPollerForLocation() "FileLocationHandler::getIoPollerForLocation()"
       to read without blocking a thread; see @ref filelocationhandler_nonblocking
+
+    To retrieve a resource together with its metadata, such as the URI it was actually retrieved from after any
+    redirects, call one of:
+    - @ref FileLocationHandler::FileLocationHandler::getResourceFromLocation() "FileLocationHandler::getResourceFromLocation()"
+    - @ref FileLocationHandler::FileLocationHandler::getResourcePollerForLocation() "FileLocationHandler::getResourcePollerForLocation()"
+      to retrieve it without blocking a thread
+
+    See @ref filelocationhandler_resources.
 
     To write file data, call one of:
     - @ref FileLocationHandler::FileLocationHandler::writeFileToLocation() "FileLocationHandler::writeFileToLocation()"
@@ -211,9 +219,90 @@ FileLocationHandler::setConnectionFilter(bool sub (string name, bool write) {
     connection names separated by @ref Qore::PathSep "PathSep" characters.  If neither is set, all connections are
     allowed.
 
+    @section filelocationhandler_resources Resources with Metadata
+
+    @ref FileLocationHandler::FileLocationHandler::getResourceFromLocation() "getResourceFromLocation()" and
+    @ref FileLocationHandler::FileLocationHandler::getResourcePollerForLocation() "getResourcePollerForLocation()"
+    return a @ref FileLocationHandler::FileResourceResult "FileResourceResult": the resource's data together with a
+    @ref FileLocationHandler::FileResourceInfo "FileResourceInfo" hash describing it.  The blocking and the
+    non-blocking variants return the same result and raise the same errors; the non-blocking variant performs all
+    I/O, including following HTTP redirects, as the poller is driven.
+
+    The data is a binary value holding the resource's bytes after any transfer or content decoding (for example
+    \c gzip) and before any character decoding; an empty resource is an empty binary value.  Consumers decide how
+    to decode it, using the declared \c charset if they wish.
+
+    |!Key|!Description
+    |\c requested_location|the location as requested, without location options and without user information; for a handler bound to a client (see @ref FileLocationHandler::FileLocationHandler::getHttpHandlerForClient() "getHttpHandlerForClient()" and @ref FileLocationHandler::FileLocationHandler::getRestHandlerForClient() "getRestHandlerForClient()"), whose locations are paths that the client resolves, the URL of the first request made
+    |\c effective_location|the absolute URI that produced the data, without a fragment; @ref nothing if unknown
+    |\c media_type|the media type declared by the transport, in lower case and without parameters
+    |\c charset|the character encoding declared by the transport
+    |\c http|for HTTP-based locations: the final status code, the final response headers, and the redirects followed
+    |\c extra|handler-specific information, documented by the handler
+
+    The effective location is the base URI for relative references in the data (RFC 3986 section 5.1.3); use
+    @ref Qore::resolve_url() "resolve_url()" to resolve them.  It is known for these locations:
+
+    |!Scheme|!Effective location
+    |\c file://, or no scheme|the absolute \c file:// URI of the file read, with \c "." and \c ".." removed and each path segment percent-encoded; see @ref FileLocationHandler::AbstractFileLocationHandler::getFileUri() "AbstractFileLocationHandler::getFileUri()"
+    |\c http://, \c https://, \c rest://, \c rests://|the URL of the final response, after any redirects
+    |\c conn://, \c connection://|the effective location reported for the resolved target, if any
+    |\c data://|none: the data is not retrieved from anywhere
+
+    Other handlers, including handlers registered by applications, report only what they can observe: the default
+    implementation reads the data with the handler's existing methods and reports only the requested location, so
+    existing handlers support the new methods without changes.  A handler never reports the requested location as
+    the effective location when it cannot tell where the data came from.
+
+    HTTP headers are reported with lower-case names, each with the list of values received, so a repeated header
+    such as \c Set-Cookie keeps each value.  The headers describe the response as sent: \c Content-Length and
+    \c Content-Encoding describe the transferred representation, not the decoded data.  Each redirect followed
+    is reported with the URL of the request that received it, its status code, its \c Location value as received,
+    the absolute URL it was resolved to, and its headers.  Request headers, such as \c Authorization, are never
+    reported.
+
+    HTTP redirects are followed by the transport (see @ref Qore::HTTPClient "HTTPClient"): \c Location values are
+    resolved according to RFC 3986, fragments are never sent, and credentials are only sent to the origin of the
+    original request.  A handler bound to a client with
+    @ref FileLocationHandler::FileLocationHandler::getHttpHandlerForClient() "getHttpHandlerForClient()" or
+    @ref FileLocationHandler::FileLocationHandler::getRestHandlerForClient() "getRestHandlerForClient()" uses the
+    client's own settings, including its redirect limits, authentication, proxy, and TLS options.
+
+    @par Example: retrieving a document and resolving a relative reference in it
+    @code{.py}
+hash<FileResourceResult> res = FileLocationHandler::getResourceFromLocation("https://example.com/svc/root.wsdl");
+string base = res.info.effective_location ?? res.info.requested_location;
+# an import in the document with location "../types/common.xsd" is retrieved from:
+string import_location = resolve_url(base, "../types/common.xsd", RESOLVE_URL_STRICT | RESOLVE_URL_NO_FRAGMENT);
+    @endcode
+
+    The \c file:// scheme of this module takes a literal path, while an effective location is a percent-encoded
+    URI; convert a \c file URI obtained by resolving a reference with
+    @ref FileLocationHandler::AbstractFileLocationHandler::getPathFromFileUri() "AbstractFileLocationHandler::getPathFromFileUri()"
+    before retrieving it:
+    @code{.py}
+if (import_location =~ /^file:/i) {
+    import_location = AbstractFileLocationHandler::getPathFromFileUri(import_location);
+}
+hash<FileResourceResult> import = FileLocationHandler::getResourceFromLocation(import_location);
+    @endcode
+
+    @note Response headers can be sensitive (for example \c Set-Cookie); the metadata is returned to the caller
+    and is never logged by this module
+
     @section filelocationhandler_relnotes Release Notes
 
     @subsection filelocationhandler_v3_0 FileLocationHandler v3.0
+    - added @ref FileLocationHandler::AbstractFileLocationHandler::getFileUri() "AbstractFileLocationHandler::getFileUri()"
+      and @ref FileLocationHandler::AbstractFileLocationHandler::getPathFromFileUri()
+      "AbstractFileLocationHandler::getPathFromFileUri()" to convert between local paths and \c file URIs
+    - added @ref FileLocationHandler::FileLocationHandler::getResourceFromLocation()
+      "FileLocationHandler::getResourceFromLocation()" and
+      @ref FileLocationHandler::FileLocationHandler::getResourcePollerForLocation()
+      "FileLocationHandler::getResourcePollerForLocation()", which return a resource's data together with its
+      metadata: the effective location it was retrieved from, its media type and character encoding, and for
+      HTTP locations the final response headers and the redirects followed; see
+      @ref filelocationhandler_resources
     - implemented support for non-blocking I/O from file handlers
       (<a href="https://github.com/qoretechnologies/qore/issues/4764">issue 4764</a>)
     - \c "sftp://" locations (and \c conn:// locations resolving to them) support non-blocking reads with

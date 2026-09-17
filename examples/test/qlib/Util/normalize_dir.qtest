@@ -1,8 +1,8 @@
 #!/usr/bin/env qore
 
 %prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
-%requires Util
-%requires QUnit
+%requires ../../../../qlib/Util.qm
+%requires ../../../../qlib/QUnit.qm
 
 %modern
 %enable-all-warnings
@@ -18,5 +18,20 @@ public class NormalizeDirTest inherits QUnit::Test {
     testNormalizeDir() {
         assertEq("\\\\vboxsrv\\home\\t.x", normalize_dir_windows("//vboxsrv///home/t.x"));
         assertEq("\\\\vboxsrv\\home\\t.x", normalize_dir_windows("\\\\vboxsrv\\\\\\home\\t.x"));
+
+        # ".." never removes the root
+        assertEq("/etc", normalize_dir_unix("/../etc", "/cwd"));
+        assertEq("/b", normalize_dir_unix("/a/../../b", "/cwd"));
+        assertEq("/", normalize_dir_unix("/..", "/cwd"));
+        assertEq("/", normalize_dir_unix("/a/b/../../..", "/cwd"));
+        assertEq("/x", normalize_dir_unix("../x", "/cwd"));
+        assertEq("/b", normalize_dir_unix("a/../../b", "/cwd"));
+        assertEq("/c/x", normalize_dir_unix("../x", "/c/d"));
+        assertEq("/a/c", normalize_dir_unix("/a/b/./../c", "/cwd"));
+        assertEq("C:\\x", normalize_dir_windows("C:\\..\\x", "C:\\cwd"));
+        assertEq("C:\\x", normalize_dir_windows("C:\\a\\..\\..\\x", "C:\\cwd"));
+        assertEq("C:\\x", normalize_dir_windows("..\\..\\x", "C:\\cwd"));
+        assertEq("\\\\server\\share\\x", normalize_dir_windows("\\\\server\\share\\..\\x", "C:\\cwd"));
+        assertEq("\\\\server\\share\\x", normalize_dir_windows("\\\\server\\share\\a\\..\\x", "C:\\cwd"));
     }
 }

@@ -1636,31 +1636,13 @@ private:
     bool done = false;
 };
 
-static void qore_socket_object_set_h2_headers(strcase_str_map_t& out, const QoreHashNode* headers) {
-    if (!headers) {
-        return;
-    }
-
-    ConstHashIterator hi(headers);
-    while (hi.next()) {
-        QoreValue val = hi.get();
-        // NT_STRING may be an inline (SSO) short string with no QoreStringNode; access it safely
-        if (val.getType() == NT_STRING) {
-            out[hi.getKey()] = QoreStringDataHelper(val).c_str();
-        }
-    }
+// a header with several values is one field per value, and non-string values are formatted as for HTTP/1.x
+static void qore_socket_object_set_h2_headers(qore_http_header_pairs_t& out, const QoreHashNode* headers) {
+    qore_get_http_header_pairs(headers, out);
 }
 
-static void qore_socket_object_set_quic_headers(strcase_str_map_t& out, const QoreHashNode* headers) {
-    if (!headers) {
-        return;
-    }
-
-    ConstHashIterator hi(headers);
-    while (hi.next()) {
-        QoreStringValueHelper val(hi.get());
-        out[hi.getKey()] = val->c_str();
-    }
+static void qore_socket_object_set_quic_headers(qore_http_header_pairs_t& out, const QoreHashNode* headers) {
+    qore_get_http_header_pairs(headers, out);
 }
 
 static QoreHashNode* qore_socket_object_make_sockaddr_output(const struct sockaddr_storage& addr, socklen_t len,
@@ -1923,7 +1905,7 @@ private:
     uint32_t h2_error_code = NGHTTP2_CANCEL;
     std::string method;
     std::string path;
-    strcase_str_map_t header_map;
+    qore_http_header_pairs_t header_map;
     std::vector<std::pair<std::string, std::string>> request_headers;
     SimpleRefHolder<BinaryNode> body;
     InputStream* input_stream = nullptr;
@@ -2290,7 +2272,7 @@ private:
     int status_code = 0;
     std::string method;
     std::string path;
-    strcase_str_map_t header_map;
+    qore_http_header_pairs_t header_map;
     SimpleRefHolder<BinaryNode> body;
     SimpleRefHolder<InputStream> input_stream;
     Queue* queue = nullptr;
@@ -6431,7 +6413,7 @@ static int64_t qore_socket_object_submit_quic_request(QoreSocketObject* s, const
             xsink->raiseException("HTTP3-ERROR", "no HTTP/3 session active");
             return -1;
         }
-        strcase_str_map_t header_map;
+        qore_http_header_pairs_t header_map;
         qore_socket_object_set_quic_headers(header_map, headers);
         int64_t stream_id;
         if (streaming) {

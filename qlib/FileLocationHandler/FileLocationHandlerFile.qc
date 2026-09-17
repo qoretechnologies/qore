@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file FileLocationHandlerFile.qc module for returning file data from a URL-like location string
 
-/*  FileLocationHandlerFile Copyright 2021 - 2024 Qore Technologies, s.r.o.
+/*  FileLocationHandlerFile Copyright 2021 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -116,6 +116,73 @@ class FileLocationHandlerFile inherits AbstractFileLocationHandler {
             *hash<auto> opts) {
         File f();
         return f.startPollRead(substitute_env_vars(location));
+    }
+
+    #! Retrieves a resource and its metadata from the given location
+    /** The effective location is the absolute \c file:// URI of the file read; see
+        @ref FileLocationHandler::AbstractFileLocationHandler::getFileUri() "AbstractFileLocationHandler::getFileUri()"
+
+        @param scheme the scheme being used
+        @param location the location string without the scheme
+        @param opts read options
+
+        @return the resource's data and metadata
+
+        @throw FILE-READ-ERROR an I/O or other error occurred when reading the file
+
+        @note Supports environment variable substitution in \a location
+
+        @since FileLocationHandler 3.0
+    */
+    private hash<FileResourceResult> getResourceImpl(string scheme, string location, *hash<auto> opts) {
+        string path = substitute_env_vars(location);
+        return <FileResourceResult>{
+            "data": ReadOnlyFile::readBinaryFile(path, opts.max_file_len),
+            "info": FileLocationHandlerFile::getFileResourceInfo(scheme, location, path),
+        };
+    }
+
+    #! Retrieves an I/O poller to retrieve a resource and its metadata from the given location
+    /** @param scheme the scheme being used
+        @param location the location string without the scheme
+        @param opts read options
+
+        @return an I/O poller whose output is the resource's data and metadata
+
+        @note Supports environment variable substitution in \a location
+
+        @since FileLocationHandler 3.0
+    */
+    private Qore::AbstractPollOperation<hash<FileResourceResult>> getResourcePollerImpl(string scheme,
+            string location, *hash<auto> opts) {
+        string path = substitute_env_vars(location);
+        hash<FileResourceInfo> info = FileLocationHandlerFile::getFileResourceInfo(scheme, location, path);
+        File f();
+        AbstractPollOperation op;
+        try {
+            op = f.startPollRead(path, False, opts.max_file_len ?? -1);
+        } catch (hash<ExceptionInfo> ex) {
+            # a file that cannot be opened is reported exactly as a blocking read reports it
+            if (ex.err == "FILE-OPEN-ERROR" && ex.arg.intp()) {
+                throw "FILE-OPEN2-ERROR", sprintf("cannot open '%s': %s", path, strerror(ex.arg)), ex.arg;
+            }
+            rethrow;
+        }
+        return new FileResourcePollOperation(op, hash<FileResourceResult> sub (auto output) {
+            return <FileResourceResult>{
+                "data": FileResourcePollOperation::getBinaryOutput(output),
+                "info": info,
+            };
+        });
+    }
+
+    #! Returns the resource information for a local file
+    private static hash<FileResourceInfo> getFileResourceInfo(string scheme, string location, string path) {
+        return <FileResourceInfo>{
+            # a file location is a literal path; an "@" in it never separates user information
+            "requested_location": scheme + "://" + location,
+            "effective_location": AbstractFileLocationHandler::getFileUri(path),
+        };
     }
 
     #! Returns a stream reader for the file's data at the given location

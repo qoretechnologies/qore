@@ -467,6 +467,8 @@ public class NamedArgumentsTest inherits QUnit::Test {
         assertEq("a%20b", encode_url(url: "a b"), "URL encode exposes url");
         assertEq("a b", decode_uri_request(uri: "a%20b"), "URI request decode exposes uri");
         assertEq("a%20b", encode_uri_request(url: "a b"), "URI request encode exposes url");
+        assertEq("http://h/a/c", resolve_url(base: "http://h/a/b", reference: "c"),
+            "URL reference resolution exposes base and reference");
 
         assertTrue(exists_function(name: "type"), "function inspection exposes name");
         assertEq("builtin", function_type(name: "type"), "function_type exposes name");

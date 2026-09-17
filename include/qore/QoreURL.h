@@ -6,7 +6,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -40,6 +40,35 @@
 #define QURL_DECODE_PATH   (1 << 2)
 #define QURL_MAINTAIN_CASE (1 << 3)
 #define QURL_DECODE_ANY    (QURL_DECODE | QURL_DECODE_PATH)
+
+//! qore_resolve_url() option: reject arguments that are not valid URI references
+/** Controls, space, malformed percent-encoded octets, and a relative-path reference whose first segment contains a
+    colon are rejected
+*/
+#define QRU_STRICT          (1 << 0)
+//! qore_resolve_url() option: remove any fragment from the target
+#define QRU_NO_FRAGMENT     (1 << 1)
+//! qore_resolve_url() option: accept a base that is a relative reference
+#define QRU_RELATIVE_BASE   (1 << 2)
+//! qore_resolve_url() option: percent-encode octets that cannot appear in a URI in the target (IRI to URI mapping)
+#define QRU_ENCODE          (1 << 3)
+
+class QoreString;
+class QoreStringNode;
+class ExceptionSink;
+
+//! Resolves a URI reference against a base URI according to RFC 3986 section 5.2
+/** @param base the base URI; must be an absolute URI unless @ref QRU_RELATIVE_BASE is given
+    @param reference the reference to resolve
+    @param options a bitfield of \c QRU_* options
+    @param xsink if an error occurs, the Qore-language exception information will be added here
+
+    @return the target in UTF-8 encoding (the caller owns the reference), or nullptr if an exception was raised
+
+    @since %Qore 3.0
+*/
+DLLEXPORT QoreStringNode* qore_resolve_url(const QoreString& base, const QoreString& reference, int options,
+        ExceptionSink* xsink);
 
 //! helps with parsing URLs and provides access to URL components through Qore data structures
 class QoreURL {

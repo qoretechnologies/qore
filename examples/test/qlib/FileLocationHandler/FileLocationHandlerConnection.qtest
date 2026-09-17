@@ -10,6 +10,9 @@
 # needs the same module instance the connection provider uses, so it is resolved by name from this directory
 %prepend-module-path "${SCRIPT_DIR}"
 
+# the modules are required by name: the connection provider module loaded by ConnectionProvider requires them by
+# name, and a module loaded by path would be a second instance whose classes the provider's objects do not match;
+# the module path above ensures that the local versions are used
 %requires FileLocationHandler
 %requires DataProvider
 %requires FileLocationTestConnectionProvider
@@ -53,6 +56,7 @@ public class FileLocationHandlerConnectionTest inherits QUnit::Test {
         addTestCase("tier 1b option validation", \tier1bOptionTest());
         addTestCase("tier 1b negative", \tier1bNegativeTest());
         addTestCase("client-bound handlers", \boundHandlerTest());
+        addTestCase("resources with metadata", \resourceTest());
         addTestCase("negative", \negativeTest());
 
         setupConnectionProvider();
@@ -529,6 +533,61 @@ public class FileLocationHandlerConnectionTest inherits QUnit::Test {
         setFileApi({});
         assertThrows("UNIMPLEMENTED", "returning the data itself",
             \FileLocationHandler::getIoPollerForLocation(), "conn://testapp/docs/report.txt");
+    }
+
+    #! Resources retrieved through a connection report the connection location as the requested location
+    resourceTest() {
+        # tier 1a: a filesystem connection redirects to the file handler, which knows the effective location
+        makeFile("resource file.txt");
+        string uri = "file://" + (map encode_url($1, True), (tmp.path + "/resource file.txt").split("/")).join("/");
+        hash<FileResourceResult> r = FileLocationHandler::getResourceFromLocation(p("resource file.txt"));
+        assertEq(binary(FileContents), r.data);
+        assertEq(p("resource file.txt"), r.info.requested_location);
+        assertEq(uri, r.info.effective_location);
+        r = runPoller(FileLocationHandler::getResourcePollerForLocation(p("resource file.txt")));
+        assertEq(binary(FileContents), r.data);
+        assertEq(p("resource file.txt"), r.info.requested_location);
+        assertEq(uri, r.info.effective_location);
+        # options are passed through to the target
+        r = FileLocationHandler::getResourceFromLocation(p("resource file.txt"), {"max_file_len": 4});
+        assertEq(binary(FileContents.substr(0, 4)), r.data);
+        r = runPoller(FileLocationHandler::getResourcePollerForLocation(p("resource file.txt") + "{max_file_len=4}"));
+        assertEq(binary(FileContents.substr(0, 4)), r.data);
+        assertEq(p("resource file.txt"), r.info.requested_location, "options are removed");
+
+        # tier 1b: a native handler without resource support reports only what is known
+        TestStore::reset();
+        TestNativeFileLocationHandler::reset();
+        TestStore::files."docs/native.txt" = FileContents;
+        r = FileLocationHandler::getResourceFromLocation("conn://native/docs/native.txt");
+        assertEq(binary(FileContents), r.data);
+        assertEq("conn://native/docs/native.txt", r.info.requested_location);
+        assertNothing(r.info.effective_location);
+        assertEq(1, TestNativeFileLocationHandler::calls);
+        # the native handler does not support non-blocking reads
+        assertThrows("UNIMPLEMENTED", "does not support non-blocking",
+            \FileLocationHandler::getResourcePollerForLocation(), "conn://native/docs/native.txt");
+
+        # tier 2: an application file API
+        on_exit DataProviderActionCatalog::deregisterAppFileApi(TestAppName);
+        TestStore::reset();
+        TestStore::files."docs/report.txt" = FileContents;
+        setFileApi({});
+        r = FileLocationHandler::getResourceFromLocation("conn://testapp/docs/report.txt");
+        assertEq(binary(FileContents), r.data);
+        assertEq("conn://testapp/docs/report.txt", r.info.requested_location);
+        assertNothing(r.info.effective_location);
+        assertThrows("UNIMPLEMENTED", \FileLocationHandler::getResourcePollerForLocation(),
+            "conn://testapp/docs/report.txt");
+
+        # the credentials of a connection never appear in results or errors
+        hash<ExceptionInfo> ex = getError(\FileLocationHandler::getResourceFromLocation(),
+            ("conn://ftp-secret/file.txt",));
+        assertNRegex(PasswordMarker, get_exception_string(ex));
+        ex = getError(sub (string loc) {
+            runPoller(FileLocationHandler::getResourcePollerForLocation(loc));
+        }, ("conn://ftp-secret/file.txt",));
+        assertNRegex(PasswordMarker, get_exception_string(ex));
     }
 
     #! Drives a poll operation to completion and returns its output

@@ -416,6 +416,10 @@ public:
     // own manager, so re-entering sandboxed code (a callback) stays sandboxed.
     unsigned sandbox_policy_barrier = 0;
 
+    // the sandbox context of the thread that started the operation that this thread is continuing; when set, it
+    // replaces the sandbox manager resolution below (see QoreSandboxContextHelper)
+    const QoreSandboxContext* sandbox_context = nullptr;
+
     // current namespace context for parsing
     qore_ns_private* current_ns = nullptr;
 
@@ -2670,6 +2674,15 @@ static QoreSandboxManager* find_thread_sandbox_manager_ref_intern(QoreProgram** 
     if (!td) {
         return nullptr;
     }
+    // an operation continued for another thread is governed by the sandbox of the thread that started it; the
+    // Program of such a manager is only known by its ID (see get_cancel_scope_pgm_id())
+    if (const QoreSandboxContext* ctx = td->sandbox_context) {
+        QoreSandboxManager* sm = policy ? ctx->policy_manager : ctx->manager;
+        if (sm) {
+            sm->ref();
+        }
+        return sm;
+    }
     // issue #4285: with a policy barrier active, resolution does not walk out to enclosing
     // callers; see ThreadData::sandbox_policy_barrier
     const bool barrier = policy && td->sandbox_policy_barrier;
@@ -2722,6 +2735,56 @@ int qore_push_sandbox_policy_barrier() {
     }
     ++td->sandbox_policy_barrier;
     return 0;
+}
+
+QoreSandboxContext::QoreSandboxContext() {
+    ThreadData* td = thread_data.get();
+    if (td && td->sandbox_context) {
+        // a nested capture keeps the context that is applied
+        const QoreSandboxContext* ctx = td->sandbox_context;
+        manager = ctx->manager;
+        policy_manager = ctx->policy_manager;
+        pgm_id = ctx->pgm_id;
+        if (manager) {
+            manager->ref();
+        }
+        if (policy_manager) {
+            policy_manager->ref();
+        }
+        return;
+    }
+    QoreProgram* pgm = nullptr;
+    manager = find_thread_sandbox_manager_ref_intern(&pgm);
+    if (manager) {
+        // the manager is owned by the Program it was found on
+        assert(pgm);
+        pgm_id = pgm->getProgramId();
+    }
+    policy_manager = find_thread_sandbox_manager_ref_intern(nullptr, true);
+}
+
+QoreSandboxContext::~QoreSandboxContext() {
+    if (manager) {
+        manager->deref(nullptr);
+    }
+    if (policy_manager) {
+        policy_manager->deref(nullptr);
+    }
+}
+
+QoreSandboxContextHelper::QoreSandboxContextHelper(const QoreSandboxContext& ctx) {
+    ThreadData* td = thread_data.get();
+    if (td) {
+        old_ctx = td->sandbox_context;
+        td->sandbox_context = &ctx;
+        active = true;
+    }
+}
+
+QoreSandboxContextHelper::~QoreSandboxContextHelper() {
+    if (active) {
+        thread_data.get()->sandbox_context = old_ctx;
+    }
 }
 
 void qore_pop_sandbox_policy_barrier() {
@@ -4326,6 +4389,10 @@ void QoreThreadList::dropCancelRequest(int tid, unsigned scope_pgm_id) {
     shared) module Program, including threads that never entered the sandboxed Program.
 */
 static unsigned get_cancel_scope_pgm_id() {
+    ThreadData* td = thread_data.get();
+    if (td && td->sandbox_context) {
+        return td->sandbox_context->manager ? td->sandbox_context->pgm_id : 0;
+    }
     QoreProgram* pgm = nullptr;
     QoreSandboxManager* sm = find_thread_sandbox_manager_ref_intern(&pgm);
     if (!sm) {

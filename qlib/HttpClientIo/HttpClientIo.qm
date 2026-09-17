@@ -172,6 +172,11 @@ manager.closeAll();
       protocols, selecting H3 only after its handshake succeeds
     - HTTP/1.1 serial request/response with keep-alive; the connection manager
       creates multiple connections for concurrent requests
+    - @ref HttpClientIo::HttpClientConnectionManager::request() "HttpClientConnectionManager::request()" follows
+      301, 302, 303, 307, and 308 redirects: \c Location values are resolved according to RFC 3986 with
+      @ref Qore::resolve_url() "resolve_url()" and fragments are removed; \c Authorization, \c Cookie, and
+      \c Host request headers are only sent to the origin of the original request; and the response reports the
+      effective URL and the redirects followed (see @ref HttpClientIo::HttpClientResponseInfo "HttpClientResponseInfo")
     - Connection pooling with configurable limits, HTTP-proxy support,
       configurable automatic request retry, and QUIC connection migration for
       HTTP/3
@@ -395,11 +400,27 @@ public namespace HttpClientIo {
             final URL whose response is returned here; with no redirect it is the
             originally-requested URL.  Callers should resolve relative references
             (links in an HTML body, etc.) against this URL rather than the URL they
-            originally requested, exactly as a browser does.  In \c redirect_passthru
+            originally requested, exactly as a browser does (RFC 3986 section 5.1.3; see
+            @ref Qore::resolve_url() "resolve_url()").  In \c redirect_passthru
             mode (redirects returned to the caller instead of being followed) this is
             the requested URL that returned the redirect response.
+
+            The URL never contains user information or a fragment.  It has the same meaning as the
+            \c effective-url key of the @ref Qore::HTTPClient "HTTPClient" request information hash.
+
+            @note Only set by @ref HttpClientConnectionManager::request(), the API that follows redirects; the
+            lower-level request, streaming, and asynchronous APIs send a single request to the URL given and leave
+            this field unset
         */
         *string effective_url;
+
+        #! The redirects followed to produce this response, from the first response to the last redirect
+        /** Only set by @ref HttpClientConnectionManager::request(), and only if at least one redirect was
+            followed
+
+            @since HttpClientIo 1.0
+        */
+        *list<hash<HttpRedirectInfo>> redirects;
     }
 
     #! Unified error info for HTTP client operations
@@ -575,10 +596,19 @@ public namespace HttpClientIo {
         bool enable_cookies = True;
 
         #! Maximum number of HTTP redirects to follow (default: 5)
-        /** Set to 0 to disable automatic redirect following.
-            Redirects with status 301, 302, 303, 307, and 308 are followed.
-            Set-Cookie headers in redirect responses are processed before
-            following the redirect (when cookies are enabled).
+        /** A redirect response beyond this limit raises \c HTTP-REDIRECT-ERROR; with 0, any redirect response
+            that would be followed raises the error.  Use \c redirect_passthru to receive redirect responses
+            instead.
+
+            Redirects with status 301, 302, 303, 307, and 308 are followed; the \c Location value is resolved
+            against the URL of the request that received it according to RFC 3986 section 5.2, and any fragment
+            is removed.  A 303 redirect is retrieved with \c GET, a \c POST redirected with 301 or 302 is
+            changed to \c GET, and 307 and 308 repeat the request; a request that changes to \c GET is sent
+            without its body and content headers.  The \c Authorization, \c Cookie, and \c Host request headers
+            are sent only to the origin (scheme, host, and port) of the original request, and user information in
+            a redirect location is never used.  Set-Cookie headers in redirect responses are processed before
+            following the redirect (when cookies are enabled), and the cookie jar supplies the cookies for each
+            target.
         */
         int max_redirects = 5;
 

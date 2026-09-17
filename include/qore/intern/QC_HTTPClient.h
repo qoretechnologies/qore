@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2006 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2006 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -36,6 +36,7 @@ DLLEXPORT extern qore_classid_t CID_HTTPCLIENT;
 DLLEXPORT extern QoreClass *QC_HTTPCLIENT;
 DLLEXPORT extern QoreClass *QC_SOCKET;
 DLLLOCAL QoreClass *initHTTPClientClass(QoreNamespace& ns);
+DLLLOCAL TypedHashDecl* init_hashdecl_HttpRedirectInfo(QoreNamespace& ns);
 
 class HTTPInfoRefHelper {
 protected:

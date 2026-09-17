@@ -2286,14 +2286,8 @@ SocketQuicSendResponsePollOperation::SocketQuicSendResponsePollOperation(
         return;
     }
 
-    // Convert headers hash to std::map
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            QoreStringValueHelper val(hi.get());
-            header_map_[hi.getKey()] = val->c_str();
-        }
-    }
+    // a header with several values is one field per value
+    qore_get_http_header_pairs(headers, header_map_);
 
     // Copy body data so session mutation can be deferred to continuePoll().
     if (body) {
@@ -2640,14 +2634,8 @@ SocketQuicSendStreamingResponsePollOperation::SocketQuicSendStreamingResponsePol
         return;
     }
 
-    // Convert headers hash to std::map
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            QoreStringValueHelper val(hi.get());
-            header_map[hi.getKey()] = val->c_str();
-        }
-    }
+    // a header with several values is one field per value
+    qore_get_http_header_pairs(headers, header_map);
 
     // Set non-blocking guard flag on QoreSocketObject
     if (sock->priv->setNonBlock(xsink)) {

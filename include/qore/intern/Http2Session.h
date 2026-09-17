@@ -38,6 +38,7 @@
 
 #include <qore/Qore.h>
 #include <qore/InputStream.h>
+#include "qore/intern/QoreHttpHeaderPairs.h"
 
 #include <cctype>
 #include <functional>
@@ -283,7 +284,7 @@ public:
         @since Qore 2.2
     */
     DLLLOCAL int submitResponseStreaming(int32_t stream_id, int status_code,
-        const strcase_str_map_t& headers, ExceptionSink* xsink);
+        const qore_http_header_pairs_t& headers, ExceptionSink* xsink);
 
     //! Submit a PUSH_PROMISE (server-side)
     /** @param stream_id Stream ID of the associated request
@@ -293,7 +294,7 @@ public:
         @return promised stream ID on success, -1 on error
     */
     DLLLOCAL int32_t submitPushPromise(int32_t stream_id, const char* path,
-        const strcase_str_map_t& headers, ExceptionSink* xsink);
+        const qore_http_header_pairs_t& headers, ExceptionSink* xsink);
 
     //! Submit a RST_STREAM frame to cancel a stream
     DLLLOCAL int submitRstStream(int32_t stream_id, uint32_t error_code, ExceptionSink* xsink);
@@ -344,7 +345,7 @@ public:
         @return 0 on success, -1 on error
     */
     DLLLOCAL int submitTrailers(int32_t stream_id,
-        const strcase_str_map_t& trailers, ExceptionSink* xsink);
+        const qore_http_header_pairs_t& trailers, ExceptionSink* xsink);
 
     //! Set the stream type (for protocol upgrades like WebSocket/SSE)
     DLLLOCAL void setStreamType(int32_t stream_id, Http2StreamType type);
@@ -358,11 +359,18 @@ public:
         @return 0 on success, -1 on error
     */
     DLLLOCAL int submitConnectResponse(int32_t stream_id, int status_code,
-        const strcase_str_map_t& headers, ExceptionSink* xsink);
+        const qore_http_header_pairs_t& headers, ExceptionSink* xsink);
 
     //! Returns true if RFC 8441 extended CONNECT protocol is enabled locally
     DLLLOCAL bool isConnectProtocolEnabled() const {
         return local_settings.enable_connect_protocol != 0;
+    }
+
+    //! Returns true once the first SETTINGS frame of the peer has been processed
+    /** The peer's connection preface starts with this frame (RFC 9113 section 3.4)
+    */
+    DLLLOCAL bool isRemoteSettingsReceived() const {
+        return remote_settings_received;
     }
 
     //! Returns true if the remote peer has advertised ENABLE_CONNECT_PROTOCOL
@@ -743,7 +751,7 @@ private:
         const uint8_t* value, size_t valuelen, uint8_t flags, void* user_data);
 
     // Helper to convert headers to nghttp2 format
-    DLLLOCAL std::vector<nghttp2_nv> makeNv(const strcase_str_map_t& headers);
+    DLLLOCAL std::vector<nghttp2_nv> makeNv(const qore_http_header_pairs_t& headers);
 
     // Template implementations for submit methods to avoid map→vector<pair> copy
     template<typename HeaderRange>

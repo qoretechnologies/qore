@@ -432,6 +432,11 @@ void AsyncIoControllerPriv::releaseOffIoThread(AsyncIoDeferredRelease& refs, Exc
     call_dispatcher.load(std::memory_order_acquire)->dispatchReleaseAsync(deferred.release());
 }
 
+void AsyncIoControllerPriv::dispatchNativeTask(AsyncIoNativeTask* task) {
+    ensureCallDispatcher();
+    call_dispatcher.load(std::memory_order_acquire)->dispatchNativeTaskAsync(task);
+}
+
 void AsyncIoControllerPriv::snapshotSocketWaitGeneration(PollInfo& pinfo, QoreHashNode* poll_info) {
     pinfo.socket_wait_generation_valid = false;
     pinfo.socket_wait_fd = -1;
@@ -803,7 +808,19 @@ void QoreCallDispatcher::dispatchReleaseAsync(AsyncIoDeferredRelease* release) {
     enqueue(std::move(item));
 }
 
+void QoreCallDispatcher::dispatchNativeTaskAsync(AsyncIoNativeTask* task) {
+    AsyncWorkItem item{nullptr, nullptr, nullptr, nullptr, DT_NATIVE_TASK, nullptr, std::string()};
+    item.native_task = task;
+    enqueue(std::move(item));
+}
+
 void QoreCallDispatcher::releaseWorkItem(AsyncWorkItem& item, ExceptionSink* xsink) {
+    if (item.native_task) {
+        // the task was never run
+        item.native_task->discard(xsink);
+        delete item.native_task;
+        item.native_task = nullptr;
+    }
     if (item.release) {
         item.release->release(xsink);
         delete item.release;
@@ -864,6 +881,8 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
             item.pgm = item.spop_obj->getProgram();
         } else if (item.release) {
             item.pgm = item.release->getProgram();
+        } else if (item.native_task) {
+            item.pgm = item.native_task->getProgram();
         }
         if (item.pgm) {
             item.pgm->depRef();
@@ -969,18 +988,45 @@ void QoreCallDispatcher::enqueue(AsyncWorkItem&& item) {
 }
 
 void QoreCallDispatcher::stop(ExceptionSink* xsink) {
-    AutoLocker al(m);
-    stopping = true;
-    work_avail.broadcast();
+    // the remaining items are released after the lock is dropped, as in enqueue(): releasing an item can run a
+    // Qore destructor or discard a native task, which can re-enter the dispatcher (flushCallbacksByOwner()) or take
+    // the lock of the operation that dispatched the task while that operation is waiting for this lock
+    std::deque<AsyncWorkItem> remaining;
+    {
+        AutoLocker al(m);
+        stopping = true;
+        work_avail.broadcast();
 
-    // Wait for all workers to exit before returning, since the caller may
-    // delete this object immediately after stop() returns
-    while (active_workers > 0) {
-        workers_done.wait(m);
+        // Wait for all workers to exit before returning, since the caller may
+        // delete this object immediately after stop() returns
+        while (active_workers > 0) {
+            workers_done.wait(m);
+        }
+
+        // no item can be queued after this point: enqueue() discards items once stopping is set
+        remaining.swap(async_queue);
+        for (auto& item : remaining) {
+            // Match the enqueue-time increment of active_per_owner so any
+            // concurrent waitForOwnerIdle() doesn't hang on drained queue items.
+            if (!item.owner.empty()) {
+                auto it = active_per_owner.find(item.owner);
+                if (it != active_per_owner.end()) {
+                    if (--it->second <= 0) {
+                        active_per_owner.erase(it);
+                        owner_idle_cond.broadcast();
+                    }
+                }
+            }
+        }
     }
 
     // Clean up any remaining async work items
-    for (auto& item : async_queue) {
+    for (auto& item : remaining) {
+        if (item.native_task) {
+            item.native_task->discard(xsink);
+            delete item.native_task;
+            item.native_task = nullptr;
+        }
         if (item.release) {
             item.release->release(xsink);
             delete item.release;
@@ -1007,19 +1053,7 @@ void QoreCallDispatcher::stop(ExceptionSink* xsink) {
             // program past shutdown.
             item.pgm->depDeref();
         }
-        // Match the enqueue-time increment of active_per_owner so any
-        // concurrent waitForOwnerIdle() doesn't hang on drained queue items.
-        if (!item.owner.empty()) {
-            auto it = active_per_owner.find(item.owner);
-            if (it != active_per_owner.end()) {
-                if (--it->second <= 0) {
-                    active_per_owner.erase(it);
-                    owner_idle_cond.broadcast();
-                }
-            }
-        }
     }
-    async_queue.clear();
 }
 
 void QoreCallDispatcher::waitForIdle() {
@@ -1237,6 +1271,8 @@ static const char* getDispatchTypeName(QoreCallDispatcher::DispatchType type) {
             return "onPollComplete";
         case QoreCallDispatcher::DT_RELEASE:
             return "release";
+        case QoreCallDispatcher::DT_NATIVE_TASK:
+            return "nativeTask";
     }
     return "unknown";
 }
@@ -1494,6 +1530,16 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
                 case DT_RELEASE:
                     // nothing to call; the references are released below
                     break;
+                case DT_NATIVE_TASK: {
+                    method_name = "nativeTask";
+                    AsyncIoNativeTask* task = async_item.native_task;
+                    // the task has run once it is detached here; the cleanup below discards only a task that
+                    // was never run
+                    async_item.native_task = nullptr;
+                    task->run(&work_xsink);
+                    delete task;
+                    break;
+                }
             }
         }
 
@@ -1552,6 +1598,12 @@ void QoreCallDispatcher::workerLoop(ExceptionSink* xsink) {
             async_item.owner.clear();  // make the post-deref decrement a no-op
         }
 
+        if (async_item.native_task) {
+            // the item was skipped because its program or owner is shutting down
+            async_item.native_task->discard(xsink);
+            delete async_item.native_task;
+            async_item.native_task = nullptr;
+        }
         if (async_item.release) {
             async_item.release->release(xsink);
             delete async_item.release;

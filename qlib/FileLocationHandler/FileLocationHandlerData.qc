@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file FileLocationHandlerData.qc module for returning file data from a URL-like location string
 
-/*  FileLocationHandlerData Copyright 2021 - 2024 Qore Technologies, s.r.o.
+/*  FileLocationHandlerData Copyright 2021 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -51,6 +51,52 @@ class FileLocationHandlerData inherits AbstractFileLocationHandler {
     */
     private binary getBinaryFileImpl(string scheme, string location, *hash<auto> opts) {
         return location.toBinary();
+    }
+
+    #! Retrieves a resource and its metadata from the given location
+    /** The data is the location string without the scheme; its encoding is reported as the character encoding,
+        and there is no effective location, as the data is not retrieved from anywhere
+
+        @param scheme the scheme being used
+        @param location the location string without the scheme
+        @param opts read options
+
+        @return the resource's data and metadata
+
+        @since FileLocationHandler 3.0
+    */
+    private hash<FileResourceResult> getResourceImpl(string scheme, string location, *hash<auto> opts) {
+        return FileLocationHandlerData::getDataResource(scheme, location);
+    }
+
+    #! Retrieves an I/O poller to retrieve a resource and its metadata from the given location
+    /** @param scheme the scheme being used
+        @param location the location string without the scheme
+        @param opts read options
+
+        @return an I/O poller whose output is the resource's data and metadata
+
+        @since FileLocationHandler 3.0
+    */
+    private Qore::AbstractPollOperation<hash<FileResourceResult>> getResourcePollerImpl(string scheme,
+            string location, *hash<auto> opts) {
+        hash<FileResourceResult> rv = FileLocationHandlerData::getDataResource(scheme, location);
+        return new FileResourcePollOperation(new ImmediateDataPollOperation(rv),
+            hash<FileResourceResult> sub (auto output) {
+                return output;
+            });
+    }
+
+    #! Returns the resource for immediate data
+    private static hash<FileResourceResult> getDataResource(string scheme, string location) {
+        return <FileResourceResult>{
+            "data": location.toBinary(),
+            "info": <FileResourceInfo>{
+                # the data itself is not URL-like, so it is reported unchanged
+                "requested_location": scheme + "://" + location,
+                "charset": location.encoding(),
+            },
+        };
     }
 
     #! Retrieves an I/O poller to retrieve a binary file from the given location

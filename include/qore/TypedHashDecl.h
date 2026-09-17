@@ -487,6 +487,11 @@ DLLEXPORT extern const TypedHashDecl* hashdeclSandboxConfigInfo;
 */
 DLLEXPORT extern const TypedHashDecl* hashdeclSocketPollOperationInfo;
 
+//! HttpRedirectInfo hashdecl
+/** @since %Qore 3.0
+*/
+DLLEXPORT extern const TypedHashDecl* hashdeclHttpRedirectInfo;
+
 //! SocketPollResultInfo hashdecl
 /** @since %Qore 3.0
 */

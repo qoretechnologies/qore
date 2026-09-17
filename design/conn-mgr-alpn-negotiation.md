@@ -175,6 +175,34 @@ The poll op inherits from `AbstractHttpPollConnectionPriv` so it
 integrates with the existing manager state machine
 (`CONNECTING → READY → CLOSED`).
 
+**Connect deadline (as implemented).** The manager's `connect_timeout_ms`
+is enforced by the connection itself, on the I/O thread, like the H1, H2,
+and H3 connect deadlines: `NegotiatingHttpClientConnection` passes it to
+the poll op (`setConnectTimeout()`), which arms a monotonic deadline on its
+first connect-phase `continuePoll()`, lowers (never raises) the
+`poll_timeout_ms` it returns so that the I/O thread runs it at the
+deadline, and fails with `HTTPCLIENT-NEGOTIATE-TIMEOUT` through `setError()`
+when it expires. The error closes the connection, which wakes both kinds of
+waiter: a registered ready notifier (an asynchronous acquisition, such as an
+`HTTPClient` poll operation) and `waitForReadyOrError()`. The manager
+supplies the same timeout to the `Http1ClientConnection` and
+`Http2ClientConnection` poll ops it creates. An HTTP/2 connection is ready,
+and its connect phase ends, only once the peer's SETTINGS frame has been
+processed (`Http2Session::isRemoteSettingsReceived()`); a read cycle alone is
+no evidence, because TLS 1.3 session tickets or a timer can wake the
+operation before the peer has sent anything. The `Http2ClientConnection`
+that adopts a socket after ALPN selected `h2` keeps the negotiation's
+deadline (`setConnectDeadline()`), as does the one that adopts a proxy
+tunnel's socket, so the whole connect phase is bounded by one
+`connect_timeout`.
+
+A caller-side wait (`waitForReadyOrError()` in a blocking acquisition) is
+bounded by `getConnectWaitTimeoutMs()`, the connect timeout plus a grace
+period: it is only a backstop, because with the same timeout it would expire
+before the connection generated its own error and replace a diagnosable
+error with a generic timeout. Without a transport deadline, an asynchronous
+acquisition had no bound at all.
+
 ### 5.3 Alternate constructors on `Http1`/`Http2ClientConnection`
 
 Today both constructors take `(target_host, target_port, ssl_required)`

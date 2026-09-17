@@ -106,6 +106,9 @@ module Util {
     @section utilrelnotes Release Notes
 
     @subsection util_3_0 Util 3.0
+    - fixed @ref Util::normalize_dir() "normalize_dir()", @ref Util::normalize_dir_unix() "normalize_dir_unix()", and
+      @ref Util::normalize_dir_windows() "normalize_dir_windows()" so that a \c ".." segment never removes the root:
+      \c "/../etc" returned the relative path \c "etc", and \c "C:\\..\\x" lost its drive
     - added @ref Util::get_free_port() "get_free_port()" so that code needing a port where nothing is listening,
       or a port to start a server on, does not have to hard-code one
     - fixed @ref Util::parse_uri_query() "parse_uri_query()" to split URI query strings before URL-decoding
@@ -667,12 +670,8 @@ public string sub normalize_dir_unix(string path, string cwd = getcwd() ?? "") {
     # separate into a list for eliminating occurences of ".."
     list l = path.split("/");
 
-    for (int i = 1; i < l.size(); ++i) {
-        if (l[i] == "..") {
-            splice l, i - 1, 2;
-            i -= 2;
-        }
-    }
+    # the root is never removed: ".." in the root directory refers to the root directory itself
+    Util::remove_parent_segments(\l, l[0] === "" ? 1 : 0);
 
     path = l.join("/");
     return path ? path : "/";
@@ -720,15 +719,37 @@ public string sub normalize_dir_windows(string path, string cwd = getcwd() ?? ""
     # separate into a list for eliminating occurences of ".."
     list l = path.split("\\");
 
+    # the root is never removed: a UNC path's root is "\\server\share"; otherwise it is a drive or "\"
+    int root_len;
+    if (l.size() > 1 && l[0] === "" && l[1] === "") {
+        root_len = min(4, l.size());
+    } else if (l[0] === "" || l[0] =~ /^[A-Za-z]:$/) {
+        root_len = 1;
+    }
+    Util::remove_parent_segments(\l, root_len);
+
+    path = l.join("\\");
+    return path ? path : "\\";
+}
+
+#! removes ".." segments and the segments they refer to from a list of path segments
+/** @param l the path segments
+    @param root_len the number of leading segments that make up the root of the path; a ".." segment directly
+    below the root refers to the root itself, so it is removed without removing the root
+*/
+sub remove_parent_segments(reference<list> l, int root_len) {
     for (int i = 1; i < l.size(); ++i) {
-        if (l[i] == "..") {
+        if (l[i] != "..") {
+            continue;
+        }
+        if (i <= root_len) {
+            splice l, i, 1;
+            --i;
+        } else {
             splice l, i - 1, 2;
             i -= 2;
         }
     }
-
-    path = l.join("\\");
-    return path ? path : "\\";
 }
 
 #! returns a path as a relative path from another directory

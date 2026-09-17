@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2025 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -32,12 +32,14 @@
 #include "qore/Qore.h"
 #include "qore/QoreURL.h"
 #include "qore/intern/QoreHashNodeIntern.h"
+#include "qore/intern/QoreUriReference.h"
 
 #include <cctype>
 #include <cstdlib>
 #include <cstring>
 #include <string>
 #include <regex>
+#include <vector>
 
 static std::regex check_port("[0-9]{1,5}(/|$)", std::regex::extended);
 
@@ -534,4 +536,463 @@ char* QoreURL::take_password() {
 
 char* QoreURL::take_host() {
    return priv->host ? priv->host->giveBuffer() : nullptr;
+}
+
+// checks for cancellation every 100 iterations of a loop over a URI reference, if an exception sink is given
+class UriCancelCheck {
+public:
+    DLLLOCAL UriCancelCheck(ExceptionSink* xsink) : xsink(xsink) {
+    }
+
+    //! returns true if the operation was cancelled, in which case an exception has been raised
+    DLLLOCAL bool operator()() {
+        return xsink && !(++count % 100) && qore_check_cancel(xsink, "URI reference processing");
+    }
+
+private:
+    ExceptionSink* xsink;
+    unsigned count = 0;
+};
+
+bool QoreUriReference::isValidAuthority(const std::string& authority) {
+    const char* p = authority.data();
+    const char* end = p + authority.size();
+    for (; p < end; ++p) {
+        const unsigned char c = static_cast<unsigned char>(*p);
+        if (c == '%') {
+            if (end - p < 3 || !isxdigit(static_cast<unsigned char>(p[1]))
+                    || !isxdigit(static_cast<unsigned char>(p[2]))) {
+                return false;
+            }
+            p += 2;
+            continue;
+        }
+        if (c <= 0x20 || c == 0x7f || c == '"' || c == '<' || c == '>' || c == '\\' || c == '^' || c == '`'
+                || c == '{' || c == '|' || c == '}') {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool QoreUriReference::isValidScheme(const char* str, size_t len) {
+    // RFC 3986 section 3.1: scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )
+    if (!len || !isalpha(static_cast<unsigned char>(str[0]))) {
+        return false;
+    }
+    for (size_t i = 1; i < len; ++i) {
+        const unsigned char c = static_cast<unsigned char>(str[i]);
+        if (!isalnum(c) && c != '+' && c != '-' && c != '.') {
+            return false;
+        }
+    }
+    return true;
+}
+
+void QoreUriReference::parse(const char* str, size_t len, ExceptionSink* xsink) {
+    *this = QoreUriReference();
+    const char* p = str;
+    const char* end = str + len;
+    UriCancelCheck cancelled(xsink);
+
+    // RFC 3986 appendix B: ^(([^:/?#]+):)?(//([^/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?
+    const char* q = p;
+    while (q < end && *q != ':' && *q != '/' && *q != '?' && *q != '#') {
+        if (cancelled()) {
+            return;
+        }
+        ++q;
+    }
+    if (q < end && *q == ':' && isValidScheme(p, q - p)) {
+        scheme.assign(p, q - p);
+        has_scheme = true;
+        p = q + 1;
+    }
+
+    if (end - p >= 2 && p[0] == '/' && p[1] == '/') {
+        p += 2;
+        q = p;
+        while (q < end && *q != '/' && *q != '?' && *q != '#') {
+            if (cancelled()) {
+                return;
+            }
+            ++q;
+        }
+        authority.assign(p, q - p);
+        has_authority = true;
+        p = q;
+    }
+
+    q = p;
+    while (q < end && *q != '?' && *q != '#') {
+        if (cancelled()) {
+            return;
+        }
+        ++q;
+    }
+    path.assign(p, q - p);
+    p = q;
+
+    if (p < end && *p == '?') {
+        ++p;
+        q = p;
+        while (q < end && *q != '#') {
+            if (cancelled()) {
+                return;
+            }
+            ++q;
+        }
+        query.assign(p, q - p);
+        has_query = true;
+        p = q;
+    }
+
+    if (p < end && *p == '#') {
+        ++p;
+        fragment.assign(p, end - p);
+        has_fragment = true;
+    }
+}
+
+std::string QoreUriReference::compose(bool include_fragment, bool encode, ExceptionSink* xsink) const {
+    // RFC 3986 section 5.3
+    std::string rv;
+    if (has_scheme) {
+        rv += scheme;
+        rv += ':';
+    }
+    if (has_authority) {
+        rv += "//";
+        rv += authority;
+    } else if (path.size() >= 2 && path[0] == '/' && path[1] == '/') {
+        // without an authority, a path cannot start with "//" (RFC 3986 section 3.3), as it would be taken for one;
+        // the dot segment keeps the path equivalent
+        rv += "/.";
+    }
+    if (encode) {
+        appendEncoded(rv, path, xsink);
+    } else {
+        rv += path;
+    }
+    if (has_query) {
+        rv += '?';
+        if (encode) {
+            appendEncoded(rv, query, xsink);
+        } else {
+            rv += query;
+        }
+    }
+    if (include_fragment && has_fragment) {
+        rv += '#';
+        if (encode) {
+            appendEncoded(rv, fragment, xsink);
+        } else {
+            rv += fragment;
+        }
+    }
+    return rv;
+}
+
+void QoreUriReference::appendEncoded(std::string& out, const std::string& in, ExceptionSink* xsink) {
+    UriCancelCheck cancelled(xsink);
+    for (unsigned char c : in) {
+        if (cancelled()) {
+            return;
+        }
+        if (c <= 0x20 || c >= 0x7f || c == '"' || c == '<' || c == '>' || c == '\\' || c == '^' || c == '`'
+                || c == '{' || c == '|' || c == '}') {
+            char buf[4];
+            snprintf(buf, sizeof buf, "%%%02X", c);
+            out += buf;
+        } else {
+            out += static_cast<char>(c);
+        }
+    }
+}
+
+bool QoreUriReference::hasColonInFirstRelativeSegment() const {
+    if (has_scheme || has_authority || path.empty() || path[0] == '/') {
+        return false;
+    }
+    size_t end = path.find('/');
+    return path.find(':') < end;
+}
+
+std::string QoreUriReference::removeRelativeDotSegments(const std::string& path, ExceptionSink* xsink) {
+    UriCancelCheck cancelled(xsink);
+    std::vector<std::string> out;
+    size_t start = 0;
+    while (true) {
+        if (cancelled()) {
+            return std::string();
+        }
+        size_t end = path.find('/', start);
+        bool last = end == std::string::npos;
+        std::string seg = path.substr(start, last ? std::string::npos : end - start);
+        if (seg == "." || seg == "..") {
+            if (seg == "..") {
+                if (!out.empty() && out.back() != "..") {
+                    out.pop_back();
+                } else {
+                    out.push_back("..");
+                }
+            }
+            // a final dot segment names a directory
+            if (last) {
+                out.push_back(std::string());
+            }
+        } else {
+            out.push_back(std::move(seg));
+        }
+        if (last) {
+            break;
+        }
+        start = end + 1;
+    }
+    std::string rv;
+    for (size_t i = 0; i < out.size(); ++i) {
+        if (cancelled()) {
+            return std::string();
+        }
+        if (i) {
+            rv += '/';
+        }
+        rv += out[i];
+    }
+    if (rv.empty() && !path.empty()) {
+        // the path named the current directory; an empty path would be a same-document reference
+        return "./";
+    }
+    // a colon in the first segment would make the path look like a scheme (RFC 3986 section 4.2)
+    size_t first_end = rv.find('/');
+    if (rv.find(':') < first_end) {
+        rv.insert(0, "./");
+    }
+    return rv;
+}
+
+// removes the last segment and its preceding "/", if any, from the output buffer
+static void uri_remove_last_segment(std::string& out) {
+    size_t pos = out.rfind('/');
+    if (pos == std::string::npos) {
+        out.clear();
+    } else {
+        out.resize(pos);
+    }
+}
+
+std::string QoreUriReference::removeDotSegments(const std::string& path, ExceptionSink* xsink) {
+    // RFC 3986 section 5.2.4; the letters below refer to the steps in the RFC
+    UriCancelCheck cancelled(xsink);
+    std::string in(path);
+    std::string out;
+    size_t i = 0;
+    while (i < in.size()) {
+        if (cancelled()) {
+            return std::string();
+        }
+        size_t rem = in.size() - i;
+        // A: remove a "../" or "./" prefix
+        if (!in.compare(i, 3, "../")) {
+            i += 3;
+            continue;
+        }
+        if (!in.compare(i, 2, "./")) {
+            i += 2;
+            continue;
+        }
+        // B: replace a "/./" prefix or a complete "/." segment with "/"
+        if (!in.compare(i, 3, "/./")) {
+            i += 2;
+            continue;
+        }
+        if (rem == 2 && !in.compare(i, 2, "/.")) {
+            in.replace(i, 2, "/");
+            continue;
+        }
+        // C: replace a "/../" prefix or a complete "/.." segment with "/" and remove the last output segment
+        if (!in.compare(i, 4, "/../")) {
+            i += 3;
+            uri_remove_last_segment(out);
+            continue;
+        }
+        if (rem == 3 && !in.compare(i, 3, "/..")) {
+            in.replace(i, 3, "/");
+            uri_remove_last_segment(out);
+            continue;
+        }
+        // D: remove a remaining "." or ".."
+        if ((rem == 1 && in[i] == '.') || (rem == 2 && !in.compare(i, 2, ".."))) {
+            break;
+        }
+        // E: move the first path segment, including any initial "/", to the output
+        size_t start = i;
+        if (in[i] == '/') {
+            ++i;
+        }
+        size_t next = in.find('/', i);
+        if (next == std::string::npos) {
+            next = in.size();
+        }
+        out.append(in, start, next - start);
+        i = next;
+    }
+    return out;
+}
+
+// RFC 3986 section 5.2.3
+static std::string uri_merge_paths(const QoreUriReference& base, const std::string& ref_path) {
+    if (base.has_authority && base.path.empty()) {
+        return "/" + ref_path;
+    }
+    size_t pos = base.path.rfind('/');
+    if (pos == std::string::npos) {
+        return ref_path;
+    }
+    return base.path.substr(0, pos + 1) + ref_path;
+}
+
+QoreUriReference QoreUriReference::resolve(const QoreUriReference& ref, ExceptionSink* xsink) const {
+    // RFC 3986 section 5.2.2, strict parser
+    QoreUriReference t;
+    // true if dot segments have to be removed from t.path
+    bool remove_dots = true;
+    if (ref.has_scheme) {
+        t.scheme = ref.scheme;
+        t.has_scheme = true;
+        t.authority = ref.authority;
+        t.has_authority = ref.has_authority;
+        t.path = ref.path;
+        t.query = ref.query;
+        t.has_query = ref.has_query;
+    } else {
+        if (ref.has_authority) {
+            t.authority = ref.authority;
+            t.has_authority = true;
+            t.path = ref.path;
+            t.query = ref.query;
+            t.has_query = ref.has_query;
+        } else {
+            if (ref.path.empty()) {
+                t.path = path;
+                remove_dots = false;
+                if (ref.has_query) {
+                    t.query = ref.query;
+                    t.has_query = true;
+                } else {
+                    t.query = query;
+                    t.has_query = has_query;
+                }
+            } else {
+                t.path = ref.path[0] == '/' ? ref.path : uri_merge_paths(*this, ref.path);
+                t.query = ref.query;
+                t.has_query = ref.has_query;
+            }
+            t.authority = authority;
+            t.has_authority = has_authority;
+        }
+        t.scheme = scheme;
+        t.has_scheme = has_scheme;
+    }
+    if (remove_dots) {
+        // a relative target (only possible with a relative base) keeps the ".." segments it cannot remove
+        t.path = (!t.has_scheme && !t.has_authority && (t.path.empty() || t.path[0] != '/'))
+            ? removeRelativeDotSegments(t.path, xsink)
+            : removeDotSegments(t.path, xsink);
+    }
+    t.fragment = ref.fragment;
+    t.has_fragment = ref.has_fragment;
+    return t;
+}
+
+std::string QoreUriReference::getRequestTarget() const {
+    std::string rv = path.empty() ? std::string("/") : path;
+    if (has_query) {
+        rv += '?';
+        rv += query;
+    }
+    return rv;
+}
+
+bool QoreUriReference::isScheme(const char* str) const {
+    return has_scheme && !strcasecmp(scheme.c_str(), str);
+}
+
+// checks a URI reference for the octets that cannot appear in one
+static int uri_check_strict(const char* what, const QoreString& value, ExceptionSink* xsink) {
+    const char* p = value.c_str();
+    size_t len = value.size();
+    UriCancelCheck cancelled(xsink);
+    for (size_t i = 0; i < len; ++i) {
+        if (cancelled()) {
+            return -1;
+        }
+        const unsigned char c = static_cast<unsigned char>(p[i]);
+        if (c <= 0x20 || c == 0x7f) {
+            xsink->raiseException("RESOLVE-URL-ERROR", "%s has an invalid character (code %d) at byte offset %lld; "
+                "a URI reference cannot contain control or space characters", what, (int)c, (long long)i);
+            return -1;
+        }
+        if (c == '%' && (i + 2 >= len || !isxdigit(static_cast<unsigned char>(p[i + 1]))
+                || !isxdigit(static_cast<unsigned char>(p[i + 2])))) {
+            xsink->raiseException("RESOLVE-URL-ERROR", "%s '%s' has a malformed percent-encoded octet at byte "
+                "offset %lld", what, p, (long long)i);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+QoreStringNode* qore_resolve_url(const QoreString& base, const QoreString& reference, int options,
+        ExceptionSink* xsink) {
+    TempEncodingHelper b(base, QCS_UTF8, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    TempEncodingHelper r(reference, QCS_UTF8, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    bool strict = options & QRU_STRICT;
+    if (strict && (uri_check_strict("base URI", **b, xsink) || uri_check_strict("URI reference", **r, xsink))) {
+        return nullptr;
+    }
+
+    QoreUriReference base_ref;
+    base_ref.parse(b->c_str(), b->size(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (!base_ref.has_scheme && !(options & QRU_RELATIVE_BASE)) {
+        xsink->raiseException("RESOLVE-URL-ERROR", "base URI '%s' has no scheme; a base URI must be absolute",
+            b->c_str());
+        return nullptr;
+    }
+    QoreUriReference ref;
+    ref.parse(r->c_str(), r->size(), xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    if (strict) {
+        if (base_ref.hasColonInFirstRelativeSegment()) {
+            xsink->raiseException("RESOLVE-URL-ERROR", "base URI '%s' is a relative-path reference whose first "
+                "segment contains a colon", b->c_str());
+            return nullptr;
+        }
+        if (ref.hasColonInFirstRelativeSegment()) {
+            xsink->raiseException("RESOLVE-URL-ERROR", "URI reference '%s' is a relative-path reference whose "
+                "first segment contains a colon; prefix it with \"./\"", r->c_str());
+            return nullptr;
+        }
+    }
+
+    QoreUriReference resolved = base_ref.resolve(ref, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    std::string target = resolved.compose(!(options & QRU_NO_FRAGMENT), options & QRU_ENCODE, xsink);
+    if (*xsink) {
+        return nullptr;
+    }
+    return new QoreStringNode(target.data(), target.size(), QCS_UTF8);
 }

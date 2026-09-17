@@ -145,6 +145,9 @@ printf("%Y\n", ans.body);
     @section restclientrelnotes Release Notes
 
     @subsection restclientv2_7 RestClient v2.7
+    - @ref RestClient::RestRequestPollOperation::getInfo() "RestRequestPollOperation::getInfo()" reports the same
+      request information as a blocking request, including \c response-headers-raw, the redirects followed
+      (\c redirects, \c redirect-N), and \c effective-url
     - polling pings retain their originating connection for the operation lifetime, so a temporary
       connection remains available for authentication updates and response validation
     - OAuth consent URLs encode extra authorization argument names and values, state, client IDs, and PKCE
@@ -6115,7 +6118,10 @@ public class RestRequestPollOperation inherits Qore::AbstractPollOperation<auto>
 
                 info."response-code" = resp."code";
                 info."response-body-raw" = rbody;
-                info += resp.info{"request-uri", "response-uri", "response-headers"};
+                # the same request information as a blocking request, including the redirects followed
+                info += resp.info{"request-uri", "response-uri", "response-headers", "response-headers-raw",
+                    "effective-url", "redirects"}
+                    + (map {$1.key: $1.value}, resp.info.pairIterator(), $1.key =~ /^redirect-(message-)?[0-9]+$/);
 
                 rc.processPollFinalNegotiateResponse(resp.info."response-headers",
                     negotiate_context);
@@ -6167,6 +6173,10 @@ public class RestRequestPollOperation inherits Qore::AbstractPollOperation<auto>
     }
 
     #! Returns the info hash with request/response details
+    /** After the request completes, the hash has the same keys as the \c info output of
+        @ref RestClient::RestClient::doRequest() "RestClient::doRequest()", including \c response-body-raw with
+        the response body before deserialization, \c effective-url, and \c redirects
+    */
     hash<auto> getInfo() {
         return info;
     }

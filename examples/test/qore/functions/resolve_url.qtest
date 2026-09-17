@@ -1,0 +1,336 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    resolve_url() tests: RFC 3986 section 5.4 reference resolution examples plus octet preservation and errors.
+*/
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires ../../../../qlib/QUnit.qm
+
+%exec-class ResolveUrlTest
+
+public class ResolveUrlTest inherits QUnit::Test {
+    public {
+        #! The base URI of the RFC 3986 section 5.4 examples
+        const RfcBase = "http://a/b/c/d;p?q";
+
+        #! RFC 3986 section 5.4.1: normal examples
+        const NormalExamples = {
+            "g:h": "g:h",
+            "g": "http://a/b/c/g",
+            "./g": "http://a/b/c/g",
+            "g/": "http://a/b/c/g/",
+            "/g": "http://a/g",
+            "//g": "http://g",
+            "?y": "http://a/b/c/d;p?y",
+            "g?y": "http://a/b/c/g?y",
+            "#s": "http://a/b/c/d;p?q#s",
+            "g#s": "http://a/b/c/g#s",
+            "g?y#s": "http://a/b/c/g?y#s",
+            ";x": "http://a/b/c/;x",
+            "g;x": "http://a/b/c/g;x",
+            "g;x?y#s": "http://a/b/c/g;x?y#s",
+            "": "http://a/b/c/d;p?q",
+            ".": "http://a/b/c/",
+            "./": "http://a/b/c/",
+            "..": "http://a/b/",
+            "../": "http://a/b/",
+            "../g": "http://a/b/g",
+            "../..": "http://a/",
+            "../../": "http://a/",
+            "../../g": "http://a/g",
+        };
+
+        #! RFC 3986 section 5.4.2: abnormal examples (strict parser)
+        const AbnormalExamples = {
+            "../../../g": "http://a/g",
+            "../../../../g": "http://a/g",
+            "/./g": "http://a/g",
+            "/../g": "http://a/g",
+            "g.": "http://a/b/c/g.",
+            ".g": "http://a/b/c/.g",
+            "g..": "http://a/b/c/g..",
+            "..g": "http://a/b/c/..g",
+            "./../g": "http://a/b/g",
+            "./g/.": "http://a/b/c/g/",
+            "g/./h": "http://a/b/c/g/h",
+            "g/../h": "http://a/b/c/h",
+            "g;x=1/./y": "http://a/b/c/g;x=1/y",
+            "g;x=1/../y": "http://a/b/c/y",
+            "g?y/./x": "http://a/b/c/g?y/./x",
+            "g?y/../x": "http://a/b/c/g?y/../x",
+            "g#s/./x": "http://a/b/c/g#s/./x",
+            "g#s/../x": "http://a/b/c/g#s/../x",
+            "http:g": "http:g",
+        };
+    }
+
+    constructor() : Test("resolve_url test", "1.0") {
+        addTestCase("RFC 3986 normal examples", \normalExamplesTest());
+        addTestCase("RFC 3986 abnormal examples", \abnormalExamplesTest());
+        addTestCase("octet preservation", \octetTest());
+        addTestCase("authority and base forms", \baseFormTest());
+        addTestCase("HTTP redirect locations", \redirectLocationTest());
+        addTestCase("encodings", \encodingTest());
+        addTestCase("strict option", \strictTest());
+        addTestCase("no fragment option", \noFragmentTest());
+        addTestCase("relative base option", \relativeBaseTest());
+        addTestCase("encode option", \encodeTest());
+        addTestCase("negative", \negativeTest());
+        addTestCase("cancellation", \cancellationTest());
+
+        set_return_value(main());
+    }
+
+    normalExamplesTest() {
+        foreach hash<auto> i in (NormalExamples.pairIterator()) {
+            assertEq(i.value, resolve_url(RfcBase, i.key), sprintf("reference %y", i.key));
+        }
+    }
+
+    abnormalExamplesTest() {
+        foreach hash<auto> i in (AbnormalExamples.pairIterator()) {
+            assertEq(i.value, resolve_url(RfcBase, i.key), sprintf("reference %y", i.key));
+        }
+    }
+
+    octetTest() {
+        # percent-encoded octets, including encoded delimiters, are never decoded or re-encoded
+        assertEq("http://h/a%2Fb/d%3F?x=%23&y=%2F", resolve_url("http://h/a%2Fb/c", "d%3F?x=%23&y=%2F"));
+        assertEq("http://h/%7Euser/x%20y", resolve_url("http://h/%7Euser/", "x%20y"));
+        # lower-case escapes are kept as given
+        assertEq("http://h/a%2fb", resolve_url("http://h/", "a%2fb"));
+        # a defined empty query is kept, from the reference and from the base
+        assertEq("http://h/p?", resolve_url("http://h/p?", ""));
+        assertEq("http://h/p?", resolve_url("http://h/p?q", "?"));
+        assertEq("http://h/x?", resolve_url("http://h/p?q", "x?"));
+        # an empty fragment is kept
+        assertEq("http://h/p?q#", resolve_url("http://h/p?q", "#"));
+        # the base fragment is ignored
+        assertEq("http://h/p?q", resolve_url("http://h/p?q#frag", ""));
+        assertEq("http://h/p?q#new", resolve_url("http://h/p?q#frag", "#new"));
+        # reserved delimiters in the path and query are kept
+        assertEq("http://h/a/b;c=d,e/f?g=h&i=j:k@l/m", resolve_url("http://h/a/x", "b;c=d,e/f?g=h&i=j:k@l/m"));
+        # characters that are not valid in a URI are not changed either
+        assertEq("http://h/a b/ü", resolve_url("http://h/", "a b/ü"));
+        # the scheme, authority, and case are returned as given
+        assertEq("HTTP://Host:8080/X", resolve_url("HTTP://Host:8080/Y", "X"));
+        assertEq("Other://User@H:1/p", resolve_url("http://h/", "Other://User@H:1/./p"));
+    }
+
+    baseFormTest() {
+        # a base with an authority and an empty path merges below "/"
+        assertEq("http://h/g", resolve_url("http://h", "g"));
+        assertEq("http://h?q", resolve_url("http://h?q", ""));
+        assertEq("http://h?y", resolve_url("http://h", "?y"));
+        # a base without an authority merges relative to its path
+        assertEq("urn:a/g", resolve_url("urn:a/b", "g"));
+        assertEq("mailto:g", resolve_url("mailto:user@example.com", "g"));
+        # network-path references keep the base scheme
+        assertEq("https://other:8443/x/y?z#f", resolve_url("https://h/p", "//other:8443/x/./y?z#f"));
+        # a network-path reference with an empty authority
+        assertEq("file:///etc/hosts", resolve_url("file:///tmp/x", "///etc/hosts"));
+        # file URIs
+        assertEq("file:///var/data/types.xsd", resolve_url("file:///var/data/wsdl/root.wsdl", "../types.xsd"));
+        # an IPv6 authority
+        assertEq("http://[::1]:8080/b/c", resolve_url("http://[::1]:8080/b/a", "c"));
+        # UNIX domain socket URLs used by Qore
+        assertEq("http://socket=%2Ftmp%2Fs.sock/new/x?1",
+            resolve_url("http://socket=%2Ftmp%2Fs.sock/old/y", "../new/x?1"));
+        # a relative path with a colon in a later segment is not a scheme
+        assertEq("http://h/a/b:c", resolve_url("http://h/a/x", "./b:c"));
+        assertEq("http://h/a/b/c:d", resolve_url("http://h/a/x", "b/c:d"));
+        # a first segment that cannot be a scheme is a relative path
+        assertEq("http://h/a/1a:b", resolve_url("http://h/a/x", "1a:b"));
+        assertEq("http://h/a/a b:c", resolve_url("http://h/a/x", "a b:c"));
+        assertEq("http://h/a/-x:y", resolve_url("http://h/a/x", "-x:y"));
+        # valid scheme characters
+        assertEq("a+b-c.d:e", resolve_url("http://h/", "a+b-c.d:e"));
+        # without an authority, a path starting with "//" is prefixed with "/." so that it is not taken for one
+        assertEq("foo:/.//b", resolve_url("foo:/a", "..//b"));
+        assertEq("foo:/.//b", resolve_url("foo:/.//b", ""));
+        assertEq("foo:/.//b/c", resolve_url("foo:/.//b/x", "c"));
+        assertEq("/.//g", resolve_url("a/b", "/x/..//g", RESOLVE_URL_RELATIVE_BASE));
+        # an empty authority is an authority
+        assertEq("file:////b", resolve_url("file:///a", "..//b"));
+    }
+
+    redirectLocationTest() {
+        # the relative Location case that was sent as a literal request target
+        assertEq("http://127.0.0.1:1/new/root.wsdl?rev=2#section",
+            resolve_url("http://127.0.0.1:1/old/root.wsdl", "../new/root.wsdl?rev=2#section"));
+        # a same-document redirect resolves to the request URL
+        assertEq("http://h/p?q#x", resolve_url("http://h/p?q", "#x"));
+        # dot segments above the root are removed
+        assertEq("http://h/x", resolve_url("http://h/a", "../../../x"));
+        assertEq("http://h/", resolve_url("http://h/a/b", "../.."));
+        # an absolute reference replaces everything, including the query
+        assertEq("https://e.com", resolve_url("http://h/p?q", "https://e.com"));
+        # dot segments are removed from paths with non-ASCII characters
+        assertEq("http://h/é/", resolve_url("http://h/é/x", "b/.."));
+        assertEq("http://h/é/", resolve_url("http://h/é/x", "./."));
+        assertEq("http://h/é/ü/", resolve_url("http://h/é/x", "ü/c/.."));
+        # dot segments are removed from absolute references as well
+        assertEq("https://e.com/x", resolve_url("http://h/", "https://e.com/a/../../x"));
+    }
+
+    encodingTest() {
+        # arguments in other encodings are converted, and the result is UTF-8
+        string base = convert_encoding("http://h/dir/ä", "ISO-8859-1");
+        string ref = convert_encoding("ö", "ISO-8859-1");
+        string rv = resolve_url(base, ref);
+        assertEq("UTF-8", rv.encoding());
+        assertEq("http://h/dir/ö", rv);
+        # named arguments
+        assertEq("http://h/x", resolve_url(base: "http://h/y", reference: "x"));
+        assertEq("http://h/x", resolve_url(base: "http://h/y", reference: "x#f", options: RESOLVE_URL_NO_FRAGMENT));
+    }
+
+    strictTest() {
+        # valid references are resolved as without the option
+        foreach hash<auto> i in (NormalExamples.pairIterator()) {
+            if (i.key == "g:h") {
+                continue;
+            }
+            assertEq(i.value, resolve_url(RfcBase, i.key, RESOLVE_URL_STRICT), sprintf("reference %y", i.key));
+        }
+        assertEq("http://h/a/%C3%A4%20b", resolve_url("http://h/a/x", "%C3%A4%20b", RESOLVE_URL_STRICT));
+        # non-ASCII characters are accepted, as in IRIs
+        assertEq("http://h/é/ü", resolve_url("http://h/é/x", "ü", RESOLVE_URL_STRICT));
+        # "./" makes a colon in the first segment valid
+        assertEq("http://h/a/1:relative", resolve_url("http://h/a/x", "./1:relative", RESOLVE_URL_STRICT));
+        # a colon in a later segment is valid
+        assertEq("http://h/a/b/c:d", resolve_url("http://h/a/x", "b/c:d", RESOLVE_URL_STRICT));
+
+        list<list<string>> invalid = (
+            ("http://h/a/x", "a b", "invalid character \\(code 32\\)"),
+            ("http://h/a/x", "a\tb", "invalid character \\(code 9\\)"),
+            ("http://h/a/x", "a\x7fb", "invalid character \\(code 127\\)"),
+            ("http://h/a b", "x", "base URI has an invalid character"),
+            ("http://bad host/x", "y", "base URI has an invalid character"),
+            ("http://h/a/x", "a%2", "malformed percent-encoded octet"),
+            ("http://h/a/x", "a%zz", "malformed percent-encoded octet"),
+            ("http://h/a/x", "%", "malformed percent-encoded octet"),
+            ("http://h/a/x", "1:relative", "first segment contains a colon"),
+            ("http://h/a/x", "a b:c", "invalid character"),
+            ("http://h/a/x", "-x:y/z", "first segment contains a colon"),
+        );
+        foreach list<string> c in (invalid) {
+            string ref = c[1];
+            ref =~ s/\\t/\t/g;
+            ref =~ s/\\x7f/\x7f/g;
+            assertThrows("RESOLVE-URL-ERROR", c[2], \resolve_url(), (c[0], ref, RESOLVE_URL_STRICT),
+                sprintf("%y + %y", c[0], c[1]));
+        }
+        # a relative base with a colon in its first segment
+        assertThrows("RESOLVE-URL-ERROR", "base URI '1:a/' is a relative-path reference", \resolve_url(),
+            ("1:a/", "b", RESOLVE_URL_STRICT | RESOLVE_URL_RELATIVE_BASE));
+        # without the option, such references are resolved as relative paths
+        assertEq("http://h/a/1:relative", resolve_url("http://h/a/x", "1:relative"));
+    }
+
+    noFragmentTest() {
+        assertEq("http://h/b/g?y", resolve_url("http://h/b/c", "g?y#s", RESOLVE_URL_NO_FRAGMENT));
+        assertEq("http://h/b/c?q", resolve_url("http://h/b/c?q#base", "#s", RESOLVE_URL_NO_FRAGMENT));
+        assertEq("http://h/b/c?", resolve_url("http://h/b/c", "?#", RESOLVE_URL_NO_FRAGMENT));
+        assertEq("http://h/new/root.wsdl?rev=2", resolve_url("http://h/old/root.wsdl",
+            "../new/root.wsdl?rev=2#section", RESOLVE_URL_NO_FRAGMENT | RESOLVE_URL_STRICT));
+        # a fragment-only identity is the base without its fragment
+        assertEq("https://p/o.wsdl?v=2", resolve_url("https://p/o.wsdl?v=2#s", "", RESOLVE_URL_NO_FRAGMENT));
+    }
+
+    relativeBaseTest() {
+        int opt = RESOLVE_URL_RELATIVE_BASE;
+        # XML Base resolution without an absolute ancestor
+        assertEq("../b/", resolve_url("a/", "../../b/", opt));
+        assertEq("b/", resolve_url("a/", "../b/", opt));
+        assertEq("../b/", resolve_url("", "../b/", opt));
+        assertEq("a/c", resolve_url("a/b", "c", opt));
+        assertEq("../../c", resolve_url("../a/b", "../../c", opt));
+        assertEq("./", resolve_url("a/", "..", opt));
+        assertEq("a/", resolve_url("a/b", ".", opt));
+        assertEq("./", resolve_url("a/b", "..", opt));
+        assertEq("a/", resolve_url("a/b/", "..", opt));
+        assertEq("x/y?q#f", resolve_url("x/z", "y?q#f", opt));
+        assertEq("x/z?q", resolve_url("x/z?q", "", opt));
+        assertEq("x/z?r", resolve_url("x/z?q", "?r", opt));
+        # a colon in the first segment of a relative target is escaped with "./"
+        assertEq("./c:d", resolve_url("a/", "../c:d", opt));
+        # absolute-path and network-path references
+        assertEq("/g", resolve_url("a/b", "/x/../g", opt));
+        assertEq("//h/g", resolve_url("a/b", "//h/x/../g", opt));
+        # an absolute reference resolves as usual
+        assertEq("http://h/g", resolve_url("a/b", "http://h/x/../g", opt));
+        # an absolute base resolves as usual
+        assertEq("http://a/g", resolve_url(RfcBase, "../../../g", opt));
+        assertEq("g:/b", resolve_url("g:x", "a/../b", opt));
+        assertEq("g:/", resolve_url("g:x", "a/..", opt));
+        # a long path stays linear
+        assertEq("b", resolve_url("", strmul("part/../", 4096) + "b", opt));
+    }
+
+    encodeTest() {
+        int opt = RESOLVE_URL_ENCODE;
+        assertEq("http://h/a/%C3%A4%20b?c%20d#e%22f", resolve_url("http://h/a/x", "ä b?c d#e\"f", opt));
+        # existing escapes and delimiters are kept
+        assertEq("http://h/a/%2F%zz;x=1?q=%26&r#s", resolve_url("http://h/a/x", "%2F%zz;x=1?q=%26&r#s", opt));
+        assertEq("http://h/%3C%3E%5C%5E%60%7B%7C%7D", resolve_url("http://h/", "<>\\^`{|}", opt));
+        # the base's octets are encoded as well
+        assertEq("http://h/caf%C3%A9%20dir/%E4%B8%AD%E6%96%87.xsd",
+            resolve_url("http://h/café dir/root.wsdl", "中文.xsd", opt));
+        # the authority is not changed
+        assertEq("http://hé/x%20y", resolve_url("http://hé/", "x y", opt));
+        # combined with the other options
+        assertEq("http://h/a/%C3%A4", resolve_url("http://h/a/x", "ä#f", opt | RESOLVE_URL_NO_FRAGMENT));
+    }
+
+    negativeTest() {
+        assertThrows("RESOLVE-URL-ERROR", "has no scheme", \resolve_url(), ("/a/b", "c"));
+        assertThrows("RESOLVE-URL-ERROR", "has no scheme", \resolve_url(), ("", "c"));
+        assertThrows("RESOLVE-URL-ERROR", "has no scheme", \resolve_url(), ("//h/p", "c"));
+        assertThrows("RESOLVE-URL-ERROR", "has no scheme", \resolve_url(), ("1http://h/", "c"));
+    }
+
+    cancellationTest() {
+        # a long reference is processed with cancellation checks, so a thread cancelled while resolving it stops
+        # inside resolve_url() instead of completing the call
+        string reference = strmul("a/", 10000000) + strmul("../", 1000);
+        Counter ready(1);
+        Queue result();
+        int tid;
+        background sub () {
+            tid = gettid();
+            ready.dec();
+            try {
+                resolve_url("http://h/", reference, RESOLVE_URL_ENCODE);
+                result.push("completed");
+            } catch (hash<ExceptionInfo> ex) {
+                result.push(ex.err);
+            }
+        }();
+        ready.waitForZero();
+        cancel_thread(tid);
+        assertEq("THREAD-CANCELLED", result.get());
+    }
+}

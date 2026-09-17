@@ -65,6 +65,7 @@
 #include "qore/intern/QoreClassIntern.h"
 #include "qore/intern/CompressionTransforms.h"
 #include "qore/intern/QoreLibIntern.h"
+#include "qore/intern/QoreHttpHeaderPairs.h"
 
 #include <ares.h>
 
@@ -72,6 +73,60 @@
 constexpr unsigned max_nonblock_ops = 32;
 
 static std::atomic<uint64_t> qore_socket_sync_exec_seq{0};
+
+// formats a single header value as for HTTP/1.x messages (see qore_socket_private::do_header()); returns false if
+// the value has a type that is not sent
+static bool qore_get_http_header_value(const QoreValue& v, std::string& out) {
+    QoreString str;
+    switch (v.getType()) {
+        case NT_STRING: {
+            // a string can be held in inline short string storage, which has no QoreStringNode
+            QoreStringDataHelper data(v);
+            out.assign(data.c_str(), data.size());
+            return true;
+        }
+        case NT_INT:
+            str.sprintf(QLLD, v.getAsBigInt());
+            break;
+        case NT_FLOAT:
+            str.sprintf("%f", v.getAsFloat());
+            // issue 1556: external modules that call setlocale() can change the decimal point character
+            q_fix_decimal(&str, 0);
+            break;
+        case NT_NUMBER:
+            v.get<const QoreNumberNode>()->toString(str);
+            break;
+        case NT_BOOLEAN:
+            str.sprintf("%d", (int)v.getAsBool());
+            break;
+        default:
+            return false;
+    }
+    out.assign(str.c_str(), str.size());
+    return true;
+}
+
+void qore_get_http_header_pairs(const QoreHashNode* headers, qore_http_header_pairs_t& out) {
+    if (!headers) {
+        return;
+    }
+    ConstHashIterator hi(headers);
+    while (hi.next()) {
+        const QoreValue v = hi.get();
+        std::string value;
+        if (v.getType() == NT_LIST) {
+            // a header with several values is one field per value; the values are never combined
+            ConstListIterator li(v.get<const QoreListNode>());
+            while (li.next()) {
+                if (qore_get_http_header_value(li.getValue(), value)) {
+                    out.emplace_back(hi.getKey(), std::move(value));
+                }
+            }
+        } else if (qore_get_http_header_value(v, value)) {
+            out.emplace_back(hi.getKey(), std::move(value));
+        }
+    }
+}
 
 extern qore_classid_t CID_ASYNCIOCONTROLLER;
 extern QoreClass* QC_EVENTNOTIFIER;
@@ -2938,26 +2993,7 @@ public:
     DLLLOCAL QoreSocketControllerHttp2SendResponsePollOperation(QoreSocket* sock, int32_t stream_id, int status_code,
             const QoreHashNode* headers, const void* data, size_t size, const QoreStringNode* body_event)
             : sock(sock), stream_id(stream_id), status_code(status_code) {
-        if (headers) {
-            ConstHashIterator hi(headers);
-            while (hi.next()) {
-                const char* key = hi.getKey();
-                QoreValue val = hi.get();
-                // note: header values can be held in inline short string storage (ex: "gzip"),
-                // which has no QoreStringNode, so the data helper must be used to read the bytes
-                if (val.getType() == NT_STRING) {
-                    hdr_pairs.emplace_back(key, QoreStringDataHelper(val).c_str());
-                } else if (val.getType() == NT_LIST) {
-                    const QoreListNode* l = val.get<const QoreListNode>();
-                    for (size_t i = 0; i < l->size(); ++i) {
-                        QoreValue lv = l->retrieveEntry(i);
-                        if (lv.getType() == NT_STRING) {
-                            hdr_pairs.emplace_back(key, QoreStringDataHelper(lv).c_str());
-                        }
-                    }
-                }
-            }
-        }
+        qore_get_http_header_pairs(headers, hdr_pairs);
 
         if (data && size) {
             body = new BinaryNode;
@@ -3218,20 +3254,8 @@ public:
     }
 
 private:
-    DLLLOCAL static void setHeaders(strcase_str_map_t& out, const QoreHashNode* headers) {
-        if (!headers) {
-            return;
-        }
-
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            QoreValue val = hi.get();
-            // note: header values can be held in inline short string storage (ex: "gzip"), which
-            // has no QoreStringNode, so the data helper must be used to read the bytes
-            if (val.getType() == NT_STRING) {
-                out[hi.getKey()] = QoreStringDataHelper(val).c_str();
-            }
-        }
+    DLLLOCAL static void setHeaders(qore_http_header_pairs_t& out, const QoreHashNode* headers) {
+        qore_get_http_header_pairs(headers, out);
     }
 
     DLLLOCAL void parseRequestHeaders(const QoreHashNode* headers, ExceptionSink* xsink) {
@@ -3289,7 +3313,7 @@ private:
     int status_code = 0;
     std::string method;
     std::string path;
-    strcase_str_map_t header_map;
+    qore_http_header_pairs_t header_map;
     std::vector<std::pair<std::string, std::string>> request_headers;
     SimpleRefHolder<BinaryNode> body;
     bool end_stream = false;
@@ -16973,27 +16997,7 @@ SocketHttp2SendResponsePollOperation::SocketHttp2SendResponsePollOperation(Excep
           status_code(status_code), is_connect(is_connect) {
 
     // Build headers as vector of pairs to support duplicate header names (e.g., set-cookie)
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            const char* key = hi.getKey();
-            QoreValue val = hi.get();
-            if (val.getType() == NT_STRING) {
-                QoreStringValueHelper str(val);
-                hdr_pairs.emplace_back(key, str->c_str());
-            } else if (val.getType() == NT_LIST) {
-                // Emit separate header entries for each list value
-                const QoreListNode* l = val.get<const QoreListNode>();
-                for (size_t i = 0; i < l->size(); ++i) {
-                    QoreValue lv = l->retrieveEntry(i);
-                    if (lv.getType() == NT_STRING) {
-                        QoreStringValueHelper str(lv);
-                        hdr_pairs.emplace_back(key, str->c_str());
-                    }
-                }
-            }
-        }
-    }
+    qore_get_http_header_pairs(headers, hdr_pairs);
 
     init(xsink, defer_init);
     if (*xsink) {
@@ -17087,17 +17091,12 @@ QoreHashNode* SocketHttp2SendResponsePollOperation::continuePoll(ExceptionSink* 
                 int rv;
                 if (is_connect) {
                     // RFC 8441: CONNECT response (WebSocket over HTTP/2) - no body, no END_STREAM
-                    // submitConnectResponse still uses map (CONNECT doesn't need duplicate headers)
-                    strcase_str_map_t hdr_map;
-                    for (const auto& p : hdr_pairs) {
-                        hdr_map[p.first] = p.second;
-                    }
                     if (getenv("QORE_HTTP2_DEBUG")) {
                         fprintf(stderr, "HTTP2 DEBUG: send CONNECT response stream=%d status=%d\n",
                             stream_id, status_code);
                         fflush(stderr);
                     }
-                    rv = session->submitConnectResponse(stream_id, status_code, hdr_map, xsink);
+                    rv = session->submitConnectResponse(stream_id, status_code, hdr_pairs, xsink);
                 } else {
                     const void* body_ptr = body ? body->getPtr() : nullptr;
                     size_t body_len = body ? body->size() : 0;
@@ -17251,23 +17250,13 @@ SocketHttp2SendStreamingResponsePollOperation::SocketHttp2SendStreamingResponseP
     // Build headers map; extract Content-Length for short-stream detection
     // so EOF before the declared length can be reported to the peer via
     // RST_STREAM (matching the H1 "server closes the connection" behavior).
-    if (headers) {
-        ConstHashIterator hi(headers);
-        while (hi.next()) {
-            const char* key = hi.getKey();
-            QoreValue val = hi.get();
-            if (val.getType() == NT_STRING) {
-                QoreStringValueHelper str(val);
-                const char* str_val = str->c_str();
-                header_pairs.emplace_back(key, str_val);
-                if (!strcasecmp(key, "content-length")) {
-                    char* endptr = nullptr;
-                    long long cl = strtoll(str_val, &endptr, 10);
-                    if (endptr != str_val && cl >= 0) {
-                        content_length = cl;
-                    }
-                }
-            }
+    qore_get_http_header_pairs(headers, header_pairs);
+    if (const std::string* cl_val = qore_find_http_header(header_pairs, "content-length")) {
+        const char* str_val = cl_val->c_str();
+        char* endptr = nullptr;
+        long long cl = strtoll(str_val, &endptr, 10);
+        if (endptr != str_val && cl >= 0) {
+            content_length = cl;
         }
     }
 
@@ -17321,13 +17310,8 @@ QoreHashNode* SocketHttp2SendStreamingResponsePollOperation::continuePoll(Except
     while (true) {
         switch (ss_state) {
             case SS_SUBMIT_HEADERS: {
-                strcase_str_map_t hdr_map;
-                for (const auto& p : header_pairs) {
-                    hdr_map[p.first] = p.second;
-                }
-
                 // Submit streaming response (headers only, deferred data provider)
-                int rv = session->submitResponseStreaming(stream_id, status_code, hdr_map, xsink);
+                int rv = session->submitResponseStreaming(stream_id, status_code, header_pairs, xsink);
                 if (rv != 0 && !*xsink) {
                     xsink->raiseException("HTTP2-ERROR", "failed to submit HTTP/2 streaming response: rv=%d", rv);
                 }

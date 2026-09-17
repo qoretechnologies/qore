@@ -366,8 +366,13 @@ public:
     */
     DLLEXPORT int getOpenPoolSize() const;
 
-    //! Returns the number of connections currently pooled for @a host : @a port.
+    //! Returns the number of connections currently pooled for @a host : @a port, with and without TLS.
     DLLEXPORT int getConnectionCount(const char* host, int port) const;
+
+    //! Returns the number of connections currently pooled for @a host : @a port with the given TLS setting.
+    /** @since %Qore 3.0
+    */
+    DLLEXPORT int getConnectionCount(const char* host, int port, bool ssl) const;
 
     //! Convenience: acquires a connection, submits a request, awaits the
     //! Future synchronously, releases the connection, and returns the
@@ -521,8 +526,26 @@ protected:
         check it without taking @c pool_lock_. */
     std::atomic<unsigned> observed_protocols_{0};
 
+    //! The time added to @c connect_timeout_ms for a caller waiting for a new connection, in milliseconds
+    static constexpr int ConnectWaitGraceMs = 30000;
+
+    //! Returns how long a caller waits for a new connection to become ready, in milliseconds
+    /** A connection enforces @c connect_timeout_ms on the I/O thread and reports its own error, so the wait of a
+        caller is only a backstop: with the same timeout, the wait would expire before the connection has raised
+        its error, and a generic timeout would replace the diagnosable error of the connection.  A timeout that is
+        not positive is returned unchanged.
+    */
+    DLLLOCAL int64_t getConnectWaitTimeoutMs() const {
+        return opts_.connect_timeout_ms > 0
+            ? (int64_t)opts_.connect_timeout_ms + ConnectWaitGraceMs
+            : (int64_t)opts_.connect_timeout_ms;
+    }
+
     //! Computes the pool key for the given target (with proxy info baked in).
-    DLLLOCAL std::string poolKey(const char* host, int port) const;
+    /** The key includes the scheme: a connection with TLS must never be used for a target without TLS or the
+        reverse, as when a redirect changes the scheme but not the host and port.
+    */
+    DLLLOCAL std::string poolKey(const char* host, int port, bool ssl) const;
 
     //! Drains closed-connection notifications from onConnectionClosed.
     /** Must be called from an app thread, not the I/O thread.

@@ -1,0 +1,1041 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*
+    Copyright (C) 2026 Qore Technologies, s.r.o., all rights reserved
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+
+    HTTPClient redirect tests: every assertion is made for the blocking API and for the poll API, which must follow
+    the same redirects to the same targets and report the same metadata.
+*/
+
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires ../../../../../qlib/QUnit.qm
+%requires ../../../../../qlib/Util.qm
+%requires ../../../../../qlib/Mime.qm
+%requires ../../../../../qlib/Logger.qm
+%requires ../../../../../qlib/HttpServerUtil.qm
+%requires ../../../../../qlib/HttpServer.qm
+%requires ../../../../../qlib/AsyncSocketIo
+
+%exec-class HttpClientRedirectTest
+
+#! Makes a request for a sandboxed Program as module code does: this function runs in an unsandboxed Program
+/** @param mode \c "sync" (blocking), \c "poll" (a poll operation driven on this thread), or \c "controller" (a poll
+    operation driven by the async I/O controller, whose callback workers acquire redirect connections)
+    @param url the URL of the server
+    @param path the request path
+*/
+auto sub sandbox_request(string mode, string url, string path) {
+    HTTPClient hc({"url": url});
+    switch (mode) {
+        case "sync":
+            return hc.send(NOTHING, "GET", path).body;
+        case "poll":
+            return HttpClientRedirectTest::drive(hc.startPollSendRecv("GET", path))."response-body";
+    }
+    AbstractPollOperation op = hc.startPollSendRecv("GET", path);
+    Queue q = AsyncSocketIo::getGlobalAsyncIoController().submit(<SocketPollOperationInfo>{
+        "sock": hc,
+        "spop": op,
+        "to": 30s,
+        "owner": "http-client-redirect-sandbox-test",
+    });
+    hash<SocketPollResultInfo> result = q.get();
+    if (result.ex) {
+        throw result.ex.err, result.ex.desc, result.ex.arg;
+    }
+    return op.getOutput()."response-body";
+}
+
+const CertPem = "-----BEGIN CERTIFICATE-----
+MIIFNjCCBB6gAwIBAgISA1ELHYM0GFfi2BdvZfzLGJMLMA0GCSqGSIb3DQEBCwUA
+MDIxCzAJBgNVBAYTAlVTMRYwFAYDVQQKEw1MZXQncyBFbmNyeXB0MQswCQYDVQQD
+EwJSMzAeFw0yMjA4MDcwOTAwMDdaFw0yMjExMDUwOTAwMDZaMCIxIDAeBgNVBAMT
+F2hxLnFvcmV0ZWNobm9sb2dpZXMuY29tMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A
+MIIBCgKCAQEAlw84m+9dCjeD4s8YYVZ3gbv8YkYQGyyaojgdJuarTyJPYnGzhMf7
+PF+Y2398k+8ydAnOTwJXRcaU36f0hHDvTagP1f0EFg3kWlplzsrtrDI/HZBRH0W2
++54YE6FhPEtEkkO1aKy+VXb8QMQKSmsUZS+IxSe+69tWFI60tW92eq53tFAwEWN+
+0oBeJBCASRQa7bq1J/BgZhlBSyUQ6Zf+wqUSfmVEf7tsFujyNZ2dfxHtPtLxRspA
+7yhgnQQaXHemyEWeZWjIbToazG8SvutmcwIFK/TtE0anWdTR+Hn92mxH9mxnnyns
+Ag+RlqxnEpBDIb1ufwCFUhMXBwRiiZIM1QIDAQABo4ICVDCCAlAwDgYDVR0PAQH/
+BAQDAgWgMB0GA1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjAMBgNVHRMBAf8E
+AjAAMB0GA1UdDgQWBBSj2nUL9X+zXI7p0fFhg03WZAS0xDAfBgNVHSMEGDAWgBQU
+LrMXt1hWy65QCUDmH6+dixTCxjBVBggrBgEFBQcBAQRJMEcwIQYIKwYBBQUHMAGG
+FWh0dHA6Ly9yMy5vLmxlbmNyLm9yZzAiBggrBgEFBQcwAoYWaHR0cDovL3IzLmku
+bGVuY3Iub3JnLzAiBgNVHREEGzAZghdocS5xb3JldGVjaG5vbG9naWVzLmNvbTBM
+BgNVHSAERTBDMAgGBmeBDAECATA3BgsrBgEEAYLfEwEBATAoMCYGCCsGAQUFBwIB
+FhpodHRwOi8vY3BzLmxldHNlbmNyeXB0Lm9yZzCCAQYGCisGAQQB1nkCBAIEgfcE
+gfQA8gB3AN+lXqtogk8fbK3uuF9OPlrqzaISpGpejjsSwCBEXCpzAAABgne/YgYA
+AAQDAEgwRgIhAP/ERcskhKhF7M8VIejtrwEtDXJoX1IXec//r64jkOlUAiEAhheZ
+VMT5cZ2uoPGoD6+SuQY/CYBuHdXNR/pUC3SGOQEAdwApeb7wnjk5IfBWc59jpXfl
+vld9nGAK+PlNXSZcJV3HhAAAAYJ3v2H5AAAEAwBIMEYCIQCmiChg/6dLhE3TfGum
+JR7k8s7ibmqw2KVJI3oUR/ogBAIhAIXIIhyqb3W/34ATNT9dIPCGFKpghQw82G8w
+ANnChDgYMA0GCSqGSIb3DQEBCwUAA4IBAQAovvC8AiF7+uNLJCEXMe3VeI4Ne+l1
+mqCRRujz7ijlr6VgNxZt+i/kx1HJKrSKnQZRQ48xWAipMVYfXxH3u20p4RkkW2nj
+jjIVQvQvlFhDjLaJR74PYopp0lPuBW9RKg+C+l3vvjxjkin/MOBX2apGOvC4LJwb
+2s6f8cArBRvdhA7nwEmlP3+aqxxkp9STZYpxuKR4F9fRGtg0Y39Db+3XkYp7Y/hV
+DBVpHegoty2VFErehkJUmgdNoLdTuC8gHgA3p5bCbApyVGjBuO+QpSWG/3WiBDfm
+1IpGT8P2OhFruQHryHEKmY6f5huZV2Y0gFmqBwRiR1ToF5gFveTUJM3d
+-----END CERTIFICATE-----";
+
+const KeyPem = "-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCXDzib710KN4Pi
+zxhhVneBu/xiRhAbLJqiOB0m5qtPIk9icbOEx/s8X5jbf3yT7zJ0Cc5PAldFxpTf
+p/SEcO9NqA/V/QQWDeRaWmXOyu2sMj8dkFEfRbb7nhgToWE8S0SSQ7VorL5VdvxA
+xApKaxRlL4jFJ77r21YUjrS1b3Z6rne0UDARY37SgF4kEIBJFBrturUn8GBmGUFL
+JRDpl/7CpRJ+ZUR/u2wW6PI1nZ1/Ee0+0vFGykDvKGCdBBpcd6bIRZ5laMhtOhrM
+bxK+62ZzAgUr9O0TRqdZ1NH4ef3abEf2bGefKewCD5GWrGcSkEMhvW5/AIVSExcH
+BGKJkgzVAgMBAAECggEAPhvyCJtYQ9UjkuPXgF4O8PacBMQN5z5lrgEoa1A4a2cO
+AMoDJ7sZ327m6Ij4bdLRichmXTH3NCc8GuFxterBWcqaCD/pqC+6DjRQ27+wDTbz
+oHIwCI2feME94QRfeGzyGrlgI1OzRmyPtwljuclhL2Fl+Loo08zxDa7HOjpEGphz
+wkD2gQy5S7Mi5ekBZMhy8EklpzdKlOFdvhjo7vQu8vY8xJZ6jN65RV+RBscbmZQl
+llK1uW/8UyRIAUK9sM6Ozxbiz7QQELHpSvY3JIiZC5A6rBk2DGqOu8ouzDrQuHsB
+LHWjzceu6UcJY0tCeOUkVDnoxbj2UcINEAIABIPN2QKBgQDHHbrwdW8qRecLw8y2
+FJDO/6+8VmRKtj8B7CeOYuEZet2UvnPssisCovu0jnMa2ysF/L4YQAWa5XY0bB+E
+R/NRzeh4i0jIsW70h2qePTK+XRAGhCCKiCcb7nkED72TTplQ5wgRA/oWPLOrys34
+f+YqCI7BVrbWzgDyrhEdRAXSbwKBgQDCNuMlLcGTTi04OIQFDZmzjdvx9KvHvksz
+zff9Y0Rb1eUsXF2oG3S55umgeUcG9Nk2KigJzO6WAmTT6rcbn4tsRsnkLdqcEPmg
+P1wbBikW3Bz935k7yPcx05bVshLrJsK0Gxa8YYE6hh/PbdiQFtHf2r4uYu1kxC01
+518U8oPm+wKBgDfyJIpXlKp+BZMKqsQmNyHSOaBjbb6IQl/Z6KtbIQA1w3h9orjI
+vsj43lw3AiRznD0MbKUHqAuDmZjVIG3cgYNkpYLpL8QkBpbyTYS0kUNnho8uJK6H
+3uU8NghsG8n99ZoDsAKH6YbB+4Gzc/f0h8kbqnCsWqc0LpQBUJG2gSRFAoGBAI3P
+4kBNjuFu3hoFOnEuIyM23HlqPNyXGPZ02TXOfCXKo5Kmx0Ru9+aes80XgUOVGd4x
+Hhc56qTijpkm9BlZgEbJ0bWpvczjoELgwPKCpxIoG4tM7+j1r3pUk/jqFGJcZSN5
+/DoFwITpVuTxwoZEA2+/m8rnNYy0qoaHsafsBWBtAoGAAPYkINDjhAslu2gQlsZi
+7eA4coUg5eNUI+YYy4xonJAU488AsrcAWr5nGEids4ZM5PqKkJezG+6gctaYnjjZ
+IQrghzR1AC0Y3XDSuJYGRcZeUF2XZmOjcXNm0oMxeMEeEuuNLOTZ2pp7aUcYIOfV
+OKKqgBjNAlYDdPhOy8O8Agk=
+-----END PRIVATE KEY-----";
+
+#! A request received by a test server
+hashdecl ReceivedRequest {
+    string method;
+    string target;
+    *string authorization;
+    *string cookie;
+    *string host;
+    *string custom;
+    *string content_type;
+    auto body;
+}
+
+#! A test server handler with configurable redirect routes that records every request
+class RedirectPeer inherits AbstractHttpRequestHandler {
+    public {
+        #! Blocks requests with a target starting with "/block" until released
+        Counter block();
+        #! Signaled when a request to a "/block" target arrives
+        Queue blocked();
+    }
+
+    private {
+        #! target -> response: code, headers, body
+        hash<string, hash<auto>> routes;
+        #! The requests received
+        list<hash<ReceivedRequest>> requests;
+        #! Serializes access
+        Mutex m();
+    }
+
+    setRoute(string target, int code, *hash<auto> headers, *data body) {
+        AutoLock al(m);
+        routes{target} = {"code": code, "headers": headers, "body": body};
+    }
+
+    setRedirect(string target, int code, softlist<string> location) {
+        setRoute(target, code, {"Location": location.size() == 1 ? location[0] : location});
+    }
+
+    clear() {
+        AutoLock al(m);
+        requests = ();
+    }
+
+    list<hash<ReceivedRequest>> getRequests() {
+        AutoLock al(m);
+        return requests;
+    }
+
+    hash<HttpResponseInfo> handleRequest(hash<auto> cx, hash<auto> hdr, *data body) {
+        *hash<auto> route;
+        {
+            AutoLock al(m);
+            requests += <ReceivedRequest>{
+                "method": hdr.method,
+                "target": cx.raw_path,
+                "authorization": hdr.authorization,
+                "cookie": hdr.cookie,
+                "host": hdr.host,
+                "custom": hdr."x-custom",
+                "content_type": hdr."content-type",
+                "body": body,
+            };
+            route = routes{cx.raw_path};
+        }
+        if (cx.raw_path =~ /^\/block/) {
+            blocked.push(cx.raw_path);
+            block.waitForZero();
+        }
+        # /chain/<n>: redirect n times
+        *list<*string> chain = (cx.raw_path =~ x/^\/chain\/([0-9]+)$/);
+        if (chain) {
+            int n = chain[0].toInt();
+            if (n) {
+                return makeResponse({"Location": sprintf("/chain/%d", n - 1)}, 302, binary());
+            }
+        }
+        if (route) {
+            # a binary body is never used as a format string
+            hash<HttpResponseInfo> rv = makeResponse(route.headers ?? {}, route.code,
+                route.body.typeCode() == NT_BINARY ? route.body : binary(route.body ?? ""));
+            if (route.headers."Content-Encoding") {
+                # the body is already encoded
+                rv.no_content_encoding = True;
+            }
+            return rv;
+        }
+        return makeResponse({"Content-Type": "text/plain"}, 200, binary(sprintf("%s %s", hdr.method, cx.raw_path)));
+    }
+}
+
+#! Collects the results of a request made with both APIs
+hashdecl RequestResult {
+    int code;
+    auto body;
+    hash<auto> info;
+}
+
+public class HttpClientRedirectTest inherits QUnit::Test {
+    public {
+        #! Binary data with NUL bytes and invalid UTF-8
+        const BinaryData = <000102ff80fe00c3>;
+    }
+
+    private {
+        HttpServer server_a;
+        HttpServer server_b;
+        RedirectPeer peer_a();
+        RedirectPeer peer_b();
+        int port_a;
+        int port_b;
+        string url_a;
+        string url_b;
+        AsyncSocketIoController controller();
+    }
+
+    constructor() : Test("HTTPClient redirect test", "1.0") {
+        addTestCase("supplied reproducers", \reproducerTest());
+        addTestCase("Location reference forms", \locationFormTest());
+        addTestCase("same-URL fragment redirect", \fragmentLoopTest());
+        addTestCase("redirect status codes", \statusCodeTest());
+        addTestCase("unused redirect status", \unusedStatusTest());
+        addTestCase("method and body rules", \methodRuleTest());
+        addTestCase("redirect limits", \limitTest());
+        addTestCase("redirect passthru", \passthruTest());
+        addTestCase("invalid Location values", \locationErrorTest());
+        addTestCase("cross-origin credentials", \crossOriginTest());
+        addTestCase("streamed request bodies", \streamedBodyTest());
+        addTestCase("content decoding", \contentDecodingTest());
+        addTestCase("async I/O controller", \controllerTest());
+        addTestCase("abort during a redirect", \abortTest());
+        addTestCase("redirect events", \eventTest());
+        addTestCase("HTTP/2", \http2Test());
+        addTestCase("sandboxed redirects", \sandboxTest());
+        addTestCase("redirects and UNIX domain sockets", \unixSocketTest());
+        addTestCase("redirects that change the scheme", \schemeChangeTest());
+
+        server_a = new HttpServer(<HttpServerOptionInfo>{});
+        server_b = new HttpServer(<HttpServerOptionInfo>{});
+        on_exit {
+            server_a.stop();
+            server_b.stop();
+        }
+        server_a.setDefaultHandler("a", peer_a);
+        server_b.setDefaultHandler("b", peer_b);
+        port_a = server_a.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        port_b = server_b.addListener(<HttpListenerOptionInfo>{"node": "127.0.0.1", "service": 0}).port;
+        url_a = sprintf("http://127.0.0.1:%d", port_a);
+        url_b = sprintf("http://127.0.0.1:%d", port_b);
+
+        set_return_value(main());
+    }
+
+    reproducerTest() {
+        peer_a.setRedirect("/old/root.wsdl", 302, "/new/root.wsdl");
+        peer_a.setRoute("/new/root.wsdl", 200, {"Content-Type": "text/xml"}, "final bytes");
+        peer_a.setRedirect("/old/rel.wsdl", 302, "../new/root.wsdl?rev=2#section");
+        peer_a.setRoute("/new/root.wsdl?rev=2", 200, {"Content-Type": "text/xml"}, "final bytes");
+
+        foreach string path in (("/old/root.wsdl", "/old/rel.wsdl")) {
+            string location = path == "/old/root.wsdl" ? "/new/root.wsdl" : "../new/root.wsdl?rev=2#section";
+            string target = path == "/old/root.wsdl" ? "/new/root.wsdl" : "/new/root.wsdl?rev=2";
+            foreach hash<RequestResult> r in (requestBoth(new HTTPClient({"url": url_a + path}), "GET", path)) {
+                assertEq(200, r.code);
+                assertEq("final bytes", toBin(r.body).toString());
+                assertEq(url_a + target, r.info."effective-url");
+                assertEq(location, r.info."redirect-1");
+                assertEq("Found", r.info."redirect-message-1");
+                assertEq(sprintf("GET %s HTTP/1.1", target), r.info."request-uri");
+                assertEq(1, r.info.redirects.size());
+                hash<HttpRedirectInfo> hop = r.info.redirects[0];
+                assertEq(url_a + path, hop.request_url);
+                assertEq(302, hop.status_code);
+                assertEq("Found", hop.status_message);
+                assertEq(location, hop.location);
+                assertEq(url_a + target, hop.target_url);
+                assertEq(location, hop.headers.location);
+            }
+        }
+        # the client's URL is never changed by a redirect
+        HTTPClient hc({"url": url_a + "/old/root.wsdl"});
+        requestBoth(hc, "GET", "/old/root.wsdl");
+        assertEq(url_a + "/old/root.wsdl", hc.getURL());
+    }
+
+    locationFormTest() {
+        string base = "/a/b/c?x=1";
+        list<list<string>> cases = (
+            ("d", "a", "/a/b/d"),
+            ("../e?y", "a", "/a/e?y"),
+            ("?q", "a", "/a/b/c?q"),
+            ("?", "a", "/a/b/c?"),
+            ("./", "a", "/a/b/"),
+            (".", "a", "/a/b/"),
+            ("/t/", "a", "/t/"),
+            ("/abs?z=1&w", "a", "/abs?z=1&w"),
+            ("../../../../root", "a", "/root"),
+            ("g#frag", "a", "/a/b/g"),
+            ("/enc%2Fp%3Fx;y?q=%23a%26b%2F", "a", "/enc%2Fp%3Fx;y?q=%23a%26b%2F"),
+            ("/sp ace/ü?k=v w", "a", "/sp%20ace/%C3%BC?k=v%20w"),
+            ("/q?\"<x>\"", "a", "/q?%22%3Cx%3E%22"),
+            (url_a + "/full?1", "a", "/full?1"),
+            (url_a + "/../dots/./x", "a", "/dots/x"),
+            (url_a + "?only", "a", "/?only"),
+            (url_a, "a", "/"),
+            (sprintf("//127.0.0.1:%d/net?2#f", port_b), "b", "/net?2"),
+            (sprintf("HTTP://127.0.0.1:%d/upper", port_b), "b", "/upper"),
+            (sprintf("http://127.0.0.1:%d/b/../c", port_b), "b", "/c"),
+        );
+        foreach list<string> c in (cases) {
+            string location = c[0];
+            string target = c[2];
+            peer_a.setRedirect(base, 302, location);
+            foreach hash<RequestResult> r in (requestBoth(new HTTPClient({"url": url_a}), "GET", base,
+                    NOTHING, NOTHING, \peer_a.clear(), \peer_b.clear())) {
+                string msg = sprintf("location %y (%s)", location, r.info.api);
+                RedirectPeer peer = c[1] == "a" ? peer_a : peer_b;
+                string origin = c[1] == "a" ? url_a : url_b;
+                assertEq(200, r.code, msg);
+                assertEq("GET " + target, toBin(r.body).toString(), msg);
+                assertEq(target, peer.getRequests().last().target, msg);
+                assertEq(origin + target, r.info."effective-url", msg);
+                assertEq(origin + target, r.info.redirects[0].target_url, msg);
+                assertEq(location, r.info.redirects[0].location, msg);
+                assertEq(url_a + base, r.info.redirects[0].request_url, msg);
+            }
+        }
+    }
+
+    fragmentLoopTest() {
+        # a same-URL fragment redirect is a redirect like any other and counts against the limit
+        peer_a.setRedirect("/loop", 302, "#x");
+        HTTPClient hc({"url": url_a, "max_redirects": 3});
+        peer_a.clear();
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", "maximum redirections \\(3\\) exceeded.*'#x'",
+            \hc.get(), "/loop");
+        assertEq(4, peer_a.getRequests().size());
+        assertTrue((foldl $1 && $2, (map $1.target == "/loop", peer_a.getRequests())));
+        peer_a.clear();
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", "maximum redirections \\(3\\) exceeded",
+            \HttpClientRedirectTest::drive(), hc.startPollSendRecv("GET", "/loop"));
+        assertEq(4, peer_a.getRequests().size());
+    }
+
+    statusCodeTest() {
+        peer_a.setRoute("/landed", 200, {"Content-Type": "text/plain"}, "landed");
+        foreach int code in ((301, 302, 303, 307, 308)) {
+            string path = sprintf("/status/%d", code);
+            peer_a.setRedirect(path, code, "/landed");
+            foreach hash<RequestResult> r in (requestBoth(new HTTPClient({"url": url_a}), "GET", path)) {
+                assertEq(200, r.code, sprintf("%d %s", code, r.info.api));
+                assertEq("landed", toBin(r.body).toString());
+                assertEq(code, r.info.redirects[0].status_code);
+            }
+        }
+        # other 3xx responses are returned to the caller
+        foreach int code in ((300, 304, 305)) {
+            string path = sprintf("/status/%d", code);
+            peer_a.setRedirect(path, code, "/landed");
+            HTTPClient hc({"url": url_a});
+            peer_a.clear();
+            try {
+                hc.get(path);
+                fail(sprintf("%d: expected an exception", code));
+            } catch (hash<ExceptionInfo> ex) {
+                assertEq("HTTP-CLIENT-RECEIVE-ERROR", ex.err, sprintf("%d", code));
+                assertEq(code, ex.arg.status_code);
+            }
+            assertEq(1, peer_a.getRequests().size(), sprintf("%d was not followed", code));
+            hc.setErrorPassthru(True);
+            foreach hash<RequestResult> r in (requestBoth(hc, "GET", path)) {
+                assertEq(code, r.code, sprintf("%d %s", code, r.info.api));
+                assertEq(url_a + path, r.info."effective-url");
+                assertNothing(r.info.redirects);
+            }
+        }
+    }
+
+    #! 306 (unused) cannot be sent by HttpServer, so it is served by a raw socket server
+    unusedStatusTest() {
+        foreach string api in (("sync", "async")) {
+            Socket listener();
+            listener.bind("127.0.0.1:0");
+            listener.listen();
+            Queue served();
+            background HttpClientRedirectTest::serveRaw(listener, served,
+                "HTTP/1.1 306 Switch Proxy\r\nLocation: /landed\r\nContent-Length: 0\r\n\r\n");
+            HTTPClient hc({"url": sprintf("http://127.0.0.1:%d", listener.getSocketInfo().port),
+                "error_passthru": True});
+            int code;
+            if (api == "sync") {
+                code = hc.send(NOTHING, "GET", "/unused").status_code;
+            } else {
+                code = drive(hc.startPollSendRecv("GET", "/unused")).code;
+            }
+            assertEq(306, code, api);
+            # the server has only received the one request
+            assertEq("/unused", served.get(20000));
+        }
+    }
+
+    methodRuleTest() {
+        # method, code, expected method, body expected
+        list<list<auto>> cases = (
+            ("POST", 303, "GET", False),
+            ("PUT", 303, "GET", False),
+            ("DELETE", 303, "GET", False),
+            ("HEAD", 303, "HEAD", False),
+            ("POST", 301, "GET", False),
+            ("POST", 302, "GET", False),
+            ("PUT", 301, "PUT", True),
+            ("PUT", 302, "PUT", True),
+            ("POST", 307, "POST", True),
+            ("POST", 308, "POST", True),
+            ("PATCH", 307, "PATCH", True),
+        );
+        foreach list<auto> c in (cases) {
+            string path = sprintf("/method/%d", c[1]);
+            peer_a.setRedirect(path, c[1], "/method-target");
+            foreach hash<RequestResult> r in (requestBoth(new HTTPClient({"url": url_a}), c[0], path, "payload",
+                    {"Content-Type": "text/plain", "X-Custom": "kept"}, \peer_a.clear())) {
+                string msg = sprintf("%s %d (%s)", c[0], c[1], r.info.api);
+                assertEq(200, r.code, msg);
+                list<hash<ReceivedRequest>> reqs = peer_a.getRequests();
+                assertEq(2, reqs.size(), msg);
+                assertEq(c[0], reqs[0].method, msg);
+                assertEq("payload", reqs[0].body, msg);
+                assertEq(c[2], reqs[1].method, msg);
+                assertEq("kept", reqs[1].custom, msg);
+                if (c[3]) {
+                    assertEq("payload", reqs[1].body, msg);
+                    assertRegex("^text/plain", reqs[1].content_type, msg);
+                } else {
+                    assertNothing(reqs[1].body, msg);
+                    assertNothing(reqs[1].content_type, msg);
+                }
+            }
+        }
+    }
+
+    limitTest() {
+        foreach hash<RequestResult> r in (requestBoth(new HTTPClient({"url": url_a, "max_redirects": 3}), "GET",
+                "/chain/3")) {
+            assertEq(200, r.code);
+            assertEq(3, r.info.redirects.size());
+            assertEq((url_a + "/chain/2", url_a + "/chain/1", url_a + "/chain/0"),
+                (map $1.target_url, r.info.redirects));
+            assertEq("/chain/0", r.info."redirect-3");
+        }
+        HTTPClient hc({"url": url_a, "max_redirects": 3});
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", "maximum redirections \\(3\\) exceeded; redirect "
+            "code 302 to '/chain/0'", \hc.get(), "/chain/4");
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", "maximum redirections \\(3\\) exceeded",
+            \HttpClientRedirectTest::drive(), hc.startPollSendRecv("GET", "/chain/4"));
+        # the client remains usable
+        assertEq(200, hc.send(NOTHING, "GET", "/chain/0").status_code);
+
+        # no redirects are followed with a limit of 0
+        hc.setMaxRedirects(0);
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", "maximum redirections \\(0\\)", \hc.get(),
+            "/chain/1");
+        assertThrows("HTTP-CLIENT-MAXIMUM-REDIRECTS-EXCEEDED", "maximum redirections \\(0\\)",
+            \HttpClientRedirectTest::drive(), hc.startPollSendRecv("GET", "/chain/1"));
+        foreach hash<RequestResult> r in (requestBoth(hc, "GET", "/chain/0")) {
+            assertEq(200, r.code);
+            assertNothing(r.info.redirects);
+        }
+    }
+
+    passthruTest() {
+        HTTPClient hc({"url": url_a, "redirect_passthru": True, "error_passthru": True});
+        foreach hash<RequestResult> r in (requestBoth(hc, "GET", "/chain/1", NOTHING, NOTHING, \peer_a.clear())) {
+            assertEq(302, r.code);
+            assertEq(url_a + "/chain/1", r.info."effective-url");
+            assertNothing(r.info.redirects);
+            assertNothing(r.info."redirect-1");
+            assertEq(1, peer_a.getRequests().size());
+        }
+        # without error_passthru the blocking API reports the redirect response as an error
+        hc.setErrorPassthru(False);
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "HTTP status code 302", \hc.get(), "/chain/1");
+    }
+
+    locationErrorTest() {
+        peer_a.setRoute("/noloc", 302);
+        peer_a.setRedirect("/multiloc", 302, ("/one", "/two"));
+        peer_a.setRedirect("/badscheme", 302, "ftp://127.0.0.1/x");
+        peer_a.setRedirect("/nohost", 302, "http:///x");
+        peer_a.setRedirect("/nohost2", 302, "http:x");
+        peer_a.setRedirect("/userinfo-only", 302, "http://user@/x");
+        peer_a.setRedirect("/badport", 302, "http://127.0.0.1:99999/x");
+        peer_a.setRedirect("/unix", 302, "http://socket=%2Ftmp%2Fqore-redirect-test.sock/x");
+        peer_a.setRedirect("/badhost-space", 302, "http://a b/x");
+        peer_a.setRedirect("/badhost-pct", 302, "http://a%zzb/x");
+        peer_a.setRedirect("/badhost-char", 302, "http://a<b>/x");
+
+        list<list<string>> cases = (
+            ("/noloc", "HTTP-CLIENT-REDIRECT-ERROR", "no redirect location given for status code 302"),
+            ("/multiloc", "HTTP-HEADER-ERROR", "multiple \"location\" headers"),
+            ("/badscheme", "HTTP-CLIENT-UNKNOWN-PROTOCOL", "protocol 'ftp'"),
+            ("/nohost", "HTTP-CLIENT-REDIRECT-ERROR", "has no host"),
+            ("/nohost2", "HTTP-CLIENT-REDIRECT-ERROR", "has no host"),
+            ("/userinfo-only", "HTTP-CLIENT-REDIRECT-ERROR", "has no host"),
+            ("/badport", "PARSE-URL-ERROR|HTTP-CLIENT-URL-ERROR", "port"),
+            # a server can never send a request to a local UNIX domain socket
+            ("/unix", "HTTP-CLIENT-REDIRECT-ERROR", "names a UNIX domain socket"),
+            # a host that could inject data into a request
+            ("/badhost-space", "HTTP-CLIENT-REDIRECT-ERROR", "has an invalid host"),
+            ("/badhost-pct", "HTTP-CLIENT-REDIRECT-ERROR", "has an invalid host"),
+            ("/badhost-char", "HTTP-CLIENT-REDIRECT-ERROR", "has an invalid host"),
+        );
+        HTTPClient hc({"url": url_a});
+        foreach list<string> c in (cases) {
+            foreach string api in (("sync", "async")) {
+                try {
+                    if (api == "sync") {
+                        hc.get(c[0]);
+                    } else {
+                        drive(hc.startPollSendRecv("GET", c[0]));
+                    }
+                    fail(sprintf("%s %s: expected an exception", c[0], api));
+                } catch (hash<ExceptionInfo> ex) {
+                    assertRegex("^(" + c[1] + ")$", ex.err, sprintf("%s %s: %s", c[0], api, ex.desc));
+                    assertRegex(c[2], ex.desc, sprintf("%s %s", c[0], api));
+                }
+                # the client remains usable
+                assertEq("GET /ok", hc.get("/ok"));
+            }
+        }
+    }
+
+    crossOriginTest() {
+        # A -> B -> A: origin-bound headers are only sent to A
+        peer_a.setRedirect("/xo", 302, url_b + "/xo-b");
+        peer_b.setRedirect("/xo-b", 307, url_a + "/xo-final");
+        HTTPClient hc({"url": sprintf("http://user:pass@127.0.0.1:%d", port_a)});
+        hash<auto> hdr = {"Cookie": "c=1", "X-Custom": "v", "Host": "vhost.example"};
+        foreach hash<RequestResult> r in (requestBoth(hc, "GET", "/xo", NOTHING, hdr, \peer_a.clear(),
+                \peer_b.clear())) {
+            string msg = r.info.api;
+            assertEq(200, r.code, msg);
+            list<hash<ReceivedRequest>> a = peer_a.getRequests();
+            list<hash<ReceivedRequest>> b = peer_b.getRequests();
+            assertEq(("/xo", "/xo-final"), (map $1.target, a), msg);
+            assertEq(("/xo-b",), (map $1.target, b), msg);
+            foreach hash<ReceivedRequest> req in (a) {
+                assertEq("Basic dXNlcjpwYXNz", req.authorization, msg);
+                assertEq("c=1", req.cookie, msg);
+                assertEq("vhost.example", req.host, msg);
+                assertEq("v", req.custom, msg);
+            }
+            assertNothing(b[0].authorization, msg);
+            assertNothing(b[0].cookie, msg);
+            assertEq(sprintf("127.0.0.1:%d", port_b), b[0].host, msg);
+            assertEq("v", b[0].custom, msg);
+            # the request information never reports credentials
+            assertEq(url_a + "/xo", r.info.redirects[0].request_url, msg);
+            assertEq(url_a + "/xo-final", r.info."effective-url", msg);
+        }
+
+        # a caller-supplied Authorization header is bound to the origin as well
+        hc = new HTTPClient({"url": url_a});
+        foreach hash<RequestResult> r in (requestBoth(hc, "GET", "/xo", NOTHING, {"Authorization": "Bearer tok"},
+                \peer_a.clear(), \peer_b.clear())) {
+            assertEq(200, r.code);
+            assertEq(("Bearer tok", "Bearer tok"), (map $1.authorization, peer_a.getRequests()));
+            assertNothing(peer_b.getRequests()[0].authorization);
+        }
+
+        # user information in a redirect location is never used
+        peer_a.setRedirect("/xo-cred", 302, sprintf("http://evil:pw@127.0.0.1:%d/xo-plain", port_b));
+        foreach hash<RequestResult> r in (requestBoth(hc, "GET", "/xo-cred", NOTHING, NOTHING, \peer_b.clear())) {
+            assertEq(200, r.code);
+            assertNothing(peer_b.getRequests()[0].authorization);
+            assertEq(url_b + "/xo-plain", r.info.redirects[0].target_url);
+            assertEq(url_b + "/xo-plain", r.info."effective-url");
+        }
+
+        # an authentication challenge from another origin is not answered with the client's credentials
+        peer_a.setRedirect("/xo-401", 302, url_b + "/challenge");
+        peer_b.setRoute("/challenge", 401, {"WWW-Authenticate": "Basic realm=\"b\""});
+        hc = new HTTPClient({"url": sprintf("http://user:pass@127.0.0.1:%d", port_a)});
+        peer_b.clear();
+        assertThrows("HTTP-CLIENT-RECEIVE-ERROR", "HTTP status code 401", \hc.get(), "/xo-401");
+        assertEq(1, peer_b.getRequests().size());
+        assertNothing(peer_b.getRequests()[0].authorization);
+
+        # a same-origin redirect keeps the credentials
+        peer_a.setRedirect("/so", 302, "/so-final");
+        foreach hash<RequestResult> r in (requestBoth(hc, "GET", "/so", NOTHING, NOTHING, \peer_a.clear())) {
+            assertEq(200, r.code);
+            assertEq(("Basic dXNlcjpwYXNz", "Basic dXNlcjpwYXNz"), (map $1.authorization, peer_a.getRequests()));
+        }
+    }
+
+    streamedBodyTest() {
+        peer_a.setRedirect("/stream307", 307, "/stream-target");
+        peer_a.setRedirect("/stream303", 303, "/stream-target");
+        HTTPClient hc({"url": url_a});
+        # a streamed body cannot be sent again
+        assertThrows("HTTP-CLIENT-REDIRECT-ERROR", "the POST request body was streamed and cannot be sent again",
+            \hc.sendChunked(), (new BinaryOutputStream(), new BinaryInputStream(binary("streamed")), "POST", 4096,
+            "/stream307"));
+        # ... unless the redirect drops it
+        peer_a.clear();
+        BinaryOutputStream out();
+        hc.sendChunked(out, new BinaryInputStream(binary("streamed")), "POST", 4096, "/stream303", NOTHING, 0,
+            True);
+        assertEq("GET /stream-target", out.getData().toString());
+        assertEq(("POST", "GET"), (map $1.method, peer_a.getRequests()));
+        assertEq("streamed", peer_a.getRequests()[0].body);
+        # the client remains usable
+        assertEq("GET /ok", hc.get("/ok"));
+    }
+
+    contentDecodingTest() {
+        binary gz = gzip(BinaryData);
+        peer_a.setRoute("/gzip", 200, {"Content-Type": "application/octet-stream", "Content-Encoding": "gzip"}, gz);
+        peer_a.setRedirect("/to-gzip", 302, "/gzip");
+        peer_a.setRoute("/badgzip", 200, {"Content-Type": "application/octet-stream", "Content-Encoding": "gzip"},
+            binary("not gzip data"));
+        peer_a.setRoute("/unknown-encoding", 200, {"Content-Type": "application/octet-stream",
+            "Content-Encoding": "x-unknown"}, BinaryData);
+        peer_a.setRoute("/latin1", 200, {"Content-Type": "text/plain; charset=ISO-8859-1"}, <e4f6fc>);
+        peer_a.setRoute("/empty", 200, {"Content-Type": "text/plain"}, "");
+
+        HTTPClient hc({"url": url_a});
+        foreach hash<RequestResult> r in (requestBoth(hc, "GET", "/to-gzip")) {
+            assertEq(BinaryData, toBin(r.body), r.info.api);
+            assertEq(BinaryData, toBin(r.info."response-body"), r.info.api);
+            assertEq("gzip", r.info."response-headers-raw"."Content-Encoding", r.info.api);
+        }
+        foreach hash<RequestResult> r in (requestBoth(hc, "GET", "/unknown-encoding")) {
+            assertEq(BinaryData, toBin(r.body), r.info.api);
+        }
+        foreach hash<RequestResult> r in (requestBoth(hc, "GET", "/latin1")) {
+            assertEq(<e4f6fc>, toBin(r.body), r.info.api);
+        }
+        foreach hash<RequestResult> r in (requestBoth(hc, "GET", "/empty")) {
+            # HttpServer sends an empty 200 response as 204 No Content
+            assertEq(204, r.code, r.info.api);
+            assertEq(0, r.body.size(), r.info.api);
+        }
+
+        # a body that cannot be decoded raises the same error with both APIs
+        string err;
+        try {
+            hc.get("/badgzip");
+            fail("expected an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            err = ex.err;
+        }
+        AbstractPollOperation op = hc.startPollSendRecv("GET", "/badgzip");
+        try {
+            drive(op);
+            fail("expected an exception");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq(err, ex.err);
+            assertRegex("while decompressing 'gzip' Content-Encoding", ex.desc);
+        }
+        assertEq("GET /ok", hc.get("/ok"));
+
+        # encoding_passthru returns the encoded body with both APIs
+        hc = new HTTPClient({"url": url_a, "encoding_passthru": True});
+        foreach hash<RequestResult> r in (requestBoth(hc, "GET", "/gzip")) {
+            assertEq(gz, toBin(r.body), r.info.api);
+        }
+        foreach hash<RequestResult> r in (requestBoth(hc, "GET", "/badgzip")) {
+            assertEq(binary("not gzip data"), toBin(r.body), r.info.api);
+        }
+    }
+
+    controllerTest() {
+        # redirects followed by an operation driven by the async I/O controller, where the connection for the
+        # next request is acquired off the async I/O thread
+        peer_a.setRedirect("/ctl-cross", 307, url_b + "/ctl-b");
+        peer_b.setRedirect("/ctl-b", 308, url_a + "/ctl-final");
+        peer_a.setRedirect("/ctl-same", 307, "ctl-final?same");
+        HTTPClient hc({"url": sprintf("http://user:pass@127.0.0.1:%d", port_a)});
+        foreach string path in (("/ctl-cross", "/ctl-same")) {
+            peer_a.clear();
+            peer_b.clear();
+            foreach bool wrapped in ((False, True)) {
+                AbstractPollOperation op = hc.startPollSendRecv("POST", path, "ctl-body");
+                hash<SocketPollResultInfo> result = execOp(hc, op, wrapped);
+                assertNothing(result.ex, path);
+                assertTrue(op.goalReached(), path);
+                hash<auto> out = op.getOutput();
+                assertEq(200, out.code, path);
+                string target = path == "/ctl-cross" ? "/ctl-final" : "/ctl-final?same";
+                assertEq("POST " + target, toBin(out."response-body").toString(), path);
+                assertEq(url_a + target, out.info."effective-url", path);
+                assertEq(path == "/ctl-cross" ? 2 : 1, out.info.redirects.size(), path);
+            }
+            if (path == "/ctl-cross") {
+                assertNothing(peer_b.getRequests()[0].authorization);
+                assertEq("ctl-body", peer_b.getRequests()[0].body);
+            }
+            assertEq("Basic dXNlcjpwYXNz", peer_a.getRequests().last().authorization);
+        }
+        # an error while following a redirect is reported by the controller
+        peer_a.setRedirect("/ctl-bad", 302, "ftp://127.0.0.1/x");
+        hash<SocketPollResultInfo> result = execOp(hc, hc.startPollSendRecv("GET", "/ctl-bad"), False);
+        assertEq("HTTP-CLIENT-UNKNOWN-PROTOCOL", result.ex.err);
+        # a connection failure for the redirect target is reported by the controller
+        Socket closed_listener();
+        closed_listener.bind("127.0.0.1:0");
+        int closed_port = closed_listener.getSocketInfo().port;
+        closed_listener.close();
+        peer_a.setRedirect("/ctl-refused", 302, sprintf("http://127.0.0.1:%d/x", closed_port));
+        result = execOp(hc, hc.startPollSendRecv("GET", "/ctl-refused"), False);
+        assertTrue(exists result.ex);
+        assertEq("GET /ok", hc.get("/ok"));
+    }
+
+    abortTest() {
+        # abort an operation waiting for the response to a redirected request
+        peer_a.setRedirect("/to-block", 302, url_b + "/block");
+        peer_b.block.inc();
+        on_exit {
+            if (peer_b.block.getCount()) {
+                peer_b.block.dec();
+            }
+        }
+        HTTPClient hc({"url": url_a});
+        AbstractPollOperation op = hc.startPollSendRecv("GET", "/to-block");
+        *hash<SocketPollInfo> pi;
+        # drive the operation until the redirected request has been received
+        while (!peer_b.blocked.size()) {
+            pi = op.continuePoll();
+            assertTrue(exists pi);
+            Socket::poll((pi,), 20000);
+        }
+        assertEq("/block", peer_b.blocked.get());
+        op.abort();
+        assertTrue(op.goalReached());
+        assertNothing(op.getOutput());
+        peer_b.block.dec();
+        # the client remains usable
+        assertEq("GET /ok", hc.get("/ok"));
+        foreach hash<RequestResult> r in (requestBoth(hc, "GET", "/chain/2")) {
+            assertEq(200, r.code);
+        }
+    }
+
+    eventTest() {
+        Queue q();
+        HTTPClient hc({"url": url_a});
+        hc.setEventQueue(q);
+        foreach string api in (("sync", "async")) {
+            if (api == "sync") {
+                hc.get("/chain/2");
+            } else {
+                drive(hc.startPollSendRecv("GET", "/chain/2"));
+            }
+            list<string> locations = ();
+            while (q.size()) {
+                hash<auto> ev = q.get();
+                if (ev.event == EVENT_HTTP_REDIRECT) {
+                    locations += ev.location;
+                    assertEq("Found", ev.status_message, api);
+                }
+            }
+            assertEq(("/chain/1", "/chain/0"), locations, api);
+        }
+    }
+
+    http2Test() {
+        HttpServer server(<HttpServerOptionInfo>{});
+        on_exit server.stop();
+        RedirectPeer peer();
+        server.setDefaultHandler("h2", peer);
+        int port = server.addListener(<HttpListenerOptionInfo>{
+            "node": "127.0.0.1",
+            "service": 0,
+            "cert": new SSLCertificate(CertPem),
+            "key": new SSLPrivateKey(KeyPem),
+            "http_version": "2.0",
+        }).port;
+        server.waitForAsyncIo();
+        string url = sprintf("https://127.0.0.1:%d", port);
+        peer.setRedirect("/h2/old/x", 302, "../new/y?z=1#f");
+        peer.setRoute("/h2/new/y?z=1", 200, {"Content-Type": "text/plain", "Set-Cookie": ("a=1", "b=2")}, "h2 body");
+        HTTPClient hc({"url": url, "ssl_verify_cert": False, "http_version": "2.0"});
+        foreach hash<RequestResult> r in (requestBoth(hc, "GET", "/h2/old/x")) {
+            string msg = r.info.api;
+            assertEq(200, r.code, msg);
+            assertEq("h2 body", toBin(r.body).toString(), msg);
+            assertEq(url + "/h2/new/y?z=1", r.info."effective-url", msg);
+            assertEq("../new/y?z=1#f", r.info.redirects[0].location, msg);
+            # HTTP/2 carries no reason phrase; the standard one is reported
+            assertEq("Found", r.info.redirects[0].status_message, msg);
+            assertEq("Found", r.info."redirect-message-1", msg);
+            # HTTP/2 headers have lower-case names on the wire
+            assertEq(("a=1", "b=2"), r.info."response-headers-raw"."set-cookie", msg);
+        }
+    }
+
+    #! Makes the same request with the blocking and the poll APIs and returns both results
+    private list<hash<RequestResult>> requestBoth(HTTPClient hc, string method, string path, *string body,
+            *hash<auto> hdr, *code reset1, *code reset2) {
+        list<hash<RequestResult>> rv = ();
+        foreach string api in (("sync", "async")) {
+            if (reset1) {
+                reset1();
+            }
+            if (reset2) {
+                reset2();
+            }
+            if (api == "sync") {
+                hash<auto> info;
+                hash<auto> resp = hc.send(body, method, path, hdr, False, \info);
+                rv += <RequestResult>{
+                    "code": resp.status_code,
+                    "body": resp.body ?? binary(),
+                    "info": info + {"api": api},
+                };
+            } else {
+                AbstractPollOperation op = exists body
+                    ? hc.startPollSendRecv(method, path, body, hdr)
+                    : hc.startPollSendRecv(method, path, NOTHING, hdr);
+                hash<auto> out = drive(op);
+                rv += <RequestResult>{
+                    "code": out.code,
+                    "body": out."response-body" ?? binary(),
+                    "info": out.info + {"api": api},
+                };
+            }
+        }
+        return rv;
+    }
+
+    #! Serves a single raw HTTP response on a connection and reports the request target received
+    static serveRaw(Socket listener, Queue served, string response) {
+        on_exit {
+            listener.close();
+        }
+        *Socket s = listener.accept(20s);
+        if (!s) {
+            served.push("<no connection>");
+            return;
+        }
+        on_exit {
+            s.close();
+        }
+        served.push(s.readHTTPHeader(20s).path);
+        s.send(response, 20s);
+    }
+
+    sandboxTest() {
+        # the sandbox allows connections to server A only; a redirect to server B must be denied however the
+        # operation is driven, including when a callback worker of the async I/O controller acquires the connection
+        # for a request made by module code on behalf of the sandboxed Program
+        SandboxManager sm();
+        sm.setNetworkDefaultPolicy(True);
+        sm.addNetworkAllowedPort(port_a);
+        peer_a.setRedirect("/sb-cross", 302, url_b + "/sb-b");
+        peer_a.setRedirect("/sb-same", 302, "/sb-final");
+        Program p(PO_NO_CHILD_PO_RESTRICTIONS);
+        p.setSandboxManager(sm);
+        p.importFunction("sandbox_request");
+        p.parse("%modern\nauto sub run(string mode, string url, string path) { return sandbox_request(mode, url, "
+            "path); }", "sandbox-redirect");
+        peer_b.clear();
+        foreach string mode in (("sync", "poll", "controller")) {
+            assertThrows("NETWORK-ACCESS-DENIED", \p.callFunction(), ("run", mode, url_a, "/sb-cross"), mode);
+            # a redirect that stays on the allowed server is followed
+            assertEq("GET /sb-final", toBin(p.callFunction("run", mode, url_a, "/sb-same")).toString(), mode);
+        }
+        assertEq((), peer_b.getRequests(), "server B was never reached");
+    }
+
+    unixSocketTest() {
+%ifdef Windows
+        testSkip("skipping because UNIX socket URLs are not available on Windows");
+%endif
+        string path = sprintf("%s%sqore-redirect-%d-%s.sock", tmp_location(), DirSep, getpid(),
+            get_random_string(12));
+        string encoded = encode_url(path, True);
+        on_exit unlink(path);
+        Socket server();
+        server.bindUNIX(path);
+        server.listen();
+        on_exit server.close();
+
+        # serves requests with one connection per request until the "/stop" request is received
+        Queue requests();
+        Counter running(1);
+        background sub () {
+            on_exit running.dec();
+            try {
+                while (True) {
+                    Socket peer = server.accept(30s);
+                    hash<auto> hdr = peer.readHTTPHeader(30s);
+                    requests.push(hdr.path);
+                    string response;
+                    switch (hdr.path) {
+                        case "/first":
+                            response = sprintf("HTTP/1.1 302 Found\r\nLocation: http://socket=%s/second\r\n", encoded);
+                            break;
+                        case "/other":
+                            response = "HTTP/1.1 302 Found\r\nLocation: http://socket=%2Ftmp%2Fqore-other.sock/x\r\n";
+                            break;
+                        default:
+                            response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n";
+                            break;
+                    }
+                    string body = hdr.path == "/second" ? "second" : "";
+                    peer.send(response + sprintf("Content-Length: %d\r\nConnection: close\r\n\r\n%s", body.size(),
+                        body));
+                    peer.close();
+                    if (hdr.path == "/stop") {
+                        break;
+                    }
+                }
+            } catch (hash<ExceptionInfo> ex) {
+                requests.push(ex);
+            }
+        }();
+        on_exit {
+            try {
+                HTTPClient stop_client({"url": "http://socket=" + encoded, "timeout": 5s});
+                stop_client.get("/stop");
+            } catch (hash<ExceptionInfo> ex) {
+            }
+            running.waitForZero();
+        }
+
+        HTTPClient hc({"url": "http://socket=" + encoded, "timeout": 5s});
+        foreach string api in (("sync", "async")) {
+            # a request on a UNIX domain socket can be redirected to the same socket
+            auto body = api == "sync"
+                ? hc.get("/first")
+                : drive(hc.startPollSendRecv("GET", "/first"))."response-body";
+            assertEq("second", toBin(body).toString(), api);
+            assertEq("/first", requests.get(5s), api);
+            assertEq("/second", requests.get(5s), api);
+            # but not to another socket
+            assertThrows("HTTP-CLIENT-REDIRECT-ERROR", "names a UNIX domain socket",
+                api == "sync" ? \hc.get() : sub (string p) { drive(hc.startPollSendRecv("GET", p)); }, "/other",
+                api);
+            assertEq("/other", requests.get(5s), api);
+        }
+    }
+
+    schemeChangeTest() {
+        # a redirect to https on the same host and port must use a new TLS connection, never the pooled plaintext
+        # connection that received the redirect; server A does not speak TLS, so the request fails
+        peer_a.setRedirect("/to-https", 302, sprintf("https://127.0.0.1:%d/https-target", port_a));
+        HTTPClient hc({"url": url_a, "connect_timeout": 10s, "timeout": 10s});
+        foreach string api in (("sync", "async")) {
+            peer_a.clear();
+            try {
+                if (api == "sync") {
+                    hc.get("/to-https");
+                } else {
+                    drive(hc.startPollSendRecv("GET", "/to-https"));
+                }
+                fail(api + ": the redirected request succeeded over a plaintext connection");
+            } catch (hash<ExceptionInfo> ex) {
+                assertNeq("TEST-TIMEOUT", ex.err, api);
+            }
+            assertEq(("/to-https",), (map $1.target, peer_a.getRequests()), api);
+        }
+    }
+
+    #! Returns data as a binary value
+    static binary toBin(auto d) {
+        return d.typeCode() == NT_BINARY ? d : binary(d);
+    }
+
+    #! Drives a poll operation on this thread until it completes and returns its output
+    static auto drive(AbstractPollOperation op) {
+        date deadline = now_us() + 30s;
+        while (!op.goalReached()) {
+            *hash<SocketPollInfo> pi = op.continuePoll();
+            int remaining = (deadline - now_us()).durationMilliseconds();
+            if (remaining <= 0) {
+                op.abort();
+                throw "TEST-TIMEOUT", sprintf("poll operation %y did not complete (state %y)", op.getGoal(),
+                    op.getState());
+            }
+            if (pi) {
+                Socket::poll((pi,), remaining);
+            }
+        }
+        return op.getOutput();
+    }
+
+    #! Runs a poll operation with the async I/O controller and returns the result
+    private hash<SocketPollResultInfo> execOp(HTTPClient hc, AbstractPollOperation op, bool wrapped) {
+        hash<SocketPollOperationInfo> info = <SocketPollOperationInfo>{
+            "sock": hc,
+            "spop": op,
+            "to": 30s,
+            "owner": "http-client-redirect-test",
+        };
+        if (!wrapped) {
+            Queue q = controller.submit(info);
+            return q.get();
+        }
+        Counter done(1);
+        hash<SocketPollResultInfo> rv;
+        info.spop = new DelegatingPollOperation(op, sub (hash<SocketPollResultInfo> result) {
+            rv = result;
+            done.dec();
+        });
+        controller.submit(info);
+        done.waitForZero();
+        return rv;
+    }
+}

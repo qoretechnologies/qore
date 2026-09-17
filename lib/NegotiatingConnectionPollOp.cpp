@@ -138,6 +138,10 @@ QoreHashNode* NegotiatingConnectionPollOpPriv::handleConnecting(ExceptionSink* x
         return nullptr;
     }
 
+    if (checkConnectDeadline(xsink)) {
+        return nullptr;
+    }
+
     ExceptionSink poll_xsink;
     QoreHashNode* poll_info = current_op->continuePoll(&poll_xsink);
     if (poll_xsink) {
@@ -158,7 +162,7 @@ QoreHashNode* NegotiatingConnectionPollOpPriv::handleConnecting(ExceptionSink* x
         // so it re-arms epoll for the right events.
         ASYNC_IO_TRACE("handleConnecting still-connecting target='%s:%d' priv=%p elapsed_us=%lld\n",
             target_host.c_str(), target_port, (void*)this, (long long)elapsed_us);
-        return poll_info;
+        return clampConnectDeadline(poll_info, xsink);
     }
 
     if (!current_op->goalReached()) {
@@ -222,6 +226,48 @@ QoreHashNode* NegotiatingConnectionPollOpPriv::handleConnecting(ExceptionSink* x
     // the socket.
     neg_state.store(NegState::DECIDED, std::memory_order_release);
     return nullptr;
+}
+
+int NegotiatingConnectionPollOpPriv::checkConnectDeadline(ExceptionSink* xsink) {
+    if (connect_timeout_us <= 0) {
+        return 0;
+    }
+    int64_t now_us = q_get_monotonic_us();
+    int64_t deadline_us = connect_deadline_us.load(std::memory_order_acquire);
+    if (!deadline_us) {
+        connect_deadline_us.store(now_us + connect_timeout_us, std::memory_order_release);
+        return 0;
+    }
+    if (now_us < deadline_us) {
+        return 0;
+    }
+    // the same error as the blocking acquisition has always raised
+    QoreStringMaker desc("ALPN negotiation with %s:%d timed out after %lld ms (neg state: %s)",
+        target_host.c_str(), target_port, (long long)(connect_timeout_us / 1000), getStateName());
+    setError("HTTPCLIENT-NEGOTIATE-TIMEOUT", desc.c_str(), xsink);
+    return -1;
+}
+
+QoreHashNode* NegotiatingConnectionPollOpPriv::clampConnectDeadline(QoreHashNode* poll_info,
+        ExceptionSink* xsink) {
+    int64_t deadline_us = connect_deadline_us.load(std::memory_order_acquire);
+    if (!poll_info || deadline_us <= 0) {
+        return poll_info;
+    }
+    int64_t now_us = q_get_monotonic_us();
+    int64_t remaining_ms = now_us >= deadline_us
+        ? 0
+        : (deadline_us - now_us + 999) / 1000;
+    QoreValue ptv = poll_info->getKeyValue("poll_timeout_ms");
+    if (ptv.getType() == NT_INT) {
+        int64_t current_ms = ptv.getAsBigInt();
+        // < 0 means "no bound", so it always loses to the connect deadline
+        if (current_ms >= 0 && current_ms <= remaining_ms) {
+            return poll_info;
+        }
+    }
+    poll_info->setKeyValue("poll_timeout_ms", remaining_ms, xsink);
+    return poll_info;
 }
 
 void NegotiatingConnectionPollOpPriv::setError(const char* err, const char* desc,
@@ -293,10 +339,10 @@ void NegotiatingConnectionPollOpPriv::notifyOwnerClosed() {
 
 NegotiatingHttpClientConnection::NegotiatingHttpClientConnection(
         const char* target_host, int target_port,
-        const Http1SslConfig& ssl_config, ExceptionSink* xsink)
+        const Http1SslConfig& ssl_config, int connect_timeout_ms, ExceptionSink* xsink)
     : HttpClientConnectionBase(target_host, target_port,
           /* ssl_required */ true) {
-    if (buildAndSubmit(ssl_config, xsink)) {
+    if (buildAndSubmit(ssl_config, connect_timeout_ms, xsink)) {
         return;
     }
 }
@@ -323,7 +369,7 @@ NegotiatingHttpClientConnection::~NegotiatingHttpClientConnection() {
 }
 
 int NegotiatingHttpClientConnection::buildAndSubmit(const Http1SslConfig& ssl_config,
-        ExceptionSink* xsink) {
+        int connect_timeout_ms, ExceptionSink* xsink) {
     QoreProgram* pgm = getProgram();
 
     // 1. Create the socket priv and its QoreObject wrapper.
@@ -392,6 +438,9 @@ int NegotiatingHttpClientConnection::buildAndSubmit(const Http1SslConfig& ssl_co
             /* owner_conn */ this),
         xsink);
     NegotiatingConnectionPollOpPriv* priv_raw = *priv_holder;
+    if (connect_timeout_ms > 0) {
+        priv_raw->setConnectTimeout((int64_t)connect_timeout_ms * 1000);
+    }
 
     // 7. Wrap the priv in a QoreObject under QC_SOCKETPOLLOPERATIONBASE.
     //    The controller's getReferencedPrivateData(CID_SOCKETPOLLOPERATIONBASE)
@@ -543,13 +592,17 @@ HttpClientConnectionBase* NegotiatingHttpClientConnection::takeOver(
 
     HttpClientConnectionBase* concrete = nullptr;
     if (nominal_protocol == 2) {
+        // the HTTP/2 connection is not ready until the peer has answered its preface; that exchange completes
+        // this connect phase and keeps its deadline
         concrete = new Http2ClientConnection(
             /* adopted_sock_obj */ transferred_sock_obj,
             /* adopted_sock_priv */ transferred_sock_priv,
             /* target_host */ target_host,
             /* target_port */ target_port,
             /* max_concurrent_streams */ max_concurrent_streams,
-            xsink, mgr);
+            xsink, mgr,
+            neg_priv ? neg_priv->getConnectTimeoutUs() : 0,
+            neg_priv ? neg_priv->getConnectDeadlineUs() : 0);
     } else {
         concrete = new Http1ClientConnection(
             /* adopted_sock_obj */ transferred_sock_obj,

@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -301,6 +301,7 @@ if (f.open(fn, O_CREAT | O_TRUNC | O_WRONLY, 0644, "ISO-8859-1"))
     @return 0 = no error, -1 = see errno() and strerror() for the error message
 
     @throw ILLEGAL-EXPRESSION this exception is only thrown if called with a system constant object (@ref stdin, @ref stdout, @ref stderr) when @ref no-terminal-io is set
+    @throw FILESYSTEM-ACCESS-DENIED the @ref Qore::SandboxManager "sandbox" filesystem policy does not allow the file to be opened with the given flags
 
     @see File::open2() for a version of this method that throws an exception when errors occur opening the file
  */
@@ -309,7 +310,7 @@ int File::open(string path, softint flags = O_RDONLY, softint mode = 0666, *stri
       return QoreValue();
 
    const QoreEncoding *qe = encoding ? QEM.findCreate(encoding) : f->getEncoding();
-   return f->open(path->getBuffer(), flags, mode, qe);
+   return f->openCheckAccess(xsink, path->getBuffer(), flags, mode, qe);
 }
 
 //! Opens a file in a particular mode; throws an exception on failure

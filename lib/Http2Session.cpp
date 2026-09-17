@@ -557,7 +557,7 @@ int Http2Session::submitSettings(const Http2Settings& settings, ExceptionSink* x
     return 0;
 }
 
-std::vector<nghttp2_nv> Http2Session::makeNv(const strcase_str_map_t& headers) {
+std::vector<nghttp2_nv> Http2Session::makeNv(const qore_http_header_pairs_t& headers) {
     std::vector<nghttp2_nv> nva;
     nva.reserve(headers.size());
 
@@ -879,7 +879,7 @@ int Http2Session::submitResponseImpl(int32_t stream_id, int status_code,
 }
 
 int Http2Session::submitResponseStreaming(int32_t stream_id, int status_code,
-        const strcase_str_map_t& headers, ExceptionSink* xsink) {
+        const qore_http_header_pairs_t& headers, ExceptionSink* xsink) {
     // is_server is set once at construction and never changes — safe to read without lock
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit response on client session");
@@ -933,7 +933,7 @@ int Http2Session::submitResponseStreaming(int32_t stream_id, int status_code,
 }
 
 int32_t Http2Session::submitPushPromise(int32_t stream_id, const char* path,
-        const strcase_str_map_t& headers, ExceptionSink* xsink) {
+        const qore_http_header_pairs_t& headers, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit push promise on client session");
@@ -970,18 +970,10 @@ int32_t Http2Session::submitPushPromise(int32_t stream_id, const char* path,
     };
     nva.push_back(nv_scheme);
 
-    // Add regular headers
-    for (const auto& h : headers) {
-        if (h.first[0] == ':') {
-            continue;
-        }
-        nghttp2_nv nv = {
-            reinterpret_cast<uint8_t*>(const_cast<char*>(h.first.c_str())),
-            reinterpret_cast<uint8_t*>(const_cast<char*>(h.second.c_str())),
-            h.first.size(), h.second.size(), NGHTTP2_NV_FLAG_NONE
-        };
-        nva.push_back(nv);
-    }
+    // Add regular headers; HTTP/2 field names are lower case, and hop-by-hop headers are forbidden
+    std::vector<std::string> lowered_names;
+    lowered_names.reserve(headers.size());
+    buildRegularHeaders(nva, lowered_names, headers, false /* skip_host */);
 
     int32_t promised_stream_id = nghttp2_submit_push_promise(session, NGHTTP2_FLAG_NONE,
         stream_id, nva.data(), nva.size(), nullptr);
@@ -2443,7 +2435,7 @@ int Http2Session::sendStreamData(int32_t stream_id, const void* data, size_t len
 }
 
 int Http2Session::submitTrailers(int32_t stream_id,
-        const strcase_str_map_t& trailers, ExceptionSink* xsink) {
+        const qore_http_header_pairs_t& trailers, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
 
     if (http2DebugEnabled()) {
@@ -2551,7 +2543,7 @@ void Http2Session::setStreamType(int32_t stream_id, Http2StreamType type) {
 }
 
 int Http2Session::submitConnectResponse(int32_t stream_id, int status_code,
-        const strcase_str_map_t& headers, ExceptionSink* xsink) {
+        const qore_http_header_pairs_t& headers, ExceptionSink* xsink) {
     std::lock_guard<std::recursive_mutex> lg(m);
     if (!is_server) {
         xsink->raiseException("HTTP2-ERROR", "cannot submit CONNECT response on client session");

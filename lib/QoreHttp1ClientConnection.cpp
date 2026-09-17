@@ -269,6 +269,11 @@ int Http1ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
             /* conn_priv */ this),
         xsink);
     Http1ClientPollOperationPriv* priv_raw = *priv_holder;
+    // the operation enforces the connect timeout on the I/O thread, so a stalled connect fails even when no
+    // caller waits for the connection
+    if (manager_ && manager_->getOptions().connect_timeout_ms > 0) {
+        priv_raw->setConnectTimeout((int64_t)manager_->getOptions().connect_timeout_ms * 1000);
+    }
 
     // 5. Wrap the priv in a QoreObject.
     ReferenceHolder<QoreObject> poll_obj_holder(

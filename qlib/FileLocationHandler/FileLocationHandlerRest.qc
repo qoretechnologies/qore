@@ -1,7 +1,7 @@
 # -*- mode: qore; indent-tabs-mode: nil -*-
 #! @file FileLocationHandlerRest.qc module for returning file data from a URL-like location string
 
-/*  FileLocationHandlerRest Copyright 2021 - 2024 Qore Technologies, s.r.o.
+/*  FileLocationHandlerRest Copyright 2021 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -192,6 +192,7 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
             opts.headers.Accept = "*/*";
         }
         object hc = getRestClient(scheme, location, opts, \path);
+        checkClientMethods(hc, ("doRequest",));
         auto val = hc.doRequest(opts.method ? opts.method.upr() : "GET", path, NOTHING, NOTHING, True,
             opts.headers).body;
         if (!exists val) {
@@ -219,6 +220,7 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
     private binary getBinaryFileImpl(string scheme, string location, *hash<auto> opts) {
         string path;
         object client = getRestClient(scheme, location, opts, \path);
+        checkClientMethods(client, ("doRequest",));
         auto val = client.doRequest(opts.method ? opts.method.upr() : "GET", path, NOTHING, NOTHING, True,
             opts.headers).body;
         if (!exists val) {
@@ -245,8 +247,98 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
             *hash<auto> opts) {
         string path;
         object client = getRestClient(scheme, location, opts, \path, False);
+        checkClientMethods(client, ("startPollSendRecv",));
         return new HttpPollWrapper(client.startPollSendRecv(opts.method ? opts.method.upr() : "GET", path, NOTHING,
             opts.headers));
+    }
+
+    #! Retrieves a resource and its metadata from the given location
+    /** The request is made with the REST client's request processing (authentication, token refresh, and
+        response validation); the data is the response body before deserialization.  An HTTP error status raises
+        \c HTTP-CLIENT-RECEIVE-ERROR, as for \c http:// locations, unless the \c error_passthru option is enabled.
+
+        @param scheme the scheme being used
+        @param location the location string without the scheme
+        @param opts read options
+
+        @return the resource's data and metadata
+
+        @note This method can throw any exception related to making a REST call
+
+        @since FileLocationHandler 3.0
+    */
+    private hash<FileResourceResult> getResourceImpl(string scheme, string location, *hash<auto> opts) {
+        string path;
+        object client = getRestClient(scheme, location, opts, \path);
+        checkClientMethods(client, ("doRequest",));
+        hash<auto> info;
+        client.doRequest(getReadMethod(opts), path, NOTHING, \info, False, opts.headers);
+        return FileLocationHandlerHttp::getResourceResult(getResourceRequestedLocation(scheme, location),
+            info."response-body-raw", info);
+    }
+
+    #! Retrieves an I/O poller to retrieve a resource and its metadata from the given location
+    /** The poller uses the REST client's asynchronous request processing where the client provides it, and
+        reports the same result and errors as @ref getResourceImpl() without blocking
+
+        @param scheme the scheme being used
+        @param location the location string without the scheme
+        @param opts read options
+
+        @return an I/O poller whose output is the resource's data and metadata
+
+        @since FileLocationHandler 3.0
+    */
+    private Qore::AbstractPollOperation<hash<FileResourceResult>> getResourcePollerImpl(string scheme,
+            string location, *hash<auto> opts) {
+        string path;
+        object client = getRestClient(scheme, location, opts, \path, False);
+        *string requested_location = getResourceRequestedLocation(scheme, location);
+        if (!client.hasCallableMethod("startPollDoRequest")) {
+            # a client providing only the HTTP poll API
+            checkClientMethods(client, ("startPollSendRecv", "getErrorPassthru"));
+            bool error_passthru = client.getErrorPassthru();
+            return new FileResourcePollOperation(client.startPollSendRecv(getReadMethod(opts), path, NOTHING,
+                    opts.headers),
+                hash<FileResourceResult> sub (auto output) {
+                    return FileLocationHandlerHttp::getPollResourceResult(requested_location, output,
+                        error_passthru);
+                });
+        }
+        object op = client.startPollDoRequest(getReadMethod(opts), path, NOTHING, False, opts.headers);
+        return new RestResourcePollOperation(op, hash<FileResourceResult> sub (auto output) {
+            hash<auto> info = op.getInfo();
+            return FileLocationHandlerHttp::getResourceResult(requested_location, info."response-body-raw", info);
+        });
+    }
+
+    #! Returns the requested location of a resource, or @ref nothing for a bound handler
+    /** For a bound handler the location is a path that the client prepares with its connection and base paths, so
+        the requested location is the URL of the first request made; see
+        @ref FileLocationHandlerHttp::getResourceResult()
+    */
+    private *string getResourceRequestedLocation(string scheme, string location) {
+        return bound_client ? NOTHING : AbstractFileLocationHandler::getRequestedLocation(scheme, location);
+    }
+
+    #! Raises an exception if the client does not provide the given methods
+    /** A handler can be bound to any REST client object, but its operations use the request methods of
+        @ref RestClient::RestClient "RestClient"
+
+        @throw UNIMPLEMENTED the client does not provide a method required by the operation
+    */
+    private static checkClientMethods(object client, list<string> methods) {
+        foreach string method in (methods) {
+            if (!client.hasCallableMethod(method)) {
+                throw "UNIMPLEMENTED", sprintf("REST client class %y does not provide the %s() method required by "
+                    "this operation", client.className(), method);
+            }
+        }
+    }
+
+    #! Returns the read method
+    private static string getReadMethod(*hash<auto> opts) {
+        return opts.method ? opts.method.upr() : "GET";
     }
 
     #! Returns a stream reader for the file's data at the given location
@@ -290,6 +382,7 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
     private writeFileImpl(string scheme, string location, data contents, *hash<auto> opts) {
         string path;
         object client = getRestClient(scheme, location, opts, \path);
+        checkClientMethods(client, ("doRequest",));
         client.doRequest(opts.method ? opts.method.upr() : "POST", path, contents, NOTHING, True, opts.headers);
     }
 
@@ -391,6 +484,40 @@ class FileLocationHandlerRest inherits AbstractFileLocationHandler {
             client.connect();
         }
         return client;
+    }
+}
+
+#! An I/O poller returning a resource retrieved with a REST client's asynchronous request processing
+/** An HTTP error status is raised as \c HTTP-CLIENT-RECEIVE-ERROR, as a blocking resource request raises it
+
+    @since FileLocationHandler 3.0
+*/
+public class RestResourcePollOperation inherits FileResourcePollOperation {
+    #! Creates the poller
+    /** @param op the REST request poller; its errors for HTTP error responses are raised as
+        \c HTTP-CLIENT-RECEIVE-ERROR
+        @param convert converts the output of \a op into the result
+    */
+    constructor(Qore::AbstractPollOperation op, code<hash<FileResourceResult>(auto)> convert)
+            : FileResourcePollOperation(op, convert) {
+    }
+
+    #! Continues the retrieval
+    /** @throw HTTP-CLIENT-RECEIVE-ERROR the response has an HTTP error status
+    */
+    *hash<SocketPollInfo> continuePoll() {
+        try {
+            return FileResourcePollOperation::continuePoll();
+        } catch (hash<ExceptionInfo> ex) {
+            # the REST client reports an error status as REST-RESPONSE-ERROR when error responses are not decoded;
+            # a blocking request reports it as HTTP-CLIENT-RECEIVE-ERROR
+            if (ex.err == "REST-RESPONSE-ERROR" && ex.arg.typeCode() == NT_HASH && ex.arg.status_code.intp()
+                && (ex.arg.status_code < 100 || ex.arg.status_code >= 300)) {
+                throw "HTTP-CLIENT-RECEIVE-ERROR", sprintf("HTTP status code %d received: message: %s",
+                    ex.arg.status_code, ex.arg.status_message ?? "<no message>"), ex.arg - "decoded_body";
+            }
+            rethrow;
+        }
     }
 }
 

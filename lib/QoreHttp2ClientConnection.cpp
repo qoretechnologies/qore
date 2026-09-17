@@ -72,14 +72,16 @@ Http2ClientConnection::Http2ClientConnection(const char* target_host, int target
 Http2ClientConnection::Http2ClientConnection(QoreObject* adopted_sock_obj,
         QoreSocketObject* adopted_sock_priv,
         std::string target_host, int target_port, int max_concurrent_streams,
-        ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr)
+        ExceptionSink* xsink, HttpClientConnectionManagerBase* mgr, int64_t connect_timeout_us,
+        int64_t connect_deadline_us)
     : HttpClientConnectionBase(std::move(target_host), target_port,
           /* ssl_required */ true),
       max_concurrent_streams_(max_concurrent_streams) {
     if (mgr) {
         setManager(mgr);
     }
-    if (buildAndSubmitAdopted(adopted_sock_obj, adopted_sock_priv, xsink)) {
+    if (buildAndSubmitAdopted(adopted_sock_obj, adopted_sock_priv, connect_timeout_us, connect_deadline_us,
+            xsink)) {
         return;
     }
 }
@@ -173,6 +175,11 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
             /* conn_priv */ this),
         xsink);
     Http2ClientPollOperationPriv* priv_raw = *priv_holder;
+    // the operation enforces the connect timeout on the I/O thread, so a stalled connect fails even when no
+    // caller waits for the connection
+    if (manager_ && manager_->getOptions().connect_timeout_ms > 0) {
+        priv_raw->setConnectTimeout((int64_t)manager_->getOptions().connect_timeout_ms * 1000);
+    }
 
     // 5. Wrap the priv in a QoreObject.
     ReferenceHolder<QoreObject> poll_obj_holder(
@@ -201,7 +208,8 @@ int Http2ClientConnection::buildAndSubmit(ExceptionSink* xsink) {
 }
 
 int Http2ClientConnection::buildAndSubmitAdopted(QoreObject* adopted_sock_obj,
-        QoreSocketObject* adopted_sock_priv, ExceptionSink* xsink) {
+        QoreSocketObject* adopted_sock_priv, int64_t connect_timeout_us, int64_t connect_deadline_us,
+        ExceptionSink* xsink) {
     if (!adopted_sock_obj || !adopted_sock_priv) {
         xsink->raiseException("HTTPCLIENT-ADOPT-ERROR",
             "cannot adopt a null socket");
@@ -243,6 +251,11 @@ int Http2ClientConnection::buildAndSubmitAdopted(QoreObject* adopted_sock_obj,
             /* conn_priv */ this),
         xsink);
     Http2ClientPollOperationPriv* priv_raw = *priv_holder;
+    // the connection is not ready until the peer has answered the client preface; that exchange completes the
+    // connect phase of the connection whose socket was adopted and keeps its deadline
+    if (connect_timeout_us > 0 && connect_deadline_us > 0) {
+        priv_raw->setConnectDeadline(connect_timeout_us, connect_deadline_us);
+    }
 
     ReferenceHolder<QoreObject> poll_obj_holder(
         new QoreObject(QC_HTTP2CLIENTPOLLOPERATIONBASE, pgm, priv_holder.release()), xsink);

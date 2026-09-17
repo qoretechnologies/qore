@@ -287,6 +287,20 @@ public:
         connect_timeout_us = timeout_us;
     }
 
+    //! Sets the connect timeout and an already armed connect deadline; call before the operation is submitted
+    /** Used by a connection that continues the connect phase of another operation, such as ALPN negotiation, and
+        keeps its deadline
+
+        @param timeout_us the connect timeout in microseconds, reported when the deadline expires
+        @param deadline_us the monotonic deadline (see q_get_monotonic_us())
+
+        @since %Qore 3.0
+    */
+    DLLLOCAL void setConnectDeadline(int64_t timeout_us, int64_t deadline_us) {
+        connect_timeout_us = timeout_us;
+        connect_deadline_us = deadline_us;
+    }
+
     //! Sets the keepalive ping interval (microseconds, -1 = disabled)
     /** When positive, an HTTP/2 PING frame is submitted when the connection
         has been idle (no active streams) for this long.  nghttp2 handles the
@@ -400,7 +414,7 @@ private:
     //! Connection state (atomic for lock-free reads from app threads)
     std::atomic<H2State> h2_state{H2State::CONNECTING};
 
-    //! True when H2 protocol is confirmed (ALPN for HTTPS, SETTINGS for h2c)
+    //! True once the peer's SETTINGS frame has been processed; the connection is ready from then on
     std::atomic<bool> h2_confirmed{false};
 
     //! Whether SSL/TLS is required
@@ -414,9 +428,6 @@ private:
 
     //! Target port
     int target_port;
-
-    //! Number of successful reading cycles (for h2c confirmation)
-    int reading_cycle_count = 0;
 
     //! Consecutive empty reads counter
     int empty_read_count = 0;
@@ -554,6 +565,16 @@ private:
     DLLLOCAL static bool isConnectPhase(H2State state) {
         return state == H2State::CONNECTING || state == H2State::SSL_UPGRADE
             || state == H2State::PROXY_CONNECT_SEND || state == H2State::PROXY_CONNECT_RECV;
+    }
+
+    //! Returns True if the connection is still being established in \a state
+    /** A connection only becomes ready once the peer has answered the client preface with its SETTINGS frame (see
+        @ref h2_confirmed), so reading before that is part of the connect phase as well
+    */
+    DLLLOCAL bool inConnectPhase(H2State state) const {
+        return isConnectPhase(state)
+            || ((state == H2State::READING || state == H2State::WAIT_READ)
+                && !h2_confirmed.load(std::memory_order_acquire));
     }
 
     //! Arms the connect deadline on first use and fails the operation once it expires

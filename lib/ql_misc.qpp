@@ -308,6 +308,41 @@ const QURL_DECODE_PATH = QURL_DECODE_PATH;
 const QURL_MAINTAIN_CASE = QURL_MAINTAIN_CASE;
 ///@}
 
+/** @defgroup resolve_url_options URL Reference Resolution Options
+
+    Options for @ref Qore::resolve_url() "resolve_url()"
+
+    @since %Qore 3.0
+ */
+///@{
+//! Reject arguments that are not valid URI references
+/** Control and space characters, malformed percent-encoded octets, and a relative-path reference whose first
+    segment contains a colon (which would be taken for a URI with a scheme; RFC 3986 section 4.2) raise
+    \c RESOLVE-URL-ERROR.  Non-ASCII characters are accepted, as in IRIs (RFC 3987).
+*/
+const RESOLVE_URL_STRICT = QRU_STRICT;
+
+//! Remove any fragment from the target
+/** Use this option for a target that is retrieved or used as an identity; a fragment is never sent to a server
+*/
+const RESOLVE_URL_NO_FRAGMENT = QRU_NO_FRAGMENT;
+
+//! Accept a base that is a relative reference
+/** As for an XML Base (<tt>xml:base</tt>) without an absolute ancestor: the target is then a relative reference as
+    well, and \c ".." segments that cannot be removed from a relative path are kept
+    (<tt>resolve_url("a/", "../../b/", RESOLVE_URL_RELATIVE_BASE)</tt> returns \c "../b/").  An empty base returns
+    the reference with its dot segments removed.
+*/
+const RESOLVE_URL_RELATIVE_BASE = QRU_RELATIVE_BASE;
+
+//! Percent-encode octets that cannot appear in a URI in the path, query, and fragment of the target
+/** Controls, space, non-ASCII octets (as their UTF-8 encoding), and the characters \c "<>\\^`{|}" are encoded,
+    which maps an IRI to a URI (RFC 3987 section 3.1); existing percent-encoded octets and all URI delimiters are
+    kept, and the scheme and authority are not changed
+*/
+const RESOLVE_URL_ENCODE = QRU_ENCODE;
+///@}
+
 //! a hash describing a parsed URL
 /** @since %Qore 0.9.3
 */
@@ -1249,6 +1284,52 @@ hash<UrlInfo> h = parse_url(url_string, QURL_DECODE);
 hash<UrlInfo> parse_url(string url, *int options) [flags=NAMED_ARGS] {
     QoreURL qurl(xsink, url, options);
     return qurl.isValid() ? qurl.getHash() : QoreValue();
+}
+
+//! Resolves a URI reference against a base URI according to RFC 3986 section 5.2
+/** Implements the reference resolution algorithm of
+    <a href="https://www.rfc-editor.org/rfc/rfc3986#section-5.2">RFC 3986 section 5.2</a> using the strict parser: a
+    reference with a scheme is never treated as relative.  Use this function to find the target of a relative link
+    in a document or of an HTTP \c Location header, taking as the base the URI that the document or response was
+    actually retrieved from (RFC 3986 section 5.1.3).
+
+    @par Example:
+    @code{.py}
+string url = resolve_url("http://host/a/b/c.wsdl?rev=1", "../d/e.xsd?x#frag");
+# url: "http://host/a/d/e.xsd?x#frag"
+url = resolve_url("http://host/a/b/c.wsdl", "../d/ä e.xsd#frag", RESOLVE_URL_ENCODE | RESOLVE_URL_NO_FRAGMENT);
+# url: "http://host/a/d/%C3%A4%20e.xsd"
+    @endcode
+
+    @param base the base URI; must be an absolute URI with a scheme unless @ref RESOLVE_URL_RELATIVE_BASE is given;
+    any fragment in the base is ignored as required by RFC 3986 section 5.1
+    @param reference the URI reference to resolve; may be absolute, a network-path reference (\c "//host/path"), an
+    absolute-path reference, a relative-path reference, a query-only reference (\c "?q"), a fragment-only reference
+    (\c "#f"), or empty
+    @param options a bitfield of @ref resolve_url_options
+
+    @return the target URI; dot segments are removed from the path and the reference's fragment is kept (unless
+    @ref RESOLVE_URL_NO_FRAGMENT is given); every other octet is returned exactly as given (unless
+    @ref RESOLVE_URL_ENCODE is given): percent-encoded octets are neither decoded nor re-encoded, reserved
+    delimiters are left in place, and a defined empty query (a trailing \c "?") is preserved
+
+    @throw RESOLVE-URL-ERROR the base URI has no scheme and @ref RESOLVE_URL_RELATIVE_BASE was not given; with
+    @ref RESOLVE_URL_STRICT: an argument contains a control or space character or a malformed percent-encoded
+    octet, or is a relative-path reference whose first segment contains a colon
+
+    @note
+    - no scheme-specific normalization is performed; the scheme, authority, and case are returned as given
+    - the return value is in UTF-8 encoding
+    - to use the target as an HTTP request, remove any fragment; a fragment is never sent to a server
+
+    @see
+    - parse_url()
+    - <a href="https://www.rfc-editor.org/rfc/rfc3986">RFC 3986</a>
+
+    @since %Qore 3.0
+*/
+string resolve_url(string base, string reference, int options = 0) [flags=PURE,NAMED_ARGS] {
+    return qore_resolve_url(*base, *reference, (int)options, xsink);
 }
 
 //! Parses a URL string and returns a hash of the components; if the URL cannot be parsed then @ref nothing is returned

@@ -120,6 +120,46 @@ class FileLocationHandlerConnection inherits AbstractFileLocationHandler {
         return r.handler.getBinaryFile(r.scheme, r.location, r.opts);
     }
 
+    #! Retrieves a resource and its metadata from the given location
+    /** The resolved target provides the data and metadata; the requested location is the connection location
+
+        @param scheme the scheme being used
+        @param location the location string without the scheme
+        @param opts read options
+
+        @return the resource's data and metadata
+
+        @since FileLocationHandler 3.0
+    */
+    private hash<FileResourceResult> getResourceImpl(string scheme, string location, *hash<auto> opts) {
+        hash<ResolvedLocation> r = resolve(scheme, location, opts, False);
+        hash<FileResourceResult> rv = r.handler.getResource(r.scheme, r.location, r.opts);
+        # the resolved target location can carry credentials; the connection location is reported instead
+        rv.info.requested_location = scheme + "://" + location;
+        return rv;
+    }
+
+    #! Retrieves an I/O poller to retrieve a resource and its metadata from the given location
+    /** @param scheme the scheme being used
+        @param location the location string without the scheme
+        @param opts read options
+
+        @return an I/O poller whose output is the resource's data and metadata
+
+        @since FileLocationHandler 3.0
+    */
+    private Qore::AbstractPollOperation<hash<FileResourceResult>> getResourcePollerImpl(string scheme,
+            string location, *hash<auto> opts) {
+        hash<ResolvedLocation> r = resolve(scheme, location, opts, False);
+        string requested_location = scheme + "://" + location;
+        return new FileResourcePollOperation(r.handler.getResourcePoller(r.scheme, r.location, r.opts),
+            hash<FileResourceResult> sub (auto output) {
+                hash<FileResourceResult> rv = output;
+                rv.info.requested_location = requested_location;
+                return rv;
+            });
+    }
+
     #! Retrieves an I/O poller to retrieve a binary file from the given location
     /** @param scheme the scheme being used
         @param location the location string without the scheme

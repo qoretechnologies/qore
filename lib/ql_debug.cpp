@@ -55,6 +55,8 @@
 #include "qore/intern/RSection.h"
 #include <qore/HttpClientConnectionManager.h>
 #include <qore/QoreHttpClientObject.h>
+#include <qore/QoreSandboxManager.h>
+#include "qore/intern/qore_thread_intern.h"
 
 #include <arpa/inet.h>
 #include <cerrno>
@@ -483,6 +485,65 @@ public:
         return static_cast<TestRSectionPriv*>(priv)->tryRSectionLockNotifyWaitRead(rn);
     }
 };
+
+// QoreFile::open() has no exception sink, so a sandbox denial fails the open with EACCES; the sandbox context
+// helper applies a captured sandbox to the current thread
+static void ut_qorefile_open_sandbox_policy(UnitTestCounters& c) {
+    ExceptionSink xsink;
+    char inside_template[] = "/tmp/qore-ut-sandbox-in-XXXXXX";
+    char outside_template[] = "/tmp/qore-ut-sandbox-out-XXXXXX";
+    char* inside_dir = mkdtemp(inside_template);
+    char* outside_dir = mkdtemp(outside_template);
+    UT_ASSERT(c, inside_dir && outside_dir, "sandbox test directories created");
+    if (!inside_dir || !outside_dir) {
+        return;
+    }
+    std::string inside = std::string(inside_dir) + "/inside.txt";
+    std::string outside = std::string(outside_dir) + "/outside.txt";
+    for (const std::string* path : {&inside, &outside}) {
+        FILE* f = fopen(path->c_str(), "w");
+        if (f) {
+            fputs("x", f);
+            fclose(f);
+        }
+    }
+
+    QoreSandboxManager* sm = new QoreSandboxManager;
+    UT_ASSERT_EQ(c, 0, sm->filesystem().setSandboxRoot(inside_dir, &xsink), "sandbox root set");
+    {
+        QoreSandboxContext ctx;
+        // the test thread has no sandbox of its own; the context governs it while the helper exists
+        UT_ASSERT(c, !ctx.manager && !ctx.policy_manager, "no sandbox captured");
+        sm->ref();
+        ctx.manager = sm;
+        sm->ref();
+        ctx.policy_manager = sm;
+        {
+            QoreSandboxContextHelper sch(ctx);
+            QoreFile denied;
+            errno = 0;
+            UT_ASSERT_EQ(c, -1, denied.open(outside.c_str()), "open outside the sandbox root fails");
+            UT_ASSERT_EQ(c, EACCES, errno, "denied open sets EACCES");
+            QoreFile allowed;
+            UT_ASSERT_EQ(c, 0, allowed.open(inside.c_str()), "open inside the sandbox root succeeds");
+            QoreFile checked;
+            UT_ASSERT_EQ(c, -1, checked.openCheckAccess(&xsink, outside.c_str(), O_RDONLY, 0, QCS_DEFAULT),
+                "checked open outside the sandbox root fails");
+            UT_ASSERT(c, xsink.isException(), "checked open raises an exception");
+            xsink.clear();
+        }
+        // the helper restored the thread's own (empty) sandbox context
+        QoreFile unrestricted;
+        UT_ASSERT_EQ(c, 0, unrestricted.open(outside.c_str()), "open succeeds without the sandbox context");
+    }
+    sm->deref(&xsink);
+    xsink.clear();
+
+    unlink(inside.c_str());
+    unlink(outside.c_str());
+    rmdir(inside_dir);
+    rmdir(outside_dir);
+}
 
 static void ut_rsection_try_notify_does_not_block_on_writer(UnitTestCounters& c) {
     TestRSectionLock lock;
@@ -1940,6 +2001,11 @@ static void ut_manager_pool_reuse(UnitTestCounters& c) {
     UT_ASSERT_EQ(c, 1, mgr->getPoolSize(), "pool has 1 connection after first request");
     UT_ASSERT_EQ(c, 1, mgr->getConnectionCount("127.0.0.1", server_port),
         "key has 1 connection");
+    // the pool is keyed by scheme as well: a TLS target never finds the plaintext connection
+    UT_ASSERT_EQ(c, 1, mgr->getConnectionCount("127.0.0.1", server_port, false),
+        "plaintext key has 1 connection");
+    UT_ASSERT_EQ(c, 0, mgr->getConnectionCount("127.0.0.1", server_port, true),
+        "TLS key has no connection");
 
     // Second request to the same target — reuses the pooled connection.
     // (If reuse is broken, the server's single-accept topology makes the
@@ -2585,7 +2651,7 @@ static void ut_negotiate_close_cancels_after_closed_state(UnitTestCounters& c) {
     Http1SslConfig ssl_cfg;
     ssl_cfg.accept_all = true;
     ReferenceHolder<NegotiatingHttpClientConnection> conn(
-        new NegotiatingHttpClientConnection("127.0.0.1", server.port, ssl_cfg, &xsink),
+        new NegotiatingHttpClientConnection("127.0.0.1", server.port, ssl_cfg, 0, &xsink),
         &xsink);
     UT_ASSERT(c, !xsink, "NegotiatingHttpClientConnection construction succeeds");
     if (xsink) {
@@ -3878,6 +3944,7 @@ static QoreValue f_run_debug_unit_tests(const QoreListNode* params, RuntimeConfi
     ut_qorevalue_operator_bool_null(c);
     ut_string_data_helper(c);
     ut_qorefile_timed_read_contract(c);
+    ut_qorefile_open_sandbox_policy(c);
     ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_dgc_scan_generation(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
@@ -3890,6 +3957,7 @@ static QoreValue f_run_unit_tests(const QoreListNode* params, RuntimeConfig& rc,
     ut_qorevalue_operator_bool_null(c);
     ut_string_data_helper(c);
     ut_qorefile_timed_read_contract(c);
+    ut_qorefile_open_sandbox_policy(c);
     ut_rsection_try_notify_does_not_block_on_writer(c);
     ut_dgc_scan_generation(c);
     ut_debug_skips_foreign_thread_callbacks(c, rc.getProgram());
