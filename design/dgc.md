@@ -96,6 +96,11 @@ and a watched node's address is not reused while the watch exists. Invalidating 
 references. The watch registration rereads the reference count after registering, so a reference released in between
 is not missed.
 
+The watch holds its member with a weak reference (`RObject::tRef()`), and the recheck can collect that member, so
+every `RObject` must stay allocated while it has weak references: an object and a closure-bound variable both release
+their initial weak reference when their last reference is released, and are deleted by the last `tDeref()`, never
+directly.
+
 Because each list and hash is a node of its own, a container shared by N objects is walked once per scan rather than
 once for each object that references it, and its references from outside the cycle are never counted as internal.
 `examples/test/qore/misc/dgc-graph-components.qtest` covers both.

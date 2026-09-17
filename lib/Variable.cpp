@@ -3362,7 +3362,10 @@ void ClosureVarValue::deref(ExceptionSink* xsink) {
 
     if (!ref_copy) {
         printd(QORE_DEBUG_OBJ_REFS, "ClosureVarValue::deref() this: %p deleting\n", this);
-        delete this;
+        // release the initial weak reference; the variable is deleted when no other weak reference remains, as a
+        // weak reference (held by an LValueHelper or by the watch of a recursive set, for example) keeps it
+        // allocated after its last reference is released, as for objects
+        tDeref();
         return;
     }
 }
