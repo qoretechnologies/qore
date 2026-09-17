@@ -60,7 +60,8 @@ public hashdecl LlmRequestClassification {
 
     The implementation deliberately avoids product-specific policy.  Products
     such as Qorus should define their own allowed domains and blocked
-    categories in the caller, then use this class through @ref QoreGuardrails
+    categories in the caller, then use this class through
+    <a href="../../QoreGuardrails/html/index.html">QoreGuardrails</a>
     or directly in their request pipeline.
 
     @par Example: classify a support request

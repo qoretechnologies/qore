@@ -565,17 +565,75 @@ public class LlmStructuredRepair {
     delegates all per-mode behavior to the resulting
     @ref AbstractLlmProvider instance.
 
-    Built-in modes (after the matching REST client module is loaded):
+    The \c callback mode is registered by this module.  Every other mode is
+    provided by a separate client module, which the registry loads on demand
+    the first time the mode is requested (see
+    @ref LlmProviderRegistry::ProviderModuleMap), so the module does not need
+    to be loaded explicitly.
 
-    - \b http: OpenAI-compatible \c /v1/chat/completions
-      (@ref OpenAiRestClient)
-    - \b sglang: SGLang's OpenAI-compatible endpoint
-      (@ref SGLangRestClient)
-    - \b anthropic: Anthropic Messages API
-      (@ref AnthropicRestClient)
-    - \b gemini: Google Gemini \c generateContent
-      (@ref GeminiRestClient)
-    - \b callback: caller-supplied dispatcher (built into QoreLlmUtils)
+    |!Mode|!Service|!Provided by|!Notes
+    |\c callback|a caller-supplied OpenAI-compatible dispatcher, for example \
+        an application gateway or tenant proxy|%QoreLlmUtils \
+        (@ref CallbackLlmProvider)|requires \c api_callback
+    |\c http|any OpenAI-compatible \c /v1/chat/completions endpoint, for \
+        example OpenAI, vLLM, or an API gateway|\
+        <a href="../../OpenAiRestClient/html/index.html">OpenAiRestClient</a>|\
+        requires \c url
+    |\c sglang|SGLang's OpenAI-compatible endpoint|\
+        <a href="../../SGLangRestClient/html/index.html">SGLangRestClient</a>|\
+        requires \c url
+    |\c anthropic|the Anthropic Messages API (\c /v1/messages)|\
+        <a href="../../AnthropicRestClient/html/index.html">AnthropicRestClient</a>|\
+        requires \c url
+    |\c gemini|the Google Gemini \c generateContent API|\
+        <a href="../../GeminiRestClient/html/index.html">GeminiRestClient</a>|\
+        requires \c api_key
+    |\c vertex-ai|Gemini models on Google Vertex AI|\
+        <a href="../../VertexAiRestClient/html/index.html">VertexAiRestClient</a>|\
+        requires \c provider_options.gcp_project_id; a streamed request \
+        delivers the complete response as a single delta
+    |\c azure-openai|Azure OpenAI deployments|\
+        <a href="../../AzureOpenAiRestClient/html/index.html">AzureOpenAiRestClient</a>|\
+        requires \c url (the resource endpoint); authenticates with an API \
+        key or Microsoft Entra ID
+    |\c bedrock|the AWS Bedrock Converse API|\
+        <a href="../../BedrockRestClient/html/index.html">BedrockRestClient</a>|\
+        requires an AWS region (\c provider_options.aws_region, a \
+        region-qualified \c url, or \c AWS_REGION / \c AWS_DEFAULT_REGION in \
+        the environment); no structured output
+    |\c cohere|Cohere's v2 chat API|\
+        <a href="../../CohereRestClient/html/index.html">CohereRestClient</a>|\
+        requires \c api_key; no streaming or multimodal input
+    |\c deepseek|DeepSeek|\
+        <a href="../../DeepSeekRestClient/html/index.html">DeepSeekRestClient</a>|\
+        OpenAI-compatible
+    |\c fireworks|Fireworks AI|\
+        <a href="../../FireworksRestClient/html/index.html">FireworksRestClient</a>|\
+        OpenAI-compatible
+    |\c grok|xAI Grok|\
+        <a href="../../GrokRestClient/html/index.html">GrokRestClient</a>|\
+        OpenAI-compatible
+    |\c groq|Groq|\
+        <a href="../../GroqRestClient/html/index.html">GroqRestClient</a>|\
+        OpenAI-compatible
+    |\c mistral|Mistral AI|\
+        <a href="../../MistralRestClient/html/index.html">MistralRestClient</a>|\
+        OpenAI-compatible
+    |\c ollama|Ollama|\
+        <a href="../../OllamaRestClient/html/index.html">OllamaRestClient</a>|\
+        OpenAI-compatible; uses \c http://localhost:11434 by default; \
+        requires a model, as there is no default model
+    |\c perplexity|Perplexity|\
+        <a href="../../PerplexityRestClient/html/index.html">PerplexityRestClient</a>|\
+        OpenAI-compatible; no multimodal input
+    |\c together|Together AI|\
+        <a href="../../TogetherRestClient/html/index.html">TogetherRestClient</a>|\
+        OpenAI-compatible
+
+    Modes for hosted services use the service's public URL when \c url is not
+    set.  @ref AbstractLlmProviderFactory::getInfo() on the factory returned by
+    @ref LlmProviderRegistry::getFactoryEx() describes the features of a mode,
+    such as streaming, tool, structured output, and multimodal support.
 
     Additional modes can be added by registering new factories via
     @ref LlmProviderRegistry::registerFactory().

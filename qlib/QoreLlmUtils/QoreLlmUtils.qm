@@ -34,7 +34,7 @@
 module QoreLlmUtils {
     version = "1.0.0";
     desc = "user module providing a pluggable LLM backend abstraction for chat "
-        "completions across HTTP/OpenAI-compatible, Anthropic, Gemini, and callback API gateways";
+        "completions across OpenAI-compatible, vendor-native, and callback LLM providers";
     author = "Qore Technologies, s.r.o.";
     url = "http://qore.org";
     license = "MIT";
@@ -51,18 +51,27 @@ module QoreLlmUtils {
 
     The %QoreLlmUtils module provides a pluggable LLM backend abstraction for Qore
     AI modules that need to make chat completion calls. An LLM (Large Language Model)
-    is an AI system like ChatGPT or Claude that generates text responses.  It supports
-    four modes:
+    is an AI system like ChatGPT or Claude that generates text responses.
 
-    - \b http: Calls an OpenAI-compatible \c /v1/chat/completions endpoint
-      (SGLang, vLLM, OpenAI, Azure OpenAI, etc.) with optional JSON schema
-      enforcement via \c response_format.
-    - \b anthropic: Calls the Anthropic Messages API (\c /v1/messages) with
-      native tool-use-based JSON extraction when an output schema is provided.
-    - \b gemini: Calls the Google Gemini \c generateContent API with native
-      function calling, structured outputs, and streaming.
-    - \b callback: Calls a caller-supplied OpenAI-compatible dispatcher, for
-      example an application gateway, tenant proxy, or metered AI routing layer.
+    @ref QoreLlmUtils::LlmBackend "LlmBackend" selects a provider with the
+    @ref QoreLlmUtils::LlmBackendConfig::mode "mode" option.  The \c callback mode calls a
+    caller-supplied OpenAI-compatible dispatcher, for example an application
+    gateway, tenant proxy, or metered AI routing layer.  All other modes are
+    supplied by LLM client modules that are loaded on demand, including:
+
+    - \b http: any OpenAI-compatible \c /v1/chat/completions endpoint, for
+      example OpenAI or vLLM, with optional JSON schema enforcement via
+      \c response_format
+    - \b anthropic: the Anthropic Messages API (\c /v1/messages), with
+      native tool-use-based JSON extraction when an output schema is provided
+    - \b gemini and \b vertex-ai: Google Gemini models, with native function
+      calling and structured outputs
+    - \b azure-openai, \b bedrock, \b cohere, \b deepseek, \b fireworks,
+      \b grok, \b groq, \b mistral, \b ollama, \b perplexity, \b sglang,
+      and \b together
+
+    See @ref QoreLlmUtils::LlmBackend "LlmBackend" for the complete list of
+    modes, their client modules, and their configuration requirements.
 
     The module also includes @ref QoreLlmUtils::PromptSecretProtector
     "PromptSecretProtector", a provider-neutral helper for keeping
@@ -126,13 +135,5 @@ printf("Structured output: %s\n", result.content);
     @section qorellmutilsrelnotes QoreLlmUtils Module Release Notes
 
     @subsection qorellmutils_1_0 QoreLlmUtils Module Version 1.0
-    - Initial release with @ref QoreLlmUtils::LlmBackend "LlmBackend" supporting
-      HTTP/OpenAI-compatible, Anthropic, Gemini, and callback gateway modes
-    - Intent classification accepts only exact, line-framed closed protocol
-      markers and values; case-altered or embedded variants fail closed
-    - Added @ref QoreLlmUtils::PromptSecretProtector
-      "PromptSecretProtector" for generic prompt credential placeholders and
-      redaction support, including execution-boundary redaction of restored
-      protected values; sensitivity detection uses structural input and exact
-      canonical machine keys rather than natural-language labels
+    - Initial release
 */

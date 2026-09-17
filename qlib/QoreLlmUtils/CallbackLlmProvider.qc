@@ -32,8 +32,9 @@ public namespace QoreLlmUtils {
     Streaming is supported when @ref LlmBackendConfig::api_stream_callback
     is set: the provider invokes it with a per-chunk delta callback and
     forwards each OpenAI-shaped chunk to the caller as a
-    @ref QoreLlmUtils::ChatStreamEvent.  When @ref api_stream_callback is
-    unset, @ref chatStream() falls back to a single @ref chat() call and
+    @ref QoreLlmUtils::ChatStreamEvent.  When
+    @ref LlmBackendConfig::api_stream_callback is unset, @ref chatStream()
+    falls back to a single @ref chat() call and
     surfaces it as one synthetic content delta plus a terminal \c done
     event — so callers always see a coherent event sequence.
 */
@@ -133,7 +134,7 @@ public class CallbackLlmProvider inherits AbstractLlmProvider {
         the callback emits as a @ref QoreLlmUtils::ChatStreamEvent to
         @a callback.
 
-        When @ref api_stream_callback is unset, falls back to the
+        When @ref LlmBackendConfig::api_stream_callback is unset, falls back to the
         non-streaming @ref chat() implementation and emits the result as
         a single synthetic content delta event followed by a terminal
         \c done event.  This preserves the contract that

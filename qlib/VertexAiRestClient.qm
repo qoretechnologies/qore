@@ -60,8 +60,8 @@ module VertexAiRestClient {
     @section vertexairestclientintro Introduction to the VertexAiRestClient Module
 
     The %VertexAiRestClient module wraps Google Vertex AI for use with the
-    @ref qorellmutilsintro "QoreLlmUtils" agent stack and the
-    @ref qoreragutilsintro "QoreRagUtils" RAG pipeline.  The provider
+    <a href="../../QoreLlmUtils/html/index.html">QoreLlmUtils</a> agent stack and the
+    <a href="../../QoreRagUtils/html/index.html">QoreRagUtils</a> RAG pipeline.  The provider
     reuses the @ref geminibodyshapeintro "GeminiBodyShape" pure-static
     shapers so the Gemini-on-Vertex wire body is bit-for-bit identical to
     the native Gemini REST API; only the URL and authentication differ.
@@ -87,9 +87,10 @@ POST https://{region}-aiplatform.googleapis.com/v1/projects/{project}/locations/
     \c https://aiplatform.googleapis.com; the selected location remains in the
     resource path.
 
-    Streaming uses \c :streamGenerateContent.  Embeddings use the
-    \c :predict endpoint on text-embedding publisher models (Gecko / Text
-    Embedding Gecko).
+    Chat requests use \c :generateContent; a streamed chat request makes the
+    same call and delivers the complete response as a single delta.
+    Embeddings use the \c :predict endpoint on text-embedding publisher models
+    (Gecko / Text Embedding Gecko).
 
     @par Connection options
 
@@ -104,7 +105,9 @@ POST https://{region}-aiplatform.googleapis.com/v1/projects/{project}/locations/
       \c x-goog-user-project header; not required for the project-scoped
       endpoints used here
 
-    @par LlmBackendConfig consumed by @ref VertexAiLlmProvider
+    @par LlmBackendConfig options
+
+    @ref VertexAiLlmProvider uses the following options:
 
     - \c model (required): the Gemini publisher model name
       (e.g. \c "gemini-2.0-flash", \c "gemini-2.5-pro")

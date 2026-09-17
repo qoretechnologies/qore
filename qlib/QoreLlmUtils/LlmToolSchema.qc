@@ -38,7 +38,7 @@ public namespace QoreLlmUtils {
 /** Converts a Qore-native hash of \c name -> descriptor (the convention
     used by Qonsole command catalogs, OpenAPI op signatures, and any other
     Qore tool source that describes parameters in Qore terms) into the
-    JSON Schema shape required for @ref ToolDefinition::parameters:
+    JSON Schema shape required for @ref ToolDefinition::parameters, as follows:
 
     @verbatim
 {
