@@ -63,7 +63,7 @@ The rules are shared, so the blocking and non-blocking APIs always produce the s
 | Authentication challenges | a 401 is only answered with the client's credentials by the original origin; 407 (proxy) is unaffected |
 | Location user information | never used |
 | Location host | must be a valid authority, as it is sent in the `Host` header and, through a proxy, in the request line: no controls, space, malformed `%` escapes, or any of the characters `"` `<` `>` `\` `^` `{` `}`, a backquote, or a vertical bar |
-| UNIX domain sockets | a request can only be redirected to a UNIX domain socket (`http://socket=...`) if it is on the same socket; a server can never send a request, or a repeated body, to a local socket |
+| UNIX domain sockets | a request can only be redirected to a UNIX domain socket (`http://socket=...`) if it is itself on a UNIX domain socket, so a network server can never send a request, or a repeated body, to a local socket |
 | Connections | the connection pool is keyed by scheme, host, and port, so a redirect from `http` to `https` on the same host and port never reuses the plaintext connection |
 | Limit | a redirect beyond `max_redirects` raises; a same-URL fragment redirect counts like any other |
 

@@ -1862,11 +1862,12 @@ struct qore_httpclient_priv {
                     return -1;
                 }
             }
-            // the server chooses the location, so it must never be able to send the request (and a repeated body)
-            // to a local UNIX domain socket; a request on a socket can only be redirected to the same socket
-            if (next.conn.is_unix && (!conn.is_unix || next.conn.host != conn.host)) {
+            // the server chooses the location, so a network server must never be able to send the request (and a
+            // repeated body) to a local UNIX domain socket; a request on a socket comes from a local server and can
+            // be redirected to another socket
+            if (next.conn.is_unix && !conn.is_unix) {
                 xsink->raiseException("HTTP-CLIENT-REDIRECT-ERROR", "redirect location '%s' from '%s' (code %d) "
-                    "names a UNIX domain socket; only a request on the same socket can be redirected to one",
+                    "names a UNIX domain socket; only a request on a UNIX domain socket can be redirected to one",
                     loc->c_str(), request_url.c_str(), code);
                 return -1;
             }

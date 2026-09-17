@@ -219,7 +219,7 @@ static void HTTPClient_deserializer(QoreObject& self, const QoreHashNode* sdata,
     |Body|a request changed to \c GET is sent without its body and without its \c Content-* and \c Transfer-Encoding headers; a request body that was streamed cannot be sent again, so a redirect that would repeat it raises \c HTTP-CLIENT-REDIRECT-ERROR
     |Credentials|the \c Authorization, \c Cookie, and \c Host request headers, including an \c Authorization header built from the client URL, are sent only to the origin (scheme, host, and port) of the original request, and authentication challenges from other origins are not answered; user information in a redirect location is never used
     |Target host|a redirect to a host that contains controls, spaces, malformed percent-encoded octets, or characters that cannot appear in a URI raises \c HTTP-CLIENT-REDIRECT-ERROR
-    |UNIX domain sockets|a request can only be redirected to a UNIX domain socket (\c http://socket=...) if it is using the same socket; a redirect to a socket from any other request raises \c HTTP-CLIENT-REDIRECT-ERROR
+    |UNIX domain sockets|a request can only be redirected to a UNIX domain socket (\c http://socket=...) if it is itself on a UNIX domain socket; a redirect from a network server to a socket raises \c HTTP-CLIENT-REDIRECT-ERROR
     |Sandbox|the connection for a redirected request is subject to the @ref Qore::SandboxManager "sandbox" that governed the start of the request, also when a poll operation is driven by the async I/O controller
     |Client URL|a redirect never changes the URL of the client; it only applies to the current request
 

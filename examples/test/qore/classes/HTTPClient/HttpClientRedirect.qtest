@@ -903,73 +903,103 @@ public class HttpClientRedirectTest inherits QUnit::Test {
 %ifdef Windows
         testSkip("skipping because UNIX socket URLs are not available on Windows");
 %endif
-        string path = sprintf("%s%sqore-redirect-%d-%s.sock", tmp_location(), DirSep, getpid(),
-            get_random_string(12));
-        string encoded = encode_url(path, True);
-        on_exit unlink(path);
-        Socket server();
-        server.bindUNIX(path);
-        server.listen();
-        on_exit server.close();
-
-        # serves requests with one connection per request until the "/stop" request is received
-        Queue requests();
-        Counter running(1);
-        background sub () {
-            on_exit running.dec();
-            try {
-                while (True) {
-                    Socket peer = server.accept(30s);
-                    hash<auto> hdr = peer.readHTTPHeader(30s);
-                    requests.push(hdr.path);
-                    string response;
-                    switch (hdr.path) {
-                        case "/first":
-                            response = sprintf("HTTP/1.1 302 Found\r\nLocation: http://socket=%s/second\r\n", encoded);
-                            break;
-                        case "/other":
-                            response = "HTTP/1.1 302 Found\r\nLocation: http://socket=%2Ftmp%2Fqore-other.sock/x\r\n";
-                            break;
-                        default:
-                            response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n";
-                            break;
-                    }
-                    string body = hdr.path == "/second" ? "second" : "";
-                    peer.send(response + sprintf("Content-Length: %d\r\nConnection: close\r\n\r\n%s", body.size(),
-                        body));
-                    peer.close();
-                    if (hdr.path == "/stop") {
-                        break;
-                    }
-                }
-            } catch (hash<ExceptionInfo> ex) {
-                requests.push(ex);
-            }
-        }();
+        string prefix = sprintf("%s%sqore-redirect-%d-%s", tmp_location(), DirSep, getpid(), get_random_string(12));
+        # the socket of the request, a socket served by another local server, and a socket that does not exist
+        hash<string, string> paths = {
+            "main": prefix + ".sock",
+            "other": prefix + "-other.sock",
+            "missing": prefix + "-missing.sock",
+        };
+        hash<string, string> urls;
+        foreach hash<auto> i in (paths.pairIterator()) {
+            urls{i.key} = "http://socket=" + encode_url(i.value, True);
+        }
         on_exit {
-            try {
-                HTTPClient stop_client({"url": "http://socket=" + encoded, "timeout": 5s});
-                stop_client.get("/stop");
-            } catch (hash<ExceptionInfo> ex) {
+            unlink(paths.main);
+            unlink(paths.other);
+        }
+
+        # each server answers one connection per request until the "/stop" request is received: with a redirect for
+        # the paths in "redirects", otherwise with the server name and the path as the body
+        Queue requests();
+        Counter running();
+        code<Socket(string, hash<string, string>)> start = Socket sub (string name, hash<string, string> redirects) {
+            Socket server();
+            server.bindUNIX(paths{name});
+            server.listen();
+            running.inc();
+            background sub () {
+                on_exit running.dec();
+                try {
+                    while (True) {
+                        Socket peer = server.accept(30s);
+                        hash<auto> hdr = peer.readHTTPHeader(30s);
+                        requests.push(name + " " + hdr.path);
+                        *string location = redirects{hdr.path};
+                        string body = exists location ? "" : name + " " + hdr.path;
+                        string head = exists location
+                            ? sprintf("HTTP/1.1 302 Found\r\nLocation: %s\r\n", location)
+                            : "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n";
+                        peer.send(head + sprintf("Content-Length: %d\r\nConnection: close\r\n\r\n%s", body.size(),
+                            body));
+                        peer.close();
+                        if (hdr.path == "/stop") {
+                            break;
+                        }
+                    }
+                } catch (hash<ExceptionInfo> ex) {
+                    requests.push(ex);
+                }
+            }();
+            return server;
+        };
+        hash<string, Socket> servers;
+        on_exit {
+            map $1.close(), servers.iterator();
+        }
+        on_exit {
+            foreach string name in (keys servers) {
+                try {
+                    HTTPClient stop_client({"url": urls{name}, "timeout": 5s});
+                    stop_client.get("/stop");
+                } catch (hash<ExceptionInfo> ex) {
+                }
             }
             running.waitForZero();
         }
+        servers.main = start("main", {
+            "/first": urls.main + "/second",
+            "/other": urls.other + "/moved",
+            "/missing": urls.missing + "/moved",
+        });
+        servers.other = start("other", {});
 
-        HTTPClient hc({"url": "http://socket=" + encoded, "timeout": 5s});
+        HTTPClient hc({"url": urls.main, "timeout": 5s});
         foreach string api in (("sync", "async")) {
+            code<auto(string)> get = auto sub (string path) {
+                return api == "sync"
+                    ? hc.get(path)
+                    : drive(hc.startPollSendRecv("GET", path))."response-body";
+            };
             # a request on a UNIX domain socket can be redirected to the same socket
-            auto body = api == "sync"
-                ? hc.get("/first")
-                : drive(hc.startPollSendRecv("GET", "/first"))."response-body";
-            assertEq("second", toBin(body).toString(), api);
-            assertEq("/first", requests.get(5s), api);
-            assertEq("/second", requests.get(5s), api);
-            # but not to another socket
-            assertThrows("HTTP-CLIENT-REDIRECT-ERROR", "names a UNIX domain socket",
-                api == "sync" ? \hc.get() : sub (string p) { drive(hc.startPollSendRecv("GET", p)); }, "/other",
-                api);
-            assertEq("/other", requests.get(5s), api);
+            assertEq("main /second", toBin(get("/first")).toString(), api);
+            assertEq("main /first", requests.get(5s), api);
+            assertEq("main /second", requests.get(5s), api);
+            # a request on a socket comes from a local server, so it can also be redirected to another socket
+            assertEq("other /moved", toBin(get("/other")).toString(), api);
+            assertEq("main /other", requests.get(5s), api);
+            assertEq("other /moved", requests.get(5s), api);
+            # a redirect to a socket that does not exist is followed, and the connection fails
+            try {
+                get("/missing");
+                fail(api + ": the redirect to a missing socket succeeded");
+            } catch (hash<ExceptionInfo> ex) {
+                assertNeq("HTTP-CLIENT-REDIRECT-ERROR", ex.err, api + ": " + ex.desc);
+                assertRegex("No such file or directory", ex.desc, api);
+            }
+            assertEq("main /missing", requests.get(5s), api);
         }
+        assertEq(0, requests.size(), "no unexpected requests or server errors");
     }
 
     schemeChangeTest() {

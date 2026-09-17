@@ -985,7 +985,7 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
         @throw HTTPCLIENT-CAPACITY-ERROR if no connection can be acquired after retries
         @throw HTTP-REDIRECT-ERROR if the maximum number of redirects is exceeded, or a redirect cannot be followed:
         the response has no \c Location value or more than one, or the location has no host, an invalid host, a
-        scheme other than \c http or \c https, or names a UNIX domain socket that the request is not already using
+        scheme other than \c http or \c https, or names a UNIX domain socket and the request is not on one
     */
     hash<auto> request(string url, string method, string path, *hash<auto> headers,
             *data body, *timeout timeout_ms) {
@@ -1082,12 +1082,12 @@ public class HttpClientConnectionManager inherits HttpClientConnectionManagerBas
                     throw "HTTP-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) has an invalid "
                         "host", location, request_url, resp.status_code);
                 }
-                # the server chooses the location, so it must never be able to send the request (and a repeated
-                # body) to a local UNIX domain socket; a request on a socket can only be redirected to the same one
-                if (isUnixSocketTarget(next_info)
-                        && (!isUnixSocketTarget(cur_info) || next_info.host != cur_info.host)) {
+                # the server chooses the location, so a network server must never be able to send the request (and
+                # a repeated body) to a local UNIX domain socket; a request on a socket comes from a local server and
+                # can be redirected to another socket
+                if (isUnixSocketTarget(next_info) && !isUnixSocketTarget(cur_info)) {
                     throw "HTTP-REDIRECT-ERROR", sprintf("redirect location %y from %y (code %d) names a UNIX "
-                        "domain socket; only a request on the same socket can be redirected to one", location,
+                        "domain socket; only a request on a UNIX domain socket can be redirected to one", location,
                         request_url, resp.status_code);
                 }
                 string next_origin = getOriginUrl(next_info);

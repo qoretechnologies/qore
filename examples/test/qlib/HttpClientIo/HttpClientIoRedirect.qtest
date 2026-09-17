@@ -559,6 +559,8 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
         string path = sprintf("%s%sqore-io-redirect-%d-%s.sock", tmp_location(), DirSep, getpid(),
             get_random_string(12));
         string encoded = encode_url(path, True);
+        # a socket that does not exist
+        string missing_encoded = encode_url(regex_subst(path, "\\.sock$", "-missing.sock"), True);
         on_exit unlink(path);
         Socket server();
         server.bindUNIX(path);
@@ -581,7 +583,8 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
                             response = sprintf("HTTP/1.1 302 Found\r\nLocation: http://socket=%s/second\r\n", encoded);
                             break;
                         case "/other":
-                            response = "HTTP/1.1 302 Found\r\nLocation: http://socket=%2Ftmp%2Fqore-other.sock/x\r\n";
+                            response = sprintf("HTTP/1.1 302 Found\r\nLocation: http://socket=%s/x\r\n",
+                                missing_encoded);
                             break;
                         default:
                             response = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n";
@@ -617,8 +620,9 @@ public class HttpClientIoRedirectTest inherits QUnit::Test {
         assertEq("second", (resp.body.typeCode() == NT_BINARY ? resp.body : binary(resp.body)).toString());
         assertEq("/first", requests.get(5s));
         assertEq("/second", requests.get(5s));
-        # but not to another socket
-        assertThrows("HTTP-REDIRECT-ERROR", "names a UNIX domain socket", \mgr.request(),
+        # a request on a socket comes from a local server, so a redirect to another socket is followed: a socket that
+        # does not exist fails the connection, not the redirect (HttpClientIoUnixSocket.qtest follows one that exists)
+        assertThrows("HTTPCLIENT-CONNECT-ERROR", "No such file or directory", \mgr.request(),
             ("http://socket=" + encoded, "GET", "/other"));
         assertEq("/other", requests.get(5s));
     }

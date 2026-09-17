@@ -3102,7 +3102,7 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       followed with \c GET, and a streamed body that would have to be sent again raises
       \c HTTP-CLIENT-REDIRECT-ERROR
     - Fixed @ref Qore::HTTPClient "HTTPClient" following a redirect to a local UNIX domain socket
-      (\c http://socket=...) from a request that was not using that socket, which let a server send a request,
+      (\c http://socket=...) from a request to a network server, which let a remote server send a request,
       including a repeated request body, to a local service, and following a redirect whose host contains
       characters that cannot appear in a URI, which were then sent in the \c Host header and through a proxy in
       the request line; both now raise \c HTTP-CLIENT-REDIRECT-ERROR
