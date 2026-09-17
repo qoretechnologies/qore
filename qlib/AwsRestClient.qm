@@ -40,7 +40,7 @@
 %requires(reexport) ConnectionProvider >= 1.4
 
 module AwsRestClient {
-    version = "1.3";
+    version = "1.4";
     desc = "user module for calling AWS REST services";
     author = "David Nichols <david@qore.org>";
     url = "http://qore.org";
@@ -92,6 +92,12 @@ printf("%Y\n", ans.body);
     @endcode
 
     @section Awsrestclientrelnotes Release Notes
+
+    @subsection awsrestclientv1_4 AwsRestClient v1.4
+    - added signed raw-body requests to @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo" so schema-driven
+      AWS integrations can serialize requests once without bypassing AWS Signature Version 4 authentication
+    - preserved AWS configuration in @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()" copies
+      of @ref AwsRestClient::AwsRestClientIo "AwsRestClientIo"
 
     @subsection awsrestclientv1_3 AwsRestClient v1.3
     - added @ref AwsRestClient::AwsS3RestConnection "AwsS3RestConnection" for Amazon S3, which needs no URL -
@@ -1489,7 +1495,7 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         @param shared_mgr optional shared connection manager
     */
     constructor(hash<auto> opts, *HttpClientIo::HttpClientConnectionManager shared_mgr)
-            : RestClientIo({"data": "json"} + AwsRestClientIo::stripAwsOptions(opts), shared_mgr) {
+            : RestClientIo({"data": "json"} + opts, shared_mgr) {
         hash<UrlInfo> url_info = parse_url(opts.url);
         if (url_info{"username", "password"}) {
             throw "AWSRESTCLIENT-ERROR", sprintf("AWS URL must not contain a username or password; URL: %y",
@@ -1574,6 +1580,27 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
         return restDoRequestIntern(method, path, body, hdr);
     }
 
+    #! Sends a signed REST request with a pre-serialized body
+    /** The request body is sent unchanged while the response still passes through normal
+        deserialization and schema validation.  This is the signed counterpart of
+        @ref RestClientIo::RestClientIo::restDoRawRequest() "RestClientIo::restDoRawRequest()"
+        and is used by schema-driven AWS clients after they have serialized and validated the
+        request themselves.
+
+        @param method the HTTP method
+        @param path the URI path
+        @param body the pre-serialized request body, if any
+        @param hdr any additional request headers
+
+        @return the deserialized @ref RestClient::RestResponseInfo hash
+
+        @since AwsRestClient 1.4
+    */
+    hash<RestClient::RestResponseInfo> restDoRawRequest(string method, string path, *data body,
+            *hash<auto> hdr) {
+        return restDoRequestIntern(method, path, body, hdr, NOTHING, True);
+    }
+
     #! Sends a signed REST request, assuming an XML response body when the server sends no content type
     /** S3 answers \c CreateMultipartUpload and \c CompleteMultipartUpload with an XML document and no
         \c Content-Type header at all.  Without one the REST client has nothing to deserialize against and
@@ -1628,13 +1655,22 @@ public class AwsRestClientIo inherits RestClientIo::RestClientIo, AwsRestClientB
     }
 
     #! Internal: signs and sends a request, optionally assuming a content type for an untyped response
-    /** @param assume_content_type the content type to attribute to a response that arrives without one; the
+    /** @param method the HTTP method
+        @param path the URI path
+        @param body the request body, serialized here unless a raw_body is @ref True
+        @param hdr any additional request headers
+        @param assume_content_type the content type to attribute to a response that arrives without one; the
         header is only supplied when the server sent none, so a typed response is never reinterpreted
+        @param raw_body if @ref True, a body is already serialized and must be sent unchanged
+
+        @return the deserialized @ref RestClient::RestResponseInfo hash
     */
     private hash<RestClient::RestResponseInfo> restDoRequestIntern(string method, string path, auto body,
-            *hash<auto> hdr, *string assume_content_type) {
-        # Prepare request (serialize body, merge headers)
-        hash<auto> prepared = prepareRequest(method, \path, body, \hdr);
+            *hash<auto> hdr, *string assume_content_type, *bool raw_body) {
+        # Prepare request (serialize ordinary bodies; preserve already serialized raw bodies)
+        hash<auto> prepared = raw_body
+            ? prepareRawRequest(method, \path, body, \hdr)
+            : prepareRequest(method, \path, body, \hdr);
 
         # Sign the request
         signRequest(method, path, prepared.serialized_body, \hdr);

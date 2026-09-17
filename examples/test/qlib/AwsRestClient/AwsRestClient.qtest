@@ -88,6 +88,7 @@ class AwsTest inherits QUnit::Test {
         addTestCase("aws_imds_disabled skips IMDS", \imdsDisabledTest());
         addTestCase("IMDS probe is bounded by its timeout", \imdsTimeoutTest());
         addTestCase("S3 requests carry x-amz-content-sha256", \s3ContentSha256Test());
+        addTestCase("I/O client signs raw requests and URL copies", \ioRawCopyTest());
         set_return_value(main());
     }
 
@@ -520,6 +521,38 @@ class AwsTest inherits QUnit::Test {
         other.get("/");
         assertEq(NOTHING, HeaderCaptureHandler::last_hdr."x-amz-content-sha256",
             "a non-S3 service does not send the S3-only header");
+    }
+
+    #! The I/O client must retain AWS credentials when copied and sign pre-serialized bodies
+    ioRawCopyTest() {
+        HttpServer srv(\log(), \log());
+        int port = srv.addListener(<HttpListenerOptionInfo>{"service": 0}).port;
+        on_exit srv.stop();
+        srv.setDefaultHandler("cap", new HeaderCaptureHandler());
+
+        AwsRestClientIo rest({
+            "url": "http://localhost:" + port,
+            "aws_keyid": "AKIAEXAMPLE",
+            "aws_secret": "secret",
+            "aws_region": "us-east-1",
+            "aws_service": "bedrock",
+            "aws_imds_disabled": True,
+        });
+
+        remove HeaderCaptureHandler::last_hdr;
+        hash<RestClient::RestResponseInfo> response = rest.restDoRawRequest("POST", "/raw",
+            "{\"value\":true}", {"Content-Type": "application/json"});
+        assertEq(200, response.status_code, "the raw request completes");
+        assertRegex("^AWS4-HMAC-SHA256 ", HeaderCaptureHandler::last_hdr.authorization,
+            "the raw request carries a SigV4 authorization header");
+
+        AwsRestClientIo copy = cast<AwsRestClientIo>(rest.copyWithUrl("http://localhost:" + port));
+        remove HeaderCaptureHandler::last_hdr;
+        response = copy.restDoRawRequest("POST", "/copied-raw", "{}",
+            {"Content-Type": "application/json"});
+        assertEq(200, response.status_code, "the copied client completes a raw request");
+        assertRegex("^AWS4-HMAC-SHA256 ", HeaderCaptureHandler::last_hdr.authorization,
+            "the copied client retains the AWS credentials and signing behavior");
     }
 }
 

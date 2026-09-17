@@ -1569,6 +1569,11 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - added the full AWS credential chain: AWS_* environment variables, ECS task-role, IMDSv2
         token-protected flow, and STS \c AssumeRole bootstrap, tried in order
       - new connection options for role assumption and IMDS/STS endpoints, plus static credential helpers
+      - schema-driven AWS integrations can send pre-serialized request bodies through
+        @ref AwsRestClient::AwsRestClientIo::restDoRawRequest() "AwsRestClientIo::restDoRawRequest()" without
+        bypassing AWS Signature Version 4 authentication
+      - @ref RestClient::AbstractRestClient::copyWithUrl() "copyWithUrl()" copies retain AWS credentials and
+        signing configuration
 
     - @ref bulksqlutilintro "BulkSqlUtil" module
       - added the opt-in \c bulk_load policy for driver-native inserts, with required and automatic-fallback modes;
