@@ -26,6 +26,7 @@
 # A combined fake server that handles:
 # - GCP token endpoint (/token)
 # - Vertex AI :generateContent
+# - Vertex AI :streamGenerateContent (SSE)
 # - Vertex AI :predict (for embedder)
 class FakeVertexHandler inherits AbstractHttpRequestHandler {
     public {
@@ -60,6 +61,11 @@ class FakeVertexHandler inherits AbstractHttpRequestHandler {
             "expires_in": 3600,
             "token_type": "Bearer",
         };
+        #! Response chunks returned by :streamGenerateContent
+        list<hash<auto>> stream_chunks = ();
+        #! When set, :streamGenerateContent fails with this status and stream_error_body
+        *int stream_error_code;
+        string stream_error_body = "";
     }
 
     hash handleRequest(hash cx, hash hdr, *data body) {
@@ -77,6 +83,15 @@ class FakeVertexHandler inherits AbstractHttpRequestHandler {
         if (last_path =~ /\/token\/?$/) {
             return makeResponse({"Content-Type": MimeTypeJson}, 200,
                 make_json(token_response));
+        }
+        if (last_path =~ /:streamGenerateContent\?alt=sse$/) {
+            if (stream_error_code) {
+                return makeResponse({"Content-Type": MimeTypeJson}, stream_error_code,
+                    stream_error_body);
+            }
+            # Vertex AI frames SSE events with CRLF and sends no end marker
+            string out = (map "data: " + make_json($1) + "\r\n\r\n", stream_chunks).join("");
+            return makeResponse({"Content-Type": "text/event-stream"}, 200, out);
         }
         if (last_path =~ /:generateContent$/) {
             return makeResponse({"Content-Type": MimeTypeJson}, 200,
@@ -104,7 +119,10 @@ public class VertexAiTest inherits QUnit::Test {
         addTestCase("Gemini-on-Vertex chat round-trip",   \chatTest());
         addTestCase("OpenAI tool_choice maps to toolConfig", \toolChoiceConversionTest());
         addTestCase("complete() helper",                  \completeTest());
-        addTestCase("synthetic chatStream emits delta+done", \chatStreamTest());
+        addTestCase("chatStream streams streamGenerateContent events", \chatStreamTest());
+        addTestCase("streamed tool call is collected once", \streamToolCallTest());
+        addTestCase("streaming error response raises", \streamErrorTest());
+        addTestCase("live Vertex AI streaming (VERTEX_SA_JSON)", \liveStreamTest());
         addTestCase("URL path includes project/region/model", \pathTest());
         addTestCase("API URL follows location kind",        \apiUrlTest());
         addTestCase("missing project_id throws",          \missingProjectTest());
@@ -289,6 +307,20 @@ public class VertexAiTest inherits QUnit::Test {
             testSkip("no fake server");
         }
         GcpAuth::clearTokenCache();
+        handler.stream_chunks = (
+            {
+                "candidates": ({"content": {"role": "model", "parts": ({"text": "Hello"},)}},),
+                "responseId": "vertex-stream-id",
+            },
+            {
+                "candidates": ({
+                    "content": {"role": "model", "parts": ({"text": " from Vertex"},)},
+                    "finishReason": "STOP",
+                },),
+                "usageMetadata": {"promptTokenCount": 8, "candidatesTokenCount": 4, "totalTokenCount": 12},
+            },
+        );
+        on_exit handler.stream_chunks = ();
         VertexAiRestClient::VertexAiLlmProvider p = newProvider();
         list<hash<QoreLlmUtils::ChatStreamEvent>> events = ();
         p.chatStream((
@@ -296,9 +328,203 @@ public class VertexAiTest inherits QUnit::Test {
         ), sub (hash<QoreLlmUtils::ChatStreamEvent> e) {
             push events, e;
         });
-        assertEq(2, events.size());
-        assertEq("Hello from Vertex", events[0].delta);
-        assertEq(True, events[1].done);
+        assertEq(2, events.size(), "each response chunk is one event");
+        assertEq("Hello", events[0].delta);
+        assertFalse(events[0].done);
+        assertEq("vertex-stream-id", events[0].raw.responseId);
+        assertEq(" from Vertex", events[1].delta, "the final chunk keeps its text");
+        assertTrue(events[1].done);
+        assertEq("STOP", events[1].raw.candidates[0].finishReason);
+        assertEq("/v1/projects/fake-project/locations/us-central1/publishers/google/models/"
+            "gemini-2.0-flash:streamGenerateContent?alt=sse", handler.last_path);
+        assertEq("Bearer fake-vertex-token", handler.last_authorization);
+        assertEq("stream", handler.last_body.contents[0].parts[0].text);
+
+        # the OpenAI-compatible facade assembles the same response
+        QoreLlmUtils::LlmBackend backend = newBackend();
+        list<hash<auto>> chunks = ();
+        hash<auto> resp = backend.chatCompletionsStream({
+            "messages": ({"role": "user", "content": "stream"},),
+        }, sub (hash<auto> chunk) {
+            push chunks, chunk;
+        });
+        assertEq(2, chunks.size());
+        assertEq("Hello from Vertex", resp.choices[0].message.content);
+        assertEq("stop", resp.choices[0].finish_reason);
+        assertEq(12, resp.usage.total_tokens);
+    }
+
+    private streamToolCallTest() {
+        VertexAiTest::checkJson(self);
+        if (!fake_http) {
+            testSkip("no fake server");
+        }
+        GcpAuth::clearTokenCache();
+        # one chunk carries text, a tool call, and the finish reason
+        handler.stream_chunks = (
+            {
+                "candidates": ({
+                    "content": {"role": "model", "parts": (
+                        {"text": "Checking."},
+                        {"functionCall": {"name": "lookup", "args": {"k": "v"}}, "thoughtSignature": "sig-v"},
+                    )},
+                    "finishReason": "STOP",
+                },),
+            },
+        );
+        on_exit handler.stream_chunks = ();
+        list<hash<QoreLlmUtils::ToolDefinition>> tools = (
+            <QoreLlmUtils::ToolDefinition>{
+                "name": "lookup",
+                "description": "look up a value",
+                "parameters": {"type": "object", "properties": {"k": {"type": "string"}}},
+            },
+        );
+        QoreLlmUtils::LlmBackend backend = newBackend();
+        hash<QoreLlmUtils::ChatResponse> r = backend.chatStreamCollect((
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "look up v"},
+        ), NOTHING, tools);
+        assertEq("tool_use", r.stop_reason);
+        assertEq("Checking.", r.content);
+        assertEq(1, r.tool_calls.size(), "the tool call is collected exactly once");
+        assertEq("lookup", r.tool_calls[0].name);
+        assertEq({"k": "v"}, r.tool_calls[0].arguments);
+        assertEq("sig-v", r.tool_calls[0].thought_signature);
+
+        hash<auto> resp = backend.chatCompletionsStream({
+            "messages": ({"role": "user", "content": "look up v"},),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "lookup",
+                    "parameters": {"type": "object", "properties": {"k": {"type": "string"}}},
+                },
+            },),
+        }, sub (hash<auto> chunk) {});
+        assertEq("tool_calls", resp.choices[0].finish_reason);
+        assertEq("Checking.", resp.choices[0].message.content);
+        assertEq(1, resp.choices[0].message.tool_calls.size());
+        assertEq("{\"k\":\"v\"}", resp.choices[0].message.tool_calls[0]."function".arguments);
+    }
+
+    private streamErrorTest() {
+        VertexAiTest::checkJson(self);
+        if (!fake_http) {
+            testSkip("no fake server");
+        }
+        GcpAuth::clearTokenCache();
+        handler.stream_error_code = 403;
+        handler.stream_error_body = make_json({"error": {
+            "code": 403,
+            "message": "Permission denied on resource project fake-project.",
+            "status": "PERMISSION_DENIED",
+        }});
+        on_exit {
+            remove handler.stream_error_code;
+            handler.stream_error_body = "";
+        }
+        VertexAiRestClient::VertexAiLlmProvider p = newProvider();
+        list<hash<QoreLlmUtils::ChatStreamEvent>> events = ();
+        assertThrows("LLM-ERROR", "HTTP 403: Permission denied on resource project fake-project", \p.chatStream(), (
+            (<QoreLlmUtils::ChatMessage>{"role": "user", "content": "stream"},),
+            sub (hash<QoreLlmUtils::ChatStreamEvent> e) {
+                push events, e;
+            },
+        ));
+        assertEq((), events, "no event is delivered for a rejected request");
+    }
+
+    #! Streams from Vertex AI with the service-account key file named by VERTEX_SA_JSON
+    /** Optional environment variables: VERTEX_PROJECT (default: the key's project), VERTEX_REGION (default
+        us-central1), VERTEX_MODEL (default gemini-2.5-flash).
+    */
+    private liveStreamTest() {
+        *string sa = ENV.VERTEX_SA_JSON;
+        if (!sa.val()) {
+            testSkip("set VERTEX_SA_JSON to a service-account key file to run the live Vertex AI streaming test");
+        }
+        hash<auto> sa_info = parse_json(ReadOnlyFile::readTextFile(sa));
+        GcpAuth::clearTokenCache();
+        QoreLlmUtils::LlmBackend backend(<QoreLlmUtils::LlmBackendConfig>{
+            "mode": "vertex-ai",
+            "model": ENV.VERTEX_MODEL ?? "gemini-2.5-flash",
+            "provider_options": {
+                "gcp_project_id": ENV.VERTEX_PROJECT ?? sa_info.project_id,
+                "gcp_region": ENV.VERTEX_REGION ?? "us-central1",
+                "gcp_sa_json_path": sa,
+            },
+        });
+
+        # text arrives in several events
+        list<hash<QoreLlmUtils::ChatStreamEvent>> events = ();
+        hash<QoreLlmUtils::ChatResponse> r = backend.chatStreamCollect((
+            <QoreLlmUtils::ChatMessage>{
+                "role": "user",
+                "content": "Write the numbers from 1 to 300 in words, separated by commas.",
+            },
+        ), sub (hash<QoreLlmUtils::ChatStreamEvent> e) {
+            push events, e;
+        });
+        assertGt(1, events.size(), "the response is streamed in several events");
+        assertTrue(events.last().done, "the last event ends the stream");
+        int text_events = (select events, $1.delta.val()).size();
+        assertGt(1, text_events, "several events carry text");
+        assertEq("end_turn", r.stop_reason);
+        assertRegex("(?i)three hundred", r.content);
+        assertGt(0, r.usage.total_tokens, "usage is reported");
+
+        # a tool call is streamed and replayed with its reasoning signature
+        list<hash<QoreLlmUtils::ToolDefinition>> tools = (
+            <QoreLlmUtils::ToolDefinition>{
+                "name": "get_weather",
+                "description": "Returns the current weather for a city",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"city": {"type": "string", "description": "the city name"}},
+                    "required": ("city",),
+                },
+            },
+        );
+        list<hash<QoreLlmUtils::ChatMessage>> messages = (
+            <QoreLlmUtils::ChatMessage>{
+                "role": "user",
+                "content": "What is the weather in Prague right now? Use the get_weather tool.",
+            },
+        );
+        r = backend.chatStreamCollect(messages, NOTHING, tools);
+        assertEq("tool_use", r.stop_reason);
+        assertEq(1, r.tool_calls.size());
+        assertEq("get_weather", r.tool_calls[0].name);
+        assertRegex("(?i)prague|praha", r.tool_calls[0].arguments.city);
+        messages += <QoreLlmUtils::ChatMessage>{
+            "role": "assistant",
+            "content": r.content,
+            "tool_calls": r.tool_calls,
+        };
+        messages += <QoreLlmUtils::ChatMessage>{
+            "role": "tool",
+            "tool_call_id": r.tool_calls[0].id,
+            "name": r.tool_calls[0].name,
+            "content": make_json({"temperature_celsius": 17, "condition": "light rain"}),
+        };
+        r = backend.chatStreamCollect(messages, NOTHING, tools);
+        assertEq("end_turn", r.stop_reason);
+        assertRegex("17", r.content, "the tool result reaches the model");
+
+        # a rejected request raises instead of ending as an empty response
+        QoreLlmUtils::LlmBackend bad(<QoreLlmUtils::LlmBackendConfig>{
+            "mode": "vertex-ai",
+            "model": "qore-test-no-such-model",
+            "provider_options": {
+                "gcp_project_id": ENV.VERTEX_PROJECT ?? sa_info.project_id,
+                "gcp_region": ENV.VERTEX_REGION ?? "us-central1",
+                "gcp_sa_json_path": sa,
+            },
+        });
+        assertThrows("LLM-ERROR", "HTTP 404", \bad.chatStream(), (
+            (<QoreLlmUtils::ChatMessage>{"role": "user", "content": "hello"},),
+            sub (hash<QoreLlmUtils::ChatStreamEvent> e) {},
+        ));
     }
 
     private pathTest() {
@@ -374,6 +600,20 @@ public class VertexAiTest inherits QUnit::Test {
                 "gcp_region": "us-central1",
             });
         assertEq("vertex-ai", conn.getType());
+    }
+
+    private QoreLlmUtils::LlmBackend newBackend() {
+        return new QoreLlmUtils::LlmBackend(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "mode": "vertex-ai",
+                "model": "gemini-2.0-flash",
+                "url": "http://localhost:" + fake_port,
+                "provider_options": {
+                    "gcp_project_id": "fake-project",
+                    "gcp_region": "us-central1",
+                    "gcp_sa_json_path": sa_path,
+                },
+            });
     }
 
     private VertexAiRestClient::VertexAiLlmProvider newProvider() {

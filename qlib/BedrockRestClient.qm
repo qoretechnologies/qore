@@ -60,8 +60,8 @@ module BedrockRestClient {
     @section bedrockrestclientintro Introduction to the BedrockRestClient Module
 
     The %BedrockRestClient module wraps AWS Bedrock for use with the
-    @ref qorellmutilsintro "QoreLlmUtils" agent stack and the
-    @ref qoreragutilsintro "QoreRagUtils" RAG pipeline.  Both the unified
+    <a href="../../QoreLlmUtils/html/index.html">QoreLlmUtils</a> agent stack and the
+    <a href="../../QoreRagUtils/html/index.html">QoreRagUtils</a> RAG pipeline.  Both the unified
     Converse API (chat + streaming + tool use, covering the Anthropic /
     Llama / Mistral / Cohere / AI21 / Titan / DeepSeek model families) and
     Titan / Cohere embeddings are supported.
@@ -81,7 +81,9 @@ module BedrockRestClient {
     - \c aws_keyid / \c aws_secret / \c aws_token: see @ref awsrestclientintro
       — all four credential paths (static, env, ECS/IMDS, STS) are honored
 
-    @par LlmBackendConfig consumed by BedrockLlmProvider
+    @par LlmBackendConfig options
+
+    @ref BedrockLlmProvider uses the following options:
 
     - \c url (optional): same as above
     - \c model (required): the Bedrock model ID, e.g.
@@ -364,11 +366,9 @@ public class BedrockRestConnection inherits AwsRestClient::AwsRestConnection {
 
 #! Bedrock LLM provider — speaks the unified Converse API
 /** Implements @ref QoreLlmUtils::AbstractLlmProvider for any model
-    available via Bedrock's Converse endpoint.  Streaming is delivered via
-    a synthetic single-delta event (full response + done) so callers that
-    expect a streaming interface get a coherent event sequence; future
-    work will route through Bedrock's ConverseStream + AwsEventStream
-    binary framing for token-level streaming.
+    available via Bedrock's Converse endpoint.  A streamed request is
+    delivered as a single event with the complete response; token-level
+    streaming through Bedrock's ConverseStream endpoint is not implemented.
 
     @par Authentication
 
@@ -431,24 +431,109 @@ public class BedrockLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         return parseConverseResponse(resp.body, opts);
     }
 
-    #! Streaming chat — v1 emits a single synthetic delta + done from the non-streaming call
+    #! Streaming chat — delivers the complete Converse response as one event
     /** Token-level streaming via Bedrock's ConverseStream endpoint and the
-        AwsEventStream binary frame decoder is a follow-up; this synthetic
-        implementation keeps the @ref QoreLlmUtils::AbstractLlmProvider
-        streaming contract well-defined for current consumers.
+        AwsEventStream binary frame decoder is not implemented; this method
+        makes one Converse request and delivers the response as a single
+        @ref QoreLlmUtils::ChatStreamEvent with \c done set, the complete text
+        in \c delta, and the Converse response in \c raw, from which
+        @ref updateOpenAiStreamStateFromRaw() and @ref getOpenAiToolCallDeltas()
+        read the stop reason, usage, and tool calls.
+
+        @param messages conversation history
+        @param callback receives the event
+        @param tools optional tool definitions
+        @param opts per-call overrides
+
+        @throw LLM-ERROR the request failed
     */
     chatStream(list<hash<QoreLlmUtils::ChatMessage>> messages,
             code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
             *list<hash<QoreLlmUtils::ToolDefinition>> tools,
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
         hash<QoreLlmUtils::ChatResponse> r = chat(messages, tools, opts);
+        hash<QoreLlmUtils::ChatStreamEvent> event = <QoreLlmUtils::ChatStreamEvent>{
+            "done": True,
+            "raw": r.raw,
+        };
         if (r.content.val()) {
-            callback(<QoreLlmUtils::ChatStreamEvent>{
-                "delta": r.content,
-                "raw": r.raw,
-            });
+            event.delta = r.content;
         }
-        callback(<QoreLlmUtils::ChatStreamEvent>{"done": True, "raw": r.raw});
+        callback(event);
+    }
+
+    #! Updates OpenAI stream state from a Converse response
+    /** @param state the OpenAI-compatible stream state
+        @param raw the Converse response delivered by @ref chatStream()
+    */
+    updateOpenAiStreamStateFromRaw(reference<hash<auto>> state,
+            *hash<auto> raw) {
+        if (!raw) {
+            return;
+        }
+        *string request_id = raw.requestId ?? raw.responseMetadata.requestId;
+        if (request_id.val()) {
+            state.id = request_id;
+        }
+        if (raw.usage.typeCode() == NT_HASH) {
+            state.usage = normalizeUsage(cast<hash>(raw.usage));
+        }
+        if (raw.stopReason.val()) {
+            state.finish_reason =
+                BedrockLlmProvider::stopReasonToOpenAi(raw.stopReason);
+        }
+    }
+
+    #! Returns OpenAI tool-call deltas for the tool calls in a Converse response
+    /** @param state the OpenAI-compatible stream state
+        @param raw the Converse response delivered by @ref chatStream()
+
+        @return one complete OpenAI-shaped tool-call delta for each
+        \c toolUse block
+    */
+    list<hash<auto>> getOpenAiToolCallDeltas(reference<hash<auto>> state,
+            *hash<auto> raw) {
+        list<hash<auto>> streamed = ();
+        if (!raw) {
+            return streamed;
+        }
+        foreach auto block in (raw.output.message.content ?? ()) {
+            if (block.typeCode() != NT_HASH
+                    || block.toolUse.typeCode() != NT_HASH) {
+                continue;
+            }
+            if (state.tool_calls.typeCode() != NT_LIST) {
+                state.tool_calls = ();
+            }
+            hash<auto> tool_use = cast<hash>(block.toolUse);
+            int idx = state.tool_calls.size();
+            hash<auto> tool_call = {
+                "id": tool_use.toolUseId,
+                "type": "function",
+                "function": {
+                    "name": tool_use.name,
+                    "arguments": make_json(tool_use.input ?? {}),
+                },
+            };
+            state.tool_calls += tool_call;
+            streamed += {"index": idx} + tool_call;
+        }
+        return streamed;
+    }
+
+    #! Maps a Converse stop reason to an OpenAI finish reason
+    private static string stopReasonToOpenAi(string stop_reason) {
+        switch (stop_reason) {
+            case "tool_use":
+                return "tool_calls";
+            case "max_tokens":
+                return "length";
+            case "content_filtered":
+            case "guardrail_intervened":
+                return "content_filter";
+            default:
+                return "stop";
+        }
     }
 
     #! Returns the configured (or default) Bedrock model ID

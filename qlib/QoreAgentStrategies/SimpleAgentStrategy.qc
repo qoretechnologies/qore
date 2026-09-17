@@ -147,6 +147,8 @@ public class SimpleAgentStrategy inherits AbstractAgentStrategy {
                 "role": "assistant",
                 "content": response.content,
                 "tool_calls": response.tool_calls,
+                # providers such as Anthropic reject a replayed turn without its reasoning blocks
+                "reasoning_blocks": response.reasoning_blocks,
             };
 
             # Dispatch tools
@@ -222,11 +224,11 @@ public class SimpleAgentStrategy inherits AbstractAgentStrategy {
         after the loop exits.
 
         Tool-dispatch progress is surfaced via the @ref AgentEvent
-        callback (@ref tool_dispatched / @ref tool_completed) so clients
+        callback (\c tool_dispatched / \c tool_completed) so clients
         can render dispatch indicators between LLM bursts.
 
         @param ctx the agent context
-        @param on_event called once per @ref ChatStreamEvent reaching the
+        @param on_event called once per @ref QoreLlmUtils::ChatStreamEvent reaching the
             caller; suppression of intermediate terminals is already
             applied before @a on_event runs
 
@@ -283,12 +285,24 @@ audit.recordTurn(res);
                 sub (hash<QoreLlmUtils::ChatStreamEvent> event) {
                     # Strip terminal `done` from intermediate iterations.
                     # The loop emits its own final `done` after exit.
-                    # An intermediate `done` always corresponds to an
-                    # OpenAI `finish_reason` chunk; whether it carries
-                    # `tool_calls` or `stop` is settled here by the
-                    # strategy's loop guard below.  Surfacing it now
-                    # would cause clients to terminate prematurely.
+                    # An intermediate `done` marks the end of one model
+                    # response; whether the response requests tool calls
+                    # is settled by the strategy's loop guard below.
+                    # Surfacing it now would cause clients to terminate
+                    # prematurely.
                     if (event.done) {
+                        # the final event can carry the last text chunk, which is forwarded without the
+                        # terminal marker
+                        if (event.delta.val()) {
+                            hash<QoreLlmUtils::ChatStreamEvent> text_event =
+                                <QoreLlmUtils::ChatStreamEvent>{
+                                "delta": event.delta,
+                            };
+                            if (event.event.val()) {
+                                text_event.event = event.event;
+                            }
+                            on_event(text_event);
+                        }
                         return;
                     }
                     on_event(event);
@@ -338,6 +352,8 @@ audit.recordTurn(res);
                 "role": "assistant",
                 "content": response.content,
                 "tool_calls": response.tool_calls,
+                # providers such as Anthropic reject a replayed turn without its reasoning blocks
+                "reasoning_blocks": response.reasoning_blocks,
             };
 
             list<hash<auto>> dispatch_results = dispatchTools(ctx,

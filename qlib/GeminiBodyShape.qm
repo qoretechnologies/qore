@@ -50,14 +50,15 @@ module GeminiBodyShape {
     The %GeminiBodyShape module exposes the pure-static helpers that
     translate between the generic @ref QoreLlmUtils::ChatMessage /
     @ref QoreLlmUtils::ChatResponse types and the Google Gemini
-    \c generateContent wire format.  The native
-    @ref GeminiRestClient::GeminiLlmProvider in @ref geminirestclientintro
+    \c generateContent wire format.  The native provider in
+    <a href="../../GeminiRestClient/html/index.html">GeminiRestClient</a>
     uses these helpers; the Vertex AI Gemini-on-Vertex pathway also depends
     on them so the two providers stay in lock-step as Gemini evolves.
 
     All functions are pure-static — no I/O, no state — so callers can mix
-    and match them as needed.  The instance-level pieces (request-option
-    resolution, retry, HTTP transport) remain in the host provider.
+    and match them as needed.  @ref AbstractGeminiModelProvider implements
+    chat, completion, and \c streamGenerateContent SSE streaming on top of
+    them; the transport and authentication remain in the host provider.
 
     @par Function inventory
 
@@ -633,7 +634,7 @@ public hash<auto> sub parseToolResponse(*string content) {
         - \c temperature (\c float): mapped to \c generationConfig.temperature
         - \c reasoning_token_budget (\c *int): mapped to
           \c generationConfig.thinkingConfig.thinkingBudget when present
-        - \c extra_body (\c *hash<auto>): merged into the final body so
+        - \c extra_body (<tt>*hash&lt;auto&gt;</tt>): merged into the final body so
           callers can pass through provider-specific knobs without
           modifying this shaper
 
@@ -780,8 +781,12 @@ public hash<QoreLlmUtils::ChatResponse> sub parseChatResponse(hash<auto> body) {
     return <QoreLlmUtils::ChatResponse>{
         "id": body.responseId ?? body.id,
         "model": body.model,
-        "stop_reason": tool_calls ? "tool_use"
-            : GeminiBodyShape::mapFinishReason(cand.finishReason),
+        # a blocked prompt has no candidates; "stop_sequence" is the content-filter stop reason
+        "stop_reason": tool_calls
+            ? "tool_use"
+            : (!cand.finishReason.val() && body.promptFeedback.blockReason.val())
+                ? "stop_sequence"
+                : GeminiBodyShape::mapFinishReason(cand.finishReason),
         "content": text_parts ? text_parts.join("") : NOTHING,
         "tool_calls": tool_calls,
         "usage": GeminiBodyShape::normalizeUsage(body.usageMetadata),
@@ -948,6 +953,21 @@ public string sub requestErrorDetail(hash<ExceptionInfo> ex) {
         return ex.desc;
     }
     auto body = ex.arg.body;
+    if (body.typeCode() == NT_BINARY) {
+        body = body.toString("UTF-8");
+    }
+    # an error body that was not deserialized, for example one sent with the Content-Type of an event stream,
+    # is parsed here so the provider's message can be reported
+    if (body.typeCode() == NT_STRING && body =~ /^\s*[\[{]/) {
+        try {
+            body = parse_json(body);
+        } catch () {
+        }
+    }
+    # streaming endpoints can wrap the error object in a list
+    if (body.typeCode() == NT_LIST && body.size() == 1) {
+        body = body[0];
+    }
     *string msg;
     switch (body.typeCode()) {
         case NT_HASH:
@@ -955,9 +975,6 @@ public string sub requestErrorDetail(hash<ExceptionInfo> ex) {
             break;
         case NT_STRING:
             msg = body;
-            break;
-        case NT_BINARY:
-            msg = body.toString("UTF-8");
             break;
     }
     if (!msg.val()) {
@@ -968,13 +985,14 @@ public string sub requestErrorDetail(hash<ExceptionInfo> ex) {
 
 #! Common provider base for Gemini-family models served over different transports
 /** Holds everything shared between Gemini-on-AI-Studio (\c GeminiRestClient) and
-    Gemini-on-Vertex (\c VertexAiRestClient): @ref chat(), @ref complete(), the
-    default synthetic @ref chatStream(), request-body building, and the
+    Gemini-on-Vertex (\c VertexAiRestClient): @ref chat(), @ref complete(),
+    SSE streaming with @ref chatStream(), request-body building, and the
     OpenAI-compatible adapter hooks (\c tool_choice → \c toolConfig,
     \c response_format → output schema, body-option merging, and streaming
     tool-call harvesting).  Subclasses supply only transport and authentication
     via @ref createRestClient(), @ref getRequestPath(), @ref getRequestHeaders(),
-    @ref getDefaultModel(), and (optionally) @ref getProviderLabel().
+    @ref getDefaultModel(), and (optionally) @ref getProviderLabel() and
+    @ref getStreamRequestPath().
 
     Because the OpenAI/Gemini wire handling lives here once, the two providers
     cannot drift on tool/option/response behavior.
@@ -1044,20 +1062,153 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         return rv;
     }
 
-    #! Default synthetic streaming: one non-streamed call surfaced as delta + done
-    /** Subclasses with a native SSE endpoint override this with real streaming. */
+    #! Streams a chat completion from the \c streamGenerateContent SSE endpoint
+    /** Sends the request to @ref getStreamRequestPath() with the headers from
+        @ref getRequestHeaders() and delivers each Gemini response chunk as
+        exactly one @ref QoreLlmUtils::ChatStreamEvent, with the parsed chunk in
+        \c raw and its text, if any, in \c delta.  The chunk with a
+        \c finishReason, or with a \c promptFeedback.blockReason when the prompt
+        was blocked, is delivered with \c done set and ends the stream; if the
+        server closes the stream without one, a final \c done event without
+        \c raw is delivered.
+
+        @param messages conversation history
+        @param callback receives each event as it arrives
+        @param tools optional tool definitions
+        @param opts per-call overrides; the request timeout also limits the
+        time to wait for each event
+
+        @throw LLM-ERROR the request failed or was rejected, the response was
+        not an event stream, an event could not be parsed, the stream reported
+        an error, or no event arrived within the request timeout
+    */
     chatStream(list<hash<QoreLlmUtils::ChatMessage>> messages,
             code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
             *list<hash<QoreLlmUtils::ToolDefinition>> tools,
             *hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        hash<QoreLlmUtils::ChatResponse> r = chat(messages, tools, opts);
-        if (r.content.val()) {
-            callback(<QoreLlmUtils::ChatStreamEvent>{
-                "delta": r.content,
-                "raw": r.raw,
-            });
+        ensureRestClient();
+        hash<auto> body = buildModelBody(messages, tools, opts.output_schema, opts);
+        string path = getStreamRequestPath(opts);
+        hash<auto> hdr = (getRequestHeaders(opts) ?? {}) + {
+            "Content-Type": "application/json",
+        };
+        string json_body = make_json(body);
+        HttpClientStreamingIo::SseStreamReader reader;
+        try {
+            reader = withRetry(HttpClientStreamingIo::SseStreamReader sub () {
+                return rest_client.restSseReader("POST", path, hdr, json_body);
+            }, opts);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR",
+                sprintf("%s streaming request to %y failed: %s", getProviderLabel(), path,
+                    GeminiBodyShape::requestErrorDetail(ex)), ex;
         }
-        callback(<QoreLlmUtils::ChatStreamEvent>{"done": True, "raw": r.raw});
+        # a stream left before its end must not keep the server sending
+        on_exit reader.cancel();
+        deliverStreamEvents(reader, callback, getRequestTimeoutMs(opts));
+    }
+
+    #! Returns the \c streamGenerateContent SSE path for the given request
+    /** The default derives the path from @ref getRequestPath() by replacing its
+        \c :generateContent method with \c :streamGenerateContent and requesting
+        SSE framing with \c alt=sse.
+
+        @param opts per-call overrides
+
+        @return the streaming request path
+
+        @throw LLM-CONFIG-ERROR the path returned by @ref getRequestPath() does
+        not end with \c :generateContent
+    */
+    string getStreamRequestPath(*hash<QoreLlmUtils::LlmRequestOptions> opts) {
+        string path = getRequestPath(opts);
+        if (path !~ /:generateContent$/) {
+            throw "LLM-CONFIG-ERROR",
+                sprintf("%s request path %y does not end with \":generateContent\"; "
+                    "cannot derive the streaming request path", getProviderLabel(), path);
+        }
+        path =~ s/:generateContent$/:streamGenerateContent/;
+        return path + "?alt=sse";
+    }
+
+    #! Delivers the events of a Gemini SSE response stream to the callback
+    /** @param reader the SSE reader of the response stream
+        @param callback receives each event
+        @param timeout_ms the maximum time to wait for each event
+
+        @throw LLM-ERROR an event could not be parsed, the stream reported an
+        error, or no event arrived within \a timeout_ms
+    */
+    private deliverStreamEvents(HttpClientStreamingIo::SseStreamReader reader,
+            code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback, int timeout_ms) {
+        while (True) {
+            *hash<SseMessageInfo> evt = reader.readEvent(timeout_ms);
+            if (!evt) {
+                # the reader also returns nothing when the wait times out, which must not be reported as a
+                # complete response
+                if (!reader.isDone()) {
+                    throw "LLM-ERROR",
+                        sprintf("%s streaming response timed out: no event arrived within %d ms",
+                            getProviderLabel(), timeout_ms);
+                }
+                callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
+                return;
+            }
+            if (!evt.data.val()) {
+                continue;
+            }
+            if (evt.data == "[DONE]") {
+                callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
+                return;
+            }
+            auto parsed;
+            try {
+                parsed = parse_json(evt.data);
+            } catch (hash<ExceptionInfo> ex) {
+                throw "LLM-ERROR",
+                    sprintf("%s streaming response contained an event that is not valid JSON: %s",
+                        getProviderLabel(), ex.desc), ex;
+            }
+            if (parsed.typeCode() != NT_HASH) {
+                throw "LLM-ERROR",
+                    sprintf("%s streaming response contained an event that is not a JSON object: %y",
+                        getProviderLabel(), parsed);
+            }
+            hash<auto> chunk = cast<hash>(parsed);
+            if (chunk.error) {
+                auto error = chunk.error;
+                *string msg;
+                *string code;
+                if (error.typeCode() == NT_HASH) {
+                    msg = error.message ?? error.status;
+                    if (exists error.code) {
+                        code = error.code.toString();
+                    }
+                } else {
+                    msg = error.toString();
+                }
+                throw "LLM-ERROR",
+                    sprintf("%s streaming response reported an error: %s (code %s)", getProviderLabel(),
+                        msg ?? "no message", code ?? "?"), error;
+            }
+            bool done = chunk.candidates[0].finishReason.val()
+                || chunk.promptFeedback.blockReason.val();
+            hash<QoreLlmUtils::ChatStreamEvent> event = <QoreLlmUtils::ChatStreamEvent>{
+                "done": done,
+                "raw": chunk,
+            };
+            if (evt.event.val()) {
+                event.event = evt.event;
+            }
+            string delta = GeminiBodyShape::extractText(chunk);
+            if (delta.val()) {
+                event.delta = delta;
+            }
+            callback(event);
+            if (done) {
+                return;
+            }
+        }
     }
 
     #! Merges \c body_options with Gemini nested \c generationConfig semantics
@@ -1155,6 +1306,9 @@ public class AbstractGeminiModelProvider inherits QoreLlmUtils::AbstractLlmProvi
         if (finish_reason.val()) {
             state.finish_reason = state.tool_calls
                 ? "tool_calls" : GeminiBodyShape::finishReasonToOpenAi(finish_reason);
+        } else if (raw.promptFeedback.blockReason.val()) {
+            # the prompt was blocked, so no candidate was generated
+            state.finish_reason = "content_filter";
         } else if (raw.choices[0].finish_reason.val()) {
             state.finish_reason = raw.choices[0].finish_reason;
         }

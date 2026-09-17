@@ -156,6 +156,12 @@ class SseRestClientIoTest inherits Test {
             \testRestSseReaderCloseDelimitedEof());
         addTestCase("restSseReader throws HTTP response errors",
             \testRestSseReaderThrowsResponseError());
+        addTestCase("restSseReader separates CRLF-delimited events",
+            \testRestSseReaderCrlfFraming());
+        addTestCase("restSseReader rejects a successful response that is not an event stream",
+            \testRestSseReaderRejectsNonSseResponse());
+        addTestCase("restSseReader reports an error response sent as an event stream",
+            \testRestSseReaderErrorWithSseContentType());
         addTestCase("restObserveSse receives events", \testRestObserveSse());
         addTestCase("restObserveSse reports a refused connection", \testRestObserveSseConnectionRefused());
         addTestCase("HttpSseStreamPollOperation heartbeat defaults on",
@@ -196,6 +202,7 @@ class SseRestClientIoTest inherits Test {
         # Timeout — no more events
         *hash<SseMessageInfo> evt2 = reader.readEvent(500ms);
         assertEq(NOTHING, evt2, "timeout returns NOTHING");
+        assertFalse(reader.isDone(), "a timeout does not end the stream");
     }
 
     testRestSseReaderMultiple() {
@@ -353,6 +360,111 @@ class SseRestClientIoTest inherits Test {
                 assertTrue(string(ex.arg.body).find("bad SSE request") >= 0,
                     "raw error body is preserved");
             }
+        }
+    }
+
+    #! Serves one HTTP/1.1 request on a new listener with the given raw response and closes the connection
+    private Socket serveRawResponse(string response, reference<int> lport) {
+        Socket listener();
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        lport = listener.getSocketInfo().port;
+        background sub () {
+            try {
+                Socket conn = listener.accept(5s);
+                on_exit conn.close();
+                hash<auto> req = conn.readHTTPHeader(5s);
+                if (req."content-length") {
+                    conn.recv(req."content-length", 5s);
+                }
+                conn.send(response);
+            } catch (hash<ExceptionInfo> ex) {
+                # the test fails on the client side
+            }
+        }();
+        return listener;
+    }
+
+    private RestClientIo rawClient(int lport) {
+        return new RestClientIo({
+            "url": sprintf("http://127.0.0.1:%d", lport),
+            "data": "json",
+            "connect_timeout": 2s,
+            "timeout": 5s,
+            "protocol": "h1",
+        });
+    }
+
+    #! Regression: Gemini and Vertex AI delimit events with CRLF; the reader merged them into one event
+    testRestSseReaderCrlfFraming() {
+        int lport;
+        Socket listener = serveRawResponse("HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/event-stream; charset=UTF-8\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "data: {\"n\":1}\r\n\r\n"
+            "data: {\"n\":2}\r\n\r\n", \lport);
+        on_exit listener.close();
+        RestClientIo rest = rawClient(lport);
+        on_exit rest.close();
+
+        SseStreamReader reader = rest.restSseReader("POST", "/sse", {"Content-Type": "application/json"}, "{}");
+        on_exit reader.cancel();
+        *hash<SseMessageInfo> evt = reader.readEvent(5s);
+        assertEq("{\"n\":1}", evt.data, "the first CRLF-delimited event is delivered alone");
+        evt = reader.readEvent(5s);
+        assertEq("{\"n\":2}", evt.data, "the second CRLF-delimited event is delivered alone");
+        assertNothing(reader.readEvent(5s), "the stream ends after the last event");
+        assertTrue(reader.isDone(), "the reader is done at the end of the stream");
+    }
+
+    #! Regression: a successful response that is not an event stream was read as a stream without events
+    testRestSseReaderRejectsNonSseResponse() {
+        string body = "{\"ok\":true}";
+        int lport;
+        Socket listener = serveRawResponse(sprintf("HTTP/1.1 200 OK\r\n"
+            "Content-Type: application/json\r\n"
+            "Content-Length: %d\r\n"
+            "Connection: close\r\n"
+            "\r\n%s", body.size(), body), \lport);
+        on_exit listener.close();
+        RestClientIo rest = rawClient(lport);
+        on_exit rest.close();
+
+        try {
+            rest.restSseReader("POST", "/sse", {"Content-Type": "application/json"}, "{}");
+            fail("restSseReader must reject a response that is not an event stream");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err, ex.desc);
+            assertRegex("Content-Type \"application/json\"", ex.desc);
+            assertEq(200, ex.arg.status_code);
+            assertEq(body, ex.arg.body.typeCode() == NT_BINARY ? ex.arg.body.toString() : ex.arg.body);
+        }
+    }
+
+    #! Regression: an error body sent with the event-stream Content-Type (as Vertex AI does) raised
+    #! DESERIALIZATION-ERROR, hiding the HTTP status
+    testRestSseReaderErrorWithSseContentType() {
+        string body = "{\"error\":{\"code\":404,\"message\":\"model not found\"}}";
+        int lport;
+        Socket listener = serveRawResponse(sprintf("HTTP/1.1 404 Not Found\r\n"
+            "Content-Type: text/event-stream\r\n"
+            "Content-Length: %d\r\n"
+            "Connection: close\r\n"
+            "\r\n%s", body.size(), body), \lport);
+        on_exit listener.close();
+        RestClientIo rest = rawClient(lport);
+        on_exit rest.close();
+
+        try {
+            rest.restSseReader("POST", "/sse", {"Content-Type": "application/json"}, "{}");
+            fail("restSseReader must raise an error response");
+        } catch (hash<ExceptionInfo> ex) {
+            assertEq("REST-RESPONSE-ERROR", ex.err, ex.desc);
+            assertEq("HTTP 404 response received", ex.desc);
+            assertEq(404, ex.arg.status_code);
+            string raw_body = ex.arg.body.typeCode() == NT_BINARY ? ex.arg.body.toString() : ex.arg.body;
+            assertEq(body, raw_body, "the raw error body is preserved");
         }
     }
 

@@ -217,6 +217,23 @@ backend.chatStream(history,
                 terminal_raw.provider_diagnostics =
                     resp.provider_diagnostics;
             }
+            # the tool calls are delivered as complete OpenAI tool-call deltas
+            # so stream accumulators rebuild them from `raw`
+            if (resp.tool_calls) {
+                list<hash<auto>> tool_call_deltas = ();
+                foreach hash<ChatToolCall> tc in (resp.tool_calls) {
+                    push tool_call_deltas, {
+                        "index": $#,
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.name,
+                            "arguments": make_json(tc.arguments ?? {}),
+                        },
+                    };
+                }
+                terminal_raw.choices[0].delta.tool_calls = tool_call_deltas;
+            }
             callback(<ChatStreamEvent>{
                 "done": True,
                 "raw": terminal_raw,

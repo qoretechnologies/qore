@@ -1,0 +1,967 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+/*  LlmStreaming.qtest Copyright 2026 Qore Technologies, s.r.o.
+    MIT License
+*/
+
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../qlib"
+%requires Logger
+%requires Mime
+%requires HttpServerUtil
+%requires RestClientIo
+%requires QoreLlmTypes
+%requires QoreLlmUtils
+%requires OpenAiRestClient
+%requires AzureOpenAiRestClient
+%requires GeminiBodyShape
+%requires GeminiRestClient
+%requires AnthropicRestClient
+%requires QoreAgentStrategies
+%requires json
+%requires QUnit
+
+%exec-class LlmStreamingTest
+
+#! A scripted reply of the fake LLM server
+hashdecl FakeReply {
+    #! HTTP status code
+    int code = 200;
+    #! Content-Type of the response
+    string content_type = "text/event-stream";
+    #! Chunks of a close-delimited body (event-stream replies)
+    list<string> chunks = ();
+    #! Complete response body sent with Content-Length (other replies)
+    *string body;
+    #! When set, the response stops after its chunks until the test releases it
+    bool stall = False;
+}
+
+#! Fake LLM server speaking HTTP/1.1 on a raw socket, so any response, including a stalled event stream, can be
+#! sent; replies come from a script and every request is recorded
+class FakeLlmServer {
+    public {
+        list<hash<auto>> requests = ();
+        int port;
+    }
+
+    private {
+        Socket listener();
+        list<hash<FakeReply>> replies = ();
+        Mutex m();
+        Queue release_queue();
+        Counter running();
+        bool stopping = False;
+    }
+
+    constructor() {
+        listener.bind("127.0.0.1:0");
+        listener.listen();
+        port = listener.getSocketInfo().port;
+        running.inc();
+        background acceptLoop();
+    }
+
+    #! Stops the server after releasing any stalled response
+    stop() {
+        {
+            AutoLock al(m);
+            stopping = True;
+        }
+        release_queue.push(True);
+        # wake the accept call
+        try {
+            Socket wake();
+            wake.connect(sprintf("127.0.0.1:%d", port), 5s);
+            wake.close();
+        } catch (hash<ExceptionInfo> ex) {
+        }
+        running.waitForZero();
+        listener.close();
+    }
+
+    #! Sets the replies for the following requests
+    script(softlist<hash<FakeReply>> replies) {
+        AutoLock al(m);
+        self.replies = replies;
+        requests = ();
+        # a release left by a test that failed before its response stalled must not end a later stall
+        release_queue.clear();
+    }
+
+    #! Releases a stalled response
+    release() {
+        release_queue.push(True);
+    }
+
+    private bool isStopping() {
+        AutoLock al(m);
+        return stopping;
+    }
+
+    private acceptLoop() {
+        on_exit running.dec();
+        while (!isStopping()) {
+            Socket conn;
+            try {
+                conn = listener.accept(60s);
+            } catch (hash<ExceptionInfo> ex) {
+                continue;
+            }
+            if (isStopping()) {
+                conn.close();
+                break;
+            }
+            running.inc();
+            background serve(conn);
+        }
+    }
+
+    private serve(Socket conn) {
+        on_exit {
+            conn.close();
+            running.dec();
+        }
+        try {
+            hash<auto> hdr = conn.readHTTPHeader(10s);
+            *data body;
+            if (hdr."transfer-encoding" =~ /chunked/i) {
+                body = conn.readHTTPChunkedBody(10s).body;
+            } else if (hdr."content-length") {
+                body = conn.recv(hdr."content-length".toInt(), 10s);
+            }
+            hash<FakeReply> reply = takeReply(hdr, body);
+            string head = sprintf("HTTP/1.1 %d %s\r\nContent-Type: %s\r\nConnection: close\r\n", reply.code,
+                HttpCodes{reply.code} ?? "Status", reply.content_type);
+            if (exists reply.body) {
+                conn.send(head + sprintf("Content-Length: %d\r\n\r\n", reply.body.size()) + reply.body);
+                return;
+            }
+            conn.send(head + "\r\n");
+            foreach string chunk in (reply.chunks) {
+                conn.send(chunk);
+            }
+            if (reply.stall) {
+                try {
+                    release_queue.get(30s);
+                } catch (hash<ExceptionInfo> ex) {
+                    # the stalled response ends when the wait times out
+                }
+            }
+        } catch (hash<ExceptionInfo> ex) {
+            # a client that has given up closes the connection
+        }
+    }
+
+    private hash<FakeReply> takeReply(hash<auto> hdr, *data body) {
+        AutoLock al(m);
+        auto parsed;
+        if (body) {
+            string text = body.typeCode() == NT_BINARY ? body.toString() : body;
+            try {
+                parsed = parse_json(text);
+            } catch () {
+                parsed = text;
+            }
+        }
+        push requests, {
+            "path": hdr.path,
+            "hdr": hdr,
+            "body": parsed,
+        };
+        if (!replies) {
+            return <FakeReply>{
+                "code": 500,
+                "content_type": MimeTypeJson,
+                "body": "{\"error\":{\"code\":500,\"message\":\"no scripted reply\"}}",
+            };
+        }
+        return shift replies;
+    }
+}
+
+#! Streaming behavior of the LLM providers, the OpenAI-compatible facade, the stream collector, and agents
+public class LlmStreamingTest inherits QUnit::Test {
+    private {
+        FakeLlmServer server;
+        int port;
+    }
+
+    constructor() : Test("LlmStreamingTest", "1.0") {
+        addTestCase("Gemini: text chunks are streamed", \geminiTextStreamTest());
+        addTestCase("Gemini: a final chunk with text and a tool call", \geminiFinalChunkToolCallTest());
+        addTestCase("Gemini: an HTTP error raises", \geminiHttpErrorTest());
+        addTestCase("Gemini: an error event raises", \geminiStreamErrorEventTest());
+        addTestCase("Gemini: an invalid event raises", \geminiInvalidEventTest());
+        addTestCase("Gemini: a blocked prompt is reported as filtered", \geminiPromptBlockedTest());
+        addTestCase("Gemini: a stalled stream times out", \geminiStallTest());
+        addTestCase("Gemini: a stream closed without a finish reason", \geminiUnterminatedStreamTest());
+        addTestCase("Gemini: a response that is not an event stream raises", \geminiNonSseResponseTest());
+        addTestCase("Gemini: GeminiResponseSseStreamIo validates the response", \geminiSseStreamIoTest());
+        addTestCase("Gemini: the streaming path is derived from the request path", \streamPathTest());
+        addTestCase("OpenAI: text in the final chunk is kept", \openAiFinalChunkContentTest());
+        addTestCase("OpenAI: a stalled stream times out", \openAiStallTest());
+        addTestCase("OpenAI: split tool calls are collected", \openAiSplitToolCallTest());
+        addTestCase("Azure OpenAI: streaming uses the Azure credentials", \azureOpenAiStreamAuthTest());
+        addTestCase("Anthropic: text and tool use are streamed", \anthropicToolStreamTest());
+        addTestCase("Anthropic: reasoning blocks are collected", \anthropicThinkingStreamTest());
+        addTestCase("Anthropic: a tool call without input", \anthropicNoArgToolTest());
+        addTestCase("Anthropic: errors raise", \anthropicErrorsTest());
+        addTestCase("Callback: fallback streaming delivers tool calls", \callbackFallbackToolCallsTest());
+        addTestCase("Agent: a streamed Gemini tool call is run and replayed", \agentGeminiToolCallTest());
+        addTestCase("Agent: Anthropic reasoning blocks are replayed", \agentAnthropicReasoningTest());
+        set_return_value(main());
+    }
+
+    globalSetUp() {
+        server = new FakeLlmServer();
+        port = server.port;
+    }
+
+    globalTearDown() {
+        server.stop();
+    }
+
+    geminiTextStreamTest() {
+        server.script((
+            sseReply((
+                geminiChunk("Hel", NOTHING, {"responseId": "resp-1"}),
+                geminiChunk("lo", NOTHING),
+                geminiChunk("!", "STOP", {"usageMetadata": {"promptTokenCount": 3, "candidatesTokenCount": 3,
+                    "totalTokenCount": 6}}),
+            )),
+            sseReply((
+                geminiChunk("Hel", NOTHING, {"responseId": "resp-1"}),
+                geminiChunk("lo", NOTHING),
+                geminiChunk("!", "STOP", {"usageMetadata": {"promptTokenCount": 3, "candidatesTokenCount": 3,
+                    "totalTokenCount": 6}}),
+            )),
+        ));
+        list<hash<LlmTelemetryEvent>> ends = ();
+        LlmBackend llm = geminiBackend(NOTHING, <LlmTelemetryObserver>{
+            "end_callback": sub (hash<LlmTelemetryEvent> e) {
+                push ends, e;
+            },
+        });
+        list<hash<ChatStreamEvent>> events = ();
+        llm.chatStream(userMessage("hi"), sub (hash<ChatStreamEvent> e) {
+            push events, e;
+        });
+        assertEq(3, events.size(), "each chunk is delivered as one event");
+        assertEq(("Hel", "lo", "!"), (map $1.delta, events));
+        assertEq((False, False, True), (map $1.done, events));
+        assertEq("resp-1", events[0].raw.responseId);
+        assertEq("STOP", events[2].raw.candidates[0].finishReason);
+
+        hash<auto> request = server.requests[0];
+        assertEq("/v1beta/models/gemini-test:streamGenerateContent?alt=sse", request.path);
+        assertEq("gemini-key", request.hdr."x-goog-api-key");
+        assertEq("text/event-stream", request.hdr.accept);
+        assertEq("hi", request.body.contents[0].parts[0].text);
+
+        # telemetry reads the Gemini event shape
+        assertEq(1, ends.size());
+        assertEq("stop", ends[0].stop_reason);
+        assertEq("resp-1", ends[0].response_id);
+        assertEq(6, ends[0].usage.total_tokens);
+
+        # the OpenAI-compatible facade
+        list<hash<auto>> chunks = ();
+        hash<auto> resp = llm.chatCompletionsStream({"messages": ({"role": "user", "content": "hi"},)},
+            sub (hash<auto> chunk) {
+                push chunks, chunk;
+            });
+        assertEq(3, chunks.size());
+        assertEq("stop", chunks[2].choices[0].finish_reason);
+        assertEq("!", chunks[2].choices[0].delta.content, "the final chunk keeps its text");
+        assertEq("Hello!", resp.choices[0].message.content);
+        assertEq("stop", resp.choices[0].finish_reason);
+        assertEq(6, resp.usage.total_tokens);
+        assertEq("resp-1", resp.id);
+    }
+
+    geminiFinalChunkToolCallTest() {
+        hash<auto> chunk = {"candidates": ({
+            "content": {"role": "model", "parts": (
+                {"text": "Checking."},
+                {"functionCall": {"name": "lookup", "args": {"key": "a"}}, "thoughtSignature": "sig-1"},
+            )},
+            "finishReason": "STOP",
+        },)};
+        server.script((sseReply((chunk,)), sseReply((chunk,))));
+        LlmBackend llm = geminiBackend();
+
+        list<hash<ChatStreamEvent>> events = ();
+        hash<ChatResponse> r = llm.chatStreamCollect(userMessage("look up a"),
+            sub (hash<ChatStreamEvent> e) {
+                push events, e;
+            }, lookupTools());
+        assertEq(1, events.size(), "the chunk is delivered once");
+        assertTrue(events[0].done);
+        assertEq("Checking.", events[0].delta);
+        assertEq("tool_use", r.stop_reason);
+        assertEq("Checking.", r.content);
+        assertEq(1, r.tool_calls.size(), "the tool call is collected once");
+        assertEq("lookup", r.tool_calls[0].name);
+        assertEq({"key": "a"}, r.tool_calls[0].arguments);
+        assertEq("sig-1", r.tool_calls[0].thought_signature);
+        assertEq("Checking.", r.raw.candidates[0].content.parts[0].text, "raw holds the last event");
+
+        hash<auto> resp = llm.chatCompletionsStream(openAiLookupRequest(), sub (hash<auto> c) {});
+        assertEq("tool_calls", resp.choices[0].finish_reason);
+        assertEq("Checking.", resp.choices[0].message.content);
+        assertEq(1, resp.choices[0].message.tool_calls.size(), "the facade reports the tool call once");
+        assertEq("lookup", resp.choices[0].message.tool_calls[0]."function".name);
+    }
+
+    geminiHttpErrorTest() {
+        server.script((
+            errorReply(400, "{\"error\":{\"code\":400,\"message\":\"API key not valid\",\"status\":\"INVALID_ARGUMENT\"}}"),
+            errorReply(429, "{\"error\":{\"code\":429,\"message\":\"quota exceeded\",\"status\":\"RESOURCE_EXHAUSTED\"}}"),
+        ));
+        LlmBackend llm = geminiBackend();
+        list<hash<ChatStreamEvent>> events = ();
+        code cb = sub (hash<ChatStreamEvent> e) {
+            push events, e;
+        };
+        assertThrows("LLM-ERROR", "HTTP 400: API key not valid", \llm.chatStream(), (userMessage("hi"), cb));
+        assertThrows("LLM-ERROR", "HTTP 429: quota exceeded", \llm.chatStream(),
+            (userMessage("hi"), cb, NOTHING, <LlmRequestOptions>{"max_retries": 0}));
+        assertEq((), events, "no event is delivered for a rejected request");
+    }
+
+    geminiStreamErrorEventTest() {
+        server.script(sseReply((
+            geminiChunk("partial", NOTHING),
+            {"error": {"code": 500, "message": "internal failure", "status": "INTERNAL"}},
+        )));
+        LlmBackend llm = geminiBackend();
+        list<hash<ChatStreamEvent>> events = ();
+        assertThrows("LLM-ERROR", "reported an error: internal failure \\(code 500\\)", \llm.chatStream(),
+            (userMessage("hi"), sub (hash<ChatStreamEvent> e) {
+                push events, e;
+            }));
+        assertEq(1, events.size(), "the events before the error are delivered");
+        assertFalse(events[0].done);
+    }
+
+    geminiInvalidEventTest() {
+        server.script(<FakeReply>{
+            "chunks": ("data: this is not json\r\n\r\n",),
+        });
+        LlmBackend llm = geminiBackend();
+        assertThrows("LLM-ERROR", "not valid JSON", \llm.chatStream(),
+            (userMessage("hi"), sub (hash<ChatStreamEvent> e) {}));
+    }
+
+    geminiPromptBlockedTest() {
+        hash<auto> blocked = {"promptFeedback": {"blockReason": "SAFETY"}};
+        server.script((
+            sseReply((blocked,)),
+            sseReply((blocked,)),
+            sseReply((blocked,)),
+            <FakeReply>{
+                "content_type": MimeTypeJson,
+                "body": make_json(blocked),
+            },
+        ));
+        LlmBackend llm = geminiBackend();
+        list<hash<ChatStreamEvent>> events = ();
+        llm.chatStream(userMessage("hi"), sub (hash<ChatStreamEvent> e) {
+            push events, e;
+        });
+        assertEq(1, events.size());
+        assertTrue(events[0].done);
+        assertEq("SAFETY", events[0].raw.promptFeedback.blockReason);
+
+        hash<auto> resp = llm.chatCompletionsStream({"messages": ({"role": "user", "content": "hi"},)},
+            sub (hash<auto> c) {});
+        assertEq("content_filter", resp.choices[0].finish_reason);
+        assertEq("SAFETY", resp.provider_diagnostics.prompt_feedback.blockReason);
+
+        hash<ChatResponse> r = llm.chatStreamCollect(userMessage("hi"));
+        assertEq("stop_sequence", r.stop_reason, "a blocked prompt is a filtered response");
+        assertNothing(r.content);
+
+        # the non-streaming response agrees
+        r = llm.chat(userMessage("hi"));
+        assertEq("stop_sequence", r.stop_reason);
+    }
+
+    geminiStallTest() {
+        server.script(<FakeReply>{
+            "chunks": (sseData(geminiChunk("first", NOTHING)),),
+            "stall": True,
+        });
+        on_exit server.release();
+        LlmBackend llm = geminiBackend(500);
+        list<hash<ChatStreamEvent>> events = ();
+        assertThrows("LLM-ERROR", "timed out: no event arrived within 500 ms", \llm.chatStream(),
+            (userMessage("hi"), sub (hash<ChatStreamEvent> e) {
+                push events, e;
+            }));
+        assertEq(1, events.size(), "the event before the stall is delivered");
+        assertEq("first", events[0].delta);
+        assertFalse(events[0].done, "a stalled stream is not reported as complete");
+    }
+
+    geminiUnterminatedStreamTest() {
+        server.script(sseReply((geminiChunk("cut", NOTHING),)));
+        LlmBackend llm = geminiBackend();
+        list<hash<ChatStreamEvent>> events = ();
+        llm.chatStream(userMessage("hi"), sub (hash<ChatStreamEvent> e) {
+            push events, e;
+        });
+        assertEq(2, events.size());
+        assertEq("cut", events[0].delta);
+        assertFalse(events[0].done);
+        assertTrue(events[1].done, "the end of the stream is reported");
+        assertNothing(events[1].raw);
+    }
+
+    geminiNonSseResponseTest() {
+        server.script(<FakeReply>{
+            "content_type": MimeTypeJson,
+            "body": make_json(geminiChunk("not streamed", "STOP")),
+        });
+        LlmBackend llm = geminiBackend();
+        assertThrows("LLM-ERROR", "expected an event stream", \llm.chatStream(),
+            (userMessage("hi"), sub (hash<ChatStreamEvent> e) {}));
+    }
+
+    geminiSseStreamIoTest() {
+        server.script((
+            sseReply((geminiChunk("a", NOTHING), geminiChunk("b", "STOP"))),
+            errorReply(403, "{\"error\":{\"code\":403,\"message\":\"denied\"}}"),
+        ));
+        GeminiRestClientIo rest({"apikey": "gemini-key", "url": "http://localhost:" + port, "protocol": "h1"});
+        on_exit rest.close();
+        GeminiResponseSseStreamIo stream = rest.openStreamingConnection("gemini-test", {
+            "contents": ({"role": "user", "parts": ({"text": "hi"},)},),
+        });
+        list<string> data = ();
+        while (*hash<SseMessageInfo> evt = stream.readEvent(5s)) {
+            push data, evt.data;
+        }
+        assertTrue(stream.isDone(), "the stream ended");
+        assertEq(2, data.size(), "CRLF-delimited events are read separately");
+        assertEq("a", parse_json(data[0]).candidates[0].content.parts[0].text);
+        assertEq("/v1beta/models/gemini-test:streamGenerateContent?alt=sse", server.requests[0].path);
+        assertEq("gemini-key", server.requests[0].hdr."x-goog-api-key");
+
+        assertThrows("REST-RESPONSE-ERROR", "HTTP 403", \rest.openStreamingConnection(),
+            ("gemini-test", {"contents": ()}));
+    }
+
+    streamPathTest() {
+        TestGeminiPathProvider p("/custom/models/m-1:generateContent");
+        assertEq("/custom/models/m-1:streamGenerateContent?alt=sse", p.getStreamRequestPath());
+        TestGeminiPathProvider bad("/custom/models/m-1:predict");
+        assertThrows("LLM-CONFIG-ERROR", "does not end with", \bad.getStreamRequestPath());
+    }
+
+    openAiFinalChunkContentTest() {
+        list<hash<auto>> chunks = (
+            {"id": "c1", "choices": ({"index": 0, "delta": {"role": "assistant", "content": "Hel"}},)},
+            {"id": "c1", "choices": ({"index": 0, "delta": {"content": "lo!"}, "finish_reason": "stop"},)},
+        );
+        server.script((openAiReply(chunks), openAiReply(chunks)));
+        LlmBackend llm = openAiBackend();
+        hash<auto> resp = llm.chatCompletionsStream({"messages": ({"role": "user", "content": "hi"},)},
+            sub (hash<auto> c) {});
+        assertEq("Hello!", resp.choices[0].message.content, "the text of the final chunk is kept");
+        assertEq("stop", resp.choices[0].finish_reason);
+
+        hash<ChatResponse> r = llm.chatStreamCollect(userMessage("hi"));
+        assertEq("Hello!", r.content);
+        assertEq("end_turn", r.stop_reason);
+        assertEq("c1", r.id);
+    }
+
+    openAiStallTest() {
+        server.script(<FakeReply>{
+            "chunks": (sseData({"id": "c1", "choices": ({"index": 0, "delta": {"content": "first"}},)}),),
+            "stall": True,
+        });
+        on_exit server.release();
+        LlmBackend llm = openAiBackend(500);
+        list<hash<ChatStreamEvent>> events = ();
+        assertThrows("LLM-ERROR", "timed out: no event arrived within 500 ms", \llm.chatStream(),
+            (userMessage("hi"), sub (hash<ChatStreamEvent> e) {
+                push events, e;
+            }));
+        assertEq(1, events.size());
+        assertFalse(events[0].done);
+    }
+
+    openAiSplitToolCallTest() {
+        server.script((
+            openAiReply((
+                {"choices": ({"index": 0, "delta": {"tool_calls": ({"index": 0, "id": "call-1", "type": "function",
+                    "function": {"name": "lookup", "arguments": ""}},)}},)},
+                {"choices": ({"index": 0, "delta": {"tool_calls": ({"index": 0,
+                    "function": {"arguments": "{\"key\":"}},)}},)},
+                {"choices": ({"index": 0, "delta": {"tool_calls": ({"index": 0,
+                    "function": {"arguments": "\"a\"}"}},)}},)},
+                # some OpenAI-compatible servers report "stop" for a tool-call turn
+                {"choices": ({"index": 0, "delta": {}, "finish_reason": "stop"},)},
+            )),
+            openAiReply((
+                {"choices": ({"index": 0, "delta": {"tool_calls": ({"index": 0, "id": "call-2", "type": "function",
+                    "function": {"name": "lookup", "arguments": "{not json"}},)}},)},
+                {"choices": ({"index": 0, "delta": {}, "finish_reason": "tool_calls"},)},
+            )),
+        ));
+        LlmBackend llm = openAiBackend();
+        hash<ChatResponse> r = llm.chatStreamCollect(userMessage("look up a"), NOTHING, lookupTools());
+        assertEq("tool_use", r.stop_reason);
+        assertEq(1, r.tool_calls.size());
+        assertEq("call-1", r.tool_calls[0].id);
+        assertEq({"key": "a"}, r.tool_calls[0].arguments);
+
+        r = llm.chatStreamCollect(userMessage("look up a"), NOTHING, lookupTools());
+        assertEq("tool_use", r.stop_reason);
+        assertEq({"_raw": "{not json"}, r.tool_calls[0].arguments, "invalid arguments remain visible");
+    }
+
+    azureOpenAiStreamAuthTest() {
+        server.script(openAiReply((
+            {"id": "az-1", "choices": ({"index": 0, "delta": {"content": "hi"}, "finish_reason": "stop"},)},
+        )));
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "azure-openai",
+            "url": "http://localhost:" + port,
+            "api_key": "azure-key",
+            "protocol": "h1",
+            "provider_options": {
+                "azure_deployment": "my-deployment",
+                "azure_api_version": "2024-10-21",
+            },
+        });
+        hash<ChatResponse> r = llm.chatStreamCollect(userMessage("hi"));
+        assertEq("hi", r.content);
+        hash<auto> request = server.requests[0];
+        assertEq("/openai/deployments/my-deployment/chat/completions?api-version=2024-10-21", request.path);
+        assertEq("azure-key", request.hdr."api-key", "the Azure API key header is sent");
+        assertNothing(request.hdr.authorization, "no bearer credential is sent");
+        assertTrue(request.body.stream);
+    }
+
+    anthropicToolStreamTest() {
+        list<hash<auto>> events = (
+            {"type": "message_start", "message": {"id": "msg_1", "model": "claude-test",
+                "usage": {"input_tokens": 5, "output_tokens": 1}}},
+            {"type": "ping"},
+            {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}},
+            {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Checking."}},
+            {"type": "content_block_stop", "index": 0},
+            {"type": "content_block_start", "index": 1, "content_block": {"type": "tool_use", "id": "toolu_1",
+                "name": "lookup", "input": {}}},
+            {"type": "content_block_delta", "index": 1, "delta": {"type": "input_json_delta",
+                "partial_json": "{\"key\":"}},
+            {"type": "content_block_delta", "index": 1, "delta": {"type": "input_json_delta",
+                "partial_json": " \"a\"}"}},
+            {"type": "content_block_stop", "index": 1},
+            {"type": "message_delta", "delta": {"stop_reason": "tool_use"}, "usage": {"output_tokens": 9}},
+            {"type": "message_stop"},
+        );
+        server.script((anthropicReply(events), anthropicReply(events), anthropicReply(events)));
+        list<hash<LlmTelemetryEvent>> ends = ();
+        LlmBackend llm = anthropicBackend(NOTHING, <LlmTelemetryObserver>{
+            "end_callback": sub (hash<LlmTelemetryEvent> e) {
+                push ends, e;
+            },
+        });
+
+        list<hash<ChatStreamEvent>> received = ();
+        llm.chatStream(userMessage("look up a"), sub (hash<ChatStreamEvent> e) {
+            push received, e;
+        }, lookupTools());
+        assertEq(10, received.size(), "every event except the keep-alive is delivered once");
+        assertEq("Checking.", (select received, $1.delta.val())[0].delta);
+        assertTrue(received.last().done);
+        assertEq("message_stop", received.last().raw.type);
+
+        hash<auto> request = server.requests[0];
+        assertEq("/v1/messages", request.path);
+        assertEq("anthropic-key", request.hdr."x-api-key");
+        assertTrue(request.hdr."anthropic-version".val());
+        assertTrue(request.body.stream);
+
+        assertEq("tool_calls", ends[0].stop_reason);
+        assertEq(14, ends[0].usage.total_tokens);
+
+        hash<auto> resp = llm.chatCompletionsStream(openAiLookupRequest(), sub (hash<auto> c) {});
+        assertEq("tool_calls", resp.choices[0].finish_reason);
+        assertEq("Checking.", resp.choices[0].message.content);
+        assertEq(1, resp.choices[0].message.tool_calls.size());
+        assertEq("toolu_1", resp.choices[0].message.tool_calls[0].id);
+        assertEq("{\"key\": \"a\"}", resp.choices[0].message.tool_calls[0]."function".arguments);
+        assertEq(5, resp.usage.prompt_tokens);
+        assertEq(9, resp.usage.completion_tokens);
+        assertEq("msg_1", resp.id);
+
+        hash<ChatResponse> r = llm.chatStreamCollect(userMessage("look up a"), NOTHING, lookupTools());
+        assertEq("tool_use", r.stop_reason);
+        assertEq("claude-test", r.model);
+        assertEq({"key": "a"}, r.tool_calls[0].arguments);
+    }
+
+    anthropicThinkingStreamTest() {
+        server.script(anthropicReply((
+            {"type": "message_start", "message": {"id": "msg_2", "model": "claude-test",
+                "usage": {"input_tokens": 5, "output_tokens": 1}}},
+            {"type": "content_block_start", "index": 0, "content_block": {"type": "thinking", "thinking": ""}},
+            {"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": "Let me "}},
+            {"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta", "thinking": "think."}},
+            {"type": "content_block_delta", "index": 0, "delta": {"type": "signature_delta", "signature": "sig-t"}},
+            {"type": "content_block_stop", "index": 0},
+            {"type": "content_block_start", "index": 1, "content_block": {"type": "redacted_thinking",
+                "data": "opaque"}},
+            {"type": "content_block_stop", "index": 1},
+            {"type": "content_block_start", "index": 2, "content_block": {"type": "text", "text": ""}},
+            {"type": "content_block_delta", "index": 2, "delta": {"type": "text_delta", "text": "Done."}},
+            {"type": "content_block_stop", "index": 2},
+            {"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 20}},
+            {"type": "message_stop"},
+        )));
+        LlmBackend llm = anthropicBackend();
+        hash<ChatResponse> r = llm.chatStreamCollect(userMessage("think"));
+        assertEq("end_turn", r.stop_reason);
+        assertEq("Done.", r.content, "thinking text is not response text");
+        assertEq((
+            {"type": "thinking", "thinking": "Let me think.", "signature": "sig-t"},
+            {"type": "redacted_thinking", "data": "opaque"},
+        ), r.reasoning_blocks);
+    }
+
+    anthropicNoArgToolTest() {
+        server.script(anthropicReply((
+            {"type": "message_start", "message": {"id": "msg_3", "model": "claude-test"}},
+            {"type": "content_block_start", "index": 0, "content_block": {"type": "tool_use", "id": "toolu_2",
+                "name": "now", "input": {}}},
+            {"type": "content_block_stop", "index": 0},
+            {"type": "message_delta", "delta": {"stop_reason": "tool_use"}},
+            {"type": "message_stop"},
+        )));
+        LlmBackend llm = anthropicBackend();
+        hash<ChatResponse> r = llm.chatStreamCollect(userMessage("time?"), NOTHING, (
+            <ToolDefinition>{"name": "now", "parameters": {"type": "object"}},
+        ));
+        assertEq("tool_use", r.stop_reason);
+        assertEq("now", r.tool_calls[0].name);
+        assertEq({}, r.tool_calls[0].arguments, "a tool call without input has empty arguments");
+    }
+
+    anthropicErrorsTest() {
+        server.script((
+            errorReply(401, "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\","
+                "\"message\":\"invalid x-api-key\"}}"),
+            anthropicReply((
+                {"type": "message_start", "message": {"id": "msg_4", "model": "claude-test"}},
+                {"type": "error", "error": {"type": "overloaded_error", "message": "Overloaded"}},
+            )),
+            <FakeReply>{
+                "chunks": ("event: message_start\ndata: "
+                    + make_json({"type": "message_start", "message": {"id": "msg_5"}}) + "\n\n",),
+                "stall": True,
+            },
+        ));
+        on_exit server.release();
+        LlmBackend llm = anthropicBackend(500);
+        code cb = sub (hash<ChatStreamEvent> e) {};
+        assertThrows("LLM-ERROR", "HTTP 401 response received: invalid x-api-key", \llm.chatStream(),
+            (userMessage("hi"), cb));
+        assertThrows("LLM-ERROR", "reported an error: overloaded_error: Overloaded", \llm.chatStream(),
+            (userMessage("hi"), cb));
+        assertThrows("LLM-ERROR", "timed out: no event arrived within 500 ms", \llm.chatStream(),
+            (userMessage("hi"), cb));
+    }
+
+    callbackFallbackToolCallsTest() {
+        LlmBackend llm(<LlmBackendConfig>{
+            "mode": "callback",
+            "api_callback": hash<auto> sub (string method, string path, hash<auto> body) {
+                return {
+                    "id": "cb-1",
+                    "choices": ({
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": "Checking.",
+                            "tool_calls": ({
+                                "id": "call-cb",
+                                "type": "function",
+                                "function": {"name": "lookup", "arguments": "{\"key\":\"a\"}"},
+                            },),
+                        },
+                        "finish_reason": "tool_calls",
+                    },),
+                };
+            },
+        });
+        hash<auto> resp = llm.chatCompletionsStream(openAiLookupRequest(), sub (hash<auto> c) {});
+        assertEq("tool_calls", resp.choices[0].finish_reason);
+        assertEq(1, resp.choices[0].message.tool_calls.size(), "the tool call is delivered");
+        assertEq("call-cb", resp.choices[0].message.tool_calls[0].id);
+        assertEq({"key": "a"}, parse_json(resp.choices[0].message.tool_calls[0]."function".arguments));
+
+        hash<ChatResponse> r = llm.chatStreamCollect(userMessage("look up a"), NOTHING, lookupTools());
+        assertEq("tool_use", r.stop_reason);
+        assertEq("Checking.", r.content);
+        assertEq({"key": "a"}, r.tool_calls[0].arguments);
+    }
+
+    agentGeminiToolCallTest() {
+        server.script((
+            sseReply((
+                geminiChunk("Let me check. ", NOTHING),
+                {"candidates": ({
+                    "content": {"role": "model", "parts": (
+                        {"functionCall": {"name": "lookup", "args": {"key": "a"}}, "thoughtSignature": "sig-agent"},
+                    )},
+                    "finishReason": "STOP",
+                },)},
+            )),
+            sseReply((
+                geminiChunk("The value ", NOTHING),
+                geminiChunk("is 42.", "STOP"),
+            )),
+        ));
+        LlmBackend llm = geminiBackend();
+        SimpleAgentStrategy strategy(llm, {"max_iterations": 3});
+        list<hash<auto>> dispatches = ();
+        list<hash<ChatStreamEvent>> events = ();
+        hash<AgentResult> res = strategy.executeStream(<AgentContext>{
+            "message": "what is a?",
+            "tools": lookupTools(),
+            "tool_dispatch": auto sub (string name, hash<auto> args) {
+                push dispatches, {"name": name, "args": args};
+                return {"value": 42};
+            },
+        }, sub (hash<ChatStreamEvent> e) {
+            push events, e;
+        });
+        assertEq(1, dispatches.size(), "the tool runs once");
+        assertEq({"name": "lookup", "args": {"key": "a"}}, dispatches[0]);
+        assertEq("The value is 42.", res.response);
+        list<auto> text = map $1.delta, events, $1.delta.val();
+        assertEq(("Let me check. ", "The value ", "is 42."), text,
+            "the text of final events reaches the live stream");
+        assertEq(1, (select events, $1.done).size(), "one terminal event");
+        assertTrue(events.last().done);
+
+        # the second request replays the tool call with its reasoning signature
+        hash<auto> request = server.requests[1];
+        *hash<auto> call_part;
+        foreach hash<auto> content in (request.body.contents) {
+            foreach hash<auto> part in (content.parts) {
+                if (part.functionCall) {
+                    call_part = part;
+                }
+            }
+        }
+        assertEq("lookup", call_part.functionCall.name);
+        assertEq("sig-agent", call_part.thoughtSignature);
+    }
+
+    agentAnthropicReasoningTest() {
+        server.script((
+            anthropicReply((
+                {"type": "message_start", "message": {"id": "msg_6", "model": "claude-test"}},
+                {"type": "content_block_start", "index": 0, "content_block": {"type": "thinking", "thinking": ""}},
+                {"type": "content_block_delta", "index": 0, "delta": {"type": "thinking_delta",
+                    "thinking": "Need the tool."}},
+                {"type": "content_block_delta", "index": 0, "delta": {"type": "signature_delta",
+                    "signature": "sig-a"}},
+                {"type": "content_block_stop", "index": 0},
+                {"type": "content_block_start", "index": 1, "content_block": {"type": "tool_use", "id": "toolu_9",
+                    "name": "lookup", "input": {}}},
+                {"type": "content_block_delta", "index": 1, "delta": {"type": "input_json_delta",
+                    "partial_json": "{\"key\":\"a\"}"}},
+                {"type": "content_block_stop", "index": 1},
+                {"type": "message_delta", "delta": {"stop_reason": "tool_use"}},
+                {"type": "message_stop"},
+            )),
+            anthropicReply((
+                {"type": "message_start", "message": {"id": "msg_7", "model": "claude-test"}},
+                {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}},
+                {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "It is 42."}},
+                {"type": "content_block_stop", "index": 0},
+                {"type": "message_delta", "delta": {"stop_reason": "end_turn"}},
+                {"type": "message_stop"},
+            )),
+        ));
+        LlmBackend llm = anthropicBackend();
+        SimpleAgentStrategy strategy(llm, {"max_iterations": 3});
+        hash<AgentResult> res = strategy.executeStream(<AgentContext>{
+            "message": "what is a?",
+            "tools": lookupTools(),
+            "tool_dispatch": auto sub (string name, hash<auto> args) {
+                return {"value": 42};
+            },
+        }, sub (hash<ChatStreamEvent> e) {});
+        assertEq("It is 42.", res.response);
+
+        # the replayed assistant turn starts with its reasoning block
+        *hash<auto> assistant;
+        foreach hash<auto> msg in (server.requests[1].body.messages) {
+            if (msg.role == "assistant") {
+                assistant = msg;
+            }
+        }
+        assertEq("thinking", assistant.content[0].type);
+        assertEq("Need the tool.", assistant.content[0].thinking);
+        assertEq("sig-a", assistant.content[0].signature);
+        assertEq("tool_use", assistant.content.last().type);
+        assertEq("toolu_9", assistant.content.last().id);
+    }
+
+    private LlmBackend geminiBackend(*int timeout_ms, *hash<LlmTelemetryObserver> observer) {
+        hash<LlmBackendConfig> config = <LlmBackendConfig>{
+            "mode": "gemini",
+            "url": "http://localhost:" + port,
+            "model": "gemini-test",
+            "api_key": "gemini-key",
+            "max_retries": 0,
+            "protocol": "h1",
+        };
+        if (timeout_ms) {
+            config.timeout_ms = timeout_ms;
+        }
+        if (observer) {
+            config.telemetry_observer = observer;
+        }
+        return new LlmBackend(config);
+    }
+
+    private LlmBackend openAiBackend(*int timeout_ms) {
+        hash<LlmBackendConfig> config = <LlmBackendConfig>{
+            "mode": "http",
+            "url": "http://localhost:" + port,
+            "model": "gpt-test",
+            "api_key": "openai-key",
+            "max_retries": 0,
+            "protocol": "h1",
+        };
+        if (timeout_ms) {
+            config.timeout_ms = timeout_ms;
+        }
+        return new LlmBackend(config);
+    }
+
+    private LlmBackend anthropicBackend(*int timeout_ms, *hash<LlmTelemetryObserver> observer) {
+        hash<LlmBackendConfig> config = <LlmBackendConfig>{
+            "mode": "anthropic",
+            "url": "http://localhost:" + port,
+            "model": "claude-test",
+            "api_key": "anthropic-key",
+            "max_retries": 0,
+            "protocol": "h1",
+        };
+        if (timeout_ms) {
+            config.timeout_ms = timeout_ms;
+        }
+        if (observer) {
+            config.telemetry_observer = observer;
+        }
+        return new LlmBackend(config);
+    }
+
+    private static list<hash<ChatMessage>> userMessage(string text) {
+        return (<ChatMessage>{"role": "user", "content": text},);
+    }
+
+    private static list<hash<ToolDefinition>> lookupTools() {
+        return (
+            <ToolDefinition>{
+                "name": "lookup",
+                "description": "looks up a value",
+                "parameters": {"type": "object", "properties": {"key": {"type": "string"}}},
+            },
+        );
+    }
+
+    private static hash<auto> openAiLookupRequest() {
+        return {
+            "messages": ({"role": "user", "content": "look up a"},),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "lookup",
+                    "parameters": {"type": "object", "properties": {"key": {"type": "string"}}},
+                },
+            },),
+        };
+    }
+
+    private static hash<auto> geminiChunk(string text, *string finish_reason, *hash<auto> extra) {
+        hash<auto!> candidate;
+        candidate.content = {"role": "model", "parts": ({"text": text},)};
+        if (finish_reason) {
+            candidate.finishReason = finish_reason;
+        }
+        hash<auto!> chunk;
+        chunk.candidates = (candidate,);
+        return chunk + extra;
+    }
+
+    #! Returns an SSE event with CRLF framing, as sent by Gemini
+    private static string sseData(hash<auto> data) {
+        return "data: " + make_json(data) + "\r\n\r\n";
+    }
+
+    private static hash<FakeReply> sseReply(list<hash<auto>> chunks) {
+        return <FakeReply>{
+            "chunks": map LlmStreamingTest::sseData($1), chunks,
+        };
+    }
+
+    private static hash<FakeReply> openAiReply(list<hash<auto>> chunks) {
+        return <FakeReply>{
+            "chunks": (map "data: " + make_json($1) + "\n\n", chunks) + ("data: [DONE]\n\n",),
+        };
+    }
+
+    private static hash<FakeReply> anthropicReply(list<hash<auto>> events) {
+        return <FakeReply>{
+            "chunks": map sprintf("event: %s\ndata: %s\n\n", $1.type, make_json($1)), events,
+        };
+    }
+
+    private static hash<FakeReply> errorReply(int code, string body) {
+        return <FakeReply>{
+            "code": code,
+            "content_type": MimeTypeJson,
+            "body": body,
+        };
+    }
+}
+
+#! Exposes the stream path derivation of the shared Gemini provider
+class TestGeminiPathProvider inherits GeminiBodyShape::AbstractGeminiModelProvider {
+    private {
+        string request_path;
+    }
+
+    constructor(string request_path) : AbstractGeminiModelProvider(<LlmBackendConfig>{"mode": "test-gemini"}) {
+        self.request_path = request_path;
+    }
+
+    string getMode() {
+        return "test-gemini";
+    }
+
+    string getDefaultModel() {
+        return "m-1";
+    }
+
+    RestClientIo createRestClient() {
+        return new RestClientIo({"url": "http://localhost"});
+    }
+
+    string getRequestPath(*hash<LlmRequestOptions> opts) {
+        return request_path;
+    }
+}

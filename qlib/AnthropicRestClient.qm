@@ -764,7 +764,8 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR",
-                sprintf("Anthropic completion request failed: %s", ex.desc), ex;
+                sprintf("Anthropic completion request failed: %s",
+                    AnthropicLlmProvider::requestErrorDetail(ex)), ex;
         }
 
         string content = "";
@@ -801,7 +802,8 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR",
-                sprintf("Anthropic chat request failed: %s", ex.desc), ex;
+                sprintf("Anthropic chat request failed: %s",
+                    AnthropicLlmProvider::requestErrorDetail(ex)), ex;
         }
 
         *string text_content;
@@ -843,6 +845,27 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         };
     }
 
+    #! Streams a chat completion from the Messages API
+    /** Delivers each Messages API stream event (\c message_start,
+        \c content_block_start, \c content_block_delta, \c content_block_stop,
+        \c message_delta, and \c message_stop) as exactly one
+        @ref QoreLlmUtils::ChatStreamEvent with the parsed event in \c raw; text
+        deltas are also provided in \c delta, and \c message_stop is delivered
+        with \c done set.  Tool calls, reasoning blocks, usage, and the stop
+        reason are read from the events by @ref updateOpenAiStreamStateFromRaw()
+        and @ref getOpenAiToolCallDeltas(), for example by
+        <a href="../../QoreLlmUtils/html/index.html">LlmBackend::chatStreamCollect()</a>.
+
+        @param messages conversation history
+        @param callback receives each event as it arrives
+        @param tools optional tool definitions
+        @param opts per-call overrides; the request timeout also limits the
+        time to wait for each event
+
+        @throw LLM-ERROR the request failed or was rejected, the response was
+        not an event stream, an event could not be parsed, the stream reported
+        an error, or no event arrived within the request timeout
+    */
     chatStream(list<hash<QoreLlmUtils::ChatMessage>> messages,
             code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
             *list<hash<QoreLlmUtils::ToolDefinition>> tools,
@@ -852,63 +875,294 @@ public class AnthropicLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         hash<auto> body = buildAnthropicBody(messages, tools, opts);
         body.stream = True;
 
-        hash<auto> hdr = {
+        hash<auto> hdr = buildAuthHeaders() + {
             "Accept": "text/event-stream",
-            "anthropic-version": getConfig().anthropic_version,
+            "Content-Type": "application/json",
         };
-        if (getConfig().api_key.val()) {
-            hdr."x-api-key" = getConfig().api_key;
-        }
-        hdr."Content-Type" = "application/json";
-
-        HttpClientIo::HttpClientConnectionManager mgr =
-            rest_client.getConnectionManager();
-        HttpClientIo::HttpClientStreamHandle stream =
-            mgr.acquireStream(getConfig().url);
-
         string json_body = make_json(body);
-        stream.startStreaming("POST", "/v1/messages", hdr, False, json_body);
+        HttpClientStreamingIo::SseStreamReader reader;
+        try {
+            reader = withRetry(HttpClientStreamingIo::SseStreamReader sub () {
+                return rest_client.restSseReader("POST", "/v1/messages", hdr,
+                    json_body);
+            }, opts);
+        } catch (hash<ExceptionInfo> ex) {
+            throw "LLM-ERROR", sprintf("Anthropic streaming chat request "
+                "failed: %s", AnthropicLlmProvider::requestErrorDetail(ex)),
+                ex;
+        }
+        # a stream left before its end must not keep the server sending
+        on_exit reader.cancel();
 
-        HttpClientStreamingIo::SseStreamReader reader(stream);
-
+        int timeout_ms = getRequestTimeoutMs(opts);
         while (True) {
-            *hash<SseMessageInfo> evt = reader.readEvent(
-                getConfig().timeout_ms);
+            *hash<SseMessageInfo> evt = reader.readEvent(timeout_ms);
             if (!evt) {
+                # the reader also returns nothing when the wait times out,
+                # which must not be reported as a complete response
+                if (!reader.isDone()) {
+                    throw "LLM-ERROR", sprintf("Anthropic streaming chat "
+                        "response timed out: no event arrived within %d ms",
+                        timeout_ms);
+                }
                 callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
-                break;
+                return;
             }
-            if (evt.data == "[DONE]") {
-                callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
-                break;
-            }
-
-            *hash<auto> parsed;
-            try {
-                parsed = parse_json(evt.data);
-            } catch () {
+            if (!evt.data.val()) {
                 continue;
             }
-
-            *string delta;
-            if (parsed.type == "content_block_delta"
-                    && parsed.delta.text.val()) {
-                delta = parsed.delta.text;
-            } else if (parsed.type == "message_stop") {
-                callback(<QoreLlmUtils::ChatStreamEvent>{
-                    "done": True, "raw": parsed,
-                });
-                break;
+            auto parsed;
+            try {
+                parsed = parse_json(evt.data);
+            } catch (hash<ExceptionInfo> ex) {
+                throw "LLM-ERROR", sprintf("Anthropic streaming chat response "
+                    "contained an event that is not valid JSON: %s", ex.desc),
+                    ex;
             }
-
-            if (delta.val()) {
-                callback(<QoreLlmUtils::ChatStreamEvent>{
-                    "event": evt.event,
-                    "delta": delta,
-                    "raw": parsed,
-                });
+            if (parsed.typeCode() != NT_HASH) {
+                throw "LLM-ERROR", sprintf("Anthropic streaming chat response "
+                    "contained an event that is not a JSON object: %y",
+                    parsed);
+            }
+            hash<auto> event_data = cast<hash>(parsed);
+            if (event_data.type == "error") {
+                throw "LLM-ERROR", sprintf("Anthropic streaming chat response "
+                    "reported an error: %s: %s",
+                    event_data.error.type ?? "error",
+                    event_data.error.message ?? "no message"),
+                    event_data.error;
+            }
+            if (event_data.type == "ping") {
+                # keep-alive with no content
+                continue;
+            }
+            bool done = event_data.type == "message_stop";
+            hash<QoreLlmUtils::ChatStreamEvent> event =
+                <QoreLlmUtils::ChatStreamEvent>{
+                "done": done,
+                "raw": event_data,
+            };
+            if (evt.event.val()) {
+                event.event = evt.event;
+            }
+            if (event_data.type == "content_block_delta"
+                    && event_data.delta.text.val()) {
+                event.delta = event_data.delta.text;
+            }
+            callback(event);
+            if (done) {
+                return;
             }
         }
+    }
+
+    #! Updates OpenAI stream state from a Messages API stream event
+    /** Reads the message ID, model, and usage from \c message_start, the stop
+        reason and final usage from \c message_delta, and collects complete
+        \c thinking and \c redacted_thinking blocks in
+        \c state.reasoning_blocks so they can be replayed with the assistant
+        turn.
+
+        @param state the OpenAI-compatible stream state
+        @param raw the parsed Messages API stream event
+    */
+    updateOpenAiStreamStateFromRaw(reference<hash<auto>> state,
+            *hash<auto> raw) {
+        if (!raw) {
+            return;
+        }
+        switch (raw.type) {
+            case "message_start": {
+                if (raw.message.typeCode() != NT_HASH) {
+                    break;
+                }
+                hash<auto> msg = cast<hash>(raw.message);
+                if (msg.id.val()) {
+                    state.id = msg.id;
+                }
+                if (msg.model.val()) {
+                    state.model = msg.model;
+                }
+                if (msg.usage.typeCode() == NT_HASH) {
+                    state.anthropic_usage = msg.usage;
+                    state.usage = AnthropicLlmProvider::openAiUsage(
+                        cast<hash>(msg.usage));
+                }
+                break;
+            }
+            case "message_delta": {
+                if (raw.usage.typeCode() == NT_HASH) {
+                    # message_delta reports cumulative counts
+                    hash<auto> usage = (state.anthropic_usage ?? {})
+                        + cast<hash>(raw.usage);
+                    state.anthropic_usage = usage;
+                    state.usage = AnthropicLlmProvider::openAiUsage(usage);
+                }
+                if (raw.delta.stop_reason.val()) {
+                    state.finish_reason =
+                        AnthropicLlmProvider::stopReasonToOpenAi(
+                            raw.delta.stop_reason);
+                }
+                break;
+            }
+            case "content_block_start": {
+                if (raw.content_block.type == "thinking"
+                        || raw.content_block.type == "redacted_thinking") {
+                    state.anthropic_reasoning{raw."index".toString()} =
+                        raw.content_block;
+                }
+                break;
+            }
+            case "content_block_delta": {
+                string key = raw."index".toString();
+                if (!state.anthropic_reasoning{key}) {
+                    break;
+                }
+                switch (raw.delta.type) {
+                    case "thinking_delta":
+                        state.anthropic_reasoning{key}.thinking =
+                            (state.anthropic_reasoning{key}.thinking ?? "")
+                            + (raw.delta.thinking ?? "");
+                        break;
+                    case "signature_delta":
+                        state.anthropic_reasoning{key}.signature =
+                            (state.anthropic_reasoning{key}.signature ?? "")
+                            + (raw.delta.signature ?? "");
+                        break;
+                }
+                break;
+            }
+            case "content_block_stop": {
+                *hash<auto> block =
+                    remove state.anthropic_reasoning{raw."index".toString()};
+                if (block) {
+                    if (state.reasoning_blocks.typeCode() != NT_LIST) {
+                        state.reasoning_blocks = ();
+                    }
+                    state.reasoning_blocks += block;
+                }
+                break;
+            }
+        }
+    }
+
+    #! Returns OpenAI tool-call deltas for a Messages API stream event
+    /** A \c tool_use content block starts a tool call; its
+        \c input_json_delta events append to the call's arguments.  A tool call
+        whose input stream is empty receives \c "{}" as its arguments when its
+        block ends.
+
+        @param state the OpenAI-compatible stream state
+        @param raw the parsed Messages API stream event
+
+        @return the OpenAI-shaped tool-call deltas in the event
+    */
+    list<hash<auto>> getOpenAiToolCallDeltas(reference<hash<auto>> state,
+            *hash<auto> raw) {
+        if (!raw) {
+            return ();
+        }
+        switch (raw.type) {
+            case "content_block_start": {
+                if (raw.content_block.type != "tool_use") {
+                    break;
+                }
+                if (state.tool_calls.typeCode() != NT_LIST) {
+                    state.tool_calls = ();
+                }
+                hash<auto> block = cast<hash>(raw.content_block);
+                int idx = state.tool_calls.size();
+                state.anthropic_tool_index{raw."index".toString()} = idx;
+                # the input normally arrives in input_json_delta events
+                string arguments = block.input ? make_json(block.input) : "";
+                hash<auto> function = {
+                    "name": block.name,
+                    "arguments": arguments,
+                };
+                state.tool_calls += {
+                    "id": block.id,
+                    "type": "function",
+                    "function": function,
+                };
+                return ({
+                    "index": idx,
+                    "id": block.id,
+                    "type": "function",
+                    "function": function,
+                },);
+            }
+            case "content_block_delta": {
+                if (raw.delta.type != "input_json_delta") {
+                    break;
+                }
+                *int idx =
+                    state.anthropic_tool_index{raw."index".toString()};
+                if (!exists idx) {
+                    break;
+                }
+                string part = raw.delta.partial_json ?? "";
+                state.tool_calls[idx]."function".arguments += part;
+                return ({
+                    "index": idx,
+                    "function": {"arguments": part},
+                },);
+            }
+            case "content_block_stop": {
+                *int idx =
+                    remove state.anthropic_tool_index{raw."index".toString()};
+                if (!exists idx
+                        || state.tool_calls[idx]."function".arguments.val()) {
+                    break;
+                }
+                state.tool_calls[idx]."function".arguments = "{}";
+                return ({
+                    "index": idx,
+                    "function": {"arguments": "{}"},
+                },);
+            }
+        }
+        return ();
+    }
+
+    #! Returns OpenAI-style usage counters for Messages API usage
+    private static hash<auto> openAiUsage(hash<auto> usage) {
+        int prompt_tokens = (usage.input_tokens ?? 0).toInt();
+        int completion_tokens = (usage.output_tokens ?? 0).toInt();
+        return usage + {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+        };
+    }
+
+    #! Maps a Messages API stop reason to an OpenAI finish reason
+    private static string stopReasonToOpenAi(string stop_reason) {
+        switch (stop_reason) {
+            case "tool_use":
+                return "tool_calls";
+            case "max_tokens":
+            case "model_context_window_exceeded":
+                return "length";
+            case "refusal":
+                return "content_filter";
+            default:
+                return "stop";
+        }
+    }
+
+    #! Returns an exception description with the Messages API error message
+    private static string requestErrorDetail(hash<ExceptionInfo> ex) {
+        auto body = ex.arg.typeCode() == NT_HASH ? ex.arg.body : NOTHING;
+        if (body.typeCode() == NT_STRING && body =~ /^\s*\{/) {
+            try {
+                body = parse_json(body);
+            } catch () {
+            }
+        }
+        if (body.typeCode() == NT_HASH && body.error.message.val()) {
+            return sprintf("%s: %s", ex.desc, body.error.message);
+        }
+        return ex.desc;
     }
 
     #! Returns headers with anthropic-version and x-api-key set

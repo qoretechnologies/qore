@@ -147,7 +147,10 @@ public class GeminiRestClientBase {
     /** Maps the \c apikey option to the \c x-goog-api-key header
     */
     static hash<auto> getOptions(hash<auto> opts) {
-        hash<auto> rv = DefaultOptions + opts;
+        # the options can be a hash with only string values, which could not take the headers hash
+        hash<auto!> rv;
+        rv += DefaultOptions;
+        rv += opts;
         # Map apikey to x-goog-api-key header
         if (rv.apikey) {
             hash<auto> hdr = rv.headers ?? {};
@@ -413,44 +416,36 @@ public class GeminiResponseSseStreamIo {
         @param body the request body (serialized to JSON)
         @param hdr optional additional request headers
         @param to optional timeout for SSE event reading
+
+        @throw HTTPCLIENT-CONNECT-ERROR the connection cannot be established
+        @throw REST-RESPONSE-ERROR the server returned an error response or a
+        response that is not an event stream; the exception argument contains
+        the response status, headers, and any response body
     */
     constructor(GeminiRestClientIo rest, string model, *auto body, *hash<auto> hdr, *timeout to) {
         if (to) {
             timeout_ms = to;
         }
-        hash<auto> headers = rest.getDefaultHeaders() + (hdr ?? {});
-        headers.Accept = "text/event-stream";
-
-        # Serialize body to JSON
+        hash<auto> headers = hdr ?? {};
         *data payload;
         if (exists body) {
-            if (body.typeCode() != NT_STRING) {
-                if (!headers."Content-Type") {
-                    headers."Content-Type" = "application/json";
-                }
-                payload = make_json(body);
-            } else {
-                if (!headers."Content-Type") {
-                    headers."Content-Type" = "application/json";
-                }
-                payload = body;
+            payload = body.typeCode() == NT_STRING ? body : make_json(body);
+            if (!headers."Content-Type") {
+                headers."Content-Type" = "application/json";
             }
         }
-
-        # Build full path: /v1beta/models/{model}:streamGenerateContent?alt=sse
-        string full_path = buildPath(rest, "models/" + model + ":streamGenerateContent?alt=sse");
-
-        # Acquire stream and start SSE streaming
-        HttpClientIo::HttpClientConnectionManager mgr = rest.getConnectionManager();
-        HttpClientIo::HttpClientStreamHandle stream = mgr.acquireStream(rest.getUrl());
-        stream.startStreaming("POST", full_path, headers, False, payload);
-
-        reader = new HttpClientStreamingIo::SseStreamReader(stream);
+        # the REST client applies its default headers (including the API key) and connection path, and validates
+        # the response before any event is read
+        reader = rest.restSseReader("POST",
+            GeminiBodyShape::modelResource(model) + ":streamGenerateContent?alt=sse", headers, payload);
     }
 
     #! Reads the next SSE event
     /** @param to optional timeout override
-        @return the parsed SSE event, or NOTHING on timeout or stream end
+        @return the parsed SSE event, or NOTHING on timeout or stream end; use
+        @ref isDone() to tell them apart
+
+        @throw SSE-STREAM-ERROR the stream reported an error
     */
     *hash<SseMessageInfo> readEvent(*timeout to) {
         if (closed) {
@@ -470,22 +465,6 @@ public class GeminiResponseSseStreamIo {
             closed = True;
             reader.cancel();
         }
-    }
-
-    #! Builds the full API path from connection path + relative path
-    private static string buildPath(RestClientIo::RestClientIo rest, string path) {
-        string rv = path;
-        rv =~ s/^\/+//;
-        rv = "/" + rv;
-        *string base = rest.getConnectionPath();
-        if (base.val() && base != "/") {
-            base =~ s/\/+$//;
-            if (base !~ /^\//) {
-                base = "/" + base;
-            }
-            rv = base + rv;
-        }
-        return rv;
     }
 }
 
@@ -675,7 +654,7 @@ public class GeminiRestConnection inherits RestClient::RestConnection {
     @ref GeminiRestClientIo for transport.  The provider handles
     Gemini-native body construction, response parsing, schema sanitization
     (Gemini's JSON Schema subset is stricter than OpenAI's — see
-    @ref sanitizeGeminiSchema()), tool-call extraction, finish-reason mapping,
+    <a href="../../GeminiBodyShape/html/index.html">GeminiBodyShape::sanitizeSchema()</a>), tool-call extraction, finish-reason mapping,
     and OpenAI-compatible facade adapter hooks (\c toolConfig in place of
     \c tool_choice, \c responseSchema in place of \c response_format,
     \c usageMetadata + \c candidates[].finishReason on stream events).
@@ -732,91 +711,13 @@ public class GeminiLlmProvider inherits GeminiBodyShape::AbstractGeminiModelProv
         return new GeminiRestClientIo(opts);
     }
 
-    #! Real Gemini SSE streaming (overrides the synthetic base default)
-    chatStream(list<hash<QoreLlmUtils::ChatMessage>> messages,
-            code<nothing(hash<QoreLlmUtils::ChatStreamEvent>)> callback,
-            *list<hash<QoreLlmUtils::ToolDefinition>> tools,
-            *hash<QoreLlmUtils::LlmRequestOptions> opts) {
-        ensureRestClient();
-
-        hash<auto> body = buildModelBody(messages, tools,
-            opts.output_schema, opts);
-        GeminiResponseSseStreamIo stream =
-            cast<GeminiRestClientIo>(getRestClient()).openStreamingConnection(
-                GeminiBodyShape::bareModelName(getModelName(opts)), body,
-                NOTHING, getConfig().timeout_ms);
-        on_exit stream.close();
-
-        while (True) {
-            *hash<SseMessageInfo> evt = stream.readEvent(getConfig().timeout_ms);
-            if (!evt) {
-                callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
-                break;
-            }
-            if (!evt.data.val() || evt.data == "[DONE]") {
-                callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
-                break;
-            }
-
-            *hash<auto> parsed;
-            try {
-                parsed = parse_json(evt.data);
-            } catch () {
-                continue;
-            }
-
-            string delta = GeminiBodyShape::extractText(parsed);
-            *string finish_reason = parsed.candidates[0].finishReason;
-            # Detect a tool-call (functionCall) part in this chunk.  "Thinking"
-            # Gemini models (e.g. gemini-3.5-flash) stream the functionCall in a
-            # chunk that carries no text and no finishReason — the finishReason
-            # arrives in a later, content-empty chunk.  Such a chunk matches
-            # neither the text-delta nor the finish branch below, so without
-            # this its tool call is silently dropped and the turn looks like
-            # "no tool calls and no text".  Non-thinking models (e.g.
-            # gemini-2.5-flash) pack the functionCall and finishReason into one
-            # chunk, which is still delivered (and harvested) via the finish
-            # branch.
-            bool has_tool_call = False;
-            foreach hash<auto> part in (parsed.candidates[0].content.parts ?? ()) {
-                if (part.functionCall.typeCode() == NT_HASH) {
-                    has_tool_call = True;
-                    break;
-                }
-            }
-            if (delta.val()) {
-                callback(<QoreLlmUtils::ChatStreamEvent>{
-                    "event": evt.event,
-                    "delta": delta,
-                    "raw": parsed,
-                });
-            } else if (has_tool_call && !finish_reason.val()) {
-                # Forward a tool-call-only chunk for accumulation.  Guarded on
-                # !finish_reason so a chunk that also carries finishReason is
-                # delivered exactly once (via the finish branch below),
-                # avoiding a duplicate tool-call harvest.
-                callback(<QoreLlmUtils::ChatStreamEvent>{
-                    "event": evt.event,
-                    "delta": delta,
-                    "raw": parsed,
-                });
-            }
-            if (finish_reason.val()) {
-                callback(<QoreLlmUtils::ChatStreamEvent>{
-                    "done": True, "raw": parsed,
-                });
-                break;
-            }
-        }
-    }
-
-    # Chat/completion, request-body building, OpenAI tool_choice / response_format
-    # adapters, OpenAI streaming-state + tool-call harvesting, body-option merging,
-    # and the lazy REST-client/POST orchestration all live in the shared
-    # @ref GeminiBodyShape::AbstractGeminiModelProvider base; this class supplies
-    # only the API-key transport (createRestClient + getRequestPath) and real SSE
-    # streaming (chatStream above).  The pure body shapers live in GeminiBodyShape
-    # (shapeChatBody, parseChatResponse, sanitizeSchema, normalizeUsage, etc.).
+    # Chat/completion, SSE streaming, request-body building, OpenAI tool_choice /
+    # response_format adapters, OpenAI streaming-state + tool-call harvesting,
+    # body-option merging, and the lazy REST-client/POST orchestration all live in
+    # the shared @ref GeminiBodyShape::AbstractGeminiModelProvider base; this class
+    # supplies only the API-key transport (createRestClient + getRequestPath).  The
+    # pure body shapers live in GeminiBodyShape (shapeChatBody, parseChatResponse,
+    # sanitizeSchema, normalizeUsage, etc.).
 }
 
 #! Factory for @ref GeminiLlmProvider

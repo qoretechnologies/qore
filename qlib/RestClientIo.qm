@@ -286,119 +286,6 @@ hash<RestResponseInfo> resp = f.get(30s);
         }
     }
 
-    #! SSE reader used by RestClientIo to replay response data consumed during validation.
-    class RestClientSseStreamReader inherits HttpClientStreamingIo::SseStreamReader {
-        private {
-            #! The underlying stream handle
-            HttpClientIo::HttpClientStreamHandle rc_stream;
-
-            #! Decompressor for Content-Encoding support
-            HttpClientStreamingIo::StreamDecompressor rc_decompressor;
-
-            #! Accumulated SSE text buffer awaiting event boundary parsing
-            string rc_sse_buffer = "";
-
-            #! Data chunks consumed while validating the response
-            list<auto> rc_pending_data = ();
-
-            #! Current offset in pending_data
-            int rc_pending_data_offset = 0;
-
-            #! True when the stream has ended
-            bool rc_done = False;
-        }
-
-        constructor(HttpClientIo::HttpClientStreamHandle stream, *string content_encoding,
-                *list<auto> initial_data)
-                : HttpClientStreamingIo::SseStreamReader(stream, content_encoding) {
-            rc_stream = stream;
-            rc_decompressor = new HttpClientStreamingIo::StreamDecompressor(content_encoding);
-            if (initial_data) {
-                rc_pending_data = initial_data;
-            }
-        }
-
-        *hash<SseMessageInfo> readEvent(*timeout timeout_ms) {
-            while (!rc_done) {
-                int sep = rc_sse_buffer.find("\n\n");
-                if (sep >= 0) {
-                    string event_text = rc_sse_buffer.substr(0, sep + 2);
-                    rc_sse_buffer = rc_sse_buffer.substr(sep + 2);
-                    *hash<SseMessageInfo> evt = Socket::parseServerSentEvent(event_text);
-                    if (isCommentOnlyEvent(evt)) {
-                        continue;
-                    }
-                    return evt;
-                }
-
-                auto data;
-                if (rc_pending_data_offset < rc_pending_data.size()) {
-                    data = rc_pending_data[rc_pending_data_offset++];
-                    if (rc_pending_data_offset >= rc_pending_data.size()) {
-                        rc_pending_data = ();
-                        rc_pending_data_offset = 0;
-                    }
-                } else {
-                    try {
-                        data = rc_stream.readData(timeout_ms);
-                    } catch (hash<ExceptionInfo> ex) {
-                        if (ex.err == "HTTPCLIENT-STREAM-CLOSED") {
-                            return finishStream();
-                        }
-                        rethrow;
-                    }
-                }
-                if (!exists data) {
-                    return NOTHING;
-                }
-
-                if (data.typeCode() == NT_HASH) {
-                    if (data.end_stream) {
-                        return finishStream();
-                    }
-                    if (data.error) {
-                        rc_done = True;
-                        throw "SSE-STREAM-ERROR", sprintf("stream error: %y", data.error);
-                    }
-                    continue;
-                }
-
-                if (data.typeCode() == NT_BINARY) {
-                    rc_sse_buffer += rc_decompressor.decompressToString(data);
-                } else {
-                    rc_sse_buffer += string(data);
-                }
-            }
-            return NOTHING;
-        }
-
-        bool isDone() {
-            return rc_done;
-        }
-
-        cancel() {
-            rc_stream.cancel();
-            rc_done = True;
-        }
-
-        private *hash<SseMessageInfo> finishStream() {
-            rc_done = True;
-            if (rc_sse_buffer.val()) {
-                *hash<SseMessageInfo> last_evt = Socket::parseServerSentEvent(rc_sse_buffer);
-                rc_sse_buffer = "";
-                if (last_evt && last_evt.data.val()) {
-                    return last_evt;
-                }
-            }
-            return NOTHING;
-        }
-
-        private static bool isCommentOnlyEvent(*hash<SseMessageInfo> evt) {
-            return evt && evt.comment.val() && !evt.data.val()
-                && !evt.event.val() && !evt.id.val() && !evt.retry.val();
-        }
-    }
-
     #! Async REST client supporting HTTP/1.x, HTTP/2, and HTTP/3
     /** This class implements the @ref RestClient::AbstractRestClient "AbstractRestClient" interface
         using @ref HttpClientIo::HttpClientConnectionManager "HttpClientConnectionManager", which
@@ -1682,9 +1569,15 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
             \c readEvent() calls
 
             @throw HTTPCLIENT-CONNECT-ERROR if the connection cannot be established
-            @throw REST-RESPONSE-ERROR if an HTTP error response is received
-            before a valid SSE stream is opened; the exception argument contains
-            the response status, headers, and any collected response body
+            @throw REST-RESPONSE-ERROR if an HTTP error response, or a successful
+            response whose \c Content-Type is not \c text/event-stream, is
+            received before a valid SSE stream is opened; the exception argument
+            contains the response status, headers, and any collected response body
+
+            @note @ref HttpClientStreamingIo::SseStreamReader::readEvent() also
+            returns @ref nothing when the wait for an event times out; use
+            @ref HttpClientStreamingIo::SseStreamReader::isDone() to tell a
+            timeout from the end of the stream
 
             @see restSseStream()
         */
@@ -1728,7 +1621,8 @@ while (*hash<SseMessageInfo> evt = reader.readEvent(30s)) {
                         method, path, hdr, prepared.serialized_body,
                         response_start.first_data, response,
                         response_start.response_timeout);
-                    return new RestClientSseStreamReader(stream, NOTHING,
+                    # the reader replays the data consumed while validating the response
+                    return new HttpClientStreamingIo::SseStreamReader(stream, NOTHING,
                         initial_data);
                 } catch (hash<ExceptionInfo> ex) {
                     stream.cancel();
@@ -3036,10 +2930,13 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                             method, path, raw.status_code, resp_body, raw.headers);
                     resp_body = parsed.body;
                 } catch (hash<ExceptionInfo> ex) {
-                    if (ex.err != "DESERIALIZATION-ERROR" || !req_allow_any_response) {
+                    # like RestClient, an error response is reported as REST-RESPONSE-ERROR with its raw body
+                    # when the body cannot be deserialized; a deserialization error would hide the HTTP status
+                    if (ex.err != "DESERIALIZATION-ERROR"
+                            || (!req_allow_any_response && (req_error_passthru || raw.status_code < 300))) {
                         rethrow;
                     }
-                    # allow_any_response: deserialization failed, keep raw body
+                    # keep the raw body
                 }
             }
 
@@ -3156,6 +3053,28 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                     buildResponse(raw_response, False, req_allow_any_response,
                         method, path, request_headers, request_body);
                 }
+                # a successful response that is not an event stream (for example the JSON document of a server
+                # that ignored the SSE request) would otherwise be read as a stream without events
+                *string content_type = RestClient::getSingleHeaderValue(
+                    raw_response.headers."content-type");
+                if (content_type.val() && !RestClientIo::isSseContentType(content_type)) {
+                    *data body = drainSseErrorBody(stream, first_data, response_timeout);
+                    throw "REST-RESPONSE-ERROR",
+                        sprintf("HTTP %d response with Content-Type %y received; expected an event stream "
+                            "(Content-Type \"text/event-stream\")", raw_response.status_code, content_type),
+                        <RestClient::RestResponseInfo>{
+                            "status_code": raw_response.status_code,
+                            "headers": raw_response.headers,
+                            "body": body,
+                            "content_type": content_type,
+                            "response_body_raw": body,
+                            "request_method": method,
+                            "request_path": path,
+                            "request_headers": RestClientIo::redactHeaders(request_headers),
+                            "request_body": request_body,
+                            "protocol": raw_response.protocol,
+                        };
+                }
             }
 
             list<auto> initial_data = ();
@@ -3170,6 +3089,11 @@ rest.restSseStream("GET", "/events", sub (hash<SseMessageInfo> evt) {
                 initial_data += first_data;
             }
             return initial_data;
+        }
+
+        #! Returns True if the given Content-Type value names an event stream
+        private static bool isSseContentType(string content_type) {
+            return content_type =~ /^\s*text\/event-stream\s*(;|$)/i;
         }
 
         #! Drains a non-SSE HTTP error body before throwing REST-RESPONSE-ERROR.

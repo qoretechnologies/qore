@@ -459,12 +459,24 @@ public hashdecl LlmTelemetryObserver {
 }
 
 #! A streaming event from a chat completion
+/** Providers deliver each provider-native stream event at most once, with the
+    parsed event in \c raw; events that carry no text, such as tool-call or
+    usage events, are delivered without \c delta.  The final event has \c done
+    set and can also carry the last text in \c delta and the last native event
+    in \c raw; a final event without \c raw is delivered when the stream ended
+    without a native final event.
+
+    Tool calls, the finish reason, and usage are read from \c raw with
+    @ref AbstractLlmProvider::updateOpenAiStreamStateFromRaw() and
+    @ref AbstractLlmProvider::getOpenAiToolCallDeltas(), for example by
+    <a href="../../QoreLlmUtils/html/index.html">LlmBackend::chatStreamCollect()</a>.
+*/
 public hashdecl ChatStreamEvent {
     #! Event type from the SSE stream (e.g., "content_block_delta", "message_delta")
     *string event;
     #! Text delta (incremental text content in this chunk)
     *string delta;
-    #! True when this is the final event (stream complete)
+    #! True when this is the final event (stream complete); the final event can also carry text
     bool done = False;
     #! Raw event data (the full parsed JSON from the SSE data field)
     *hash<auto> raw;
@@ -807,6 +819,12 @@ public class AbstractLlmProvider {
     /** Default implementation throws \c LLM-ERROR; concrete providers
         override this when the underlying API supports streaming.
 
+        Implementations deliver each provider-native event at most once (see
+        @ref ChatStreamEvent), end with exactly one event with \c done set, and
+        raise \c LLM-ERROR when the request is rejected, the stream reports an
+        error, or no event arrives within the request timeout; a failure is
+        never reported as a completed response.
+
         @param messages conversation history
         @param callback receives each @ref ChatStreamEvent as it arrives
         @param tools optional tool definitions
@@ -1012,7 +1030,10 @@ public class AbstractLlmProvider {
         finish-reason fields.  Default reads OpenAI shape (\c id, \c model,
         \c usage, \c choices[0].finish_reason); providers with native event
         shapes (e.g. Gemini \c responseId, \c usageMetadata,
-        \c candidates[0].finishReason) override.
+        \c candidates[0].finishReason) override.  Providers whose responses
+        carry reasoning blocks that must be replayed collect them as a list in
+        \c state.reasoning_blocks; the state can hold further provider-specific
+        keys.
 
         @param state the OpenAI-compatible stream-state hash being accumulated
         @param raw the parsed provider-native event hash, or @ref nothing

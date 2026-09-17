@@ -590,8 +590,7 @@ public class LlmStructuredRepair {
         requires \c api_key
     |\c vertex-ai|Gemini models on Google Vertex AI|\
         <a href="../../VertexAiRestClient/html/index.html">VertexAiRestClient</a>|\
-        requires \c provider_options.gcp_project_id; a streamed request \
-        delivers the complete response as a single delta
+        requires \c provider_options.gcp_project_id
     |\c azure-openai|Azure OpenAI deployments|\
         <a href="../../AzureOpenAiRestClient/html/index.html">AzureOpenAiRestClient</a>|\
         requires \c url (the resource endpoint); authenticates with an API \
@@ -600,7 +599,8 @@ public class LlmStructuredRepair {
         <a href="../../BedrockRestClient/html/index.html">BedrockRestClient</a>|\
         requires an AWS region (\c provider_options.aws_region, a \
         region-qualified \c url, or \c AWS_REGION / \c AWS_DEFAULT_REGION in \
-        the environment); no structured output
+        the environment); no structured output; a streamed request delivers \
+        the complete response as one event
     |\c cohere|Cohere's v2 chat API|\
         <a href="../../CohereRestClient/html/index.html">CohereRestClient</a>|\
         requires \c api_key; no streaming or multimodal input
@@ -615,7 +615,7 @@ public class LlmStructuredRepair {
         OpenAI-compatible
     |\c groq|Groq|\
         <a href="../../GroqRestClient/html/index.html">GroqRestClient</a>|\
-        OpenAI-compatible
+        OpenAI-compatible; requires a model, as there is no default model
     |\c mistral|Mistral AI|\
         <a href="../../MistralRestClient/html/index.html">MistralRestClient</a>|\
         OpenAI-compatible
@@ -917,6 +917,7 @@ llm.chatStream(
         *string stop_reason;
         *string response_id;
         *string response_model;
+        hash<auto> telemetry_state = newOpenAiStreamState(NOTHING);
         *hash<LlmTelemetryObserver> observer = getTelemetryObserver(opts);
         hash<auto> request = LlmTelemetry::chatRequestSummary(messages, tools,
             opts, True);
@@ -930,21 +931,15 @@ llm.chatStream(
                     first_delta = now_us();
                 }
                 if (event.raw.typeCode() == NT_HASH) {
-                    hash<auto> raw = cast<hash>(event.raw);
-                    if (raw.usage.typeCode() == NT_HASH) {
-                        last_usage = cast<hash>(raw.usage);
+                    # the provider hook reads its own event shape (e.g. Gemini usageMetadata and
+                    # candidates[0].finishReason, or Anthropic message_start and message_delta)
+                    updateStreamState(\telemetry_state, event);
+                    if (telemetry_state.usage.typeCode() == NT_HASH) {
+                        last_usage = cast<hash>(telemetry_state.usage);
                     }
-                    if (raw.id.val()) {
-                        response_id = raw.id;
-                    }
-                    if (raw.model.val()) {
-                        response_model = raw.model;
-                    }
-                    *string finish_reason =
-                        getStreamFinishReason(cast<hash>(raw));
-                    if (finish_reason.val()) {
-                        stop_reason = finish_reason;
-                    }
+                    response_id = telemetry_state.id;
+                    response_model = telemetry_state.model;
+                    stop_reason = telemetry_state.finish_reason;
                 }
                 notifyTelemetry(observer, "stream_delta", "chat_stream", opts, {
                     "request": request,
@@ -991,6 +986,61 @@ llm.chatStream(
             });
             rethrow;
         }
+    }
+
+    #! Streams a chat completion and returns the accumulated response
+    /** Streams the request like @ref chatStream(), passes each event to
+        @a on_event, and returns the response accumulated from the events.
+        Text, tool calls, the finish reason, usage, and reasoning blocks are
+        collected through the provider's stream hooks
+        (@ref AbstractLlmProvider::updateOpenAiStreamStateFromRaw() and
+        @ref AbstractLlmProvider::getOpenAiToolCallDeltas()), so the result has
+        the same form for every provider, whatever its native event format.
+
+        @param messages conversation history
+        @param on_event optional callback receiving each event as it arrives
+        @param tools optional tool definitions
+        @param opts optional per-call overrides
+
+        @return the accumulated response:
+        - \c content: the complete text
+        - \c tool_calls: the complete tool calls; arguments that are not a JSON
+          object are returned in the \c _raw key of the arguments hash
+        - \c stop_reason: \c "end_turn", \c "tool_use", \c "max_tokens", or
+          \c "stop_sequence" when the response or prompt was filtered
+        - \c usage, \c id, \c model, \c provider_diagnostics, and
+          \c reasoning_blocks when the provider reports them
+        - \c raw: the last provider-native event
+
+        @throw LLM-ERROR the backend call failed
+
+        @par Example
+        @code{.py}
+hash<ChatResponse> resp = llm.chatStreamCollect(messages, sub (hash<ChatStreamEvent> event) {
+    if (event.delta.val()) {
+        print(event.delta);
+    }
+}, tools);
+if (resp.stop_reason == "tool_use") {
+    # run resp.tool_calls
+}
+        @endcode
+    */
+    hash<ChatResponse> chatStreamCollect(list<hash<ChatMessage>> messages,
+            *code<nothing(hash<ChatStreamEvent>)> on_event,
+            *list<hash<ToolDefinition>> tools, *hash<LlmRequestOptions> opts) {
+        hash<auto> state = newOpenAiStreamState(provider.getRequestModel(opts));
+        *hash<auto> last_raw;
+        chatStream(messages, sub (hash<ChatStreamEvent> event) {
+            chatStreamEventToOpenAiChunk(\state, event);
+            if (event.raw) {
+                last_raw = event.raw;
+            }
+            if (on_event) {
+                on_event(event);
+            }
+        }, tools, opts);
+        return streamStateToChatResponse(state, last_raw);
     }
 
     #! OpenAI-compatible chat-completions facade
@@ -1169,25 +1219,6 @@ llm.chatStream(
 
     private static int elapsedMs(date started) {
         return (now_us() - started).durationMicroseconds() / 1000;
-    }
-
-    private static *string getStreamFinishReason(hash<auto> raw) {
-        if (raw.choices.typeCode() == NT_LIST && raw.choices.size()) {
-            auto choice = raw.choices[0];
-            if (choice.typeCode() == NT_HASH) {
-                hash<auto> choice_h = cast<hash>(choice);
-                if (choice_h.finish_reason.val()) {
-                    return choice_h.finish_reason;
-                }
-            }
-        }
-        if (raw.finish_reason.val()) {
-            return raw.finish_reason;
-        }
-        if (raw.finishReason.val()) {
-            return raw.finishReason;
-        }
-        return NOTHING;
     }
 
     #! Estimates the token count for a text string
@@ -1459,6 +1490,9 @@ llm.chatStream(
         }
         if (response.provider_diagnostics.typeCode() == NT_HASH) {
             rv.provider_diagnostics = response.provider_diagnostics;
+        }
+        if (response.raw.service_tier.typeCode() == NT_STRING) {
+            rv.service_tier = response.raw.service_tier;
         }
         return rv;
     }
@@ -1954,23 +1988,39 @@ llm.chatStream(
         };
     }
 
-    private *hash<auto> chatStreamEventToOpenAiChunk(
-            reference<hash<auto>> state, hash<ChatStreamEvent> event) {
+    #! Updates an OpenAI-compatible stream state from a stream event through the provider hooks
+    /** @return the OpenAI-shaped tool-call deltas in the event
+    */
+    private list<hash<auto>> updateStreamState(reference<hash<auto>> state,
+            hash<ChatStreamEvent> event) {
         if (event.raw) {
             provider.updateOpenAiStreamStateFromRaw(\state, event.raw);
         }
+        list<hash<auto>> streamed = provider.getOpenAiToolCallDeltas(\state,
+            event.raw);
+        # a native event can carry its tool calls and finish reason together, so the finish reason seen before
+        # the calls were harvested does not reflect them
+        if (streamed && event.done) {
+            state.finish_reason = "tool_calls";
+        }
+        return streamed;
+    }
+
+    private *hash<auto> chatStreamEventToOpenAiChunk(
+            reference<hash<auto>> state, hash<ChatStreamEvent> event) {
+        list<hash<auto>> streamed = updateStreamState(\state, event);
+        if (event.raw.service_tier.typeCode() == NT_STRING) {
+            state.service_tier = event.raw.service_tier;
+        }
         hash<auto!> delta;
-        if (!event.done && event.delta.val()) {
+        # the final event can carry the last text chunk (for example an OpenAI chunk with both content and a
+        # finish_reason, or a Gemini chunk with both text and a finishReason)
+        if (event.delta.val()) {
             state.content += event.delta;
             delta.content = event.delta;
         }
-        list<hash<auto>> streamed = provider.getOpenAiToolCallDeltas(\state,
-            event.raw);
         if (streamed) {
             delta.tool_calls = streamed;
-            if (event.done) {
-                state.finish_reason = "tool_calls";
-            }
         }
         if (event.done) {
             if (!state.finish_reason.val()) {
@@ -2004,6 +2054,9 @@ llm.chatStream(
         if (state.usage) {
             rv.usage = state.usage;
         }
+        if (state.service_tier.typeCode() == NT_STRING) {
+            rv.service_tier = state.service_tier;
+        }
         # Terminal chunks carry provider diagnostics; callback gateways
         # otherwise cannot return final metadata through their streaming
         # callback's nothing return type.  Telemetry consumers must apply
@@ -2013,6 +2066,87 @@ llm.chatStream(
             rv.provider_diagnostics = state.provider_diagnostics;
         }
         return rv;
+    }
+
+    #! Converts an accumulated OpenAI-compatible stream state to a ChatResponse
+    private static hash<ChatResponse> streamStateToChatResponse(hash<auto> state,
+            *hash<auto> last_raw) {
+        list<hash<ChatToolCall>> tool_calls = ();
+        foreach auto raw_call in (state.tool_calls) {
+            if (raw_call.typeCode() != NT_HASH) {
+                continue;
+            }
+            hash<auto> tc = cast<hash>(raw_call);
+            hash<ChatToolCall> call = <ChatToolCall>{
+                "id": tc.id.val() ? tc.id.toString() : sprintf("tc_%d", $#),
+                "name": tc."function".name.val() ? tc."function".name.toString() : "",
+                "arguments": parseStreamedToolArguments(tc."function".arguments),
+            };
+            if (tc.thought_signature.typeCode() == NT_STRING
+                    && tc.thought_signature.val()) {
+                call.thought_signature = tc.thought_signature;
+            }
+            push tool_calls, call;
+        }
+        string stop_reason;
+        switch (state.finish_reason) {
+            case "stop":
+                stop_reason = "end_turn";
+                break;
+            case "tool_calls":
+                stop_reason = "tool_use";
+                break;
+            case "length":
+                stop_reason = "max_tokens";
+                break;
+            case "content_filter":
+                stop_reason = "stop_sequence";
+                break;
+            default:
+                stop_reason = state.finish_reason ?? "end_turn";
+        }
+        # some OpenAI-compatible servers report "stop" for a turn that requests tool calls
+        if (tool_calls && stop_reason == "end_turn") {
+            stop_reason = "tool_use";
+        }
+        hash<ChatResponse> rv = <ChatResponse>{
+            "id": state.id,
+            "model": state.model,
+            "stop_reason": stop_reason,
+            "content": state.content.val() ? state.content : NOTHING,
+            "tool_calls": tool_calls ? tool_calls : NOTHING,
+            "usage": state.usage.typeCode() == NT_HASH ? cast<hash>(state.usage) : {},
+            "raw": last_raw,
+        };
+        if (state.provider_diagnostics.typeCode() == NT_HASH) {
+            rv.provider_diagnostics = state.provider_diagnostics;
+        }
+        if (state.reasoning_blocks.typeCode() == NT_LIST && state.reasoning_blocks) {
+            rv.reasoning_blocks = state.reasoning_blocks;
+        }
+        return rv;
+    }
+
+    #! Parses streamed tool-call arguments
+    /** @return the arguments as a hash; arguments that are not a JSON object
+        are returned in the \c _raw key so they remain visible
+    */
+    private static *hash<auto> parseStreamedToolArguments(auto arguments) {
+        switch (arguments.typeCode()) {
+            case NT_HASH:
+                return cast<hash>(arguments);
+            case NT_STRING:
+                break;
+            default:
+                return NOTHING;
+        }
+        string text = arguments;
+        if (!text.val()) {
+            return NOTHING;
+        }
+        hash<LlmStructuredRepairResult> result =
+            LlmStructuredRepair::parseJsonObject(text);
+        return result.valid ? cast<hash>(result.value) : {"_raw": text};
     }
 
     private static hash<auto> streamStateToOpenAiResponse(hash<auto> state) {
@@ -2040,6 +2174,9 @@ llm.chatStream(
         }
         if (state.provider_diagnostics.typeCode() == NT_HASH) {
             rv.provider_diagnostics = state.provider_diagnostics;
+        }
+        if (state.service_tier.typeCode() == NT_STRING) {
+            rv.service_tier = state.service_tier;
         }
         return rv;
     }

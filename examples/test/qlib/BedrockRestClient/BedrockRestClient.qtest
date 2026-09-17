@@ -121,7 +121,8 @@ public class BedrockTest inherits QUnit::Test {
         addTestCase("Converse chat round-trip",           \converseChatTest());
         addTestCase("Converse tool_use round-trip",       \converseToolUseTest());
         addTestCase("Converse complete() helper",         \completeTest());
-        addTestCase("synthetic chatStream emits delta+done", \chatStreamTest());
+        addTestCase("chatStream delivers the response as one event", \chatStreamTest());
+        addTestCase("streamed tool calls are collected", \chatStreamToolUseTest());
         addTestCase("SigV4 authorization header is signed", \sigV4Test());
         addTestCase("missing region throws at construction", \missingRegionTest());
         addTestCase("Titan embedder round-trip",          \titanEmbedderTest());
@@ -264,9 +265,78 @@ public class BedrockTest inherits QUnit::Test {
         ), sub (hash<QoreLlmUtils::ChatStreamEvent> e) {
             push events, e;
         });
-        assertEq(2, events.size());
+        assertEq(1, events.size(), "the response is delivered as one event");
         assertEq("Hello from Bedrock", events[0].delta);
-        assertEq(True, events[1].done);
+        assertTrue(events[0].done);
+        assertEq("end_turn", events[0].raw.stopReason);
+
+        # stream consumers read the stop reason and usage from the event
+        QoreLlmUtils::LlmBackend backend = newBackend();
+        hash<QoreLlmUtils::ChatResponse> r = backend.chatStreamCollect((
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "stream"},
+        ));
+        assertEq("Hello from Bedrock", r.content);
+        assertEq("end_turn", r.stop_reason);
+        assertEq(17, r.usage.total_tokens);
+        hash<auto> resp = backend.chatCompletionsStream({
+            "messages": ({"role": "user", "content": "stream"},),
+        }, sub (hash<auto> chunk) {});
+        assertEq("Hello from Bedrock", resp.choices[0].message.content);
+        assertEq("stop", resp.choices[0].finish_reason);
+    }
+
+    private chatStreamToolUseTest() {
+        BedrockTest::checkJson(self);
+        if (!bedrock_http) {
+            testSkip("no fake server");
+        }
+        hash<auto> saved = handler.converse_response;
+        on_exit handler.converse_response = saved;
+        handler.converse_response = {
+            "output": {
+                "message": {
+                    "role": "assistant",
+                    "content": (
+                        {"text": "Checking."},
+                        {"toolUse": {"toolUseId": "tu-1", "name": "lookup", "input": {"key": "a"}}},
+                        {"toolUse": {"toolUseId": "tu-2", "name": "lookup", "input": {"key": "b"}}},
+                    ),
+                },
+            },
+            "stopReason": "tool_use",
+            "usage": {"inputTokens": 12, "outputTokens": 9, "totalTokens": 21},
+        };
+        QoreLlmUtils::LlmBackend backend = newBackend();
+        list<hash<QoreLlmUtils::ToolDefinition>> tools = (
+            <QoreLlmUtils::ToolDefinition>{
+                "name": "lookup",
+                "parameters": {"type": "object", "properties": {"key": {"type": "string"}}},
+            },
+        );
+        hash<QoreLlmUtils::ChatResponse> r = backend.chatStreamCollect((
+            <QoreLlmUtils::ChatMessage>{"role": "user", "content": "look up a and b"},
+        ), NOTHING, tools);
+        assertEq("tool_use", r.stop_reason);
+        assertEq("Checking.", r.content);
+        assertEq(2, r.tool_calls.size(), "each tool call is collected exactly once");
+        assertEq("tu-1", r.tool_calls[0].id);
+        assertEq({"key": "a"}, r.tool_calls[0].arguments);
+        assertEq("tu-2", r.tool_calls[1].id);
+        assertEq({"key": "b"}, r.tool_calls[1].arguments);
+
+        hash<auto> resp = backend.chatCompletionsStream({
+            "messages": ({"role": "user", "content": "look up a and b"},),
+            "tools": ({
+                "type": "function",
+                "function": {
+                    "name": "lookup",
+                    "parameters": {"type": "object", "properties": {"key": {"type": "string"}}},
+                },
+            },),
+        }, sub (hash<auto> chunk) {});
+        assertEq("tool_calls", resp.choices[0].finish_reason);
+        assertEq(2, resp.choices[0].message.tool_calls.size());
+        assertEq("{\"key\":\"b\"}", resp.choices[0].message.tool_calls[1]."function".arguments);
     }
 
     private sigV4Test() {
@@ -399,6 +469,21 @@ public class BedrockTest inherits QUnit::Test {
             });
         hash<PingInfo> failed = invalid.ping(False);
         assertFalse(failed.ok, "invalid AWS credentials must fail the ping");
+    }
+
+    private QoreLlmUtils::LlmBackend newBackend() {
+        return new QoreLlmUtils::LlmBackend(
+            <QoreLlmUtils::LlmBackendConfig>{
+                "mode": "bedrock",
+                "model": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+                "url": "http://localhost:" + bedrock_port,
+                "provider_options": {
+                    "aws_region": "us-east-1",
+                    "aws_keyid": "AKIA-TEST",
+                    "aws_secret": "test-secret",
+                    "aws_imds_disabled": True,
+                },
+            });
     }
 
     private BedrockRestClient::BedrockLlmProvider newProvider() {

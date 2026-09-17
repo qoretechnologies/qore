@@ -87,10 +87,10 @@ POST https://{region}-aiplatform.googleapis.com/v1/projects/{project}/locations/
     \c https://aiplatform.googleapis.com; the selected location remains in the
     resource path.
 
-    Chat requests use \c :generateContent; a streamed chat request makes the
-    same call and delivers the complete response as a single delta.
-    Embeddings use the \c :predict endpoint on text-embedding publisher models
-    (Gecko / Text Embedding Gecko).
+    Chat requests use \c :generateContent, and streamed chat requests use
+    \c :streamGenerateContent with SSE framing (\c alt=sse).  Embeddings use the
+    \c :predict endpoint on text-embedding publisher models (Gecko / Text
+    Embedding Gecko).
 
     @par Connection options
 
@@ -301,14 +301,16 @@ string sub ensureVertexUrl(string url, *hash<auto> options) {
     return vertexApiUrl(region);
 }
 
-#! Vertex AI LLM provider — Gemini-on-Vertex via :generateContent
+#! Vertex AI LLM provider — Gemini-on-Vertex via :generateContent and :streamGenerateContent
 /** Reuses @ref GeminiBodyShape for body shaping so the wire body is
     bit-for-bit identical to the native Gemini REST API.  Only the URL
     (regional Vertex AI endpoint + projects/locations/publishers/models
     path segments) and the auth mechanism (GcpAuth Bearer token) differ.
 
-    Streaming and Claude-on-Vertex / Llama-on-Vertex via \c :rawPredict are
-    follow-ups; v1 ships with non-streaming Gemini support.
+    Chat requests use \c :generateContent; streamed chat requests use
+    \c :streamGenerateContent with SSE framing (\c alt=sse) and deliver each
+    response chunk as it arrives.  Claude and Llama models on Vertex AI, which
+    use \c :rawPredict, are not supported.
 */
 public class VertexAiLlmProvider inherits GeminiBodyShape::AbstractGeminiModelProvider {
     public {
@@ -422,7 +424,7 @@ public class VertexAiLlmProviderFactory inherits QoreLlmUtils::AbstractLlmProvid
             "mode": getMode(),
             "display_name": getDisplayName(),
             "module_name": Class::getClass(self).getModuleName(),
-            "supports_streaming": True,  # via synthetic single-delta fallback in v1
+            "supports_streaming": True,
             "supports_tools": True,
             "supports_structured_output": True,
             "supports_multimodal": True,

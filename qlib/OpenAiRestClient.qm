@@ -813,7 +813,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR", sprintf("HTTP completion request failed: %s",
-                ex.desc), ex;
+                OpenAiLlmProvider::requestErrorDetail(ex)), ex;
         }
 
         return <QoreLlmUtils::LlmCompletionResult>{
@@ -838,7 +838,7 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR", sprintf("chat request failed: %s",
-                ex.desc), ex;
+                OpenAiLlmProvider::requestErrorDetail(ex)), ex;
         }
 
         return parseOpenAiChatResponse(resp.body);
@@ -853,11 +853,12 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
         hash<auto> body = buildOpenAiChatBody(messages, tools, opts);
         body.stream = True;
 
-        hash<auto> hdr = {"Accept": "text/event-stream"};
-        if (getConfig().api_key.val()) {
-            hdr."Authorization" = "Bearer " + getConfig().api_key;
-        }
-        hdr."Content-Type" = "application/json";
+        # subclasses such as the Azure OpenAI provider supply their own
+        # credential headers
+        hash<auto> hdr = (buildAuthHeader() ?? {}) + {
+            "Accept": "text/event-stream",
+            "Content-Type": "application/json",
+        };
 
         string json_body = make_json(body);
         HttpClientStreamingIo::SseStreamReader reader;
@@ -868,13 +869,22 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
             }, opts);
         } catch (hash<ExceptionInfo> ex) {
             throw "LLM-ERROR", sprintf("streaming chat request failed: %s",
-                ex.desc), ex;
+                OpenAiLlmProvider::requestErrorDetail(ex)), ex;
         }
+        # a stream left before its end must not keep the server sending
+        on_exit reader.cancel();
 
+        int timeout_ms = getRequestTimeoutMs(opts);
         while (True) {
-            *hash<SseMessageInfo> evt = reader.readEvent(
-                getConfig().timeout_ms);
+            *hash<SseMessageInfo> evt = reader.readEvent(timeout_ms);
             if (!evt) {
+                # the reader also returns nothing when the wait times out,
+                # which must not be reported as a complete response
+                if (!reader.isDone()) {
+                    throw "LLM-ERROR", sprintf("streaming chat response "
+                        "timed out: no event arrived within %d ms",
+                        timeout_ms);
+                }
                 callback(<QoreLlmUtils::ChatStreamEvent>{"done": True});
                 break;
             }
@@ -917,6 +927,43 @@ public class OpenAiLlmProvider inherits QoreLlmUtils::AbstractLlmProvider {
                 });
             }
         }
+    }
+
+    #! Returns an exception description with the error message of the provider's error response
+    /** OpenAI-compatible servers report errors as \c {"error": {"message": ...}}
+        or \c {"message": ...}
+
+        @param ex the exception raised by the request
+
+        @return \a ex.desc, followed by the provider's error message when the
+        response contains one
+    */
+    private static string requestErrorDetail(hash<ExceptionInfo> ex) {
+        auto body = ex.arg.typeCode() == NT_HASH ? ex.arg.body : NOTHING;
+        if (body.typeCode() == NT_BINARY) {
+            body = body.toString("UTF-8");
+        }
+        if (body.typeCode() == NT_STRING && body =~ /^\s*\{/) {
+            try {
+                body = parse_json(body);
+            } catch () {
+            }
+        }
+        *string msg;
+        if (body.typeCode() == NT_HASH) {
+            switch (body.error.typeCode()) {
+                case NT_HASH:
+                    msg = body.error.message;
+                    break;
+                case NT_STRING:
+                    msg = body.error;
+                    break;
+            }
+            if (!msg.val() && body.message.typeCode() == NT_STRING) {
+                msg = body.message;
+            }
+        }
+        return msg.val() ? sprintf("%s: %s", ex.desc, msg) : ex.desc;
     }
 
     #! Returns headers with the OpenAI \c Authorization: \c Bearer credential
