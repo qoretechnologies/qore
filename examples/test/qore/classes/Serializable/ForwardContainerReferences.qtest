@@ -1,0 +1,255 @@
+#!/usr/bin/env qore
+# Copyright (C) 2026 Qore Technologies, s.r.o.
+%modern
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%requires ../../../../../qlib/QUnit.qm
+%exec-class ForwardContainerReferencesTest
+
+hashdecl ForwardRecord {
+    string label;
+    *list<ForwardNode> nodes;
+}
+
+#! Assigns its members with the deserializeMembers() callback
+class ForwardNode inherits Serializable {
+    public {
+        string name;
+        list<ForwardNode> links();
+        hash<string, ForwardNode> lookup();
+        *hash<ForwardRecord> record;
+        #! The container sizes each callback received, by node name
+        static hash<auto> seen = {};
+    }
+
+    constructor(string name = "node") {
+        self.name = name;
+    }
+
+    private:internal deserializeMembers(hash<auto> members) {
+        name = members.name;
+        links = members.links;
+        lookup = members.lookup;
+        record = members.record;
+        # the callback must see complete containers, so that code validating the graph here sees what the
+        # caller will see
+        ForwardNode::seen{name} = {
+            "links": links.size(),
+            "lookup": lookup.size(),
+            "record": record.nodes.size(),
+        };
+    }
+}
+
+#! Assigns its members without a deserializeMembers() callback
+class ForwardPlainNode inherits Serializable {
+    public {
+        string name;
+        list<ForwardPlainNode> links();
+        list<list<ForwardPlainNode>> groups();
+    }
+
+    constructor(string name = "plain") {
+        self.name = name;
+    }
+}
+
+class ForwardContainerReferencesTest inherits QUnit::Test {
+    constructor() : Test("Forward container references in serialized object graphs", "1.0") {
+        addTestCase("a typed list referring back to its owner", \listSelfReferenceTest());
+        addTestCase("member assignment without a callback", \plainMemberTest());
+        addTestCase("containers referring to containers", \nestedContainerTest());
+        addTestCase("a typed hash referring back to its owner", \hashSelfReferenceTest());
+        addTestCase("a hashdecl referring back to its owner", \hashdeclReferenceTest());
+        addTestCase("mutual references between objects", \mutualReferenceTest());
+        addTestCase("callbacks receive complete containers", \callbackContentsTest());
+        addTestCase("invalid container type metadata is rejected", \invalidTypeTest());
+        addTestCase("a failing callback does not damage the graph", \callbackErrorTest());
+        set_return_value(main());
+    }
+
+    #! The reproducer of the defect: the child's list is the parent's list, which contains the child
+    private listSelfReferenceTest() {
+        ForwardNode parent("parent");
+        ForwardNode child("child");
+        parent.links = (child,);
+        child.links = parent.links;
+        assertTrue(child.links[0] === child, "the graph has the edge before serialization");
+
+        ForwardNode restored = Serializable::deserialize(parent.serialize());
+        assertEq(1, restored.links.size());
+        ForwardNode restored_child = restored.links[0];
+        assertEq("child", restored_child.name);
+        assertEq(1, restored_child.links.size(), "the forward reference is preserved");
+        assertTrue(restored_child.links[0] === restored_child, "the child refers to itself");
+        assertTrue(restored.links === restored_child.links, "the list is shared, as it was before");
+        assertTrue(restored !== parent, "deserialization returns new objects");
+    }
+
+    private plainMemberTest() {
+        ForwardPlainNode parent("parent");
+        ForwardPlainNode child("child");
+        parent.links = (child,);
+        child.links = parent.links;
+
+        ForwardPlainNode restored = Serializable::deserialize(parent.serialize());
+        ForwardPlainNode restored_child = restored.links[0];
+        assertEq(1, restored_child.links.size(), "the forward reference is preserved without a callback");
+        assertTrue(restored_child.links[0] === restored_child);
+        assertTrue(restored.links === restored_child.links);
+    }
+
+    #! A typed list holding another indexed list that is filled after the reference is made
+    private nestedContainerTest() {
+        ForwardPlainNode child("child");
+        list<ForwardPlainNode> inner = (child,);
+        child.links = inner;
+        child.groups = (inner,);
+        ForwardPlainNode parent("parent");
+        parent.links = (child,);
+        parent.groups = (inner,);
+
+        ForwardPlainNode restored = Serializable::deserialize(parent.serialize());
+        assertEq(1, restored.groups.size());
+        assertEq(1, restored.groups[0].size(), "the inner list kept its contents");
+        ForwardPlainNode restored_child = restored.groups[0][0];
+        assertTrue(restored_child === restored.links[0], "the same child is reached by both paths");
+        assertTrue(restored_child.groups[0] === restored.groups[0], "the inner list is shared");
+        assertEq(1, restored_child.links.size());
+    }
+
+    private hashSelfReferenceTest() {
+        ForwardNode parent("parent");
+        ForwardNode child("child");
+        parent.lookup = {"child": child};
+        child.lookup = parent.lookup;
+
+        ForwardNode restored = Serializable::deserialize(parent.serialize());
+        ForwardNode restored_child = restored.lookup.child;
+        assertEq(1, restored_child.lookup.size(), "the forward reference of the typed hash is preserved");
+        assertTrue(restored_child.lookup.child === restored_child);
+        assertTrue(restored.lookup === restored_child.lookup, "the hash is shared");
+    }
+
+    private hashdeclReferenceTest() {
+        ForwardNode parent("parent");
+        ForwardNode child("child");
+        hash<ForwardRecord> record = <ForwardRecord>{"label": "shared", "nodes": (child,)};
+        parent.record = record;
+        child.record = record;
+
+        ForwardNode restored = Serializable::deserialize(parent.serialize());
+        assertEq("shared", restored.record.label);
+        assertEq(1, restored.record.nodes.size());
+        ForwardNode restored_child = restored.record.nodes[0];
+        assertEq(1, restored_child.record.nodes.size(), "the hashdecl kept its contents");
+        assertTrue(restored_child.record.nodes[0] === restored_child);
+        assertTrue(restored.record === restored_child.record, "the hashdecl value is shared");
+    }
+
+    private mutualReferenceTest() {
+        ForwardNode first("first");
+        ForwardNode second("second");
+        first.links = (second,);
+        second.links = (first,);
+
+        ForwardNode restored = Serializable::deserialize(first.serialize());
+        ForwardNode restored_second = restored.links[0];
+        assertEq("second", restored_second.name);
+        assertEq(1, restored_second.links.size());
+        assertTrue(restored_second.links[0] === restored, "the objects refer to each other");
+    }
+
+    #! Callbacks that validate a graph need the complete contents of the containers they receive
+    private callbackContentsTest() {
+        ForwardNode::seen = {};
+        ForwardNode parent("parent");
+        ForwardNode child("child");
+        parent.links = (child,);
+        child.links = parent.links;
+        parent.lookup = {"child": child};
+        child.lookup = parent.lookup;
+        hash<ForwardRecord> record = <ForwardRecord>{"label": "shared", "nodes": (child,)};
+        parent.record = record;
+        child.record = record;
+
+        Serializable::deserialize(parent.serialize());
+        assertEq({"links": 1, "lookup": 1, "record": 1}, ForwardNode::seen.child,
+            "the callback of the child sees the complete containers");
+        assertEq({"links": 1, "lookup": 1, "record": 1}, ForwardNode::seen.parent,
+            "the callback of the parent sees the complete containers");
+    }
+
+    private invalidTypeTest() {
+        ForwardPlainNode node("node");
+        node.links = (new ForwardPlainNode("other"),);
+        hash<SerializationInfo> good = Serializable::serializeToData(node);
+        string list_key = ForwardContainerReferencesTest::indexKey(good, "_list");
+
+        hash<SerializationInfo> state = good;
+        state._index{list_key}._list = "ForwardPlainNode::NoSuchType";
+        assertThrows("DESERIALIZATION-ERROR", "cannot be matched to a known type",
+            \Serializable::deserialize(), (state,));
+
+        hash<auto> value = {"key": "value"};
+        hash<SerializationInfo> good_hash = Serializable::serializeToData(value);
+        string hash_key = ForwardContainerReferencesTest::indexKey(good_hash, "_hash");
+        state = good_hash;
+        state._index{hash_key}._hash = "NoSuchHashdecl";
+        assertThrows("DESERIALIZATION-ERROR", "no such typed hash", \Serializable::deserialize(), (state,));
+
+        # the valid data still deserializes after each rejection
+        ForwardPlainNode restored = Serializable::deserialize(good);
+        assertEq(1, restored.links.size());
+        assertEq(value, Serializable::deserialize(good_hash));
+    }
+
+    #! An exception in a callback leaves the deserialization with no result and no damaged graph
+    private callbackErrorTest() {
+        ForwardFailingNode parent("parent");
+        ForwardFailingNode child("child");
+        parent.links = (child,);
+        child.links = parent.links;
+        hash<SerializationInfo> state = Serializable::serializeToData(parent);
+
+        ForwardFailingNode::fail = True;
+        on_exit ForwardFailingNode::fail = False;
+        assertThrows("FORWARD-CALLBACK-ERROR", \Serializable::deserialize(), (state,));
+
+        ForwardFailingNode::fail = False;
+        ForwardFailingNode restored = Serializable::deserialize(state);
+        assertEq(1, restored.links[0].links.size(), "the graph is intact after the failed deserialization");
+        assertTrue(restored.links[0].links[0] === restored.links[0]);
+    }
+
+    #! Returns the index key of the first container declaring the given type key
+    private static string indexKey(hash<SerializationInfo> state, string type_key) {
+        foreach hash<auto> i in (state._index.pairIterator()) {
+            if (i.value.hasKey(type_key)) {
+                return i.key;
+            }
+        }
+        throw "TEST-ERROR", sprintf("no %y container in the serialized data", type_key);
+    }
+}
+
+#! Raises an exception in its deserializeMembers() callback on demand
+class ForwardFailingNode inherits Serializable {
+    public {
+        string name;
+        list<ForwardFailingNode> links();
+        #! Set to make the callback raise an exception
+        static bool fail = False;
+    }
+
+    constructor(string name = "node") {
+        self.name = name;
+    }
+
+    private:internal deserializeMembers(hash<auto> members) {
+        name = members.name;
+        links = members.links;
+        if (ForwardFailingNode::fail) {
+            throw "FORWARD-CALLBACK-ERROR", sprintf("rejected %y with %d link(s)", name, links.size());
+        }
+    }
+}

@@ -3099,6 +3099,13 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
 
     @subsection qore_3_0_0_bug_fixes Bug Fixes in Qore
 
+    - Fixed @ref Qore::Serializable "Serializable" deserialization losing a reference to a container that is
+      deserialized after the value referring to it; assigning the untyped placeholder of such a container to a
+      typed member or inserting it in a typed container converted it, which copied it, so filling the original
+      container afterwards could not be seen through the copy.  Containers in the object index are now created
+      with their declared types and filled before any object is deserialized, so
+      @ref Qore::Serializable::deserializeMembers() "deserializeMembers()" code that validates an object graph
+      also sees complete containers
     - Fixed @ref Qore::HTTPClient "HTTPClient" sending a relative \c Location value, including any fragment,
       literally as the next request target instead of resolving it against the URL of the request that received it
       (RFC 3986 section 5.2); see @ref httpclient_redirects

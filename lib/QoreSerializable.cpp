@@ -800,6 +800,84 @@ imap_t::iterator QoreSerializable::serializeListToIndexIntern(const QoreListNode
     return i;
 }
 
+//! Sets the declared type of an indexed list before its elements are deserialized
+/** An indexed container can be referenced before it is filled.  An assignment of an untyped container to a typed
+    member, or its insertion in a typed container, converts the value, which copies it; filling the original
+    container afterwards cannot reach the copy, so the reference is silently lost.  Giving the container its
+    declared type when it is created means that such an assignment keeps the container itself.
+
+    @param l the indexed list
+    @param oh the serialized list description
+    @param xsink Qore-language exception information
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+static int qore_set_indexed_list_type(QoreListNode& l, const QoreHashNode& oh, ExceptionSink* xsink) {
+    QoreValue v = oh.getKeyValue("_list");
+    if (v.getType() != NT_STRING) {
+        xsink->raiseException("DESERIALIZATION-ERROR", "'_list' key has invalid type '%s'; expecting 'string'",
+            v.getTypeName());
+        return -1;
+    }
+    QoreStringValueHelper type(v);
+    const char* value_type = type->c_str();
+    const QoreTypeInfo* vti = qore_get_type_from_string_intern(value_type);
+    if (!vti) {
+        xsink->raiseException("DESERIALIZATION-ERROR", "'list has value type '%s' which cannot be matched to a "
+            "known type", value_type);
+        return -1;
+    }
+    qore_list_private::get(l)->complexTypeInfo = (vti == anyTypeInfo ? nullptr : qore_get_complex_list_type(vti));
+    return 0;
+}
+
+//! Sets the declared type of an indexed hash before its members are deserialized
+/** @see qore_set_indexed_list_type() for why the type cannot wait for the contents
+
+    @param h the indexed hash
+    @param oh the serialized hash description
+    @param xsink Qore-language exception information
+
+    @return 0 for OK, -1 if an exception was raised
+*/
+static int qore_set_indexed_hash_type(QoreHashNode& h, const QoreHashNode& oh, ExceptionSink* xsink) {
+    QoreValue v = oh.getKeyValue("_hash");
+    if (v.getType() != NT_STRING) {
+        xsink->raiseException("DESERIALIZATION-ERROR", "'_hash' key has invalid type '%s'; expecting 'string'",
+            v.getTypeName());
+        return -1;
+    }
+    QoreStringValueHelper type(v);
+    const char* type_str = type->c_str();
+    if (type_str[0] == '^') {
+        // v1.0 data uses '^hash^' for a hash without a value type
+        if (!strcmp(type_str, "^hash^")) {
+            return 0;
+        }
+        const char* value_type = type_str + 1;
+        const QoreTypeInfo* vti = qore_get_type_from_string_intern(value_type);
+        if (!vti) {
+            xsink->raiseException("DESERIALIZATION-ERROR", "'hash has value type '%s' which cannot be matched to a "
+                "known type", value_type);
+            return -1;
+        }
+        qore_hash_private::get(h)->complexTypeInfo
+            = (vti == anyTypeInfo ? nullptr : qore_get_complex_hash_type(vti));
+        return 0;
+    }
+    const QoreNamespace* pns = nullptr;
+    const TypedHashDecl* hd = getProgram()->findHashDecl(type_str, pns);
+    if (!hd) {
+        xsink->raiseException("DESERIALIZATION-ERROR", "'_hash' key indicates that a '%s' typed hash should be "
+            "deserialized, but no such typed hash (hashdecl) could be found in the current Program object",
+            type_str);
+        return -1;
+    }
+    // the members are set when the hash is deserialized in place
+    qore_hash_private::get(h)->setHashDecl(hd);
+    return 0;
+}
+
 QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode& h, int64 flags) {
     assert(hashdeclSerializationInfo->equal(h.getHashDecl()));
     if (qore_check_cancel(xsink, "object deserialization")) {
@@ -885,11 +963,17 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
                 assert(context.oimap.find(key) == context.oimap.end());
                 context.oimap.insert(oimap_t::value_type(key, obj));
             } else if (hashdeclHashSerializationInfo->equal(oh->getHashDecl())) {
-                ValueHolder holder(new QoreHashNode(autoTypeInfo), xsink);
+                ReferenceHolder<QoreHashNode> holder(new QoreHashNode(autoTypeInfo), xsink);
+                if (qore_set_indexed_hash_type(**holder, *oh, xsink)) {
+                    return QoreValue();
+                }
                 assert(context.oimap.find(key) == context.oimap.end());
                 context.oimap.insert(oimap_t::value_type(key, holder.release()));
             } else if (hashdeclListSerializationInfo->equal(oh->getHashDecl())) {
-                ValueHolder holder(new QoreListNode(autoTypeInfo), xsink);
+                ReferenceHolder<QoreListNode> holder(new QoreListNode(autoTypeInfo), xsink);
+                if (qore_set_indexed_list_type(**holder, *oh, xsink)) {
+                    return QoreValue();
+                }
                 assert(context.oimap.find(key) == context.oimap.end());
                 context.oimap.insert(oimap_t::value_type(key, holder.release()));
             } else {
@@ -901,7 +985,9 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
             }
         }
 
-        // iterate the hash again
+        // fill the indexed containers before any object is deserialized; object member assignments and user
+        // deserializeMembers() code must see complete containers, and a container that refers to another must
+        // find it with its contents
         while (hi.next()) {
             const char* key = hi.getKey();
             const QoreHashNode* oh = hi.get().get<const QoreHashNode>();
@@ -921,7 +1007,6 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
                 if (*xsink) {
                     return QoreValue();
                 }
-                continue;
             } else if (hashdeclListSerializationInfo->equal(oh->getHashDecl())) {
                 QoreValue v = oh->getKeyValue("_list");
                 QoreListNode* val = context.oimap.find(key)->second.get<QoreListNode>();
@@ -930,10 +1015,21 @@ QoreValue QoreSerializable::deserialize(ExceptionSink* xsink, const QoreHashNode
                 if (*xsink) {
                     return QoreValue();
                 }
+            }
+            if (qore_check_cancel(xsink, "container deserialization")) {
+                return QoreValue();
+            }
+        }
+
+        // deserialize the objects
+        while (hi.next()) {
+            const char* key = hi.getKey();
+            const QoreHashNode* oh = hi.get().get<const QoreHashNode>();
+
+            if (!hashdeclObjectSerializationInfo->equal(oh->getHashDecl())) {
+                // the containers were deserialized above
                 continue;
             }
-
-            assert(hashdeclObjectSerializationInfo->equal(oh->getHashDecl()));
             QoreObject* obj = context.oimap.find(key)->second.get<QoreObject>();
 
             const QoreClass& cls = *obj->getClass();
