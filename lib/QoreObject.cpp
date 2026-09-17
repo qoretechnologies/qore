@@ -784,11 +784,13 @@ QoreValue qore_object_private::takeMember(LValueHelper& lvh, const char* key) {
 
     QoreValue rv = odata->priv->swapKeyValue(key, QoreValue(), this);
 
-    if (needs_scan(rv)) {
+    bool scan_value_removed = needs_scan(rv);
+    if (scan_value_removed) {
         if (!getScanCount()) {
             lvh.setDelta(-1);
         }
     }
+    lvh.objectRemoved(scan_value_removed);
 
     return rv;
 }
@@ -812,6 +814,7 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
     }
 
     unsigned old_count = getScanCount();
+    bool scan_value_removed = false;
 
     QoreHashNode* id = nullptr;
     const qore_class_private* old_member_class_ctx = nullptr;
@@ -848,6 +851,9 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
         if (!exists) {
             continue;
         }
+        if (!scan_value_removed && needs_scan(n)) {
+            scan_value_removed = true;
+        }
 
         // note that no exception can occur here
         rvh->setKeyValue(key, n, lvh.vl.xsink);
@@ -857,6 +863,7 @@ void qore_object_private::takeMembers(QoreLValueGeneric& rv, LValueHelper& lvh, 
     if (old_count && !getScanCount()) {
         lvh.setDelta(-1);
     }
+    lvh.objectRemoved(scan_value_removed);
 }
 
 void qore_object_private::mergeDataToHash(QoreHashNode* hash, SafeDerefHelper& sdh, ExceptionSink* xsink) const {

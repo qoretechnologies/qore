@@ -42,6 +42,8 @@
       processing time for large documents with many matches while retaining input validation
     - passing a @ref lvalue_references "reference" to a variable holding objects no longer costs time
       proportional to the size of the object graph reachable from that variable
+    - @ref remove "removing" or @ref delete "deleting" a value that holds no objects from a hash, list or
+      object no longer costs time proportional to the size of the object graph reachable from the container
     - calls to builtin functions declared deterministic and free of side effects are evaluated once at
       compile time when every argument is a literal; @ref exec_mode_aot "AOT" additionally requires the
       result to be host-portable, so a value that depends on the build host is never baked into a
@@ -3061,6 +3063,11 @@ DataFrame::DataFrame df = DataFrame::DataFrame::fromColumnarResult(selected);
       a closure and an object that it captures once they only referenced each other
     - Fixed slow recursive reference scans when many objects share a list or hash; a scan now takes time linear in
       the size of the graph, where each object that referenced a shared container walked the container again
+    - Fixed @ref remove "remove" and @ref delete "delete" of a hash key, object member, list element or slice
+      scanning the whole graph of objects reachable from the object holding the container whenever the container
+      also held an object, even when the removed value was a scalar or did not exist; the scan blocked
+      dereferences of every object that it reached, so a large graph stalled all threads using those objects.
+      Such a removal no longer makes a recursive reference scan
     - Fixed crashes when scanning or destroying long chains or cycles of objects; objects in long chains are still
       destroyed before the objects that they reference
     - Fixed a crash when copying or deleting a long chain of exceptions, such as the chain of parse errors from a

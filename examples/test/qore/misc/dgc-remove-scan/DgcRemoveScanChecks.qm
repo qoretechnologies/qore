@@ -1,0 +1,383 @@
+# -*- mode: qore; indent-tabs-mode: nil -*-
+#! @file DgcRemoveScanChecks.qm checks for the recursive-reference scans made by remove and delete
+
+/*  Copyright 2026 Qore Technologies, s.r.o.
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+*/
+
+%modern
+
+module DgcRemoveScanChecks {
+    version = "1.0";
+    desc = "checks for the recursive-reference scans made by remove and delete";
+    author = "Qore Technologies, s.r.o.";
+    url = "https://qore.org";
+    license = "MIT";
+}
+
+/** The checks are in a module so that the same code can be run from source in each execution mode and as a
+    compiled (AOT) module.  Each check returns an integer that the test compares with the expected value.
+
+    Scan counts come from dbg_get_lvalue_scan_count(), which only exists in debug builds; get_scan_counts()
+    returns an empty hash in other builds.
+*/
+public namespace DgcRemoveScanChecks {
+#! Object with members of each kind removed by the checks; counts its destructions
+public class Tracked {
+    public {
+        *Tracked peer;
+        *Tracked other;
+        *hash<auto> cx;
+        *list<auto> l;
+        *int id;
+        *int flag;
+        *int missing;
+
+        static int destroyed = 0;
+    }
+
+    destructor() {
+        ++Tracked::destroyed;
+    }
+}
+
+#! Holds containers that also hold an object, as a request context holding a listener does
+public class Holder {
+    public {
+        hash<auto> cx;
+        list<auto> l;
+        Tracked o;
+    }
+
+    constructor() {
+        Tracked t();
+        cx = {
+            "listener": t,
+            "id": 1,
+            "flag": True,
+            "a": "x",
+            "b": 2.0,
+            "nested": {"obj": t},
+        };
+        l = (t, 1, 2, 3, 4, 5);
+        o = new Tracked();
+        o.peer = t;
+        o.id = 1;
+        o.flag = 1;
+    }
+}
+
+#! Returns True if the scan count is available
+public bool sub have_scan_count() {
+    return Option::HAVE_LIBRARY_DEBUGGING;
+}
+
+#! Returns the number of scans started by lvalue operations in the current thread
+int sub scan_count() {
+    return call_function("dbg_get_lvalue_scan_count");
+}
+
+sub remove_ref_hash_key(reference<hash<auto>> cx) {
+    remove cx.id;
+}
+
+sub remove_ref_list_element(reference<list<auto>> l) {
+    remove l[2];
+}
+
+#! Returns the scan count checks: the number of scans each operation made
+/** A value that cannot take part in a recursive graph does not change the objects reachable from the holder,
+    so removing or deleting one must not scan; removing an object, a container with one, or anything from a
+    container that had to be copied must.
+*/
+public hash<string, int> sub get_scan_counts() {
+    hash<string, int> rv = {};
+    if (!have_scan_count()) {
+        return rv;
+    }
+
+    int start;
+    Holder h();
+
+    # a scalar assignment is the baseline: it never scanned
+    start = scan_count();
+    h.cx.id = 2;
+    rv."assign-hash-scalar-key" = scan_count() - start;
+
+    # hash keys
+    start = scan_count();
+    remove h.cx.missing;
+    rv."remove-hash-missing-key" = scan_count() - start;
+
+    start = scan_count();
+    int id = remove h.cx.id;
+    rv."remove-hash-scalar-key" = scan_count() - start;
+    rv."remove-hash-scalar-key-value" = id;
+
+    start = scan_count();
+    delete h.cx.flag;
+    rv."delete-hash-scalar-key" = scan_count() - start;
+
+    start = scan_count();
+    hash<auto> removed = remove h.cx.("a", "b", "missing");
+    rv."remove-hash-slice-scalars" = scan_count() - start;
+    rv."remove-hash-slice-scalars-size" = removed.size();
+
+    start = scan_count();
+    remove h.cx.("missing1", "missing2");
+    rv."remove-hash-slice-missing" = scan_count() - start;
+
+    h.cx.id = 1;
+    start = scan_count();
+    remove_ref_hash_key(\h.cx);
+    rv."remove-ref-hash-scalar-key" = scan_count() - start;
+
+    # list elements
+    start = scan_count();
+    remove h.l[1];
+    rv."remove-list-scalar-element" = scan_count() - start;
+
+    start = scan_count();
+    remove h.l[100];
+    rv."remove-list-out-of-range" = scan_count() - start;
+
+    start = scan_count();
+    delete h.l[2];
+    rv."delete-list-scalar-element" = scan_count() - start;
+
+    start = scan_count();
+    list<auto> lr = remove h.l[3, 4];
+    rv."remove-list-slice-scalars" = scan_count() - start;
+    rv."remove-list-slice-scalars-size" = lr.size();
+
+    h.l += (6, 7, 8);
+    start = scan_count();
+    lr = remove h.l[2..3];
+    rv."remove-list-range-scalars" = scan_count() - start;
+    rv."remove-list-range-scalars-size" = lr.size();
+
+    h.l += (9, 10);
+    start = scan_count();
+    remove_ref_list_element(\h.l);
+    rv."remove-ref-list-scalar-element" = scan_count() - start;
+
+    # object members
+    start = scan_count();
+    remove h.o.missing;
+    rv."remove-object-missing-member" = scan_count() - start;
+
+    start = scan_count();
+    id = remove h.o.id;
+    rv."remove-object-scalar-member" = scan_count() - start;
+    rv."remove-object-scalar-member-value" = id;
+
+    start = scan_count();
+    delete h.o.flag;
+    rv."delete-object-scalar-member" = scan_count() - start;
+
+    h.o.id = 1;
+    h.o.flag = 1;
+    start = scan_count();
+    remove h.o.("id", "flag", "missing");
+    rv."remove-object-slice-scalars" = scan_count() - start;
+
+    # removals that change the graph
+    start = scan_count();
+    remove h.cx.nested;
+    rv."remove-hash-nested-object-key" = scan_count() - start;
+
+    h.cx.id = 1;
+    start = scan_count();
+    remove h.cx.("id", "listener");
+    rv."remove-hash-slice-with-object" = scan_count() - start;
+
+    h.cx = {"listener": h.o.peer, "id": 1};
+    start = scan_count();
+    remove h.cx.listener;
+    rv."remove-hash-object-key" = scan_count() - start;
+
+    h.cx = {"listener": h.o.peer, "id": 1};
+    {
+        # the hash is shared, so the removal copies it; the copy is a node that the holder's recursive set
+        # does not know yet
+        hash<auto> shared = h.cx;
+        start = scan_count();
+        remove h.cx.id;
+        rv."remove-shared-hash-scalar-key" = scan_count() - start;
+        rv."remove-shared-hash-scalar-key-original" = shared.size();
+    }
+
+    h.l = (h.o.peer, 1, 2, 3);
+    start = scan_count();
+    remove h.l[0];
+    rv."remove-list-object-element" = scan_count() - start;
+
+    h.l = (h.o.peer, 1, 2, 3);
+    start = scan_count();
+    remove h.l[0, 1];
+    rv."remove-list-slice-with-object" = scan_count() - start;
+
+    h.l = (h.o.peer, 1, 2, 3);
+    start = scan_count();
+    remove h.l[0..1];
+    rv."remove-list-range-with-object" = scan_count() - start;
+
+    {
+        # the list is shared, so the removal copies it
+        h.l = (h.o.peer, 1, 2, 3);
+        list<auto> shared = h.l;
+        start = scan_count();
+        remove h.l[1];
+        rv."remove-shared-list-scalar-element" = scan_count() - start;
+        rv."remove-shared-list-scalar-element-original" = shared.size();
+    }
+
+    h.o.id = 1;
+    start = scan_count();
+    remove h.o.("id", "peer");
+    rv."remove-object-slice-with-object" = scan_count() - start;
+
+    h.o.peer = new Tracked();
+    start = scan_count();
+    remove h.o.peer;
+    rv."remove-object-object-member" = scan_count() - start;
+
+    h.cx = {"listener": new Tracked(), "id": 1};
+    Tracked::destroyed = 0;
+    start = scan_count();
+    delete h.cx.listener;
+    rv."delete-hash-object-key" = scan_count() - start;
+    rv."delete-hash-object-key-destroyed" = Tracked::destroyed;
+
+    return rv;
+}
+
+#! Returns the recursive graph checks: the number of objects destroyed at the point of each check
+/** Cycles must still be collected when a removal skipped the scan, and removing an edge must still break them.
+*/
+public hash<string, int> sub get_cycle_results() {
+    hash<string, int> rv = {};
+
+    Tracked::destroyed = 0;
+    {
+        Tracked a();
+        a.cx = {"self": a, "id": 1, "flag": 1};
+        remove a.cx.id;
+        delete a.cx.flag;
+        remove a.cx.missing;
+    }
+    rv."cycle-hash-scalar-key" = Tracked::destroyed;
+
+    Tracked::destroyed = 0;
+    {
+        Tracked a();
+        a.cx = {"self": a, "x": 1, "y": 2};
+        remove a.cx.("x", "y", "z");
+    }
+    rv."cycle-hash-slice-scalars" = Tracked::destroyed;
+
+    Tracked::destroyed = 0;
+    {
+        Tracked a();
+        a.l = (a, 1, 2, 3, 4);
+        remove a.l[1];
+        remove a.l[1, 10];
+        remove a.l[1..1];
+        delete a.l[5];
+    }
+    rv."cycle-list-scalars" = Tracked::destroyed;
+
+    Tracked::destroyed = 0;
+    {
+        Tracked a();
+        a.other = new Tracked();
+        a.other.peer = a;
+        a.other.id = 1;
+        a.other.flag = 1;
+        remove a.other.id;
+        remove a.other.("flag", "missing");
+    }
+    rv."cycle-object-scalar-members" = Tracked::destroyed;
+
+    Tracked::destroyed = 0;
+    {
+        hash<auto> shared;
+        {
+            Tracked a();
+            a.cx = {"self": a, "id": 1};
+            shared = a.cx;
+            # copies the shared hash: the object is now in a cycle through the copy
+            remove a.cx.id;
+        }
+        # the original hash still references the object
+        rv."cycle-shared-hash-held" = Tracked::destroyed;
+    }
+    rv."cycle-shared-hash" = Tracked::destroyed;
+
+    Tracked::destroyed = 0;
+    {
+        list<auto> shared;
+        {
+            Tracked a();
+            a.l = (a, 1);
+            shared = a.l;
+            remove a.l[1];
+        }
+        rv."cycle-shared-list-held" = Tracked::destroyed;
+    }
+    rv."cycle-shared-list" = Tracked::destroyed;
+
+    Tracked::destroyed = 0;
+    {
+        Tracked a();
+        *Tracked b = new Tracked();
+        a.cx = {"peer": b, "id": 1};
+        b.cx = {"peer": a, "id": 1};
+        remove a.cx.id;
+        remove a.cx.peer;
+        remove b;
+        # b was only held by a.cx, so it is destroyed as soon as the edge is removed
+        rv."cycle-broken-by-hash-remove-early" = Tracked::destroyed;
+    }
+    rv."cycle-broken-by-hash-remove" = Tracked::destroyed;
+
+    Tracked::destroyed = 0;
+    {
+        Tracked a();
+        Tracked b();
+        a.peer = b;
+        b.peer = a;
+        remove a.peer;
+    }
+    rv."cycle-broken-by-member-remove" = Tracked::destroyed;
+
+    Tracked::destroyed = 0;
+    {
+        Tracked a();
+        a.cx = {"self": a, "other": new Tracked(), "id": 1};
+        delete a.cx.id;
+        delete a.cx.other;
+        rv."cycle-delete-object-key-early" = Tracked::destroyed;
+    }
+    rv."cycle-delete-object-key" = Tracked::destroyed;
+
+    return rv;
+}
+}

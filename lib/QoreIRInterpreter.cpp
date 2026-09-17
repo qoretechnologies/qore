@@ -12896,6 +12896,7 @@ load_local_done:
                             LValueHelper lvh(xsink);
                             // Navigate to parent (for_remove=true: don't vivify intermediates)
                             if (!lvh.navigatePath(path_copy.data(), path_copy.size() - 1, true)) {
+                                lvh.startContainerRemoval();
                                 // Now remove/delete the final key/element from the container
                                 const LVPathStep& last_step = path_copy.back();
                                 QoreValue container = lvh.getValue();

@@ -3978,6 +3978,14 @@ static QoreValue f_dbg_make_short_string(const QoreListNode* params, RuntimeConf
     return rv;
 }
 
+//! returns the number of recursive-reference scans started by lvalue operations in the current thread
+/** A scan walks the whole object graph reachable from the object holding the lvalue, so tests use this to
+    verify that an operation that cannot change that graph does not start one.
+*/
+static QoreValue f_dbg_get_lvalue_scan_count(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    return q_get_lvalue_scan_count();
+}
+
 //! returns True if the argument is stored in inline short string storage
 static QoreValue f_dbg_is_short_string(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return get_param_value(params, 0).isShortString();
@@ -4012,6 +4020,8 @@ void init_debug_functions(QoreNamespace& qns) {
         stringTypeInfo, 1, stringTypeInfo, QORE_PARAM_NO_ARG, "value");
     qns.addBuiltinVariant("dbg_is_short_string", f_dbg_is_short_string, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
         boolTypeInfo, 1, autoTypeInfo, QORE_PARAM_NO_ARG, "value");
+    qns.addBuiltinVariant("dbg_get_lvalue_scan_count", f_dbg_get_lvalue_scan_count, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, bigIntTypeInfo);
 #endif
 
     // code flag oracle; the mask on each of these is the point of the declaration, so it must match

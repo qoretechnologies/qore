@@ -617,6 +617,15 @@ LValueHelper::LValueHelper(LValueHelper&& o) : vl(std::move(o.vl)), tvec(std::mo
     o.buffer_lvalue_value = QoreValue();
 }
 
+#ifdef DEBUG
+//! the number of recursive-reference scans started by lvalue operations in the current thread
+static thread_local int64 lvalue_scan_count = 0;
+
+int64 q_get_lvalue_scan_count() {
+    return lvalue_scan_count;
+}
+#endif
+
 LValueHelper::~LValueHelper() {
     if (buffer_lvalue) {
         if (!*vl.xsink) {
@@ -628,8 +637,6 @@ LValueHelper::~LValueHelper() {
         val = nullptr;
     }
 
-    // FIXME: technically if we have only removed robjects from the lvalue and the lvalue did not have any recursive
-    // references before, then we don't need to scan this time either
     bool obj_chg = before;
     bool obj_ref = false;
 
@@ -675,6 +682,9 @@ LValueHelper::~LValueHelper() {
 
         if (!obj_chg && (val ? val->needsScan() : needs_scan(*qv))) {
             obj_chg = true;
+        } else if (obj_chg && removalKeptGraph()) {
+            // the removal took out no value that can take part in a recursive graph
+            obj_chg = false;
         }
         if (robj) {
             robj->tRef();
@@ -710,12 +720,57 @@ LValueHelper::~LValueHelper() {
     if (robj) {
         // recalculate recursive references for objects if necessary
         if (obj_chg && !no_object_scan) {
+#ifdef DEBUG
+            ++lvalue_scan_count;
+#endif
             RSetHelper rsh(*robj, vl.xsink);
         }
         if (obj_ref) {
             robj->tDeref();
         }
     }
+}
+
+void LValueHelper::startContainerRemoval() {
+    assert(val || qv);
+    if (removal_container) {
+        return;
+    }
+    removal_container = getInternalNode();
+    switch (get_node_type(removal_container)) {
+        case NT_LIST:
+            removal_scan_count =
+                qore_list_private::getScanCount(*static_cast<const QoreListNode*>(removal_container));
+            break;
+        case NT_HASH:
+            removal_scan_count =
+                qore_hash_private::getScanCount(*static_cast<const QoreHashNode*>(removal_container));
+            break;
+        default:
+            break;
+    }
+}
+
+bool LValueHelper::removalKeptGraph() const {
+    // a container copied by ensureUnique() is a new node that the recursive sets do not know yet; the node it
+    // replaced is still held in tvec here, so its address cannot have been reused
+    if (!removal_container || getInternalNode() != removal_container) {
+        return false;
+    }
+    switch (removal_container->getType()) {
+        case NT_LIST:
+            return qore_list_private::getScanCount(*static_cast<const QoreListNode*>(removal_container))
+                == removal_scan_count;
+        case NT_HASH:
+            return qore_hash_private::getScanCount(*static_cast<const QoreHashNode*>(removal_container))
+                == removal_scan_count;
+        case NT_OBJECT:
+        case NT_WEAKREF:
+            return removal_object_reported && !removal_object_scan;
+        default:
+            break;
+    }
+    return false;
 }
 
 int LValueHelper::set(const ReferenceNode& ref, bool for_remove) {
@@ -2538,6 +2593,7 @@ void LValueRemoveHelper::doRemove(QoreValue lvalue) {
     LValueHelper lvh(op->getLeft(), xsink, true);
     if (!lvh)
         return;
+    lvh.startContainerRemoval();
 
     t = lvh.getType();
     if (t == NT_HASH) {
@@ -2688,6 +2744,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op) {
     LValueHelper lvh(op->getLeft(), xsink, true);
     if (!lvh)
         return;
+    lvh.startContainerRemoval();
 
     switch (lvh.getType()) {
         case NT_LIST: {
@@ -2840,6 +2897,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsOperatorNode* op, cons
     LValueHelper lvh(op->getLeft(), xsink, true);
     if (!lvh)
         return;
+    lvh.startContainerRemoval();
 
     switch (lvh.getType()) {
         case NT_LIST: {
@@ -3007,6 +3065,7 @@ void LValueRemoveHelper::doRemove(const QoreSquareBracketsRangeOperatorNode* op)
     LValueHelper lvh(op->get(0), xsink, true);
     if (!lvh)
         return;
+    lvh.startContainerRemoval();
 
     bool broken_list_range = static_cast<bool>(runtime_get_parse_options() & PO_BROKEN_LIST_RANGE);
     bool negative_offsets = runtime_check_parse_option(PO_NEGATIVE_OFFSETS);

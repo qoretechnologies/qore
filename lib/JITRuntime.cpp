@@ -13330,6 +13330,7 @@ extern "C" DLLEXPORT uint64_t qore_rt_lv_path_unary(
                 // to remove in either case.
                 return toBits(QoreValue());
             }
+            lvh.startContainerRemoval();
             QoreValue container = lvh.getValue();
             qore_type_t ct = container.getType();
             if ((last_is_hash_slice || last_is_hash_list)

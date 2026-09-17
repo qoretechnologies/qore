@@ -436,6 +436,13 @@ struct ObjCountRec {
 
 typedef std::vector<ObjCountRec> ocvec_t;
 
+#ifdef DEBUG
+//! returns the number of recursive-reference scans started by lvalue operations in the current thread
+/** for tests; see dbg_get_lvalue_scan_count()
+*/
+DLLLOCAL int64 q_get_lvalue_scan_count();
+#endif
+
 // this class grabs global variable or object locks for the duration of the scope of the object
 // no evaluations can be done while this object is in scope or a deadlock may result
 class LValueHelper {
@@ -477,6 +484,9 @@ protected:
     DLLLOCAL int makeIntQv(const char* desc);
     DLLLOCAL int makeIntVal(const char* desc);
 
+    //! returns true if a removal started with startContainerRemoval() left the reachable objects unchanged
+    DLLLOCAL bool removalKeptGraph() const;
+
     DLLLOCAL int makeFloat(const char* desc);
     DLLLOCAL int makeNumber(const char* desc);
 
@@ -503,8 +513,18 @@ private:
     // suppressObjectScan())
     bool no_object_scan = false;
 
+    //! set when members were removed from an object; see objectRemoved()
+    bool removal_object_reported = false;
+    //! set when a value removed from an object needs a recursive-reference scan; see objectRemoved()
+    bool removal_object_scan = false;
+
     // recursive delta: change to recursive reference count
     int rdt = 0;
+
+    //! the container that values are removed from; set by startContainerRemoval()
+    const AbstractQoreNode* removal_container = nullptr;
+    //! the scan count of a list or hash in \a removal_container when the removal started
+    unsigned removal_scan_count = 0;
 
     //! an entry created while navigating to the lvalue target
     /** a container entry (a hash key or list elements) or a container created for an lvalue slot that had no
@@ -582,6 +602,31 @@ public:
     */
     DLLLOCAL void suppressObjectScan() {
         no_object_scan = true;
+    }
+
+    //! Starts removing values from the container held by the lvalue
+    /** Call this after navigating to the container and before changing it, including with ensureUnique().
+
+        Removal code holds the container rather than the removed value, so the value tested before and after the
+        operation is the container, which needs a recursive-reference scan whenever it holds any object.  The
+        destructor therefore skips the scan if the removal cannot have changed the set of objects reachable from
+        the lvalue: the lvalue still holds the same container node, and the container lost no value that needs a
+        scan.  A list or hash shows the latter with its scan count, which only the lvalue lock holder can change.
+        An object's scan count can be changed by other threads, so object removals report it with
+        objectRemoved().
+
+        Further calls keep the state recorded by the first one, so a helper can remove values more than once.
+    */
+    DLLLOCAL void startContainerRemoval();
+
+    //! Reports that members were removed from the object held by the lvalue
+    /** @param scan_value_removed true if any removed value needs a recursive-reference scan
+    */
+    DLLLOCAL void objectRemoved(bool scan_value_removed) {
+        removal_object_reported = true;
+        if (scan_value_removed) {
+            removal_object_scan = true;
+        }
     }
 
     //! records a hash key created while navigating to the lvalue target

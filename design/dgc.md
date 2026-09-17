@@ -160,7 +160,7 @@ Cost is proportional to the size of the object graph reachable from the lvalue, 
 expensive: `RSetHelper::scan()` walks every reachable hash, list, object, closure, and reference.
 
 `LValueHelper::suppressObjectScan()` skips that scan. It is only correct when the set of objects reachable from
-the lvalue is provably unchanged. The one caller today is complex-reference argument binding in
+the lvalue is provably unchanged. The one caller of it is complex-reference argument binding in
 `QoreTypeSpec::acceptInput` (`lib/QoreTypeInfo.cpp`, `QTS_COMPLEXREF` / `QTS_COMPLEXHARDREF`): binding a
 `reference<`*complex-type*`>` argument reads the referenced value and assigns it back to the same lvalue so that
 the reference's type restriction is applied (which can fold a container's value type, producing a new node). The
@@ -169,6 +169,44 @@ i.e. nothing was folded, replaced, or removed — so no object can have entered 
 
 Do not suppress a scan on the strength of "the value looks the same". Compare node identity, and only after a
 successful assignment; suppressing a scan when the graph did change leaves a cycle undetected, i.e. leaked.
+
+### Removing values from a container
+
+`remove` and `delete` of a hash key, object member, list element or slice navigate the `LValueHelper` to the
+**container** and take the value out of it, so `before` describes the container, which needs a scan whenever it
+holds any object. Without a further rule, removing a key that does not exist, or a scalar, from a hash that also
+holds an object scans the whole graph reachable from the object holding the hash. Because the scan holds the
+r-section of every object it reaches, and every dereference of those objects waits for it, a large graph turns
+this into a process-wide stall.
+
+Every removal path therefore calls `LValueHelper::startContainerRemoval()` right after navigating to the
+container: `LValueRemoveHelper::doRemove()` (AST), `LValuePathUnary` in `lib/QoreIRInterpreter.cpp` (IR), and
+`qore_rt_lv_path_unary()` in `lib/JITRuntime.cpp` (JIT and AOT, which also covers the shared
+`executeLV*Remove()` helpers). It records the container node and, for a list or hash, its scan count. The
+destructor skips the scan when `LValueHelper::removalKeptGraph()` shows that the removal cannot have changed the
+reachable objects:
+
+- The lvalue still holds the same container node. `ensureUnique()` replaces a shared container with a copy, and
+  the copy is a node that no recursive set knows yet, so a copy always scans. The replaced node is held in the
+  helper's temporaries until after the check, so its address cannot be reused by then.
+- For a list or hash, the scan count is unchanged. Every container removal primitive decrements the count when
+  the removed value needs a scan, and only the holder of the lvalue lock can change it, so an unchanged count
+  after a pure removal means no scan-relevant value was taken.
+- For an object, `qore_object_private::takeMember()` / `takeMembers()` report through
+  `LValueHelper::objectRemoved()` whether any removed value needs a scan. An object's scan count cannot be
+  used here: other threads can change the object's members through their own lvalues at the same time.
+
+Removing an object, or a container, closure or reference that needs a scan still scans, because dropping an
+edge can make a cycle collectable. `delete` needs no special case: deleting an object removes a value that needs
+a scan. Any other removal (`lvh.remove()` of the whole value, or an unexpected container type) keeps the
+conservative scan.
+
+`QoreTypeSafeReferenceHelper::removeHashObjKey()` (the public C++ API) does not use this rule, since the same
+helper can hand out mutable nodes (`getUnique()`) that a module can change without the helper knowing.
+
+Debug builds count the scans started by lvalue operations per thread (`dbg_get_lvalue_scan_count()`);
+`examples/test/qore/misc/dgc-remove-scan/dgc-remove-scan.qtest` uses it to check every removal kind in each
+execution mode and from a compiled module, along with cycle collection after removals that skipped the scan.
 
 ## Scan locking: how the scanner stays deadlock-free and convergent
 
@@ -374,6 +412,9 @@ Do not use `realRef()` for references stored in C++ state that outlives a single
 - `lib/Variable.cpp` — `LValueHelper::~LValueHelper` (scan trigger), `ClosureVarValue::getLValue` (`robj` for
   closure-bound and thread-safe locals).
 - `lib/QoreTypeInfo.cpp` — `QoreTypeSpec::acceptInput`, the only `suppressObjectScan()` caller.
+- `lib/Variable.cpp` — `LValueHelper::startContainerRemoval()` / `removalKeptGraph()`, the removal scan rule.
+- `examples/test/qore/misc/dgc-remove-scan/dgc-remove-scan.qtest` — scan counts and cycle collection for
+  `remove` and `delete` in every engine.
 - `examples/test/qore/misc/reference-arg-binding.qtest` — cycle-collection and scan-cost regression tests for
   reference argument binding.
 - `examples/test/qore/misc/shared-container-cycles.qtest` — cycles reached through a container

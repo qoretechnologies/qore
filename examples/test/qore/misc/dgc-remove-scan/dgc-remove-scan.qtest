@@ -1,0 +1,166 @@
+#!/usr/bin/env qore
+# -*- mode: qore; indent-tabs-mode: nil -*-
+
+%modern
+%no-child-restrictions
+
+%prepend-module-path "${SCRIPT_DIR}/../../../../../qlib"
+%prepend-module-path "${SCRIPT_DIR}"
+%requires QUnit
+%requires FsUtil
+%requires DgcRemoveScanChecks
+
+%exec-class DgcRemoveScanTest
+
+#! Tests the recursive-reference (cycle) scans made by remove and delete
+/** Removal code holds the container that a value is removed from, and a container holding any object needs a
+    scan.  Removing a value that cannot take part in a recursive graph must not scan the whole graph reachable
+    from the object holding the container, while removals that change that graph must still scan, and cycles
+    must still be collected.  The checks are in DgcRemoveScanChecks.qm and run in this program, in each
+    execution mode and from a compiled module, since each engine has its own removal code.
+*/
+class DgcRemoveScanTest inherits QUnit::Test {
+    public {
+        #! the number of scans expected for each scan count check, and the expected value of each value check
+        const ExpectedScanCounts = {
+            "assign-hash-scalar-key": 0,
+            "remove-hash-missing-key": 0,
+            "remove-hash-scalar-key": 0,
+            "remove-hash-scalar-key-value": 2,
+            "delete-hash-scalar-key": 0,
+            "remove-hash-slice-scalars": 0,
+            "remove-hash-slice-scalars-size": 2,
+            "remove-hash-slice-missing": 0,
+            "remove-ref-hash-scalar-key": 0,
+            "remove-list-scalar-element": 0,
+            "remove-list-out-of-range": 0,
+            "delete-list-scalar-element": 0,
+            "remove-list-slice-scalars": 0,
+            "remove-list-slice-scalars-size": 2,
+            "remove-list-range-scalars": 0,
+            "remove-list-range-scalars-size": 2,
+            "remove-ref-list-scalar-element": 0,
+            "remove-object-missing-member": 0,
+            "remove-object-scalar-member": 0,
+            "remove-object-scalar-member-value": 1,
+            "delete-object-scalar-member": 0,
+            "remove-object-slice-scalars": 0,
+            "remove-hash-nested-object-key": 1,
+            "remove-hash-slice-with-object": 1,
+            "remove-hash-object-key": 1,
+            "remove-shared-hash-scalar-key": 1,
+            "remove-shared-hash-scalar-key-original": 2,
+            "remove-list-object-element": 1,
+            "remove-list-slice-with-object": 1,
+            "remove-list-range-with-object": 1,
+            "remove-shared-list-scalar-element": 1,
+            "remove-shared-list-scalar-element-original": 4,
+            "remove-object-slice-with-object": 1,
+            "remove-object-object-member": 1,
+            "delete-hash-object-key": 1,
+            "delete-hash-object-key-destroyed": 1,
+        };
+
+        #! the number of objects expected to be destroyed at each cycle check
+        const ExpectedCycleResults = {
+            "cycle-hash-scalar-key": 1,
+            "cycle-hash-slice-scalars": 1,
+            "cycle-list-scalars": 1,
+            "cycle-object-scalar-members": 2,
+            "cycle-shared-hash-held": 0,
+            "cycle-shared-hash": 1,
+            "cycle-shared-list-held": 0,
+            "cycle-shared-list": 1,
+            "cycle-broken-by-hash-remove-early": 1,
+            "cycle-broken-by-hash-remove": 2,
+            "cycle-broken-by-member-remove": 2,
+            "cycle-delete-object-key-early": 1,
+            "cycle-delete-object-key": 2,
+        };
+
+        #! the execution modes that the worker is run in
+        const ExecModes = ("ast", "ir", "jit");
+    }
+
+    private {
+        string qore_bin;
+        string libqore_dir;
+    }
+
+    constructor() : QUnit::Test("DgcRemoveScanTest", "1.0", \ARGV) {
+        qore_bin = ENV.QORE_BIN ?? ENV.QORE_BINARY ?? QORE_ARGV[0] ?? "qore";
+        libqore_dir = ENV.QORE_LIBDIR ?? dirname(qore_bin);
+
+        addTestCase("scan counts in this program", \testScanCountsInProgram());
+        addTestCase("cycles in this program", \testCyclesInProgram());
+        addTestCase("each execution mode", \testExecModes());
+        addTestCase("compiled module", \testCompiledModule());
+
+        set_return_value(main());
+    }
+
+    testScanCountsInProgram() {
+        if (!DgcRemoveScanChecks::have_scan_count()) {
+            testSkip("scan counts require a debug build");
+        }
+        checkResults("in-program", ExpectedScanCounts, DgcRemoveScanChecks::get_scan_counts());
+    }
+
+    testCyclesInProgram() {
+        checkResults("in-program", ExpectedCycleResults, DgcRemoveScanChecks::get_cycle_results());
+    }
+
+    testExecModes() {
+        foreach string mode in (ExecModes) {
+            string out = runWorker(get_script_dir(), "--exec-mode=" + mode);
+            checkWorkerOutput(mode, out);
+        }
+    }
+
+    testCompiledModule() {
+        TmpDir tmp("qore-dgc-remove-scan-");
+        string qmod_path = tmp.path + DirSep + "DgcRemoveScanChecks.qmod";
+        string src_path = get_script_dir() + DirSep + "DgcRemoveScanChecks.qm";
+        string compile_out = backquote(sprintf("QORE_LIBDIR=%s %s -b --compile-module --strip-source --output "
+            "%s %s 2>&1", libqore_dir, qore_bin, qmod_path, src_path));
+        assertTrue(is_file(qmod_path), "compiled checks module: " + compile_out);
+
+        # the directory holds only the compiled module, so the worker cannot load the source instead
+        checkWorkerOutput("aot", runWorker(tmp.path));
+    }
+
+    #! runs the worker with the checks module loaded from the given directory and returns its output
+    private string runWorker(string module_dir, string opts = "") {
+        string worker = get_script_dir() + DirSep + "dgc-remove-scan-worker.q";
+        return backquote(sprintf("LD_LIBRARY_PATH=%s QORE_MODULE_DIR=%s %s -b %s %s 2>&1", libqore_dir,
+            module_dir, qore_bin, opts, worker));
+    }
+
+    #! parses the "name=value" lines printed by the worker and compares them with the expected results
+    private checkWorkerOutput(string label, string out) {
+        hash<string, int> results = {};
+        foreach string line in (out.split("\n")) {
+            *list<*string> parts = (line =~ x/^([-a-z]+)=(-?[0-9]+)$/);
+            if (!parts) {
+                if (line.val()) {
+                    fail(sprintf("%s: unexpected worker output: %y", label, out));
+                }
+                continue;
+            }
+            results{parts[0]} = parts[1].toInt();
+        }
+        checkResults(label, ExpectedCycleResults, results - keys ExpectedScanCounts);
+        if (DgcRemoveScanChecks::have_scan_count()) {
+            checkResults(label, ExpectedScanCounts, results - keys ExpectedCycleResults);
+        } else {
+            assertEq(ExpectedCycleResults.size(), results.size(), label + ": result count");
+        }
+    }
+
+    private checkResults(string label, hash<auto> expected, hash<string, int> results) {
+        assertEq(sort(keys expected), sort(keys results), label + ": checks run");
+        foreach hash<auto> i in (expected.pairIterator()) {
+            assertEq(i.value, results{i.key}, sprintf("%s: %s", label, i.key));
+        }
+    }
+}
