@@ -3,7 +3,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -95,6 +95,8 @@ int QoreTypeSafeReferenceHelper::moveToHashObjKey(const char* key, bool for_remo
 }
 
 QoreValue QoreTypeSafeReferenceHelper::removeHashObjKey(const char* key) {
+    // see LValueHelper::startContainerRemoval(): the scan is skipped if the removal took out no scannable value
+    priv->startContainerRemoval();
     QoreValue v = priv->getValue();
     if (v.getType() == NT_OBJECT) {
         return qore_object_private::takeMember(*v.get<QoreObject>(), *priv, key);

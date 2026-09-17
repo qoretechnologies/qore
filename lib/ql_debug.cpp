@@ -3986,6 +3986,67 @@ static QoreValue f_dbg_get_lvalue_scan_count(const QoreListNode* params, Runtime
     return q_get_lvalue_scan_count();
 }
 
+//! removes a hash key or object member through QoreTypeSafeReferenceHelper::removeHashObjKey()
+/** @param ref a reference to a hash or object
+    @param key the key or member to remove
+
+    @return the removed value
+*/
+static QoreValue f_dbg_ref_remove_key(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
+    QoreStringNodeValueHelper key(get_param_value(params, 1));
+    // declared before the reference helper, so that the removed value is released after its locks
+    ValueHolder rv(xsink);
+    QoreTypeSafeReferenceHelper ref(get_param_value(params, 0).get<const ReferenceNode>(), xsink);
+    if (!ref) {
+        return QoreValue();
+    }
+    rv = ref.removeHashObjKey(key->c_str());
+    if (*xsink) {
+        return QoreValue();
+    }
+    return rv.release();
+}
+
+//! sets a key in the referenced hash in place and then removes another key with the same helper
+/** QoreTypeSafeReferenceHelper::getUnique() lets the caller change the hash without the helper knowing, so the
+    removal that follows must not skip the recursive-reference scan even if it removes a scalar.
+
+    @param ref a reference to a hash
+    @param set_key the key to set in place
+    @param val the value to set
+    @param remove_key the key to remove
+
+    @return the removed value
+*/
+static QoreValue f_dbg_ref_set_unique_remove_key(const QoreListNode* params, RuntimeConfig& rc,
+        ExceptionSink* xsink) {
+    QoreStringNodeValueHelper set_key(get_param_value(params, 1));
+    QoreStringNodeValueHelper remove_key(get_param_value(params, 3));
+    // declared before the reference helper, so that the removed value is released after its locks
+    ValueHolder rv(xsink);
+    QoreTypeSafeReferenceHelper ref(get_param_value(params, 0).get<const ReferenceNode>(), xsink);
+    if (!ref) {
+        return QoreValue();
+    }
+    if (ref.getType() != NT_HASH) {
+        xsink->raiseException("DBG-ARGUMENT-ERROR", "dbg_ref_set_unique_remove_key() requires a reference to a "
+            "hash; got type \"%s\" instead", ref.getTypeName());
+        return QoreValue();
+    }
+    QoreHashNode* h = ref.getUnique<QoreHashNode>();
+    if (*xsink) {
+        return QoreValue();
+    }
+    if (h->setKeyValue(set_key->c_str(), get_param_value(params, 2).refSelf(), xsink)) {
+        return QoreValue();
+    }
+    rv = ref.removeHashObjKey(remove_key->c_str());
+    if (*xsink) {
+        return QoreValue();
+    }
+    return rv.release();
+}
+
 //! returns True if the argument is stored in inline short string storage
 static QoreValue f_dbg_is_short_string(const QoreListNode* params, RuntimeConfig& rc, ExceptionSink* xsink) {
     return get_param_value(params, 0).isShortString();
@@ -4022,6 +4083,12 @@ void init_debug_functions(QoreNamespace& qns) {
         boolTypeInfo, 1, autoTypeInfo, QORE_PARAM_NO_ARG, "value");
     qns.addBuiltinVariant("dbg_get_lvalue_scan_count", f_dbg_get_lvalue_scan_count, QCF_NO_FLAGS,
         QDOM_DEBUG_HOOK, bigIntTypeInfo);
+    qns.addBuiltinVariant("dbg_ref_remove_key", f_dbg_ref_remove_key, QCF_NO_FLAGS, QDOM_DEBUG_HOOK,
+        autoTypeInfo, 2, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo, QORE_PARAM_NO_ARG, "key");
+    qns.addBuiltinVariant("dbg_ref_set_unique_remove_key", f_dbg_ref_set_unique_remove_key, QCF_NO_FLAGS,
+        QDOM_DEBUG_HOOK, autoTypeInfo, 4, referenceTypeInfo, QORE_PARAM_NO_ARG, "ref", stringTypeInfo,
+        QORE_PARAM_NO_ARG, "set_key", autoTypeInfo, QORE_PARAM_NO_ARG, "val", stringTypeInfo, QORE_PARAM_NO_ARG,
+        "remove_key");
 #endif
 
     // code flag oracle; the mask on each of these is the point of the declaration, so it must match

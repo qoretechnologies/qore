@@ -4,7 +4,7 @@
 
     Qore Programming Language
 
-    Copyright (C) 2003 - 2024 Qore Technologies, s.r.o.
+    Copyright (C) 2003 - 2026 Qore Technologies, s.r.o.
 
     Permission is hereby granted, free of charge, to any person obtaining a
     copy of this software and associated documentation files (the "Software"),
@@ -51,20 +51,25 @@ struct qore_type_safe_ref_helper_priv_t : public LValueHelper {
     }
 
     DLLLOCAL AbstractQoreNode* getUnique(ExceptionSink *xsink) {
+        // the caller can change the value in place without this helper knowing
+        disableRemovalScanSkip();
         ensureUnique();
         assert(!LValueHelper::getNodeValue() || (LValueHelper::getNodeValue()->reference_count() == 1));
         return LValueHelper::getNodeValue();
     }
 
     DLLLOCAL int assign(QoreValue val) {
+        disableRemovalScanSkip();
         return LValueHelper::assign(val, "<reference>");
     }
 
     DLLLOCAL int doHashLValue(qore_type_t t, const char* mem, bool for_remove) {
+        disableRemovalScanSkip();
         return LValueHelper::doHashLValue(t, mem, for_remove);
     }
 
     DLLLOCAL int doObjLValue(QoreObject* obj, const char* mem, bool for_remove) {
+        disableRemovalScanSkip();
         return LValueHelper::doObjLValue(obj, mem, for_remove);
     }
 
@@ -81,6 +86,8 @@ struct qore_type_safe_ref_helper_priv_t : public LValueHelper {
     }
 
     DLLLOCAL static LValueHelper& get(QoreTypeSafeReferenceHelper& ref) {
+        // the caller can use the helper in any way
+        ref.priv->disableRemovalScanSkip();
         return *ref.priv;
     }
 };

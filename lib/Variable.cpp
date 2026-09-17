@@ -754,7 +754,7 @@ void LValueHelper::startContainerRemoval() {
 bool LValueHelper::removalKeptGraph() const {
     // a container copied by ensureUnique() is a new node that the recursive sets do not know yet; the node it
     // replaced is still held in tvec here, so its address cannot have been reused
-    if (!removal_container || getInternalNode() != removal_container) {
+    if (removal_no_skip || !removal_container || getInternalNode() != removal_container) {
         return false;
     }
     switch (removal_container->getType()) {

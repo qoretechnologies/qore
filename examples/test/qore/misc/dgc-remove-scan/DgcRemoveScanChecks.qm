@@ -259,6 +259,44 @@ public hash<string, int> sub get_scan_counts() {
     remove h.o.peer;
     rv."remove-object-object-member" = scan_count() - start;
 
+    # removals through the public C++ API QoreTypeSafeReferenceHelper::removeHashObjKey()
+    h.cx = {"listener": new Tracked(), "id": 1, "flag": 1};
+    start = scan_count();
+    rv."api-remove-hash-scalar-key-value" = call_function("dbg_ref_remove_key", \h.cx, "id");
+    rv."api-remove-hash-scalar-key" = scan_count() - start;
+
+    start = scan_count();
+    call_function("dbg_ref_remove_key", \h.cx, "missing");
+    rv."api-remove-hash-missing-key" = scan_count() - start;
+
+    h.o.id = 1;
+    start = scan_count();
+    call_function("dbg_ref_remove_key", \h.o, "id");
+    rv."api-remove-object-scalar-member" = scan_count() - start;
+
+    {
+        hash<auto> shared = h.cx;
+        start = scan_count();
+        call_function("dbg_ref_remove_key", \h.cx, "flag");
+        rv."api-remove-shared-hash-scalar-key" = scan_count() - start;
+    }
+
+    # the hash is changed in place through the same helper before a scalar is removed
+    h.cx.id = 1;
+    start = scan_count();
+    call_function("dbg_ref_set_unique_remove_key", \h.cx, "added", new Tracked(), "id");
+    rv."api-set-unique-remove-hash-scalar-key" = scan_count() - start;
+    rv."api-set-unique-remove-hash-scalar-key-added" = h.cx.added ? 1 : 0;
+
+    start = scan_count();
+    call_function("dbg_ref_remove_key", \h.cx, "listener");
+    rv."api-remove-hash-object-key" = scan_count() - start;
+
+    h.o.other = new Tracked();
+    start = scan_count();
+    call_function("dbg_ref_remove_key", \h.o, "other");
+    rv."api-remove-object-object-member" = scan_count() - start;
+
     h.cx = {"listener": new Tracked(), "id": 1};
     Tracked::destroyed = 0;
     start = scan_count();
@@ -357,6 +395,18 @@ public hash<string, int> sub get_cycle_results() {
         rv."cycle-broken-by-hash-remove-early" = Tracked::destroyed;
     }
     rv."cycle-broken-by-hash-remove" = Tracked::destroyed;
+
+    if (have_scan_count()) {
+        Tracked::destroyed = 0;
+        {
+            Tracked a();
+            a.cx = {"self": a, "id": 1, "flag": 1};
+            call_function("dbg_ref_remove_key", \a.cx, "id");
+            call_function("dbg_ref_set_unique_remove_key", \a.cx, "other", new Tracked(), "flag");
+            rv."cycle-api-remove-while-changed" = Tracked::destroyed;
+        }
+        rv."cycle-api-remove" = Tracked::destroyed;
+    }
 
     Tracked::destroyed = 0;
     {

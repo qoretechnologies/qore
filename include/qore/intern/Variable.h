@@ -513,6 +513,8 @@ private:
     // suppressObjectScan())
     bool no_object_scan = false;
 
+    //! set when the lvalue was changed other than by the removal; see disableRemovalScanSkip()
+    bool removal_no_skip = false;
     //! set when members were removed from an object; see objectRemoved()
     bool removal_object_reported = false;
     //! set when a value removed from an object needs a recursive-reference scan; see objectRemoved()
@@ -618,6 +620,14 @@ public:
         Further calls keep the state recorded by the first one, so a helper can remove values more than once.
     */
     DLLLOCAL void startContainerRemoval();
+
+    //! Keeps the recursive-reference scan for the rest of this helper's life, even after a removal
+    /** Call this when the helper hands out the value for changes it cannot see, or changes it other than by
+        removing values, since a removal can then no longer show that the reachable objects are unchanged.
+    */
+    DLLLOCAL void disableRemovalScanSkip() {
+        removal_no_skip = true;
+    }
 
     //! Reports that members were removed from the object held by the lvalue
     /** @param scan_value_removed true if any removed value needs a recursive-reference scan

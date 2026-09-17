@@ -57,6 +57,15 @@ class DgcRemoveScanTest inherits QUnit::Test {
             "remove-shared-list-scalar-element-original": 4,
             "remove-object-slice-with-object": 1,
             "remove-object-object-member": 1,
+            "api-remove-hash-scalar-key-value": 1,
+            "api-remove-hash-scalar-key": 0,
+            "api-remove-hash-missing-key": 0,
+            "api-remove-object-scalar-member": 0,
+            "api-remove-shared-hash-scalar-key": 1,
+            "api-set-unique-remove-hash-scalar-key": 1,
+            "api-set-unique-remove-hash-scalar-key-added": 1,
+            "api-remove-hash-object-key": 1,
+            "api-remove-object-object-member": 1,
             "delete-hash-object-key": 1,
             "delete-hash-object-key-destroyed": 1,
         };
@@ -80,6 +89,12 @@ class DgcRemoveScanTest inherits QUnit::Test {
 
         #! the execution modes that the worker is run in
         const ExecModes = ("ast", "ir", "jit");
+
+        #! cycle checks that call debug functions and are only made in debug builds
+        const DebugCycleResults = {
+            "cycle-api-remove-while-changed": 0,
+            "cycle-api-remove": 2,
+        };
     }
 
     private {
@@ -107,7 +122,12 @@ class DgcRemoveScanTest inherits QUnit::Test {
     }
 
     testCyclesInProgram() {
-        checkResults("in-program", ExpectedCycleResults, DgcRemoveScanChecks::get_cycle_results());
+        checkResults("in-program", getExpectedCycleResults(), DgcRemoveScanChecks::get_cycle_results());
+    }
+
+    #! returns the cycle checks expected in this build
+    private hash<auto> getExpectedCycleResults() {
+        return DgcRemoveScanChecks::have_scan_count() ? ExpectedCycleResults + DebugCycleResults : ExpectedCycleResults;
     }
 
     testExecModes() {
@@ -149,11 +169,12 @@ class DgcRemoveScanTest inherits QUnit::Test {
             }
             results{parts[0]} = parts[1].toInt();
         }
-        checkResults(label, ExpectedCycleResults, results - keys ExpectedScanCounts);
+        hash<auto> expected_cycles = getExpectedCycleResults();
+        checkResults(label, expected_cycles, results - keys ExpectedScanCounts);
         if (DgcRemoveScanChecks::have_scan_count()) {
-            checkResults(label, ExpectedScanCounts, results - keys ExpectedCycleResults);
+            checkResults(label, ExpectedScanCounts, results - keys expected_cycles);
         } else {
-            assertEq(ExpectedCycleResults.size(), results.size(), label + ": result count");
+            assertEq(expected_cycles.size(), results.size(), label + ": result count");
         }
     }
 

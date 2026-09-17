@@ -201,10 +201,13 @@ edge can make a cycle collectable. `delete` needs no special case: deleting an o
 a scan. Any other removal (`lvh.remove()` of the whole value, or an unexpected container type) keeps the
 conservative scan.
 
-`QoreTypeSafeReferenceHelper::removeHashObjKey()` (the public C++ API) does not use this rule, since the same
-helper can hand out mutable nodes (`getUnique()`) that a module can change without the helper knowing.
+`QoreTypeSafeReferenceHelper::removeHashObjKey()`, the public C++ API, applies the same rule. The same helper can
+also hand out the value for changes it cannot see (`getUnique()`, and `qore_type_safe_ref_helper_priv_t::get()`)
+or change it in other ways (`assign()`, `setObjKey()`, `moveToHashObjKey()`). Each of these calls
+`LValueHelper::disableRemovalScanSkip()`, so a helper that was used for anything but removals always scans.
 
-Debug builds count the scans started by lvalue operations per thread (`dbg_get_lvalue_scan_count()`);
+Debug builds count the scans started by lvalue operations per thread (`dbg_get_lvalue_scan_count()`), and
+`dbg_ref_remove_key()` / `dbg_ref_set_unique_remove_key()` call the public reference helper API;
 `examples/test/qore/misc/dgc-remove-scan/dgc-remove-scan.qtest` uses it to check every removal kind in each
 execution mode and from a compiled module, along with cycle collection after removals that skipped the scan.
 
