@@ -384,8 +384,15 @@ public hashdecl LlmTokenUsage {
     #! Prompt / input token count
     int input_tokens = 0;
     #! Completion / output token count
+    /** The count keeps the meaning of the provider's own count: it includes the reasoning tokens of providers
+        that report them as part of it, such as OpenAI, and excludes the thinking tokens of providers that
+        report them separately, such as Gemini
+    */
     int output_tokens = 0;
-    #! Total tokens reported or derived from input + output
+    #! Total tokens reported by the provider, or derived from the counts above
+    /** A derived total adds a reasoning count only when the provider reports it separately from its output
+        count, so reasoning tokens are never counted twice
+    */
     int total_tokens = 0;
     #! Input tokens served from a provider cache
     int cached_input_tokens = 0;

@@ -498,9 +498,82 @@ public class QoreLlmUtilsTest inherits QUnit::Test {
         });
         assertEq(10, usage.input_tokens);
         assertEq(5, usage.output_tokens);
-        assertEq(17, usage.total_tokens);
+        # OpenAI counts its reasoning tokens in the completion count, so a derived total must not add them again
+        assertEq(15, usage.total_tokens);
         assertEq(3, usage.cached_input_tokens);
         assertEq(2, usage.reasoning_tokens);
+        assertEq(0, usage.embedding_tokens, "a chat response has no embedding tokens");
+
+        # a total reported by the provider is preserved
+        assertEq(15, LlmTelemetry::normalizeUsage({
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+            "completion_tokens_details": {"reasoning_tokens": 2},
+            "total_tokens": 15,
+        }).total_tokens);
+
+        # the Responses API reports its reasoning and cached counts in plural detail objects
+        hash<LlmTokenUsage> responses_usage = LlmTelemetry::normalizeUsage({
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "input_tokens_details": {"cached_tokens": 4},
+            "output_tokens_details": {"reasoning_tokens": 2},
+        });
+        assertEq(15, responses_usage.total_tokens);
+        assertEq(4, responses_usage.cached_input_tokens);
+        assertEq(2, responses_usage.reasoning_tokens);
+
+        # a response without reasoning counts input + output
+        assertEq(15, LlmTelemetry::normalizeUsage({
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+        }).total_tokens);
+        assertEq(15, LlmTelemetry::normalizeUsage({
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+            "completion_tokens_details": {"reasoning_tokens": 0},
+        }).total_tokens);
+
+        # normalized usage does not gain tokens when it is normalized again
+        assertEq(usage, LlmTelemetry::normalizeUsage(usage));
+
+        # Gemini reports its thinking tokens separately from the output count
+        hash<LlmTokenUsage> thinking_usage = LlmTelemetry::normalizeUsage({
+            "promptTokenCount": 10,
+            "candidatesTokenCount": 5,
+            "thoughtsTokenCount": 2,
+        });
+        assertEq(17, thinking_usage.total_tokens);
+        assertEq(2, thinking_usage.reasoning_tokens);
+        assertEq(17, LlmTelemetry::normalizeUsage({
+            "promptTokenCount": 10,
+            "candidatesTokenCount": 5,
+            "thoughtsTokenCount": 2,
+            "totalTokenCount": 17,
+        }).total_tokens);
+        assertEq(thinking_usage, LlmTelemetry::normalizeUsage(thinking_usage));
+
+        # an embedding response reports its tokens without generated output
+        hash<LlmTokenUsage> embedding_usage = LlmTelemetry::normalizeUsage({
+            "prompt_tokens": 8,
+            "total_tokens": 8,
+        });
+        assertEq(8, embedding_usage.embedding_tokens);
+        assertEq(8, embedding_usage.total_tokens);
+        assertEq(0, embedding_usage.output_tokens);
+
+        # an empty usage has no tokens
+        assertEq(<LlmTokenUsage>{}, LlmTelemetry::normalizeUsage({}));
+        assertEq(<LlmTokenUsage>{}, LlmTelemetry::normalizeUsage(NOTHING));
+        # a cache subset does not invent tokens
+        hash<LlmTokenUsage> cached_usage = LlmTelemetry::normalizeUsage({
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+            "prompt_tokens_details": {"cached_tokens": 10},
+        });
+        assertEq(15, cached_usage.total_tokens);
+        assertEq(10, cached_usage.cached_input_tokens);
+        assertEq(0, cached_usage.reasoning_tokens);
 
         hash<LlmTokenUsage> gemini_usage = LlmTelemetry::normalizeUsage({
             "promptTokenCount": 11,

@@ -39,9 +39,16 @@ hash<LlmTokenUsage> usage = LlmTelemetry::normalizeUsage(provider_usage);
 */
 public class LlmTelemetry {
     #! Normalizes provider usage counters into a stable token accounting shape
-    /** @param raw provider-specific usage hash or @ref NOTHING
+    /** \c output_tokens keeps the meaning of the provider's own count: OpenAI reports its reasoning tokens as
+        part of the completion / output count, while formats such as Gemini report thinking tokens separately.
+        A total reported by the provider is preserved; a missing total is derived without adding a reasoning
+        count that the provider already includes in its output count.
+
+        @param raw provider-specific usage hash or @ref NOTHING
 
         @return normalized token counters
+
+        @see @ref QoreLlmUtils::LlmTokenUsage
     */
     static hash<LlmTokenUsage> normalizeUsage(auto raw) {
         if (raw.typeCode() != NT_HASH) {
@@ -62,12 +69,12 @@ public class LlmTelemetry {
         int cache_creation_input_tokens = firstInt(usage, (
             "cache_creation_input_tokens", "cache_write_input_tokens",
             "cacheCreationInputTokens", "cacheWriteInputTokens"));
-        int reasoning_tokens = firstInt(usage, (
-            "reasoning_tokens", "thinking_tokens", "reasoningTokens",
-            "thoughtsTokenCount"));
-        int embedding_tokens = firstInt(usage, (
-            "embedding_tokens", "embeddingTokens", "total_tokens",
-            "totalTokens"));
+        # formats such as Gemini report their thinking tokens separately from the output count
+        int separate_reasoning_tokens = firstInt(usage, ("thoughtsTokenCount",));
+        # OpenAI reports its reasoning tokens as part of the completion / output count
+        int included_reasoning_tokens = firstInt(usage, (
+            "reasoning_tokens", "thinking_tokens", "reasoningTokens"));
+        int embedding_tokens = firstInt(usage, ("embedding_tokens", "embeddingTokens"));
         int reranker_tokens = firstInt(usage, (
             "reranker_tokens", "rerank_tokens", "rerankerTokens",
             "rerankTokens"));
@@ -87,16 +94,31 @@ public class LlmTelemetry {
                 firstInt(details, ("cache_creation",
                     "cache_creation_input_tokens", "cache_write")));
         }
-        if (usage.completion_tokens_details.typeCode() == NT_HASH) {
-            hash<auto> details =
-                cast<hash>(usage.completion_tokens_details);
-            reasoning_tokens = max(reasoning_tokens,
+        # the Responses API reports the cached input tokens of a request in its own detail object
+        if (usage.input_tokens_details.typeCode() == NT_HASH) {
+            hash<auto> details = cast<hash>(usage.input_tokens_details);
+            cached_input_tokens = max(cached_input_tokens,
+                firstInt(details, ("cached_tokens", "cachedTokens")));
+        }
+        foreach string key in (("completion_tokens_details", "output_tokens_details")) {
+            if (usage{key}.typeCode() != NT_HASH) {
+                continue;
+            }
+            hash<auto> details = cast<hash>(usage{key});
+            included_reasoning_tokens = max(included_reasoning_tokens,
                 firstInt(details, ("reasoning_tokens", "thinking_tokens")));
+        }
+        int reasoning_tokens = max(separate_reasoning_tokens, included_reasoning_tokens);
+        if (!embedding_tokens && !output_tokens && !reasoning_tokens) {
+            # an embedding response reports only its input and total counts; the total of a response with
+            # generated output is not an embedding count
+            embedding_tokens = firstInt(usage, ("total_tokens", "totalTokens"));
         }
         int total_tokens = firstInt(usage, (
             "total_tokens", "totalTokens", "totalTokenCount"));
         if (!total_tokens) {
-            total_tokens = input_tokens + output_tokens + reasoning_tokens;
+            # a reasoning count that the provider reports as part of its output count must not be added again
+            total_tokens = input_tokens + output_tokens + separate_reasoning_tokens;
         }
 
         return <LlmTokenUsage>{
