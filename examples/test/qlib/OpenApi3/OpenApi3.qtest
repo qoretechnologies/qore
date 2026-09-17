@@ -4447,6 +4447,32 @@ public class OpenApi3Test inherits QUnit::Test {
         assertEq(("subscriptions",),
             sort(keys cast<SchemaObject>(so.components.schemas.Extra.properties.attributes).properties),
             "and neither is the other one");
+
+        # additionalProperties permits unknown keys; it does not turn off constraints on declared keys.
+        OpenApi3::OpenApi3Schema flexible = new OpenApi3::OpenApi3Schema("", ValidOpenApi31Schema + {
+            "components": {"schemas": {
+                "Positive": {"type": "integer", "minimum": 1},
+                "Flexible": {
+                    "type": "object",
+                    "additionalProperties": True,
+                    "properties": {
+                        "count": {
+                            "allOf": ({"$ref": "#/components/schemas/Positive"},),
+                            "description": "a positive count",
+                        },
+                    },
+                },
+            }},
+        });
+        SchemaObject fs = flexible.components.schemas.Flexible;
+        auto valid = {"count": 1, "vendorExtension": {"anything": True}};
+        fs.check(True, True, "/flexible", "POST", "body", \valid);
+        assertEq(1, valid.count);
+        assertTrue(valid.vendorExtension.anything);
+        auto invalid = {"count": 0, "vendorExtension": "still allowed"};
+        assertThrows("SCHEMA-VALIDATION-ERROR", "too small", sub () {
+            fs.check(True, True, "/flexible", "POST", "body", \invalid);
+        });
     }
 
     #! A schema that refers to itself must produce a type instead of exhausting the thread's stack

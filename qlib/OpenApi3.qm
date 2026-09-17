@@ -302,6 +302,7 @@ excluded from the union and make it @ref RestSchemaValidator::AbstractSchemaObje
     @section openapi3_relnotes OpenApi3 Module Release Notes
 
     @subsection openapi3_1_0 OpenApi3 v1.0
+    - validate declared object properties even when `additionalProperties: true` also permits unknown keys
     - expand server-variable defaults before deriving the request base path
     - support discriminator-only inheritance mappings and escaped local schema references; a mapped branch
       is selected by its discriminator in optional, soft and mandatory type forms alike, and a cyclic
@@ -6453,8 +6454,9 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
             If additionalProperties is a schema, additional properties (beyond what are defined in 'properties') are
             allowed and must match the schema
         */
-        # check properties in this schema definition
-        if (additionalProperties !== True && type != "any" && !no_check_others) {
+        # Check every declared property even when arbitrary additional properties are allowed.  The latter
+        # controls unknown keys only; it must not disable validation of keys whose schemas are known.
+        if (type != "any" && !no_check_others) {
             # issue #4825: write the hash keys to another hash in case values need to change type
             hash<auto> nv;
             foreach string key in (keys value) {
@@ -6464,9 +6466,10 @@ public class SchemaObject inherits ObjectBase, SchemaBase, RestSchemaValidator::
                         prop = additionalProperties;
                     }
                     if (!prop) {
-                        if (allow_unknown) {
+                        if (additionalProperties === True || allow_unknown) {
                             # this schema says nothing about the property, which is not a reason to reject
-                            # the value against it; see the parameter's documentation
+                            # the value against it; additionalProperties=true explicitly allows it, and
+                            # allow_unknown is used while selecting a composition alternative
                             nv{key} += value{key};
                             continue;
                         }

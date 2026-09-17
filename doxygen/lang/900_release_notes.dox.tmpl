@@ -2757,6 +2757,7 @@ string import_location = resolve_url(res.info.effective_location, "../types/comm
       - module documentation resolves transitive user and bundled native dependency symbols
 
     - @ref openapi3intro "OpenApi3" module
+      - validates declared object properties even when the schema also permits arbitrary additional properties
       - preserves composed field types and supports multipart file-or-URL inputs, including named file arrays
       - derives response types from every declared media representation and validates the selected Content-Type
       - required read-only and write-only properties respect request/response direction
